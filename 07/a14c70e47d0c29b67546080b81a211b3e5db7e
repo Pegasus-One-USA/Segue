@@ -1,0 +1,101 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_bcd3dfe81559c0::t_4b295146ca8b02 1360-1364
+  s_bcd3dfe81559c0::t_ebafec3b94aa7e 978-984
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.html
+  s_c67a572885b599::t_de62f97b2d50b4 53-62
+  s_c67a572885b599::t_45664034b83d58 13-23,25,28,45-48
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_c67a572885b599::t_b711ff5c852b0a 70-77
+  s_c67a572885b599::t_752193d270ea59 28-42
+  s_c67a572885b599::t_0535b921a7833d 135
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_c67a572885b599::t_306af7670b0adc 173,176
+  s_c67a572885b599::t_e90711ca481fa1 35,46-47
+  s_c67a572885b599::t_5f0b4a0a408f7e 43
+  s_c67a572885b599::t_3f7482708d7fca 132
+  s_c67a572885b599::t_88be5dc4263bcf 239
+  s_c67a572885b599::t_491a99e15a4659 78-83
+  s_c67a572885b599::t_abdadd56138beb 184
+  s_c67a572885b599::t_1feb1cf39d7401 138
+  s_c67a572885b599::t_6ac02efcdcb661 231
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_c67a572885b599::t_d9f4f11b1244fb 612
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_c67a572885b599::t_36cfd088359c00 38-39
+  s_c67a572885b599::t_95dc5a3746a45b 81
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_c67a572885b599::t_f48a3893ef101c 231,237-250,254-258
+  s_c67a572885b599::t_6a39946d0d2c07 273-275
+  s_c67a572885b599::t_1f50aef9873959 251-252
+  s_c67a572885b599::t_328b947d81a60a 253
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_c67a572885b599::t_93ed3074cbba63 34
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_c67a572885b599::t_87809558627cfa 23-28
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_c67a572885b599::t_3f0cccd8ac713c 63
+  s_c67a572885b599::t_0aafeabec99368 24,27-30,33
+  s_c67a572885b599::t_cfb1a75c18afec 21,25-26,31-32,34-35
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_c67a572885b599::t_1554fe2a951050 305-307,310,317
+  s_c67a572885b599::t_c89f9e79041fa4 340,347
+  s_c67a572885b599::t_ca3f1035ff3bf7 437,440-453,462
+  s_c67a572885b599::t_ba61938a474f72 409
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_c67a572885b599::t_6a2ba8ef3f85b8 201
+  s_c67a572885b599::t_b3f5d8903931a7 218
+  s_c67a572885b599::t_e0de374eab9388 45-47
+  s_c67a572885b599::t_478af03362ac2c 235
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_c67a572885b599::t_1dc9ff84a3ff0d 407-408
+  s_c67a572885b599::t_f0658cb95f8611 394
+  s_c67a572885b599::t_f4fb690bac5dc1 343-345
+  s_c67a572885b599::t_3c752c76c78162 254
+  s_c67a572885b599::t_1be8c171be603d 181
+  s_c67a572885b599::t_f57ec9b2eea484 150
+  s_c67a572885b599::t_ec23c0757b3220 167
+  s_c67a572885b599::t_f7646de231e911 359-360
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_c67a572885b599::t_7154f93d5d241e 91,94,137-139
+  s_c67a572885b599::t_2ea80248b974f8 111-114,130-136
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_c67a572885b599::t_d9a2c227bd3911 266,269,271,279
+  s_c67a572885b599::t_073366811d4289 1336
+  s_c67a572885b599::t_03c817d5d0ec35 1431
+  s_c67a572885b599::t_b3ac79ccc7a789 477
+  s_c67a572885b599::t_74ff73c231b99c 577
+  s_c67a572885b599::t_8265e7a374c2a8 149
+  s_c67a572885b599::t_309b8a1db63fe9 469
+  s_c67a572885b599::t_5eca883c47f35b 1344
+  s_c67a572885b599::t_ceeed365839c53 178-189
+  s_c67a572885b599::t_14208e67c581ac 273-274
+  s_c67a572885b599::t_937f543602688a 1233
+portal/src/app/services/destination-schema.service.ts
+  s_c67a572885b599::t_e4469c6e0c14ad 42-44
+portal/src/app/services/phase-config.service.ts
+  s_c67a572885b599::t_5b6e7240bd11c6 28,42,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "07a14c70e47d0c29b67546080b81a211b3e5db7e",
+  "prompts": {},
+  "sessions": {
+    "s_bcd3dfe81559c0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42e077ea-969d-4802-ae25-3f18afcac872",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c67a572885b599": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb0db689-44d9-4ddd-8e56-6c1baa5b79c3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

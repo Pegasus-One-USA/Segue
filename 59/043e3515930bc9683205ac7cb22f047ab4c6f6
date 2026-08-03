@@ -1,0 +1,66 @@
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_26202082a1cf9f::t_f30e66ab9bd1bb 258-294
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_3183b454f306bf::t_01a521a6be0117 504-543
+  s_3183b454f306bf::t_2ff4233f454fb4 502-503
+  s_3183b454f306bf::t_ebdbf6846387c6 544-546
+  s_26202082a1cf9f::t_6517826cd770cb 547-563
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_26202082a1cf9f::t_b784284c4c13d9 136-179
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileUsageAndDeleteTests.cs
+  s_26202082a1cf9f::t_7ef19ac921ff6a 9
+  s_26202082a1cf9f::t_f2c372acf4c558 1-8,10-115
+tests/FHIRBridge.UnitTests/Configuration/InMemoryConfigurationRepositoryTests.cs
+  s_26202082a1cf9f::t_cac553c026d109 1
+  s_26202082a1cf9f::t_fdd7e336867663 85-160
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_26202082a1cf9f::t_d5850623983153 492-523
+  s_26202082a1cf9f::t_6617ec982bf5df 1559-1585
+tests/FHIRBridge.Api.IntegrationTests/Tests/MappingProfileMasterScreenTests.cs
+  s_26202082a1cf9f::t_9c8cdbf97a5d96 1-158
+docs/backend/14-mapping-profile-master-screen-plan.md
+  s_26202082a1cf9f::t_9133d9a8eb4103 416,481-484,495-549
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_26202082a1cf9f::t_f43ebc6e8922a7 61-62,66,95-101
+src/FHIRBridge.Application/DTOs/MappingProfileDto.cs
+  s_26202082a1cf9f::t_dd92067c89c87e 12-15
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_26202082a1cf9f::t_c184b12e8198fc 157-160
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_26202082a1cf9f::t_a4a3765fe013e8 51-55,60-69
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_26202082a1cf9f::t_37561482a2097a 278-339,377-384
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_26202082a1cf9f::t_0284f397b05076 228-282,301-306
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_26202082a1cf9f::t_b0cd441d5b0d32 226-227,253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "59043e3515930bc9683205ac7cb22f047ab4c6f6",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_26202082a1cf9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e22b5f6d-b00e-4387-889d-ede3efd400e9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_3183b454f306bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "713a1f57-7458-4972-a94c-2fb0cfeb0337",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

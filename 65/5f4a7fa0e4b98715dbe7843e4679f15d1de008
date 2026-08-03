@@ -1,0 +1,227 @@
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_26202082a1cf9f::t_b784284c4c13d9 136-179
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.spec.ts
+  s_26202082a1cf9f::t_e17b0c4dcb2d11 1-115
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.ts
+  s_26202082a1cf9f::t_226fe92dcccf74 1
+  s_26202082a1cf9f::t_e3c8b412cefcb1 2-872
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_26202082a1cf9f::t_a4a3765fe013e8 51-55,60-68
+  s_26202082a1cf9f::t_a7fcd9dd9179a3 69
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.ts
+  s_26202082a1cf9f::t_d2403e72184335 1-36
+src/FHIRBridge.Domain/Entities/SourceConfiguration.cs
+  s_b40b94f933297e::t_c4ae3117e8fc6e 47-49,53
+portal/src/app/services/destination-schema.service.ts
+  s_26202082a1cf9f::t_273092864872a3 73-79
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_b40b94f933297e::t_64a2d30afb505b 132-134,137-142
+  s_b40b94f933297e::t_ea24be150be0e5 270-273
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_26202082a1cf9f::t_f43ebc6e8922a7 61-62,66,95-100
+  s_26202082a1cf9f::t_0616daa0817880 101
+tests/FHIRBridge.Api.IntegrationTests/Tests/MappingProfileMasterScreenTests.cs
+  s_26202082a1cf9f::t_9c8cdbf97a5d96 1-158
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_26202082a1cf9f::t_e66ab7b98dc248 24-25
+  s_26202082a1cf9f::t_1d9f128b5d1532 19-21
+docs/backend/14-mapping-profile-master-screen-plan.md
+  s_26202082a1cf9f::t_1058a7ca8832f7 410-419,425-459
+  s_26202082a1cf9f::t_9133d9a8eb4103 518-521,532-586
+  s_26202082a1cf9f::t_e8d8acb3246fac 3-4
+  s_26202082a1cf9f::t_0175d0c7054ee4 460
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.html
+  s_26202082a1cf9f::t_bdc9b0bdd05e72 1
+  s_26202082a1cf9f::t_4334893f923814 2-10
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260803085841_AddPerResourceTypeSyncCursor.Designer.cs
+  s_b40b94f933297e::t_f690bfcfa915c5 1-3706
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.html
+  s_26202082a1cf9f::t_239c992ef05464 1-10
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_26202082a1cf9f::t_6517826cd770cb 547-563
+  s_3183b454f306bf::t_ebdbf6846387c6 544-546
+  s_3183b454f306bf::t_01a521a6be0117 504-543
+  s_3183b454f306bf::t_2ff4233f454fb4 502-503
+tests/FHIRBridge.UnitTests/Sources/SourceRetrievalConfigurationSyncCursorTests.cs
+  s_b40b94f933297e::t_9c60a12bc9689a 1-90
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_26202082a1cf9f::t_1754f1842e8179 1-28
+tests/FHIRBridge.UnitTests/Pipeline/BuildBulkExportRequestTests.cs
+  s_b40b94f933297e::t_2e71b2b42a014c 27-29
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConfigurationConfiguration.cs
+  s_b40b94f933297e::t_6df903a0441605 101-107
+  s_b40b94f933297e::t_d89f097e071550 1,17-23
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_26202082a1cf9f::t_4f9538b27829c6 146-153,155,159-163,192-203,205-208
+  s_26202082a1cf9f::t_f995baedf7de04 170-176
+  s_26202082a1cf9f::t_1b994d2922a6a2 230-233,239
+  s_26202082a1cf9f::t_21890796f5dff3 123
+  s_26202082a1cf9f::t_2099d3b3642c1d 1-2
+  s_26202082a1cf9f::t_9e108d50cbb7cb 12
+  s_26202082a1cf9f::t_ad79ed0b3f9e92 3-9,11,13-90,92-122,124-145,154,156-158,164-169,177-191,204,209-229,234-238,240-259
+  s_26202082a1cf9f::t_ba49c8ee905a0b 91
+  s_26202082a1cf9f::t_fee2104c79cdb5 10
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_b40b94f933297e::t_8fd3da7163eb41 79
+  s_b40b94f933297e::t_0925e7a996cdd1 100
+  s_26202082a1cf9f::t_c184b12e8198fc 157-160
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_26202082a1cf9f::t_2f12ccd2675654 1-253
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_26202082a1cf9f::t_c1401c3c19f358 380-383,392-400
+  s_26202082a1cf9f::t_924b9d1dff2667 468
+  s_26202082a1cf9f::t_fead81f852874b 477,479
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileUsageAndDeleteTests.cs
+  s_26202082a1cf9f::t_7ef19ac921ff6a 9
+  s_26202082a1cf9f::t_f2c372acf4c558 1-8,10-115
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260803085841_AddPerResourceTypeSyncCursor.cs
+  s_b40b94f933297e::t_f690bfcfa915c5 1-10,55-69,73,75-77,79,81,85-95,107-109
+  s_b40b94f933297e::t_b8eabc34562015 11-14,23,26,34-36,39-41,44-45,47-51,54,70-72,74,78,80,82-84,96-106
+  s_b40b94f933297e::t_765ec65c7da323 15-20,24,27-33
+  s_b40b94f933297e::t_241a6ec9137e3f 21-22,25,37-38,42-43,46,52-53
+portal/src/app/services/workflow-api.service.ts
+  s_26202082a1cf9f::t_5bbce3600ff0a5 193-200
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_b40b94f933297e::t_b99ff5402f0805 63-68
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_26202082a1cf9f::t_763c0f7edc7b8b 1-72
+portal/src/app/mapping-profiles/services/mapping-profile.service.ts
+  s_26202082a1cf9f::t_2f73374e5ca09a 1-68
+portal/src/app/core/api-endpoints.ts
+  s_26202082a1cf9f::t_8edb12a2305655 111-123
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_26202082a1cf9f::t_b0cd441d5b0d32 226-227,253
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.scss
+  s_26202082a1cf9f::t_686ea594b6ea3a 1-4
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_26202082a1cf9f::t_097e7118e33f21 1-64,66-69,71,73-98
+  s_26202082a1cf9f::t_a7b2a562ec1a2c 72
+  s_26202082a1cf9f::t_e7c4f61973bf5b 65
+  s_26202082a1cf9f::t_649dc78042ad38 70
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionSyncCursorStoreTests.cs
+  s_b40b94f933297e::t_b9f5db94436ad0 1-63
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionSyncCursorStore.cs
+  s_b40b94f933297e::t_4ab00216623a14 10-14
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_b40b94f933297e::t_f690bfcfa915c5 3269-3272,3368-3371
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_b40b94f933297e::t_f370a82d3c1ded 47
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.html
+  s_26202082a1cf9f::t_8a8db7b62e52aa 1-165
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_26202082a1cf9f::t_6617ec982bf5df 1559-1584
+  s_26202082a1cf9f::t_d5850623983153 492-523
+  s_26202082a1cf9f::t_fd1430a3f32aba 1585
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_26202082a1cf9f::t_81037da9b6808d 13
+  s_26202082a1cf9f::t_56a01b45752d34 686-696
+  s_26202082a1cf9f::t_5d1fc5af4d2fe6 667-670,672,676
+  s_26202082a1cf9f::t_2c3e0603c4e98c 123-130
+  s_26202082a1cf9f::t_8d8e3284471ebb 256-259
+  s_26202082a1cf9f::t_c8af21ebe7534b 545,558,585
+  s_26202082a1cf9f::t_17385f5c1f730b 12,17,19,26,36-38
+  s_26202082a1cf9f::t_0862b5497fef95 172,185-189,191-195,199
+  s_26202082a1cf9f::t_5e779dfd887aa4 553-556,570-580
+  s_26202082a1cf9f::t_d541399d3d2bc5 3
+  s_26202082a1cf9f::t_da1be72e524b0e 699
+portal/src/app/app.routes.ts
+  s_26202082a1cf9f::t_c3779c40401cda 92
+  s_26202082a1cf9f::t_1bceef9ac53fc6 93-94
+src/FHIRBridge.Application/DTOs/MappingProfileDto.cs
+  s_26202082a1cf9f::t_dd92067c89c87e 12-15
+tests/FHIRBridge.UnitTests/Configuration/InMemoryConfigurationRepositoryTests.cs
+  s_26202082a1cf9f::t_cac553c026d109 1
+  s_26202082a1cf9f::t_fdd7e336867663 85-159
+  s_26202082a1cf9f::t_c96d713dc65487 160
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.scss
+  s_26202082a1cf9f::t_bb196b18916065 1-144
+src/FHIRBridge.Application/DTOs/SourceRetrievalConfigurationDto.cs
+  s_b40b94f933297e::t_dcc65ab23e97b7 19
+portal/src/app/mapping-profiles/models/mapping-profile.model.ts
+  s_26202082a1cf9f::t_5449f0fe31439d 1-91
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_26202082a1cf9f::t_37561482a2097a 278-339,377-383
+  s_26202082a1cf9f::t_2bff7d85b296f5 384
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_26202082a1cf9f::t_a19c14e843afe1 33-47
+  s_26202082a1cf9f::t_8c27bff35fd5e1 630-638,641,643-646
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_26202082a1cf9f::t_c565dec9436f2b 1-206
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_26202082a1cf9f::t_f30e66ab9bd1bb 258-294
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorSyncCursorTests.cs
+  s_b40b94f933297e::t_8b0c8b512d1fb7 1-112
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_b40b94f933297e::t_6c87e689626eb7 78-81,85
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionSyncCursorStore.cs
+  s_b40b94f933297e::t_f36664f5d250cc 20-24,26-30,37
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_b40b94f933297e::t_c1d179e5d6c416 27,44-46,53-55,87
+  s_b40b94f933297e::t_568495ffcf5eee 81-86,88-92,122-136
+  s_b40b94f933297e::t_41e17effb56139 93-117,119-121
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_26202082a1cf9f::t_0284f397b05076 228-282,301-303,305
+  s_26202082a1cf9f::t_e7b179dcf93802 304
+  s_26202082a1cf9f::t_87007f46dde668 306
+portal/src/app/settings/settings.routes.ts
+  s_26202082a1cf9f::t_b356c978fe8b2b 32-37,39,41-42,44-73
+  s_26202082a1cf9f::t_55a55716cc2a30 84-87,91-92,94-116
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.scss
+  s_26202082a1cf9f::t_5843b90a9a14f0 1-4
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_62edaf1aaf9a1a::t_b666f390306cd7 589
+  s_b40b94f933297e::t_132d1dc7708f7a 584-588
+  s_b40b94f933297e::t_58d0288afd11ee 740-750,759,762,766
+  s_b40b94f933297e::t_6589b9e3977d4b 431,485-488,505,507
+docs/backend/wip-per-resource-type-sync-cursor.md
+  s_b40b94f933297e::t_2b8e47b0ff4732 1-21,23,63,65
+  s_b40b94f933297e::t_7d16cbca5633eb 22,24-34,36,45-62,64,66-67
+  s_b40b94f933297e::t_fbf5f832fd3546 35,37-44
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_b40b94f933297e::t_9dc7e1f57bca87 1,17-23
+  s_b40b94f933297e::t_78e1eae4ca3c77 190-196
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_b40b94f933297e::t_17d916c79245c5 1198
+portal/src/app/services/phase-config.service.ts
+  s_26202082a1cf9f::t_2d4fdd4d946394 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "655f4a7fa0e4b98715dbe7843e4679f15d1de008",
+  "prompts": {},
+  "sessions": {
+    "s_26202082a1cf9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e22b5f6d-b00e-4387-889d-ede3efd400e9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_3183b454f306bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "713a1f57-7458-4972-a94c-2fb0cfeb0337",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_62edaf1aaf9a1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c57b5268-7104-4ea3-a0ed-8ed6370873c6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_b40b94f933297e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7801b450-944a-408e-9829-0424d3adbe20",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

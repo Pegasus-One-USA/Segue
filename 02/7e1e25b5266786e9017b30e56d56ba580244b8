@@ -1,0 +1,121 @@
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_644c8309209587::t_61045d35e7d774 25
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_644c8309209587::t_4bf37d928f2cb1 148,157-158,167
+  s_644c8309209587::t_0bade94b2cc218 320-356
+  s_644c8309209587::t_4de4906a62763f 119-121
+  s_644c8309209587::t_47c35a161c9dbe 49-51
+  s_644c8309209587::t_a7045b9a0af272 105-107
+  s_644c8309209587::t_47f428cca82ae6 63-65
+  s_644c8309209587::t_fa86f540540ed4 21-23
+  s_644c8309209587::t_71ea93600c09a0 77-79
+  s_644c8309209587::t_7b6f96bbb32974 35-37
+  s_644c8309209587::t_961f830036a01b 91-93
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Audit/WorkflowAuditEventType.cs
+  s_644c8309209587::t_2705d8f1c8087b 12-15
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_644c8309209587::t_28e43c0efbba18 1-175
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRankedWorkflowOrchestrator.cs
+  s_644c8309209587::t_c20c956157a8b3 1,20-29
+  s_95e777373fed34::t_f3193ad5596021 30
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRunStatus.cs
+  s_644c8309209587::t_bc6dc6ae2c840e 13-18
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731182352_AddBulkExportJobs.Designer.cs
+  s_644c8309209587::t_471a5afe00d708 1-3689
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_644c8309209587::t_64752805f46d92 527-589
+  s_644c8309209587::t_1d29c53e724d7f 398-473
+  s_f90d29314889f0::t_63be340999a9ab 361-397
+  s_95e777373fed34::t_bd5e1be99a1f58 590
+tests/FHIRBridge.UnitTests/Infrastructure/EfBulkExportJobRepositoryTests.cs
+  s_644c8309209587::t_4c9efaa030ac3f 1-36,40-139,141-156
+  s_644c8309209587::t_95eebbdd5af3f5 37-39
+  s_644c8309209587::t_cd9b837c9f7bb5 140
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_644c8309209587::t_61e5242b85fec3 67-74
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  s_644c8309209587::t_a36516c9535a35 31-53
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowNodeOutput.cs
+  s_644c8309209587::t_dcb1108567362c 29-38
+src/FHIRBridge.Infrastructure/Workflows/BulkExportPauseRecorder.cs
+  s_644c8309209587::t_537423d85d8caf 1-26
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirBulkExportClientTests.cs
+  s_644c8309209587::t_77dc7ef0285926 115-194
+  s_644c8309209587::t_9f3cfb122b4b05 23
+  s_95e777373fed34::t_a46832f41108f0 195
+src/FHIRBridge.Application/Abstractions/Persistence/IBulkExportJobRepository.cs
+  s_644c8309209587::t_8806ce37e06fd3 1-23
+src/Worker/FHIRBridge.Worker/BulkExportPollWorker.cs
+  s_644c8309209587::t_bcc520a4d58bbc 1-78
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirBulkExportClient.cs
+  s_644c8309209587::t_2b1e7603c96cb3 16-37
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_644c8309209587::t_68a973d74ef353 195
+  s_644c8309209587::t_2c5a49bad51b5a 194
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_644c8309209587::t_8d2730e2c02dfe 1-140
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IBulkExportPauseRecorder.cs
+  s_644c8309209587::t_7405f8980eefb3 1-14
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_644c8309209587::t_b3a62409375149 166
+  s_f90d29314889f0::t_fb95e738bcb13c 203-204,346-363
+  s_644c8309209587::t_1641c418452e4a 305
+  s_644c8309209587::t_6710c8131008d3 20-21,31-33,43-44
+  s_644c8309209587::t_324856865493b6 323
+  s_644c8309209587::t_7f8447398e1e20 664-674,683-762
+  s_644c8309209587::t_cca542eb8d3886 101-136,138-139,141-165,167-202,205,236-269,271
+  s_644c8309209587::t_88a355d9ef2807 675-682
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_644c8309209587::t_a66d9adf395bde 225,232
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_644c8309209587::t_9eed803858677d 80-84
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  s_644c8309209587::t_bff0740e806165 47-86,90-91,93-128
+src/FHIRBridge.Application/Services/IBulkExportPollService.cs
+  s_644c8309209587::t_aed8a5598c56aa 1-9
+src/FHIRBridge.Domain/Entities/BulkExportJob.cs
+  s_644c8309209587::t_6d0625931a2de1 1-95,101-147
+  s_644c8309209587::t_ce91f21c25204b 96-100
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260731182352_AddBulkExportJobs.cs
+  s_644c8309209587::t_471a5afe00d708 1-73
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_644c8309209587::t_812799f2ee98e5 38
+src/FHIRBridge.Infrastructure/Persistence/EfBulkExportJobRepository.cs
+  s_644c8309209587::t_beca7a0eabf0a1 1-60
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  s_644c8309209587::t_69b933d41dd8fd 1-31
+src/Worker/FHIRBridge.Worker/BulkExportPollOptions.cs
+  s_644c8309209587::t_b14bdfd31d1595 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "027e1e25b5266786e9017b30e56d56ba580244b8",
+  "prompts": {},
+  "sessions": {
+    "s_644c8309209587": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11eaa6a5-4deb-4734-9464-4884ba8ca45f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_95e777373fed34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8562615b-6809-42d0-833c-07e2ae2ae7fc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f90d29314889f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7f86a9a-90b3-4eca-8711-036f30bd010e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

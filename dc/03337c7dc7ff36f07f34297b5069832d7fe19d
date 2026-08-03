@@ -1,0 +1,22 @@
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_d9867ffc15e4a5::t_94da3d49c80707 199-244
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_d9867ffc15e4a5::t_575eec85de97bb 119-123
+  s_d9867ffc15e4a5::t_097f663b156c15 53,60-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "dc03337c7dc7ff36f07f34297b5069832d7fe19d",
+  "prompts": {},
+  "sessions": {
+    "s_d9867ffc15e4a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "734721ed-1294-420f-9009-d6786943c114",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

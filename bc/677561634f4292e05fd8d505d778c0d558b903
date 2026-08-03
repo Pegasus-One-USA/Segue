@@ -1,0 +1,103 @@
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_d9867ffc15e4a5::t_86aa6cf186abb0 59-60
+src/BuildingBlocks/FHIRBridge.Governance/DefaultExceptionClassifier.cs
+  s_aedacb30c05cae::t_3dde8dcd0c99cb 45
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_aedacb30c05cae::t_1342b57d8422aa 464-465
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_aedacb30c05cae::t_e9a9f98fafae69 185,192
+  s_aedacb30c05cae::t_f1d08bf4649838 191
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_aedacb30c05cae::t_cfdb3d70ac4ad9 104-121,128
+  s_aedacb30c05cae::t_37b14adb25892c 134-137,143-144
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_aedacb30c05cae::t_2ebf10cfbff49e 244
+  s_aedacb30c05cae::t_10ab6a84188045 243,245-246
+src/Worker/FHIRBridge.Worker/Hl7MllpListenerService.cs
+  s_aedacb30c05cae::t_08f58934d7c0e3 5
+  s_aedacb30c05cae::t_ef40c0594c0564 109-116
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_aedacb30c05cae::t_6e5347cf441328 41
+src/FHIRBridge.Infrastructure/Governance/BulkExportKickOffFailureDiagnosisRule.cs
+  s_aedacb30c05cae::t_4462e9583cd6e4 10
+  s_aedacb30c05cae::t_39b32fa77df1de 1-9,11-44
+tests/FHIRBridge.UnitTests/Governance/SftpDestinationFailureDiagnosisRuleTests.cs
+  s_aedacb30c05cae::t_3ae0887f2bf359 1-36
+src/FHIRBridge.Infrastructure/Governance/TokenEndpointFailureDiagnosisRule.cs
+  s_aedacb30c05cae::t_dfaf701589ae83 1-42
+src/FHIRBridge.Infrastructure/Governance/SftpDestinationFailureDiagnosisRule.cs
+  s_aedacb30c05cae::t_58de8ee7a32f41 1-38
+src/FHIRBridge.Infrastructure/Governance/MongoDestinationFailureDiagnosisRule.cs
+  s_aedacb30c05cae::t_89cf84ca97368f 1-37
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_d9867ffc15e4a5::t_a3a575af692d7c 1-8
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorScopeAuthorizationTests.cs
+  s_d9867ffc15e4a5::t_15bdfc2c59dfcd 1-125
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRankedWorkflowOrchestrator.cs
+  s_aedacb30c05cae::t_d63a170346ad48 23-27,34
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.ts
+  s_d9867ffc15e4a5::t_989e32da83d2c6 9-15,19-25
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_aedacb30c05cae::t_1546e589060d18 169-176,179-182
+  s_aedacb30c05cae::t_b8ceee6ed6713a 134,183
+  s_aedacb30c05cae::t_32524857fca484 356-357
+src/FHIRBridge.Infrastructure/Hl7v2/Hl7MessageProcessor.cs
+  s_aedacb30c05cae::t_0a852a056310f9 5,24,29-30,35
+  s_aedacb30c05cae::t_6e1758ccd40133 85-93
+  s_aedacb30c05cae::t_463c9d3a5c4e7f 49-55
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_d9867ffc15e4a5::t_d2a587f19082b2 53-55
+  s_d9867ffc15e4a5::t_210e7ff90dba8e 128-130
+  s_d9867ffc15e4a5::t_e7f8a194c09eea 378-405,416-426
+  s_d9867ffc15e4a5::t_5820687f8c9112 649-675
+  s_d9867ffc15e4a5::t_20812f0bd89aee 23-25
+  s_d9867ffc15e4a5::t_0c4b46bd2e6e19 113-115
+  s_d9867ffc15e4a5::t_62261c740db7be 38-40
+  s_d9867ffc15e4a5::t_9630b4cd597354 2,648
+  s_d9867ffc15e4a5::t_0bb121a69c308e 158,168-169,179
+  s_d9867ffc15e4a5::t_040ca082fbe9a1 83-85
+  s_d9867ffc15e4a5::t_a1c5df37a81eb7 68-70
+  s_d9867ffc15e4a5::t_ebc5a669799686 98-100
+tests/FHIRBridge.UnitTests/Governance/MongoDestinationFailureDiagnosisRuleTests.cs
+  s_aedacb30c05cae::t_88e593bfd3c56e 1-37
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirBulkExportClient.cs
+  s_aedacb30c05cae::t_d7e4c1ceaaddc2 38-45
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d9867ffc15e4a5::t_2b31f2d63541a3 1061-1066,1069-1070
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_aedacb30c05cae::t_936fbab8c3bd46 66-67,142
+  s_aedacb30c05cae::t_a7c96226df2aef 128-129
+  s_aedacb30c05cae::t_a33e5b00fe2b77 143-181
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  s_aedacb30c05cae::t_e4b97d13e0967b 31-37,46-47
+tests/FHIRBridge.UnitTests/Governance/TokenEndpointFailureDiagnosisRuleTests.cs
+  s_aedacb30c05cae::t_4127a30f4ac623 1-38
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  s_aedacb30c05cae::t_1cc85d72787bc8 341,347
+  s_aedacb30c05cae::t_b990d11bdf7cb2 142-238
+  s_aedacb30c05cae::t_e10d0554f89a44 109-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "bc677561634f4292e05fd8d505d778c0d558b903",
+  "prompts": {},
+  "sessions": {
+    "s_aedacb30c05cae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e736d03b-dc6a-477b-a9c6-f3d49aa9fb15",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d9867ffc15e4a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "734721ed-1294-420f-9009-d6786943c114",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

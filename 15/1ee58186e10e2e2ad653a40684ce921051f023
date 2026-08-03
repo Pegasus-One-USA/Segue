@@ -1,0 +1,23 @@
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.scss
+  s_391b55190a7812::t_027f00ba70b8d4 5-7,10-12,14-16,20,23-27,31,35-39,42-44,47-53,55-57,60-66,68-79,83-90,114-115,117-143
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.ts
+  s_391b55190a7812::t_3bc3f42a1c0e3f 11
+Demo_TestApp/frontend/src/app/demo-types/backend-system/patient-details/patient-details.html
+  s_391b55190a7812::t_1a886eb746b1b4 2-5,8,10-21,23-59,61-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "151ee58186e10e2e2ad653a40684ce921051f023",
+  "prompts": {},
+  "sessions": {
+    "s_391b55190a7812": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f15e1902-866d-4125-be7e-f52ddb0befa8",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

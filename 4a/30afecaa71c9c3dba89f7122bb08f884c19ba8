@@ -1,0 +1,22 @@
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_563b36e6d1f96c::t_2ae3cc3e621bfb 204-206
+portal/src/app/auth/services/auth.service.ts
+  s_563b36e6d1f96c::t_2e2ddbf4c606a2 3
+  s_563b36e6d1f96c::t_a31ac7571e0b2a 123-126,131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "4a30afecaa71c9c3dba89f7122bb08f884c19ba8",
+  "prompts": {},
+  "sessions": {
+    "s_563b36e6d1f96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d1be468-7973-4038-9618-43ded366ad88",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainmachiwalaGZ <hasnain.machiwala@growthzone.com>"
+    }
+  }
+}
