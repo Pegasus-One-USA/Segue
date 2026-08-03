@@ -199,7 +199,7 @@ public sealed class Worker : BackgroundService
         return trigger.Type switch
         {
             WorkflowTriggerType.Schedule =>
-                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc, trigger.TimeZoneId),
+                ScheduleExpressionMatcher.IsDueSince(trigger.ScheduleExpression, workflow.LastTriggeredOnUtc, nowUtc, trigger.TimeZoneId, workflow.CreatedOnUtc),
             WorkflowTriggerType.Poll =>
                 trigger.IntervalMinutes is int minutes && minutes > 0 &&
                 (workflow.LastTriggeredOnUtc is null ||

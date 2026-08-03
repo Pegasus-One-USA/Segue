@@ -78,6 +78,35 @@ public sealed class ScheduleExpressionMatcherTests
     }
 
     [Fact]
+    public void IsDueSince_catches_up_from_created_on_utc_when_never_triggered()
+    {
+        // Workflow created at 23:30 UTC with a poll landing at 23:43 — the 23:40 slot must not be missed just
+        // because the trigger has never fired before (no LastTriggeredOnUtc yet).
+        var createdOnUtc = new DateTime(2026, 1, 15, 23, 30, 0, DateTimeKind.Utc);
+        var utcNow = new DateTime(2026, 1, 15, 23, 43, 0, DateTimeKind.Utc);
+
+        ScheduleExpressionMatcher.IsDueSince("40 23 * * *", null, utcNow, "UTC", createdOnUtc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsDueSince_does_not_backfill_before_created_on_utc_when_never_triggered()
+    {
+        // A schedule slot that fell before the workflow even existed must not fire retroactively.
+        var createdOnUtc = new DateTime(2026, 1, 15, 23, 41, 0, DateTimeKind.Utc);
+        var utcNow = new DateTime(2026, 1, 15, 23, 43, 0, DateTimeKind.Utc);
+
+        ScheduleExpressionMatcher.IsDueSince("40 23 * * *", null, utcNow, "UTC", createdOnUtc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsDueSince_with_no_created_on_utc_falls_back_to_current_minute_only_when_never_triggered()
+    {
+        var utcNow = new DateTime(2026, 1, 15, 23, 43, 0, DateTimeKind.Utc);
+
+        ScheduleExpressionMatcher.IsDueSince("40 23 * * *", null, utcNow, "UTC", createdOnUtc: null).Should().BeFalse();
+    }
+
+    [Fact]
     public void NextDueAfter_returns_a_utc_instant_that_corresponds_to_the_configured_zones_wall_clock_time()
     {
         var fromUtc = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);

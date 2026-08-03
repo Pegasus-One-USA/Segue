@@ -44,15 +44,19 @@ public static class ScheduleExpressionMatcher
     /// <summary>
     /// Returns true when the schedule has at least one matching minute in the window
     /// (<paramref name="lastTriggeredOnUtc"/>, <paramref name="utcNow"/>]. This makes scheduling catch-up aware:
-    /// a slot missed while the dispatcher was down still fires once on the next evaluation. When the route has never
-    /// been triggered, only the current minute is considered (no historical backfill on first enable).
+    /// a slot missed while the dispatcher was down (or simply between poll ticks) still fires once on the next
+    /// evaluation. When the route/workflow has never been triggered, the window starts at
+    /// <paramref name="createdOnUtc"/> instead (still bounded by <see cref="MaxCatchUpMinutes"/>), so a slot missed
+    /// between creation and the first poll after it still fires — without replaying an unbounded backlog if
+    /// <paramref name="createdOnUtc"/> is old and the schedule was only just enabled.
     /// <paramref name="timeZoneId"/> is the zone the cron fields are evaluated in — defaults to UTC.
     /// </summary>
     public static bool IsDueSince(
         string? scheduleExpression,
         DateTime? lastTriggeredOnUtc,
         DateTime utcNow,
-        string? timeZoneId = "UTC")
+        string? timeZoneId = "UTC",
+        DateTime? createdOnUtc = null)
     {
         if (string.IsNullOrWhiteSpace(scheduleExpression))
         {
@@ -67,6 +71,11 @@ public static class ScheduleExpressionMatcher
         {
             var afterLast = TruncateToMinuteUtc(last).AddMinutes(1);
             start = afterLast > earliest ? afterLast : earliest;
+        }
+        else if (createdOnUtc is { } created)
+        {
+            var createdMinute = TruncateToMinuteUtc(created);
+            start = createdMinute > earliest ? createdMinute : earliest;
         }
         else
         {
