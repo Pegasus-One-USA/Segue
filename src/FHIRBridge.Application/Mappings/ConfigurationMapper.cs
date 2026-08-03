@@ -178,7 +178,8 @@ public static class ConfigurationMapper
                 : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             field.IsUpsertKey,
             field.CorrelationCodeJsonPath,
-            field.CorrelationCodeValue);
+            field.CorrelationCodeValue,
+            IsEnabled: field.IsEnabled);
     }
 
     public static ResourcePipelineRouteDto ToDto(ResourcePipelineRoute route)

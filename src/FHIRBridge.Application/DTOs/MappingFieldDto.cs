@@ -29,4 +29,5 @@ public sealed record MappingFieldDto(
     // JsonMappingEngine can reject a value that would overflow the column before it's ever sent to the database.
     int? MaxLength = null,
     int? Precision = null,
-    int? Scale = null);
+    int? Scale = null,
+    bool IsEnabled = true);

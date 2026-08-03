@@ -172,7 +172,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
                 result[profile.ResourceType] = new ResourceMappingConfig(
                     profile.DestinationObject,
-                    profile.Fields.Select(ConfigurationMapper.ToDto).ToArray());
+                    profile.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray());
             }
         }
 

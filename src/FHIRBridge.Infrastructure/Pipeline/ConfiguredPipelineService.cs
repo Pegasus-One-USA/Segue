@@ -1338,6 +1338,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .Where(field =>
                 string.IsNullOrWhiteSpace(field.DestinationObject) ||
                 string.Equals(field.DestinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase))
+            .Where(field => field.IsEnabled)
             .ToList();
 
         mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
