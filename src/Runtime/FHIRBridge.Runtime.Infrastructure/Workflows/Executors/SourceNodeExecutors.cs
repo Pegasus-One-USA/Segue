@@ -278,18 +278,40 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // hand-authored node config. If even that is absent, there is no way to know what this node should fetch —
         // silently defaulting to "Patient" here previously meant a misconfigured node would quietly under-fetch
         // instead of failing the run, so this now fails loudly and tells the caller what to configure.
-        var resourceTypes = configuredResources is { Count: > 0 }
-            ? configuredResources
-            : source.ResourceTypes is { Count: > 0 } configured
-                ? configured
-                : DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes
-                    ? fromScopes
-                    : !string.IsNullOrWhiteSpace(configuredResourceType)
-                        ? [configuredResourceType]
-                        : throw new InvalidOperationException(
-                            $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
-                            "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, " +
-                            "and no SMART scopes to derive one from. Configure at least one resource type for this node.");
+        IReadOnlyCollection<string> resourceTypes;
+        if (configuredResources is { Count: > 0 })
+        {
+            resourceTypes = configuredResources;
+        }
+        else if (source.ResourceTypes is { Count: > 0 } configured)
+        {
+            resourceTypes = configured;
+        }
+        else if (DeriveResourceTypesFromScopes(source.Scopes) is { Count: > 0 } fromScopes)
+        {
+            resourceTypes = fromScopes;
+        }
+        else if (!string.IsNullOrWhiteSpace(configuredResourceType))
+        {
+            resourceTypes = [configuredResourceType];
+        }
+        else
+        {
+            // Last resort before failing outright: a source with no resource-type config of its own (e.g. Generic
+            // FHIR, which has no OAuth scopes to derive from at all) still has a real answer as long as some
+            // reachable destination declares its own "dest_resources" — the same field RestrictToDestinationResourceTypesAsync
+            // below already reads to *narrow* an existing list. Using it to *seed* one too means the source form's
+            // own Resource Type field can be optional rather than mandatory, since the destination wizard's data-group
+            // picker already captures the same choice for any workflow that has a destination at all.
+            var fromDestination = await GetDestinationResourceTypesAsync(node, cancellationToken);
+            resourceTypes = fromDestination.Count > 0
+                ? fromDestination
+                : throw new InvalidOperationException(
+                    $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
+                    "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, no SMART " +
+                    "scopes to derive one from, and no reachable destination's own resource selection to fall back " +
+                    "to. Configure at least one resource type for this node or its destination.");
+        }
 
         // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
         // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source
@@ -569,15 +591,34 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         CancellationToken cancellationToken)
     {
+        var destinationResourceTypes = await GetDestinationResourceTypesAsync(node, cancellationToken);
+        return destinationResourceTypes.Count == 0
+            ? resourceTypes
+            : resourceTypes.Where(destinationResourceTypes.Contains).ToList();
+    }
+
+    /// <summary>
+    /// Every FHIR resource type any destination reachable from this source node has declared via its own
+    /// wizard-authored "dest_resources" field — unioned across all such destinations. Shared by
+    /// <see cref="RestrictToDestinationResourceTypesAsync"/> (uses this to narrow an already-resolved list) and the
+    /// resource-type resolution fallback chain in <see cref="ExecuteAsync"/> (uses this to seed one from scratch
+    /// when the source itself has no configured/connection-level/scope-derived resource types of its own — e.g. a
+    /// Generic FHIR source, which has no OAuth scopes to derive anything from). Returns an empty set (never throws)
+    /// when there's no workflow store, no workflow definition, or no reachable destination at all.
+    /// </summary>
+    private async Task<IReadOnlyCollection<string>> GetDestinationResourceTypesAsync(
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
         if (_workflowDefinitionStore is null)
         {
-            return resourceTypes;
+            return [];
         }
 
         var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
         if (definition is null)
         {
-            return resourceTypes;
+            return [];
         }
 
         var reachable = new HashSet<Guid>();
@@ -605,9 +646,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             }
         }
 
-        return destinationResourceTypes.Count == 0
-            ? resourceTypes
-            : resourceTypes.Where(destinationResourceTypes.Contains).ToList();
+        return destinationResourceTypes;
     }
 
     /// <summary>

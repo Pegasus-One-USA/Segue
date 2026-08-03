@@ -298,7 +298,10 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Subscription',
     description: 'Epic pushes change notifications through a FHIR Subscription.',
     fields: [
-      { key: 'subscriptionResourceType', label: 'Resource Type',        type: 'multiselect', required: true },
+      // Hidden here for the same reason as searchRestResourceType below (Resource Type is already captured by the
+      // destination node's own "dest_resources" picker) — the control itself stays in the form: scope generation
+      // (activeRetrievalResourceTypes/scopeString) still reads it. See ensureRetrievalResourceTypeDefault.
+      { key: 'subscriptionResourceType', label: 'Resource Type',        type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'eventType',              label: 'Event Type in Epic',      type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
       { key: 'notificationPayload',    label: 'Notification Payload',    type: 'select',       required: true, options: [
         { value: 'id-only', label: 'ID only' },
@@ -314,7 +317,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Webhook',
     description: 'Epic (or a middleware relay) posts updates to a Segue callback endpoint.',
     fields: [
-      { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: true },
+      // Hidden — see subscriptionResourceType above / ensureRetrievalResourceTypeDefault.
+      { key: 'webhookResourceType',    label: 'Resource Type',           type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'eventType',              label: 'Event Type',              type: 'select',       required: true, options: EVENT_TYPE_OPTIONS },
       { key: 'endpointType',           label: 'Endpoint Type',           type: 'select',       required: true, options: ENDPOINT_TYPE_OPTIONS },
       { key: 'payloadFormat',          label: 'Payload Format',          type: 'select',       required: true, options: [
@@ -338,7 +342,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
       // connection's one-shot fetch runs under.
       // Hidden for every retrieval scope (Standalone already reused the shared Resource Type & Scopes picker
       // instead; Backend System now gets the same full-MVP1-set default automatically — see
-      // ensureSearchRestResourceTypeDefault — rather than a second, separate multiselect). The control itself
+      // ensureRetrievalResourceTypeDefault — rather than a second, separate multiselect). The control itself
       // stays in the form: scope generation (activeRetrievalResourceTypes/scopeString) still reads it.
       { key: 'searchRestResourceType', label: 'Resource Type',                   type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'searchCriteria',        label: 'Search Criteria',                  type: 'text',         required: false, placeholder: 'status=active&category=vital-signs', hint: 'Optional FHIR search parameters appended to every request.' },
@@ -376,7 +380,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> = 
     label: 'Bulk Export',
     description: 'Kicks off a FHIR Bulk Data $export job and retrieves the resulting NDJSON files.',
     fields: [
-      { key: 'bulkExportResourceType', label: 'Resource Type',               type: 'multiselect', required: true },
+      // Hidden — see subscriptionResourceType above / ensureRetrievalResourceTypeDefault.
+      { key: 'bulkExportResourceType', label: 'Resource Type',               type: 'multiselect', required: false, visibleWhen: () => false },
       { key: 'exportScope',           label: 'Export Scope',                 type: 'select',       required: true, options: [
         { value: 'system',  label: 'System ($export)' },
         { value: 'group',   label: 'Group ($export)' },
@@ -968,7 +973,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
       && this.form.controls.resources.value.length === 0) {
       this.form.controls.resources.setValue([...FHIR_RESOURCES]);
     }
-    this.ensureSearchRestResourceTypeDefault();
+    this.ensureRetrievalResourceTypeDefault();
 
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
@@ -1015,7 +1020,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
         const nextMethod = (next as RetrievalMethod) || '';
         this.clearInapplicableRetrievalFields(this.prevRetrievalMethod, nextMethod);
         this.prevRetrievalMethod = nextMethod;
-        this.ensureSearchRestResourceTypeDefault();
+        this.ensureRetrievalResourceTypeDefault();
         this.syncRetrievalValidators();
       });
 
@@ -1148,7 +1153,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     setIfPresent('timeoutSeconds', 'Timeout (seconds)');
     setIfPresent('maxRecordsPerRun', 'Max records per run');
 
-    this.ensureSearchRestResourceTypeDefault();
+    this.ensureRetrievalResourceTypeDefault();
   }
 
   /**
@@ -1327,17 +1332,25 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     this.form.patchValue(patch);
   }
 
-  /** Search REST's own Resource Type control is hidden entirely from the UI (see RETRIEVAL_METHOD_CONFIG['search-
-   *  rest'].fields) — scope generation (activeRetrievalResourceTypes/scopeString) still reads it, so a Backend
-   *  System connection with Search REST selected needs a non-empty value from somewhere other than a picker the
-   *  admin can no longer see. Defaults it to every MVP1 resource type, same as the shared Resource Type picker
-   *  already does for audiences that show it (see the showResourcePicker default in ngOnInit). Never overwrites a
-   *  real, already-populated value — a genuinely restored/edited selection (from a saved connection or an edited
-   *  canvas node) is left exactly as-is. */
-  private ensureSearchRestResourceTypeDefault(): void {
-    if (this.form.controls.retrievalMethod.value !== 'search-rest') return;
-    if (this.form.controls.searchRestResourceType.value.length > 0) return;
-    this.form.controls.searchRestResourceType.setValue([...FHIR_RESOURCES]);
+  /** Every retrieval method's own Resource Type control is hidden entirely from the UI (see RETRIEVAL_METHOD_CONFIG
+   *  fields) — the destination node's own "dest_resources" picker (and, at execution time, the backend's
+   *  destination-derived fallback) already captures the same choice. Scope generation
+   *  (activeRetrievalResourceTypes/scopeString) still reads whichever control belongs to the active method, so a
+   *  connection needs a non-empty value from somewhere other than a picker the admin can no longer see. Defaults it
+   *  to every MVP1 resource type, same as the shared Resource Type picker already does for audiences that show it
+   *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
+   *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
+  private ensureRetrievalResourceTypeDefault(): void {
+    const key = ({
+      subscription: 'subscriptionResourceType',
+      webhook: 'webhookResourceType',
+      'search-rest': 'searchRestResourceType',
+      'bulk-export': 'bulkExportResourceType',
+    } as const)[this.form.controls.retrievalMethod.value as RetrievalMethod];
+    if (!key) return;
+    const control = this.form.controls[key];
+    if (control.value.length > 0) return;
+    control.setValue([...FHIR_RESOURCES]);
   }
 
   /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
@@ -1731,8 +1744,9 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
 
     // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control needs a non-empty
     // value even when the cloned connection has no retrieval data to restore it from — same full-MVP1-set
-    // fallback the shared `resources` picker's own default above uses (see also ensureSearchRestResourceTypeDefault,
-    // for the case where the field is Search REST's own hidden control and this clone had no retrieval data at all).
+    // fallback the shared `resources` picker's own default above uses (see also ensureRetrievalResourceTypeDefault,
+    // for the case where the field is one of the retrieval methods' own hidden controls and this clone had no
+    // retrieval data at all).
     this.form.get(retrievalResourceKey)?.setValue(
       retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES]
     );

@@ -184,11 +184,12 @@ export class GenericFhirSourceFormComponent {
     }
   });
 
-  readonly availableResources = FHIR_RESOURCES;
-  readonly selectedResources = signal<string[]>([]);
-
-  readonly allResourcesSelected = computed(() => this.selectedResources().length === this.availableResources.length);
-  readonly someResourcesSelected = computed(() => this.selectedResources().length > 0 && !this.allResourcesSelected());
+  // Resource Type is not asked in this form's own UI — the destination node's own "dest_resources" picker already
+  // captures it, and SourceNodeExecutor derives it from there when a source node has none of its own. Defaults to
+  // every MVP1 resource type (same fallback EpicAudienceFormComponent.ensureRetrievalResourceTypeDefault uses for
+  // its own now-hidden per-method Resource Type controls) so the emitted 'Resources' field is never empty; a node
+  // restored from a previously saved value keeps that value instead (see _populate).
+  readonly selectedResources = signal<string[]>([...FHIR_RESOURCES]);
 
   constructor() {
     effect(() => {
@@ -242,19 +243,6 @@ export class GenericFhirSourceFormComponent {
     }
   }
 
-  isResourceSelected(r: string): boolean {
-    return this.selectedResources().includes(r);
-  }
-
-  toggleResource(r: string): void {
-    this.selectedResources.update(list =>
-      list.includes(r) ? list.filter(x => x !== r) : [...list, r]);
-  }
-
-  toggleAllResources(): void {
-    this.selectedResources.set(this.allResourcesSelected() ? [] : [...this.availableResources]);
-  }
-
   toggleWeekday(day: string): void {
     this.form.controls.fullRefreshDaysOfWeek.setValue(
       this.selectedWeekdays().includes(day)
@@ -267,7 +255,7 @@ export class GenericFhirSourceFormComponent {
   /** null ⇒ fix the highlighted fields — mirrors getConfig()/getRows()'s "null means invalid" contract. */
   getFields(): Record<string, string> | null {
     this.form.markAllAsTouched();
-    if (this.form.invalid || this.selectedResources().length === 0) return null;
+    if (this.form.invalid) return null;
     if (this.showRecurrence() && this.form.controls.fullRefreshRecurrence.value === 'weekly' && this.selectedWeekdays().length === 0) return null;
 
     const v = this.form.getRawValue();

@@ -28,34 +28,12 @@
       </div>
     </div>
 
-    <!-- ═══════════ SECTION 2: Resources ═════════════════════════════════════ -->
+    <!-- ═══════════ SECTION 2: Data Retrieval Method ══════════════════════════ -->
+    <!-- Resource Type is deliberately not asked here — the destination node's own "dest_resources" picker already
+         captures it, and the backend derives it from there when this source node has none of its own. -->
     <div class="eaf-section">
       <div class="eaf-section-head">
         <span class="eaf-section-num">2</span>
-        <span class="eaf-section-title">Resources</span>
-      </div>
-
-      <div class="eaf-resources-grid">
-        <label class="eaf-res-all">
-          <input type="checkbox" [checked]="allResourcesSelected()" [indeterminate]="someResourcesSelected()" (change)="toggleAllResources()" />
-          <span>Select all</span>
-        </label>
-        @for (r of availableResources; track r) {
-          <label class="eaf-res-item" [class.eaf-res-item--checked]="isResourceSelected(r)">
-            <input type="checkbox" [checked]="isResourceSelected(r)" (change)="toggleResource(r)" />
-            <span class="eaf-res-name">{{ r }}</span>
-          </label>
-        }
-      </div>
-      @if (selectedResources().length === 0) {
-        <p class="eaf-error-msg">Select at least one resource.</p>
-      }
-    </div>
-
-    <!-- ═══════════ SECTION 3: Data Retrieval Method ══════════════════════════ -->
-    <div class="eaf-section">
-      <div class="eaf-section-head">
-        <span class="eaf-section-num">3</span>
         <span class="eaf-section-title">Data Retrieval Method</span>
       </div>
       <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this server.</p>
@@ -80,7 +58,7 @@
     <!-- ═══════════ SECTION 4: Retrieval Configuration ═══════════════════════ -->
     <div class="eaf-section eaf-section--last">
       <div class="eaf-section-head">
-        <span class="eaf-section-num">4</span>
+        <span class="eaf-section-num">3</span>
         <span class="eaf-section-title">Retrieval Configuration</span>
         @if (retrievalMethodConfig(); as method) {
           <span class="eaf-badge-neutral">{{ method.label }}</span>
