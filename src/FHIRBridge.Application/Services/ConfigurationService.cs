@@ -499,6 +499,68 @@ public sealed class ConfigurationService : IConfigurationService
         return ConfigurationMapper.ToDto(mappingProfile);
     }
 
+    public async Task<PagedResult<MappingProfileDto>> GetMappingProfilesPagedAsync(
+        MappingProfileFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken cancellationToken)
+    {
+        var result = await _repository.GetMappingProfilesPagedAsync(filter, page, pageSize, sortBy, sortOrder, cancellationToken);
+        var dtos = result.Items.Select(ConfigurationMapper.ToDto).ToList();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+        var resolved = dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToList();
+
+        return new PagedResult<MappingProfileDto>(
+            resolved,
+            result.TotalCount,
+            result.Page,
+            result.PageSize);
+    }
+
+    public async Task<MappingProfileDto?> GetMappingProfileByIdAsync(Guid mappingProfileId, CancellationToken cancellationToken)
+    {
+        var mappingProfile = await _repository.GetMappingProfileAsync(mappingProfileId, cancellationToken);
+        if (mappingProfile is null)
+        {
+            return null;
+        }
+
+        var dto = ConfigurationMapper.ToDto(mappingProfile);
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            new[] { dto.CreatedBy, dto.ModifiedBy }, cancellationToken);
+
+        return dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        };
+    }
+
+    public async Task<int> GetMappingProfileUsageCountAsync(Guid mappingProfileId, CancellationToken cancellationToken)
+    {
+        var routes = await _repository.GetRoutesAsync(cancellationToken);
+
+        return routes.Count(route =>
+            route.MappingProfileId == mappingProfileId ||
+            route.ResourceMappings.Any(mapping =>
+                mapping.MappingProfileId == mappingProfileId ||
+                mapping.ParentReferences.Any(parent => parent.ParentMappingProfileId == mappingProfileId)));
+    }
+
+    public async Task DeleteMappingProfileAsync(Guid mappingProfileId, CancellationToken cancellationToken)
+    {
+        var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        await _repository.RemoveMappingProfileAsync(mappingProfile, cancellationToken);
+    }
+
     public async Task<ResourceConfigurationDto> ConfigureResourceAsync(
         ConfigureResourceRequest request,
         CancellationToken cancellationToken)

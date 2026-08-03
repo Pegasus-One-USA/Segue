@@ -190,6 +190,14 @@ export interface MappingFieldRequest {
   // items by position. Ignored for every other arrayPolicy.
   correlationCodeJsonPath?: string | null;
   correlationCodeValue?: string | null;
+  // Mirrors the remaining MappingFieldDto members (docs/backend/14-mapping-profile-master-screen-plan.md §3.2) —
+  // MaxLength/Precision/Scale are deliberately excluded, since the backend documents them as never persisted on
+  // the profile itself, only filled in at pipeline run time from the destination's live schema.
+  normalizationType?: string | null;
+  terminologySystemJsonPath?: string | null;
+  terminologyCodeJsonPath?: string | null;
+  cardinality?: string | null;
+  isEnabled?: boolean;
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on

@@ -129,9 +129,16 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             PatientIds: retrieval?.PatientIds is { Length: > 0 } patientIds ? patientIds : null,
             OutputFormat: retrieval?.OutputFormat,
             // Bulk $export uses the _since cursor (not the search path's _lastUpdated); carry it only when incremental
-            // sync is on and a prior run recorded a timestamp.
-            Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
+            // sync is on and every configured resource type has a prior recorded timestamp (see
+            // GetEarliestSuccessfulSyncUtc — a batched export job can't give one type a different _since than another).
+            Since: retrieval is { IncrementalSyncEnabled: true } && retrieval.GetEarliestSuccessfulSyncUtc(retrieval.ResourceTypes) is { } lastSync
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
+                : null,
+            // Search REST fetches each resource type via its own independent request, so each tracks its own
+            // _lastUpdated cursor instead of sharing one connection-wide value (see SourceNodeExecutors, which
+            // looks this up per resource type when building each request).
+            LastUpdatedWatermarks: retrieval is { IncrementalSyncEnabled: true }
+                ? retrieval.LastSuccessfulSyncUtcByResourceType
                 : null,
             TargetPatientId: targetPatientId,
             PatientSearchCriteria: patientSearchCriteria,
@@ -260,10 +267,10 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             }
         }
 
-        if (retrieval.IncrementalSyncEnabled && retrieval.LastSuccessfulSyncUtc is { } lastSync)
-        {
-            parts.Add($"_lastUpdated=gt{lastSync:yyyy-MM-ddTHH:mm:ssZ}");
-        }
+        // _lastUpdated is intentionally NOT added here: each resource type is fetched via its own independent
+        // search request with its own watermark (source.LastUpdatedWatermarks, applied per-type by
+        // SourceNodeExecutors), rather than one value shared across every resource type this connection is
+        // configured for.
 
         if (!string.IsNullOrWhiteSpace(retrieval.SortOrder))
         {

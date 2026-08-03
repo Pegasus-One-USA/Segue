@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -12,6 +13,13 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
         (left, right) => ReferenceEquals(left, right) || (left != null && right != null && left.SequenceEqual(right)),
         value => value.Aggregate(0, (hash, item) => HashCode.Combine(hash, StringComparer.Ordinal.GetHashCode(item))),
         value => value.ToArray());
+
+    // Compares the JSON-serialized resource-type -> last-sync-timestamp map by content, independent of key order.
+    private static readonly ValueComparer<IReadOnlyDictionary<string, DateTime>> LastSuccessfulSyncMapComparer = new(
+        (left, right) => left!.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .SequenceEqual(right!.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)),
+        value => value.Aggregate(0, (hash, kv) => HashCode.Combine(hash, StringComparer.OrdinalIgnoreCase.GetHashCode(kv.Key), kv.Value)),
+        value => value.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase));
 
     public void Configure(EntityTypeBuilder<SourceConnection> builder)
     {
@@ -179,8 +187,13 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
             retrieval.Property(x => x.MaxRecordsPerRun)
                 .HasColumnName("RetrievalMaxRecordsPerRun");
 
-            retrieval.Property(x => x.LastSuccessfulSyncUtc)
-                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+            var lastSuccessfulSync = retrieval.Property(x => x.LastSuccessfulSyncUtcByResourceType)
+                .HasConversion(
+                    value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
+                    value => JsonSerializer.Deserialize<Dictionary<string, DateTime>>(value, (JsonSerializerOptions?)null)
+                        ?? new Dictionary<string, DateTime>())
+                .HasColumnName("RetrievalLastSuccessfulSyncByResourceType");
+            lastSuccessfulSync.Metadata.SetValueComparer(LastSuccessfulSyncMapComparer);
 
             retrieval.Property(x => x.ExportScope)
                 .HasMaxLength(50)

@@ -108,6 +108,19 @@ export const DESTINATION_ENDPOINTS = {
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
 };
 
+// ─── Mapping Profiles (ConfigurationsController / ConfigurationCatalogController — api/v1/mapping-profiles) ──
+export const MAPPING_PROFILE_ENDPOINTS = {
+  list:      `${API_V1_BASE}/mapping-profiles`,
+  paged:     `${API_V1_BASE}/mapping-profiles/paged`,
+  byId:      (id: string) => `${API_V1_BASE}/mapping-profiles/${id}`,
+  activate:   (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/activate`,
+  deactivate: (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/deactivate`,
+  // WorkflowEndpoints, not ConfigurationsController — same reasoning as DESTINATION_ENDPOINTS.usage: the
+  // usage check has to walk every workflow's node config (plus route-level references), which only the
+  // Runtime workflow store + IConfigurationRepository together can answer.
+  usage:     `${API_V1_BASE}/workflows/mapping-profile-usage`,
+};
+
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
 // Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.

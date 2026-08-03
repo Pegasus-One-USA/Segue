@@ -275,6 +275,68 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public async Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) =>
         await _db.MappingProfiles.Include(x => x.Fields).OrderBy(x => x.Name).ToListAsync(ct);
 
+    public async Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(
+        MappingProfileFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _db.MappingProfiles.Include(x => x.Fields).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var search = filter.Search;
+            query = query.Where(x =>
+                EF.Functions.Like(x.Name, $"%{search}%") ||
+                EF.Functions.Like(x.DestinationObject, $"%{search}%"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ResourceType))
+        {
+            query = query.Where(x => x.ResourceType == filter.ResourceType);
+        }
+
+        if (filter.SourceConnectionId.HasValue)
+        {
+            query = query.Where(x => x.SourceConnectionId == filter.SourceConnectionId.Value);
+        }
+
+        if (filter.DestinationId.HasValue)
+        {
+            query = query.Where(x => x.DestinationId == filter.DestinationId.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        query = sortBy?.ToLowerInvariant() switch
+        {
+            "resourcetype"       => desc ? query.OrderByDescending(x => x.ResourceType)                  : query.OrderBy(x => x.ResourceType),
+            "destinationobject"  => desc ? query.OrderByDescending(x => x.DestinationObject)              : query.OrderBy(x => x.DestinationObject),
+            "isenabled"          => desc ? query.OrderByDescending(x => x.IsEnabled)                      : query.OrderBy(x => x.IsEnabled),
+            "createdonutc"       => desc ? query.OrderByDescending(x => x.CreatedOnUtc)                   : query.OrderBy(x => x.CreatedOnUtc),
+            "modifiedonutc"      => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc): query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                    => desc ? query.OrderByDescending(x => x.Name)                           : query.OrderBy(x => x.Name),
+        };
+
+        var items = await query
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return new PagedResult<MappingProfile>(items, totalCount, page, take);
+    }
+
     public async Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) =>
         await _db.MappingProfiles.Include(x => x.Fields).FirstOrDefaultAsync(x => x.Id == id, ct);
 
@@ -310,6 +372,14 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         // later Get*Async for this id within the same request's DbContext re-materializes cleanly instead of
         // hitting the corrupted tracked entry/orphans.
         _db.ChangeTracker.Clear();
+    }
+
+    public Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct)
+    {
+        // MappingProfile is ISoftDeletable: AuditingSaveChangesInterceptor converts this Remove into a soft delete
+        // (IsDeleted/DeletedBy/DeletedOnUtc) rather than issuing a physical DELETE.
+        _db.MappingProfiles.Remove(e);
+        return _db.SaveChangesAsync(ct);
     }
 
     // ── Resource pipeline routes ──────────────────────────────────────────────

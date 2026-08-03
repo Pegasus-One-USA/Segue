@@ -1195,7 +1195,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         var scope = MapBulkExportScope(retrieval?.ExportScope);
 
-        DateTimeOffset? since = retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } syncedAt }
+        DateTimeOffset? since = retrieval is { IncrementalSyncEnabled: true } && retrieval.GetEarliestSuccessfulSyncUtc(resourceTypes) is { } syncedAt
             ? new DateTimeOffset(DateTime.SpecifyKind(syncedAt, DateTimeKind.Utc))
             : null;
 

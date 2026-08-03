@@ -48,9 +48,24 @@ public interface IConfigurationService
 
     Task<MappingProfileDto> AddMappingProfileAsync(CreateMappingProfileRequest request, CancellationToken cancellationToken);
 
+    Task<PagedResult<MappingProfileDto>> GetMappingProfilesPagedAsync(
+        MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken cancellationToken);
+
+    Task<MappingProfileDto?> GetMappingProfileByIdAsync(Guid mappingProfileId, CancellationToken cancellationToken);
+
     Task<MappingProfileDto> UpdateMappingProfileAsync(Guid mappingProfileId, CreateMappingProfileRequest request, CancellationToken cancellationToken);
 
     Task<MappingProfileDto> SetMappingProfileEnabledAsync(Guid mappingProfileId, bool isEnabled, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Number of <see cref="Domain.Entities.ResourcePipelineRoute"/> records that reference this mapping profile —
+    /// as their primary mapping, as one of their composite <c>ResourceMappings</c>, or as a parent reference target.
+    /// A non-zero count means <see cref="DeleteMappingProfileAsync"/> would fail against the Restrict FK; callers
+    /// should surface this as a conflict before attempting the delete.
+    /// </summary>
+    Task<int> GetMappingProfileUsageCountAsync(Guid mappingProfileId, CancellationToken cancellationToken);
+
+    Task DeleteMappingProfileAsync(Guid mappingProfileId, CancellationToken cancellationToken);
 
     Task<ResourceConfigurationDto> ConfigureResourceAsync(ConfigureResourceRequest request, CancellationToken cancellationToken);
 

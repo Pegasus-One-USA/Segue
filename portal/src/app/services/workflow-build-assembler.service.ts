@@ -30,6 +30,21 @@ interface DestMappingRow {
   isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
   isRequiredParentRef?: boolean; // wizard-forced true on a locked "child of" reference-field row
   parentResourceType?: string;   // which parent (of possibly several) this locked row satisfies
+  // Advanced MappingFieldDto members the wizard has no UI to author (docs/backend/14-mapping-profile-master-screen-plan.md
+  // §3.2) but must still round-trip losslessly when present — e.g. a row loaded from a profile the Mapping
+  // Profiles master screen authored. undefined for every wizard-authored row, in which case the computed
+  // defaults below (isRequired/arrayPolicy/etc.) apply exactly as before.
+  isRequired?: boolean;
+  defaultValue?: string;
+  format?: string;
+  normalizationType?: string;
+  terminologySystemJsonPath?: string;
+  terminologyCodeJsonPath?: string;
+  arrayPolicy?: string;
+  cardinality?: string;
+  correlationCodeJsonPath?: string;
+  correlationCodeValue?: string;
+  isEnabled?: boolean;
 }
 
 /**
@@ -612,17 +627,23 @@ export class WorkflowBuildAssemblerService {
         // required here matches reality and satisfies the backend's NOT NULL-vs-IsRequired check
         // (CreateMappingProfileRequestValidator) for destinations whose key column is NOT NULL, which is
         // virtually always the case for a primary key. Every other row defaults to optional; a locked
-        // "child of" reference row is upgraded to required separately below.
-        isRequired: row === idRow,
-        defaultValue: null,
-        format: null,
+        // "child of" reference row is upgraded to required separately below. A row carrying its own
+        // isRequired (loaded from a profile authored outside the wizard) overrides this computed default.
+        isRequired: row.isRequired ?? row === idRow,
+        defaultValue: row.defaultValue ?? null,
+        format: row.format ?? null,
+        normalizationType: row.normalizationType,
+        terminologySystemJsonPath: row.terminologySystemJsonPath,
+        terminologyCodeJsonPath: row.terminologyCodeJsonPath,
+        cardinality: row.cardinality,
         // A flat destination column takes the first match when the path crosses an array; multi-value
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
+        arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
         arrayAncestors: arrays.length > 0 ? arrays : null,
-        isUpsertKey: row === idRow,
-        correlationCodeJsonPath: null,
-        correlationCodeValue: null,
+        isUpsertKey: row.isUpsertKey ?? row === idRow,
+        correlationCodeJsonPath: row.correlationCodeJsonPath ?? null,
+        correlationCodeValue: row.correlationCodeValue ?? null,
+        isEnabled: row.isEnabled,
       };
     });
     // A locked "child of" row is mandatory the same way the id row is — mark it required so the built

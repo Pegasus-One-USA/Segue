@@ -70,6 +70,13 @@ export class DestinationSchemaService {
     return this.http.post<DestinationSchemaProbe>(DESTINATION_ENDPOINTS.schemaPreview, request);
   }
 
+  /** Tables/columns of an already-saved relational destination, introspected server-side using its stored
+   *  secret — no credentials round-trip through the browser. Returns an empty table list (not an error) for
+   *  a non-relational destination type. */
+  getSchema(destinationId: string): Observable<{ destinationId: string; tables: DestinationTable[] }> {
+    return this.http.get<{ destinationId: string; tables: DestinationTable[] }>(DESTINATION_ENDPOINTS.schema(destinationId));
+  }
+
   /** Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). */
   testSftp(request: SftpConnectionTestRequest): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.sftpTest, request);

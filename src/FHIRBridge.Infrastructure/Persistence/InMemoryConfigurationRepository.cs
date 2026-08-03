@@ -225,6 +225,61 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<MappingProfile>>(_mappingProfiles.Values.OrderBy(x => x.Name).ToList());
 
+    public Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(
+        MappingProfileFilter filter,
+        int page,
+        int pageSize,
+        string? sortBy,
+        string? sortOrder,
+        CancellationToken ct)
+    {
+        var query = _mappingProfiles.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            query = query.Where(x =>
+                x.Name.Contains(filter.Search, StringComparison.OrdinalIgnoreCase) ||
+                x.DestinationObject.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ResourceType))
+        {
+            query = query.Where(x => string.Equals(x.ResourceType, filter.ResourceType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.SourceConnectionId.HasValue)
+        {
+            query = query.Where(x => x.SourceConnectionId == filter.SourceConnectionId.Value);
+        }
+
+        if (filter.DestinationId.HasValue)
+        {
+            query = query.Where(x => x.DestinationId == filter.DestinationId.Value);
+        }
+
+        if (filter.IsEnabled.HasValue)
+        {
+            query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedEnumerable<MappingProfile> ordering = sortBy?.ToLowerInvariant() switch
+        {
+            "resourcetype"      => desc ? query.OrderByDescending(x => x.ResourceType)                   : query.OrderBy(x => x.ResourceType),
+            "destinationobject" => desc ? query.OrderByDescending(x => x.DestinationObject)               : query.OrderBy(x => x.DestinationObject),
+            "isenabled"         => desc ? query.OrderByDescending(x => x.IsEnabled)                       : query.OrderBy(x => x.IsEnabled),
+            "createdonutc"      => desc ? query.OrderByDescending(x => x.CreatedOnUtc)                    : query.OrderBy(x => x.CreatedOnUtc),
+            "modifiedonutc"     => desc ? query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc) : query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            _                   => desc ? query.OrderByDescending(x => x.Name)                            : query.OrderBy(x => x.Name),
+        };
+        var ordered = ordering.ToList();
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = ordered.Skip(skip).Take(take).ToList();
+
+        return Task.FromResult(new PagedResult<MappingProfile>(items, ordered.Count, page, take));
+    }
+
     public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct)
     {
         _mappingProfiles.TryGetValue(id, out var e);
@@ -240,6 +295,12 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct)
     {
         _mappingProfiles[e.Id] = e;
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct)
+    {
+        _mappingProfiles.TryRemove(e.Id, out _);
         return Task.CompletedTask;
     }
 

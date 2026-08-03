@@ -89,9 +89,9 @@ export const routes: Routes = [
       // Backward-compatible redirects for the old standalone URLs these pages used to live at.
       { path: 'ehr-endpoints', redirectTo: 'settings/ehr-endpoints' },
       { path: 'allowed-origins', redirectTo: 'settings/allowed-origins' },
-      { path: 'system-security', redirectTo: 'settings/system-security' },
-      { path: 'source-connections', redirectTo: 'settings/source-connections' },
-      { path: 'destination-connections', redirectTo: 'settings/destination-connections' },
+      { path: 'system-security', redirectTo: 'settings/system-settings/security' },
+      { path: 'source-connections', redirectTo: 'settings/workflow-configurations/source-connections' },
+      { path: 'destination-connections', redirectTo: 'settings/workflow-configurations/destination-connections' },
 
       // User Account pages
       {

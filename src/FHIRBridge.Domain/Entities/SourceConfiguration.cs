@@ -44,13 +44,13 @@ public sealed class SourceConfiguration : AuditableChildEntity<Guid>, IHasAuditD
         Retrieval = retrieval;
     }
 
-    /// <summary>Advances the incremental-sync cursor after this workflow's run completes successfully. No-op when
-    /// this configuration has no retrieval configuration.</summary>
-    public void RecordRetrievalSync(DateTime syncedAtUtc)
+    /// <summary>Advances the incremental-sync cursor for the given resource types after this workflow's run
+    /// completes successfully. No-op when this configuration has no retrieval configuration.</summary>
+    public void RecordRetrievalSync(IReadOnlyCollection<string> resourceTypes, DateTime syncedAtUtc)
     {
         if (Retrieval is not null)
         {
-            Retrieval = Retrieval.WithLastSuccessfulSync(syncedAtUtc);
+            Retrieval = Retrieval.WithLastSuccessfulSync(resourceTypes, syncedAtUtc);
         }
     }
 

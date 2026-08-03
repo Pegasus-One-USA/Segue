@@ -133,6 +133,49 @@ public sealed class ConfigurationCatalogController : ControllerBase
     public async Task<IActionResult> ListMappingProfiles(CancellationToken cancellationToken)
     {
         var mappings = await _repository.GetMappingProfilesAsync(cancellationToken);
-        return Ok(mappings.Select(ConfigurationMapper.ToDto).ToArray());
+        var dtos = mappings.Select(ConfigurationMapper.ToDto).ToArray();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+
+        return Ok(dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToArray());
+    }
+
+    [HttpGet("mapping-profiles/paged")]
+    [ProducesResponseType(typeof(PagedResult<MappingProfileDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListMappingProfilesPaged(
+        [FromQuery] string? search,
+        [FromQuery] string? resourceType,
+        [FromQuery] Guid? sourceConnectionId,
+        [FromQuery] Guid? destinationId,
+        [FromQuery] bool? isEnabled,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortOrder,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _configurationService.GetMappingProfilesPagedAsync(
+            new MappingProfileFilter(search, resourceType, sourceConnectionId, destinationId, isEnabled),
+            page <= 0 ? 1 : page,
+            pageSize <= 0 ? 25 : pageSize,
+            sortBy,
+            sortOrder,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpGet("mapping-profiles/{mappingProfileId:guid}")]
+    [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMappingProfileById(Guid mappingProfileId, CancellationToken cancellationToken)
+    {
+        var mappingProfile = await _configurationService.GetMappingProfileByIdAsync(mappingProfileId, cancellationToken);
+        return mappingProfile is null ? NotFound() : Ok(mappingProfile);
     }
 }

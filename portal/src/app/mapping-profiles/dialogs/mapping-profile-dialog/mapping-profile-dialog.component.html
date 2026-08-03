@@ -1,0 +1,98 @@
+<h2 mat-dialog-title>
+  @if (isCreate) { New Mapping Profile }
+  @else if (isView) { View Mapping Profile — {{ data.mappingProfile?.name }} }
+  @else { Edit Mapping Profile — {{ data.mappingProfile?.name }} }
+</h2>
+
+<mat-dialog-content class="mpd-content">
+
+  <form [formGroup]="metaForm" class="mpd-meta-form">
+    <div class="mpd-meta-grid">
+
+      <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.name.invalid && metaForm.controls.name.touched">
+        <label for="mpd-name">Name <span class="mpd-req">*</span></label>
+        <input id="mpd-name" formControlName="name" placeholder="e.g. Patient → Warehouse" />
+      </div>
+
+      <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched">
+        <label for="mpd-resourceType">Resource Type <span class="mpd-req">*</span></label>
+        <select id="mpd-resourceType" formControlName="resourceType">
+          <option value="" disabled>Choose a FHIR resource…</option>
+          @for (r of resourceTypeOptions; track r) {
+            <option [value]="r">{{ r }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched">
+        <label for="mpd-source">Source Connection <span class="mpd-req">*</span></label>
+        <select id="mpd-source" formControlName="sourceConnectionId">
+          <option value="" disabled>Choose a source connection…</option>
+          @for (s of sourceOptions(); track s.id) {
+            <option [value]="s.id">{{ s.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched">
+        <label for="mpd-destination">Destination <span class="mpd-req">*</span></label>
+        <select id="mpd-destination" formControlName="destinationId">
+          <option value="" disabled>Choose a destination…</option>
+          @for (d of destinationOptions(); track d.id) {
+            <option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</option>
+          }
+        </select>
+      </div>
+
+      <div class="mpd-meta-field mpd-meta-field--full" [class.mpd-meta-field--error]="metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched">
+        <label for="mpd-destinationObject">Destination Object <span class="mpd-req">*</span></label>
+        <input id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" />
+      </div>
+
+      <div class="mpd-meta-field mpd-meta-field--checkbox">
+        <label>
+          <input type="checkbox" formControlName="isEnabled" />
+          Enabled
+        </label>
+      </div>
+
+    </div>
+  </form>
+
+  @if (metaForm.value.resourceType) {
+    <div class="mpd-mapping-head">
+      <span class="mpd-mapping-title">Field mappings</span>
+      <span class="mpd-hint">SQL Server, Azure SQL, MySQL, and PostgreSQL destinations load real tables/columns automatically; other destination types use free-text column entry.</span>
+    </div>
+    <app-mapping-profile-form
+      [resources]="[metaForm.value.resourceType!]"
+      [destType]="destType()"
+      [sqlTables]="sqlTables()"
+      [initialRows]="initialRows()"
+      [initialTargets]="initialTargets()"
+      [readOnly]="isView"
+    />
+  } @else {
+    <p class="mpd-hint">Choose a resource type to start mapping fields.</p>
+  }
+
+  @if (errorMessage()) {
+    <p class="mpd-error">{{ errorMessage() }}</p>
+  }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">{{ isView ? 'Close' : 'Cancel' }}</button>
+  @if (!isView) {
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="saving()"
+      (click)="save()"
+    >
+      {{ saving() ? 'Saving…' : 'Save' }}
+    </button>
+  }
+</mat-dialog-actions>

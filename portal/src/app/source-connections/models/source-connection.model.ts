@@ -44,7 +44,7 @@ export interface SourceRetrievalConfigurationModel {
   retryPolicy?: string | null;
   timeoutSeconds?: number | null;
   maxRecordsPerRun?: number | null;
-  lastSuccessfulSyncUtc?: string | null;
+  lastSuccessfulSyncUtcByResourceType?: Record<string, string> | null;
   exportScope?: string | null;
   groupId?: string | null;
   patientIds?: string[] | null;

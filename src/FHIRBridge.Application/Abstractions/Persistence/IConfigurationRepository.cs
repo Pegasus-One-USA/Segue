@@ -58,9 +58,12 @@ public interface IConfigurationRepository
 
     // ── Mapping profiles ──────────────────────────────────────────────────────
     Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct);
+    Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(
+        MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct);
     Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct);
+    Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct);
 
     // ── Resource pipeline routes ──────────────────────────────────────────────
     Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct);
@@ -88,4 +91,11 @@ public sealed record SourceConnectionFilter(
     string? Search,
     SourceSystemType? SourceSystemType,
     ApplicationType? ApplicationType,
+    bool? IsEnabled);
+
+public sealed record MappingProfileFilter(
+    string? Search,
+    string? ResourceType,
+    Guid? SourceConnectionId,
+    Guid? DestinationId,
     bool? IsEnabled);

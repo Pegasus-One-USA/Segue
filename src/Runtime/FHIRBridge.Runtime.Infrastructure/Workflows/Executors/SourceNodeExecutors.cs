@@ -428,6 +428,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
         var skippedResourceTypes = new List<string>();
+        var syncedResourceTypes = new List<string>();
         foreach (var type in executionOrder)
         {
             var isPatientType = string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase);
@@ -481,6 +482,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 resource.ResourceId ?? string.Empty,
                 resource.RawJson)));
 
+            // Only a type that actually completed (didn't throw/get skipped above) advances its own cursor — a
+            // sibling type failing this run must not affect this one, and vice versa.
+            syncedResourceTypes.Add(type);
+
             if (isPatientType)
             {
                 cohortPatientIds = page
@@ -497,9 +502,9 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
         }
 
-        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null)
+        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null && syncedResourceTypes.Count > 0)
         {
-            await _syncCursorStore.RecordSuccessfulSyncAsync(resolvedSourceConnectionId, DateTime.UtcNow, cancellationToken);
+            await _syncCursorStore.RecordSuccessfulSyncAsync(resolvedSourceConnectionId, syncedResourceTypes, DateTime.UtcNow, cancellationToken);
         }
 
         var payload = new ResourceBatch(resources.ToArray());
@@ -575,6 +580,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         string.IsNullOrWhiteSpace(raw)
             ? []
             : raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>Appends one FHIR search parameter onto an existing (possibly null/blank) search-parameters string.</summary>
+    private static string AppendSearchParameter(string? searchParameters, string parameter) =>
+        string.IsNullOrWhiteSpace(searchParameters)
+            ? parameter
+            : $"{searchParameters.TrimEnd('&', '?')}&{parameter}";
 
     /// <summary>
     /// Narrows <paramref name="resourceTypes"/> down to whatever this node's downstream destination node(s) actually
@@ -726,7 +737,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         Guid workflowRunId,
         CancellationToken cancellationToken)
     {
-        var maxAttempts = source.RetryPolicy switch
+        // Each resource type is fetched via its own independent search request, so each carries its own
+        // _lastUpdated watermark rather than the connection-wide value every type used to share — a type with no
+        // watermark of its own (first run, or previously skipped) falls back to an unfiltered full pull. Applied
+        // here (the single choke point both the direct and cohort-scoped search paths funnel through), not earlier
+        // in ExecuteAsync, because SearchCohortScopedAsync deliberately clears SearchParameters for sibling types —
+        // baking the watermark into that string upstream would have been wiped out along with it.
+        var effectiveSource = source.LastUpdatedWatermarks?.TryGetValue(resourceType, out var watermark) == true
+            ? source with { SearchParameters = AppendSearchParameter(source.SearchParameters, $"_lastUpdated=gt{watermark:yyyy-MM-ddTHH:mm:ssZ}") }
+            : source;
+
+        var maxAttempts = effectiveSource.RetryPolicy switch
         {
             "fixed-3" => 3,
             "exponential" => 3,
@@ -735,14 +756,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
         for (var attempt = 1; ; attempt++)
         {
-            using var timeoutCts = source.TimeoutSeconds is { } timeoutSeconds
+            using var timeoutCts = effectiveSource.TimeoutSeconds is { } timeoutSeconds
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
                 : null;
-            timeoutCts?.CancelAfter(TimeSpan.FromSeconds(source.TimeoutSeconds!.Value));
+            timeoutCts?.CancelAfter(TimeSpan.FromSeconds(effectiveSource.TimeoutSeconds!.Value));
 
             try
             {
-                var result = await client.SearchAsync(resourceType, source, timeoutCts?.Token ?? cancellationToken);
+                var result = await client.SearchAsync(resourceType, effectiveSource, timeoutCts?.Token ?? cancellationToken);
                 return result;
             }
             catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException

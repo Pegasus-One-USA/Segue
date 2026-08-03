@@ -24,7 +24,7 @@ public sealed class SourceRetrievalConfiguration
         string? retryPolicy = null,
         int? timeoutSeconds = null,
         int? maxRecordsPerRun = null,
-        DateTime? lastSuccessfulSyncUtc = null,
+        IReadOnlyDictionary<string, DateTime>? lastSuccessfulSyncUtcByResourceType = null,
         string? exportScope = null,
         string? groupId = null,
         string[]? patientIds = null,
@@ -41,12 +41,17 @@ public sealed class SourceRetrievalConfiguration
         RetryPolicy = retryPolicy;
         TimeoutSeconds = timeoutSeconds;
         MaxRecordsPerRun = maxRecordsPerRun;
-        LastSuccessfulSyncUtc = lastSuccessfulSyncUtc;
+        LastSuccessfulSyncUtcByResourceType = lastSuccessfulSyncUtcByResourceType is { Count: > 0 }
+            ? new Dictionary<string, DateTime>(lastSuccessfulSyncUtcByResourceType, StringComparer.OrdinalIgnoreCase)
+            : EmptySyncMap;
         ExportScope = exportScope;
         GroupId = groupId;
         PatientIds = patientIds ?? [];
         OutputFormat = outputFormat;
     }
+
+    private static readonly IReadOnlyDictionary<string, DateTime> EmptySyncMap =
+        new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
     public string RetrievalMethod { get; private set; } = default!;
     public string[] ResourceTypes { get; private set; } = [];
@@ -73,13 +78,60 @@ public sealed class SourceRetrievalConfiguration
     /// <summary>Requested bulk output format, e.g. <c>application/fhir+ndjson</c>. Null lets the server pick its default.</summary>
     public string? OutputFormat { get; private set; }
 
-    /// <summary>UTC timestamp of the last run that completed successfully — the fallback incremental cursor when the
-    /// connector doesn't expose its own resume token. Advanced only by <see cref="Entities.SourceConnection.RecordRetrievalSync"/>.</summary>
-    public DateTime? LastSuccessfulSyncUtc { get; private set; }
+    /// <summary>UTC timestamp of the last run that completed successfully, per resource type — the fallback
+    /// incremental cursor when the connector doesn't expose its own resume token. Each resource type is fetched via
+    /// its own independent FHIR search request, so each tracks its own watermark rather than sharing one connection-
+    /// wide value; a type that was skipped or failed on a run keeps its prior entry untouched. Advanced only by
+    /// <see cref="Entities.SourceConnection.RecordRetrievalSync"/>.</summary>
+    public IReadOnlyDictionary<string, DateTime> LastSuccessfulSyncUtcByResourceType { get; private set; } = EmptySyncMap;
 
-    /// <summary>Returns a copy with the sync cursor advanced; all other settings are carried over unchanged.</summary>
-    public SourceRetrievalConfiguration WithLastSuccessfulSync(DateTime syncedAtUtc) => new(
-        RetrievalMethod, ResourceTypes, SearchCriteria, IncrementalSyncEnabled, PageSize, SortOrder,
-        IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun, syncedAtUtc,
-        ExportScope, GroupId, PatientIds, OutputFormat);
+    /// <summary>The last successful sync watermark for a specific resource type, or null if that type has never
+    /// completed a run (i.e. its next fetch should be a full pull).</summary>
+    public DateTime? GetLastSuccessfulSyncUtc(string resourceType) =>
+        LastSuccessfulSyncUtcByResourceType.TryGetValue(resourceType, out var syncedAtUtc) ? syncedAtUtc : null;
+
+    /// <summary>The earliest sync watermark across the given resource types, for retrieval methods that only support
+    /// one cursor per request (bulk <c>$export</c>'s single job-level <c>_since</c> covering several resource types
+    /// at once) rather than per-type search requests. Conservative: if any of the given resource types has never
+    /// completed a run, there is no watermark that's safe for the whole job, so this returns null (full pull) rather
+    /// than silently skipping that type up to a sibling's more-advanced cursor.</summary>
+    public DateTime? GetEarliestSuccessfulSyncUtc(IReadOnlyCollection<string> resourceTypes)
+    {
+        if (resourceTypes.Count == 0)
+        {
+            return null;
+        }
+
+        DateTime? earliest = null;
+        foreach (var resourceType in resourceTypes)
+        {
+            if (!LastSuccessfulSyncUtcByResourceType.TryGetValue(resourceType, out var syncedAtUtc))
+            {
+                return null;
+            }
+
+            if (earliest is null || syncedAtUtc < earliest)
+            {
+                earliest = syncedAtUtc;
+            }
+        }
+
+        return earliest;
+    }
+
+    /// <summary>Returns a copy with the given resource types' sync cursors advanced to <paramref name="syncedAtUtc"/>;
+    /// every other resource type's existing cursor, and every other setting, is carried over unchanged.</summary>
+    public SourceRetrievalConfiguration WithLastSuccessfulSync(IReadOnlyCollection<string> resourceTypes, DateTime syncedAtUtc)
+    {
+        var merged = new Dictionary<string, DateTime>(LastSuccessfulSyncUtcByResourceType, StringComparer.OrdinalIgnoreCase);
+        foreach (var resourceType in resourceTypes)
+        {
+            merged[resourceType] = syncedAtUtc;
+        }
+
+        return new(
+            RetrievalMethod, ResourceTypes, SearchCriteria, IncrementalSyncEnabled, PageSize, SortOrder,
+            IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun, merged,
+            ExportScope, GroupId, PatientIds, OutputFormat);
+    }
 }

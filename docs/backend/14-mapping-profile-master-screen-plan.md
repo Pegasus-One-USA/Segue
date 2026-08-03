@@ -1,6 +1,7 @@
 # 14 — Mapping Profile Master Screen Plan
 
-**Status:** proposed, not started
+**Status:** slices 1, 2, 3, 4, 5 implemented (uncommitted — see §6 for per-slice notes and deviations). Slices 6–8
+not started.
 **Goal:** promote mapping profiles to a master screen under Settings (peer of Source Connections and Destination
 Connections), and let the destination wizard **auto-populate field mappings from saved profiles at the resource
 selection step** instead of authoring every mapping from scratch.
@@ -406,20 +407,56 @@ Give it a dialog hosting the same extracted component. End state — one compone
 
 ## 6. Sequencing
 
-| Slice | Contents | Ships value |
-|---|---|---|
-| 1 | §4.1–4.2 (audit fields, display names) | independently |
-| 2 | §4.3–4.4 (paged list, get-by-id) | independently |
-| 3 | §5.1 + §3.2 (extraction **and** `MappingRow` widening, no behaviour change) | gate: wizard regression pass |
-| 4 | §5.2–5.3 Settings screen — **mapping-owned (CSV/Mongo) first**, authorable with no connection | first user-visible win |
-| 5 | §4.5–4.7 (usage, activate, delete + orphan cleanup) | before the junk is noticed |
-| 6 | §5.4 step 2 auto-populate, mapping-owned only | the headline feature |
-| 7 | §5.4 extended to destination-owned (needs the §3.1 source-id prerequisite) | |
-| 8 | §5.5 Field Mapping node dialog | |
+| Slice | Contents | Ships value | Status |
+|---|---|---|---|
+| 1 | §4.1–4.2 (audit fields, display names) | independently | **Done** |
+| 2 | §4.3–4.4 (paged list, get-by-id) | independently | **Done** |
+| 3 | §5.1 + §3.2 (extraction **and** `MappingRow` widening, no behaviour change) | gate: wizard regression pass | **Done** — compiled/build-verified only; no interactive browser QA of the wizard was done (no browser access in that session) |
+| 4 | §5.2–5.3 Settings screen — **mapping-owned (CSV/Mongo) first**, authorable with no connection | first user-visible win | **Done, with deviations** — see below |
+| 5 | §4.5–4.7 (usage, activate, delete) | before the junk is noticed | **Done except the orphan cleanup** (§4.7's one-off cleanup of pre-existing orphaned profiles was not run) |
+| 6 | §5.4 step 2 auto-populate, mapping-owned only — built as the **primary** path (§10.3), not an optional shortcut | the headline feature | Not started |
+| 7 | §5.4 extended to destination-owned (needs the §3.1 source-id prerequisite) | | Not started |
+| 8 | §5.5 Field Mapping node dialog | | Not started |
 
 Slices 1–2 and 3 are independent and can run in parallel. Slice 4 needs **no backend change beyond 1–2** and no
 wizard change at all: a CSV destination is already creatable offline in Settings, so an offline mapping profile
 against it closes the loop.
+
+### Slice 4 deviations from the plan as implemented
+
+- **Grid is a flat sortable/filterable table**, not grouped-by-(source, destination) with per-resource expansion
+  as §5.2 describes — skipped as a UX nicety to keep scope contained. Columns match §5.2's list otherwise (Name,
+  Resource Type, Source, Destination, Target Object, Fields count, Enabled, Modified, actions).
+- **Destination Object is not purely free text as originally shipped** — SQL Server/Azure SQL/MySQL/PostgreSQL
+  destinations now load real tables/columns via `GET /destinations/{id}/schema` (introspects using the
+  destination's *stored* secret, no credentials round-trip through the browser), feeding
+  `MappingProfileFormComponent`'s `[sqlTables]` input the same way the wizard's own SQL probe does. Every other
+  destination type still free-texts the target object. (This was a real bug in the first pass, not a deliberate
+  simplification — `destType()`'s reactivity was also broken, see below.)
+- **Known gap, not yet fixed:** the dialog has no write-mode control. The wizard appends `;mode=upsert` /
+  `;mode=update` to `DestinationObject` when the destination's own `ConnectionMetadataJson.dest_writeMode` calls
+  for it (see `workflow-build-assembler.service.ts`'s `buildMappingForResource`); the Settings dialog never adds
+  that suffix, so a profile saved there is insert-only unless someone hand-types `;mode=upsert` into the free-text
+  field. Fix sketched but not implemented: parse `dest_writeMode` off the selected destination and either
+  auto-append the suffix on save or expose an explicit write-mode dropdown defaulted from it.
+- Usage endpoint (`/workflows/mapping-profile-usage`) is wired but only used to disable Delete — the list doesn't
+  surface a "used by N workflows" count anywhere.
+- A reactivity bug was found and fixed during implementation: `selectedDestinationType`/`destType` originally read
+  `metaForm.controls.destinationId.value` directly inside a `computed()`, which never re-triggers on a later
+  dropdown change (a plain FormControl getter isn't a tracked signal). Fixed via `toSignal()` on the control's
+  `valueChanges`.
+
+### Companion work done outside this plan's scope (same session)
+
+Not part of this plan, but touches the same wizard/canvas code: **Generic FHIR** was re-enabled as a selectable
+source in the canvas workflow builder (previously gated out of both the backend `DefaultWorkflowNodeCatalog` and
+the frontend `PhaseConfigService`). This uncovered and fixed two real bugs unrelated to mapping profiles —
+`workflow-graph-mapper.service.ts`'s `transformIdForNode()` and `workflow-build-assembler.service.ts`'s
+`buildSource()` both silently treated *every* non-Sample, non-Epic source node as Epic. A new
+`GenericFhirSourceFormComponent` was added (base URL, resource checklist, and a Search-REST/Bulk-`$export`
+retrieval section reusing the same vendor-agnostic `buildRetrieval()` Epic's form already fed) so `_lastUpdated`/
+`_since` incremental sync works for it identically to Epic. See git history for this session rather than a
+separate plan doc — it was scoped reactively, not planned.
 
 ---
 
@@ -478,6 +515,10 @@ genuine standalone master.
 
 ## 9. Companion work (separate doc)
 
+**Priority item, independent of everything above:** MongoDB destinations can be created in the wizard but not
+edited in Settings. One-line-ish fix to `toFormType` plus a Mongo branch in the dialog. Worth doing regardless of
+whether this plan proceeds, since it is a live inconsistency in an existing master screen.
+
 The Destination master screen currently supports fewer types than the wizard — `toFormType`
 (`destination-connection-dialog.component.ts:22-26`) maps only the SQL family and `Csv`/`Sftp`, so **MongoDB
 destinations created in the wizard cannot be edited in Settings**. All 22 `DestinationType` values have working
@@ -488,3 +529,58 @@ Note for that plan: there are **no per-destination icons or colours to copy**. `
 all 22 render as the same grey `▶` (`#64748B`). Only the `category` label differs (Relational / NoSQL / Analytics /
 Cloud+FHIR / File / Delivery). Per-type icons and colours must be **designed once and shared** by the node
 library and the master screen, or the two will drift.
+
+---
+
+## 10. Component sharing boundary
+
+### 10.1 The rule: share the form, not the shell
+
+| Layer | Shared between wizard and master screen? |
+|---|---|
+| Field-level form component | **yes** — exactly one per entity |
+| Mode inputs (`ownership`, `readonly`, `showAdvanced`) | yes, on that component |
+| Dialog / stepper shell | **no** |
+| Save + edit semantics | **no** |
+| List, grid, delete, usage gating | master screen only |
+
+This is not a new convention — it is what the two existing master screens already do, and the difference between
+them is instructive:
+
+- **Source Connections** reuses the wizard component wholesale: `source-connection-list.component.ts` imports
+  `EpicAudienceFormComponent` and calls `WizardService.openEntity(dto, {readonly})`, running the same component
+  under `wizardMode() === 'entity'`.
+- **Destination Connections** shares only the inner form: `destination-connection-dialog.component.ts` embeds
+  `DestinationConnectionFormComponent` via `viewChild()` + `getConfig()`, but supplies its own shell, its own
+  `metaForm` (name + target), and a `replaceSecret` toggle. It *had* to — the comment at `:78-81` explains that
+  the rich connection fields "are never returned by the API — they were folded into an opaque, write-only secret
+  at creation — so they can't be pre-filled." The wizard has no such concept because the wizard only ever creates.
+
+Same fields, different lifecycle. Follow the destination pattern for mapping.
+
+### 10.2 Why sharing the form matters — drift, not DRY
+
+`CreateDestinationConfigurationRequestValidator` describes itself in its own doc comment as a "Server-side mirror
+of the Angular destination wizard's `sqlForm`/`mongoForm`/`csvForm` required fields and
+`_syncDeliveryModeValidators`'s conditional-by-delivery-mode rules." There is already a two-way sync burden
+between the wizard form and the server validator. A separate master-screen form makes it three-way, and the two
+client copies will disagree about what is required long before anyone notices.
+
+**The cost to watch:** sharing has produced large components — `epic-audience-form` is ~2100 lines serving both
+modes, `destination-wizard` is 1436 — with mode conditionals like
+`showSourcePicker = computed(() => wizardMode() === 'canvas' && !isEditing)` spread throughout. The §5.1 contract
+(`input()`s in, `getRows()` out, zero knowledge of node config) is the guard against repeating that. **If
+`MappingProfileFormComponent` ever reads `dest_mappings`, the boundary has failed.**
+
+### 10.3 Authoring direction — decide now, cheap now, expensive later
+
+Target state: **mapping is authored only in the master screen; the wizard only picks.** No mapping authoring on
+the canvas at all — select a saved profile, or click through to create one.
+
+Rationale: it makes the master screen unambiguously the source of truth, which dissolves §8e (mapping state
+currently stored twice — node config JSON *and* a DB row, with only the transform node reading the row).
+
+This plan does **not** implement that, because it is a significant change to the wizard's single-flow experience.
+But it changes the emphasis of slice 6: build the step 2 picker as the **primary** path with step 3 authoring as
+the fallback, rather than treating the picker as an optional shortcut bolted onto a step-3-first flow. Same code,
+opposite default — and reversing it later means rebuilding the step.

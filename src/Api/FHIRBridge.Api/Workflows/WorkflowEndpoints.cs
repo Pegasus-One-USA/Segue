@@ -489,6 +489,38 @@ public static class WorkflowEndpoints
             return Results.Ok(usedDestinationIds);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Mapping Profiles master screen: which mapping profile ids are referenced right now, either by a workflow
+        // node's config (mappingProfileId / the per-resource mappingProfileIds map — see BuildWorkflow above) or by
+        // a persisted ResourcePipelineRoute (primary mapping, a composite ResourceMappings entry, or a parent
+        // reference target). The route-level FK is already Restrict, but that only surfaces as a raw DB error at
+        // delete time — this gives the list screen an accurate "used by N workflows" count up front, and the delete
+        // endpoint (ConfigurationsController.DeleteMappingProfile) checks the route-level usage itself as the actual
+        // delete guard.
+        group.MapGet("/workflows/mapping-profile-usage", async (
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+
+            var usedFromNodeConfig = workflows
+                .SelectMany(workflow => workflow.Nodes)
+                .SelectMany(node => GetMappingProfileIdsFromConfiguration(node.ConfigurationJson))
+                .Distinct();
+
+            var routes = await configurationRepository.GetRoutesAsync(cancellationToken);
+            var usedFromRoutes = routes
+                .SelectMany(route => route.ResourceMappings
+                    .SelectMany(mapping => mapping.ParentReferences
+                        .Select(parent => parent.ParentMappingProfileId)
+                        .Append(mapping.MappingProfileId))
+                    .Append(route.MappingProfileId));
+
+            var usedMappingProfileIds = usedFromNodeConfig.Concat(usedFromRoutes).Distinct().ToArray();
+
+            return Results.Ok(usedMappingProfileIds);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // "View destination data": resolve the workflow's destination node → its created destination + target table
         // and read back a capped row sample so the UI can show what the pipeline wrote. Admin-only.
         group.MapGet("/workflows/{workflowId:guid}/destination-data", async (
@@ -1523,6 +1555,33 @@ public static class WorkflowEndpoints
 
     private static string? GetConfigurationString(string? configurationJson, string key)
         => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
+
+    // A node can carry the legacy single mappingProfileId, the per-resource mappingProfileIds map, or both (see
+    // the "Kept for backward compatibility" comment in BuildWorkflow) — collect ids from whichever are present.
+    private static IEnumerable<Guid> GetMappingProfileIdsFromConfiguration(string? configurationJson)
+    {
+        var config = TryParseConfiguration(configurationJson);
+        if (config is null)
+        {
+            yield break;
+        }
+
+        if (config["mappingProfileId"]?.ToString() is { } singleId && Guid.TryParse(singleId, out var parsedSingleId))
+        {
+            yield return parsedSingleId;
+        }
+
+        if (config["mappingProfileIds"] is JsonObject idsByResource)
+        {
+            foreach (var entry in idsByResource)
+            {
+                if (entry.Value?.ToString() is { } rawId && Guid.TryParse(rawId, out var parsedId))
+                {
+                    yield return parsedId;
+                }
+            }
+        }
+    }
 
     private static JsonObject? TryParseConfiguration(string? configurationJson)
     {

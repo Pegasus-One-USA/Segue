@@ -24,7 +24,9 @@ public sealed class BuildBulkExportRequestTests
             resourceTypes: ["Patient"],
             searchCriteria: null,
             incrementalSyncEnabled: incremental,
-            lastSuccessfulSyncUtc: lastSync,
+            lastSuccessfulSyncUtcByResourceType: lastSync is { } syncedAt
+                ? new Dictionary<string, DateTime> { ["Patient"] = syncedAt }
+                : null,
             exportScope: exportScope,
             groupId: groupId,
             patientIds: patientIds,

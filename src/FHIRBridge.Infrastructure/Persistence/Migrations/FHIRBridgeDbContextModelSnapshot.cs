@@ -3266,9 +3266,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasColumnType("bit")
                                 .HasColumnName("RetrievalIncrementalSyncEnabled");
 
-                            b1.Property<DateTime?>("LastSuccessfulSyncUtc")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+                            b1.Property<string>("LastSuccessfulSyncUtcByResourceType")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("RetrievalLastSuccessfulSyncByResourceType");
 
                             b1.Property<int?>("MaxRecordsPerRun")
                                 .HasColumnType("int")
@@ -3364,9 +3365,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasColumnType("bit")
                                 .HasColumnName("RetrievalIncrementalSyncEnabled");
 
-                            b1.Property<DateTime?>("LastSuccessfulSyncUtc")
-                                .HasColumnType("datetime2")
-                                .HasColumnName("RetrievalLastSuccessfulSyncUtc");
+                            b1.Property<string>("LastSuccessfulSyncUtcByResourceType")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("RetrievalLastSuccessfulSyncByResourceType");
 
                             b1.Property<int?>("MaxRecordsPerRun")
                                 .HasColumnType("int")

@@ -255,6 +255,43 @@ public sealed class ConfigurationsController : ControllerBase
         return Ok(mappingProfile);
     }
 
+    [HttpPost("mapping-profiles/{mappingProfileId:guid}/activate")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ActivateMappingProfile(
+        Guid mappingProfileId,
+        CancellationToken cancellationToken)
+    {
+        var mappingProfile = await _configurationService.SetMappingProfileEnabledAsync(
+            mappingProfileId,
+            true,
+            cancellationToken);
+
+        return Ok(mappingProfile);
+    }
+
+    [HttpDelete("mapping-profiles/{mappingProfileId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteMappingProfile(
+        Guid mappingProfileId,
+        CancellationToken cancellationToken)
+    {
+        var usageCount = await _configurationService.GetMappingProfileUsageCountAsync(mappingProfileId, cancellationToken);
+        if (usageCount > 0)
+        {
+            return Conflict(new
+            {
+                message = $"This mapping profile is used by {usageCount} pipeline route(s) and cannot be deleted.",
+            });
+        }
+
+        await _configurationService.DeleteMappingProfileAsync(mappingProfileId, cancellationToken);
+        return NoContent();
+    }
+
     // ── Resources / routes ────────────────────────────────────────────────────
 
     [HttpPost("resources")]

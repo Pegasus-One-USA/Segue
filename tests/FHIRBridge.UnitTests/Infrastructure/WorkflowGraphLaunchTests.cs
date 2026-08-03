@@ -223,6 +223,8 @@ public sealed class WorkflowGraphLaunchTests
         public Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct) => Task.FromResult(_destinations.FirstOrDefault(x => x.Id == id));
         public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) => Task.FromResult(false);
         public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) => Task.FromResult(_mappings);
+        public Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
+            Task.FromResult(new PagedResult<MappingProfile>(_mappings, _mappings.Count, page, pageSize));
         public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) => Task.FromResult(_mappings.FirstOrDefault(x => x.Id == id));
         public Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) => Task.FromResult(_routes);
         public Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) => Task.FromResult(_routes.FirstOrDefault(x => x.Id == id));
@@ -248,6 +250,7 @@ public sealed class WorkflowGraphLaunchTests
         public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
+        public Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateRouteAsync(ResourcePipelineRoute e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddWebhookAsync(WebhookConfiguration e, CancellationToken ct) => throw new NotSupportedException();

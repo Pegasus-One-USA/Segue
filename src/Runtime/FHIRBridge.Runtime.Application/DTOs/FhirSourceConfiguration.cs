@@ -60,4 +60,9 @@ public sealed record FhirSourceConfiguration(
     // SourceConnectionId, so every pipeline that shares the same logged-in user's session reuses the one token that
     // user's authorization already covers, rather than needing its own separate MyChart consent. Null preserves the
     // pre-existing per-SourceConnection keying for every other ApplicationType and for callers that don't supply it.
-    string? CallerId = null);
+    string? CallerId = null,
+    // Per-resource-type incremental sync watermark ("_lastUpdated" cursor), keyed by resource type — search REST
+    // fetches each resource type via its own independent request, so each tracks its own cursor rather than sharing
+    // one connection-wide value (contrast with Since above, bulk export's single job-level cursor). Null when
+    // incremental sync isn't enabled, or the referenced SourceConnection has no retrieval config at all.
+    IReadOnlyDictionary<string, DateTime>? LastUpdatedWatermarks = null);

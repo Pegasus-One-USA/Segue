@@ -75,14 +75,14 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         IsEnabled = isEnabled;
     }
 
-    /// <summary>Advances the incremental-sync cursor after a workflow run completes successfully. No-op when this
-    /// connection has no retrieval configuration (interactive sources, or Backend sources created before this field
-    /// existed).</summary>
-    public void RecordRetrievalSync(DateTime syncedAtUtc)
+    /// <summary>Advances the incremental-sync cursor for the given resource types after a workflow run completes
+    /// successfully. No-op when this connection has no retrieval configuration (interactive sources, or Backend
+    /// sources created before this field existed).</summary>
+    public void RecordRetrievalSync(IReadOnlyCollection<string> resourceTypes, DateTime syncedAtUtc)
     {
         if (Retrieval is not null)
         {
-            Retrieval = Retrieval.WithLastSuccessfulSync(syncedAtUtc);
+            Retrieval = Retrieval.WithLastSuccessfulSync(resourceTypes, syncedAtUtc);
         }
     }
 

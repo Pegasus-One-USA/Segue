@@ -76,7 +76,7 @@ public static class ConfigurationMapper
                 retrieval.RetryPolicy,
                 retrieval.TimeoutSeconds,
                 retrieval.MaxRecordsPerRun,
-                retrieval.LastSuccessfulSyncUtc,
+                retrieval.LastSuccessfulSyncUtcByResourceType,
                 retrieval.ExportScope,
                 retrieval.GroupId,
                 retrieval.PatientIds,
@@ -97,7 +97,7 @@ public static class ConfigurationMapper
                 dto.RetryPolicy,
                 dto.TimeoutSeconds,
                 dto.MaxRecordsPerRun,
-                dto.LastSuccessfulSyncUtc,
+                dto.LastSuccessfulSyncUtcByResourceType,
                 dto.ExportScope,
                 dto.GroupId,
                 dto.PatientIds,
@@ -154,6 +154,10 @@ public static class ConfigurationMapper
                 .Select(ToDto)
                 .ToList(),
             mappingProfile.IsEnabled,
+            mappingProfile.CreatedOnUtc,
+            mappingProfile.CreatedBy,
+            mappingProfile.ModifiedOnUtc,
+            mappingProfile.ModifiedBy,
             mappingProfile.SourceConfigurationId);
     }
 
