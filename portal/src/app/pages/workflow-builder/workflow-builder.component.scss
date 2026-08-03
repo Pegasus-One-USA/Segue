@@ -11,21 +11,17 @@
 .builder-subheader {
   // Positioned + given an explicit stacking order so its content can visually spill past its own
   // flex-item box (the name field's absolutely-positioned required-field error message extends below
-  // .dock's normal-flow height) without .builder-canvas-area — the next flex sibling, later in DOM order
-  // — painting over it. Two plain non-positioned/static siblings paint strictly in DOM order, so without
-  // this the canvas area's own opaque background covers whatever overflows below the subheader's box.
+  // .dock's normal-flow height) without .builder-canvas-area — the next flex sibling, later in DOM order,
+  // non-positioned, and without its own stacking order — painting over it wherever that message visually
+  // overflows past this header's own box (e.g. on hover, when nothing else about the layout changes but
+  // paint order still favors the later sibling). Two plain non-positioned/static siblings paint strictly
+  // in DOM order, so without this the canvas area's own opaque background covers the overflow.
   position:    relative;
   z-index:     1;
   display:     flex;
   align-items: flex-start;
   padding:     var(--space-6) var(--space-9) 0;
   flex-shrink: 0;
-  // .builder-canvas-area is a later, non-positioned flex sibling — without its own stacking
-  // order, it paints over the name field's absolutely-positioned error message wherever that
-  // message visually overflows past this header's own box (e.g. on hover, when nothing else
-  // about the layout changes but paint order still favors the later sibling).
-  position:    relative;
-  z-index:     1;
 }
 
 // The toolbar floats above the canvas as a single elevated "dock" card — the

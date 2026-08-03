@@ -29,7 +29,6 @@ import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.c
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
-import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
