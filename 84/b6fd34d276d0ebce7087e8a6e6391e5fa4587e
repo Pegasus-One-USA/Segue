@@ -1,0 +1,98 @@
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_bd3c34f1df2191::t_9ac7a762a72bb7 58-67
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_bd3c34f1df2191::t_7060e29db76063 353
+  s_bd3c34f1df2191::t_d2de1ee22aff39 351
+  s_bd3c34f1df2191::t_c79b80ff7cc0cb 455
+  s_bd3c34f1df2191::t_5c86afac2665d8 280,352
+src/FHIRBridge.Application/Abstractions/Terminology/ILoincReleaseClient.cs
+  s_bd3c34f1df2191::t_5c86afac2665d8 1-8
+portal/src/app/settings/services/loinc-settings.service.ts
+  s_bd3c34f1df2191::t_ec3d7ec23299b0 1-17
+portal/src/app/core/api-endpoints.ts
+  s_b2710f407c52f1::t_241749bec05958 162
+  s_bd3c34f1df2191::t_ec3d7ec23299b0 158-161
+src/FHIRBridge.Infrastructure/Terminology/LoincReleaseClient.cs
+  s_bd3c34f1df2191::t_5c86afac2665d8 1-66
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.html
+  s_d97dc6bcc06825::t_4b72335b7aa191 1-107
+src/Api/FHIRBridge.Api/Controllers/V1/LoincTerminologyController.cs
+  s_bd3c34f1df2191::t_5707006403196f 4-5,17,19,44-69
+  s_bd3c34f1df2191::t_7fda89b3145b80 1-3,6-16,18,20-43,70-90
+src/FHIRBridge.Application/Abstractions/Terminology/ILoincSynchronizationService.cs
+  s_bd3c34f1df2191::t_7060e29db76063 1-7
+portal/src/app/settings/settings.routes.ts
+  s_bd3c34f1df2191::t_ec3d7ec23299b0 115
+src/FHIRBridge.Infrastructure/Terminology/LoincTerminologyLookupService.cs
+  s_bd3c34f1df2191::t_d2de1ee22aff39 1-31
+src/Worker/FHIRBridge.Worker/LoincSynchronizationWorker.cs
+  s_bd3c34f1df2191::t_9f0c123dfc7910 1-34
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_bd3c34f1df2191::t_ec3d7ec23299b0 17
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_bd3c34f1df2191::t_9ac7a762a72bb7 3,43-49
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.scss
+  s_d97dc6bcc06825::t_2e41ef29ea35c9 1-69
+src/FHIRBridge.Domain/Entities/Terminology/LoincEntities.cs
+  s_bd3c34f1df2191::t_7060e29db76063 1-36,38-43,47-63,74-83,96-107,121-130,133-138,147-148,151-158
+  s_d97dc6bcc06825::t_5b3a22e0df40b4 37,44-46,64-73,84-95,108-120,131-132,139-146,149-150,159-167
+src/Api/FHIRBridge.Api/Controllers/V1/LoincConfigurationController.cs
+  s_bd3c34f1df2191::t_c79b80ff7cc0cb 1-4,6-16,19-26,31
+  s_bd3c34f1df2191::t_9f0c123dfc7910 5,17-18,27-30
+src/FHIRBridge.Infrastructure/Terminology/CompositeTerminologyLookupService.cs
+  s_bd3c34f1df2191::t_d2de1ee22aff39 9,14,18,28
+src/FHIRBridge.Application/Services/LoincConfigurationService.cs
+  s_bd3c34f1df2191::t_c79b80ff7cc0cb 1-70
+src/FHIRBridge.Infrastructure/Terminology/LoincSynchronizationService.cs
+  s_bd3c34f1df2191::t_7060e29db76063 1-12,14-28,31-33,38-53,62-70,74,76,80,163,167-168,170,174
+  s_d97dc6bcc06825::t_da21daca5774bd 13,29-30,34-37,54-61,71-73,75,77-79,81-162,164-166,169,171-173
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_bd3c34f1df2191::t_9f0c123dfc7910 87
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/LoincConfigurations.cs
+  s_bd3c34f1df2191::t_9ac7a762a72bb7 1-83
+src/FHIRBridge.Application/DTOs/LoincConfigurationDtos.cs
+  s_bd3c34f1df2191::t_c79b80ff7cc0cb 1-31
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.ts
+  s_d97dc6bcc06825::t_e028817a49839c 10-21
+  s_bd3c34f1df2191::t_ec3d7ec23299b0 1-9,22-25
+src/FHIRBridge.Application/Services/ILoincConfigurationService.cs
+  s_bd3c34f1df2191::t_c79b80ff7cc0cb 1-9
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260804082629_AddLoincTerminology.Designer.cs
+  s_bd3c34f1df2191::t_a9cd614dd9324e 1-4001
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260804082629_AddLoincTerminology.cs
+  s_bd3c34f1df2191::t_407361f3223120 1-246
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_bd3c34f1df2191::t_bfe6c374ec3446 2357-2651
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "84b6fd34d276d0ebce7087e8a6e6391e5fa4587e",
+  "prompts": {},
+  "sessions": {
+    "s_b2710f407c52f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ca6e98c-663e-482f-9b28-346b58d536fc",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_bd3c34f1df2191": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcb9b-05b3-7910-bf30-4878101f8e86",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d97dc6bcc06825": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c16f68c-feb4-4e67-8e10-65cd6f223f34",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
