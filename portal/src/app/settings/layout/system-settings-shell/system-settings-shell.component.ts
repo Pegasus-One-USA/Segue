@@ -14,7 +14,7 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   { label: 'Email', route: 'email', icon: 'mail' },
   { label: 'General', route: 'general', icon: 'tune' },
   { label: 'Security', route: 'security', icon: 'security' },
-  { label: 'LOINC', route: 'loinc', icon: 'biotech' },
+  { label: 'Terminology Codes', route: 'terminology', icon: 'biotech' },
 ];
 
 @Component({

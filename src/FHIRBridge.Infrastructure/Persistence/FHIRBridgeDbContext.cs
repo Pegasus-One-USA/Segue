@@ -47,6 +47,11 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<LoincConceptMap> LoincConceptMaps => Set<LoincConceptMap>();
     public DbSet<LoincVersion> LoincVersions => Set<LoincVersion>();
     public DbSet<LoincImportHistory> LoincImportHistory => Set<LoincImportHistory>();
+    public DbSet<SnomedConcept> SnomedConcepts => Set<SnomedConcept>();
+    public DbSet<SnomedDescription> SnomedDescriptions => Set<SnomedDescription>();
+    public DbSet<SnomedRelationship> SnomedRelationships => Set<SnomedRelationship>();
+    public DbSet<SnomedVersion> SnomedVersions => Set<SnomedVersion>();
+    public DbSet<SnomedImportHistory> SnomedImportHistory => Set<SnomedImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

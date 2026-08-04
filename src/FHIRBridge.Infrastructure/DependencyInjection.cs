@@ -351,6 +351,7 @@ public static class DependencyInjection
         services.AddScoped<LoincTerminologyLookupService>();
         services.AddScoped<ILoincReleaseClient, LoincReleaseClient>();
         services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
+        services.AddScoped<ISnomedImportService, SnomedImportService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(

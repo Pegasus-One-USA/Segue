@@ -112,7 +112,22 @@ export const SETTINGS_ROUTES: Routes = [
                 m => m.AppSecretListComponent
               ),
           },
-          { path: 'loinc', loadComponent: () => import('./pages/loinc-settings/loinc-settings.component').then(m => m.LoincSettingsComponent) },
+          {
+            // Groups the four code-system import screens (LOINC's existing vendor sync plus SNOMED
+            // CT/RxNorm/ICD-10 upload-based import) under one nested shell with a tab per system.
+            path: 'terminology',
+            loadComponent: () =>
+              import('./layout/terminology-configurations-shell/terminology-configurations-shell.component').then(
+                m => m.TerminologyConfigurationsShellComponent
+              ),
+            children: [
+              { path: 'loinc', loadComponent: () => import('./pages/loinc-settings/loinc-settings.component').then(m => m.LoincSettingsComponent) },
+              { path: 'snomed-ct', loadComponent: () => import('./pages/snomed-settings/snomed-settings.component').then(m => m.SnomedSettingsComponent) },
+              { path: 'rxnorm', loadComponent: () => import('./pages/rxnorm-settings/rxnorm-settings.component').then(m => m.RxnormSettingsComponent) },
+              { path: 'icd-10', loadComponent: () => import('./pages/icd10-settings/icd10-settings.component').then(m => m.Icd10SettingsComponent) },
+              { path: '', redirectTo: 'loinc', pathMatch: 'full' },
+            ],
+          },
           { path: '', redirectTo: 'email', pathMatch: 'full' },
         ],
       },

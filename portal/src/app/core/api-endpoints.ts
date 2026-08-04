@@ -160,6 +160,14 @@ export const LOINC_ENDPOINTS = {
   synchronize: `${API_V1_BASE}/terminology/loinc/configuration/synchronize`,
 };
 
+// ─── SNOMED CT (SnomedConfigurationController — api/v1/terminology/snomed/configuration) ──
+// Upload-driven import (RF2 Snapshot release .zip) rather than a vendor API pull — no configuration
+// endpoint, just import + history.
+export const SNOMED_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/snomed/configuration/import`,
+  history: `${API_V1_BASE}/terminology/snomed/configuration/history`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
