@@ -1,0 +1,31 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_2160c47880609b::t_123695a8c23d99 975-981
+Demo_TestApp/backend/Program.cs
+  s_9b48790bb1404e::t_e5f5d07017da3b 114-136,142-144
+  s_9b48790bb1404e::t_7708a659c2e00c 137
+  s_9b48790bb1404e::t_7641e1abcb10a6 138-141,145-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c201013406bd292a07dc2f20799af3b48834d427",
+  "prompts": {},
+  "sessions": {
+    "s_2160c47880609b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a0c720a-0ab3-49a9-8bc6-fcbd80f0321e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    },
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
