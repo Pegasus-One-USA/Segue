@@ -84,6 +84,7 @@ builder.Services.AddHostedService<BulkExportPollWorker>();
 
 builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
 builder.Services.AddHostedService<EndpointHealthCheckWorker>();
+builder.Services.AddHostedService<LoincSynchronizationWorker>();
 
 // Retention enforcement: was built (RetentionPurgeService/ConfiguredRetentionPolicyService/the purgeable-store
 // registrations in AddFHIRBridgeInfrastructure) but never actually hosted anywhere until now, so it never ran.

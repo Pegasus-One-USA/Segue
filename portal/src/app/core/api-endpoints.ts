@@ -155,6 +155,11 @@ export const APP_SECRETS_ENDPOINTS = {
   regenerate: (secretName: string) => `${API_V1_BASE}/system/app-secrets/${secretName}/regenerate`,
 };
 
+export const LOINC_ENDPOINTS = {
+  configuration: `${API_V1_BASE}/terminology/loinc/configuration`,
+  synchronize: `${API_V1_BASE}/terminology/loinc/configuration/synchronize`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

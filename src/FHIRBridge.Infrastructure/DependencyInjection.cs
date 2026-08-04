@@ -277,6 +277,7 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
         services.AddHttpClient(nameof(MappedPowerBiDestinationWriter));
         services.AddHttpClient(nameof(FhirTerminologyLookupService));
+        services.AddHttpClient(nameof(LoincReleaseClient));
         services.AddHttpClient(nameof(FhirTerminologyTranslationService));
 
         services.AddSingleton<MappedInMemoryDestinationBuffer>();
@@ -347,6 +348,9 @@ public static class DependencyInjection
             configuration.GetValue<int?>("Caching:TerminologyTtlMinutes") ?? 60);
 
         services.AddSingleton<LocalTerminologyLookupService>();
+        services.AddScoped<LoincTerminologyLookupService>();
+        services.AddScoped<ILoincReleaseClient, LoincReleaseClient>();
+        services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(
@@ -448,6 +452,7 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();
+        services.AddScoped<ILoincConfigurationService, LoincConfigurationService>();
         // Needs only IDataProtectionProvider (registered app-wide in Program.cs), not FHIRBridgeDbContext — works
         // the same on both the SQL-backed and InMemory paths above.
         services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();

@@ -112,6 +112,7 @@ export const SETTINGS_ROUTES: Routes = [
                 m => m.AppSecretListComponent
               ),
           },
+          { path: 'loinc', loadComponent: () => import('./pages/loinc-settings/loinc-settings.component').then(m => m.LoincSettingsComponent) },
           { path: '', redirectTo: 'email', pathMatch: 'full' },
         ],
       },

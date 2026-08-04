@@ -1,0 +1,107 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">LOINC Terminology</h1>
+    <p class="page-sub">Configure the official LOINC release service and synchronize the local terminology database.</p>
+  </div>
+
+  @if (loading()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
+      <section class="settings-card">
+        <h2 class="card-title">Connection</h2>
+        <p class="card-sub">Credentials and endpoints used to authenticate with and download from the official LOINC release service.</p>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="loinc-downloadApiUrl">Download API URL <span class="req">*</span></label>
+            <input id="loinc-downloadApiUrl" type="text" formControlName="downloadApiUrl" placeholder="https://loinc.regenstrief.org/api/v1" />
+            @if (form.controls.downloadApiUrl.touched && form.controls.downloadApiUrl.invalid) {
+              <p class="field-error">Download API URL is required.</p>
+            }
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="loinc-fhirApiUrl">FHIR API URL</label>
+            <input id="loinc-fhirApiUrl" type="text" formControlName="fhirApiUrl" placeholder="https://fhir.loinc.org" />
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-username">Username</label>
+            <input id="loinc-username" type="text" formControlName="username" autocomplete="off"
+                   [placeholder]="usernameSet() ? 'Leave blank to keep current username' : 'LOINC username'" />
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-password">Password</label>
+            <input id="loinc-password" type="password" formControlName="password" autocomplete="new-password"
+                   [placeholder]="passwordSet() ? 'Leave blank to keep current password' : 'LOINC password'" />
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">Synchronization</h2>
+            <p class="card-sub">Schedule automatic LOINC release imports, or run one on demand below.</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="schedulerEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field">
+            <label for="loinc-frequency">Frequency</label>
+            <select id="loinc-frequency" formControlName="frequency">
+              <option>Monthly</option>
+              <option>Weekly</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-executionTime">Execution time</label>
+            <input id="loinc-executionTime" type="time" formControlName="executionTime" />
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-retryCount">Retry count</label>
+            <input id="loinc-retryCount" type="number" min="0" max="10" formControlName="retryCount" />
+            @if (form.controls.retryCount.touched && form.controls.retryCount.invalid) {
+              <p class="field-error">Enter a value between 0 and 10.</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-retryIntervalSeconds">Retry interval (seconds)</label>
+            <input id="loinc-retryIntervalSeconds" type="number" min="1" max="3600" formControlName="retryIntervalSeconds" />
+            @if (form.controls.retryIntervalSeconds.touched && form.controls.retryIntervalSeconds.invalid) {
+              <p class="field-error">Enter a value between 1 and 3600.</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-downloadTimeoutSeconds">Download timeout (seconds)</label>
+            <input id="loinc-downloadTimeoutSeconds" type="number" min="30" max="3600" formControlName="downloadTimeoutSeconds" />
+            @if (form.controls.downloadTimeoutSeconds.touched && form.controls.downloadTimeoutSeconds.invalid) {
+              <p class="field-error">Enter a value between 30 and 3600.</p>
+            }
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary" type="submit" [disabled]="saving() || form.invalid">
+            {{ saving() ? 'Saving…' : 'Save Settings' }}
+          </button>
+          <button class="btn-outline" type="button" [disabled]="syncing()" (click)="synchronize()">
+            {{ syncing() ? 'Synchronizing…' : 'Synchronize Now' }}
+          </button>
+        </div>
+      </section>
+    </form>
+  }
+</div>

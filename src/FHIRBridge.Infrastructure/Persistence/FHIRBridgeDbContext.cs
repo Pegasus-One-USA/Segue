@@ -1,5 +1,6 @@
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Governance;
+using FHIRBridge.Domain.Entities.Terminology;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Abstractions;
@@ -39,6 +40,13 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
+    public DbSet<LoincConcept> LoincConcepts => Set<LoincConcept>();
+    public DbSet<LoincPart> LoincParts => Set<LoincPart>();
+    public DbSet<LoincGroup> LoincGroups => Set<LoincGroup>();
+    public DbSet<LoincAnswerList> LoincAnswerLists => Set<LoincAnswerList>();
+    public DbSet<LoincConceptMap> LoincConceptMaps => Set<LoincConceptMap>();
+    public DbSet<LoincVersion> LoincVersions => Set<LoincVersion>();
+    public DbSet<LoincImportHistory> LoincImportHistory => Set<LoincImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
