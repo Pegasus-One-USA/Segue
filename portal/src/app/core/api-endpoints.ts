@@ -168,6 +168,13 @@ export const SNOMED_ENDPOINTS = {
   history: `${API_V1_BASE}/terminology/snomed/configuration/history`,
 };
 
+// ─── ICD-10-CM (Icd10ConfigurationController — api/v1/terminology/icd10/configuration) ──
+// Upload-driven import (CMS "Code Descriptions in Tabular Order" release .zip) — same pattern as SNOMED.
+export const ICD10_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/icd10/configuration/import`,
+  history: `${API_V1_BASE}/terminology/icd10/configuration/history`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

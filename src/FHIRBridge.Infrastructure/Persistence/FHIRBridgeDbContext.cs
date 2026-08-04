@@ -52,6 +52,9 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<SnomedRelationship> SnomedRelationships => Set<SnomedRelationship>();
     public DbSet<SnomedVersion> SnomedVersions => Set<SnomedVersion>();
     public DbSet<SnomedImportHistory> SnomedImportHistory => Set<SnomedImportHistory>();
+    public DbSet<Icd10Code> Icd10Codes => Set<Icd10Code>();
+    public DbSet<Icd10Version> Icd10Versions => Set<Icd10Version>();
+    public DbSet<Icd10ImportHistory> Icd10ImportHistory => Set<Icd10ImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

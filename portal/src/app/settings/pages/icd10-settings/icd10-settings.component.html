@@ -1,11 +1,69 @@
 <div class="dash-content">
   <div class="page-header">
-    <h1 class="page-title">ICD-10 Terminology</h1>
-    <p class="page-sub">Upload an official ICD-10-CM release to import it into the local terminology database.</p>
+    <h1 class="page-title">ICD-10-CM Terminology</h1>
+    <p class="page-sub">Upload the official CMS "Code Descriptions in Tabular Order" release (.zip) to import it into the local terminology database.</p>
   </div>
 
   <section class="settings-card">
-    <h2 class="card-title">Coming soon</h2>
-    <p class="card-sub">ICD-10 release upload and import is not yet available. It will follow the same upload-based pattern as SNOMED CT.</p>
+    <h2 class="card-title">Import Release</h2>
+    <p class="card-sub">Accepts the CMS ICD-10-CM order-file release archive as distributed for the fiscal year.</p>
+
+    <div class="upload-row">
+      <label class="file-input">
+        <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="importing()" />
+        <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
+      </label>
+      <button class="btn-primary" type="button" [disabled]="!selectedFile() || importing()" (click)="import()">
+        {{ importing() ? 'Importing…' : 'Import' }}
+      </button>
+    </div>
+
+    @if (importing()) {
+      <div class="progress-track">
+        <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+      </div>
+      <p class="card-sub">Uploading… {{ uploadProgress() }}%</p>
+    }
+  </section>
+
+  <section class="settings-card">
+    <h2 class="card-title">Import History</h2>
+    <p class="card-sub">The most recent ICD-10-CM release imports.</p>
+
+    @if (loading()) {
+      <p class="card-sub">Loading…</p>
+    } @else if (history().length === 0) {
+      <p class="card-sub">No ICD-10-CM release has been imported yet.</p>
+    } @else {
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>Started</th>
+            <th>Completed</th>
+            <th>Codes</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of history(); track entry.id) {
+            <tr>
+              <td>{{ entry.version ?? '—' }}</td>
+              <td>{{ entry.startedOnUtc | date: 'short' }}</td>
+              <td>{{ entry.completedOnUtc ? (entry.completedOnUtc | date: 'short') : '—' }}</td>
+              <td>{{ entry.importedCodeCount }}</td>
+              <td>
+                <span class="status-badge" [class.status-badge--ok]="entry.status === 'Succeeded'" [class.status-badge--warn]="entry.status !== 'Succeeded'">
+                  {{ entry.status }}
+                </span>
+                @if (entry.errorMessage) {
+                  <p class="field-error">{{ entry.errorMessage }}</p>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
   </section>
 </div>

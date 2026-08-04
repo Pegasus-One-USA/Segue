@@ -13,3 +13,48 @@
 .settings-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-modal); padding: 22px 24px; }
 .card-title    { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
 .card-sub      { font-size: 13px; color: var(--color-muted); margin: 0; }
+
+.upload-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+
+.file-input {
+  flex: 1 1 auto; display: flex; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--color-border-input); border-radius: 9px;
+  font-size: 13.5px; color: var(--color-muted); background: var(--color-surface); cursor: pointer;
+  transition: border-color var(--transition-base);
+  &:hover { border-color: var(--color-muted-2); }
+  input[type='file'] { display: none; }
+}
+
+.btn-primary {
+  padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
+  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--transition-base);
+  &:hover:not(:disabled) { background: var(--color-primary-dark); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.progress-track {
+  margin-top: 14px; height: 6px; border-radius: 999px; background: var(--color-border);
+  overflow: hidden;
+}
+.progress-fill { height: 100%; background: var(--color-primary); transition: width 0.2s ease; }
+
+.history-table {
+  width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 13.5px;
+
+  th {
+    text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--color-muted);
+    text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--color-border);
+  }
+  td { padding: 10px 10px; color: var(--color-ink); border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+}
+
+.status-badge {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600;
+  &--ok   { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &--warn { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+}
+
+.field-error { font-size: 12px; color: var(--color-error); margin: 4px 0 0; }

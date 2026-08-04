@@ -1,4 +1,3 @@
-using System.Data;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
@@ -23,7 +22,6 @@ public sealed class SnomedImportService : ISnomedImportService
 {
     private const string FullySpecifiedNameTypeId = "900000000000003001";
     private const string SynonymTypeId = "900000000000013009";
-    private const int BulkCopyBatchSize = 20000;
 
     private readonly FHIRBridgeDbContext _db;
     public SnomedImportService(FHIRBridgeDbContext db) => _db = db;
@@ -81,7 +79,7 @@ public sealed class SnomedImportService : ISnomedImportService
                 }
             }
 
-            await BulkCopyAsync(connection, sqlTransaction, "#SnomedConceptStaging",
+            await TerminologyBulkCopy.WriteAsync(connection, sqlTransaction, "#SnomedConceptStaging",
                 ["Id", "EffectiveTime", "Active", "ModuleId", "DefinitionStatusId", "Fsn", "PreferredTerm", "Version"],
                 StageConceptRows(), cancellationToken);
 
@@ -113,13 +111,13 @@ public sealed class SnomedImportService : ISnomedImportService
             _db.ChangeTracker.Clear();
 
             await _db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE terminology.SnomedDescriptions", cancellationToken);
-            await BulkCopyAsync(connection, sqlTransaction, "terminology.SnomedDescriptions",
+            await TerminologyBulkCopy.WriteAsync(connection, sqlTransaction, "terminology.SnomedDescriptions",
                 ["Id", "ConceptId", "Term", "TypeId", "LanguageCode", "CaseSignificanceId", "Active", "Version"],
                 ReadDescriptionRows(archive).Select(d => new object?[] { d.Id, d.ConceptId, d.Term, d.TypeId, d.LanguageCode, d.CaseSignificanceId, d.Active, version }),
                 cancellationToken);
 
             await _db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE terminology.SnomedRelationships", cancellationToken);
-            await BulkCopyAsync(connection, sqlTransaction, "terminology.SnomedRelationships",
+            await TerminologyBulkCopy.WriteAsync(connection, sqlTransaction, "terminology.SnomedRelationships",
                 ["Id", "SourceId", "DestinationId", "TypeId", "RelationshipGroup", "CharacteristicTypeId", "Active", "Version"],
                 ReadRelationshipRows(archive).Select(r => new object?[] { r.Id, r.SourceId, r.DestinationId, r.TypeId, r.RelationshipGroup, r.CharacteristicTypeId, r.Active, version }),
                 cancellationToken);
@@ -147,20 +145,6 @@ public sealed class SnomedImportService : ISnomedImportService
         {
             File.Delete(zipPath);
         }
-    }
-
-    private static async Task BulkCopyAsync(SqlConnection connection, SqlTransaction transaction, string destinationTable,
-        string[] columns, IEnumerable<object?[]> rows, CancellationToken cancellationToken)
-    {
-        using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
-        {
-            DestinationTableName = destinationTable,
-            BatchSize = BulkCopyBatchSize,
-            BulkCopyTimeout = 600,
-        };
-        foreach (var column in columns) bulkCopy.ColumnMappings.Add(column, column);
-        using var reader = new ArrayRowDataReader(columns, rows.GetEnumerator());
-        await bulkCopy.WriteToServerAsync(reader, cancellationToken);
     }
 
     private static ZipArchiveEntry? FindEntry(ZipArchive archive, params string[] mustContain) =>
@@ -239,74 +223,4 @@ public sealed class SnomedImportService : ISnomedImportService
     private sealed record ConceptRow(string Id, DateOnly EffectiveTime, bool Active, string ModuleId, string DefinitionStatusId);
     private sealed record DescriptionRow(string Id, string ConceptId, string Term, string TypeId, string LanguageCode, string CaseSignificanceId, bool Active);
     private sealed record RelationshipRow(string Id, string SourceId, string DestinationId, string TypeId, int RelationshipGroup, string CharacteristicTypeId, bool Active);
-
-    /// <summary>Minimal streaming IDataReader over pre-projected object[] rows, so SqlBulkCopy can read
-    /// directly from a lazily-parsed RF2 sequence without ever materializing it into a DataTable/list.</summary>
-    private sealed class ArrayRowDataReader : IDataReader
-    {
-        private readonly string[] _columns;
-        private readonly IEnumerator<object?[]> _rows;
-        private object?[] _current = [];
-
-        public ArrayRowDataReader(string[] columns, IEnumerator<object?[]> rows)
-        {
-            _columns = columns;
-            _rows = rows;
-        }
-
-        public int FieldCount => _columns.Length;
-        public object this[int i] => GetValue(i);
-        public object this[string name] => GetValue(GetOrdinal(name));
-        public int Depth => 0;
-        public bool IsClosed => false;
-        public int RecordsAffected => -1;
-
-        public bool Read()
-        {
-            if (!_rows.MoveNext()) return false;
-            _current = _rows.Current;
-            return true;
-        }
-
-        public bool NextResult() => false;
-        public void Close() { }
-        public void Dispose() => _rows.Dispose();
-
-        public string GetName(int i) => _columns[i];
-        public int GetOrdinal(string name)
-        {
-            var index = Array.IndexOf(_columns, name);
-            if (index < 0) throw new IndexOutOfRangeException(name);
-            return index;
-        }
-
-        public object GetValue(int i) => _current[i] ?? DBNull.Value;
-        public bool IsDBNull(int i) => _current[i] is null;
-
-        public int GetValues(object[] values)
-        {
-            var count = Math.Min(values.Length, _current.Length);
-            for (var i = 0; i < count; i++) values[i] = GetValue(i);
-            return count;
-        }
-
-        public bool GetBoolean(int i) => (bool)_current[i]!;
-        public byte GetByte(int i) => (byte)_current[i]!;
-        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length) => throw new NotSupportedException();
-        public char GetChar(int i) => (char)_current[i]!;
-        public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length) => throw new NotSupportedException();
-        public IDataReader GetData(int i) => throw new NotSupportedException();
-        public string GetDataTypeName(int i) => _current[i]?.GetType().Name ?? "Object";
-        public DateTime GetDateTime(int i) => (DateTime)_current[i]!;
-        public decimal GetDecimal(int i) => (decimal)_current[i]!;
-        public double GetDouble(int i) => (double)_current[i]!;
-        public Type GetFieldType(int i) => _current[i]?.GetType() ?? typeof(object);
-        public float GetFloat(int i) => (float)_current[i]!;
-        public Guid GetGuid(int i) => (Guid)_current[i]!;
-        public short GetInt16(int i) => (short)_current[i]!;
-        public int GetInt32(int i) => (int)_current[i]!;
-        public long GetInt64(int i) => (long)_current[i]!;
-        public string GetString(int i) => (string)_current[i]!;
-        public DataTable? GetSchemaTable() => null;
-    }
 }
