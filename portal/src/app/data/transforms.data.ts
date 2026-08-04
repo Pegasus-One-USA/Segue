@@ -21,6 +21,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-blob',        rank: 7, category: 'Cloud / FHIR', name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.' },
   { id: 'dest-s3',          rank: 7, category: 'Cloud / FHIR', name: 'Amazon S3',          sub: 'Write objects to Amazon S3.' },
   { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', name: 'FHIR Repository',    sub: 'POST a transaction bundle to a FHIR store.' },
+  { id: 'dest-ahds',        rank: 7, category: 'Cloud / FHIR', name: 'Azure Health Data Services', sub: 'Write FHIR resources into an Azure Health Data Services FHIR service.' },
   { id: 'dest-csv',         rank: 7, category: 'File',         name: 'CSV',                sub: 'Emit CSV files.' },
   { id: 'dest-xlsx',        rank: 7, category: 'File',         name: 'Excel',              sub: 'Emit .xlsx workbooks.' },
   { id: 'dest-ndjson',      rank: 7, category: 'File',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.' },

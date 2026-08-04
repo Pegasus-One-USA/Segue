@@ -29,10 +29,24 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
     public CreateDestinationConfigurationRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.KeyVaultName).NotEmpty();
-        RuleFor(x => x.SecretName).NotEmpty();
+        // Every destination type stores its credential at (KeyVaultName, SecretName) — except Azure Health Data
+        // Services in managed-identity mode, which authenticates as the host's own Azure identity and has no
+        // secret to store.
+        RuleFor(x => x.KeyVaultName).NotEmpty().When(x => !IsManagedIdentityAhds(x));
+        RuleFor(x => x.SecretName).NotEmpty().When(x => !IsManagedIdentityAhds(x));
 
         RuleFor(x => x).Custom(ValidateConnectionMetadata);
+    }
+
+    private static bool IsManagedIdentityAhds(CreateDestinationConfigurationRequest request)
+    {
+        if (request.DestinationType != DestinationType.AzureHealthDataServices || request.ConnectionMetadataJson is null)
+        {
+            return false;
+        }
+
+        var metadata = ParseMetadata(request.ConnectionMetadataJson);
+        return metadata.GetValueOrDefault("dest_authMode") == "managedIdentity";
     }
 
     private static void ValidateConnectionMetadata(
@@ -59,6 +73,28 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         else if (request.DestinationType == DestinationType.Csv)
         {
             ValidateCsvMetadata(context, metadata);
+        }
+        else if (request.DestinationType == DestinationType.AzureHealthDataServices)
+        {
+            ValidateAzureHealthDataServicesMetadata(context, metadata);
+        }
+    }
+
+    private static void ValidateAzureHealthDataServicesMetadata(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        RequireField(context, metadata, "dest_fhirServiceUrl", "FHIR service URL is required.");
+
+        var authMode = metadata.GetValueOrDefault("dest_authMode", "clientCredentials");
+        if (authMode == "clientCredentials")
+        {
+            RequireField(context, metadata, "dest_tenantId", "Tenant ID is required.");
+            RequireField(context, metadata, "dest_clientId", "Client ID is required.");
+        }
+        else if (authMode != "managedIdentity")
+        {
+            context.AddFailure("dest_authMode", "Authentication mode must be 'clientCredentials' or 'managedIdentity'.");
         }
     }
 

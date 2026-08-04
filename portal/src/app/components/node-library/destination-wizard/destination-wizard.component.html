@@ -206,6 +206,82 @@
 
           </div><!-- /dw-grid-2 -->
         </form>
+      } @else if (isAhds()) {
+        <form [formGroup]="ahdsForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="ahdsForm.get('name')!.invalid && ahdsForm.get('name')!.touched">
+              <label class="dw-label" for="dw-ahds-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-ahds-name" class="dw-input" formControlName="name" placeholder="e.g. Azure Health Data Services" />
+              @if (ahdsForm.get('name')!.invalid && ahdsForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="ahdsForm.get('fhirServiceUrl')!.invalid && ahdsForm.get('fhirServiceUrl')!.touched">
+              <label class="dw-label" for="dw-ahds-url">FHIR service URL <span class="dw-req">*</span></label>
+              <input id="dw-ahds-url" class="dw-input" formControlName="fhirServiceUrl"
+                placeholder="https://myworkspace-myfhir.fhir.azurehealthcareapis.com" />
+              @if (ahdsForm.get('fhirServiceUrl')!.invalid && ahdsForm.get('fhirServiceUrl')!.touched) {
+                <span class="dw-error">FHIR service URL is required.</span>
+              }
+              <span class="dw-hint">The client's own Azure Health Data Services FHIR service — found in their Azure portal under the FHIR service's Overview blade.</span>
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-ahds-authMode">Authentication mode <span class="dw-req">*</span></label>
+              <div class="dw-select-wrap">
+                <select id="dw-ahds-authMode" class="dw-select" formControlName="authMode">
+                  <option value="clientCredentials">Client credentials (app registration)</option>
+                  <option value="managedIdentity">Managed identity</option>
+                </select>
+              </div>
+              @if (ahdsForm.get('authMode')!.value === 'managedIdentity') {
+                <span class="dw-hint">Only works when FHIRBridge itself runs inside the client's Azure subscription.</span>
+              }
+            </div>
+
+            @if (ahdsForm.get('authMode')!.value === 'managedIdentity') {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-ahds-miClientId">User-assigned identity client ID</label>
+                <input id="dw-ahds-miClientId" class="dw-input" formControlName="managedIdentityClientId"
+                  placeholder="leave blank to use the system-assigned identity" />
+              </div>
+            } @else {
+              <div class="dw-field" [class.dw-field--error]="ahdsForm.get('tenantId')!.invalid && ahdsForm.get('tenantId')!.touched">
+                <label class="dw-label" for="dw-ahds-tenantId">Tenant ID <span class="dw-req">*</span></label>
+                <input id="dw-ahds-tenantId" class="dw-input" formControlName="tenantId" placeholder="the client's Entra ID tenant ID" />
+                @if (ahdsForm.get('tenantId')!.invalid && ahdsForm.get('tenantId')!.touched) {
+                  <span class="dw-error">Tenant ID is required.</span>
+                }
+              </div>
+
+              <div class="dw-field" [class.dw-field--error]="ahdsForm.get('clientId')!.invalid && ahdsForm.get('clientId')!.touched">
+                <label class="dw-label" for="dw-ahds-clientId">Client ID <span class="dw-req">*</span></label>
+                <input id="dw-ahds-clientId" class="dw-input" formControlName="clientId" placeholder="the app registration's application (client) ID" />
+                @if (ahdsForm.get('clientId')!.invalid && ahdsForm.get('clientId')!.touched) {
+                  <span class="dw-error">Client ID is required.</span>
+                }
+              </div>
+
+              <div class="dw-field" [class.dw-field--error]="ahdsForm.get('clientSecret')!.invalid && ahdsForm.get('clientSecret')!.touched">
+                <label class="dw-label" for="dw-ahds-clientSecret">Client secret <span class="dw-req">*</span></label>
+                <input id="dw-ahds-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+                @if (ahdsForm.get('clientSecret')!.invalid && ahdsForm.get('clientSecret')!.touched) {
+                  <span class="dw-error">Client secret is required.</span>
+                }
+                <span class="dw-hint">The app registration's client secret value — grant it the FHIR Data Writer (or Contributor) role on the target FHIR service.</span>
+              </div>
+            }
+
+            <div class="dw-field dw-field--full">
+              <label class="dw-label" for="dw-ahds-scope">AAD scope override</label>
+              <input id="dw-ahds-scope" class="dw-input" formControlName="scope"
+                placeholder="optional — defaults to {fhirServiceUrl}/.default" />
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -382,7 +458,7 @@
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">Map fields</span>
         <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isAhds() ? 'Azure Health Data Services writes the full FHIR resource — mapping here only confirms which fields exist; the id row is what matters for write safety.' : 'Map FHIR paths to CSV file columns.' }}
         </span>
       </div>
 
@@ -400,7 +476,7 @@
               }
             </span>
             <span class="dw-mapping-target-inline">
-              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
+              <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : isAhds() ? 'Resource type' : 'File name' }}</label>
               @if (hasSqlTables()) {
                 <div class="dw-select-wrap">
                   <select class="dw-select dw-target-select"
@@ -419,7 +495,7 @@
                   [value]="targetFor(r)"
                   (click)="$event.stopPropagation()"
                   (input)="updateTarget(r, $any($event.target).value)"
-                  [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
+                  [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : isAhds() ? 'Patient' : 'patients.csv'"
                 />
               }
             </span>
@@ -463,7 +539,7 @@
               <tr>
                 <th>Business field</th>
                 <th>FHIR path</th>
-                <th>{{ isSql() ? 'Column' : isMongo() ? 'Field' : 'CSV column' }}</th>
+                <th>{{ isSql() ? 'Column' : isMongo() ? 'Field' : isAhds() ? 'Field (informational)' : 'CSV column' }}</th>
                 <th class="dw-map-key-col" title="Upsert key — the column an Upsert write matches an existing row on">Key</th>
                 <th class="dw-map-actions" aria-label="Actions"></th>
               </tr>
@@ -593,6 +669,29 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
           </div>
+        } @else if (isAhds()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ ahdsForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR service URL</span>
+            <span class="dw-review-val dw-mono">{{ ahdsForm.value.fhirServiceUrl || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth mode</span>
+            <span class="dw-review-val">{{ ahdsForm.value.authMode }}</span>
+          </div>
+          @if (ahdsForm.value.authMode === 'clientCredentials') {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Tenant ID</span>
+              <span class="dw-review-val dw-mono">{{ ahdsForm.value.tenantId || '—' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">Client ID</span>
+              <span class="dw-review-val dw-mono">{{ ahdsForm.value.clientId || '—' }}</span>
+            </div>
+          }
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>

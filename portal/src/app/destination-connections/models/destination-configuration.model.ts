@@ -1,6 +1,6 @@
 /** Must match the backend's DestinationType enum member names (serialized as strings). This screen only
- * exposes Sql/CSV/Mongo creation (matching the workflow wizard), but Type filtering accepts any of the 22
- * values an existing row could have been created as (e.g. by a future wizard extension). */
+ * exposes Sql/CSV/Mongo/AzureHealthDataServices creation (matching the workflow wizard), but Type filtering
+ * accepts any of the 23 values an existing row could have been created as (e.g. by a future wizard extension). */
 export type DestinationType =
   | 'InMemory'
   | 'SqlServer'
@@ -23,7 +23,12 @@ export type DestinationType =
   | 'Avro'
   | 'Protobuf'
   | 'Databricks'
-  | 'Mongo';
+  | 'Mongo'
+  | 'AzureHealthDataServices';
+
+/** Must match the backend's AzureHealthDataServicesConnectionOptions auth-mode constants. Stored as
+ *  `dest_authMode` in ConnectionMetadataJson for AzureHealthDataServices destinations. */
+export type AzureHealthDataServicesAuthMode = 'clientCredentials' | 'managedIdentity';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
  *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */

@@ -313,8 +313,11 @@ export class WorkflowBuildAssemblerService {
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isAhds =
+      node.nodeType.includes('AzureHealthDataServices') ||
+      (fields['__transformId'] ?? '') === 'dest-ahds';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isAhds ? 'Azure Health Data Services Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -368,6 +371,26 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    if (isAhds) {
+      const isManagedIdentity = fields['dest_authMode'] === 'managedIdentity';
+      return {
+        name,
+        destinationType: 'AzureHealthDataServices',
+        keyVaultName,
+        secretName,
+        // The client's own FHIR service base URL — the writer reads this (or the ConnectionMetadataJson
+        // fallback) directly, the same way dest-fhir's Target holds a FHIR repository's base URL.
+        target: fields['dest_fhirServiceUrl'] || null,
+        // managedIdentity mode authenticates as the host's own Azure identity — there is no secret to store.
+        inlineSecret: isManagedIdentity
+          ? ''
+          : hasExistingSecret && !fields['dest_clientSecret']
+            ? null
+            : fields['dest_clientSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'ahds'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -394,7 +417,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv',
+    kind: 'sql' | 'mongo' | 'csv' | 'ahds',
   ): string {
     const keys =
       kind === 'sql'
@@ -410,7 +433,17 @@ export class WorkflowBuildAssemblerService {
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
-          : [
+          : kind === 'ahds'
+            ? [
+                'dest_name',
+                'dest_fhirServiceUrl',
+                'dest_authMode',
+                'dest_tenantId',
+                'dest_clientId',
+                'dest_managedIdentityClientId',
+                'dest_scope',
+              ]
+            : [
               'dest_name',
               'dest_deliveryMode',
               'dest_filePattern',

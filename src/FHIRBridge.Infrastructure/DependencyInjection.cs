@@ -267,6 +267,7 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
+        services.AddHttpClient(nameof(MappedAzureHealthDataServicesDestinationWriter));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
         services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
@@ -303,6 +304,8 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedDatabricksDestinationWriter));
         services.AddScoped<MappedDatabricksDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
+        services.AddScoped<IAzureHealthDataServicesTokenProvider, AzureHealthDataServicesTokenProvider>();
+        services.AddScoped<MappedAzureHealthDataServicesDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);

@@ -1,6 +1,4 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -17,11 +15,6 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinationWriter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false
-    };
-
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
 
@@ -43,7 +36,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
         foreach (var record in records)
         {
-            var (resourceType, resourceId, body) = BuildFhirResource(record);
+            var (resourceType, resourceId, body) = MappedFhirResourceBuilder.Build(record);
             var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
             using var content = new StringContent(body, Encoding.UTF8, "application/fhir+json");
             using var response = await httpClient.PutAsync(endpoint, content, cancellationToken);
@@ -51,34 +44,5 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         }
 
         return new DestinationWriteResult(records.Count);
-    }
-
-    /// <summary>
-    /// Produces a (resourceType, id, body) triple to PUT. Prefers the normalized FHIR resource; reconciles its
-    /// <c>id</c> to a stable value so URL and body agree. Falls back to the flattened payload for non-FHIR flows.
-    /// </summary>
-    private static (string ResourceType, string Id, string Body) BuildFhirResource(MappedDestinationRecord record)
-    {
-        if (!string.IsNullOrWhiteSpace(record.SourceJson)
-            && JsonNode.Parse(record.SourceJson) is JsonObject resource
-            && resource["resourceType"]?.GetValue<string>() is { Length: > 0 } resourceType)
-        {
-            var id = resource["id"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                id = string.IsNullOrWhiteSpace(record.SourceResourceId)
-                    ? Guid.NewGuid().ToString("N")
-                    : record.SourceResourceId;
-                resource["id"] = id;
-            }
-
-            return (resourceType, Uri.EscapeDataString(id!), resource.ToJsonString(JsonOptions));
-        }
-
-        // Non-FHIR fallback: post the flattened mapped payload to a permissive ingestion endpoint.
-        var fallbackId = string.IsNullOrWhiteSpace(record.SourceResourceId)
-            ? Guid.NewGuid().ToString("N")
-            : Uri.EscapeDataString(record.SourceResourceId);
-        return (record.ResourceType, fallbackId, MappedDestinationSerialization.ToJson(record));
     }
 }

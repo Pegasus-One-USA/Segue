@@ -183,4 +183,103 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
 
         _sut.Validate(Request(DestinationType.Csv, metadata)).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public void Ahds_metadata_missing_fhir_service_url_fails()
+    {
+        var metadata = new { dest_authMode = "clientCredentials", dest_tenantId = "t", dest_clientId = "c" };
+        var result = _sut.Validate(Request(DestinationType.AzureHealthDataServices, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_fhirServiceUrl");
+    }
+
+    [Theory]
+    [InlineData("dest_tenantId")]
+    [InlineData("dest_clientId")]
+    public void Ahds_client_credentials_mode_missing_a_required_field_fails(string missingKey)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_fhirServiceUrl"] = "https://myworkspace-myfhir.fhir.azurehealthcareapis.com",
+            ["dest_authMode"] = "clientCredentials",
+            ["dest_tenantId"] = "tenant-1",
+            ["dest_clientId"] = "client-1",
+        };
+        metadata.Remove(missingKey);
+
+        var result = _sut.Validate(Request(DestinationType.AzureHealthDataServices, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == missingKey);
+    }
+
+    [Fact]
+    public void Ahds_client_credentials_mode_with_all_required_fields_passes()
+    {
+        var metadata = new
+        {
+            dest_fhirServiceUrl = "https://myworkspace-myfhir.fhir.azurehealthcareapis.com",
+            dest_authMode = "clientCredentials",
+            dest_tenantId = "tenant-1",
+            dest_clientId = "client-1",
+        };
+
+        _sut.Validate(Request(DestinationType.AzureHealthDataServices, metadata)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Ahds_unrecognized_auth_mode_fails()
+    {
+        var metadata = new
+        {
+            dest_fhirServiceUrl = "https://myworkspace-myfhir.fhir.azurehealthcareapis.com",
+            dest_authMode = "somethingElse",
+        };
+
+        var result = _sut.Validate(Request(DestinationType.AzureHealthDataServices, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_authMode");
+    }
+
+    [Fact]
+    public void Ahds_managed_identity_mode_does_not_require_tenant_client_id_or_a_key_vault_secret()
+    {
+        var metadata = new
+        {
+            dest_fhirServiceUrl = "https://myworkspace-myfhir.fhir.azurehealthcareapis.com",
+            dest_authMode = "managedIdentity",
+        };
+        var request = Request(DestinationType.AzureHealthDataServices, metadata) with
+        {
+            KeyVaultName = "",
+            SecretName = "",
+        };
+
+        _sut.Validate(request).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Ahds_client_credentials_mode_without_a_key_vault_secret_fails()
+    {
+        var metadata = new
+        {
+            dest_fhirServiceUrl = "https://myworkspace-myfhir.fhir.azurehealthcareapis.com",
+            dest_authMode = "clientCredentials",
+            dest_tenantId = "tenant-1",
+            dest_clientId = "client-1",
+        };
+        var request = Request(DestinationType.AzureHealthDataServices, metadata) with
+        {
+            KeyVaultName = "",
+            SecretName = "",
+        };
+
+        var result = _sut.Validate(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "KeyVaultName");
+        result.Errors.Should().Contain(e => e.PropertyName == "SecretName");
+    }
 }

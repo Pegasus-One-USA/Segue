@@ -40,6 +40,7 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-mysql',
     'dest-mongo',
     'dest-postgres',
+    'dest-ahds',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',
