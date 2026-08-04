@@ -972,7 +972,13 @@ export class DestinationWizardComponent implements OnInit {
       return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
-    if (s >= 3) return this._hasUnverifiedColumns() || this._hasTypeMismatchedColumns() || this.resourcesMissingParentSelection().length > 0;
+    // Not gated on isRowColumnUnverified/isRowTypeMismatched here: this canvas only ever lets a user
+    // create a mapping by dragging a source field onto an enumerated REAL column, so those checks can only
+    // ever fire for the auto-inserted mandatory id row when no primary key was auto-detected — a row this
+    // canvas has no picker for, since it isn't created by dragging. Blocking on it would deadlock Next with
+    // no visible cause and no way to fix it. Left as available checks (isRowColumnUnverified,
+    // isRowTypeMismatched, typeMismatchMessage) for a future "flag this row" UI treatment.
+    if (s >= 3) return this.resourcesMissingParentSelection().length > 0;
     return false;
   }
 

@@ -111,6 +111,42 @@ IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') I
         ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
         CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
 ");
+
+    // Same EnsureCreated limitation as above — PatientCsvExportWorkflowId/PatientCsvEmailExportWorkflowId/
+    // StandaloneBaseUrl/ProviderInAppWorkflowId were added to WorkflowSettingsEntity after some local databases
+    // already existed. Backfill values match this file's HasData seed so a pre-existing HealthAppDb ends up in the
+    // same state a brand-new one would.
+    var standaloneBaseUrl = builder.Configuration["DefaultWorkflowSettings:StandaloneBaseUrl"] ?? string.Empty;
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('WorkflowSettings', 'PatientCsvExportWorkflowId') IS NULL
+    ALTER TABLE [WorkflowSettings]
+        ADD [PatientCsvExportWorkflowId] NVARCHAR(MAX) NOT NULL
+        CONSTRAINT [DF_WorkflowSettings_PatCsvExport] DEFAULT('a0de009e-9a60-494f-9ff8-d83cefdd1a3b');
+
+IF COL_LENGTH('WorkflowSettings', 'PatientCsvEmailExportWorkflowId') IS NULL
+    ALTER TABLE [WorkflowSettings]
+        ADD [PatientCsvEmailExportWorkflowId] NVARCHAR(MAX) NOT NULL
+        CONSTRAINT [DF_WorkflowSettings_PatCsvEmailExport] DEFAULT('c5e813f5-04fe-4223-8465-fba1a1e83b75');
+
+IF COL_LENGTH('WorkflowSettings', 'ProviderInAppWorkflowId') IS NULL
+    ALTER TABLE [WorkflowSettings]
+        ADD [ProviderInAppWorkflowId] NVARCHAR(MAX) NOT NULL
+        CONSTRAINT [DF_WorkflowSettings_ProviderInApp] DEFAULT('');
+");
+
+    // StandaloneBaseUrl's backfill value comes from config, so it needs a parameterized statement rather than a
+    // literal DEFAULT(...) constraint like the columns above. Split across two batches — a column added by an
+    // ALTER TABLE can't be referenced by another statement in that same batch (SQL Server resolves column names
+    // at compile time, before the ALTER has actually run), so the follow-up UPDATE/ALTER COLUMN needs its own
+    // ExecuteSqlRaw call, issued after the ADD has already committed.
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('WorkflowSettings', 'StandaloneBaseUrl') IS NULL
+    ALTER TABLE [WorkflowSettings] ADD [StandaloneBaseUrl] NVARCHAR(MAX) NULL;
+");
+    db.Database.ExecuteSqlRaw(@"
+UPDATE [WorkflowSettings] SET [StandaloneBaseUrl] = {0} WHERE [StandaloneBaseUrl] IS NULL;
+ALTER TABLE [WorkflowSettings] ALTER COLUMN [StandaloneBaseUrl] NVARCHAR(MAX) NOT NULL;
+", standaloneBaseUrl);
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
