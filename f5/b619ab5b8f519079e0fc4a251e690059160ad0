@@ -1,0 +1,96 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_2160c47880609b::t_48769d7bfb7702 41
+  s_2160c47880609b::t_6cda3237595ddb 6
+  s_2160c47880609b::t_d98e788710a079 192
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_2160c47880609b::t_353587bfb31177 1,4,10-12,18,39
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_2160c47880609b::t_c1aeeca9013012 1155,1159,1229,1683,1810,1829
+  s_2160c47880609b::t_d3189afcc89691 162
+  s_2160c47880609b::t_a7de93119f5788 1323
+  s_2160c47880609b::t_afd711fdcc5845 784-792,796-922,1652,1752
+  s_2160c47880609b::t_d73b0929d0a41e 1819-1822
+  s_2160c47880609b::t_6a112de1582f8e 2003-2008
+  s_2160c47880609b::t_c939de06ba74c3 739,752,782,1319,1342-1491
+  s_2160c47880609b::t_a06cc56c43b13f 1672
+  s_2160c47880609b::t_0623512151e7eb 1767
+  s_2160c47880609b::t_5f8bc32eecce62 1879
+  s_2160c47880609b::t_4ccbd8d6275b5e 1113,1121,1791,1799
+  s_2160c47880609b::t_5a1123bae871ab 736-738
+  s_2160c47880609b::t_12d3faeef540fb 740-742,749-751
+  s_2160c47880609b::t_313ed0672e24b8 780-781
+  s_2160c47880609b::t_418116be59c6ea 783
+  s_2160c47880609b::t_ecaf4c426d4824 1152-1154
+  s_2160c47880609b::t_b257d9c29009bd 1156-1158
+  s_2160c47880609b::t_8b94b3d3ee711f 1160-1162
+  s_2160c47880609b::t_dc5799a0997d82 1230-1232
+  s_2160c47880609b::t_4784c16beace92 1316-1318
+  s_2160c47880609b::t_49e4e991223b44 1320
+  s_2160c47880609b::t_108320cb0e9c2e 1649-1651
+  s_2160c47880609b::t_fd3332c4af269a 1684-1686
+  s_2160c47880609b::t_23fd070ade9a35 1750-1751
+  s_2160c47880609b::t_e1d0b7eb8f2b61 1818
+  s_2160c47880609b::t_8e0492e67ac6cb 1830-1832
+  s_2160c47880609b::t_ab82a9bc5d469a 13,32,49,216-238,257,271-275,650,653-668,677,728-735,743-748,973,976,1143,1149-1151,1163,1173-1177,1209,1226,1233-1236,1252,1260,1282,1285,1315,1638,1643-1648,1687-1689,1705,1833-1834,1998
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-snapshot.model.ts
+  s_2160c47880609b::t_777642889857e7 12
+  s_2160c47880609b::t_7fa5277b64259b 20,47
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  s_2160c47880609b::t_f9c45ef6eac306 36-41
+  s_2160c47880609b::t_2906bce5f7b01a 1,6,13
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_2160c47880609b::t_196d950a893bc8 21
+  s_2160c47880609b::t_2f3f45db9cd3c3 19-20
+  s_2160c47880609b::t_9f332ab971f346 22
+  s_2160c47880609b::t_734719ebf88bb4 49-50,52-54,59,69-71,74-79,84,95,98,104,115-118,134-143,160,172-212,303,485,514-526,552-558
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.ts
+  s_2160c47880609b::t_05c83a79aecbde 28
+  s_2160c47880609b::t_d3b1160fe2fe44 39
+  s_2160c47880609b::t_26cc814e95ff20 4
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_2160c47880609b::t_d938ade102824a 71-79,92-94
+  s_2160c47880609b::t_4524a2ff6d29de 118-120
+  s_2160c47880609b::t_598a046dac9b61 147-149
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_2160c47880609b::t_c2e912c5cddc19 75
+  s_2160c47880609b::t_5d472195674620 658-660
+  s_2160c47880609b::t_37b29c63328956 20
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_2160c47880609b::t_9131e02a740670 211
+  s_2160c47880609b::t_7bb947a416fe7a 69,156,225,298,387-389,403-406,438,454-455
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_2160c47880609b::t_211832eb74da17 26-29,36-40
+  s_2160c47880609b::t_d2917287d419ef 68-71,78-82,89-93
+  s_2160c47880609b::t_dbf382518c59c6 131-134
+  s_2160c47880609b::t_938f0fdd640427 25
+  s_2160c47880609b::t_451d242498d76b 67
+  s_2160c47880609b::t_02f8ffc3ea47ab 128-130
+  s_2160c47880609b::t_d0469ef3301058 13,17,47-50,57-60,100-103,110-113,120-127,141-144,151-154,161-164,171-174,181-184,191-194,201-204,211-214,221-224,231-234,241-244,526-540,543-544,551-552,558-559,581-583,586,589,591-593,620,624-642,745,816-826,872-905,907-909
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_2160c47880609b::t_f7df01a57b76f0 418-423
+  s_2160c47880609b::t_b91b0ea28f261f 139
+  s_2160c47880609b::t_066c619e784cea 470
+  s_2160c47880609b::t_417cd7c58eb6b9 23
+  s_2160c47880609b::t_68a21ad1b71357 18-22,24-26
+  s_2160c47880609b::t_eedd5906800e4e 111
+  s_2160c47880609b::t_f719c12025e4db 261,267-268
+  s_2160c47880609b::t_119a455ee12f37 517
+  s_2160c47880609b::t_cf632e45919a84 348
+  s_2160c47880609b::t_a4b52e3c9921e9 232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "f5b619ab5b8f519079e0fc4a251e690059160ad0",
+  "prompts": {},
+  "sessions": {
+    "s_2160c47880609b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a0c720a-0ab3-49a9-8bc6-fcbd80f0321e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_26202082a1cf9f::t_682198c40b63d4 256
+  s_26202082a1cf9f::t_6e53943651704a 269
+  s_26202082a1cf9f::t_2ea700fae0a4e0 276
+  s_26202082a1cf9f::t_184af482b5c5bd 262
+  s_26202082a1cf9f::t_a13913ce684787 156
+  s_26202082a1cf9f::t_30edd15baec1ea 142-145
+  s_26202082a1cf9f::t_a0ae574867f577 248
+  s_26202082a1cf9f::t_95f45e8e17aca3 197
+  s_26202082a1cf9f::t_8412118599099c 240
+  s_26202082a1cf9f::t_58d0836cbed67d 283
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_26202082a1cf9f::t_7260696051dd8b 3,5-12,16,19-20,40-46,65-70,83,96-102,105-112,116-117,122-128,137-140,142,144-146,151-185,194-200,220-225,227-231,256-265,274,282,311,314-324
+  s_26202082a1cf9f::t_b027c5f730a8e1 13-15,18,22-27,30-38,53-56,64,71-82,88-93,103,121,130-136,141,143,147-150,190-192,214-218,254-255,271,286-307
+  s_62edaf1aaf9a1a::t_86802650b18416 21,129,266
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_26202082a1cf9f::t_81e8976803182b 78,88,128,140,150-152,154,222,230,232,247,276,382
+  s_26202082a1cf9f::t_73d15d87ac9e1b 1-2,4-9,11-18,20-28,31-36,38-48,50-52,55-59,61,63-76,80-87,90,92,94-104,106-117,119-127,130-139,141,143-149,153,156,158-167,169-203,205-221,223-229,231,234-246,249-275,278-381,384-385
+  s_26202082a1cf9f::t_e1a0c997482893 233
+  s_26202082a1cf9f::t_f6e4acdeb91ee5 248
+  s_26202082a1cf9f::t_d50ebf1210ed60 277
+  s_26202082a1cf9f::t_61f31d2a2707dd 383
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.scss
+  s_26202082a1cf9f::t_49a0d0c9ae1438 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "0a0edf6bc5c368c1cf1243fc3560c27214c1e7fa",
+  "prompts": {},
+  "sessions": {
+    "s_26202082a1cf9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e22b5f6d-b00e-4387-889d-ede3efd400e9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_62edaf1aaf9a1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c57b5268-7104-4ea3-a0ed-8ed6370873c6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
