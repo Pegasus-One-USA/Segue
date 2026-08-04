@@ -1,0 +1,78 @@
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.scss
+  s_a2babd50bb52dc::t_92b4ee8cf48aaf 1-4
+src/FHIRBridge.Domain/Entities/Terminology/SnomedEntities.cs
+  s_a2babd50bb52dc::t_fb768185f8318c 3,22-23,43,60,70,87
+  s_a2babd50bb52dc::t_a7c45fa3464fc3 1-2,4-21,24-42,44-59,61-69,71-86,88-133
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_a2babd50bb52dc::t_f12f689da0cf37 1-42
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260804165645_AddSnomedTerminology.cs
+  s_a2babd50bb52dc::t_60f15888e15ef0 1-179
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.ts
+  s_a2babd50bb52dc::t_296e11a5185a06 1-29
+portal/src/app/core/api-endpoints.ts
+  s_a2babd50bb52dc::t_273512197f495d 163-170
+portal/src/app/settings/services/snomed-settings.service.ts
+  s_a2babd50bb52dc::t_655452af11526d 1-35
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.ts
+  s_a2babd50bb52dc::t_7ab0287ac21a8b 1-64
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.scss
+  s_a2babd50bb52dc::t_ad0b741e1f076a 1-60
+src/FHIRBridge.Infrastructure/Terminology/SnomedImportService.cs
+  s_a2babd50bb52dc::t_f1ba3af7ad468d 2-4,6,8-13,22-25,27-39,42-44,46-47,58-59,74,76,81,111,114,126-127,129-130,132,134-136,140,142-149,164-178,180,182,185-188,193,199-203,205-206,211,217-221,223-224,229,236-241,312
+  s_a2babd50bb52dc::t_11b473ca49c50e 45
+  s_a2babd50bb52dc::t_4ddafa591d2079 222
+  s_a2babd50bb52dc::t_7ec2cfa6416b95 7
+  s_a2babd50bb52dc::t_c4f21e30bee231 1,5,14-21,26,40,48-57,60-73,75,77-80,84-110,115-125,128,133,137-138,150-151,154-163,179,181,183-184,189-192,194-198,207-210,212-216,225-228,230-235,242-311
+  s_a2babd50bb52dc::t_c7f36a3a8572d1 152-153
+  s_a2babd50bb52dc::t_a20ce181ac22df 41,82-83,112-113,131,139,141
+  s_a2babd50bb52dc::t_333317b76d69c3 204
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.html
+  s_a2babd50bb52dc::t_f4d6056a1c4e93 1-10
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_a2babd50bb52dc::t_27ff4cc3a0cb26 354
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.html
+  s_a2babd50bb52dc::t_5fa371a87b9ecc 1-11
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_a2babd50bb52dc::t_41603f0c3f5546 17
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.scss
+  s_a2babd50bb52dc::t_309a94a877d2d7 1-15
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.scss
+  s_a2babd50bb52dc::t_a2b95074daf0ac 1-15
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/SnomedConfigurations.cs
+  s_a2babd50bb52dc::t_17abbafda101a1 1-75
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.ts
+  s_a2babd50bb52dc::t_1b285db89a5d07 1-9
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260804165645_AddSnomedTerminology.Designer.cs
+  s_a2babd50bb52dc::t_60f15888e15ef0 1-4215
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.ts
+  s_a2babd50bb52dc::t_8543be9e0f27a5 1-9
+portal/src/app/settings/settings.routes.ts
+  s_a2babd50bb52dc::t_9087b72bb88412 115-130
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_a2babd50bb52dc::t_60f15888e15ef0 2652-2865
+src/FHIRBridge.Application/Abstractions/Terminology/ISnomedImportService.cs
+  s_a2babd50bb52dc::t_36f50c4de588c4 1-4,7-10
+  s_a2babd50bb52dc::t_20e9eab705329c 5-6
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.html
+  s_a2babd50bb52dc::t_c4f4728be2cc48 1-69
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_a2babd50bb52dc::t_c448f29b5597eb 50-54
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.html
+  s_a2babd50bb52dc::t_e645871e0c0c9b 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "39601320241bac4dee92aa3613d0714531ceac69",
+  "prompts": {},
+  "sessions": {
+    "s_a2babd50bb52dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb4f9ae4-cf0d-468f-8818-ba3a7024efaf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
