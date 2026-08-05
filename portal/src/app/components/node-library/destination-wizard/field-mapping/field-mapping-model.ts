@@ -144,6 +144,7 @@ export function serializeRowsFlat(
 ): (LegacyMappingRow & {
   arrayPolicy: string; approximated: boolean; isUpsertKey: boolean;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
+  referencesResource?: string;
 })[] {
   // Once the user has explicitly marked ANY row for a resource as the upsert key (via the target card's
   // key toggle), that choice is authoritative for the whole resource — the real PK column is no longer
@@ -201,6 +202,12 @@ export function serializeRowsFlat(
         parentKeyColumn: genuineRelation.parentColumn,
         foreignKeyColumn: genuineRelation.foreignKeyColumnName,
       } : {}),
+      // Round-tripped through to workflow-build-assembler.service.ts, which resolves it into the referenced
+      // resource's own table/id column (MappingFieldRequest.referenceLookupTable/referenceLookupKeyColumn) —
+      // without this, the field-mapping-list "which resource does this reference?" picker has no effect at
+      // all on what actually gets saved, and a FHIR reference column keeps writing raw "Patient/xyz" strings
+      // (or, worse, NULL into a NOT NULL FK column) forever, no matter what the user picks in that dropdown.
+      ...(row.referencesResource ? { referencesResource: row.referencesResource } : {}),
     };
   });
 }

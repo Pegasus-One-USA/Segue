@@ -607,6 +607,16 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         GeneratedFile? inlineDownload;
         FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult? writeResult = null;
         var explicitProfile = ReadConfiguration<MappingProfile>(node, "mappingProfile");
+        // A writer isolates per-record failures (constraint violations, conversion errors, ...) into
+        // DestinationWriteResult.RecordErrors instead of throwing, so one bad record never discards the rest of
+        // an otherwise-good batch — see MappedSqlServerDestinationWriter.WriteAsync. Previously nothing here ever
+        // read RecordErrors, so a resource type whose every record failed to write (e.g. a NOT NULL column with
+        // no mapped field) still reported node/run Status "Succeeded" with zero indication anything went wrong.
+        // Collecting them into the same "skippedResourceTypes" metadata key SourceNodeExecutors uses for scope-
+        // authorization skips reuses RankedWorkflowOrchestrator's existing WorkflowRunStatus.PartialSuccess
+        // aggregation and its ExpectedFailure/"PartialSuccess" audit-log capture, rather than inventing a second
+        // parallel reporting path.
+        var writeFailureReasons = new List<string>();
 
         if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
         {
@@ -634,6 +644,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 totalWritten += groupResult.Count;
                 firstDownloadUrl ??= groupResult.DownloadUrl;
                 writeResult = groupResult;
+
+                if (groupResult.RecordErrors is { Count: > 0 } groupErrors)
+                {
+                    writeFailureReasons.Add(DescribeWriteFailures(group.Key, groupRecords.Length, groupErrors));
+                }
             }
 
             written = totalWritten;
@@ -649,6 +664,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             written = writeResult.Count;
             downloadUrl = writeResult.DownloadUrl;
             inlineDownload = writeResult.InlineDownload;
+
+            if (writeResult.RecordErrors is { Count: > 0 } singleProfileErrors)
+            {
+                writeFailureReasons.Add(DescribeWriteFailures(mappingProfile.ResourceType, records.Length, singleProfileErrors));
+            }
         }
 
         var result = new RuntimeDestinationWriteResult(
@@ -686,8 +706,24 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // Populated only for a CSV destination using Download-URL delivery — the caller of /run reads this
                 // back to fetch the generated file. Download (inline-bytes) delivery is not supported on this engine
                 // (see the AllowInlineDelivery comment above) and will have already thrown before reaching here.
-                ["downloadUrl"] = downloadUrl
+                ["downloadUrl"] = downloadUrl,
+                // Same metadata key/shape SourceNodeExecutors uses for scope-authorization skips — see the
+                // writeFailureReasons doc comment above for why this destination-write case reuses it.
+                ["skippedResourceTypes"] = writeFailureReasons.Count > 0 ? writeFailureReasons.ToArray() : null
             });
+    }
+
+    /// <summary>
+    /// One human-readable line per resource type whose destination write left records unwritten — e.g. a NOT
+    /// NULL column with no mapped field, or any other per-record constraint/conversion failure a writer isolates
+    /// via <see cref="FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult.RecordErrors"/>
+    /// instead of throwing. Deduplicates the underlying messages (a batch of failures is usually the same root
+    /// cause repeated once per record) and caps the sample so one resource type's summary can't dwarf the rest.
+    /// </summary>
+    private static string DescribeWriteFailures(string resourceType, int totalCount, IReadOnlyList<string> errors)
+    {
+        var sample = string.Join(" | ", errors.Distinct(StringComparer.Ordinal).Take(2));
+        return $"{resourceType}: {errors.Count} of {totalCount} record(s) failed to write to the destination ({sample})";
     }
 
     protected override object CreatePayload(

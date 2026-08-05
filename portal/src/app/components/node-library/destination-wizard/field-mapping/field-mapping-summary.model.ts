@@ -87,6 +87,10 @@ export interface MappingSummaryColumn {
   /** Set when this column is a FHIR reference that must be resolved against another mapped resource's
    *  own table + id column at write time — see MappingRow.referencesResource for how this is derived. */
   referenceLookup?: { table: string; keyColumn: string };
+  /** Mirrors MappingRow.isUpsertKey — present (true) only on the one column the user explicitly
+   *  designated as the resource's upsert key via the target card's toggle. Omitted (not false) on every
+   *  other column, matching referenceLookup's spread convention above. */
+  isUpsertKey?: boolean;
 }
 
 export interface MappingSummaryTable {
@@ -201,15 +205,16 @@ function toSummaryColumn(
   // undefined) — keeps the wire shape byte-for-byte identical to before this feature for every existing
   // mapping, and sidesteps any ambiguity in how a test's equality check treats an undefined-valued key.
   const referenceLookup = keyInfo ? { referenceLookup: { table: keyInfo.table, keyColumn: keyInfo.keyColumn } } : {};
+  const upsertKey = row.isUpsertKey === true ? { isUpsertKey: true } : {};
 
   if (row.mode === 'childJson') {
-    return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance, ...referenceLookup };
+    return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance, ...referenceLookup, ...upsertKey };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
-    return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup };
+    return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup, ...upsertKey };
   }
-  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup };
+  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey };
 }
 
 // ── per-resource table set + schema-change/processing-order derivation ──────────────────────────────
@@ -529,6 +534,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           mappingRows.push({
             resource, sources: [], mode: 'childJson', childNodeId: col.sourceNode ?? '',
             instance, targetName: col.column, tableName: fullName,
+            ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
           });
           continue;
         }
@@ -542,6 +548,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           instance,
           targetName: col.column, tableName: fullName,
           ...(referencesResource ? { referencesResource } : {}),
+          ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
         });
       }
     });

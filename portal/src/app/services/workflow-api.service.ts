@@ -206,6 +206,12 @@ export interface MappingFieldRequest {
   parentTable?: string | null;
   parentKeyColumn?: string | null;
   foreignKeyColumn?: string | null;
+  // FK-aware reference resolution — set when this field's source is a FHIR reference (e.g. "$.subject.
+  // reference") that must be resolved against another mapped resource's own table + id column at write time,
+  // rather than written verbatim (a bigint FK column can never accept a raw "Patient/xyz" string). Mirrors
+  // MappingFieldDto.ReferenceLookupTable/ReferenceLookupKeyColumn on the backend exactly.
+  referenceLookupTable?: string | null;
+  referenceLookupKeyColumn?: string | null;
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on

@@ -56,6 +56,11 @@ interface DestMappingRow {
   parentTable?: string;
   parentKeyColumn?: string;
   foreignKeyColumn?: string;
+  // Set by field-mapping-list.component.ts's "which resource does this reference?" picker (round-tripped
+  // through field-mapping-model.ts's serializeRowsFlat) — resolved in buildMappingForResource into the
+  // referenced resource's own table/id column, since the raw FHIR reference string ("Patient/xyz") this field
+  // is sourced from can never be written as-is into what's normally a NOT NULL FK column.
+  referencesResource?: string;
 }
 
 /**
@@ -649,6 +654,11 @@ export class WorkflowBuildAssemblerService {
           parentKeyColumn: row.parentKeyColumn ?? null,
           foreignKeyColumn: row.foreignKeyColumn ?? null,
         } : {}),
+        // Resolves the field-mapping-list "which resource does this reference?" picker into the referenced
+        // resource's own table/id column — without this a FHIR reference field (e.g. Observation.subject.
+        // reference) keeps writing the raw "Patient/xyz" string, or NULL, into what's normally a NOT NULL FK
+        // column, on every save, regardless of what the user picked in that dropdown.
+        ...(row.referencesResource ? this.resolveReferenceLookup(rows, row.referencesResource) : {}),
         // The field-mapping canvas always writes SeparateDestination child-table rows as StoreJson-shaped
         // Json regardless of the naive path-derived type, matching the backend engine's own StoreJson handling.
         valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
@@ -748,6 +758,11 @@ export class WorkflowBuildAssemblerService {
   }
 
   private valueTypeFor(path: string): string {
+    // Checked against the original (not lowercased) path: FHIR's choice-type fields spell out their type as
+    // a capitalized suffix (deceasedBoolean, multipleBirthBoolean, valueBoolean, ...), and "active" is FHIR's
+    // other common bare boolean field (Patient.active, Practitioner.active, Location.active, ...). Without this,
+    // both fell through to the 'String' default below despite the backend catalog itself typing them Boolean.
+    if (/Boolean$/.test(path) || /(^|\.)active$/i.test(path)) return 'Boolean';
     const p = path.toLowerCase();
     if (
       p.includes('birthdate') ||
@@ -762,6 +777,27 @@ export class WorkflowBuildAssemblerService {
     )
       return 'DateTime';
     return 'String';
+  }
+
+  /**
+   * Resolves a "which resource does this reference?" picker value (row.referencesResource) into the referenced
+   * resource's own destination table + the column its own "$.id" field targets. Mirrors
+   * field-mapping-summary.model.ts's computeResourceKeyInfo — that copy only feeds dest_mapping_summary_v1's
+   * UI-redisplay round-trip; this is the one that actually reaches MappingFieldRequest.referenceLookupTable/
+   * referenceLookupKeyColumn, which JsonMappingEngine/MappedSqlServerDestinationWriter read at pipeline-run
+   * time to resolve a raw FHIR reference string into the referenced row's real key at write time. Returns {}
+   * (never throws) when the referenced resource has no id row yet — an incomplete save shouldn't crash, it
+   * should just leave the reference unresolved, same as if the picker had never been touched.
+   */
+  private resolveReferenceLookup(
+    rows: DestMappingRow[],
+    referencedResource: string,
+  ): { referenceLookupTable?: string; referenceLookupKeyColumn?: string } {
+    const idRow = rows.find(
+      (r) => r.resource === referencedResource
+        && (r.jsonPath ?? this.toJsonPath(r.path, referencedResource)) === '$.id',
+    );
+    return idRow ? { referenceLookupTable: idRow.target, referenceLookupKeyColumn: idRow.column } : {};
   }
 
   // ── graph helpers ───────────────────────────────────────────────────────────
