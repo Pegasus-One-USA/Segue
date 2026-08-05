@@ -206,6 +206,105 @@
 
           </div><!-- /dw-grid-2 -->
         </form>
+      } @else if (isFhir()) {
+        <form [formGroup]="fhirForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-3">
+
+            <div class="dw-field" [class.dw-field--error]="fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched">
+              <label class="dw-label" for="dw-fhir-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-fhir-name" class="dw-input" formControlName="name" placeholder="e.g. Aidbox Production" />
+              @if (fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched">
+              <label class="dw-label" for="dw-fhir-baseUrl">Base URL <span class="dw-req">*</span></label>
+              <input id="dw-fhir-baseUrl" class="dw-input" formControlName="baseUrl" placeholder="https://tenant.aidbox.app/fhir" />
+              @if (fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched) {
+                <span class="dw-error">Base URL is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-project">Aidbox Project</label>
+              <input id="dw-fhir-project" class="dw-input" formControlName="project" placeholder="e.g. tenant-acme" />
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-auth">Authentication <span class="dw-req">*</span></label>
+              <div class="dw-select-wrap">
+                <select id="dw-fhir-auth" class="dw-select" formControlName="authType">
+                  <option value="oauth2">OAuth2 Client Credentials</option>
+                  <option value="basic">Basic Username / Password</option>
+                  <option value="bearer">Static Bearer Token</option>
+                </select>
+              </div>
+            </div>
+
+            @if (fhirForm.get('authType')!.value === 'oauth2') {
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched">
+                <label class="dw-label" for="dw-fhir-tokenEndpoint">Token endpoint <span class="dw-req">*</span></label>
+                <input id="dw-fhir-tokenEndpoint" class="dw-input" formControlName="tokenEndpoint" placeholder="https://tenant.aidbox.app/auth/token" />
+                @if (fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched) {
+                  <span class="dw-error">Token endpoint is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched">
+                <label class="dw-label" for="dw-fhir-clientId">Client ID <span class="dw-req">*</span></label>
+                <input id="dw-fhir-clientId" class="dw-input" formControlName="clientId" autocomplete="off" />
+                @if (fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched) {
+                  <span class="dw-error">Client ID is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
+                <label class="dw-label" for="dw-fhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+                <input id="dw-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+                @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
+                  <span class="dw-error">Client secret is required.</span>
+                }
+              </div>
+            }
+
+            @if (fhirForm.get('authType')!.value === 'basic') {
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched">
+                <label class="dw-label" for="dw-fhir-username">Username <span class="dw-req">*</span></label>
+                <input id="dw-fhir-username" class="dw-input" formControlName="username" autocomplete="off" />
+                @if (fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched) {
+                  <span class="dw-error">Username is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched">
+                <label class="dw-label" for="dw-fhir-password">Password <span class="dw-req">*</span></label>
+                <input id="dw-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+                @if (fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched) {
+                  <span class="dw-error">Password is required.</span>
+                }
+              </div>
+            }
+
+            @if (fhirForm.get('authType')!.value === 'bearer') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched">
+                <label class="dw-label" for="dw-fhir-bearerToken">Bearer token <span class="dw-req">*</span></label>
+                <input id="dw-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password" />
+                @if (fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched) {
+                  <span class="dw-error">Bearer token is required.</span>
+                }
+              </div>
+            }
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-fhir-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by resource id (PUT)</option>
+                  <option value="conditional">Conditional update by identifier</option>
+                </select>
+              </div>
+            </div>
+
+          </div><!-- /dw-grid-3 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -379,25 +478,73 @@
     <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
     <!-- [hidden] rather than @if: the embedded mapping form must stay mounted across steps 3-4 (Review
          reads its row count/parent-selection state — see reviewSummary/isNextDisabled), where an @if here
-         would destroy it the moment the user advances past step 3. -->
-    <div [hidden]="!isStepActive(3)">
-      <div class="dw-section-head">
-        <span class="dw-section-num">3</span>
-        <span class="dw-section-title">Map fields</span>
-        <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
-        </span>
-      </div>
+         would destroy it the moment the user advances past step 3. Not rendered at all for FHIR (below) —
+         a passthrough destination has no field-by-field mapping concept; destType is fixed for the life of
+         one wizard instance, so this never toggles at runtime for an already-mounted sql/mongo/csv wizard. -->
+    @if (!isFhir()) {
+      <div [hidden]="!isStepActive(3)">
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+          </span>
+        </div>
 
-      <app-mapping-profile-form
-        [resources]="selectedResources()"
-        [destType]="destType()"
-        [sqlTables]="sqlTables()"
-        [initialRows]="initialMappingRows()"
-        [initialTargets]="initialTargetByResource()"
-        [initialParentSelections]="initialParentSelections()"
-      />
-    </div>
+        <app-mapping-profile-form
+          [resources]="selectedResources()"
+          [destType]="nonFhirDestType()"
+          [sqlTables]="sqlTables()"
+          [initialRows]="initialMappingRows()"
+          [initialTargets]="initialTargetByResource()"
+          [initialParentSelections]="initialParentSelections()"
+        />
+      </div>
+    } @else {
+      <div [hidden]="!isStepActive(3)">
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">Choose how FHIR resources are written to Aidbox.</span>
+        </div>
+
+        <label class="dw-fhir-choice" [class.selected]="fhirMapMode() === 'passthrough'">
+          <input type="radio" name="fhirMapMode" [checked]="fhirMapMode() === 'passthrough'" (change)="fhirMapMode.set('passthrough')" />
+          <div class="dw-fhir-choice-body">
+            <span class="dw-fhir-choice-title">Send FHIR resources as-is <span class="dw-fhir-choice-pill">Recommended</span></span>
+            <span class="dw-hint">Writes the normalized resource unchanged — no mapping to configure.</span>
+          </div>
+        </label>
+
+        <label class="dw-fhir-choice" [class.selected]="fhirMapMode() === 'customize'">
+          <input type="radio" name="fhirMapMode" [checked]="fhirMapMode() === 'customize'" (change)="selectFhirCustomizeMode()" />
+          <div class="dw-fhir-choice-body">
+            <span class="dw-fhir-choice-title">Customize fields before writing</span>
+            <span class="dw-hint">Only for redaction, identifier renaming, or code translation — not a full column map.</span>
+          </div>
+        </label>
+
+        @if (fhirMapMode() === 'customize') {
+          <div class="dw-fhir-rules">
+            @for (rule of fhirCustomRules(); track $index) {
+              <div class="dw-fhir-rule-row">
+                <input class="dw-input" [value]="rule.field" (input)="updateFhirRule($index, 'field', $any($event.target).value)" placeholder="e.g. identifier[0].system" />
+                <div class="dw-select-wrap">
+                  <select class="dw-select" [value]="rule.action" (change)="updateFhirRule($index, 'action', $any($event.target).value)">
+                    <option value="rename">Rename</option>
+                    <option value="redact">Redact</option>
+                    <option value="translate">Translate</option>
+                  </select>
+                </div>
+                <input class="dw-input" [value]="rule.value" (input)="updateFhirRule($index, 'value', $any($event.target).value)" placeholder="new value" />
+                <button type="button" class="dw-clear-btn" title="Remove rule" (click)="removeFhirRule($index)">✕</button>
+              </div>
+            }
+            <button type="button" class="dw-btn" (click)="addFhirRule()">+ Add rule</button>
+          </div>
+        }
+      </div>
+    }
 
     <!-- ═══ STEP 4: Review ═══════════════════════════════════════════════ -->
     @if (isStepActive(4)) {
@@ -445,6 +592,31 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
           </div>
+        } @else if (isFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ fhirForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Base URL</span>
+            <span class="dw-review-val dw-mono">{{ fhirForm.value.baseUrl || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Project</span>
+            <span class="dw-review-val">{{ fhirForm.value.project || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ fhirForm.value.authType === 'oauth2' ? 'OAuth2 Client Credentials' : fhirForm.value.authType === 'basic' ? 'Basic Username / Password' : 'Static Bearer Token' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'conditional' ? 'Conditional update by identifier' : 'Upsert by resource id (PUT)' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Field handling</span>
+            <span class="dw-review-val">{{ fhirMapMode() === 'customize' ? ('Custom mapping (' + fhirCustomRules().length + ' rule' + (fhirCustomRules().length === 1 ? '' : 's') + ')') : 'Passthrough — no mapping' }}</span>
+          </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -463,10 +635,12 @@
           <span class="dw-review-key">Data groups</span>
           <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
         </div>
-        <div class="dw-review-card">
-          <span class="dw-review-key">Mapped fields</span>
-          <span class="dw-review-val">{{ (mappingForm()?.mappingRows()?.length) ?? 0 }} fields</span>
-        </div>
+        @if (!isFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Mapped fields</span>
+            <span class="dw-review-val">{{ (mappingForm()?.mappingRows()?.length) ?? 0 }} fields</span>
+          </div>
+        }
       </div>
 
       <div class="dw-callout dw-callout--info">

@@ -345,8 +345,11 @@ export class WorkflowBuildAssemblerService {
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isFhir =
+      node.nodeType.includes('Fhir') ||
+      (fields['__transformId'] ?? '') === 'dest-fhir';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isFhir ? 'FHIR Repository Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -400,6 +403,26 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    if (isFhir) {
+      // dest_clientSecret/dest_password/dest_bearerToken are redacted from persisted config (see
+      // WorkflowGraphMapperService's SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload —
+      // same "don't blank an already-provisioned secret unless the user actually typed a new one" guard the
+      // SQL/Mongo/SFTP branches above use.
+      const hasNewSecretInput = !!(fields['dest_clientSecret'] || fields['dest_password'] || fields['dest_bearerToken']);
+      return {
+        name,
+        destinationType: 'FhirRepository',
+        keyVaultName,
+        secretName,
+        target: fields['dest_baseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !hasNewSecretInput
+            ? null
+            : this.buildFhirSecretBlob(fields),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -426,7 +449,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv',
+    kind: 'sql' | 'mongo' | 'csv' | 'fhir',
   ): string {
     const keys =
       kind === 'sql'
@@ -442,7 +465,19 @@ export class WorkflowBuildAssemblerService {
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
-          : [
+          : kind === 'fhir'
+            ? [
+                'dest_name',
+                'dest_baseUrl',
+                'dest_project',
+                'dest_writeMode',
+                'dest_tokenEndpoint',
+                'dest_clientId',
+                'dest_username',
+                'dest_fhirMapMode',
+                'dest_fhirCustomRules',
+              ]
+            : [
               'dest_name',
               'dest_deliveryMode',
               'dest_filePattern',
@@ -463,7 +498,33 @@ export class WorkflowBuildAssemblerService {
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
     }
+    // The backend reads this metadata key as dest_fhirAuthType (see FhirRepositoryAuthResolver); the wizard's own
+    // field/form-control name is dest_authType — bridge the naming difference here rather than renaming either
+    // side to match, since dest_authType already mirrors the SQL family's dest_auth naming convention. The wizard's
+    // internal value for this option is 'oauth2' (matches its own authType control/validators throughout the
+    // component), but the backend's CreateDestinationConfigurationRequestValidator/FhirRepositoryAuthResolver only
+    // recognize 'clientCredentials' — bridge the value too, not just the key.
+    if (kind === 'fhir' && f['dest_authType'] !== undefined) {
+      metadata['dest_fhirAuthType'] = f['dest_authType'] === 'oauth2' ? 'clientCredentials' : f['dest_authType'];
+    }
     return JSON.stringify(metadata);
+  }
+
+  /** Builds the FHIR-repository destination's encrypted secret blob, shaped to match exactly what the backend's
+   *  FhirRepositoryAuthResolver (FHIRBridge.Infrastructure) expects to parse for each auth type. */
+  private buildFhirSecretBlob(f: Record<string, string>): string {
+    const authType = f['dest_authType'] ?? 'oauth2';
+    if (authType === 'basic') {
+      return JSON.stringify({ username: f['dest_username'] ?? '', password: f['dest_password'] ?? '' });
+    }
+    if (authType === 'bearer') {
+      return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
+    }
+    return JSON.stringify({
+      clientId: f['dest_clientId'] ?? '',
+      clientSecret: f['dest_clientSecret'] ?? '',
+      tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+    });
   }
 
   private buildSqlConnectionString(f: Record<string, string>, isMySql = false, isPostgres = false): string {

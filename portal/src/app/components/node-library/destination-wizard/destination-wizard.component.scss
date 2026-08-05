@@ -393,6 +393,66 @@
   margin-top: 2px;
 }
 
+/* ── FHIR passthrough / customize choice (step 3) ────────────────────────────── */
+.dw-fhir-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: var(--color-primary); }
+  &.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  input[type='radio'] { margin-top: 3px; accent-color: var(--color-primary); }
+}
+
+.dw-fhir-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dw-fhir-choice-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-fhir-choice-pill {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.dw-fhir-rules {
+  margin: 4px 0 0 32px;
+}
+
+.dw-fhir-rule-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 1fr 36px;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
 /* ── Mapping table ────────────────────────────────────────────────────────── */
 .dw-mapping-group {
   border: 1px solid var(--color-border);

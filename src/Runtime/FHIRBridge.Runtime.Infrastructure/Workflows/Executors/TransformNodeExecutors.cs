@@ -63,11 +63,52 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var resourceConfigs = await ResolveResourceMappingConfigsAsync(node, cancellationToken);
-
         var records = new List<MappedDestinationRecord>();
         // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
         var runTimestampUtc = DateTime.UtcNow;
+
+        // FHIR-repository passthrough (e.g. Aidbox): the destination wizard's Step 3 "Send FHIR resources as-is"
+        // choice (the default) is stamped onto this synthetic Field Mapping node's own config as dest_fhirMapMode —
+        // see WorkflowGraphMapperService.syntheticMappingRequest(), which spreads the destination node's fields
+        // (including dest_fhirMapMode and destinationTransformId) onto this node verbatim. A FHIR-repository
+        // destination is spec-owned (docs/backend/14-mapping-profile-master-screen-plan.md) — it has no target
+        // columns to map into, so every resource is emitted unchanged rather than routed through the field-mapping
+        // engine below, which requires a configured field list and would otherwise silently emit zero records for
+        // any resource type nobody explicitly mapped. "customize" mode (rename/redact/translate a handful of
+        // fields) is intentionally NOT handled here yet — its rule list has no backend translation built (still a
+        // UI-only stub) — so it falls through to the normal field-mapping path below unchanged.
+        var isFhirPassthrough =
+            string.Equals(ReadStringConfiguration(node, "destinationTransformId"), "dest-fhir", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(ReadStringConfiguration(node, "dest_fhirMapMode"), "customize", StringComparison.OrdinalIgnoreCase);
+
+        if (isFhirPassthrough)
+        {
+            foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
+            {
+                var passthroughJson = Convert.ToString(resource.Payload) ?? "{}";
+                records.Add(new MappedDestinationRecord(
+                    context.WorkflowRunId,
+                    resource.ResourceType,
+                    resource.ResourceType,
+                    resource.ResourceId,
+                    new Dictionary<string, object?>(),
+                    passthroughJson));
+            }
+
+            return new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                new MappedRecordBatch(records),
+                WorkflowDataContract.MappedRecordBatch,
+                new Dictionary<string, object?>
+                {
+                    ["executor"] = GetType().Name,
+                    ["count"] = records.Count,
+                    ["passthrough"] = true
+                });
+        }
+
+        var resourceConfigs = await ResolveResourceMappingConfigsAsync(node, cancellationToken);
 
         foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
         {

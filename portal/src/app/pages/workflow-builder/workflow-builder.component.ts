@@ -310,7 +310,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
-        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
+        this.reconcileSourceConnectionFields(result.workflowId, request.name, result.sourceConnectionIds);
       },
       error: err => {
         const msg = typeof err?.error?.error === 'string'
@@ -354,16 +354,28 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   /**
+   * A brand-new source node (sourceMode 'new' in the Epic/Cerner/Athenahealth/Allscripts/Meditech wizard) has no
+   * sourceConnectionId of its own until THIS build assigns one — and nothing was writing it back onto the node
+   * afterward, so the Runtime-plane's SourceNodeExecutor.ExecuteAsync could never resolve real credentials on a
+   * later Run (falls through to its zero-record placeholder path, silently reporting "Succeeded" with no data
+   * ever actually fetched — confirmed via a live Epic workflow that made zero outbound API calls on every run).
+   * Stamped here, in the still-live canvas node (before resetCanvasAndWorkflowState() would otherwise throw that
+   * state away) — deliberately WITHOUT sourceConnectionResolved: 'true', since that flag means "an existing
+   * connection was picked and must never be mutated by this save" (see WorkflowBuildAssemblerService.assemble());
+   * a connection this workflow itself just created should keep being upserted in place on every future save, the
+   * same way a destination's own destinationId already does.
+   *
    * The "Private Key / JWKS URL" field a Backend System + JWT source shows is never actually sent to the backend
    * SourceConnection (no such column exists there) — the only durable place it CAN live is this node's own
    * ConfigurationJson, which the workflow definition already persists on every save. For a node whose signing key
    * FHIRBridge generated/imported, the real URL is only knowable once this build assigns a sourceConnectionId — so
-   * it's wrong (a stale placeholder) on the save that just happened. Corrects it here, in the still-live canvas
-   * node (before resetCanvasAndWorkflowState() would otherwise throw that state away), then persists the
-   * correction with a plain definition save (PUT /workflows/{id} — NOT another /workflows/build) so it doesn't
-   * re-touch the source/destinations/mappings just created/synced above, or re-trigger capability discovery.
+   * it's wrong (a stale placeholder) on the save that just happened. Corrected here too, for the same reason.
+   *
+   * Both corrections are persisted together with a plain definition save (PUT /workflows/{id} — NOT another
+   * /workflows/build) so this doesn't re-touch the source/destinations/mappings just created/synced above, or
+   * re-trigger capability discovery.
    */
-  private reconcileGeneratedJwksUrls(
+  private reconcileSourceConnectionFields(
     workflowId: string,
     workflowName: string,
     sourceConnectionIds: Record<string, string>,
@@ -375,25 +387,36 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       if (!node) continue;
 
       const fields = node.fields;
+      let updatedFields = fields;
+
+      if (updatedFields['sourceConnectionId'] !== sourceConnectionId) {
+        updatedFields = { ...updatedFields, sourceConnectionId };
+        anyCorrected = true;
+      }
+
       const isGeneratedOrImportedBackendKey =
         fields['Auth method'] === 'jwt' &&
         fields['Epic audience'] === 'backend-system' &&
         (fields['Signing key source'] === 'gen' || fields['Signing key source'] === 'import');
 
-      if (!isGeneratedOrImportedBackendKey) continue;
+      if (isGeneratedOrImportedBackendKey) {
+        const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+        if (updatedFields['JWKS URL'] !== jwksUrl) {
+          updatedFields = { ...updatedFields, 'JWKS URL': jwksUrl };
+          anyCorrected = true;
+        }
 
-      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
-      if (fields['JWKS URL'] !== jwksUrl) {
-        this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
-        anyCorrected = true;
+        this.toast.show(
+          `JWKS URL for "${fields['__name'] || 'this source'}"`,
+          `Register this URL in Epic's app configuration: ${jwksUrl}`,
+          'info',
+          20000,
+        );
       }
 
-      this.toast.show(
-        `JWKS URL for "${fields['__name'] || 'this source'}"`,
-        `Register this URL in Epic's app configuration: ${jwksUrl}`,
-        'info',
-        20000,
-      );
+      if (updatedFields !== fields) {
+        this.store.updateNode(nodeId, { fields: updatedFields } as Partial<CanvasNode>);
+      }
     }
 
     if (!anyCorrected) {
@@ -478,7 +501,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId);
+    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId, e.config);
 
     const siblings = this.store.outboundEdges(attachNode.id).length;
     const node: TransformNode = {
@@ -517,8 +540,21 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
    *    resolves its fields from whichever mappingProfileId ends up on the node). Clone the Mapping node instead —
    *    same upstream parent, starting from the same field config — so each destination keeps its own dedicated node.
    */
-  private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
+  private resolveDestinationAttachPoint(
+    attachNode: CanvasNode,
+    transformId: string,
+    config?: Record<string, string>,
+  ): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
+
+    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement in passthrough
+    // mode (WorkflowGraphValidator.DestinationRequiresMappedRecords) — a Field Mapping node has no configuration
+    // screen and no way to receive the FHIR-specific signal it would need to behave as a passthrough, so wire the
+    // destination directly to its source/transform parent instead of forcing one in. "customize" mode still needs
+    // real field mapping, so it keeps the normal insertion behavior below.
+    if (transformId === 'dest-fhir' && config?.['dest_fhirMapMode'] !== 'customize') {
+      return attachNode;
+    }
 
     const isMappingNode = attachNode.kind === 'transform' && (attachNode as TransformNode).transformId === 'field-mapping';
     if (!isMappingNode) {
@@ -610,7 +646,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       const node = this.store.byId(nodeId);
       if (node?.kind === 'transform') {
         const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
+        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir') {
           // Edit destination node — open library in transform mode with parent as origin.
           const parent = this.store.parentOf(nodeId);
           this.editingNodeId.set(nodeId);

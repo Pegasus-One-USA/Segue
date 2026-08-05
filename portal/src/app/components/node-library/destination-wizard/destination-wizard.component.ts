@@ -37,7 +37,7 @@ export class DestinationWizardComponent implements OnInit {
    *  DestinationConnectionFormComponent's viewChild()+getConfig() embed pattern used by the Settings screens. */
   readonly mappingForm = viewChild(MappingProfileFormComponent);
 
-  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'fhir'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -113,6 +113,45 @@ export class DestinationWizardComponent implements OnInit {
     downloadLinkExpiryMinutes: [60, []],
   });
 
+  readonly fhirForm = this.fb.group({
+    name:          ['Aidbox Production', [Validators.required]],
+    baseUrl:       ['', [Validators.required]],
+    project:       ['', []],
+    authType:      ['oauth2', [Validators.required]],
+    writeMode:     ['upsert', []],
+    // ── OAuth2 Client Credentials fields (conditional on authType) ───────────
+    tokenEndpoint: ['', []],
+    clientId:      ['', []],
+    clientSecret:  ['', []],
+    // ── Basic auth fields (conditional) ──────────────────────────────────────
+    username:      ['', []],
+    password:      ['', []],
+    // ── Bearer token field (conditional) ─────────────────────────────────────
+    bearerToken:   ['', []],
+  });
+
+  // ── FHIR field-handling (step 3: passthrough vs. customize) ──────────────
+  readonly fhirMapMode = signal<'passthrough' | 'customize'>('passthrough');
+  readonly fhirCustomRules = signal<{ field: string; action: 'rename' | 'redact' | 'translate'; value: string }[]>([]);
+
+  selectFhirCustomizeMode(): void {
+    this.fhirMapMode.set('customize');
+    if (this.fhirCustomRules().length === 0) this.addFhirRule();
+  }
+
+  addFhirRule(): void {
+    this.fhirCustomRules.update(rows => [...rows, { field: '', action: 'redact', value: '' }]);
+  }
+
+  removeFhirRule(index: number): void {
+    this.fhirCustomRules.update(rows => rows.length > 1 ? rows.filter((_, i) => i !== index) : rows);
+  }
+
+  updateFhirRule(index: number, key: 'field' | 'action' | 'value', value: string): void {
+    this.fhirCustomRules.update(rows =>
+      rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
   // Always the platform's full curated resource set (FHIR_RESOURCES) — every Epic source now requests scopes
   // for all of these regardless of what's picked here, so this no longer needs to derive from (and be capped
@@ -149,6 +188,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -161,14 +201,25 @@ export class DestinationWizardComponent implements OnInit {
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly isCsv        = computed(() => this.destType() === 'csv');
+  readonly isFhir       = computed(() => this.destType() === 'fhir');
+
+  /** Template-only narrowing helper — <app-mapping-profile-form> is never actually bound when isFhir() is true
+   *  (wrapped in @if (!isFhir()) in the template), but Angular's control-flow narrowing doesn't propagate through
+   *  a signal call site (destType() and isFhir() are two independent function calls to the type checker), so the
+   *  wider destType() union needs an explicit cast here rather than widening MappingProfileFormComponent's own
+   *  input type (which genuinely cannot represent a no-mapping-needed destination). */
+  nonFhirDestType(): 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' {
+    return this.destType() as 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres';
+  }
   readonly destLabel    = computed(() =>
     this.destType() === 'sql' ? 'SQL Server'
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'fhir' ? 'FHIR Repository (Aidbox)'
       : 'CSV');
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.isFhir() ? this.fhirForm.value : this.csvForm.value;
     const rows = this.mappingForm()?.mappingRows() ?? [];
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -178,6 +229,10 @@ export class DestinationWizardComponent implements OnInit {
     // SFTP/email/download-link fields are required only while their mode is selected.
     this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
     this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+
+    // FHIR auth fields required only while their auth type is selected.
+    this._syncFhirAuthValidators(this.fhirForm.controls.authType.value);
+    this.fhirForm.controls.authType.valueChanges.subscribe(v => this._syncFhirAuthValidators(v));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -229,6 +284,30 @@ export class DestinationWizardComponent implements OnInit {
     expiry.updateValueAndValidity({ emitEvent: false });
   }
 
+  // Reverse of WorkflowBuildAssemblerService.buildConnectionMetadata's oauth2 -> clientCredentials bridge, for
+  // populating the wizard from an existing DestinationConfiguration's real dest_fhirAuthType value. 'none' has no
+  // representation in this wizard's dropdown (oauth2/basic/bearer only), so it — like an absent value — falls
+  // back to the wizard's default option.
+  private _fhirAuthTypeFromBackend(value: string | undefined): 'oauth2' | 'basic' | 'bearer' {
+    return value === 'basic' || value === 'bearer' ? value : 'oauth2';
+  }
+
+  private _syncFhirAuthValidators(authType: string | null): void {
+    (['tokenEndpoint', 'clientId', 'clientSecret'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    (['username', 'password'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    const bearerToken = this.fhirForm.get('bearerToken')!;
+    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.updateValueAndValidity({ emitEvent: false });
+  }
+
   ngOnInit(): void {
     const edit = this.editNode();
     if (edit) {
@@ -250,7 +329,7 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.isFhir() ? this.fhirForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
     if (s >= 3) {
@@ -266,7 +345,7 @@ export class DestinationWizardComponent implements OnInit {
     // now reveals exactly which field is missing instead of just silently doing nothing.
     if (this.isNextDisabled()) {
       if (this.step() === 1) {
-        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.csvForm).markAllAsTouched();
+        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.isFhir() ? this.fhirForm : this.csvForm).markAllAsTouched();
       }
       return;
     }
@@ -342,6 +421,9 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables.set([]);
     } else if (this.isMongo()) {
       this.mongoForm.reset();
+    } else if (this.isFhir()) {
+      this.fhirForm.reset();
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
     } else {
       this.csvForm.reset();
       this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
@@ -358,7 +440,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isFhir()
+                ? DestinationWizardComponent.FHIR_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -418,6 +502,25 @@ export class DestinationWizardComponent implements OnInit {
         writeMode:        metadata['dest_writeMode']    || 'upsert',
       });
       this._existingBaseline = this.mongoForm.getRawValue();
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:          metadata['dest_name']          || selected.name,
+        baseUrl:       metadata['dest_baseUrl']       || selected.target || '',
+        project:       metadata['dest_project']       || '',
+        // The backend persists this as dest_fhirAuthType with its own vocabulary (none/bearer/basic/
+        // clientCredentials — see WorkflowBuildAssemblerService.buildConnectionMetadata's bridge comment);
+        // translate it back to the wizard's own authType values here rather than reading the wrong key.
+        authType:      this._fhirAuthTypeFromBackend(metadata['dest_fhirAuthType']),
+        writeMode:     metadata['dest_writeMode']     || 'upsert',
+        tokenEndpoint: metadata['dest_tokenEndpoint'] || '',
+        clientId:      metadata['dest_clientId']      || '',
+        clientSecret:  '',
+        username:      metadata['dest_username']      || '',
+        password:      '',
+        bearerToken:   '',
+      });
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
+      this._existingBaseline = this.fhirForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -463,10 +566,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'clientSecret', 'bearerToken']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.isFhir() ? this.fhirForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -517,6 +620,27 @@ export class DestinationWizardComponent implements OnInit {
         collection:       f['dest_collection']  || '',
         writeMode:        f['dest_writeMode']    || 'upsert',
       });
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:          f['dest_name']          || 'Aidbox Production',
+        baseUrl:       f['dest_baseUrl']       || '',
+        project:       f['dest_project']       || '',
+        authType:      f['dest_authType']      || 'oauth2',
+        writeMode:     f['dest_writeMode']     || 'upsert',
+        tokenEndpoint: f['dest_tokenEndpoint'] || '',
+        clientId:      f['dest_clientId']      || '',
+        clientSecret:  '',
+        username:      f['dest_username']      || '',
+        password:      '',
+        bearerToken:   '',
+      });
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
+      if (f['dest_fhirMapMode']) {
+        this.fhirMapMode.set(f['dest_fhirMapMode'] === 'customize' ? 'customize' : 'passthrough');
+      }
+      if (f['dest_fhirCustomRules']) {
+        try { this.fhirCustomRules.set(JSON.parse(f['dest_fhirCustomRules'])); } catch { /* ignore malformed */ }
+      }
     } else {
       this.csvForm.patchValue({
         name:         f['dest_name']         || 'CSV Export',
@@ -613,6 +737,27 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_connectionString'] = v.connectionString ?? '';
       config['dest_collection']       = v.collection       ?? '';
       config['dest_writeMode']        = v.writeMode        ?? 'upsert';
+    } else if (type === 'fhir') {
+      const v = this.fhirForm.value;
+      config['dest_name']      = v.name      ?? '';
+      config['dest_baseUrl']   = v.baseUrl   ?? '';
+      config['dest_project']   = v.project   ?? '';
+      config['dest_authType']  = v.authType  ?? 'oauth2';
+      config['dest_writeMode'] = v.writeMode ?? 'upsert';
+      if (v.authType === 'oauth2') {
+        config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
+        config['dest_clientId']      = v.clientId      ?? '';
+        config['dest_clientSecret']  = v.clientSecret  ?? '';
+      } else if (v.authType === 'basic') {
+        config['dest_username'] = v.username ?? '';
+        config['dest_password'] = v.password ?? '';
+      } else if (v.authType === 'bearer') {
+        config['dest_bearerToken'] = v.bearerToken ?? '';
+      }
+      config['dest_fhirMapMode'] = this.fhirMapMode();
+      if (this.fhirMapMode() === 'customize') {
+        config['dest_fhirCustomRules'] = JSON.stringify(this.fhirCustomRules());
+      }
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -700,7 +845,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : type === 'fhir' ? 'dest-fhir' : 'dest-csv',
       status:      'enabled',
       config,
     });

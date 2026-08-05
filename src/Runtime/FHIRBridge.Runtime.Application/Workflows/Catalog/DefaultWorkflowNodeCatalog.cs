@@ -43,8 +43,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.MySqlDestination),
         Destination(WorkflowNodeTypes.MongoDestination),
         Destination(WorkflowNodeTypes.PostgreSqlDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql destinations are exposed in the palette.
-        // The writers below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
+        Destination(WorkflowNodeTypes.FhirRepositoryDestination),
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + FhirRepository destinations
+        // are exposed in the palette. The writers below remain registered in ConfiguredDestinationWriterFactory
+        // and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
         // Destination(WorkflowNodeTypes.PowerBiDestination),
@@ -52,7 +54,6 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         // Destination(WorkflowNodeTypes.DatabricksDestination),
         // Destination(WorkflowNodeTypes.BlobDestination),
         // Destination(WorkflowNodeTypes.S3Destination),
-        // Destination(WorkflowNodeTypes.FhirRepositoryDestination),
         // Destination(WorkflowNodeTypes.ExcelDestination),
         // Destination(WorkflowNodeTypes.NdjsonDestination),
         // Destination(WorkflowNodeTypes.ParquetDestination),
@@ -169,7 +170,13 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeCategory.Destination,
             70,
             [],
-            [WorkflowDataContract.MappedRecordBatch],
+            // FhirRepositoryDestination additionally accepts raw/normalized resources directly (no Mapping node
+            // required) — it's spec-owned, so passthrough writes a resource unchanged rather than mapping fields
+            // into destination columns. Every other destination type is unaffected: MappedRecordBatch remains
+            // their only accepted input, so WorkflowGraphValidator's Mapping-node requirement still applies to them.
+            nodeType == WorkflowNodeTypes.FhirRepositoryDestination
+                ? [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.MappedRecordBatch]
+                : [WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.DestinationWriteResult,
             nodeType,
             DisplayNameFor(nodeType),
@@ -199,6 +206,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "dest-mysql",
             WorkflowNodeTypes.MongoDestination => "dest-mongo",
             WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
+            WorkflowNodeTypes.FhirRepositoryDestination => "dest-fhir",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -216,6 +224,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "MySQL",
             WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
+            WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -233,6 +242,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
+            WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

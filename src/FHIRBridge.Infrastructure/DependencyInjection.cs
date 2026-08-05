@@ -102,6 +102,16 @@ public static class DependencyInjection
                     destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
         }
 
+        // FhirRepository (e.g. Aidbox) needs an authenticated conformance check (GET {base}/metadata), not the
+        // anonymous HEAD/directory check TargetReachabilityDestinationHealthCheckProvider does above — it gets its
+        // own provider instead of joining that loop. Previously FhirRepository had no registered health check at all.
+        services.AddHttpClient(nameof(Destinations.FhirRepositoryHealthCheckProvider));
+        services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
+            new Destinations.FhirRepositoryHealthCheckProvider(
+                sp.GetRequiredService<ISecretProvider>(),
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
+
         // Registered unconditionally (before the in-memory/DB branch below) — it resolves
         // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
         services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
@@ -272,6 +282,11 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
+        services.AddHttpClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider));
+        services.AddScoped<Destinations.Auth.IFhirDestinationTokenProvider>(sp =>
+            new Destinations.Auth.FhirDestinationOAuth2TokenProvider(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider)),
+                sp.GetRequiredService<IFhirAccessTokenCache>()));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
         services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
