@@ -1,0 +1,287 @@
+Demo_TestApp/frontend/src/environments/environment.staging.ts
+  s_40e3518071d2f8::t_5ee4ba35ecb9d2 1-11
+Demo_TestApp/backend/Program.cs
+  s_40e3518071d2f8::t_63fc8981bd4798 124-126
+portal/src/environments/environment.working.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-8
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_40e3518071d2f8::t_ec67e49e3b8a82 67-71
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_40e3518071d2f8::t_bc6e2fa1e09263 4
+  s_40e3518071d2f8::t_8fef9e58276d4d 41
+  s_40e3518071d2f8::t_debfdbd1761eec 1-3,5-40,42-219
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-payload.util.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-258
+portal/src/app/services/wizard.service.ts
+  s_40e3518071d2f8::t_e4cd4412c41d63 363-365
+  s_40e3518071d2f8::t_24afbc9abc54b6 126-128
+  s_40e3518071d2f8::t_fedc91a0acd5c5 101-105
+  s_40e3518071d2f8::t_2bdec78b701575 392-397
+  s_40e3518071d2f8::t_f10ed3058b85dc 482,490
+  s_40e3518071d2f8::t_086239a4bcc25a 441-479
+  s_40e3518071d2f8::t_da318064690b08 2
+  s_40e3518071d2f8::t_443b1b4209ab65 494-499
+  s_40e3518071d2f8::t_b215c2699f721d 200,239
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-82
+portal/src/environments/environment.dev.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-8
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-173
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-anchor.service.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-234
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_40e3518071d2f8::t_9ba7cafa8f434c 24-28
+  s_40e3518071d2f8::t_debfdbd1761eec 1-23,29-200
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-107
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_40e3518071d2f8::t_8d65340b6ca121 580-586,588
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_40e3518071d2f8::t_8d65340b6ca121 1-12,26,174,186-193,229-230,405-409,415-417,426-585
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-34
+portal/src/environments/environment.staging.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-8
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-snapshot.model.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-10,12-19,21-46,48-51
+  s_40e3518071d2f8::t_dc42bb78cf9c37 11
+  s_40e3518071d2f8::t_8fef9e58276d4d 20,47
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-profile-import.service.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-43
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-142
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-231
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-223
+Demo_TestApp/frontend/angular.json
+  s_40e3518071d2f8::t_36255f6a6e0ff3 62-145,161-172
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.html
+  s_40e3518071d2f8::t_58ca4236abe086 20-21,23
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-64
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-43
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-69
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-16
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.ts
+  s_40e3518071d2f8::t_8d65340b6ca121 12-13,17
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.html
+  s_40e3518071d2f8::t_8d65340b6ca121 2,4-8
+portal/src/environments/environment.qa.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-8
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_40e3518071d2f8::t_8fef9e58276d4d 75
+  s_40e3518071d2f8::t_debfdbd1761eec 1-4,6-74,76-1035
+  s_40e3518071d2f8::t_c810396025a8dd 5
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_40e3518071d2f8::t_9dd9c416fef9d0 313
+  s_40e3518071d2f8::t_3d08ee7acfbc3a 9
+  s_40e3518071d2f8::t_8190f388fa7a71 748-763
+  s_40e3518071d2f8::t_fc7fa11c34dab4 561-565,570
+  s_40e3518071d2f8::t_2c019cbe372bb2 764-765
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-84
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-47
+portal/src/app/components/nodes/source-node/source-node.component.scss
+  s_40e3518071d2f8::t_8d65340b6ca121 14-21
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-automap.util.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-66
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-summary.service.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-41
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-146
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_40e3518071d2f8::t_216d36583ae996 1986,1999-2000
+  s_40e3518071d2f8::t_1ae61eb5c3f68e 18
+  s_40e3518071d2f8::t_6a5bdc84d17bc9 5
+  s_40e3518071d2f8::t_51bb0ec762ae7f 992-1002
+  s_40e3518071d2f8::t_4850abf53376a5 409-414
+  s_40e3518071d2f8::t_146f47b4741b5f 2067,2069-2091
+  s_40e3518071d2f8::t_480f94dd8905d5 512-517
+  s_40e3518071d2f8::t_fc2d05f0859f9e 946-950
+  s_40e3518071d2f8::t_8450b06e829e87 470-475
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-321
+Demo_TestApp/frontend/src/environments/environment.working.ts
+  s_40e3518071d2f8::t_5ee4ba35ecb9d2 1-11
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-83
+Demo_TestApp/frontend/src/environments/environment.dev.ts
+  s_40e3518071d2f8::t_5ee4ba35ecb9d2 1-11
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-209
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-133
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.ts
+  s_40e3518071d2f8::t_b6553287846344 4,6-13,24,29-30,33-37
+portal/src/app/components/node-library/destination-wizard/resource-dependency.config.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-112
+portal/src/app/services/destination-schema.service.ts
+  s_40e3518071d2f8::t_05238a848d6d46 32-33
+  s_40e3518071d2f8::t_7996e70507ca15 145-159
+  s_40e3518071d2f8::t_5920bb728ce7eb 57-111
+  s_40e3518071d2f8::t_069eb48e527e19 12-13,19-24
+  s_40e3518071d2f8::t_59b22ab5fc3444 160
+portal/src/styles.scss
+  s_40e3518071d2f8::t_8d65340b6ca121 105-108,226-240
+  s_40e3518071d2f8::t_c39b67eef08e34 241
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_40e3518071d2f8::t_24ec1e3af72902 1-2,4-5,7-8,15-16,18-26,33-51
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_40e3518071d2f8::t_1dce2baeb7461b 14,17-22
+  s_40e3518071d2f8::t_d61638548ffa10 15-16
+  s_40e3518071d2f8::t_f02e39d4c28a3b 509
+  s_40e3518071d2f8::t_711c5818efa4ca 265
+  s_40e3518071d2f8::t_cfa104218d67c0 415
+  s_40e3518071d2f8::t_debfdbd1761eec 1-13,23-107,109-135,137-228,230-257,259-263,266-344,346-414,416-461,463-508,510-558
+  s_40e3518071d2f8::t_c2eab518a2ed83 108,136,229,264,345,462
+  s_40e3518071d2f8::t_717b70a6052620 258
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-112
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-export-preview-modal.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-64
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-55
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-129
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-export-preview-modal.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-41
+portal/src/app/components/node-library/destination-wizard/resource-dependency.config.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-91
+portal/src/app/services/mapping-catalog.service.ts
+  s_40e3518071d2f8::t_ad7c9e3e5b1f0a 84-88,90-91,93,99
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-148
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-export-preview-modal.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-29
+portal/src/app/data/scope-constants.data.ts
+  s_40e3518071d2f8::t_8d65340b6ca121 10-15
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-94
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview.util.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-56
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_40e3518071d2f8::t_c06dba4c7409f5 324-325,327-333
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-payload.util.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-135
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_40e3518071d2f8::t_e3097586f64497 389-392
+  s_40e3518071d2f8::t_2633cc88e19205 17-19
+  s_40e3518071d2f8::t_96840b56e8e748 575
+  s_40e3518071d2f8::t_8c4f9be14029e8 3-16,22-29,31-33,35-36,39,103,302,369-370,383-388,393-474,476-479,481,549,560-574,576-599,601
+Demo_TestApp/frontend/src/environments/environment.qa.ts
+  s_40e3518071d2f8::t_5ee4ba35ecb9d2 1-11
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-103
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_40e3518071d2f8::t_8f5060c01b2c2e 628-630
+  s_40e3518071d2f8::t_a43eb222774380 48-50
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview.util.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-63
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-100
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_40e3518071d2f8::t_e430b7e7cff360 1481,1484,1497
+  s_40e3518071d2f8::t_e772b8b2a2e3c3 1542-1543,1548,1554-1563
+  s_40e3518071d2f8::t_ce1309f41e5d0d 1317,1324-1326
+  s_40e3518071d2f8::t_ff4fcf22e72b8c 1681-1685
+  s_40e3518071d2f8::t_a87196d2d30719 1463
+  s_40e3518071d2f8::t_51f0abf01ff249 160
+  s_40e3518071d2f8::t_a98560b09a1fd9 2-3,8-9,12-13,15-17,19-111,113-125,132,140,142-149,151-153,155-159,165-184,189-190,197-203,215-222,256,263-267,270-275,282-465,467-613,626-641,662-668,671,677-683,690-695,697-698,700-732,736-749,783,789-790,809-810,815-820,822-849,853-858,862-923,952-958,961,970,976-980,982,1086,1140-1170,1172,1176-1316,1318-1323,1327-1337,1343-1345,1380,1386-1391,1396-1417,1421-1422,1427-1448,1451-1462,1464-1480,1526-1541,1544-1547,1549-1553,1564-1610,1636-1643,1647-1674,1676-1680,1686-1732
+  s_40e3518071d2f8::t_d415721b191e03 466
+  s_40e3518071d2f8::t_b9aea7ec164909 18
+  s_40e3518071d2f8::t_2eb5e09d38463a 981
+  s_40e3518071d2f8::t_bc57436caa0957 1356
+  s_40e3518071d2f8::t_d5e9a659797cb9 983
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-108
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-19
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-automap.util.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-51
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-254
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-snapshot.service.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-73
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-49
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-131
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_40e3518071d2f8::t_debfdbd1761eec 1-49
+portal/src/app/core/api-endpoints.ts
+  s_40e3518071d2f8::t_8d65340b6ca121 109-112,133-145
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-240
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-83
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-396
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-136
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_40e3518071d2f8::t_d119fdd82c41a6 13-16
+  s_40e3518071d2f8::t_8eec54a96b0ef8 839-844
+  s_40e3518071d2f8::t_c571ce19a9c3b9 81-245,845
+  s_40e3518071d2f8::t_ed2b8966032171 846
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1-428
+portal/src/app/dashboard/components/pipeline-table/pipeline-table.component.scss
+  s_40e3518071d2f8::t_bb50573cfe885c 54-60
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_40e3518071d2f8::t_96d9c0bcac1639 590-592
+  s_40e3518071d2f8::t_9e9b9033d73a55 158-161
+  s_40e3518071d2f8::t_090ba47655dcf4 541-543
+  s_40e3518071d2f8::t_d388a170580d8c 177-179
+  s_40e3518071d2f8::t_8064a453568bb5 507-509
+  s_40e3518071d2f8::t_8cfbe6b45c5f64 123
+  s_40e3518071d2f8::t_ba5c9515c3d109 185-218
+  s_40e3518071d2f8::t_3ba4225f779f97 7
+  s_40e3518071d2f8::t_6b2f2d768aa911 180
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_40e3518071d2f8::t_c30eb39fb767a3 169,172-176
+  s_40e3518071d2f8::t_c4ba76a871cdab 211-217,223-225
+  s_40e3518071d2f8::t_b0d4ed2f7a949a 27-32
+  s_40e3518071d2f8::t_50d57b92392d77 2-24,26,33-75,81-83
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.ts
+  s_40e3518071d2f8::t_debfdbd1761eec 1,3-26,28-44
+  s_40e3518071d2f8::t_66d322d43bebbb 2
+  s_40e3518071d2f8::t_8fef9e58276d4d 27
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_40e3518071d2f8::t_d5070ad7be5a15 95,99-101
+  s_40e3518071d2f8::t_30f26ab6acbaa8 698-701,705-709,712
+portal/angular.json
+  s_40e3518071d2f8::t_628e9ce2117752 82-165,181-192
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.scss
+  s_40e3518071d2f8::t_debfdbd1761eec 1-82
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.ts
+  s_40e3518071d2f8::t_8d65340b6ca121 1,17-31
+  s_40e3518071d2f8::t_1344ac6a0a6130 32
+portal/src/app/components/nodes/transform-node/transform-node.component.scss
+  s_40e3518071d2f8::t_8d65340b6ca121 13-20
+portal/src/app/dashboard/models/pipeline-run.model.ts
+  s_40e3518071d2f8::t_8d65340b6ca121 1-10,19,22-24,32-48
+  s_40e3518071d2f8::t_dac223bbcfdccf 25-31
+  s_40e3518071d2f8::t_d6dbacec3bca47 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7de2874c0b3a72ae5b6c08703305ed219611af09",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
