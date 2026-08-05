@@ -881,17 +881,25 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
         List<IGrouping<string, MappedDestinationRecord>> groups)
     {
+        // Keyed on the bare table name (schema prefix and any ";mode=..." write-mode suffix stripped). A
+        // group's own DestinationObject carries both — it's the full profile-level value (e.g.
+        // "dbo.Encounter;mode=upsert") — while a reference lookup's LookupTable is just the bare name a mapped
+        // field's own row targets (e.g. "Encounter", matching DestMappingRow.target's convention). Comparing the
+        // two as-is never matches, which silently disabled this entire topological sort for any real (non-
+        // legacy) MappingProfile — a resource referencing another via ReferenceLookupTable/ReferenceLookupKeyColumn
+        // could land in either write order, failing "no row in [table] has [column] = ..." whenever the
+        // referenced resource's own group happened to be written second.
         var tableToGroup = groups
             .Select(g => (Table: g.Select(r => r.DestinationObject).FirstOrDefault(), Group: g))
             .Where(x => x.Table is not null)
-            .GroupBy(x => x.Table!, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(x => NormalizeTableName(x.Table!), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First().Group, StringComparer.OrdinalIgnoreCase);
 
         var dependencies = groups.ToDictionary(
             g => g,
             g => g
                 .SelectMany(r => r.ReferenceLookups ?? [])
-                .Select(l => l.LookupTable)
+                .Select(l => NormalizeTableName(l.LookupTable))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(table => tableToGroup.ContainsKey(table) && !ReferenceEquals(tableToGroup[table], g))
                 .Select(table => tableToGroup[table])
@@ -924,6 +932,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return ordered;
+    }
+
+    /// <summary>Strips a ";mode=..." write-mode suffix and any schema prefix, leaving just the bare table
+    /// name — the one form both a group's own (profile-level, schema+suffix-qualified) DestinationObject and a
+    /// reference lookup's (bare, per-field) LookupTable can be compared against.</summary>
+    private static string NormalizeTableName(string table)
+    {
+        var semicolon = table.IndexOf(';');
+        var withoutOptions = semicolon >= 0 ? table[..semicolon] : table;
+        var dot = withoutOptions.LastIndexOf('.');
+        return dot >= 0 ? withoutOptions[(dot + 1)..] : withoutOptions;
     }
 
     /// <summary>
