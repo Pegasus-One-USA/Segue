@@ -1,0 +1,83 @@
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_8c124f3f2435f0::t_8d00aed3ac87c1 36
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_8c124f3f2435f0::t_17703574afbe2e 139-147
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_8c124f3f2435f0::t_84071c2231bede 584-590,596-598,600-602
+  s_8c124f3f2435f0::t_7bdd3438adfe2a 2
+  s_8c124f3f2435f0::t_2c76b9bfbd1213 1418-1423
+  s_8c124f3f2435f0::t_8fa098b39ba262 408-412
+  s_8c124f3f2435f0::t_68c1b8a46b8b87 580-583,591-595,599,603-605
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_8c124f3f2435f0::t_793abf014e9603 100-113
+  s_8c124f3f2435f0::t_5c8cfd0aaa00ee 84-99,114,119-126
+  s_8c124f3f2435f0::t_0e7a3b79b2ee17 115-118
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_8c124f3f2435f0::t_4ee0d94016125f 39-40
+  s_8c124f3f2435f0::t_d18e3548c10be5 15
+  s_8c124f3f2435f0::t_e961ab87e95fba 43
+  s_8c124f3f2435f0::t_e562d835edd041 196,200
+  s_8c124f3f2435f0::t_ec6ab81f589b79 45-75
+  s_8c124f3f2435f0::t_c770a1efb8ad60 44
+  s_8c124f3f2435f0::t_c7c280b8a179fc 235,239
+  s_8c124f3f2435f0::t_13d9e796fd1a5a 4-11
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_8c124f3f2435f0::t_8847c0c57ce587 210,213,216,218,224-234
+  s_8c124f3f2435f0::t_6b6027d2d22c1e 189-192,197,202,205-209
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_8c124f3f2435f0::t_ceab20ed7bc0af 185-189,194
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_8c124f3f2435f0::t_22c08786b51864 554-555
+  s_8c124f3f2435f0::t_5cb8354ec7aba6 475-508,512-523,529-538,541,549-553
+  s_8c124f3f2435f0::t_c69dc84215f73f 67-70
+  s_8c124f3f2435f0::t_a7c05e65299973 2
+  s_8c124f3f2435f0::t_ea4e8a26c006b2 309
+  s_8c124f3f2435f0::t_a0dc4827f37839 524-528
+  s_8c124f3f2435f0::t_85188ee1103f0c 509-511
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_8c124f3f2435f0::t_92451c94a61d89 1
+  s_8c124f3f2435f0::t_a56aed9f659c0c 61-124
+  s_8c124f3f2435f0::t_eaf4de47b7d2b8 177-184
+  s_8c124f3f2435f0::t_35a9f146d3b508 33
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  s_8c124f3f2435f0::t_5e0a701b40b959 23-42
+  s_8c124f3f2435f0::t_d16c22f84a3882 820-826
+  s_8c124f3f2435f0::t_b33eeda4c6fb94 829-835
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_8c124f3f2435f0::t_30bf0ec194b1fa 19-38
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_8c124f3f2435f0::t_df091c21de69ef 4-13
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_8c124f3f2435f0::t_66ae5d8850dccb 51,53-56,58,60-99
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  s_8c124f3f2435f0::t_be309bfd1c7335 83-105
+  s_8c124f3f2435f0::t_07570d0e931790 761
+  s_8c124f3f2435f0::t_e770314d92623c 755-760,762-766
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_8c124f3f2435f0::t_06738237293cf7 93-96
+  s_8c124f3f2435f0::t_330f779123e778 91-92
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_8c124f3f2435f0::t_eeb61f12cd5347 63-198
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_8c124f3f2435f0::t_66924955a16ab9 90-114
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_8c124f3f2435f0::t_ad56764fb4d614 157-163,165-166,168,170-171,173
+  s_8c124f3f2435f0::t_cc940266e854a0 130,132-140,153-156,164,167,169,172,174
+  s_8c124f3f2435f0::t_315e407b8fd96d 108-129,131,141-152,175-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "5fa4ee57342aeb7bedcbf9eb1023c58c391763d5",
+  "prompts": {},
+  "sessions": {
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}

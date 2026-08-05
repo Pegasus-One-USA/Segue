@@ -1,0 +1,31 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_8c124f3f2435f0::t_416bd4a67048de 8,119-123,127-128,132-141,146,153
+portal/src/app/services/wizard.service.ts
+  s_8c124f3f2435f0::t_68cbd9996a57a4 9,237-242,246
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  s_8c124f3f2435f0::t_e3d56f6c8f81a3 852-855,1416-1422
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_8c124f3f2435f0::t_ce4958393f8ed4 1664
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_8c124f3f2435f0::t_944cf9f2f2612a 2,222-241
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_8c124f3f2435f0::t_18caca85f9c4a3 95-97,160-167
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_8c124f3f2435f0::t_3cbfc8bec0314c 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "a79b5715778b0af48bb21f52305e23b7d3c1f09a",
+  "prompts": {},
+  "sessions": {
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
