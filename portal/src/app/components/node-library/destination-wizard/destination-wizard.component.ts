@@ -718,20 +718,25 @@ export class DestinationWizardComponent implements OnInit {
     // over the built-in fallback once loaded. Deduped via _requested, keyed on sourceConnectionId too —
     // so if that only becomes known partway through this session (e.g. after a save/build round-trip
     // stamps a real id onto the source node), this refetches with it instead of staying stuck on
-    // whatever (generic-catalog) result was fetched back when it was still null.
+    // whatever (generic-catalog) result was fetched back when it was still null. sourceVendor is passed
+    // alongside it as a fallback for a source node that hasn't been saved yet at all (so has no real
+    // connection id) but already has a vendor picked in its own form (e.g. the Epic wizard's EHR
+    // selector defaults to "Epic" the moment it's dropped on the canvas) — without this, a brand-new
+    // Epic source would show the generic catalog until the first save round-trip.
     effect(() => {
       const sourceConnectionId = this.sourceConnectionId();
-      for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId);
+      const sourceVendor = this.sourceVendor();
+      for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId, sourceVendor);
     });
   }
 
   private readonly _requested = new Set<string>();
 
-  private _ensureCatalog(resource: string, sourceConnectionId: string | null): void {
-    const key = `${resource}::${sourceConnectionId ?? ''}`;
+  private _ensureCatalog(resource: string, sourceConnectionId: string | null, sourceVendor: string): void {
+    const key = `${resource}::${sourceConnectionId ?? ''}::${sourceVendor}`;
     if (this._requested.has(key)) return;
     this._requested.add(key);
-    this.catalogSvc.fields(resource, sourceConnectionId).subscribe(fields => {
+    this.catalogSvc.fields(resource, sourceConnectionId, sourceVendor).subscribe(fields => {
       if (!fields.length) { this._requested.delete(key); return; }
       const defs = fields.map(f => this._toFieldDef(resource, f));
       this.catalogByResource.update(m => ({ ...m, [resource]: defs }));

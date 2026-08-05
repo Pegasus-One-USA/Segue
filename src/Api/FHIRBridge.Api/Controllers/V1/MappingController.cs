@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,19 +55,23 @@ public sealed class MappingController : ControllerBase
 
     /// <summary>
     /// Returns the field catalog for a resource type. When <paramref name="sourceConnectionId"/> is
-    /// supplied, resolves that source's vendor and prefers its vendor-specific catalog (Epic today);
-    /// falls back to the generic base-FHIR-R4 catalog for any resource type the vendor catalog doesn't
-    /// cover yet, or when no source connection is given at all (unchanged from before this endpoint
-    /// took a vendor into account).
+    /// supplied, resolves that source's vendor and prefers its vendor-specific catalog (Epic today).
+    /// <paramref name="sourceVendor"/> is the fallback for a source node that hasn't been saved yet (no
+    /// real connection id assigned) but already has a vendor picked in its own form (e.g. the Epic
+    /// wizard's EHR selector defaults to "Epic" from the moment it's dropped on the canvas) — without
+    /// this, a brand-new Epic source would show the generic catalog until the first save round-trip.
+    /// Falls back to the generic base-FHIR-R4 catalog for any resource type the vendor catalog doesn't
+    /// cover yet, or when neither a source connection nor a vendor is given at all.
     /// </summary>
     [HttpGet("catalog/resources/{resourceType}/fields")]
     [ProducesResponseType(typeof(IReadOnlyList<FhirElementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalogFields(
         string resourceType,
         [FromQuery] Guid? sourceConnectionId,
+        [FromQuery] string? sourceVendor,
         CancellationToken cancellationToken)
     {
-        var catalog = await ResolveCatalogAsync(sourceConnectionId, cancellationToken);
+        var catalog = await ResolveCatalogAsync(sourceConnectionId, sourceVendor, cancellationToken);
         var fields = catalog.Fields(resourceType);
 
         if (fields.Count == 0 && !ReferenceEquals(catalog, _genericCatalog))
@@ -82,20 +87,25 @@ public sealed class MappingController : ControllerBase
         return Ok(fields);
     }
 
-    private async Task<IFhirElementCatalog> ResolveCatalogAsync(Guid? sourceConnectionId, CancellationToken cancellationToken)
+    private async Task<IFhirElementCatalog> ResolveCatalogAsync(
+        Guid? sourceConnectionId,
+        string? sourceVendor,
+        CancellationToken cancellationToken)
     {
-        if (sourceConnectionId is null)
+        if (sourceConnectionId is not null)
         {
-            return _genericCatalog;
+            var source = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId.Value, cancellationToken);
+            if (source is not null)
+            {
+                return _serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(FhirElementCatalogKeys.For(source.SourceSystemType));
+            }
         }
 
-        var source = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId.Value, cancellationToken);
-        if (source is null)
+        if (!string.IsNullOrWhiteSpace(sourceVendor) && Enum.TryParse<SourceSystemType>(sourceVendor, ignoreCase: true, out var vendor))
         {
-            return _genericCatalog;
+            return _serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(FhirElementCatalogKeys.For(vendor));
         }
 
-        var key = FhirElementCatalogKeys.For(source.SourceSystemType);
-        return _serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(key);
+        return _genericCatalog;
     }
 }

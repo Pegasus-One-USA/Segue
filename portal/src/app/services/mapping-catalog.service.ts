@@ -83,14 +83,15 @@ export class MappingCatalogService {
 
   /** sourceConnectionId lets the backend prefer that source's vendor-specific catalog (Epic, ...) —
    *  omit it (or pass null) to get the generic base-FHIR-R4 catalog, same as before this param existed.
-   *  Cache key includes it so switching sources (or generic vs. vendor) never returns another's stale
-   *  result for the same resource type. */
-  fields(resourceType: string, sourceConnectionId?: string | null): Observable<FhirElement[]> {
+   *  sourceVendor is the fallback for a brand-new source node that hasn't been saved yet (so has no real
+   *  connection id) but already has a vendor picked in its own form. Cache key includes both so switching
+   *  sources (or generic vs. vendor) never returns another's stale result for the same resource type. */
+  fields(resourceType: string, sourceConnectionId?: string | null, sourceVendor?: string | null): Observable<FhirElement[]> {
     if (!resourceType) return of([]);
-    const key = `${resourceType}::${sourceConnectionId ?? ''}`;
+    const key = `${resourceType}::${sourceConnectionId ?? ''}::${sourceVendor ?? ''}`;
     let stream = this.cache.get(key);
     if (!stream) {
-      stream = this.http.get<FhirElement[]>(MAPPING_ENDPOINTS.resourceFields(resourceType, sourceConnectionId)).pipe(
+      stream = this.http.get<FhirElement[]>(MAPPING_ENDPOINTS.resourceFields(resourceType, sourceConnectionId, sourceVendor)).pipe(
         // Prepend the resource-agnostic system-value fields so they're selectable alongside the FHIR elements.
         map(fields => [...SYSTEM_MAPPING_FIELDS, ...fields]),
         catchError(() => of<FhirElement[]>([...SYSTEM_MAPPING_FIELDS])),
