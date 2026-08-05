@@ -610,22 +610,104 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             WorkflowRunSkipped: skipWorkflowTrigger);
     }
 
-    // Enforces a permanent user-to-FHIR-context binding: when this authorization carries a UserIdentity (a
-    // third-party app's own end-user identity, e.g. Demo_TestApp's logged-in account email) and the source's
-    // application type establishes a durable per-user context (Patient or Practitioner — see
-    // ISourceApplicationStrategy.BindingResourceType, resolved through the registry rather than switched on
-    // ApplicationType), the first successful authorization for that (source, identity) pair permanently pins it to
-    // the returned resource id. Returns true when THIS authorization must be rejected because it returned a
-    // different resource id than a previously stored binding — the caller must not trigger any pipeline/workflow
-    // run or treat the token as usable in that case.
-    private async Task<bool> EnforceUserFhirContextBindingAsync(
+    // Enforces a permanent binding for sources that establish a durable per-user or per-patient context. Dispatches
+    // to one of two genuinely different shapes depending on ApplicationType — see each helper's own remarks.
+    // Returns true when THIS authorization must be rejected because it disagrees with a previously stored binding
+    // — the caller must not trigger any pipeline/workflow run or treat the token as usable in that case.
+    private Task<bool> EnforceUserFhirContextBindingAsync(
+        SourceConnection sourceConnection,
+        PendingAuthorization pending,
+        SmartAuthorizationCodeExchangeResult exchangeResult,
+        CancellationToken cancellationToken) =>
+        sourceConnection.ApplicationType == ApplicationType.EhrLaunch
+            ? EnforceEhrLaunchBindingAsync(sourceConnection, pending, exchangeResult, cancellationToken)
+            : EnforceCallerIdentityBindingAsync(sourceConnection, pending, exchangeResult, cancellationToken);
+
+    // ApplicationType.EhrLaunch (Provider EHR Launch): pins a given (issuer, patient) pair to whichever caller
+    // identity first established it — the inverse of the other two cases. A provider is expected to launch into
+    // MANY different patients' charts over time (that's normal, not a violation to guard against), so pinning one
+    // caller identity to one patient forever would be wrong; instead, a DIFFERENT caller later authorizing against
+    // the SAME already-bound (issuer, patient) pair is rejected. UserIdentity is "{issuer}:{patient}" — the
+    // natural, already-unique key for this shape, with no caller identity folded in — so ResourceType/ResourceId
+    // stay true to their documented meaning everywhere else in this table (a real FHIR Patient/Practitioner id).
+    //
+    // The caller being compared is tracked two ways: CallerIdentity (a Demo_TestApp account email, or its
+    // hardcoded embedded-launch fallback — see /api/provider-in-app-launch-context) is kept purely for
+    // human-readable display, since it isn't reliable from inside a genuinely embedded, third-party-cookie-blocked
+    // iframe. CallerFhirUserId (the id_token's fhirUser-derived Practitioner id, when Epic returns one) IS reliable
+    // there — it arrives via the token exchange itself, not the launching app's session — so it's what the actual
+    // mismatch comparison prefers whenever both the stored and the new authorization have one; falls back to
+    // comparing CallerIdentity only when either side lacks a fhirUser value.
+    private async Task<bool> EnforceEhrLaunchBindingAsync(
         SourceConnection sourceConnection,
         PendingAuthorization pending,
         SmartAuthorizationCodeExchangeResult exchangeResult,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(pending.UserIdentity)
-            || sourceConnection.ApplicationType is not { } applicationType
+        var patientId = exchangeResult.PatientId;
+        if (string.IsNullOrWhiteSpace(patientId))
+        {
+            _logger.LogWarning(
+                "User-to-FHIR-context binding skipped for source {SourceConnectionId}: expected a Patient " +
+                "context but none was returned by the EHR.",
+                sourceConnection.Id);
+            return false;
+        }
+
+        var callerIdentity = pending.UserIdentity;
+        var callerFhirUserId = exchangeResult.PractitionerId;
+        if (string.IsNullOrWhiteSpace(callerIdentity) && string.IsNullOrWhiteSpace(callerFhirUserId))
+        {
+            return false;
+        }
+
+        // pending.ResolvedBaseUrl is the launch issuer for this application type — StartEhrLaunchCoreAsync sets
+        // the FhirSourceConfiguration's BaseUrl to the launch `iss`, per SMART's "aud must equal the issuer" rule,
+        // and that's what flows through as ResolvedBaseUrl.
+        var identity = $"{pending.ResolvedBaseUrl}:{patientId}";
+
+        var existing = await _userFhirContextBindingRepository.GetAsync(sourceConnection.Id, identity, cancellationToken);
+        if (existing is null)
+        {
+            await _userFhirContextBindingRepository.AddAsync(
+                new UserFhirContextBinding(
+                    sourceConnection.Id, identity, FhirContextResourceType.Patient, patientId, callerIdentity, callerFhirUserId),
+                cancellationToken);
+            return false;
+        }
+
+        var callerMismatch = !string.IsNullOrWhiteSpace(callerFhirUserId) && !string.IsNullOrWhiteSpace(existing.CallerFhirUserId)
+            ? !string.Equals(existing.CallerFhirUserId, callerFhirUserId, StringComparison.Ordinal)
+            : !string.Equals(existing.CallerIdentity, callerIdentity, StringComparison.Ordinal);
+
+        if (callerMismatch)
+        {
+            _logger.LogWarning(
+                "User-to-FHIR-context binding mismatch for source {SourceConnectionId}: this patient is already " +
+                "linked to a different caller identity.",
+                sourceConnection.Id);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Provider Standalone (Practitioner-kind) / Patient portal (Patient-kind), via
+    // ISourceApplicationStrategy.BindingResourceType: a strict, symmetric 1:1 pairing between the caller-supplied
+    // UserIdentity and the Patient/Practitioner id the EHR returned, checked in BOTH directions — this account
+    // already linked to a different patient/practitioner is rejected (forward), and this patient/practitioner
+    // already linked to a different account is ALSO rejected (reverse — GetByResourceAsync). Demo_TestApp's
+    // launch-standalone-provider.ts/launch-standalone-patient.ts both read the real logged-in HealthApp account's
+    // email straight out of sessionStorage before every launch (a directly-opened flow, not an embedded iframe, so
+    // there's no cookie-blocking problem the way EHR-launch has), so it's already a reliable, distinct-per-real-
+    // account identity for both directions of this check.
+    private async Task<bool> EnforceCallerIdentityBindingAsync(
+        SourceConnection sourceConnection,
+        PendingAuthorization pending,
+        SmartAuthorizationCodeExchangeResult exchangeResult,
+        CancellationToken cancellationToken)
+    {
+        if (sourceConnection.ApplicationType is not { } applicationType
             || !_applicationStrategyRegistry.TryResolve(applicationType, out var strategy)
             || strategy.BindingResourceType == FhirContextBindingKind.None)
         {
@@ -638,9 +720,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         if (string.IsNullOrWhiteSpace(resourceId))
         {
-            // The EHR didn't return the context this binding kind needs (e.g. no fhirUser claim in the id_token, or
-            // a misconfigured scope). Nothing to enforce against yet — log and let the sign-in proceed rather than
-            // hard-failing every launch until the EHR registration is fixed.
+            // The EHR didn't return the context this binding kind needs (e.g. no fhirUser claim in the id_token,
+            // or a misconfigured scope). Nothing to enforce against yet — log and let the sign-in proceed rather
+            // than hard-failing every launch until the EHR registration is fixed.
             _logger.LogWarning(
                 "User-to-FHIR-context binding skipped for source {SourceConnectionId}: expected a {ResourceType} " +
                 "context but none was returned by the EHR.",
@@ -648,11 +730,31 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             return false;
         }
 
-        var existing = await _userFhirContextBindingRepository.GetAsync(sourceConnection.Id, pending.UserIdentity!, cancellationToken);
+        var identity = pending.UserIdentity;
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return false;
+        }
+
+        // Reverse direction first: this resource already claimed by a DIFFERENT account? Checked before the
+        // forward lookup so a brand-new account trying to claim an already-owned patient/practitioner is rejected
+        // even though IT has no existing row of its own yet.
+        var existingForResource = await _userFhirContextBindingRepository.GetByResourceAsync(
+            sourceConnection.Id, resourceType, resourceId, cancellationToken);
+        if (existingForResource is not null && !string.Equals(existingForResource.UserIdentity, identity, StringComparison.Ordinal))
+        {
+            _logger.LogWarning(
+                "User-to-FHIR-context binding mismatch for source {SourceConnectionId}: this {ResourceType} is " +
+                "already linked to a different account.",
+                sourceConnection.Id, resourceType);
+            return true;
+        }
+
+        var existing = await _userFhirContextBindingRepository.GetAsync(sourceConnection.Id, identity, cancellationToken);
         if (existing is null)
         {
             await _userFhirContextBindingRepository.AddAsync(
-                new UserFhirContextBinding(sourceConnection.Id, pending.UserIdentity!, resourceType, resourceId),
+                new UserFhirContextBinding(sourceConnection.Id, identity, resourceType, resourceId),
                 cancellationToken);
             return false;
         }
@@ -660,8 +762,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         if (!string.Equals(existing.ResourceId, resourceId, StringComparison.Ordinal) || existing.ResourceType != resourceType)
         {
             _logger.LogWarning(
-                "User-to-FHIR-context binding mismatch for source {SourceConnectionId}: this account is bound to a " +
-                "different {ResourceType} than the one this authorization returned.",
+                "User-to-FHIR-context binding mismatch for source {SourceConnectionId}: this account is already " +
+                "linked to a different {ResourceType} than the one this authorization returned.",
                 sourceConnection.Id, resourceType);
             return true;
         }
