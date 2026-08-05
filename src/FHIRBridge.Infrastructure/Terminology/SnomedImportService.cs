@@ -26,22 +26,20 @@ public sealed class SnomedImportService : ISnomedImportService
     private readonly FHIRBridgeDbContext _db;
     public SnomedImportService(FHIRBridgeDbContext db) => _db = db;
 
-    public async Task<SnomedImportResult> ImportAsync(Stream releaseZipStream, CancellationToken cancellationToken)
+    public async Task<SnomedImportResult> ImportAsync(string zipFilePath, CancellationToken cancellationToken)
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "App_Data", "Terminology", "Snomed");
-        Directory.CreateDirectory(root);
-        var zipPath = Path.Combine(root, $"upload-{Guid.NewGuid():N}.zip");
-
-        await using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-            await releaseZipStream.CopyToAsync(fileStream, cancellationToken);
+        var history = new SnomedImportHistory(null, null);
+        _db.SnomedImportHistory.Add(history);
+        await _db.SaveChangesAsync(cancellationToken);
 
         _db.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
 
         try
         {
-            using var archive = ZipFile.OpenRead(zipPath);
+            using var archive = ZipFile.OpenRead(zipFilePath);
             var conceptEntry = FindEntry(archive, "_Concept_Snapshot") ?? throw new InvalidDataException("No Concept Snapshot file was found in the release archive.");
             var version = ExtractVersion(conceptEntry.Name);
+            history.SetVersion(version);
 
             // Only the FSN/preferred-term text per concept is kept in memory — not the full description
             // rows — so this stays small (one entry per concept) regardless of how many descriptions exist.
@@ -106,9 +104,9 @@ public sealed class SnomedImportService : ISnomedImportService
             await _db.Database.ExecuteSqlRawAsync("DROP TABLE #SnomedConceptStaging", cancellationToken);
 
             foreach (var activeVersion in await _db.SnomedVersions.Where(x => x.IsActive).ToListAsync(cancellationToken)) activeVersion.SetActive(false);
-            _db.SnomedVersions.Add(new SnomedVersion(version, ParseEffectiveTime(version), null, true));
-            await _db.SaveChangesAsync(cancellationToken);
-            _db.ChangeTracker.Clear();
+            var existingVersion = await _db.SnomedVersions.FirstOrDefaultAsync(x => x.Version == version, cancellationToken);
+            if (existingVersion is not null) existingVersion.SetActive(true);
+            else _db.SnomedVersions.Add(new SnomedVersion(version, ParseEffectiveTime(version), null, true));
 
             await _db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE terminology.SnomedDescriptions", cancellationToken);
             await TerminologyBulkCopy.WriteAsync(connection, sqlTransaction, "terminology.SnomedDescriptions",
@@ -122,9 +120,7 @@ public sealed class SnomedImportService : ISnomedImportService
                 ReadRelationshipRows(archive).Select(r => new object?[] { r.Id, r.SourceId, r.DestinationId, r.TypeId, r.RelationshipGroup, r.CharacteristicTypeId, r.Active, version }),
                 cancellationToken);
 
-            var history = new SnomedImportHistory(version, null);
             history.Complete(conceptCount);
-            _db.SnomedImportHistory.Add(history);
             await _db.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
@@ -132,18 +128,18 @@ public sealed class SnomedImportService : ISnomedImportService
         }
         catch (Exception exception)
         {
-            // The failed step may have left entities attached to the tracker — clear it first, or this
-            // recovery save retries the same graph and can fail again, silently losing the real error.
+            // Whatever else failed may still be attached (e.g. a duplicate-key SnomedVersion insert) — clear
+            // the tracker first and re-attach only `history`, or this recovery save retries the same poisoned
+            // graph, fails again, and the real error never makes it into SnomedImportHistory.
             _db.ChangeTracker.Clear();
-            var history = new SnomedImportHistory(null, null);
             history.Fail(exception.ToString());
-            _db.SnomedImportHistory.Add(history);
+            _db.SnomedImportHistory.Update(history);
             await _db.SaveChangesAsync(CancellationToken.None);
             throw;
         }
         finally
         {
-            File.Delete(zipPath);
+            File.Delete(zipFilePath);
         }
     }
 

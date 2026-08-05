@@ -6,5 +6,7 @@ public sealed record Icd10ImportHistoryEntryDto(Guid Id, string? Version, DateTi
 
 public interface IIcd10ImportService
 {
-    Task<Icd10ImportResult> ImportAsync(Stream releaseZipStream, CancellationToken cancellationToken);
+    /// <summary>Imports the ICD-10-CM release zip already saved at <paramref name="zipFilePath"/>. Deletes
+    /// the file when done. Runs off the request thread via TerminologyImportChannel.</summary>
+    Task<Icd10ImportResult> ImportAsync(string zipFilePath, CancellationToken cancellationToken);
 }

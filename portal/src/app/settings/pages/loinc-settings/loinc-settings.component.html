@@ -103,5 +103,49 @@
         </div>
       </section>
     </form>
+
+    <section class="settings-card">
+      <h2 class="card-title">Import History</h2>
+      <p class="card-sub">The most recent LOINC synchronization runs.</p>
+
+      @if (historyLoading()) {
+        <p class="card-sub">Loading…</p>
+      } @else if (history().length === 0) {
+        <p class="card-sub">LOINC has not been synchronized yet.</p>
+      } @else {
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Started</th>
+              <th>Completed</th>
+              <th>Terms</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of history(); track entry.id) {
+              <tr>
+                <td>{{ entry.version ?? '—' }}</td>
+                <td>{{ entry.startedOnUtc | date: 'short' }}</td>
+                <td>{{ entry.completedOnUtc ? (entry.completedOnUtc | date: 'short') : '—' }}</td>
+                <td>{{ entry.importedConceptCount }}</td>
+                <td>
+                  <span class="status-badge"
+                        [class.status-badge--ok]="entry.status === 'Succeeded'"
+                        [class.status-badge--info]="entry.status === 'Running'"
+                        [class.status-badge--warn]="entry.status === 'Failed'">
+                    {{ entry.status }}
+                  </span>
+                  @if (entry.errorMessage) {
+                    <p class="field-error">{{ entry.errorMessage }}</p>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
   }
 </div>

@@ -361,6 +361,11 @@ public static class DependencyInjection
         services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
         services.AddScoped<ISnomedImportService, SnomedImportService>();
         services.AddScoped<IIcd10ImportService, Icd10ImportService>();
+        services.AddScoped<IRxNormImportService, RxNormImportService>();
+        // Runs LOINC/SNOMED/ICD-10/RxNorm imports off the request thread — see TerminologyImportChannel's
+        // remarks for why this stays in-process rather than going through the Worker/MassTransit.
+        services.AddSingleton<TerminologyImportChannel>();
+        services.AddHostedService<TerminologyImportBackgroundService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(

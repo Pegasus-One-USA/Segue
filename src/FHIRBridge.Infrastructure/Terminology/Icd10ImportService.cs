@@ -20,22 +20,20 @@ public sealed class Icd10ImportService : IIcd10ImportService
     private readonly FHIRBridgeDbContext _db;
     public Icd10ImportService(FHIRBridgeDbContext db) => _db = db;
 
-    public async Task<Icd10ImportResult> ImportAsync(Stream releaseZipStream, CancellationToken cancellationToken)
+    public async Task<Icd10ImportResult> ImportAsync(string zipFilePath, CancellationToken cancellationToken)
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "App_Data", "Terminology", "Icd10");
-        Directory.CreateDirectory(root);
-        var zipPath = Path.Combine(root, $"upload-{Guid.NewGuid():N}.zip");
-
-        await using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-            await releaseZipStream.CopyToAsync(fileStream, cancellationToken);
+        var history = new Icd10ImportHistory(null, null);
+        _db.Icd10ImportHistory.Add(history);
+        await _db.SaveChangesAsync(cancellationToken);
 
         _db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
 
         try
         {
-            using var archive = ZipFile.OpenRead(zipPath);
+            using var archive = ZipFile.OpenRead(zipFilePath);
             var orderEntry = FindOrderEntry(archive) ?? throw new InvalidDataException("No ICD-10-CM order file was found in the release archive.");
             var version = ExtractVersion(orderEntry.Name);
+            history.SetVersion(version);
 
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             var connection = (SqlConnection)_db.Database.GetDbConnection();
@@ -59,11 +57,11 @@ public sealed class Icd10ImportService : IIcd10ImportService
             if (codeCount == 0) throw new InvalidDataException("The release contains no ICD-10-CM codes.");
 
             foreach (var activeVersion in await _db.Icd10Versions.Where(x => x.IsActive).ToListAsync(cancellationToken)) activeVersion.SetActive(false);
-            _db.Icd10Versions.Add(new Icd10Version(version, null, null, true));
+            var existingVersion = await _db.Icd10Versions.FirstOrDefaultAsync(x => x.Version == version, cancellationToken);
+            if (existingVersion is not null) existingVersion.SetActive(true);
+            else _db.Icd10Versions.Add(new Icd10Version(version, null, null, true));
 
-            var history = new Icd10ImportHistory(version, null);
             history.Complete(codeCount);
-            _db.Icd10ImportHistory.Add(history);
             await _db.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
@@ -72,15 +70,14 @@ public sealed class Icd10ImportService : IIcd10ImportService
         catch (Exception exception)
         {
             _db.ChangeTracker.Clear();
-            var history = new Icd10ImportHistory(null, null);
             history.Fail(exception.ToString());
-            _db.Icd10ImportHistory.Add(history);
+            _db.Icd10ImportHistory.Update(history);
             await _db.SaveChangesAsync(CancellationToken.None);
             throw;
         }
         finally
         {
-            File.Delete(zipPath);
+            File.Delete(zipFilePath);
         }
     }
 

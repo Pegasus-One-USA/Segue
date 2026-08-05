@@ -1,8 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpEventType } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { ToastService } from '../../../services/toast.service';
 import { SnomedSettingsService, SnomedImportHistoryEntry } from '../../services/snomed-settings.service';
+
+const POLL_INTERVAL_MS = 3000;
 
 @Component({
   selector: 'app-snomed-settings',
@@ -11,18 +13,23 @@ import { SnomedSettingsService, SnomedImportHistoryEntry } from '../../services/
   templateUrl: './snomed-settings.component.html',
   styleUrl: './snomed-settings.component.scss',
 })
-export class SnomedSettingsComponent implements OnInit {
+export class SnomedSettingsComponent implements OnInit, OnDestroy {
   private readonly service = inject(SnomedSettingsService);
   private readonly toast = inject(ToastService);
+  private pollTimer?: ReturnType<typeof setTimeout>;
 
   protected readonly loading = signal(true);
-  protected readonly importing = signal(false);
+  protected readonly uploading = signal(false);
   protected readonly uploadProgress = signal(0);
   protected readonly selectedFile = signal<File | null>(null);
   protected readonly history = signal<SnomedImportHistoryEntry[]>([]);
 
   ngOnInit(): void {
     this.loadHistory();
+  }
+
+  ngOnDestroy(): void {
+    clearTimeout(this.pollTimer);
   }
 
   protected onFileSelected(event: Event): void {
@@ -33,23 +40,22 @@ export class SnomedSettingsComponent implements OnInit {
   protected import(): void {
     const file = this.selectedFile();
     if (!file) return;
-    this.importing.set(true);
+    this.uploading.set(true);
     this.uploadProgress.set(0);
     this.service.importFile(file).subscribe({
       next: event => {
         if (event.type === HttpEventType.UploadProgress && event.total) {
           this.uploadProgress.set(Math.round((100 * event.loaded) / event.total));
         } else if (event.type === HttpEventType.Response) {
-          this.importing.set(false);
+          this.uploading.set(false);
           this.selectedFile.set(null);
-          this.toast.success(`Imported ${event.body?.importedConceptCount ?? 0} SNOMED CT concepts (release ${event.body?.version ?? ''})`);
+          this.toast.success('SNOMED CT import started in the background — check the history below for progress.');
           this.loadHistory();
         }
       },
       error: () => {
-        this.importing.set(false);
-        this.toast.error('SNOMED CT import failed');
-        this.loadHistory();
+        this.uploading.set(false);
+        this.toast.error('SNOMED CT upload failed');
       },
     });
   }
@@ -57,7 +63,12 @@ export class SnomedSettingsComponent implements OnInit {
   private loadHistory(): void {
     this.loading.set(true);
     this.service.getHistory().subscribe({
-      next: entries => { this.history.set(entries); this.loading.set(false); },
+      next: entries => {
+        this.history.set(entries);
+        this.loading.set(false);
+        clearTimeout(this.pollTimer);
+        if (entries.some(e => e.status === 'Running')) this.pollTimer = setTimeout(() => this.loadHistory(), POLL_INTERVAL_MS);
+      },
       error: () => { this.loading.set(false); this.toast.error('Failed to load SNOMED CT import history'); },
     });
   }

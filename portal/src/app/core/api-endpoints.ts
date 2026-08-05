@@ -158,6 +158,7 @@ export const APP_SECRETS_ENDPOINTS = {
 export const LOINC_ENDPOINTS = {
   configuration: `${API_V1_BASE}/terminology/loinc/configuration`,
   synchronize: `${API_V1_BASE}/terminology/loinc/configuration/synchronize`,
+  history: `${API_V1_BASE}/terminology/loinc/configuration/history`,
 };
 
 // ─── SNOMED CT (SnomedConfigurationController — api/v1/terminology/snomed/configuration) ──
@@ -173,6 +174,13 @@ export const SNOMED_ENDPOINTS = {
 export const ICD10_ENDPOINTS = {
   import: `${API_V1_BASE}/terminology/icd10/configuration/import`,
   history: `${API_V1_BASE}/terminology/icd10/configuration/history`,
+};
+
+// ─── RxNorm (RxNormConfigurationController — api/v1/terminology/rxnorm/configuration) ──
+// Upload-driven import (RxNorm Full Monthly Release .zip) — same pattern as SNOMED/ICD-10.
+export const RXNORM_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/rxnorm/configuration/import`,
+  history: `${API_V1_BASE}/terminology/rxnorm/configuration/history`,
 };
 
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────

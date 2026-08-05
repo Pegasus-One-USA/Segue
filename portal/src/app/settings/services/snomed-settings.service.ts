@@ -3,9 +3,10 @@ import { HttpClient, HttpEvent, HttpRequest } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SNOMED_ENDPOINTS } from '../../core/api-endpoints';
 
-export interface SnomedImportResult {
-  version: string;
-  importedConceptCount: number;
+// The import runs in the background on the server (see TerminologyImportChannel) — the response to the
+// upload POST only confirms the job was queued, never the eventual concept count. Poll getHistory() for that.
+export interface ImportStartedResponse {
+  message: string;
 }
 
 export interface SnomedImportHistoryEntry {
@@ -22,11 +23,11 @@ export interface SnomedImportHistoryEntry {
 export class SnomedSettingsService {
   private readonly http = inject(HttpClient);
 
-  importFile(file: File): Observable<HttpEvent<SnomedImportResult>> {
+  importFile(file: File): Observable<HttpEvent<ImportStartedResponse>> {
     const formData = new FormData();
     formData.append('file', file);
     const request = new HttpRequest('POST', SNOMED_ENDPOINTS.import, formData, { reportProgress: true });
-    return this.http.request<SnomedImportResult>(request);
+    return this.http.request<ImportStartedResponse>(request);
   }
 
   getHistory(): Observable<SnomedImportHistoryEntry[]> {

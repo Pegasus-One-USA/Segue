@@ -12,22 +12,22 @@ namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/terminology/snomed/configuration")]
-public sealed class SnomedConfigurationController : ControllerBase
+[Route("api/v1/terminology/rxnorm/configuration")]
+public sealed class RxNormConfigurationController : ControllerBase
 {
     private readonly TerminologyImportChannel _importChannel;
     private readonly FHIRBridgeDbContext _db;
-    public SnomedConfigurationController(TerminologyImportChannel importChannel, FHIRBridgeDbContext db) => (_importChannel, _db) = (importChannel, db);
+    public RxNormConfigurationController(TerminologyImportChannel importChannel, FHIRBridgeDbContext db) => (_importChannel, _db) = (importChannel, db);
 
     [HttpPost("import")]
     [RequestSizeLimit(2_147_483_648)]
     [RequestFormLimits(MultipartBodyLengthLimit = 2_147_483_648)]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Import a SNOMED CT RF2 release archive.")]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Import an RxNorm release archive.")]
     public async Task<IActionResult> Import(IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0) return BadRequest("A SNOMED CT release .zip file is required.");
+        if (file is null || file.Length == 0) return BadRequest("An RxNorm release .zip file is required.");
 
-        var root = Path.Combine(AppContext.BaseDirectory, "App_Data", "Terminology", "Snomed");
+        var root = Path.Combine(AppContext.BaseDirectory, "App_Data", "Terminology", "RxNorm");
         Directory.CreateDirectory(root);
         var zipPath = Path.Combine(root, $"upload-{Guid.NewGuid():N}.zip");
         await using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
@@ -35,21 +35,21 @@ public sealed class SnomedConfigurationController : ControllerBase
 
         _importChannel.Enqueue(async (services, ct) =>
         {
-            var importService = services.GetRequiredService<ISnomedImportService>();
+            var importService = services.GetRequiredService<IRxNormImportService>();
             await importService.ImportAsync(zipPath, ct);
         });
 
-        return Accepted(new { message = "SNOMED CT import started in the background. Check import history for progress." });
+        return Accepted(new { message = "RxNorm import started in the background. Check import history for progress." });
     }
 
     [HttpGet("history")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View SNOMED CT import history.")]
-    public async Task<ActionResult<IReadOnlyList<SnomedImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View RxNorm import history.")]
+    public async Task<ActionResult<IReadOnlyList<RxNormImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
     {
-        var history = await _db.SnomedImportHistory
+        var history = await _db.RxNormImportHistory
             .OrderByDescending(x => x.StartedOnUtc)
             .Take(20)
-            .Select(x => new SnomedImportHistoryEntryDto(x.Id, x.Version, x.StartedOnUtc, x.CompletedOnUtc, x.ImportedConceptCount, x.Status, x.ErrorMessage))
+            .Select(x => new RxNormImportHistoryEntryDto(x.Id, x.Version, x.StartedOnUtc, x.CompletedOnUtc, x.ImportedConceptCount, x.Status, x.ErrorMessage))
             .ToListAsync(cancellationToken);
         return Ok(history);
     }
