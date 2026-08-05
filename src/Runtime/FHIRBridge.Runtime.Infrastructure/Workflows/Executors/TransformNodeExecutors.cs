@@ -46,14 +46,17 @@ public sealed class PatientMatchingNodeExecutor : PassThroughNodeExecutor
 public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly IJsonMappingEngine? _mappingEngine;
+    private readonly IMappingMaterializer? _mappingMaterializer;
     private readonly IConfigurationRepository? _configurationRepository;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
+        IMappingMaterializer? mappingMaterializer = null,
         IConfigurationRepository? configurationRepository = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
+        _mappingMaterializer = mappingMaterializer;
         _configurationRepository = configurationRepository;
     }
 
@@ -63,65 +66,92 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs,
         CancellationToken cancellationToken)
     {
-        var resourceConfigs = await ResolveResourceMappingConfigsAsync(node, cancellationToken);
+        var configuredFields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
+        var configuredResourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        var configuredDestinationObject = ReadStringConfiguration(node, "destinationObject") ?? configuredResourceType;
+        Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId);
+        Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
 
         var records = new List<MappedDestinationRecord>();
         // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
         var runTimestampUtc = DateTime.UtcNow;
+        // Resource types with no resolvable MappingProfile — surfaced in the output metadata below so "why is
+        // my Encounter/Observation data missing" is answerable directly from execution history (this workflow's
+        // resource type genuinely has no mapping configured for this destination) instead of needing to check
+        // MappingProfiles by hand.
+        var skippedResourceTypes = new List<string>();
 
-        foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
+        // A single Field Mapping node can receive a heterogeneous batch — e.g. an EpicSource node configured
+        // for both Patient and Observation scopes feeds one Mapping node before a single Destination node.
+        // Every resource type MUST be mapped through its OWN MappingProfile: applying the node's one resolved
+        // profile to every envelope regardless of its real ResourceType isn't just "the other types go
+        // unmapped" — their JSON still gets walked against whatever fields happen to exist (almost always just
+        // the root "id"), silently producing bogus rows (e.g. an Observation's id landing in the Patient table
+        // as a garbage "patient" row with every other column null — a real incident this grouping prevents).
+        foreach (var group in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs)
+            .GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase))
         {
-            // A destination selecting multiple resources (e.g. Patient + Observation + Condition) has one config
-            // entry per resource type here — each with its own fields and destination object. A resource type this
-            // node has no configured mapping for is skipped entirely rather than mapped with another resource
-            // type's fields (which previously produced rows with only the coincidentally-shared "id" populated and
-            // every other column blank/wrong).
-            if (!resourceConfigs.TryGetValue(resource.ResourceType, out var config))
+            var resourceType = group.Key;
+            var (fields, destinationObject) = await ResolveResourceMappingAsync(
+                node, resourceType, configuredResourceType, configuredFields, configuredDestinationObject,
+                sourceConnectionId, destinationId, cancellationToken);
+
+            if (fields is null)
             {
+                // No profile exists for this resource type — nothing tells us how to map it, so skip it rather
+                // than guess; guessing (reusing a different resource type's fields) is exactly the
+                // silent-corruption bug this method guards against.
+                skippedResourceTypes.Add(resourceType);
                 continue;
             }
 
-            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
-            // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the source
-            // FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
-            var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            foreach (var resource in group)
             {
-                ["@runId"] = context.WorkflowRunId,
-                ["@now"] = runTimestampUtc,
-                ["@resourceType"] = resource.ResourceType,
-                ["@sourceResourceId"] = resource.ResourceId,
-            };
-            var mapped = _mappingEngine?.Map(sourceJson, config.Fields, systemValues);
-
-            // Parent row (Scalar/FirstItem/RejectIfMultiple fields land here). Skipped when every field on this
-            // node uses SeparateDestination, so a node dedicated to a child table doesn't emit an empty parent row.
-            if (mapped is null || mapped.Values.Count > 0)
-            {
-                records.Add(new MappedDestinationRecord(
-                    context.WorkflowRunId,
-                    resource.ResourceType,
-                    config.DestinationObject,
-                    resource.ResourceId,
-                    mapped?.Values ?? new Dictionary<string, object?>(),
-                    sourceJson));
-            }
-
-            // ArrayPolicy.SeparateDestination rows: one record per array element, routed to its own child table.
-            foreach (var childTable in mapped?.ChildTables ?? [])
-            {
-                foreach (var row in childTable.Rows)
+                var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
+                // source FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
+                var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
-                    var values = row
-                        .Where(kv => !string.Equals(kv.Key, "RowIndex", StringComparison.OrdinalIgnoreCase))
-                        .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-
+                    ["@runId"] = context.WorkflowRunId,
+                    ["@now"] = runTimestampUtc,
+                    ["@resourceType"] = resource.ResourceType,
+                    ["@sourceResourceId"] = resource.ResourceId,
+                };
+                var mapped = _mappingEngine?.Map(sourceJson, fields, systemValues);
+                if (mapped is null)
+                {
                     records.Add(new MappedDestinationRecord(
-                        context.WorkflowRunId,
-                        resource.ResourceType,
-                        childTable.Name,
-                        resource.ResourceId,
-                        values,
-                        sourceJson));
+                        context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
+                        new Dictionary<string, object?>(), sourceJson));
+                    continue;
+                }
+
+                // ArrayPolicy.SeparateDestination child-table rows travel as MappedChildTableRecords attached to
+                // the parent row (not as separate flat records with their own DestinationObject) — the writer
+                // resolves a single target table per write call, so a flat child record would otherwise get
+                // written straight into the PARENT's table ("Invalid column name" for every child-only column).
+                var childTables = BuildChildTableRecords(mapped.ChildTables, fields, resourceType);
+                var referenceLookups = mapped.ReferenceLookups is { Count: > 0 }
+                    ? mapped.ReferenceLookups
+                        .Select(l => new MappedReferenceLookup(l.TargetField, l.LookupTable, l.LookupKeyColumn, l.ReferenceId))
+                        .ToArray()
+                    : null;
+
+                // Parent row (Scalar/FirstItem/RejectIfMultiple/RepeatParent fields land here). Skipped only
+                // when there's truly nothing to write — no parent-level field AND no child table either. A node
+                // whose fields are entirely SeparateDestination still needs a parent row emitted (even with
+                // empty Values) because the writer captures the child rows' FK value off THAT row's own write
+                // (OUTPUT INSERTED) — dropping it would silently lose the child data instead of just writing an
+                // extra near-empty row.
+                if (mapped.Values.Count > 0 || childTables is not null)
+                {
+                    var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
+                    foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
+                    {
+                        records.Add(new MappedDestinationRecord(
+                            context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
+                            parentRow, sourceJson, childTables, referenceLookups));
+                    }
                 }
             }
         }
@@ -134,8 +164,73 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             new Dictionary<string, object?>
             {
                 ["executor"] = GetType().Name,
-                ["count"] = records.Count
+                ["count"] = records.Count,
+                // Per-resource-type breakdown of "count" above (records this resource type actually contributed,
+                // including child-table carrier rows) — the mapping-side counterpart to EpicSourceNode's own
+                // "resourceTypeCounts", so a drop between the two is visible without decrypting anything.
+                ["resourceTypeCounts"] = records
+                    .GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
+                // Resource types present in the upstream batch that had no resolvable MappingProfile for this
+                // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
+                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
             });
+    }
+
+    /// <summary>
+    /// Resolves one resource type's fields + destination object, preferring (in order): the real MappingProfile
+    /// found by the natural key (resourceType, sourceConnectionId, destinationId) MappingImportService/
+    /// ConfigurationService already de-duplicate on — what actually exists for this node's source/destination
+    /// combination right now, rather than trusting a possibly-stale stamped id; <c>mappingProfileIds</c> — a JSON
+    /// object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps when a destination selects more
+    /// than one resource (see WorkflowEndpoints.cs's Mappings step), for a node saved before sourceConnectionId/
+    /// destinationId were stamped onto it; the legacy single <c>mappingProfileId</c> (one resource per node,
+    /// pre-dating multi-resource destinations) — only for the node's OWN configured resource type, since it can
+    /// only ever refer to one specific profile; and finally the node's own inline "fields"/"destinationObject"
+    /// config (no repository composed, or a hand-authored node) — again only for its own configured resource
+    /// type. Returns null Fields when nothing resolves — the caller skips that resource type entirely rather than
+    /// guessing with another resource type's shape.
+    /// </summary>
+    private async Task<(IReadOnlyCollection<MappingFieldDto>? Fields, string DestinationObject)> ResolveResourceMappingAsync(
+        WorkflowNode node,
+        string resourceType,
+        string configuredResourceType,
+        IReadOnlyCollection<MappingFieldDto> configuredFields,
+        string configuredDestinationObject,
+        Guid sourceConnectionId,
+        Guid destinationId,
+        CancellationToken cancellationToken)
+    {
+        if (_configurationRepository is not null)
+        {
+            if (sourceConnectionId != Guid.Empty && destinationId != Guid.Empty)
+            {
+                var exactMatch = await _configurationRepository.FindMappingProfileAsync(
+                    resourceType, sourceConnectionId, destinationId, cancellationToken);
+                if (exactMatch is not null)
+                {
+                    return (exactMatch.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), exactMatch.DestinationObject);
+                }
+            }
+
+            if (ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
+            {
+                var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
+                if (profile is not null)
+                {
+                    return (profile.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), profile.DestinationObject);
+                }
+            }
+        }
+
+        if (string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            // No repository (e.g. unit tests) or nothing resolvable at all for the node's own configured
+            // resource type — fall back to whatever fields were embedded directly on the node's config.
+            return (configuredFields, configuredDestinationObject);
+        }
+
+        return (null, configuredDestinationObject);
     }
 
     protected override object CreatePayload(
@@ -144,65 +239,73 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
         => new MappedRecordBatch(inputs.Select(input => input.Payload!).Where(payload => payload is not null).ToArray());
 
-    private readonly record struct ResourceMappingConfig(string DestinationObject, IReadOnlyCollection<MappingFieldDto> Fields);
-
     /// <summary>
-    /// Resolves this node's mapping configuration, keyed by FHIR resource type. Prefers <c>mappingProfileIds</c> —
-    /// a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps when a destination
-    /// selects more than one resource (see WorkflowEndpoints.cs's Mappings step) — resolving each referenced
-    /// MappingProfile from the database. Falls back to the legacy single <c>mappingProfileId</c> (one resource per
-    /// node, pre-dating multi-resource destinations), and finally to the node's own inline
-    /// "resourceType"/"destinationObject"/"fields" config (no repository composed, or a hand-authored node) —
-    /// unchanged behavior for every node that predates multi-resource support.
+    /// Resolves each child table's FK/parent-key column names from the (import-populated)
+    /// <see cref="MappingFieldDto.ForeignKeyColumn"/>/<see cref="MappingFieldDto.ParentKeyColumn"/> metadata on
+    /// one of its own fields. A child table with no field carrying that metadata can't be linked back to a
+    /// parent row — skipped rather than written with a missing/garbage FK value (mirrors
+    /// ConfiguredPipelineService's identical guard for the Configured Pipeline execution path).
     /// </summary>
-    private async Task<Dictionary<string, ResourceMappingConfig>> ResolveResourceMappingConfigsAsync(
-        WorkflowNode node, CancellationToken cancellationToken)
+    private static IReadOnlyList<MappedChildTableRecord>? BuildChildTableRecords(
+        IReadOnlyList<MappingChildTableDto>? childTables, IReadOnlyCollection<MappingFieldDto> fields, string resourceType)
     {
-        var result = new Dictionary<string, ResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
-
-        if (_configurationRepository is not null)
+        if (childTables is not { Count: > 0 })
         {
-            foreach (var profileId in ReadProfileIds(node))
-            {
-                var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
-                if (profile is null)
-                {
-                    continue;
-                }
+            return null;
+        }
 
-                result[profile.ResourceType] = new ResourceMappingConfig(
-                    profile.DestinationObject,
-                    profile.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray());
+        var records = new List<MappedChildTableRecord>();
+        foreach (var childTable in childTables)
+        {
+            var fkField = fields.FirstOrDefault(f =>
+                string.Equals(f.DestinationObject, childTable.Name, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(f.ForeignKeyColumn));
+
+            if (fkField is null)
+            {
+                continue;
+            }
+
+            var rows = childTable.Rows
+                .Select(row => (IReadOnlyDictionary<string, object?>)row
+                    .Where(kv => !string.Equals(kv.Key, "RowIndex", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            records.Add(new MappedChildTableRecord(childTable.Name, fkField.ForeignKeyColumn!, fkField.ParentKeyColumn ?? "Id", rows));
+        }
+
+        return records.Count > 0 ? records : null;
+    }
+
+    private static Dictionary<string, Guid> ReadProfileIds(WorkflowNode node)
+    {
+        var mappingProfileIds = ReadConfiguration<Dictionary<string, string>>(node, "mappingProfileIds");
+        var result = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        if (mappingProfileIds is { Count: > 0 })
+        {
+            foreach (var (resourceType, id) in mappingProfileIds)
+            {
+                if (Guid.TryParse(id, out var parsed))
+                {
+                    result[resourceType] = parsed;
+                }
+            }
+
+            if (result.Count > 0)
+            {
+                return result;
             }
         }
 
-        if (result.Count > 0)
-        {
-            return result;
-        }
-
-        // Legacy/offline fallback: the node's own inline config describes exactly one resource type.
-        var resourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        var destinationObject = ReadStringConfiguration(node, "destinationObject") ?? resourceType;
-        var fields = ReadConfiguration<IReadOnlyCollection<MappingFieldDto>>(node, "fields") ?? [];
-        result[resourceType] = new ResourceMappingConfig(destinationObject, fields);
-        return result;
-    }
-
-    private static IReadOnlyList<Guid> ReadProfileIds(WorkflowNode node)
-    {
-        var mappingProfileIds = ReadConfiguration<Dictionary<string, string>>(node, "mappingProfileIds");
-        if (mappingProfileIds is { Count: > 0 })
-        {
-            return mappingProfileIds.Values
-                .Select(id => Guid.TryParse(id, out var parsed) ? parsed : (Guid?)null)
-                .Where(id => id is not null)
-                .Select(id => id!.Value)
-                .ToArray();
-        }
-
         var single = ReadStringConfiguration(node, "mappingProfileId");
-        return Guid.TryParse(single, out var singleId) ? [singleId] : [];
+        var legacyResourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        if (Guid.TryParse(single, out var singleId))
+        {
+            result[legacyResourceType] = singleId;
+        }
+
+        return result;
     }
 }
 

@@ -486,6 +486,14 @@ public sealed class ConfigurationService : IConfigurationService
         return updatedDto;
     }
 
+    public async Task<MappingProfileDto?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken cancellationToken)
+    {
+        var mappingProfile = await _repository.FindMappingProfileAsync(
+            resourceType, sourceConnectionId, destinationId, cancellationToken);
+        return mappingProfile is null ? null : ConfigurationMapper.ToDto(mappingProfile);
+    }
+
     public async Task<MappingProfileDto> SetMappingProfileEnabledAsync(
         Guid mappingProfileId,
         bool isEnabled,

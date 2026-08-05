@@ -327,8 +327,11 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
+        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
-        if (!isPatientResource && !PatientCompartmentResourceTypes.IsSupported(resourceType))
+        var isCompartmentResource = isPatientResource || PatientCompartmentResourceTypes.IsSupported(resourceType);
+
+        if (!isCompartmentResource)
         {
             // Non-patient-compartment types can't be patient-scoped, and historically their request-time
             // PatientSearchCriteria was dropped here entirely. Honor it for Practitioner ONLY (deliberately narrow —
@@ -338,17 +341,14 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             if (string.Equals(resourceType, "Practitioner", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria))
             {
-                var practitionerQuery = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
                 var practitionerCriteria = source.PatientSearchCriteria.Trim().TrimStart('?').TrimStart('&');
-                return string.IsNullOrWhiteSpace(practitionerQuery)
+                return string.IsNullOrWhiteSpace(query)
                     ? practitionerCriteria
-                    : $"{practitionerQuery}&{practitionerCriteria}";
+                    : $"{query}&{practitionerCriteria}";
             }
 
             return source.SearchParameters;
         }
-
-        var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
 
         // A request-time raw search criteria string (e.g. "active=true", "identifier=MRN12345",
         // "family=Smith&given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box,

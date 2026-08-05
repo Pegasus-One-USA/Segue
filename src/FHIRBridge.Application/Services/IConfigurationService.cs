@@ -55,6 +55,12 @@ public interface IConfigurationService
 
     Task<MappingProfileDto> UpdateMappingProfileAsync(Guid mappingProfileId, CreateMappingProfileRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Looks up a MappingProfile by its natural key (resourceType, sourceConnectionId, destinationId) —
+    /// the same key <c>MappingImportService</c> de-duplicates on. Used by the workflow-build endpoint to detect
+    /// (and reuse) a profile that already exists for this combination instead of creating/overwriting one.</summary>
+    Task<MappingProfileDto?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken cancellationToken);
+
     Task<MappingProfileDto> SetMappingProfileEnabledAsync(Guid mappingProfileId, bool isEnabled, CancellationToken cancellationToken);
 
     /// <summary>

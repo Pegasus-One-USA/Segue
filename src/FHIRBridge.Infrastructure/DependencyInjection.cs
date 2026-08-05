@@ -332,6 +332,14 @@ public static class DependencyInjection
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
+
+        foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
+        {
+            services.AddSingleton(registration);
+        }
+
+        services.AddScoped<SqlServerMappingSchemaProvider>();
+        services.AddScoped<IMappingSchemaProviderFactory, MappingSchemaProviderFactory>();
         // Read-back of a capped row sample from a relational destination table ("View destination data").
         services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
         // Option A: workflow source nodes reference a real SourceConnection by id; this resolves it to the runtime

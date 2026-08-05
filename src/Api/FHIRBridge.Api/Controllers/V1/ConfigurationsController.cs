@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
@@ -22,15 +23,18 @@ public sealed class ConfigurationsController : ControllerBase
     private readonly IConfigurationService _configurationService;
     private readonly IAuthorizationService _authorizationService;
     private readonly IEpicSourceConnectionScopeSyncService _scopeSyncService;
+    private readonly IMappingImportService _mappingImportService;
 
     public ConfigurationsController(
         IConfigurationService configurationService,
         IAuthorizationService authorizationService,
-        IEpicSourceConnectionScopeSyncService scopeSyncService)
+        IEpicSourceConnectionScopeSyncService scopeSyncService,
+        IMappingImportService mappingImportService)
     {
         _configurationService = configurationService;
         _authorizationService = authorizationService;
         _scopeSyncService = scopeSyncService;
+        _mappingImportService = mappingImportService;
     }
 
     // ── Source connections ────────────────────────────────────────────────────
@@ -291,6 +295,24 @@ public sealed class ConfigurationsController : ControllerBase
         await _configurationService.DeleteMappingProfileAsync(mappingProfileId, cancellationToken);
         return NoContent();
     }
+
+    /// <summary>
+    /// Imports the field-mapping configuration produced by the Workflow Builder's "Update" button: persists
+    /// one mapping profile per resourceType and applies the destination schema changes (new tables/columns)
+    /// it implies. Safely re-runnable — re-posting the same payload reports everything as already-existing
+    /// rather than duplicating profiles/tables/columns.
+    /// </summary>
+    [HttpPost("mapping-profiles/import")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Import a mapping configuration and apply destination schema changes.")]
+    [ProducesResponseType(typeof(MappingImportResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ImportMappingConfiguration(
+        [FromBody] JsonElement request,
+        CancellationToken cancellationToken)
+        => Ok(await _mappingImportService.ImportAsync(request, cancellationToken));
 
     // ── Resources / routes ────────────────────────────────────────────────────
 

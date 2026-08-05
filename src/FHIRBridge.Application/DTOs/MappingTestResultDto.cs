@@ -9,8 +9,23 @@ public sealed record MappingTestResultDto(
     IReadOnlyDictionary<string, object?> Values,
     IReadOnlyList<string> Errors,
     IReadOnlyList<IReadOnlyDictionary<string, object?>>? Rows = null,
-    IReadOnlyList<MappingChildTableDto>? ChildTables = null);
+    IReadOnlyList<MappingChildTableDto>? ChildTables = null,
+    /// <summary>Fields whose value is a FHIR reference (e.g. "Patient/xyz") that must be resolved against
+    /// another table's row rather than written verbatim — see <see cref="MappingReferenceLookupDto"/>.</summary>
+    IReadOnlyList<MappingReferenceLookupDto>? ReferenceLookups = null);
 
 public sealed record MappingChildTableDto(
     string Name,
     IReadOnlyList<IReadOnlyDictionary<string, object?>> Rows);
+
+/// <summary>
+/// One field on the mapped parent row that needs its written value resolved by looking up another already-
+/// written table, rather than trusting whatever <see cref="JsonMappingEngine"/> extracted verbatim (a bare FHIR
+/// id string can never satisfy a bigint FK column). <see cref="ReferenceId"/> is the id extracted from the raw
+/// reference string (e.g. "Patient/xyz" → "xyz"); null when the source resource had no reference at that path.
+/// </summary>
+public sealed record MappingReferenceLookupDto(
+    string TargetField,
+    string LookupTable,
+    string LookupKeyColumn,
+    string? ReferenceId);
