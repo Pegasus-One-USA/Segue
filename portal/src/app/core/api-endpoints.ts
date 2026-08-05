@@ -131,10 +131,17 @@ export const MAPPING_PROFILE_ENDPOINTS = {
 export const MAPPING_ENDPOINTS = {
   resources:     `${API_V1_BASE}/mapping/catalog/resources`,
   // sourceConnectionId lets the backend resolve that source's vendor (Epic, ...) and prefer its
-  // vendor-specific catalog over the generic base-FHIR-R4 one — omitted (or falsy) always gets generic.
-  resourceFields: (resourceType: string, sourceConnectionId?: string | null) => {
+  // vendor-specific catalog over the generic base-FHIR-R4 one. sourceVendor is the fallback for a
+  // source node that hasn't been saved yet (no real connection id assigned) but already has a vendor
+  // picked in its own form — without it, a brand-new Epic source shows the generic catalog until the
+  // first save round-trip. Both omitted (or falsy) always gets generic.
+  resourceFields: (resourceType: string, sourceConnectionId?: string | null, sourceVendor?: string | null) => {
     const base = `${API_V1_BASE}/mapping/catalog/resources/${encodeURIComponent(resourceType)}/fields`;
-    return sourceConnectionId ? `${base}?sourceConnectionId=${encodeURIComponent(sourceConnectionId)}` : base;
+    const params = new URLSearchParams();
+    if (sourceConnectionId) params.set('sourceConnectionId', sourceConnectionId);
+    if (sourceVendor) params.set('sourceVendor', sourceVendor);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
   },
 };
 
