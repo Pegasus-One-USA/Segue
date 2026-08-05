@@ -1,0 +1,176 @@
+src/FHIRBridge.Application/DTOs/MappingImportDtos.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-104
+src/FHIRBridge.Infrastructure/Destinations/MappingSchemaProviderFactory.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-68
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/medicationrequest_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-926
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_40e3518071d2f8::t_16af0283a809a0 1,47-112
+  s_40e3518071d2f8::t_310535e96314c9 113
+src/FHIRBridge.Application/DTOs/MappingTestResultDto.cs
+  s_40e3518071d2f8::t_16af0283a809a0 12-15,20-31
+tools/EpicTemplateCatalogGenerator/EpicTemplateCatalogGenerator.csproj
+  s_40e3518071d2f8::t_cebe455841dd0e 1-17
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaTransaction.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-43
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/encounter_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-668
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_40e3518071d2f8::t_16af0283a809a0 58-63
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-183
+tools/EpicTemplateCatalogGenerator/Program.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-293
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/medicationadministration_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-523
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/MutualTlsCertificateProvider.cs
+  s_40e3518071d2f8::t_16af0283a809a0 1,99,111-117
+  s_40e3518071d2f8::t_48ba198f8b9cdb 118-119
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_40e3518071d2f8::t_185206ea909002 57-129
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/servicerequest_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-695
+src/FHIRBridge.Application/Services/EmbeddedFhirElementCatalog.cs
+  s_40e3518071d2f8::t_16af0283a809a0 9-13,17-18,21-26,42,44,49
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_40e3518071d2f8::t_15c39e1e92e124 299-316
+  s_40e3518071d2f8::t_d56d1b05011e63 1
+  s_40e3518071d2f8::t_f27628539bcae8 26,31-32,37
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_40e3518071d2f8::t_16af0283a809a0 522-528
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/practitioner_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-219
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-831
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_40e3518071d2f8::t_9a8dc79eec48cc 24,43,46-56,58-66,84,101,103,130-131,140-158,166-183,187,189,196,280
+  s_40e3518071d2f8::t_db1ed2ce6a5115 219,221
+  s_40e3518071d2f8::t_9be9d8110a850e 281-338
+src/FHIRBridge.Application/Abstractions/Mapping/FhirElementCatalogKeys.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-17
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/condition_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-426
+src/FHIRBridge.Application/Abstractions/Destinations/IDestinationSchemaService.cs
+  s_40e3518071d2f8::t_16af0283a809a0 17-42
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_40e3518071d2f8::t_05deb66bca53ad 17-28
+src/FHIRBridge.Infrastructure/Normalization/TerminologyMappedRecordNormalizationService.cs
+  s_40e3518071d2f8::t_16af0283a809a0 85
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaProviderFactory.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-9
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_40e3518071d2f8::t_16af0283a809a0 93-96,112-114,117
+src/FHIRBridge.Application/DTOs/MappedDestinationRecord.cs
+  s_40e3518071d2f8::t_16af0283a809a0 14-44
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_40e3518071d2f8::t_5e8cedbe2e3994 15-19,26,28-41,88-98,111-114,118-119,122-131,134-136,139-140,144-152,204-273,275-277,280-329,334-335,338-339,343-345,352,355,362,365-371,374,380-381,384,386-409,412-434,437-439,441-442,445-449,451-454,461,463-467,471-482,485-488,490,492,495-496,499,501-505,507,510-565,568-612,684,686,688-694,701-709,739-741,743-744,795,800,806,813-816,821
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaProvider.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-31
+src/FHIRBridge.Infrastructure/Destinations/SqlServerMappingSchemaTransaction.cs
+  s_40e3518071d2f8::t_ce0a2e29b402b6 120-121
+  s_40e3518071d2f8::t_fe7b3ab52a4a36 99-100
+  s_40e3518071d2f8::t_cebe455841dd0e 1-98,101-119,122-225,228-259
+  s_40e3518071d2f8::t_ca1325b508b5a2 226-227
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/diagnosticreport_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-383
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_40e3518071d2f8::t_95f7fc72d14d26 49,54,59,69-73,78-82,84-92,94-97,99,101-105,108,110-121,124-154,167-176,180-215,217,219-235,243-247,249-250,252-255,257-258,260-262,264-266,269-275,278,281,284,287-298,302-308
+  s_40e3518071d2f8::t_57f3a4e9b0dd36 216,218
+tests/FHIRBridge.UnitTests/Infrastructure/MappingProfileFieldReplacementTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-81
+src/Api/FHIRBridge.Api/Controllers/V1/MappingController.cs
+  s_40e3518071d2f8::t_16af0283a809a0 2,7,17-19,21-25,28-30,42-47,52,55-61,64-67,69-76,84-99
+  s_40e3518071d2f8::t_1a241e9c454f57 100
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_40e3518071d2f8::t_5a0ac325f1a4a6 1,3,20-32,35-38,40-69,72-89,91-99,101-122,125-161,164-292,299,301,303,311-312,344,346-348,370,377,394-492
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_40e3518071d2f8::t_f998e001a20573 262-267
+  s_40e3518071d2f8::t_fe324b7e4bcb7b 192-208,225-229
+src/FHIRBridge.Application/FHIRBridge.Application.csproj
+  s_40e3518071d2f8::t_16af0283a809a0 22-24
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.epic.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-40062
+  s_40e3518071d2f8::t_a58d10ee205510 40063
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_40e3518071d2f8::t_582af3ddad061d 330,332-334,345,347
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_40e3518071d2f8::t_00f050093d5c0d 85
+  s_40e3518071d2f8::t_637820043153fb 36
+  s_40e3518071d2f8::t_6e427310e5ef6e 1359-1365,1367-1374,1376-1385,1387-1393,1399-1437
+  s_40e3518071d2f8::t_46503790922d0b 1336-1338,1438-1439
+  s_40e3518071d2f8::t_c48215924356a8 61
+tests/FHIRBridge.UnitTests/Configuration/JsonMappingEngineTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-203
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_40e3518071d2f8::t_16af0283a809a0 45-59,108-122
+  s_40e3518071d2f8::t_0bf358b4ff5330 123
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-58,60-122,124-179,181-234,236-277
+  s_40e3518071d2f8::t_06a2383507306e 59,123,180,235
+src/FHIRBridge.Application/Services/IMappingImportService.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-20
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_40e3518071d2f8::t_7d631a3eb4eeb9 6
+  s_40e3518071d2f8::t_5f59f3690e5f58 561,568-569,576
+  s_40e3518071d2f8::t_96840f54ea527d 618-620,622,625-626,631-633
+  s_40e3518071d2f8::t_79f7f44de4eab3 763-834,836-892
+  s_40e3518071d2f8::t_8ad1ed7555be19 835
+  s_40e3518071d2f8::t_9030e80f9f32ca 27-29,38-40,49-51,60-62,71-73,82-84,93-95,104-106,115-117,126-128,137-139,148-150,159-161,170-172,181-183,192-194,203-205,214-216,225-227,236-238,247-249,258-260,762
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/observation_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-748
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_40e3518071d2f8::t_16af0283a809a0 489-496
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-192,194-513
+  s_40e3518071d2f8::t_a3d0a19a8cb920 193
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/allergyintolerance_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-356
+src/FHIRBridge.Application/Abstractions/Destinations/IMappingSchemaProvider.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-22
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 2-5,7-34,41-112
+  s_40e3518071d2f8::t_6b98ebec67154d 1,6
+  s_40e3518071d2f8::t_3d0372e36bdbc4 35-40
+src/BuildingBlocks/FHIRBridge.Integration/Sql/SqlIdentifier.cs
+  s_40e3518071d2f8::t_16af0283a809a0 1-2,6,13-31
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_40e3518071d2f8::t_16af0283a809a0 335-342
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/patient_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-347
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_40e3518071d2f8::t_fc06c3e874b9dd 17-22
+  s_40e3518071d2f8::t_a1c75ada77cd16 348-349
+  s_40e3518071d2f8::t_173d449ae8b917 405-406
+  s_40e3518071d2f8::t_ca94aaac6ea1c5 288-289
+  s_40e3518071d2f8::t_6083d647d0dbd2 437
+  s_40e3518071d2f8::t_e43de0b9667546 849-851,859,863-865
+  s_40e3518071d2f8::t_4de8964195215f 503-507,513-571
+  s_40e3518071d2f8::t_7fdd396271e23e 765-807
+  s_40e3518071d2f8::t_7fb2e488c8d2c4 813
+  s_40e3518071d2f8::t_15e5f7916cb384 144-184,187-263,266-287,290-347,350-404,407-436,438-492
+  s_40e3518071d2f8::t_557041fa182b96 16,23
+  s_40e3518071d2f8::t_ec45deecaebfcc 185-186
+  s_40e3518071d2f8::t_1a41e17a03d3a7 264-265
+tests/FHIRBridge.UnitTests/Validation/NoOpDestinationSchemaService.cs
+  s_40e3518071d2f8::t_c192ad4adae6b3 20-31
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/procedure_template.epic-r4.json
+  s_40e3518071d2f8::t_cebe455841dd0e 1-673
+src/FHIRBridge.Infrastructure/Destinations/SqlServerDdlTypeValidator.cs
+  s_40e3518071d2f8::t_cebe455841dd0e 1-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "82b4650611503cf14d17810f663a0ba12bb62199",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
