@@ -1,0 +1,115 @@
+src/FHIRBridge.Infrastructure/Terminology/TerminologyImportChannel.cs
+  s_a2babd50bb52dc::t_d053ac0d0ebad7 1-25
+src/FHIRBridge.Infrastructure/Terminology/TerminologyImportBackgroundService.cs
+  s_a2babd50bb52dc::t_dcc87fd03cb75e 1-42
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_a2babd50bb52dc::t_8daec8fb01f2b5 5,9,18,20,26,29-42
+portal/src/app/settings/services/snomed-settings.service.ts
+  s_a2babd50bb52dc::t_3d04a61065987d 6-9,26,30
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.scss
+  s_a2babd50bb52dc::t_1f9abab0852a32 70-88
+src/FHIRBridge.Domain/Entities/Terminology/SnomedEntities.cs
+  s_a2babd50bb52dc::t_085e253643cd28 131
+src/FHIRBridge.Domain/Entities/Terminology/Icd10Entities.cs
+  s_a2babd50bb52dc::t_b203c0aaf2e7aa 66
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  s_a2babd50bb52dc::t_6ce2477a9765b7 1-56
+src/FHIRBridge.Infrastructure/Terminology/RxNormImportService.cs
+  s_a2babd50bb52dc::t_7d1c15d0ca025e 55-57
+  s_a2babd50bb52dc::t_145063f7591eda 67,69
+  s_a2babd50bb52dc::t_5c4057220a2efd 1-54,58-66,68,70-135
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805073756_AddRxNormTerminology.cs
+  s_a2babd50bb52dc::t_da25d91483a9f9 1-112
+portal/src/app/settings/services/loinc-settings.service.ts
+  s_a2babd50bb52dc::t_162041cc25a25a 5,12-22,28-30
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.html
+  s_a2babd50bb52dc::t_ff9038f02b70ad 106-149
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_a2babd50bb52dc::t_c1c799f622e47b 58-60
+src/FHIRBridge.Application/Abstractions/Terminology/ISnomedImportService.cs
+  s_a2babd50bb52dc::t_0932adc360ecf4 9-13
+portal/src/app/core/api-endpoints.ts
+  s_a2babd50bb52dc::t_cc0e16566a47ff 179-183
+  s_40e3518071d2f8::t_607d6bc40389e3 161,184-185
+portal/src/app/settings/services/rxnorm-settings.service.ts
+  s_a2babd50bb52dc::t_ca09fe4817d6b8 1-31
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.html
+  s_a2babd50bb52dc::t_e034d030d804b2 13,16-17,21,25
+  s_a2babd50bb52dc::t_b033e838aa662c 56-59
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.scss
+  s_a2babd50bb52dc::t_003c49125bdfd5 58
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.scss
+  s_a2babd50bb52dc::t_8c8928d6f77945 58
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.ts
+  s_a2babd50bb52dc::t_b4aeda117f32a7 1,3,5,7-10,12,14,27-31,33-52
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805073756_AddRxNormTerminology.Designer.cs
+  s_a2babd50bb52dc::t_da25d91483a9f9 1-4465
+src/FHIRBridge.Application/Abstractions/Terminology/IRxNormImportService.cs
+  s_a2babd50bb52dc::t_1775021b4d0747 1-12
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/RxNormConfigurations.cs
+  s_a2babd50bb52dc::t_f1b042ecaa0449 1-39
+src/FHIRBridge.Infrastructure/Terminology/Icd10ImportService.cs
+  s_a2babd50bb52dc::t_f1cb6ec4d5c7b7 74
+  s_a2babd50bb52dc::t_913be65d5f1d4f 80
+  s_a2babd50bb52dc::t_5df9445c5d9ef7 23,25-27,33,36
+  s_a2babd50bb52dc::t_2637e9dcf57a49 60-62
+src/FHIRBridge.Application/Abstractions/Terminology/IIcd10ImportService.cs
+  s_a2babd50bb52dc::t_5b6b99ab4c1984 9-11
+src/FHIRBridge.Application/Abstractions/Terminology/ILoincSynchronizationService.cs
+  s_a2babd50bb52dc::t_0476b842953b26 4-5
+portal/src/app/settings/services/icd10-settings.service.ts
+  s_a2babd50bb52dc::t_1b7eb7232ae4e1 5,21,25
+src/FHIRBridge.Domain/Entities/Terminology/RxNormEntities.cs
+  s_a2babd50bb52dc::t_13c01b1fbc4093 1-66
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.html
+  s_a2babd50bb52dc::t_cd3a689f50c7a7 56-59
+  s_a2babd50bb52dc::t_03da206b43cbb4 13,16-17,21,25
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.ts
+  s_a2babd50bb52dc::t_2ce177c11772a3 1,7-8,16,19,22,31-34,43,50,52,57-58,66-71
+src/FHIRBridge.Infrastructure/Terminology/SnomedImportService.cs
+  s_a2babd50bb52dc::t_514822cd2041f5 29,31-33,39
+  s_a2babd50bb52dc::t_f0f586fcfb576e 142
+  s_a2babd50bb52dc::t_1508f62d62fe1a 42
+  s_a2babd50bb52dc::t_2e8dbbb998484c 107-109
+  s_a2babd50bb52dc::t_b8016fb6b98aa1 131-133,136
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.scss
+  s_a2babd50bb52dc::t_c9ad023f8bb171 16-61
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_a2babd50bb52dc::t_fed90a85e072ad 364-368
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  s_a2babd50bb52dc::t_526800df75bb14 5,9,18,20,26,29-42
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_a2babd50bb52dc::t_da25d91483a9f9 2772-2881
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.ts
+  s_a2babd50bb52dc::t_0d9b41ba4d5c5a 1,7-8,16,19,22,31-34,43,50,52,57-58,66-71
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.ts
+  s_a2babd50bb52dc::t_d5269bd188da12 1-7,12,16-75
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.html
+  s_a2babd50bb52dc::t_c52e2a578857b9 4,8-70
+src/Api/FHIRBridge.Api/Controllers/V1/LoincConfigurationController.cs
+  s_a2babd50bb52dc::t_2a2fb37b46cd29 6-7,10-11,21-24,36-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "84b215c6f6af7a7e840f4623cf72bdb68b8698db",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a2babd50bb52dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb4f9ae4-cf0d-468f-8818-ba3a7024efaf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
