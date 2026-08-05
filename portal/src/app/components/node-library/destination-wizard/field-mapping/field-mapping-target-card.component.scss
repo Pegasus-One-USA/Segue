@@ -310,6 +310,27 @@
   background: var(--color-primary-soft);
 }
 
+.fm-target-key-toggle {
+  flex-shrink: 0;
+  opacity: 0.35;
+  background: none;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm, 6px);
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+
+  &:hover { opacity: 1; background: var(--color-warning-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-warning-soft); }
+}
+
+.fm-target-key-toggle--active {
+  opacity: 1;
+  background: var(--color-warning-soft);
+}
+
 .fm-target-caveat {
   font-size: 11px;
   color: var(--color-warning-strong);

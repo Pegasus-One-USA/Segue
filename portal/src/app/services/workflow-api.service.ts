@@ -198,6 +198,14 @@ export interface MappingFieldRequest {
   terminologyCodeJsonPath?: string | null;
   cardinality?: string | null;
   isEnabled?: boolean;
+  // Child-table (arrayPolicy: SeparateDestination) support — mirrors MappingFieldDto's own members of the
+  // same name. Only set when this field's real destination table differs from the profile's own
+  // destinationObject (e.g. a Patient.name array fanned out into a separate dbo.PatientName table); absent
+  // for every ordinary same-table field, matching today's wire shape exactly.
+  destinationObject?: string | null;
+  parentTable?: string | null;
+  parentKeyColumn?: string | null;
+  foreignKeyColumn?: string | null;
 }
 
 // existingId: when the node already carries an id from a prior create-on-save (round-tripped through node.fields on

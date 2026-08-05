@@ -39,6 +39,7 @@
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
           [columnDataType]="columnTypeOn(card.tableName)"
           [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+          [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)"
           [relation]="relationFor(card.tableName)"
           [isArmed]="!!armedId()"
           [isApproximated]="isApproximatedFn"
@@ -52,6 +53,7 @@
           (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+          (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
           (createTableRequested)="openCreateTableModal(card.resource, true)"
         />
       }

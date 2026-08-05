@@ -73,6 +73,13 @@ export interface MappingRow {
    * physical table/column names.
    */
   referencesResource?: string | null;
+  /**
+   * User-designated upsert key for this row's resource, set via the target card's key toggle — takes
+   * full precedence over the destination table's real PK column once ANY row for the resource has this
+   * set true (see serializeRowsFlat). Lets a user key an upsert off a natural/business column instead of
+   * being forced onto whichever column the schema happens to flag as the physical primary key.
+   */
+  isUpsertKey?: boolean;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */
@@ -111,34 +118,72 @@ export function migrateLegacyRow(row: LegacyMappingRow): MappingRow {
   };
 }
 
-/**
- * Flattens the rich MappingRow[] back to the legacy wire shape for dest_mappings, using each row's
- * primary (first) source. Callers that also want the full shape for round-tripping the wizard's own
- * UI state should separately persist JSON.stringify(rows) under dest_mappings_v2.
- */
+/** Structurally identical to field-mapping-summary.model.ts's ChildTableRelation — redeclared here (rather
+ *  than imported) to avoid a circular import, since that file already imports from this one. */
+export interface FlatChildTableRelation {
+  parentTable: string;
+  parentColumn: string;
+  foreignKeyColumnName: string;
+}
+
 /**
  * Flattens the rich MappingRow[] back to the legacy wire shape for dest_mappings (see serializeRowsFlat).
  * `sqlTables`, when supplied, is used to tag each row `isUpsertKey: true` when its target column is the
- * destination table's real primary key — see serializeRowsFlat's own doc comment for why.
+ * destination table's real primary key — see serializeRowsFlat's own doc comment for why. `childTableRelationsByTable`,
+ * when supplied, lets a row mapped onto a table OTHER than its resource's own primary/root table (e.g. an
+ * array fanned out into a separate child table) carry the parent/foreign-key linkage workflow-build-assembler
+ * .service.ts needs to route that field to its own table at write time — see MappingField.ParentTable/
+ * ParentKeyColumn/ForeignKeyColumn on the backend, which this mirrors exactly (MappingImportService.BuildFieldAsync
+ * populates them the same way for the "Save mapping" / mapping-profiles/import path).
  */
 export function serializeRowsFlat(
   rows: MappingRow[],
   targetByResource: Record<string, string>,
   sqlTables: DestinationTable[] = [],
-): (LegacyMappingRow & { arrayPolicy: string; approximated: boolean; isUpsertKey: boolean })[] {
+  childTableRelationsByTable: Record<string, FlatChildTableRelation> = {},
+): (LegacyMappingRow & {
+  arrayPolicy: string; approximated: boolean; isUpsertKey: boolean;
+  parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
+})[] {
+  // Once the user has explicitly marked ANY row for a resource as the upsert key (via the target card's
+  // key toggle), that choice is authoritative for the whole resource — the real PK column is no longer
+  // consulted at all, so a business/natural key can be used even when it isn't the table's physical PK.
+  const resourcesWithExplicitKey = new Set(rows.filter(r => r.isUpsertKey === true).map(r => r.resource));
   return rows.map(row => {
     const primary = row.sources[0];
-    const { arrayPolicy, approximated } = resolveArrayPolicy(row);
-    const targetTableName = targetByResource[row.resource] ?? row.tableName;
-    // The upsert key is whichever mapped field lands on the destination table's REAL primary key column
-    // (e.g. PatientId, not necessarily a column named "Id") — not literally whichever field maps the FHIR
-    // resource's own ".id" element. A resource's id often isn't mapped to the PK column at all (it may be
-    // mapped to a natural/business key column instead, with the PK itself being an identity/auto column
-    // fed some other way), so keying off "$.id" alone under-detects. workflow-build-assembler.service.ts's
-    // buildMappingForResource still also matches jsonPath === '$.id' as a fallback for rows saved before
-    // this existed, or when sqlTables (a live-probed/created schema) isn't available to check against.
+    // A row's OWN table is always the real destination for its column — critically, this must NOT fall
+    // back to the resource's primary table when they differ (see rootTable below), or a field mapped onto
+    // a genuine child/extra table (e.g. "Use" on dbo.PatientName) gets silently validated/written against
+    // the wrong table's columns (dbo.Patient), which doesn't have that column at all.
+    const targetTableName = row.tableName;
+    const rootTable = targetByResource[row.resource];
+    const isChildTable = !!rootTable && targetTableName !== rootTable;
+    // A genuine child-table relation only counts when its declared parent is actually this resource's own
+    // root table — the same cross-resource guard field-mapping-summary.model.ts's resolveTable applies, so
+    // an unrelated live-schema FK (e.g. Encounter.PatientId -> Patient.Id, a cross-resource reference, not
+    // a same-resource child table) never gets mistaken for one here.
+    const relation = isChildTable ? childTableRelationsByTable[targetTableName] : undefined;
+    const genuineRelation = relation && relation.parentTable === rootTable ? relation : undefined;
+
+    const resolvedPolicy = resolveArrayPolicy(row);
+    const { approximated } = resolvedPolicy;
+    // RepeatParent ("this array field's parent row is repeated once per item") only makes sense on the
+    // resource's OWN root table — off it, the equivalent backend concept is SeparateDestination (the
+    // array's items become rows of the child table instead), mirroring MappingImportService
+    // .ResolveArrayMetadata's identical isRootTable branch.
+    const arrayPolicy: string = (isChildTable && resolvedPolicy.arrayPolicy === 'RepeatParent')
+      ? 'SeparateDestination'
+      : resolvedPolicy.arrayPolicy;
+
+    // Without an explicit designation, fall back to whichever mapped field lands on the destination
+    // table's REAL primary key column (e.g. PatientId, not necessarily a column named "Id") — not
+    // literally whichever field maps the FHIR resource's own ".id" element. workflow-build-assembler
+    // .service.ts's buildMappingForResource still also matches jsonPath === '$.id' as a further fallback
+    // for rows saved before this existed, or when sqlTables isn't available to check against.
     const targetTable = sqlTables.find(t => t.fullName === targetTableName);
-    const isUpsertKey = !!targetTable?.columns.some(c => c.name === row.targetName && c.isPrimaryKey);
+    const isUpsertKey = resourcesWithExplicitKey.has(row.resource)
+      ? row.isUpsertKey === true
+      : !!targetTable?.columns.some(c => c.name === row.targetName && c.isPrimaryKey);
     return {
       resource: row.resource,
       field: primary?.label ?? '',
@@ -151,6 +196,11 @@ export function serializeRowsFlat(
       arrayPolicy,
       approximated,
       isUpsertKey,
+      ...(genuineRelation ? {
+        parentTable: genuineRelation.parentTable,
+        parentKeyColumn: genuineRelation.parentColumn,
+        foreignKeyColumn: genuineRelation.foreignKeyColumnName,
+      } : {}),
     };
   });
 }

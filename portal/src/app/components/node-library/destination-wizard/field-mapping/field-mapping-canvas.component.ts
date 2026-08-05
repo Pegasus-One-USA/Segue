@@ -413,6 +413,20 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     return (column: string) => this.keyInfoForTable()(tableName, column);
   }
 
+  /** Mirrors serializeRowsFlat's precedence: once ANY row for the resource has an explicit isUpsertKey,
+   *  that fully decides the effective key for every row of the resource — the real PK badge is only
+   *  consulted as a fallback when nothing has been explicitly designated yet. */
+  isUpsertKeyColumnOn(resource: string, tableName: string) {
+    return (column: string): boolean => {
+      const row = this.rowForColumnFn(resource, tableName, column);
+      if (!row) return false;
+      const hasExplicitKey = this.mappingRows().some(r => r.resource === resource && r.isUpsertKey === true);
+      return hasExplicitKey
+        ? row.isUpsertKey === true
+        : !!this.keyInfoForTable()(tableName, column)?.isPrimaryKey;
+    };
+  }
+
   relationFor(tableName: string): ChildTableRelation | undefined {
     return this.childTableRelations()[tableName];
   }
@@ -974,6 +988,23 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
       this.mappingRows().map(r =>
         (r.resource === updated.resource && r.tableName === updated.tableName && r.targetName === updated.targetName) ? updated : r,
       ),
+    );
+  }
+
+  /** Only one row per resource can be the upsert key (the backend resolves a single key column — see
+   *  MappedSqlServerDestinationWriter.ResolveUpsertKeyColumn) — so marking one on clears any other
+   *  explicit key already set for the same resource. Marking the already-active row off drops the
+   *  explicit override entirely, reverting that resource to the real-PK fallback in serializeRowsFlat. */
+  onToggleUpsertKey(resource: string, tableName: string, column: string): void {
+    const target = this.rowForColumnFn(resource, tableName, column);
+    if (!target) return;
+    const turningOn = !target.isUpsertKey;
+    this.mappingRowsChange.emit(
+      this.mappingRows().map(r => {
+        if (r.resource !== resource) return r;
+        if (r === target) return { ...r, isUpsertKey: turningOn };
+        return r.isUpsertKey ? { ...r, isUpsertKey: false } : r;
+      }),
     );
   }
 

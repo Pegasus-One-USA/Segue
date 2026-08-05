@@ -1393,26 +1393,54 @@ public static class WorkflowEndpoints
             return null;
         }
 
-        var tableIdentifier = spec.DestinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is [var name, ..]
+        var rootTableIdentifier = spec.DestinationObject.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is [var name, ..]
             ? name
             : spec.DestinationObject;
 
-        var table = schema.Tables.FirstOrDefault(t =>
-            string.Equals(t.FullName, tableIdentifier, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(t.TableName, tableIdentifier, StringComparison.OrdinalIgnoreCase));
+        var root = schema.Tables.FirstOrDefault(t =>
+            string.Equals(t.FullName, rootTableIdentifier, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TableName, rootTableIdentifier, StringComparison.OrdinalIgnoreCase));
 
-        // The configured table isn't one this destination's live schema actually has — a different, more specific
-        // failure than a bad column, and one the writer already reports clearly at run time; nothing further to
-        // check here since there are no real columns to validate field names against.
-        if (table is null)
+        // The configured root table isn't one this destination's live schema actually has — a different, more
+        // specific failure than a bad column, and one the writer already reports clearly at run time; nothing
+        // further to check here since there are no real columns to validate any field's name against.
+        if (root is null)
         {
             return null;
         }
 
-        var realColumns = new HashSet<string>(table.Columns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+        // A field carrying its own DestinationObject (a SeparateDestination child-table field, e.g. Patient.name
+        // fanned out into dbo.PatientName) must be checked against ITS OWN table's real columns, not the
+        // resource's root table — a column that exists on the child table but not the root (or vice versa) would
+        // otherwise report a false failure. Resolved lazily and cached since several fields typically share the
+        // same child table.
+        var tablesByIdentifier = new Dictionary<string, DestinationTableSchemaDto?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [rootTableIdentifier] = root,
+        };
 
         foreach (var field in spec.Fields)
         {
+            var tableIdentifier = string.IsNullOrWhiteSpace(field.DestinationObject)
+                ? rootTableIdentifier
+                : field.DestinationObject;
+
+            if (!tablesByIdentifier.TryGetValue(tableIdentifier, out var table))
+            {
+                table = schema.Tables.FirstOrDefault(t =>
+                    string.Equals(t.FullName, tableIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.TableName, tableIdentifier, StringComparison.OrdinalIgnoreCase));
+                tablesByIdentifier[tableIdentifier] = table;
+            }
+
+            // Same leniency as the root-table-not-found case above — a child table this destination's live
+            // schema doesn't (yet) have is a different failure the writer reports clearly at run time.
+            if (table is null)
+            {
+                continue;
+            }
+
+            var realColumns = new HashSet<string>(table.Columns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
             if (!realColumns.Contains(field.TargetField))
             {
                 return field.IsUpsertKey

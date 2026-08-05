@@ -51,6 +51,9 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    *  references) — undefined for CSV or free-text columns that have no real schema behind them, in which
    *  case no key badge is shown. */
   readonly columnKeyInfo = input<(column: string) => FmColumnKeyInfo | undefined>(() => undefined);
+  /** Whether a column is the EFFECTIVE upsert key (user's explicit override for this resource if one
+   *  exists, else the destination table's real PK) — drives the key-toggle button's pressed state. */
+  readonly isUpsertKeyColumn = input<(column: string) => boolean>(() => false);
   /** Set only when this table was created as a child of another (see ChildTableRelation) — read-only
    *  display of an already-known relation, same display-only role as columnDataType/columnKeyInfo. */
   readonly relation = input<ChildTableRelation | undefined>(undefined);
@@ -67,6 +70,9 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly removeTable = output<void>();
   readonly deleteColumn = output<string>();
   readonly editColumn = output<string>();
+  /** A mapped column's key-toggle button was clicked — the parent decides whether that marks it as this
+   *  resource's upsert key or clears it (see FieldMappingCanvasComponent.onToggleUpsertKey). */
+  readonly toggleUpsertKey = output<string>();
   /** The "✎ Create a new table…" sentinel option was picked in the primary target select — the parent
    *  opens the real create-table modal and, on success, makes the result this resource's primary
    *  target (see FieldMappingCanvasComponent.openCreateTableModal's asPrimary flag). */

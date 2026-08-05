@@ -48,6 +48,14 @@ interface DestMappingRow {
   // True when this row's field-mapping metadata (JsonPath/arrayPolicy/etc.) was derived by naive path
   // conversion rather than the backend FHIR catalog's own authoritative shape — see field-mapping-model.ts.
   approximated?: boolean;
+  // Set by field-mapping-model.ts's serializeRowsFlat only when `target` is a genuine child table of this
+  // resource's own primary table (e.g. dbo.PatientName, child of dbo.Patient) — lets buildMappingForResource
+  // route this one field to its own table via MappingFieldRequest.destinationObject rather than the
+  // resource's single baseDestinationObject, exactly mirroring MappingImportService.BuildFieldAsync on the
+  // backend for the mapping-profiles/import path.
+  parentTable?: string;
+  parentKeyColumn?: string;
+  foreignKeyColumn?: string;
 }
 
 /**
@@ -588,9 +596,13 @@ export class WorkflowBuildAssemblerService {
     resource: string,
   ): MappingBuildSpec {
     const resourceRows = rows.filter((row) => row.resource === resource);
+    // dest_targets (the wizard's own per-resource "which table is primary" record) is authoritative and
+    // must be checked BEFORE resourceRows[0]?.target — now that a row's target correctly reflects its own
+    // table (see field-mapping-model.ts's serializeRowsFlat), resourceRows[0] could just as easily be a
+    // child-table row as the primary one, and array order here isn't meaningful.
     const baseDestinationObject =
-      resourceRows[0]?.target ||
       this.targetForResource(destFields, resource) ||
+      resourceRows[0]?.target ||
       resource;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
@@ -622,9 +634,21 @@ export class WorkflowBuildAssemblerService {
       const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      // A row whose own table differs from this resource's baseDestinationObject is a genuine child-table
+      // field (e.g. Patient.name.use -> dbo.PatientName) — route it there explicitly via a per-field
+      // destinationObject override, same as MappingImportService.BuildFieldAsync does for mapping-profiles
+      // /import. Every ordinary same-table field omits this (undefined), keeping the wire payload unchanged
+      // from before this existed.
+      const isChildTableField = !!row.target && row.target !== baseDestinationObject;
       return {
         targetField: row.column,
         jsonPath,
+        ...(isChildTableField ? {
+          destinationObject: row.target,
+          parentTable: row.parentTable ?? null,
+          parentKeyColumn: row.parentKeyColumn ?? null,
+          foreignKeyColumn: row.foreignKeyColumn ?? null,
+        } : {}),
         // The field-mapping canvas always writes SeparateDestination child-table rows as StoreJson-shaped
         // Json regardless of the naive path-derived type, matching the backend engine's own StoreJson handling.
         valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
