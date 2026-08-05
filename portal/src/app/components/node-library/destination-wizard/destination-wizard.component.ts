@@ -339,7 +339,6 @@ export class DestinationWizardComponent implements OnInit {
       targetByResource: this.targetByResource(),
     });
     this.lastMappingSummary.set(doc);
-    this.mappingSummaryPreviewOpen.set(true);
     this.mappingSummarySvc.save(doc).subscribe(() => {
       this.toast.success('Mapping saved', `${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} saved.`);
     });
@@ -1655,12 +1654,13 @@ export class DestinationWizardComponent implements OnInit {
     // full rich shape (joins, instance selection) so re-opening the wizard restores them exactly.
     config['dest_mappingCount'] = String(this.mappingRows().length);
     config['dest_targets']      = JSON.stringify(this.targetByResource());
-    // Disabled for now (not removed — re-enable if needed later): dest_extraTables is fully superseded by
-    // dest_mapping_summary_v1 (loadMappingSummary restores extraTablesByGroup on its own); dest_sourcePayloadFields
-    // is the only thing that restores payloadFieldsByResource on reopen, so re-enable that one first if this
-    // ever needs to come back.
+    // dest_extraTables is disabled (not removed — re-enable if needed later): fully superseded by
+    // dest_mapping_summary_v1, which restores extraTablesByGroup on its own via loadMappingSummary.
     // config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
-    // config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
+    // dest_sourcePayloadFields is the only thing that restores payloadFieldsByResource on reopen — without
+    // it, reopening a saved destination node forgets any "Load JSON payload" data and falls back to the
+    // built-in generic field list, making the source tree look unloaded even though mapping rows survive.
+    config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
     config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource(), this.sqlTables()));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys

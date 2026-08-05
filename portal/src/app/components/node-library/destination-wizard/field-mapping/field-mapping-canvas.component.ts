@@ -109,8 +109,14 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   // pattern as DestinationWizardComponent's exitMappingRequest/saveMappingRequest.
   readonly openLoadPayloadRequest = input<number>(0);
   readonly openPreviewRequest = input<number>(0);
-  private _lastLoadPayloadTrigger = 0;
-  private _lastPreviewTrigger = 0;
+  // null until the effect below has observed a real (post-input-binding) value — these counters live
+  // on an ancestor that outlives the canvas and never resets, so a remounted instance (e.g. re-entering
+  // a group whose mapping is already done) must learn its baseline from whatever the counter already
+  // is, not assume 0, or it mistakes an old, already-handled click for a fresh one and pops the modal
+  // with no user action this time. Reading the input in a field initializer is too early — Angular
+  // hasn't bound the real value from the parent yet — so the baseline is captured lazily instead.
+  private _lastLoadPayloadTrigger: number | null = null;
+  private _lastPreviewTrigger: number | null = null;
 
   readonly mappingRowsChange = output<MappingRow[]>();
   readonly targetByResourceChange = output<Record<string, string>>();
@@ -228,13 +234,17 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   };
 
   constructor() {
-    // React only on an actual increment, never the initial read (both start at 0).
+    // React only on an actual increment while this instance is alive. The first run just learns the
+    // real baseline (whatever the ancestor's counter already sits at) rather than acting on it — that
+    // first value is never "the user just clicked", it's this instance catching up.
     effect(() => {
       const v = this.openLoadPayloadRequest();
+      if (this._lastLoadPayloadTrigger === null) { this._lastLoadPayloadTrigger = v; return; }
       if (v !== this._lastLoadPayloadTrigger) { this._lastLoadPayloadTrigger = v; if (v > 0) this.openLoadPayloadModal(); }
     });
     effect(() => {
       const v = this.openPreviewRequest();
+      if (this._lastPreviewTrigger === null) { this._lastPreviewTrigger = v; return; }
       if (v !== this._lastPreviewTrigger) { this._lastPreviewTrigger = v; if (v > 0) this.openDrawer(); }
     });
   }

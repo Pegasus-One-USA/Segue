@@ -207,6 +207,12 @@ export class NodeLibraryDialogComponent {
   bumpLoadPayloadTrigger(): void { this.loadPayloadTrigger.update(v => v + 1); }
   bumpPreviewOutputTrigger(): void { this.previewOutputTrigger.update(v => v + 1); }
 
+  // Whether the whole dialog is expanded to near-fullscreen (see .nld--maximized) — the maximize button
+  // lives in several places (mapping-canvas header, floating controls, and each form's own topbar) but
+  // they all toggle this one piece of state.
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void { this.isMaximized.update(v => !v); }
+
   // Mirrors the open canvas's own destination type / mapping count so the header can show them
   // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
   readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');

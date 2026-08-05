@@ -132,7 +132,7 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     return this.columns().every(c => c.name.trim().length > 0);
   }
 
-  onTableNameInput(value: string): void { this.tableName.set(value); }
+  onTableNameInput(value: string): void { this.tableName.set(value.replace(/\s/g, '')); }
 
   onRelationChange(value: 'standalone' | 'child'): void {
     this.relation.set(value);

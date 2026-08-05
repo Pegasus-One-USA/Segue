@@ -9,6 +9,13 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width var(--transition-base, 150ms ease), height var(--transition-base, 150ms ease);
+
+  &--maximized {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
 }
 
 /* ── Confirm before discarding an in-progress destination config ─────────────── */
@@ -70,6 +77,33 @@
 :host-context(.cdk-overlay-backdrop) {
   background: rgba(255, 255, 255, 0.58);
   backdrop-filter: blur(2px);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.nld-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.nld-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nld-brand-hex {
+  font-size: 28px;
+  color: var(--color-primary, var(--color-primary));
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .nld-title {
@@ -154,10 +188,6 @@
 }
 
 .nld-maximize {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 10;
   width: 28px;
   height: 28px;
   display: grid;

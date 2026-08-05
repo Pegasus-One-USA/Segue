@@ -17,6 +17,7 @@
         class="fm-createtable-input"
         [value]="tableName()"
         (input)="onTableNameInput($any($event.target).value)"
+        (keydown.space)="$event.preventDefault()"
         placeholder="e.g. PatientAllergy"
         [disabled]="submitting()"
       />
