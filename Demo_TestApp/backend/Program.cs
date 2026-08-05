@@ -111,6 +111,19 @@ IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') I
         ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
         CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
 ");
+
+    // EnsureCreated won't add the AccountContextLinks table to an already-existing HealthAppDb — see
+    // AccountContextLinkEntity's own remarks for what this table is for. Idempotent, same pattern as above.
+    db.Database.ExecuteSqlRaw(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AccountContextLinks')
+    CREATE TABLE [AccountContextLinks] (
+        [Id] INT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_AccountContextLinks] PRIMARY KEY,
+        [AccountEmail] NVARCHAR(256) NOT NULL,
+        [AudienceType] NVARCHAR(50) NOT NULL,
+        [ResourceId] NVARCHAR(256) NOT NULL,
+        [CreatedUtc] DATETIME2 NOT NULL CONSTRAINT [DF_AccountContextLinks_CreatedUtc] DEFAULT(SYSUTCDATETIME())
+    );
+");
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
@@ -383,6 +396,112 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     }
 });
 
+// Account-linking check — see AccountContextLinkEntity's own remarks for what this enforces and why it lives
+// here rather than (or on top of) FHIRBridge's own UserFhirContextBindings. Called by the frontend once a launch
+// has produced a workflowRunId, right before displaying whatever patient FHIRBridge's /launch-result returns.
+// Anonymous by design, same reasoning as /api/provider-in-app-launch-context above: an embedded EHR-launch
+// iframe won't send the hb_session cookie at all, so audienceType=ehrLaunch has to tolerate no session present
+// (skips the check entirely rather than 401ing — best-effort, matches how the launch-context minting side
+// already treats this same limitation). audienceType=patientStandalone is a directly-opened flow that always
+// has a session in practice, but is handled the same defensive way rather than assuming that.
+app.MapGet("/api/account-context-link/check", async (
+    HttpContext http,
+    SessionStore sessions,
+    HealthAppDbContext db,
+    IHttpClientFactory httpClientFactory,
+    ILogger<Program> logger,
+    string workflowRunId,
+    string audienceType) =>
+{
+    if (audienceType is not ("ehrLaunch" or "patientStandalone"))
+    {
+        return Results.BadRequest(new { error = "invalid_request", error_description = "audienceType must be ehrLaunch or patientStandalone." });
+    }
+
+    if (!http.Request.Cookies.TryGetValue(SessionCookieName, out var sessionId)
+        || !sessions.TryGet(sessionId, out _, out var accountEmail, out _))
+    {
+        // No session at all (the embedded-iframe case, or a not-yet-logged-in tab) — nothing to link against.
+        // Not an error: the caller should proceed exactly as if this check had never run.
+        return Results.Ok(new { ok = true });
+    }
+
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    var baseUrl = settings?.StandaloneBaseUrl ?? string.Empty;
+    if (string.IsNullOrWhiteSpace(baseUrl))
+    {
+        return Results.Ok(new { ok = true });
+    }
+
+    string? resourceId;
+    try
+    {
+        var client = httpClientFactory.CreateClient("Workflow");
+        var response = await client.GetAsync($"{baseUrl.TrimEnd('/')}/api/v1/workflows/runs/{workflowRunId}/launch-result");
+        if (!response.IsSuccessStatusCode)
+        {
+            return Results.Ok(new { ok = true });
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var launchResult = JsonSerializer.Deserialize<LaunchResultPatientId>(body, jsonOptions);
+        resourceId = launchResult?.PatientId;
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not reach FHIRBridge to read launch-result for workflowRunId={WorkflowRunId}.", workflowRunId);
+        return Results.Ok(new { ok = true });
+    }
+
+    if (string.IsNullOrWhiteSpace(resourceId))
+    {
+        // Nothing resolved yet (e.g. the run failed or returned no Patient) — nothing to check against.
+        return Results.Ok(new { ok = true });
+    }
+
+    // Reverse direction: is this patient already linked to a DIFFERENT account? Checked for both audience types —
+    // this is what stops a different account from claiming a patient another account already owns.
+    var existingForResource = await db.AccountContextLinks.FirstOrDefaultAsync(
+        x => x.AudienceType == audienceType && x.ResourceId == resourceId);
+    if (existingForResource is not null && existingForResource.AccountEmail != accountEmail)
+    {
+        logger.LogWarning(
+            "Account-context link mismatch: audienceType={AudienceType} — this patient is already linked to a different account.",
+            audienceType);
+        return Results.Ok(new { ok = false, message = "This patient is already linked to a different account. Please contact your administrator if you believe this is an error." });
+    }
+
+    // Forward direction (Patient Standalone only): is THIS account already linked to a DIFFERENT patient? Provider
+    // EHR Launch deliberately skips this — a provider is expected to launch into many different patients' charts
+    // over time, so the same account linking to many different patients is allowed there.
+    if (audienceType == "patientStandalone")
+    {
+        var existingForAccount = await db.AccountContextLinks.FirstOrDefaultAsync(
+            x => x.AudienceType == audienceType && x.AccountEmail == accountEmail);
+        if (existingForAccount is not null && existingForAccount.ResourceId != resourceId)
+        {
+            logger.LogWarning(
+                "Account-context link mismatch: audienceType={AudienceType} — this account is already linked to a different patient.",
+                audienceType);
+            return Results.Ok(new { ok = false, message = "This account is already linked to a different patient. Please contact your administrator if you believe this is an error." });
+        }
+    }
+
+    if (existingForResource is null)
+    {
+        db.AccountContextLinks.Add(new AccountContextLinkEntity
+        {
+            AccountEmail = accountEmail,
+            AudienceType = audienceType,
+            ResourceId = resourceId,
+            CreatedUtc = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    return Results.Ok(new { ok = true });
+});
+
 // Calls the admin-configured workflow URL, expects a { "Resources": [{ "ResourceType", "ResourceId",
 // "Payload" }] } body back, and upserts each resource into the local Patients table — demonstrating the
 // app fetching real data through FHIRBridge and storing it in its own database.
@@ -641,6 +760,10 @@ record SaveSettingsRequest(
     string BackendSystemPractitionerImportWorkflowId);
 // Matches FHIRBridge's GET /api/v1/workflows/{id}/public-launch-context response shape.
 record MintedLaunchContext(string Context);
+// The subset of FHIRBridge's GET /api/v1/workflows/runs/{id}/launch-result response this app actually needs —
+// the full response also carries the raw Patient resource itself, which /api/account-context-link/check has no
+// use for.
+record LaunchResultPatientId(string? PatientId);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.

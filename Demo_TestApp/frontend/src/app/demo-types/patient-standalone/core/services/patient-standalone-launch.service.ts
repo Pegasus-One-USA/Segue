@@ -357,6 +357,23 @@ export class PatientStandaloneLaunchService {
     );
   }
 
+  /** Account-linking check against Demo_TestApp's OWN backend (not FHIRBridge) — see
+   *  HealthAppDbContext.AccountContextLinkEntity's remarks for what this enforces and why. Never throws: a
+   *  failed check must never block a launch that would otherwise have succeeded, so callers get { ok: true }
+   *  on any network/server error, exactly as if the check had found nothing to object to. */
+  async checkAccountContextLink(workflowRunId: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      return await firstValueFrom(
+        this.http.get<{ ok: boolean; message?: string }>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/account-context-link/check`,
+          { params: { workflowRunId, audienceType: 'patientStandalone' }, withCredentials: true },
+        ),
+      );
+    } catch {
+      return { ok: true };
+    }
+  }
+
   async checkRememberedSession(): Promise<EpicSessionStatusResponse> {
     return firstValueFrom(
       this.http.get<EpicSessionStatusResponse>(
