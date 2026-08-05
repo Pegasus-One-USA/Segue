@@ -1,0 +1,34 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_9b48790bb1404e::t_9686a5d0032563 610-619,647-651,667-671,727-728
+  s_9b48790bb1404e::t_c072ddf8e17d12 709-712,716-726
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_9b48790bb1404e::t_b5ac454df88f66 205-210
+  s_9b48790bb1404e::t_ac591f493b08ac 147
+portal/src/app/services/workflow-api.service.ts
+  s_9b48790bb1404e::t_ac312e4c4c0c9f 209-214
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_9b48790bb1404e::t_0661c53eaa1104 782-802
+  s_9b48790bb1404e::t_4deb7df96375e1 657-661
+  s_9b48790bb1404e::t_c4d1039aa4fdac 59-63
+  s_9b48790bb1404e::t_54a1c4a76e6dd8 761-765
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_9b48790bb1404e::t_d4cd1a88a20959 208,211,215,217
+  s_9b48790bb1404e::t_11c98d386c5454 537,551
+  s_9b48790bb1404e::t_906734cf7161d6 90-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "ad986911aea2b1dbbe704360f0ff6497e595cf5e",
+  "prompts": {},
+  "sessions": {
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
