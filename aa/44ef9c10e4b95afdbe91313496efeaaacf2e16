@@ -1,0 +1,32 @@
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_40e3518071d2f8::t_61f6427b3eee7c 360-376
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_40e3518071d2f8::t_54c2121e57f23d 157-169,182-197
+  s_40e3518071d2f8::t_63397012547147 198-199
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_40e3518071d2f8::t_ad4f87bf8a0971 76-102,174
+  s_40e3518071d2f8::t_f715946b345be2 175
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_40e3518071d2f8::t_2bf3f4aafb2f1a 336-345
+Demo_TestApp/backend/Program.cs
+  s_40e3518071d2f8::t_3043e2aa4952b3 399-502
+  s_40e3518071d2f8::t_a000c4d7f7cbab 114-126
+  s_40e3518071d2f8::t_8b12d3796c9e9d 763-766
+  s_40e3518071d2f8::t_d6ca46fc586c66 503-504
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "aa44ef9c10e4b95afdbe91313496efeaaacf2e16",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
