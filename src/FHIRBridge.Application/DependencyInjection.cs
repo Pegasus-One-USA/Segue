@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IAnomalyDetectionService, RunAnomalyDetectionService>();
         services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();
         services.AddScoped<IBulkExportPollService, BulkExportPollService>();
+        services.AddScoped<IMappingImportService, MappingImportService>();
 
         return services;
     }
