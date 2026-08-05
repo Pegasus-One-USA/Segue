@@ -1,0 +1,42 @@
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_40e3518071d2f8::t_564ac122f38734 629-631,667,669,673
+  s_40e3518071d2f8::t_d46ba621ff42fa 613-617,621-628,641,647-657,660-666,668,670-672,675-678,684-695,704-707,710,723-725,733-734,765
+  s_40e3518071d2f8::t_63449dc24a6035 618-620,708-709,735-736,751-753,757
+  s_40e3518071d2f8::t_3a7ef0f067eb80 632-640,658-659,674,679-683,696-703,737-750
+  s_40e3518071d2f8::t_5749014e96f30d 766
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805132632_AddUserFhirContextBindingCallerIdentity.cs
+  s_40e3518071d2f8::t_d494b8b4ad4b6a 1-40
+src/FHIRBridge.Infrastructure/Persistence/EfUserFhirContextBindingRepository.cs
+  s_40e3518071d2f8::t_bf0146069cd9e6 20-24
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_40e3518071d2f8::t_d494b8b4ad4b6a 3257-3264
+src/FHIRBridge.Domain/Entities/UserFhirContextBinding.cs
+  s_40e3518071d2f8::t_42d0e2ab3bb1f3 36-37,45,60-63,65-72
+  s_40e3518071d2f8::t_fef5be4669c0ee 13-27,35,44,51-52,64
+  s_40e3518071d2f8::t_9d8a1769ac0676 73
+src/FHIRBridge.Application/Abstractions/Persistence/IUserFhirContextBindingRepository.cs
+  s_40e3518071d2f8::t_c198f82610744f 11-19
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserFhirContextBindingConfiguration.cs
+  s_40e3518071d2f8::t_ef3d29deeca275 18
+  s_40e3518071d2f8::t_275287be01468c 17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_40e3518071d2f8::t_13fc79337fd1b9 25-31
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805132632_AddUserFhirContextBindingCallerIdentity.Designer.cs
+  s_40e3518071d2f8::t_d494b8b4ad4b6a 1-4473
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b13520048a8358cf12d19e2ce3518220585a4336",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

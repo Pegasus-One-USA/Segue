@@ -1,0 +1,25 @@
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_8c124f3f2435f0::t_9164872ed59a58 402
+  s_8c124f3f2435f0::t_3866fb8abb7456 231,238
+  s_8c124f3f2435f0::t_0e8ae8722c3517 448,450
+  s_8c124f3f2435f0::t_c1977bcc08005a 2
+  s_8c124f3f2435f0::t_609ae9b26b0c60 121-122,124-127,129-131
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_8c124f3f2435f0::t_ec461cc3197e4c 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "258f344c986ac47f59ea79d57511809995660f99",
+  "prompts": {},
+  "sessions": {
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}

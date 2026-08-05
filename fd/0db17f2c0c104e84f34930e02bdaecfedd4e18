@@ -1,0 +1,43 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_8c124f3f2435f0::t_46e5b6fa6a0020 1657-1658,1660-1663
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_39163135bbc470::t_eb66f3854630dd 112-119
+  s_39163135bbc470::t_bd09c4c54bcb18 237-239,242,247
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_8c124f3f2435f0::t_09543a217ec891 2
+  s_8c124f3f2435f0::t_5c4598572af471 220-222
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_39163135bbc470::t_1a3e1c5d5ce33b 135
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_8c124f3f2435f0::t_4086be1d6a1f1b 210-215
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_39163135bbc470::t_86ad905abeae37 20
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_8c124f3f2435f0::t_a99f36e1efe4ff 82-108
+  s_8c124f3f2435f0::t_4ed6a89c07806a 12-14,18
+  s_8c124f3f2435f0::t_49cedd1fba460c 15-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "fd0db17f2c0c104e84f34930e02bdaecfedd4e18",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    },
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
