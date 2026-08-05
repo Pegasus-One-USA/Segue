@@ -226,6 +226,9 @@ public sealed class WorkflowGraphLaunchTests
         public Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
             Task.FromResult(new PagedResult<MappingProfile>(_mappings, _mappings.Count, page, pageSize));
         public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) => Task.FromResult(_mappings.FirstOrDefault(x => x.Id == id));
+        public Task<MappingProfile?> FindMappingProfileAsync(string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct) =>
+            Task.FromResult(_mappings.FirstOrDefault(x =>
+                x.ResourceType == resourceType && x.SourceConnectionId == sourceConnectionId && x.DestinationId == destinationId));
         public Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) => Task.FromResult(_routes);
         public Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) => Task.FromResult(_routes.FirstOrDefault(x => x.Id == id));
 

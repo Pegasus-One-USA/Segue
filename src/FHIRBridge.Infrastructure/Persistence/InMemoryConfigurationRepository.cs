@@ -280,6 +280,16 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(new PagedResult<MappingProfile>(items, ordered.Count, page, take));
     }
 
+    public Task<MappingProfile?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct)
+    {
+        var match = _mappingProfiles.Values.FirstOrDefault(x =>
+            x.ResourceType == resourceType
+            && x.SourceConnectionId == sourceConnectionId
+            && x.DestinationId == destinationId);
+        return Task.FromResult(match);
+    }
+
     public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct)
     {
         _mappingProfiles.TryGetValue(id, out var e);

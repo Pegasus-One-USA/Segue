@@ -30,4 +30,9 @@ public sealed record MappingFieldDto(
     int? MaxLength = null,
     int? Precision = null,
     int? Scale = null,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    string? ParentTable = null,
+    string? ParentKeyColumn = null,
+    string? ForeignKeyColumn = null,
+    string? ReferenceLookupTable = null,
+    string? ReferenceLookupKeyColumn = null);

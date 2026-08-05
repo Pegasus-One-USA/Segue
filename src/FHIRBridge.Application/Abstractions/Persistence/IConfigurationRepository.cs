@@ -61,6 +61,12 @@ public interface IConfigurationRepository
     Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(
         MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct);
     Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Looks up an existing mapping profile for the same (ResourceType, SourceConnectionId,
+    /// DestinationId) triple — the idempotency key the mapping-config import endpoint upserts on.</summary>
+    Task<MappingProfile?> FindMappingProfileAsync(
+        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct);
+
     Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct);
