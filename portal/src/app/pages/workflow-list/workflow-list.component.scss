@@ -1,5 +1,5 @@
 .list-page {
-  padding: 32px;
+  padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
   display: flex;
@@ -118,14 +118,17 @@
   align-items: center;
   gap: 6px;
   height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
+  padding: 0 14px;
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-base);
-  background: var(--color-bg);
-  color: var(--color-ink);
-  font-size: 13px;
-  font-weight: 600;
+  background: transparent;
+  color: var(--color-ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
   cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
 
   &--active {
     border-color: var(--color-primary);
@@ -225,14 +228,14 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     text-align: left;
-    padding: 12px 16px;
+    padding: 10px 12px;
     white-space: nowrap;
     background: var(--color-side);
     border-bottom: 2px solid var(--color-border);
   }
 
   tbody td {
-    padding: 14px 16px;
+    padding: 12px;
     border-bottom: 1px solid var(--color-border);
     vertical-align: middle;
     font-size: 14px;
@@ -396,7 +399,7 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 // Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
 // side — now that those 5 live inside the "more actions" (⋮) menu, the column only needs to fit the
 // Run button + divider + kebab trigger, so the old width just left a large empty gutter on the right.
-.col-actions { width: 200px; }
+.col-actions { width: 170px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
@@ -442,9 +445,9 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 // nowrap: the actions cell must never wrap onto a second line — .table-wrapper
 // already scrolls horizontally (see above) if a viewport is ever too narrow to
 // fit it, so wrapping here only ever produced an inconsistent, fragile layout.
-.row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
-.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 2px; flex-shrink: 0; }
+.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 1px; flex-shrink: 0; }
 
 // ── Row "more actions" menu ───────────────────────────────────────────────────
 // Same look as .filter-dropdown-panel above, but position: fixed with top/right set inline from
