@@ -328,6 +328,8 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
 // workflow having been opted into public launch via POST /api/v1/workflows/{id}/enable-public-launch. Must be
 // awaited BEFORE the component's synchronous full-page redirect to FHIRBridge's launch endpoint (see ngOnInit).
 app.MapGet("/api/provider-in-app-launch-context", async (
+    HttpContext http,
+    SessionStore sessions,
     HealthAppDbContext db,
     IHttpClientFactory httpClientFactory,
     ILogger<Program> logger) =>
@@ -342,11 +344,17 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     }
 
     var client = httpClientFactory.CreateClient("Workflow");
-    // ProviderInApp has no session at mint time (see this endpoint's own anonymous-by-design remarks above), so the
-    // logged-in HealthApp account can't be read from a cookie here the way Patient/Provider Standalone do. Exactly
-    // one seeded HealthApp account (providerInApp@healthapp.local) ever drives this flow, so a fixed identity is
-    // sent instead — FHIRBridge permanently binds it to whichever patient Epic's embedded launch establishes first.
-    const string providerInAppUserIdentity = "providerinapp@healthapp.local";
+    // Epic's embedded ("Embedded" launch display mode) iframe won't send the hb_session cookie at all (cross-site,
+    // SameSite=Lax), so there's genuinely no logged-in account to read in that case — falls back to a single fixed
+    // identity, same as before, so FHIRBridge still has something stable to permanently bind against. A real
+    // browser tab hitting this same endpoint (e.g. testing Provider_InApp outside the iframe) DOES send the
+    // cookie, so the actual logged-in HealthApp account's email is used instead whenever one is present — letting
+    // more than one seeded account exercise this flow independently, each getting its own FHIRBridge binding.
+    var providerInAppUserIdentity =
+        http.Request.Cookies.TryGetValue(SessionCookieName, out var sessionId)
+        && sessions.TryGet(sessionId, out _, out var sessionEmail, out _)
+            ? sessionEmail
+            : "providerinapp@healthapp.local";
     var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context?userIdentity={Uri.EscapeDataString(providerInAppUserIdentity)}";
 
     try
