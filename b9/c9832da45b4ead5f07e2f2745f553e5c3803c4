@@ -1,0 +1,50 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_be8fae4aa527a7::t_305be92a909594 92-101
+portal/src/app/services/workflow-api.service.ts
+  s_be8fae4aa527a7::t_0a40ba326b5967 201-208
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_be8fae4aa527a7::t_320dd17802d325 59-103
+  s_be8fae4aa527a7::t_99ef709bdba429 5
+  s_be8fae4aa527a7::t_b6cee928054dcb 104-163
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_be8fae4aa527a7::t_902d784010ff62 416-429
+  s_be8fae4aa527a7::t_48ec3713f76a7f 994-1010
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_be8fae4aa527a7::t_cbff3f9788aec7 637-642,646-651
+  s_be8fae4aa527a7::t_6bb3fae5c80185 51-58
+  s_be8fae4aa527a7::t_f70b2eca3ce8b4 599-602,605
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_be8fae4aa527a7::t_8d537ed7ba883e 42
+  s_be8fae4aa527a7::t_5235b131f058f1 56
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_be8fae4aa527a7::t_3e4359b53e89d4 168-169,174-176
+  s_be8fae4aa527a7::t_530c4a9669b83b 121-128,132-137,143-147,154-167,170-173,177,199-203
+  s_be8fae4aa527a7::t_5985d7616dbba4 148-151,178-182,184-186
+  s_be8fae4aa527a7::t_94eb92ecc0fbe9 76-82
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_be8fae4aa527a7::t_f0d1a2e30512fe 1396,1400-1402,1404-1407,1412-1416,1418-1420,1424-1443
+  s_be8fae4aa527a7::t_501499a3043c38 1417
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_be8fae4aa527a7::t_1875e4b9d0a55d 1658-1660
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_be8fae4aa527a7::t_e689ff84df3738 54-56
+  s_be8fae4aa527a7::t_81c0cdec061c7c 73-75
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_be8fae4aa527a7::t_91ed194240a3d7 313-333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "b9c9832da45b4ead5f07e2f2745f553e5c3803c4",
+  "prompts": {},
+  "sessions": {
+    "s_be8fae4aa527a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b3c4d6a-a381-4b8d-89f9-34b739a7cd57",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

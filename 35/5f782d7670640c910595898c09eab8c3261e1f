@@ -1,0 +1,90 @@
+Demo_TestApp/backend/HealthAppDbContext.cs
+  h_9042ea4abaf2fc 76-102,174-175
+Demo_TestApp/backend/Program.cs
+  h_9042ea4abaf2fc 114-126,344-345,360-370,399-504,763-766
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  h_9042ea4abaf2fc 157-169,182-199
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  h_9042ea4abaf2fc 360-376
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  h_9042ea4abaf2fc 336-345
+docs/transform-console-enterprise.html
+  h_9042ea4abaf2fc 1-577
+docs/transform-settings-mechanics.html
+  h_9042ea4abaf2fc 1-240
+docs/workflow-menu-implementation.html
+  h_9042ea4abaf2fc 1-454
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.html
+  h_9042ea4abaf2fc 23-42,820-826,829-835
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.scss
+  h_9042ea4abaf2fc 83-105,755-766
+portal/src/app/components/epic-source-wizard/epic-audience-form/epic-audience-form.component.ts
+  h_9042ea4abaf2fc 2,408-412,580-605,852-855,1416-1422
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  h_9042ea4abaf2fc 19-38
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  h_9042ea4abaf2fc 90-114
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  h_9042ea4abaf2fc 185-189,194,1657-1658,1660-1663
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  h_9042ea4abaf2fc 86-128
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  h_9042ea4abaf2fc 108-211
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  h_9042ea4abaf2fc 2,67-70,112-119,237-239,242,247,319,499-562,565,573-579
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  h_9042ea4abaf2fc 20,52,54-57,59,61-100
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  h_9042ea4abaf2fc 63-198
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  h_9042ea4abaf2fc 1,33,61-124,135,177-184
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  h_9042ea4abaf2fc 139-147
+portal/src/app/components/node-library/node-library-dialog.component.html
+  h_9042ea4abaf2fc 4-11,15,39-40,43-75,194,198,220-222,235,239
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  h_9042ea4abaf2fc 12,129-131,190-194,198,203,206-211,214,217,219,225-235
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  h_9042ea4abaf2fc 210-215
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  h_9042ea4abaf2fc 4-13
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  h_9042ea4abaf2fc 91-96
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  h_9042ea4abaf2fc 2,121-122,124-127,129-131,231,238,402,448,450
+portal/src/app/services/wizard.service.ts
+  h_9042ea4abaf2fc 9,237-242,246
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  h_9042ea4abaf2fc 53
+src/FHIRBridge.Application/Abstractions/Persistence/IUserFhirContextBindingRepository.cs
+  h_9042ea4abaf2fc 11-19
+src/FHIRBridge.Application/DependencyInjection.cs
+  h_9042ea4abaf2fc 36
+src/FHIRBridge.Domain/Entities/UserFhirContextBinding.cs
+  h_9042ea4abaf2fc 13-27,35-37,44-45,51-52,60-73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserFhirContextBindingConfiguration.cs
+  h_9042ea4abaf2fc 17-18
+src/FHIRBridge.Infrastructure/Persistence/EfUserFhirContextBindingRepository.cs
+  h_9042ea4abaf2fc 20-24
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805132632_AddUserFhirContextBindingCallerIdentity.Designer.cs
+  h_9042ea4abaf2fc 1-4473
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260805132632_AddUserFhirContextBindingCallerIdentity.cs
+  h_9042ea4abaf2fc 1-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  h_9042ea4abaf2fc 3257-3264
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  h_9042ea4abaf2fc 613-641,647-710,723-725,733-753,757,765-766
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  h_9042ea4abaf2fc 25-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "355f782d7670640c910595898c09eab8c3261e1f",
+  "prompts": {},
+  "humans": {
+    "h_9042ea4abaf2fc": {
+      "author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
