@@ -88,6 +88,12 @@ export class TransformNodeComponent {
     return this.transformId().startsWith('dest-');
   }
 
+  /** Field Mapping nodes aren't independently removable from the canvas via this button — by product
+   *  decision, not a technical restriction. */
+  protected isMapping(): boolean {
+    return this.transformId() === 'field-mapping';
+  }
+
   onAddNextClick(e: MouseEvent): void {
     e.stopPropagation();
     this.addNext.emit(this.node().id);

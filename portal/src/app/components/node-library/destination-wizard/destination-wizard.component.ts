@@ -182,10 +182,16 @@ export class DestinationWizardComponent implements OnInit {
   // own toolbar, so the wizard just forwards these without reacting to them itself.
   readonly openLoadPayloadRequest = input<number>(0);
   readonly openPreviewRequest = input<number>(0);
+  /** Whether the OUTER Node Library dialog is currently maximized — this wizard's own topbar (see
+   *  .dw-topbar) renders the maximize/restore button itself while its steps are showing, since the
+   *  outer dialog's own header row is hidden then (see NodeLibraryDialogComponent's .nld-header) to
+   *  avoid two title bars stacked on top of each other. */
+  readonly isMaximized = input<boolean>(false);
 
   readonly saved     = output<AddTransformEvent>();
   readonly cancelled = output<void>();
   readonly closeAll  = output<void>();
+  readonly toggleMaximizeRequest = output<void>();
   /** Total field-mapping count for the currently open group — the dialog header shows it next to the title. */
   readonly mappingCountChange = output<number>();
 

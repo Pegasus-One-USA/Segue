@@ -87,6 +87,31 @@
   &:hover { background: var(--color-bg); color: var(--color-ink-2); }
 }
 
+/* The dialog-level maximize/restore toggle, relocated here next to "← Back to library" now that
+   the outer Node Library header (which used to show it) is hidden while these steps are showing —
+   see NodeLibraryDialogComponent's .nld-header. Same icon/markup as that header's own .nld-maximize
+   used, just under this component's own class names (view encapsulation means .nld-maximize's CSS
+   can't reach into this template). */
+.dw-maximize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
+.dw-maximize-ico {
+  width: 16px;
+  height: 16px;
+}
+
 /* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
    now that the outer Node Library header is gone. */
 .dw-close-btn {

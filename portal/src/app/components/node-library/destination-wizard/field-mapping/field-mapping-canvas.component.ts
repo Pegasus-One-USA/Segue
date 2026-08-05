@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
+  Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
@@ -64,6 +64,10 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
+  // Not .required — only rendered while addTableMenuOpen() is true (see toggleAddTableMenu, which
+  // focuses it manually once open instead of the `autofocus` attribute, which @angular-eslint/template/
+  // no-autofocus disallows for the accessibility reasons in its own rule description).
+  private readonly addTableSearchInput = viewChild<ElementRef<HTMLInputElement>>('addTableSearchInput');
   private resizeObserver: ResizeObserver | null = null;
   private viewportResizeObserver: ResizeObserver | null = null;
 
@@ -302,7 +306,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
       this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
       return;
     }
-    if ((ev.target as HTMLElement).closest('.fm-source-rows, .fm-target-rows')) {
+    if ((ev.target as HTMLElement).closest('.fm-source-rows, .fm-target-rows, .fm-add-table-options')) {
       return;
     }
     ev.preventDefault();
@@ -468,14 +472,85 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private creatingTableResource: string | null = null;
   private creatingTableAsPrimary = false;
 
-  /** Routes a dropdown selection: the special "create new" sentinel opens the create-table modal;
+  /** A native <select>'s open option list is rendered by the OS/browser itself — no page CSS/DOM can
+   *  size, position, or inject a search box into it, so it can't be kept inside the canvas's own
+   *  visible bounds as that shrinks, nor filtered as the user types. This custom panel renders
+   *  position: fixed, sized/positioned from real getBoundingClientRect() measurements of the trigger
+   *  button and the canvas viewport itself (see toggleAddTableMenu) — the same escape-the-clipping-
+   *  ancestor technique workflow-list.component.ts's .row-menu-panel already uses for an analogous
+   *  overflow problem. */
+  readonly addTableMenuOpen = signal(false);
+  readonly addTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+  readonly addTableSearchQuery = signal('');
+
+  /** Opens/closes the custom "+ Add a table…" panel, sized to whichever of (space below the trigger,
+   *  space above it) is larger within the canvas's own viewport — not the browser window — so it never
+   *  grows past what's actually visible even when the canvas panel itself is small. */
+  toggleAddTableMenu(event: MouseEvent): void {
+    if (this.addTableMenuOpen()) {
+      this.closeAddTableMenu();
+      return;
+    }
+
+    const triggerRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const viewportRect = this.viewport().nativeElement.getBoundingClientRect();
+    const margin = 8;
+    const spaceBelow = viewportRect.bottom - triggerRect.bottom - margin;
+    const spaceAbove = triggerRect.top - viewportRect.top - margin;
+    const minUsableHeight = 120;
+
+    this.addTableMenuStyle.set(
+      spaceBelow >= minUsableHeight || spaceBelow >= spaceAbove
+        ? { top: triggerRect.bottom + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceBelow) }
+        : { bottom: window.innerHeight - triggerRect.top + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceAbove) }
+    );
+    this.addTableSearchQuery.set('');
+    this.addTableMenuOpen.set(true);
+    // One tick so the panel (and its search input, an @if-conditional sibling of this trigger) has
+    // actually rendered before we try to focus it.
+    setTimeout(() => this.addTableSearchInput()?.nativeElement.focus());
+  }
+
+  closeAddTableMenu(): void {
+    this.addTableMenuOpen.set(false);
+    this.addTableMenuStyle.set(null);
+    this.addTableSearchQuery.set('');
+  }
+
+  onAddTableSearchInput(value: string): void {
+    this.addTableSearchQuery.set(value);
+  }
+
+  clearAddTableSearch(): void {
+    this.addTableSearchQuery.set('');
+    this.addTableSearchInput()?.nativeElement.focus();
+  }
+
+  /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a
+   *  computed() — it just re-filters on every call, same as tablesForResourceFn/columnsForResourceTableFn
+   *  above; the table lists involved are small enough that this is cheap per change-detection pass. */
+  filteredTablesToAdd(resource: string): string[] {
+    const query = this.addTableSearchQuery().trim().toLowerCase();
+    const all = this.availableTablesToAdd()(resource);
+    return query ? all.filter(t => t.toLowerCase().includes(query)) : all;
+  }
+
+  /** Routes a panel selection: the special "create new" sentinel opens the create-table modal;
    *  anything else names an already-probed, already-existing table — no backend call needed. */
   onAddTableSelectChange(resource: string, value: string): void {
+    this.closeAddTableMenu();
     if (value === this.createNewTableOption) {
       this.openCreateTableModal(resource);
       return;
     }
     this.onAddExtraTable(resource, value);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClickForAddTableMenu(event: MouseEvent): void {
+    if (this.addTableMenuOpen() && !(event.target as HTMLElement).closest('.fm-add-table-slot')) {
+      this.closeAddTableMenu();
+    }
   }
 
   /** Also the direct entry point when no live schema exists at all (!hasSqlTables()) — there's no
