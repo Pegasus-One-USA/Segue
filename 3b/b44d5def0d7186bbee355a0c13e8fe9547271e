@@ -1,0 +1,21 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_9b48790bb1404e::t_ce4c892df45279 937-939
+  s_9b48790bb1404e::t_2c249eea6da32c 940-947
+  s_9b48790bb1404e::t_be7d81f1ea5f47 884-891,895,902
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "3bb44d5def0d7186bbee355a0c13e8fe9547271e",
+  "prompts": {},
+  "sessions": {
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
