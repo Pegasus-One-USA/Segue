@@ -7,8 +7,12 @@ export const FHIR_RESOURCES: string[] = [
   'MedicationRequest', 'MedicationAdministration',
 ];
 
-export const DEFAULT_RESOURCES: string[] = [
-  'Patient', 'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
+/** The 11 FHIR resource types Epic sources/destinations actually support end-to-end — the
+ *  canonical list surfaced in the Epic source wizard's scope generation and the destination
+ *  wizard's data-group picker. */
+export const SUPPORTED_RESOURCE_TYPES: string[] = [
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
+  'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
 ];
 
 export const CODED_RESOURCES: string[] = [

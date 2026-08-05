@@ -1,28 +1,16 @@
 import { Component, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { ExecutionStatus, RouteExecution } from '../../../execution-history/models/execution-history.model';
+import { PipelineRun, PipelineRunStatus } from '../../models/pipeline-run.model';
 
-// Reuses the existing .status-badge CSS classes (status-running/completed/failed/queued/cancelled) —
-// mapped from the real ExecutionStatus vocabulary rather than renaming the CSS.
-const STATUS_LABELS: Record<ExecutionStatus, string> = {
-  Pending:            'Pending',
-  Running:            'Running',
-  Succeeded:          'Completed',
-  Failed:             'Failed',
-  Cancelled:          'Cancelled',
-  PartialSuccess:     'Partial Success',
-  AwaitingBulkExport: 'Awaiting Bulk Export',
-};
-
-const STATUS_CLASSES: Record<ExecutionStatus, string> = {
-  Pending:            'queued',
-  Running:            'running',
-  Succeeded:          'completed',
-  Failed:             'failed',
-  Cancelled:          'cancelled',
-  PartialSuccess:     'partial',
-  AwaitingBulkExport: 'awaiting',
+const STATUS_LABELS: Record<PipelineRunStatus, string> = {
+  running:             'Running',
+  completed:           'Completed',
+  completedWithErrors: 'Completed with errors',
+  failed:              'Failed',
+  skipped:             'Skipped',
+  queued:              'Queued',
+  cancelled:           'Cancelled',
 };
 
 @Component({
@@ -33,20 +21,19 @@ const STATUS_CLASSES: Record<ExecutionStatus, string> = {
   styleUrl: './pipeline-table.component.scss',
 })
 export class PipelineTableComponent {
-  readonly runs        = input<RouteExecution[]>([]);
+  readonly runs        = input<PipelineRun[]>([]);
   readonly runClicked  = output<string>();
   readonly editClicked = output<string>();
   readonly logsClicked = output<string>();
 
-  sourceLabel(run: RouteExecution): string {
-    return run.sourceName ?? run.sourceSystemType ?? '—';
+  statusLabel(s: PipelineRunStatus): string {
+    return STATUS_LABELS[s];
   }
 
-  statusLabel(status: ExecutionStatus): string {
-    return STATUS_LABELS[status];
-  }
-
-  statusClass(status: ExecutionStatus): string {
-    return STATUS_CLASSES[status];
+  formatDuration(ms?: number): string {
+    if (!ms) return '—';
+    if (ms < 1000)  return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
   }
 }

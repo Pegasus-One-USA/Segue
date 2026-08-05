@@ -4,6 +4,7 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
 import { PhaseConfigService } from '../../services/phase-config.service';
 import { WizardService } from '../../services/wizard.service';
+import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
@@ -119,6 +120,7 @@ export class NodeLibraryDialogComponent {
   private readonly store    = inject(PipelineStore);
   private readonly appSvc   = inject(ApplicabilityService);
   private readonly phaseCfg = inject(PhaseConfigService);
+  private readonly graphMapper = inject(WorkflowGraphMapperService);
   readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
@@ -153,6 +155,10 @@ export class NodeLibraryDialogComponent {
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
 
+  // ── maximize / restore ─────────────────────────────────────────────────────
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void { this.isMaximized.update(v => !v); }
+
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
@@ -168,10 +174,48 @@ export class NodeLibraryDialogComponent {
     return Array.from(new Set([...fromNodes, ...this.wiz.resources()]));
   });
 
+  // The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
+  // "sourceConnectionId" field. Reactive to store.nodes() via findLaunchSourceId()'s own read of it.
+  readonly sourceConnectionId = computed(() => this.graphMapper.findLaunchSourceId());
+
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);
   readonly destWizardHasProgressed = signal(false);
+
+  // True while the destination wizard has a specific data group's mapping canvas open — hides the
+  // node-picker sidebar entirely so the canvas gets the full dialog width.
+  readonly destMappingCanvasActive = signal(false);
+  // "Map fields — {group}" while a group's canvas is open; null shows the normal "Node Library" title.
+  readonly destMappingTitle = signal<string | null>(null);
+
+  // Header-level Close/Save (shown in place of the maximize icon's neighboring × while a group's
+  // canvas is open) trigger the wizard's own methods via an incrementing counter input, since a
+  // template reference variable on <app-destination-wizard> isn't reachable from here — it's declared
+  // inside a conditional @if/@else branch, out of scope for the sibling header buttons.
+  readonly exitMappingTrigger = signal(0);
+  readonly saveMappingTrigger = signal(0);
+  bumpExitMappingTrigger(): void { this.exitMappingTrigger.update(v => v + 1); }
+  bumpSaveMappingTrigger(): void { this.saveMappingTrigger.update(v => v + 1); }
+
+  // Same counter-trigger pattern, for the independent "save a mapping-only snapshot" action — never
+  // touches the workflow-level Save above (saveMappingTrigger), which still only keeps in-memory
+  // progress and closes the canvas; this one persists just the mapping screen's own state.
+  readonly saveSnapshotTrigger = signal(0);
+  bumpSaveSnapshotTrigger(): void { this.saveSnapshotTrigger.update(v => v + 1); }
+
+  // Same counter-trigger pattern for the canvas's "Load JSON payload"/"Preview output" actions, now
+  // shown here instead of the canvas's own toolbar row (freeing that row's height for the canvas itself).
+  readonly loadPayloadTrigger = signal(0);
+  readonly previewOutputTrigger = signal(0);
+  bumpLoadPayloadTrigger(): void { this.loadPayloadTrigger.update(v => v + 1); }
+  bumpPreviewOutputTrigger(): void { this.previewOutputTrigger.update(v => v + 1); }
+
+  // Mirrors the open canvas's own destination type / mapping count so the header can show them
+  // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
+  readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
+  readonly destMappingCount = signal(0);
+
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
 
   private readonly destTypeLocked = computed(() =>
@@ -460,6 +504,9 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
     this.showDestWizard.set(true);
   }
 
@@ -491,6 +538,9 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -537,6 +587,9 @@ export class NodeLibraryDialogComponent {
     this.destEditNode.set(null);
     this.destWizardStep.set(1);
     this.destWizardHasProgressed.set(false);
+    this.destMappingCanvasActive.set(false);
+    this.destMappingTitle.set(null);
+    this.destMappingCount.set(0);
     this.pendingDestSwitch.set(null);
     this.wiz.close();
   }

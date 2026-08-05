@@ -51,13 +51,13 @@
   font-weight: 600;
   letter-spacing: 0.3px;
 
-  &.status-running   { background: var(--color-info-soft);    color: var(--color-info-strong); }
-  &.status-completed { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &.status-failed    { background: var(--color-error-soft);   color: var(--color-error-strong); }
-  &.status-queued    { background: var(--color-warning-soft); color: var(--color-warning-strong); }
-  &.status-cancelled { background: var(--color-side);         color: var(--color-muted); }
-  &.status-partial   { background: var(--color-warning-soft); color: var(--color-warning-strong); }
-  &.status-awaiting  { background: var(--color-info-soft);    color: var(--color-info-strong); }
+  &.status-running             { background: var(--color-info-soft);    color: var(--color-info-strong); }
+  &.status-completed           { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.status-completedWithErrors { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.status-failed              { background: var(--color-error-soft);   color: var(--color-error-strong); }
+  &.status-skipped             { background: var(--color-side);         color: var(--color-muted); }
+  &.status-queued              { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.status-cancelled           { background: var(--color-side);         color: var(--color-muted); }
 }
 
 .action-cell {

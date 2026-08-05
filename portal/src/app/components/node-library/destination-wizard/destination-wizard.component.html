@@ -1,39 +1,42 @@
 <div class="dw">
 
-  <!-- ── Top bar ──────────────────────────────────────────────────────────── -->
-  <div class="dw-topbar">
-    <div class="dw-topbar-left">
-      <div class="dw-icon-wrap">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
-          <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
-    </div>
-    <div class="dw-topbar-actions">
-      <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
-      <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
-    </div>
-  </div>
-
-  <!-- ── Step indicator ───────────────────────────────────────────────────── -->
-  <div class="dw-stepper">
-    @for (label of STEP_LABELS; track $index) {
-      <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
-        <div class="dw-step-num">
-          @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+  <!-- ── Top bar + step indicator ── hidden while a group's mapping canvas is open; the outer
+       Node Library header shows "Map fields — {group}" instead, and Close/Save below the canvas
+       are the only navigation needed there. ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-topbar">
+      <div class="dw-topbar-left">
+        <div class="dw-icon-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
+            <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
         </div>
-        <span class="dw-step-label">{{ label }}</span>
+        <span class="dw-topbar-title">{{ destLabel() }} Configuration</span>
       </div>
-      @if ($index < STEP_LABELS.length - 1) {
-        <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+      <div class="dw-topbar-actions">
+        <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
+    </div>
+
+    <div class="dw-stepper">
+      @for (label of STEP_LABELS; track $index) {
+        <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
+          <div class="dw-step-num">
+            @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+          </div>
+          <span class="dw-step-label">{{ label }}</span>
+        </div>
+        @if ($index < STEP_LABELS.length - 1) {
+          <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+        }
       }
-    }
-  </div>
+    </div>
+  }
 
   <!-- ── Body ─────────────────────────────────────────────────────────────── -->
-  <div class="dw-body">
+  <div class="dw-body" [class.dw-body--canvas]="!!activeMappingGroup()">
 
     <!-- ═══ STEP 1: Configure ═══════════════════════════════════════════════ -->
     @if (isStepActive(1)) {
@@ -97,7 +100,7 @@
 
             <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
               <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
-              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. SegueDW" />
+              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
               @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
                 <span class="dw-error">Database name is required.</span>
               }
@@ -296,7 +299,7 @@
 
               <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
                 <label class="dw-label" for="dw-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/segue" />
+                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
                 @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
                   <span class="dw-error">Remote folder is required.</span>
                 }
@@ -363,8 +366,8 @@
               @if (isResourceSelected(r)) { ✓ }
             </div>
             <div class="dw-rc-body">
-              <strong class="dw-rc-name">{{ r }}</strong>
-              <span class="dw-rc-scope">{{ 'user/' + r + '.read' }}</span>
+              <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
+              <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
             </div>
           </button>
         }
@@ -377,27 +380,105 @@
     }
 
     <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
-    <!-- [hidden] rather than @if: the embedded mapping form must stay mounted across steps 3-4 (Review
-         reads its row count/parent-selection state — see reviewSummary/isNextDisabled), where an @if here
-         would destroy it the moment the user advances past step 3. -->
-    <div [hidden]="!isStepActive(3)">
-      <div class="dw-section-head">
-        <span class="dw-section-num">3</span>
-        <span class="dw-section-title">Map fields</span>
-        <span class="dw-section-hint">
-          {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
-        </span>
-      </div>
+    @if (isStepActive(3)) {
+      @if (!activeMappingGroup()) {
+        <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+            Choose a data group to map.
+          </span>
+        </div>
 
-      <app-mapping-profile-form
-        [resources]="selectedResources()"
-        [destType]="destType()"
-        [sqlTables]="sqlTables()"
-        [initialRows]="initialMappingRows()"
-        [initialTargets]="initialTargetByResource()"
-        [initialParentSelections]="initialParentSelections()"
+        <!-- ── Save mapping / Load saved mapping / Load mapping JSON controls live here, hidden from
+             this screen for now — still reachable via the in-canvas header Save (which also builds and
+             shows the Mapping JSON), see buildAndShowMappingSummary()/loadMappingSnapshot()/
+             submitLoadMappingSummary(). ── -->
+
+        <table class="data-table dw-groups-table">
+          <thead class="data-table__header">
+            <tr>
+              <th class="dw-groups-drag-col"></th>
+              <th>Data group</th>
+              <th class="dw-groups-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody #groupsBody>
+            @for (r of resourceKeys(); track r) {
+              <tr
+                class="data-table__row"
+                [class.dw-groups-row--dragging]="draggingResource() === r"
+                [attr.data-resource-row]="r"
+              >
+                <td class="dw-groups-drag-col">
+                  <button
+                    type="button"
+                    class="dw-groups-drag-handle"
+                    [attr.aria-label]="'Drag to reorder ' + r"
+                    title="Drag to reorder"
+                    (pointerdown)="onGroupRowDragHandlePointerDown(r, $event)"
+                    (pointermove)="onGroupRowDragPointerMove($event)"
+                    (pointerup)="onGroupRowDragPointerUp($event)"
+                    (pointercancel)="onGroupRowDragPointerUp($event)"
+                  >⠿</button>
+                </td>
+                <td class="dw-groups-name">{{ r }}</td>
+                <td class="dw-groups-actions">
+                  <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">Map</button>
+                </td>
+              </tr>
+            }
+            @if (resourceKeys().length === 0) {
+              <tr><td colspan="3" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <!-- ── Mapping canvas, scoped to the one selected group ── the outer Node Library header
+             shows "Map fields — {group}" in place of its own title, so no title repeats here. ── -->
+        <app-field-mapping-canvas
+          class="dw-mapping-canvas-full"
+          [resources]="[activeMappingGroup()!]"
+          [allResources]="selectedResources()"
+          [destType]="destType()"
+          [mappingRows]="mappingRows()"
+          [targetByResource]="targetByResource()"
+          [availableFields]="availableFieldsFn"
+          [columnsForResourceTarget]="columnsForResourceTargetFn"
+          [hasSqlTables]="hasSqlTables()"
+          [sqlTableOptions]="sqlTableOptions()"
+          [csvDelimiterKey]="csvForm.value.delimiter ?? 'comma'"
+          [extraTables]="extraTablesFor(activeMappingGroup()!)"
+          [columnsForTable]="columnsForTableFn"
+          [dataTypeForTable]="dataTypeForTableColumnFn"
+          [keyInfoForTable]="keyInfoForTableColumnFn"
+          [childTableRelations]="childTableRelationsByTable()"
+          [availableTablesToAdd]="availableTablesToAddFn"
+          [connectionInfo]="connectionInfo()"
+          [openLoadPayloadRequest]="openLoadPayloadRequest()"
+          [openPreviewRequest]="openPreviewRequest()"
+          (mappingRowsChange)="mappingRows.set($event)"
+          (targetByResourceChange)="targetByResource.set($event)"
+          (extraTablesChange)="onExtraTablesChange($event)"
+          (columnAdded)="onColumnAdded($event)"
+          (tableCreated)="onTableCreated($event)"
+          (columnDropped)="onColumnDropped($event)"
+          (columnAltered)="onColumnAltered($event)"
+          (schemaOpQueued)="onSchemaOpQueued($event)"
+          (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+          (childTableRelationAdded)="onChildTableRelationAdded($event)"
+        />
+      }
+    }
+
+    @if (mappingSummaryPreviewOpen()) {
+      <app-field-mapping-export-preview-modal
+        [data]="lastMappingSummary()"
+        (closed)="closeMappingSummaryPreview()"
       />
-    </div>
+    }
 
     <!-- ═══ STEP 4: Review ═══════════════════════════════════════════════ -->
     @if (isStepActive(4)) {
@@ -465,7 +546,7 @@
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">Mapped fields</span>
-          <span class="dw-review-val">{{ (mappingForm()?.mappingRows()?.length) ?? 0 }} fields</span>
+          <span class="dw-review-val">{{ mappingRows().length }} fields</span>
         </div>
       </div>
 
@@ -474,32 +555,49 @@
       </div>
     }
 
-    @if ((isStepActive(3) || isStepActive(4)) && (mappingForm()?.resourcesMissingParentSelection()?.length ?? 0) > 0) {
-      <div class="dw-callout dw-callout--warn">
-        Select a parent for: {{ mappingForm()?.resourcesMissingParentSelection()?.join(', ') }} before continuing.
-      </div>
-    }
-
   </div><!-- /dw-body -->
 
-  <!-- ── Footer ───────────────────────────────────────────────────────────── -->
-  <div class="dw-footer">
-    <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
-    <div class="dw-footer-right">
-      <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
-      <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
-      <button
-        class="dw-btn dw-btn--primary"
-        type="button"
-        [class.dw-btn--invalid]="isNextDisabled()"
-        [disabled]="probeState() === 'testing'"
-        (click)="next()"
-      >
-        @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Workflow' }} }
-        @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
-        @else { Next }
-      </button>
+  <!-- ── Footer ── hidden while a group's mapping canvas is open; Close/Save below the
+       canvas are the only exit points there, so the step Cancel/Back/Next controls would
+       just be redundant (and "Next"/"Back" would skip past the canvas state entirely). ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-footer">
+      <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
+      <div class="dw-footer-right">
+        <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
+        <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
+        <button
+          class="dw-btn dw-btn--primary"
+          type="button"
+          [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination() || savingMappingProfiles() || applyingSchemaOps()"
+          (click)="next()"
+        >
+          @if (step() === TOTAL_STEPS) { {{ applyingSchemaOps() ? 'Applying schema changes…' : (savingMappingProfiles() ? 'Saving…' : (editNode() ? '✓ Update' : '✓ Add to Workflow')) }} }
+          @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
+          @else if (step() === 1 && provisioningDestination()) { Creating… }
+          @else { Next }
+        </button>
+      </div>
     </div>
-  </div>
+  }
+
+  <!-- ── Confirm before discarding an in-progress group mapping ─────────────── -->
+  @if (pendingExitConfirm()) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onExitConfirmBackdropClick($event)"
+         (keydown.escape)="cancelExitMapping()">
+      <div class="dw-confirm-dialog">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">Exit mapping for {{ activeMappingGroup() }}?</h3>
+        <p class="dw-confirm-body">
+          Any changes made since you opened this group's mapping will be discarded.
+        </p>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelExitMapping()">Keep editing</button>
+          <button type="button" class="btn btn-danger" (click)="confirmExitMapping()">Exit without saving</button>
+        </div>
+      </div>
+    </div>
+  }
 
 </div>

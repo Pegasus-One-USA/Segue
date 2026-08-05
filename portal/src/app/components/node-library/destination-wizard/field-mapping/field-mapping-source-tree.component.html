@@ -1,0 +1,47 @@
+<div class="fm-source-card" #card [style.left.px]="x()" [style.top.px]="y()">
+  <div
+    class="fm-source-head"
+    (pointerdown)="onHeadPointerDown($event)"
+    (pointermove)="onHeadPointerMove($event)"
+    (pointerup)="onHeadPointerUp($event)"
+  >
+    <span class="fm-source-kind">payload</span>
+    <span class="fm-source-name">
+      {{ forest()[0]?.label ?? 'payload' }}{{ forest().length > 1 ? ' + ' + (forest().length - 1) : '' }}
+    </span>
+    <div class="fm-source-search-wrap" (pointerdown)="$event.stopPropagation()">
+      <input
+        type="search"
+        class="fm-source-search"
+        placeholder="Search fields…"
+        aria-label="Search fields in this payload"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+      @if (isSearching()) {
+        <button type="button" class="fm-source-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
+      }
+    </div>
+  </div>
+  <div class="fm-source-rows">
+    @if (isSearching() && matchCount() === 0) {
+      <div class="fm-source-no-match">No fields match "{{ searchQuery() }}".</div>
+    }
+    @for (r of filteredRoots(); track r.node.id) {
+      <div class="fm-source-group" [style.--fm-group-color]="groupColorVar(r.colorIndex)">
+        <app-field-mapping-tree-node
+          [node]="r.node"
+          [depth]="0"
+          [isCollapsed]="effectiveIsCollapsed()"
+          [isMapped]="isMapped()"
+          [isArmed]="isArmed()"
+          (toggleCollapse)="toggleCollapse.emit($event)"
+          (armToggle)="armToggle.emit($event)"
+          (dragStart)="dragStart.emit($event)"
+          (dragMove)="dragMove.emit($event)"
+          (dragEnd)="dragEnd.emit($event)"
+        />
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,34 @@
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fm-wires-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fm-wire {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+
+  &:hover { stroke-width: 3.2; }
+}
+
+.fm-wire--dashed {
+  stroke-dasharray: 5 4;
+}
+
+.fm-wire--temp {
+  stroke-dasharray: 6 5;
+  opacity: 0.85;
+  pointer-events: none;
+}

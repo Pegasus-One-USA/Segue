@@ -1,14 +1,86 @@
 <app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="close()">
-  <div class="nld">
+  <div class="nld" [class.nld--maximized]="isMaximized()">
 
-    @if (!(showEpicForm() || showDestWizard() || showGenericFhirForm())) {
-      <button class="nld-close" type="button" aria-label="Close" (click)="close()">×</button>
+    <!-- ── Header ── identity + persistent controls only. The mapping badges/tool-buttons live in
+         their own row below (.nld-mapping-toolbar) so this row's item count — and so its layout — never
+         depends on how many mapping-canvas actions exist; it fits at any dialog width, minimized or not. -->
+    <div class="nld-header">
+      <div class="nld-header-left">
+        <span class="nld-brand-hex">⬡</span>
+        @if (destMappingTitle(); as title) {
+          <h2 class="nld-title">{{ title }}</h2>
+        } @else {
+          <div>
+            <h2 class="nld-title">Node Library</h2>
+            <p class="nld-subtitle">
+              @if (mode() === 'source') {
+                Choose a data source to start your pipeline
+              } @else {
+                Choose the next step — context-aware recommendations applied
+              }
+            </p>
+          </div>
+        }
+      </div>
+
+      <div class="nld-header-right">
+        @if (mode() === 'transform' && pickerMeta() && !destMappingTitle()) {
+          <div class="nld-ctx-chips">
+            <span class="nld-ctx-chip">{{ pickerMeta()?.rule }}</span>
+            <span class="nld-ctx-chip">{{ pickerMeta()?.cfg?.context }}</span>
+          </div>
+        }
+        <button
+          class="nld-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximize()"
+        >
+          @if (isMaximized()) {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
+        @if (destMappingTitle()) {
+          <button type="button" class="btn btn-secondary btn-sm" (click)="bumpExitMappingTrigger()">Close</button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="bumpSaveMappingTrigger()">Save</button>
+        } @else if (!(showEpicForm() || showDestWizard() || showGenericFhirForm())) {
+          <button class="nld-close" type="button" aria-label="Close dialog" (click)="close()">×</button>
+        }
+      </div>
+    </div>
+
+    <!-- ── Mapping toolbar ── badges + canvas actions, on their own row so they can wrap independently
+         of the title/Close/Save row above at narrow dialog widths, instead of squeezing the title. -->
+    @if (destMappingTitle()) {
+      <div class="nld-mapping-toolbar">
+        <div class="nld-mapping-toolbar-badges">
+          <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
+          <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="nld-mapping-toolbar-actions">
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpPreviewOutputTrigger()">⤢ Preview output</button>
+          <button type="button" class="nld-mapping-tool-btn" title="Save just this mapping's fields/tables as an independent, reusable JSON — not the whole workflow" (click)="bumpSaveSnapshotTrigger()">💾 Save mapping snapshot</button>
+        </div>
+      </div>
     }
 
     <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
     <div class="nld-body">
 
-      <!-- LEFT: Node Library sidebar -->
+      <!-- LEFT: Node Library sidebar — hidden entirely (not just mini) while a group's mapping
+           canvas is open, so the canvas gets the full dialog width. -->
+      @if (!destMappingCanvasActive()) {
       <nav class="nld-sidebar" [class.nld-sidebar--mini]="isSidebarMini()" aria-label="Node library">
 
         <!-- Collapse / expand toggle (visible only when a form is active) -->
@@ -94,9 +166,14 @@
         </div>
 
       </nav>
+      }
 
       <!-- RIGHT: Detail / config panel -->
-      <section class="nld-detail" [class.nld-detail--form]="showEpicForm() || showDestWizard() || showGenericFhirForm()">
+      <section
+        class="nld-detail"
+        [class.nld-detail--form]="showEpicForm() || showDestWizard() || showGenericFhirForm()"
+        [class.nld-detail--canvas]="destMappingCanvasActive()"
+      >
 
         <!-- ── Inline Epic Audience Form ─────────────────────────────────── -->
         @if (showEpicForm()) {
@@ -131,11 +208,21 @@
             [attachNode]="destWizardAttach()!"
             [editNode]="destEditNode()"
             [sourceResources]="sourceResources()"
+            [sourceVendor]="wiz.ehrType()"
+            [sourceConnectionId]="sourceConnectionId()"
+            [exitMappingRequest]="exitMappingTrigger()"
+            [saveMappingRequest]="saveMappingTrigger()"
+            [saveSnapshotRequest]="saveSnapshotTrigger()"
+            [openLoadPayloadRequest]="loadPayloadTrigger()"
+            [openPreviewRequest]="previewOutputTrigger()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
             (closeAll)="close()"
             (stepChange)="destWizardStep.set($event)"
             (progressChange)="destWizardHasProgressed.set($event)"
+            (mappingCanvasActive)="destMappingCanvasActive.set($event)"
+            (mappingCanvasTitle)="destMappingTitle.set($event)"
+            (mappingCountChange)="destMappingCount.set($event)"
           />
 
         } @else {

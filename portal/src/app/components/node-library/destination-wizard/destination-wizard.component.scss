@@ -1,3 +1,15 @@
+// No :host rule here previously meant <app-destination-wizard> (this component's own host element)
+// stayed a default inline/auto-sized box inside .nld-detail's flex column — so .dw's `height: 100%`
+// below had nothing definite to resolve against, and that "no real bound" propagated all the way down
+// to .fm-canvas, which is why its overflow-y: auto never actually had anything to trigger on. flex: 1 +
+// min-height: 0 here is what makes the whole chain a real, bounded height instead of "grow to content".
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* ── Wrapper ──────────────────────────────────────────────────────────────── */
 // Without this, the host stays sized to its own content (default flex-item sizing), so a short
 // step (e.g. Configure with few fields) leaves the footer floating above blank space instead of
@@ -11,6 +23,7 @@
 }
 
 .dw {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -158,6 +171,7 @@
 /* ── Body ─────────────────────────────────────────────────────────────────── */
 .dw-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
   display: flex;
@@ -167,6 +181,14 @@
   &::-webkit-scrollbar { width: 5px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+}
+
+// The full-canvas mapping view has no other step content sharing .dw-body — the default 20px top
+// padding just shows up as a bare empty strip above the canvas's own toolbar. Trimmed way down here so
+// the canvas (flex: 1 below) claims that space instead, without affecting the other steps' spacing.
+.dw-body--canvas {
+  padding: 4px 16px 8px;
+  overflow-y: hidden;
 }
 
 /* ── Section head ─────────────────────────────────────────────────────────── */
@@ -203,6 +225,8 @@
   width: 100%;
   padding-left: 36px;
 }
+
+.dw-section-spacer { flex: 1; }
 
 /* ── Form ─────────────────────────────────────────────────────────────────── */
 .dw-form { width: 100%; }
@@ -378,11 +402,19 @@
   }
 }
 
+.dw-rc-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .dw-rc-name {
   display: block;
   font-size: 13px;
   font-weight: 700;
   color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dw-rc-scope {
@@ -391,6 +423,166 @@
   color: var(--color-muted-2);
   font-family: ui-monospace, Consolas, monospace;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */
+.dw-snapshot-load-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt, transparent);
+}
+
+.dw-snapshot-load-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.dw-snapshot-load-error {
+  font-size: 12px;
+  color: var(--color-error);
+  margin: -6px 0 14px;
+}
+
+.dw-snapshot-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* ── Data group selection screen (Step 3, before a group is chosen) ─────────── */
+.dw-groups-table {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dw-groups-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-groups-actions-col { width: 100px; }
+.dw-groups-drag-col { width: 32px; }
+
+.dw-groups-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-muted-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+
+  &:hover { background: var(--color-side); color: var(--color-ink-2); }
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+// Every row in this table transitions transform (the FLIP slide-into-place, driven from TS) and
+// background/opacity (the dragging-state fade below) — scoped to just this table, not the shared
+// .data-table__row class used elsewhere in the app.
+.dw-groups-table .data-table__row {
+  transition: transform 180ms ease, background-color 150ms ease, opacity 150ms ease;
+}
+
+.dw-groups-row--dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.6;
+  background: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.dw-groups-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dw-groups-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+/* The mapping canvas itself, once a group is chosen — fills the remaining Step 3 space. */
+.dw-mapping-canvas-full {
+  flex: 1;
+  min-height: 0;
+}
+
+
+/* ── Confirm before discarding an in-progress group mapping ─────────────────── */
+.dw-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.dw-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dw-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.dw-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.dw-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 /* ── Mapping table ────────────────────────────────────────────────────────── */

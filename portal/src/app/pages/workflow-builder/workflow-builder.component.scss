@@ -321,8 +321,16 @@
     }
   }
 
+  // Danger (design spec §7.2 Danger variant) — bg/border/text all tinted, not just the text,
+  // so it actually reads as a distinct button rather than plain colored text on the dock card.
   &--danger {
-    color: var(--color-error);
+    background:   var(--color-error-soft);
+    border-color: var(--color-error);
+    color:        var(--color-error);
+
+    &:hover {
+      filter: brightness(0.97);
+    }
   }
 }
 

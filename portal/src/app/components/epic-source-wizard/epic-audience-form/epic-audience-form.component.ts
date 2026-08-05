@@ -2,6 +2,7 @@ import {
   Component, output, inject, signal, computed, effect, OnInit, DestroyRef, ElementRef, ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { take } from 'rxjs/operators';
 import { ReactiveFormsModule, FormBuilder, Validators, ValidatorFn, AbstractControl, ValidationErrors } from '@angular/forms';
 import { WizardService, APPLICATION_TYPE_TO_AUDIENCE, AUTHENTICATION_TYPE_TO_AUTH_METHOD } from '../../../services/wizard.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
@@ -14,6 +15,7 @@ import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../mod
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { environment } from '../../../../environments/environment';
 import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
@@ -53,24 +55,6 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
  * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
  * `.rs` / `.cruds` implies v2, coarse `.read` / `.write` implies v1. Returns null when nothing is conclusive.
  */
-// True when an advertised scope (possibly with '*' wildcards in the resource/action segment) covers a concrete scope —
-// e.g. advertised "user/*.rs" covers "user/Patient.rs". Mirrors the backend ScopeGeneratorService matcher.
-function scopeWildcardCovers(advertised: string, scope: string): boolean {
-  const split = (s: string): [string, string, string] => {
-    const slash = s.indexOf('/');
-    if (slash < 0) return [s, '', ''];
-    const prefix = s.slice(0, slash);
-    const rest = s.slice(slash + 1);
-    const dot = rest.lastIndexOf('.');
-    return dot < 0 ? [prefix, rest, ''] : [prefix, rest.slice(0, dot), rest.slice(dot + 1)];
-  };
-  const [ap, ar, aa] = split(advertised);
-  const [sp, sr, sa] = split(scope);
-  return ap.toLowerCase() === sp.toLowerCase()
-    && (ar === '*' || ar.toLowerCase() === sr.toLowerCase())
-    && (aa === '*' || aa.toLowerCase() === sa.toLowerCase());
-}
-
 /**
  * `token_endpoint_auth_methods_supported` is a server-wide list (every method the FHIR server accepts from any
  * client), not a statement about how *this* app is registered — Epic's discovery document lists
@@ -422,6 +406,12 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
    *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
   readonly closeAll  = output<void>();
 
+  /** Set when the backend rejects a save (e.g. "A source connection named 'X' already exists.") — shown
+   *  inline under App Name (the field the user actually needs to change to retry) instead of only as a
+   *  toast, and clears itself the moment the user edits the name again. The dialog stays open on failure —
+   *  `saved` only fires once WizardService.save() actually confirms success (see save() below). */
+  protected readonly saveErrorMessage = signal<string | null>(null);
+
   // The "Application URLs" section (Launch URL / Redirect URI) is hidden — both fields are now always
   // resolved from the actual deployment host (see OAUTH_DEFAULT_URLS) rather than admin-entered, so there's
   // nothing left here for an admin to read or edit. The form controls (and their validators/defaults) stay
@@ -473,19 +463,22 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   // Resource Type list: always the platform's curated MVP1 set (FHIR_RESOURCES), regardless of what Discover
   // returns — the backend's /metadata probe reflects everything the endpoint's CapabilityStatement supports
   // (often 50+ types, filtered only by read-interaction support), not what this pipeline can actually process.
-  // discoveredResourceTypes is still populated for the separate scope-validation cross-check below
-  // (unsupportedScopes/scopesValidatedByDiscovery) — it just no longer drives which checkboxes are offered.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
   protected get resources(): string[] {
     return FHIR_RESOURCES;
   }
+  protected isResourceSupported(r: string): boolean { return SUPPORTED_RESOURCE_TYPES.includes(r); }
+
+  /** Of `resources`, only the subset this pipeline actually supports today — drives "Select all" and the
+   *  selected-count display in the retrieval-method resource grids so both are scoped to what's selectable
+   *  rather than the full (curated, but not necessarily all pipeline-supported) FHIR_RESOURCES list. */
+  protected readonly selectableResources = computed(() => this.resources.filter(r => this.isResourceSupported(r)));
 
   /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
   protected get isEditing(): boolean { return this.wiz.isEditing(); }
 
   protected readonly discStatus   = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
   protected readonly discValues   = signal<FullDiscoveredValues | null>(null);
-  protected readonly discoveredScopes = signal<string[]>([]);
   // True once discovery actually determined the SMART scope version (vs. leaving the default) — drives the badge.
   protected readonly scopeVersionAuto = signal(false);
   // True once discovery actually determined the Client Auth Method (vs. leaving the default) — drives the badge.
@@ -516,7 +509,12 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     // Hyperdrive app-launch configuration. FHIRBridge doesn't control this behavior; it's recorded for admins.
     launchDisplayMode: ['Embedded'],
     callbackUrl:       [OAUTH_DEFAULT_URLS.redirectUri, [Validators.required, urlValidator]],
-    resources:         [[] as string[], Validators.required],
+    // No UI picks this anymore (Resource Type & Scopes was removed from the form) — a brand-new source
+    // starts with no resource-derived scopes at all. EpicSourceConnectionScopeSyncService (backend) fills
+    // this in for real the first time a workflow referencing this source is built, from the union of every
+    // connected destination's own selected resource types — see clearInapplicableFields/ngOnInit above.
+    // Deliberately not required: an empty selection here is the valid, expected starting state.
+    resources:         [[] as string[]],
     scopeVersion:      ['v2'],
     appName:           ['Segue Epic'],
     // ── CDS Hooks ──────────────────────────────────────────────────────────────
@@ -845,25 +843,6 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     return [...fixed, ...res.map(r => `${cfg.scopePrefix}/${r}.${suffix}`)].join('\n');
   });
 
-  /** True once Discover has fetched the endpoint's advertised scopes — lets the panel say "validated against Epic". */
-  protected get scopesValidatedByDiscovery(): boolean { return this.discoveredScopes().length > 0; }
-
-  /**
-   * Resource scopes the generated set requests that the source did NOT advertise in its SMART discovery document —
-   * mirrors the backend ScopeGeneratorService validation (exact or wildcard match). Base scopes (openid/launch/…) are
-   * not validated because servers rarely enumerate them in scopes_supported. Empty until Discover has run.
-   */
-  protected readonly unsupportedScopes = computed(() => {
-    const advertised = this.discoveredScopes();
-    if (advertised.length === 0) {
-      return [] as string[];
-    }
-    return this.scopeString()
-      .split(/\s+/)
-      .filter(Boolean)
-      .filter(s => /^[^/]+\/[^.]+\.[^.]+$/.test(s)) // resource-shaped scopes only
-      .filter(s => !advertised.some(a => a === s || scopeWildcardCovers(a, s)));
-  });
 
   constructor() {
     // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
@@ -964,15 +943,11 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
     this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
 
-    // New (non-editing) connections whose audience uses the shared Resource Type picker (removed from the UI —
-    // see AUDIENCE_FIELD_CONFIG.showResourcePicker) always request every MVP1-supported resource type's scope
-    // up front, rather than asking the user to hand-pick a subset before a destination even exists. Editing an
-    // existing connection keeps whatever was actually saved (restored above), never overwritten here.
-    if (!this.wiz.isEditing()
-      && AUDIENCE_FIELD_CONFIG[this.audience()].showResourcePicker
-      && this.form.controls.resources.value.length === 0) {
-      this.form.controls.resources.setValue([...FHIR_RESOURCES]);
-    }
+    // A brand-new connection starts with no resource-derived scopes at all — no UI picks this anymore (the
+    // Resource Type & Scopes picker was removed). EpicSourceConnectionScopeSyncService (backend) fills this
+    // in for real the first time a workflow referencing this source is built, from the union of every
+    // connected destination's own selected resource types. Editing an existing connection keeps whatever was
+    // actually saved (restored above), never overwritten here.
     this.ensureRetrievalResourceTypeDefault();
 
     this.lockRetrievalMethodIfOneShot();
@@ -1013,6 +988,17 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     this.form.controls.keySource.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncValidators());
+
+    // Clear a previous save failure (e.g. "name already exists") the moment the user edits the name
+    // again — it was already surfaced and shouldn't linger once they've acted on it.
+    this.form.controls.appName.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.saveErrorMessage()) {
+          this.saveErrorMessage.set(null);
+          this.form.controls.appName.setErrors(null);
+        }
+      });
 
     this.form.controls.retrievalMethod.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -1542,7 +1528,6 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     this.discoveredResourceTypes.set([]);
     this.discStatus.set('idle');
     this.discValues.set(null);
-    this.discoveredScopes.set([]);
     this.scopeVersionAuto.set(false);
     this.authMethodAuto.set(false);
     this.testStatus.set('idle');
@@ -1840,7 +1825,6 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
           supportedScopes: result.scopesSupported.length ? result.scopesSupported.join(' ') : '—',
         };
         this.discValues.set(dv);
-        this.discoveredScopes.set(result.scopesSupported);
         // Resource Type: Auto — from the source's /metadata.
         this.discoveredResourceTypes.set(result.resourceTypes);
         // SMART Scope Version: Auto — prefer Epic's advertised permission-v1/permission-v2 capabilities; if neither is
@@ -1999,7 +1983,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     // retrieval method's own Resource Type list is currently set.
     this.wiz.resources.set(this.showResourcePickerSection() ? (v.resources ?? []) : this.activeRetrievalResourceTypes());
 
-    this.wiz.save({
+    const formValuesToSave = {
       stepName:    resolvedName,
       baseUrl:     v.epicBaseUrl ?? '',
       token:       v.tokenEndpoint ?? '',
@@ -2012,7 +1996,8 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
       secretName:  v.privateKeySecretName ?? '',
       redirectUri: v.callbackUrl ?? '',
       launchUrl:   v.launchUrl ?? '',
-    }, {
+    };
+    const fieldsToSave = {
       'Client ID':             v.clientId ?? '',
       'Auth method':           v.authMethod ?? 'secret',
       // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
@@ -2079,9 +2064,31 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
         sourceConnectionId: resolvedSourceConnectionId,
         sourceConnectionResolved: 'true',
       } : {}),
-    });
+    };
 
-    this.saved.emit();
+    console.log('%c[Epic Configuration] "Add to Pipeline" clicked — node data about to be saved:', 'color:#00A89D;font-weight:700');
+    console.log('formValues (connection basics):', formValuesToSave);
+    console.log('fields (everything else stored on the node):', fieldsToSave);
+
+    // Subscribe BEFORE calling save() — it fires synchronously on success/failure once the HTTP call
+    // settles, and save() itself doesn't return anything to await. Only close the dialog (via `saved`)
+    // once the backend actually confirms success; on failure, surface the real error under App Name
+    // (the field the user needs to change to retry) and keep everything else exactly as they left it.
+    this.wiz.saveOutcome$.pipe(take(1)).subscribe(outcome => {
+      if (outcome.success) {
+        this.saved.emit();
+        return;
+      }
+      this.saveErrorMessage.set(outcome.error ?? 'Save failed.');
+      this.form.controls.appName.setErrors({ server: true });
+      this.form.controls.appName.markAsTouched();
+      queueMicrotask(() => {
+        const el = this.formRoot?.nativeElement.querySelector<HTMLInputElement>('#eaf-appName');
+        el?.focus();
+        el?.select();
+      });
+    });
+    this.wiz.save(formValuesToSave, fieldsToSave);
   }
 
   /** Backs both the topbar "← Back to library" and the footer "Cancel" buttons — same confirm-before-discard

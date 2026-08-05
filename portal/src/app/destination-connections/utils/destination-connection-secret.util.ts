@@ -64,7 +64,11 @@ export function buildConnectionMetadata(f: Record<string, string>, isSql: boolea
     : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
        'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
        'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
-       'dest_downloadLinkExpiryMinutes'];
+       'dest_downloadLinkExpiryMinutes',
+       // MongoDB — the connection string itself lives only in the encrypted secret (see the mongo branch
+       // in destination-wizard.component.ts's provisionDestinationConnection); collection/writeMode aren't
+       // secret, so they round-trip here the same way SQL's non-secret fields do.
+       'dest_collection', 'dest_writeMode'];
   const metadata: Record<string, string> = {};
   for (const key of keys) {
     if (f[key] !== undefined) metadata[key] = f[key];

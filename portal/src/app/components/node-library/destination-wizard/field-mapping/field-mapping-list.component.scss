@@ -1,0 +1,240 @@
+// :host's own height is bound via @HostBinding (field-mapping-list.component.ts) while expanded, so
+// this becomes a real, bounded flex column instead of "grow to content" — .fm-list-body (flex: 1 below)
+// is what actually absorbs whatever height that leaves after the handle + head, exactly mirroring how
+// .fm-canvas/.fm-viewport already divide space with the same flex: 1; min-height: 0 pattern.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+// Drag up/down to trade height with the canvas above. A real, normal-flow element (not an absolutely
+// positioned overlay poking into the canvas above) — that canvas has its own drag-to-pan pointerdown
+// handler on the exact same pixels an overlay approach would've shared, which is what silently ate the
+// drag before it ever reached this handle.
+.fm-list-resize-handle {
+  flex-shrink: 0;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+  position: relative;
+
+  &:hover, &:active {
+    &::after { background: var(--color-primary-mid); }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: transparent;
+    transition: background var(--transition-base, 150ms ease);
+  }
+}
+
+.fm-list-head {
+  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-side);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  text-align: left;
+
+  &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
+}
+
+.fm-list-caret {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-muted);
+  transition: transform var(--transition-base, 150ms ease);
+
+  &--collapsed { transform: rotate(-90deg); }
+}
+
+.fm-list-count {
+  font-family: var(--font-mono);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-pill);
+  padding: 1px 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fm-list-spacer { flex: 1; }
+
+.fm-list-hint { font-size: 11px; font-weight: 400; color: var(--color-muted-2); }
+
+.fm-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-6) var(--space-8);
+}
+
+.fm-mono { font-family: var(--font-mono); font-size: 12px; }
+
+.fm-list-caveat {
+  margin-left: var(--space-2);
+  color: var(--color-warning-strong);
+}
+
+.fm-list-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 var(--space-2);
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); border-radius: var(--radius-sm); }
+}
+
+.fm-list-link--danger { color: var(--color-error); }
+
+.fm-list-dash { color: var(--color-muted-2); }
+
+.fm-inline-select, .fm-inline-input {
+  font-family: var(--font-family);
+  font-size: 12px;
+  padding: 2px var(--space-4);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  margin: 1px 2px 1px 0;
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-mid);
+  }
+}
+
+.fm-inline-input { width: 84px; }
+.fm-inline-input--narrow { width: 52px; }
+
+.fm-inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
+.fm-list-empty {
+  text-align: center;
+  color: var(--color-muted-2);
+  padding: var(--space-10);
+}
+
+.fm-list-add {
+  margin-top: var(--space-6);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  border: 1px solid var(--color-primary-mid);
+  border-radius: var(--radius-base);
+  padding: var(--space-4) var(--space-8);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover { background: var(--color-primary-mid); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+.fm-draft-form {
+  margin-top: var(--space-6);
+  padding: var(--space-8);
+  background: var(--color-side);
+  border-radius: var(--radius-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.fm-draft-row {
+  display: flex;
+  align-items: end;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.fm-draft-row--sources { align-items: center; }
+
+.fm-draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+
+  select, input {
+    font-family: var(--font-family);
+    font-size: 13px;
+    font-weight: 400;
+    padding: var(--space-2) var(--space-6);
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    background: var(--color-surface);
+    color: var(--color-ink);
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+  }
+}
+
+.fm-draft-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.fm-draft-row--sources select {
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: var(--space-2) var(--space-6);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.fm-draft-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-6);
+}
+
+.fm-draft-submit {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-base);
+  padding: var(--space-2) var(--space-8);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled { background: var(--color-border); border-color: var(--color-border); color: var(--color-muted); cursor: not-allowed; }
+  &:not(:disabled):hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}

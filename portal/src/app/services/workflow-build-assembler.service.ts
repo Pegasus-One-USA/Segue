@@ -45,6 +45,9 @@ interface DestMappingRow {
   correlationCodeJsonPath?: string;
   correlationCodeValue?: string;
   isEnabled?: boolean;
+  // True when this row's field-mapping metadata (JsonPath/arrayPolicy/etc.) was derived by naive path
+  // conversion rather than the backend FHIR catalog's own authoritative shape — see field-mapping-model.ts.
+  approximated?: boolean;
 }
 
 /**
@@ -622,7 +625,9 @@ export class WorkflowBuildAssemblerService {
       return {
         targetField: row.column,
         jsonPath,
-        valueType: row.valueType ?? this.valueTypeFor(row.path),
+        // The field-mapping canvas always writes SeparateDestination child-table rows as StoreJson-shaped
+        // Json regardless of the naive path-derived type, matching the backend engine's own StoreJson handling.
+        valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
         // The id/Upsert-key row is structurally mandatory (every resource always has an id) — flagging it
         // required here matches reality and satisfies the backend's NOT NULL-vs-IsRequired check
         // (CreateMappingProfileRequestValidator) for destinations whose key column is NOT NULL, which is
