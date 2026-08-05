@@ -1,5 +1,5 @@
 <app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="close()">
-  <div class="nld" [class.nld--maximized]="isMaximized()">
+  <div class="nld">
 
     <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
          mapping canvas is open (destMappingTitle() truthy) — every other state (plain node browsing,
@@ -218,6 +218,26 @@
           </div>
 
         } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
+
+          <!-- ── Mapping-canvas toolbar ── the sidebar (and the plain "×" close button above) are both
+               hidden while a group's mapping canvas is open, so its title/badges/actions live here
+               instead, right above the wizard itself. ── -->
+          @if (destMappingTitle(); as title) {
+            <div class="nld-mapping-toolbar">
+              <div class="nld-mapping-toolbar-badges">
+                <h3 class="nld-title">{{ title }}</h3>
+                <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
+                <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
+              </div>
+              <div class="nld-mapping-toolbar-actions">
+                <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
+                <button type="button" class="nld-mapping-tool-btn" (click)="bumpPreviewOutputTrigger()">⤢ Preview output</button>
+                <button type="button" class="nld-mapping-tool-btn" title="Save just this mapping's fields/tables as an independent, reusable JSON — not the whole workflow" (click)="bumpSaveSnapshotTrigger()">💾 Save mapping snapshot</button>
+                <button type="button" class="btn btn-secondary btn-sm" (click)="bumpExitMappingTrigger()">Close</button>
+                <button type="button" class="btn btn-primary btn-sm" (click)="bumpSaveMappingTrigger()">Save</button>
+              </div>
+            </div>
+          }
 
           <!-- ── Destination wizard (SQL Server or CSV) ──────────────────── -->
           <app-destination-wizard

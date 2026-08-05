@@ -155,10 +155,6 @@ export class NodeLibraryDialogComponent {
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
 
-  // ── maximize / restore ─────────────────────────────────────────────────────
-  readonly isMaximized = signal(false);
-  toggleMaximize(): void { this.isMaximized.update(v => !v); }
-
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);

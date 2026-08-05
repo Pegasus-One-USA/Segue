@@ -9,12 +9,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-
-  &--maximized {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-  }
 }
 
 /* ── Confirm before discarding an in-progress destination config ─────────────── */
@@ -78,33 +72,6 @@
   backdrop-filter: blur(2px);
 }
 
-/* ── Header ────────────────────────────────────────────────────────────────── */
-.nld-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border, var(--color-border));
-  flex-shrink: 0;
-  background: var(--color-surface);
-}
-
-.nld-header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex: 1;
-  min-width: 0;
-}
-
-.nld-brand-hex {
-  font-size: 28px;
-  color: var(--color-primary, var(--color-primary));
-  line-height: 1;
-  flex-shrink: 0;
-}
-
 .nld-title {
   font-size: 17px;
   font-weight: 800;
@@ -125,9 +92,9 @@
 }
 
 /* ── Mapping-canvas toolbar, relocated here from the canvas's own header row (see
-   field-mapping-canvas.component.html) so that row's height goes back to the canvas viewport. Its own
-   row below .nld-header (not squeezed into it) so the badge/button count here never competes with the
-   title for space — this row wraps freely at narrow dialog widths instead. ── */
+   field-mapping-canvas.component.html) so that row's height goes back to the canvas viewport, and shown
+   in the detail panel (see node-library-dialog.component.html) since the dialog has no header of its own
+   and the sidebar is hidden entirely while a group's mapping canvas is open. ── */
 .nld-mapping-toolbar {
   display: flex;
   align-items: center;
@@ -190,7 +157,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
   border: none;
   color: var(--color-muted-2, var(--color-muted-2));
   cursor: pointer;

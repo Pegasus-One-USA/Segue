@@ -1661,7 +1661,7 @@ export class DestinationWizardComponent implements OnInit {
     // ever needs to come back.
     // config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
     // config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
-    config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource()));
+    config['dest_mappings']     = JSON.stringify(serializeRowsFlat(this.mappingRows(), this.targetByResource(), this.sqlTables()));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
     // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
