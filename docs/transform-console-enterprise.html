@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FHIRBridge — Transformation &amp; Validation Console</title>
+<style>
+:root{
+  --ink:#0F1B19; --surface:#FFFFFF; --surface-2:#FAFCFB; --canvas:#F3F7F6; --brand:#00A89D; --brand-deep:#0A6B62;
+  --brand-tint:#E6F7F5; --border:#DCE7E4; --warn:#B4711E; --warn-tint:#FBF0E3;
+  --danger:#B23B3B; --danger-tint:#FBEAEA; --ok:#3E8B63; --ok-tint:#E8F5EE; --muted:#8B9A97; --muted-tint:#EEF2F1;
+  --shadow:0 1px 2px rgba(15,27,25,.06), 0 8px 24px rgba(15,27,25,.08);
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --ink:#EAF3F1; --surface:#132523; --surface-2:#0F201E; --canvas:#0D1917; --brand:#2FD9CB; --brand-deep:#63E5D9;
+    --brand-tint:#173330; --border:#254440; --warn:#E5A657; --warn-tint:#2E2415; --danger:#E37B7B; --danger-tint:#2E1717;
+    --ok:#6FCB9C; --ok-tint:#16302422; --muted:#7C918D; --muted-tint:#1B2E2B; --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px rgba(0,0,0,.45); }
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-ui);color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.shell{display:flex;min-height:100vh}
+
+/* ---------- sidenav ---------- */
+.sidenav{width:236px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--border);padding:18px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:8px;padding:4px 8px 16px;font-weight:700;font-size:14px;letter-spacing:-.01em}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--brand)}
+.nav-group{margin-bottom:14px}
+.nav-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:0 10px;margin-bottom:6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:560;color:var(--ink);cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:var(--font-ui)}
+.nav-item:hover{background:var(--muted-tint)}
+.nav-item.active{background:var(--brand-tint);color:var(--brand-deep);font-weight:650}
+.nav-item .ic{width:16px;text-align:center;font-size:12px;flex:0 0 auto}
+.nav-item .badge{margin-left:auto;font-family:var(--font-mono);font-size:10px;background:var(--danger-tint);color:var(--danger);border-radius:999px;padding:1px 6px}
+
+/* ---------- main ---------- */
+.main{flex:1 1 auto;min-width:0}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.crumb{font-size:12px;color:var(--muted)}
+.crumb b{color:var(--ink)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.env-badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--warn-tint);color:var(--warn);padding:3px 9px;border-radius:999px}
+.res-select{font-family:var(--font-ui);font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--canvas);color:var(--ink)}
+
+.view{padding:26px 28px 80px;max-width:1180px}
+.view h1{font-size:20px;margin:0 0 4px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
+.view .desc{font-size:13px;color:var(--muted);margin:0 0 22px;max-width:72ch;line-height:1.55}
+
+/* ---------- shared: cards, tables, badges ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px}
+.card h3{font-size:13.5px;margin:0 0 3px;font-weight:650}
+.card .sub{font-size:11.5px;color:var(--muted);margin:0 0 12px}
+.grid-3{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media (max-width:900px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow)}
+.kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:650}
+.kpi .value{font-size:24px;font-weight:700;margin-top:4px;font-family:var(--font-mono);letter-spacing:-.02em}
+.kpi .value small{font-size:13px;color:var(--muted);font-family:var(--font-ui)}
+.kpi svg{margin-top:8px;width:100%;height:28px}
+.kpi.ok .value{color:var(--ok)}
+.kpi.warn .value{color:var(--warn)}
+
+table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
+table.dt th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:0 10px 8px;border-bottom:1px solid var(--border)}
+table.dt td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+table.dt tr:last-child td{border-bottom:none}
+table.dt tbody tr:hover{background:var(--muted-tint)}
+.mono{font-family:var(--font-mono);font-size:12px}
+.overflow{overflow-x:auto}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:650;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.badge.ok{background:var(--ok-tint);color:var(--ok)}
+.badge.warn{background:var(--warn-tint);color:var(--warn)}
+.badge.danger{background:var(--danger-tint);color:var(--danger)}
+.badge.muted{background:var(--muted-tint);color:var(--muted)}
+.badge.brand{background:var(--brand-tint);color:var(--brand-deep)}
+
+.chip{display:inline-flex;align-items:center;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--muted-tint);border:1px solid var(--border);margin:2px 3px 0 0;font-family:var(--font-mono)}
+.chip.on{background:var(--brand-tint);color:var(--brand-deep);border-color:var(--brand)}
+
+select, input[type=text], input[type=number]{font-family:var(--font-ui);font-size:12px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--canvas);color:var(--ink)}
+.btn{font-size:12px;font-weight:650;padding:7px 13px;border-radius:9px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--ink)}
+.btn:hover{border-color:var(--brand);color:var(--brand-deep)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#04231F}
+.btn.primary:hover{background:var(--brand-deep)}
+.btn.danger-o{border-color:var(--danger);color:var(--danger)}
+.btn.danger-o:hover{background:var(--danger-tint)}
+.btn:focus-visible, select:focus-visible, .nav-item:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.callout{display:flex;gap:10px;align-items:flex-start;background:var(--brand-tint);border:1px solid var(--brand);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--brand-deep);margin-bottom:16px;line-height:1.5}
+.callout.muted{background:var(--muted-tint);border-color:var(--border);color:var(--muted)}
+
+/* policy layers */
+.policy-row{display:grid;grid-template-columns:1.4fr 1fr 1fr .6fr .5fr;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.policy-row:last-child{border-bottom:none}
+.policy-row .cat{font-weight:600}
+.policy-row .cat .d{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:1px}
+.lockcol{color:var(--muted);font-size:11px;display:flex;align-items:center;gap:4px}
+
+/* rule engine */
+.rule-card{border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:var(--surface)}
+.rule-card .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px}
+.rule-card .head .v{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.rule-expr{font-family:var(--font-mono);font-size:12px;background:var(--canvas);border:1px solid var(--border);border-radius:8px;padding:9px 11px;line-height:1.6}
+.rule-expr .kw{color:var(--brand-deep);font-weight:700}
+.rule-meta{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+
+/* timeline */
+.timeline{position:relative;padding-left:26px}
+.timeline:before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.tl-item{position:relative;padding-bottom:20px}
+.tl-item:last-child{padding-bottom:0}
+.tl-dot{position:absolute;left:-26px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--brand)}
+.tl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.tl-head .ver{font-family:var(--font-mono);font-weight:700}
+.tl-when{font-size:11px;color:var(--muted)}
+.tl-summary{font-size:12.5px;color:var(--ink);margin:4px 0 6px}
+
+/* safe harbor matrix */
+.sh-matrix td.cat{font-weight:600;max-width:230px}
+.sh-matrix td.cat .n{font-family:var(--font-mono);color:var(--muted);font-size:10.5px;display:block}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidenav">
+    <div class="brand"><span class="dot"></span> FHIRBridge · Transform</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Monitor</div>
+      <button class="nav-item active" data-view="overview"><span class="ic">◧</span> Overview</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Configure</div>
+      <button class="nav-item" data-view="policy"><span class="ic">⎘</span> Policy layers</button>
+      <button class="nav-item" data-view="terminology"><span class="ic">✎</span> Terminology resolution</button>
+      <button class="nav-item" data-view="validation"><span class="ic">✓</span> Validation profiles</button>
+      <button class="nav-item" data-view="rules"><span class="ic">ƒ</span> Rule engine</button>
+      <button class="nav-item" data-view="governance"><span class="ic">🛡</span> Governance &amp; de-ID</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Operate</div>
+      <button class="nav-item" data-view="quarantine"><span class="ic">⚑</span> Quarantine &amp; review <span class="badge">14</span></button>
+      <button class="nav-item" data-view="testing"><span class="ic">▷</span> Testing &amp; staging</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Govern</div>
+      <button class="nav-item" data-view="audit"><span class="ic">☰</span> Audit &amp; change history</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="crumb">Pipeline <b>Epic → Medplum</b> / Transform node</div>
+      <div class="topbar-right">
+        <span class="env-badge">Staging</span>
+        <select class="res-select" id="resSelect">
+          <option>Observation</option><option>Condition</option><option>MedicationRequest</option><option>Practitioner</option><option>Patient</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="view" id="v-overview">
+      <h1>Transform &amp; validation health</h1>
+      <p class="desc">Pipeline-wide, last 24 hours. Resource selector above scopes the Terminology and Validation Profile screens only — this view always spans every resource type in the pipeline.</p>
+
+      <div class="callout">🧭 This pipeline inherits <b>Tenant Policy — "Default HIPAA Baseline"</b>, with <b>2 overrides</b> in effect. <a href="#" data-goto="policy" style="text-decoration:underline">Review overrides →</a></div>
+
+      <div class="grid-3">
+        <div class="kpi ok"><div class="label">Pass rate</div><div class="value">98.4<small>%</small></div><svg viewBox="0 0 100 28"><polyline points="0,20 15,18 30,19 45,12 60,14 75,8 90,6 100,5" fill="none" stroke="var(--ok)" stroke-width="2"/></svg></div>
+        <div class="kpi warn"><div class="label">Quarantine rate</div><div class="value">1.1<small>%</small></div><svg viewBox="0 0 100 28"><polyline points="0,10 15,12 30,9 45,14 60,11 75,16 90,13 100,15" fill="none" stroke="var(--warn)" stroke-width="2"/></svg></div>
+        <div class="kpi"><div class="label">Avg. validation latency</div><div class="value">42<small>ms</small></div><svg viewBox="0 0 100 28"><polyline points="0,18 15,16 30,17 45,15 60,16 75,13 90,14 100,12" fill="none" stroke="var(--brand)" stroke-width="2"/></svg></div>
+        <div class="kpi"><div class="label">Records processed</div><div class="value">128<small>.4k</small></div><svg viewBox="0 0 100 28"><polyline points="0,22 15,20 30,17 45,16 60,12 75,10 90,7 100,5" fill="none" stroke="var(--brand)" stroke-width="2"/></svg></div>
+      </div>
+
+      <div class="card">
+        <h3>Per-resource breakdown</h3>
+        <p class="sub">Top failure reason reflects the most common rule/terminology miss for that resource in the last 24h.</p>
+        <div class="overflow"><table class="dt">
+          <thead><tr><th>Resource</th><th>Volume</th><th>Pass rate</th><th>Quarantined</th><th>Top failure reason</th></tr></thead>
+          <tbody>
+            <tr><td>Observation</td><td class="mono">64,210</td><td><span class="badge ok">99.1%</span></td><td class="mono">58</td><td>Unmapped local lab code → LOINC</td></tr>
+            <tr><td>Condition</td><td class="mono">21,884</td><td><span class="badge ok">98.7%</span></td><td class="mono">41</td><td>ICD-10 code has no SNOMED ConceptMap entry</td></tr>
+            <tr><td>MedicationRequest</td><td class="mono">18,502</td><td><span class="badge warn">96.3%</span></td><td class="mono">112</td><td>Negative dosage quantity (rule v3)</td></tr>
+            <tr><td>Practitioner</td><td class="mono">3,109</td><td><span class="badge ok">100%</span></td><td class="mono">0</td><td>—</td></tr>
+            <tr><td>Patient</td><td class="mono">20,712</td><td><span class="badge ok">99.6%</span></td><td class="mono">9</td><td>MPI match below confidence threshold</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ============ POLICY LAYERS ============ -->
+    <section class="view" id="v-policy" hidden>
+      <h1>Policy layers</h1>
+      <p class="desc">Governance and validation defaults live at the tenant level; individual pipelines may override. Overrides are visible here, not silently inherited — an auditor should be able to see every deviation from baseline in one screen.</p>
+
+      <div class="card">
+        <h3>Default HIPAA Baseline <span class="badge brand">Tenant policy</span></h3>
+        <p class="sub">Applies to every pipeline unless explicitly overridden below.</p>
+        <div class="policy-row" style="border-bottom:1px solid var(--border);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding-bottom:8px">
+          <div>Category</div><div>Tenant default</div><div>Pipeline override</div><div>Status</div><div></div>
+        </div>
+        <div class="policy-row">
+          <div class="cat">De-identification method<span class="d">Safe Harbor vs Expert Determination</span></div>
+          <div>Safe Harbor</div>
+          <div>Safe Harbor</div>
+          <div><span class="badge muted">Inherited</span></div>
+          <div></div>
+        </div>
+        <div class="policy-row">
+          <div class="cat">Structural validation severity<span class="d">on cardinality / data-type failure</span></div>
+          <div>Error</div>
+          <div>Error</div>
+          <div><span class="badge muted">Inherited</span></div>
+          <div></div>
+        </div>
+        <div class="policy-row">
+          <div class="cat">Business rule severity<span class="d">rule-engine failures</span></div>
+          <div>Warning</div>
+          <div><select><option>Warning</option><option selected>Error</option></select></div>
+          <div><span class="badge warn">Overridden</span></div>
+          <div><button class="btn">Reset</button></div>
+        </div>
+        <div class="policy-row">
+          <div class="cat">On-quarantine retry attempts</div>
+          <div class="mono">3</div>
+          <div><input type="text" value="5" style="width:60px;text-align:center" class="mono"></div>
+          <div><span class="badge warn">Overridden</span></div>
+          <div><button class="btn">Reset</button></div>
+        </div>
+        <div class="policy-row">
+          <div class="cat">Unmapped terminology handling</div>
+          <div>Quarantine</div>
+          <div>Quarantine</div>
+          <div><span class="badge muted">Inherited</span></div>
+          <div></div>
+        </div>
+      </div>
+      <div class="callout muted">🔒 Only Tenant Admins can edit the baseline itself. This pipeline's overrides are logged to <a href="#" data-goto="audit" style="text-decoration:underline">Audit &amp; change history</a> on save.</div>
+    </section>
+
+    <!-- ============ TERMINOLOGY RESOLUTION ============ -->
+    <section class="view" id="v-terminology" hidden>
+      <h1>Terminology resolution — <span id="term-res-title">Observation</span></h1>
+      <p class="desc">Real resolution status per coded element, not a static target label. Confidence reflects the ConceptMap match; anything below threshold routes to Quarantine &amp; review rather than writing an unverified code downstream.</p>
+
+      <div class="card">
+        <div class="overflow"><table class="dt" id="term-table">
+          <thead><tr><th>Coded element</th><th>Source code system</th><th>Target</th><th>Version pinned</th><th>Sample resolution</th><th>Confidence</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+
+      <div class="card">
+        <h3>Unmapped-code policy</h3>
+        <div class="policy-row" style="grid-template-columns:1fr 1fr">
+          <div>When no ConceptMap entry exists</div>
+          <div><select><option selected>Quarantine for manual mapping</option><option>Pass through unmapped source code</option><option>Apply default target code</option></select></div>
+        </div>
+        <div class="policy-row" style="grid-template-columns:1fr 1fr">
+          <div>When match confidence is below</div>
+          <div><input type="text" value="0.85" style="width:70px" class="mono"> → treat as unmapped</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VALIDATION PROFILES ============ -->
+    <section class="view" id="v-validation" hidden>
+      <h1>Validation profiles — <span id="val-res-title">Observation</span></h1>
+      <p class="desc">Multiple implementation guides can be active at once. Binding strength sets a floor on severity — a <span class="mono">required</span> binding can never be downgraded below Error, even by a pipeline override.</p>
+
+      <div class="card">
+        <h3>Active profiles</h3>
+        <div>
+          <span class="chip on">US Core 6.1.0</span>
+          <span class="chip on">Da Vinci PDex 2.1.0</span>
+          <span class="chip">CARIN BB 2.0.0</span>
+          <span class="chip">+ Add profile…</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Invariants &amp; bindings</h3>
+        <div class="overflow"><table class="dt" id="val-table">
+          <thead><tr><th>Rule</th><th>Source</th><th>Binding strength</th><th>Floor</th><th>Effective severity</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ============ RULE ENGINE ============ -->
+    <section class="view" id="v-rules">
+      <h1>Rule engine</h1>
+      <p class="desc">Business rules are versioned, testable expressions — not a severity dropdown with nothing behind it. Every rule below is FHIRPath-style, has an explicit action, and carries its own version history.</p>
+
+      <div class="rule-card">
+        <div class="head"><div><span class="badge ok">Active</span> <b style="font-size:13px">Negative vital-sign value</b></div><div class="v">v3 · edited 2026-07-22</div></div>
+        <div class="rule-expr"><span class="kw">IF</span> Observation.category = 'vital-signs' <span class="kw">AND</span> valueQuantity.value &lt; 0<br><span class="kw">THEN</span> severity = Error, action = Route to quarantine, reason = "Negative vital sign value"</div>
+        <div class="rule-meta"><span class="badge muted">Observation</span><span class="badge muted">142 fired / 24h</span><a href="#" data-goto="audit" class="btn" style="text-decoration:none">View version history</a></div>
+      </div>
+
+      <div class="rule-card">
+        <div class="head"><div><span class="badge ok">Active</span> <b style="font-size:13px">Onset date required for active conditions</b></div><div class="v">v1 · edited 2026-06-30</div></div>
+        <div class="rule-expr"><span class="kw">IF</span> Condition.clinicalStatus = 'active' <span class="kw">AND</span> onsetDateTime <span class="kw">IS</span> null<br><span class="kw">THEN</span> severity = Warning, action = Flag for review</div>
+        <div class="rule-meta"><span class="badge muted">Condition</span><span class="badge muted">9 fired / 24h</span></div>
+      </div>
+
+      <div class="rule-card">
+        <div class="head"><div><span class="badge warn">Draft</span> <b style="font-size:13px">Dosage exceeds formulary max</b></div><div class="v">unpublished</div></div>
+        <div class="rule-expr"><span class="kw">IF</span> MedicationRequest.medicationCodeableConcept <span class="kw">IN</span> FormularyMaxTable <span class="kw">AND</span> dosageInstruction.doseQuantity.value &gt; FormularyMaxTable.max<br><span class="kw">THEN</span> severity = Error, action = Route to quarantine</div>
+        <div class="rule-meta"><span class="badge muted">MedicationRequest</span><button class="btn">Run against golden samples</button><button class="btn primary">Publish</button></div>
+      </div>
+
+      <div class="card">
+        <h3>New rule</h3>
+        <div class="policy-row" style="grid-template-columns:1fr">
+          <input type="text" placeholder="IF &lt;FHIRPath-style condition&gt;…" class="mono" style="width:100%">
+        </div>
+        <div class="row-actions" style="margin-top:8px">
+          <select><option>Observation</option><option>Condition</option><option>MedicationRequest</option><option>Practitioner</option><option>Patient</option><option>All resources</option></select>
+          <select><option>Error</option><option>Warning</option><option>Info</option></select>
+          <select><option>Flag for review</option><option>Route to quarantine</option><option>Enrich field</option></select>
+          <button class="btn primary">Save as draft</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GOVERNANCE ============ -->
+    <section class="view" id="v-governance" hidden>
+      <h1>Governance &amp; de-identification</h1>
+      <p class="desc">Systematic coverage of all 18 HIPAA Safe Harbor identifier categories, not a hand-maintained list of two example fields. Method can be switched per pipeline; Expert Determination requires statistician sign-off before it can be published.</p>
+
+      <div class="card">
+        <h3>De-identification method</h3>
+        <div class="row-actions">
+          <label><input type="radio" name="method" checked> Safe Harbor (§164.514(b)(2))</label>
+          <label><input type="radio" name="method"> Expert Determination (§164.514(b)(1))</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Safe Harbor identifier matrix</h3>
+        <p class="sub">18 of 18 categories tracked. "Needs mapping" blocks promotion to production in Testing &amp; staging.</p>
+        <div class="overflow"><table class="dt sh-matrix">
+          <thead><tr><th>Identifier category</th><th>Applies to</th><th>Action</th><th>Status</th></tr></thead>
+          <tbody id="sh-body"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ============ QUARANTINE & REVIEW ============ -->
+    <section class="view" id="v-quarantine" hidden>
+      <h1>Quarantine &amp; review</h1>
+      <p class="desc">Records that failed validation or terminology resolution don't disappear — they land here for a human decision, with an SLA clock so nothing rots silently.</p>
+
+      <div class="grid-3">
+        <div class="kpi"><div class="label">In queue</div><div class="value">14</div></div>
+        <div class="kpi warn"><div class="label">SLA breached</div><div class="value">3</div></div>
+        <div class="kpi"><div class="label">Oldest item</div><div class="value">2<small>d 4h</small></div></div>
+        <div class="kpi ok"><div class="label">Resolved / 24h</div><div class="value">47</div></div>
+      </div>
+
+      <div class="card">
+        <div class="overflow"><table class="dt">
+          <thead><tr><th>Resource</th><th>Reason</th><th>Severity</th><th>Age</th><th>SLA</th><th>Assigned</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td>MedicationRequest <span class="mono" style="color:var(--muted)">#88213</span></td><td>Dosage quantity is negative</td><td><span class="badge danger">Error</span></td><td class="mono">6h</td><td><span class="badge ok">On track</span></td><td>M. Chen</td><td class="row-actions"><button class="btn">Review</button><button class="btn primary">Fix &amp; resubmit</button></td></tr>
+            <tr><td>Observation <span class="mono" style="color:var(--muted)">#88190</span></td><td>Local lab code has no LOINC ConceptMap entry</td><td><span class="badge warn">Warning</span></td><td class="mono">1d 2h</td><td><span class="badge warn">Due in 4h</span></td><td>Unassigned</td><td class="row-actions"><button class="btn">Assign</button><button class="btn">Review</button></td></tr>
+            <tr><td>Condition <span class="mono" style="color:var(--muted)">#87990</span></td><td>ICD-10 code unmapped to SNOMED</td><td><span class="badge warn">Warning</span></td><td class="mono">2d 4h</td><td><span class="badge danger">Breached</span></td><td>R. Osei</td><td class="row-actions"><button class="btn">Review</button><button class="btn danger-o">Escalate</button></td></tr>
+            <tr><td>Patient <span class="mono" style="color:var(--muted)">#87877</span></td><td>MPI match confidence 0.71 (below 0.85 threshold)</td><td><span class="badge danger">Error</span></td><td class="mono">1d 0h</td><td><span class="badge warn">Due in 20h</span></td><td>M. Chen</td><td class="row-actions"><button class="btn">Review</button><button class="btn danger-o">Discard</button></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ============ TESTING & STAGING ============ -->
+    <section class="view" id="v-testing" hidden>
+      <h1>Testing &amp; staging</h1>
+      <p class="desc">No config change reaches production traffic without a regression pass against golden samples and a diff review of exactly what would change.</p>
+
+      <div class="card">
+        <h3>Golden sample sets</h3>
+        <div class="overflow"><table class="dt">
+          <thead><tr><th>Resource</th><th>Samples</th><th>Last run</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Observation</td><td class="mono">240</td><td class="mono">12 min ago</td><td><span class="badge ok">240 / 240 passed</span></td></tr>
+            <tr><td>Condition</td><td class="mono">180</td><td class="mono">12 min ago</td><td><span class="badge warn">166 / 180 passed</span></td></tr>
+            <tr><td>MedicationRequest</td><td class="mono">200</td><td class="mono">12 min ago</td><td><span class="badge warn">186 / 200 passed</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>Diff — config v12 vs v11</h3>
+          <p class="sub">Business rule severity override changed Warning → Error for MedicationRequest.</p>
+          <div class="rule-expr" style="font-size:11.5px">14 of 200 golden samples changed outcome:<br>— 12 now route to Quarantine (previously passed with a warning)<br>— 2 unaffected downstream (were already quarantined for another reason)</div>
+        </div>
+        <div class="card">
+          <h3>Staged rollout</h3>
+          <p class="sub">Config v12 is live for a canary slice before full promotion.</p>
+          <div class="policy-row" style="grid-template-columns:1fr 1fr">
+            <div>Canary scope</div><div>10% of MedicationRequest traffic</div>
+          </div>
+          <div class="policy-row" style="grid-template-columns:1fr 1fr">
+            <div>Running since</div><div class="mono">3h 40m</div>
+          </div>
+          <div class="row-actions" style="margin-top:10px">
+            <button class="btn primary">Promote to 100%</button>
+            <button class="btn danger-o">Roll back</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ AUDIT ============ -->
+    <section class="view" id="v-audit" hidden>
+      <h1>Audit &amp; change history</h1>
+      <p class="desc">Append-only, per FHIRBridge's existing audit-log guarantees — every transform/validation config change is a new version, never an in-place edit.</p>
+
+      <div class="card">
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div class="tl-head"><span class="ver">v12</span><span class="badge brand">Canary — 10%</span><span class="tl-when">2026-08-05 09:14 · M. Chen</span></div>
+            <div class="tl-summary">Raised MedicationRequest business-rule severity Warning → Error (pipeline override of tenant baseline).</div>
+            <div class="row-actions"><button class="btn">View diff</button></div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot" style="border-color:var(--border)"></div>
+            <div class="tl-head"><span class="ver">v11</span><span class="badge muted">Superseded</span><span class="tl-when">2026-07-22 15:02 · M. Chen</span></div>
+            <div class="tl-summary">Published rule "Negative vital-sign value" v3 — tightened threshold from ≤0 to &lt;0.</div>
+            <div class="row-actions"><button class="btn">View diff</button><button class="btn danger-o">Roll back to v11</button></div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot" style="border-color:var(--border)"></div>
+            <div class="tl-head"><span class="ver">v10</span><span class="badge muted">Superseded</span><span class="tl-when">2026-06-30 11:47 · R. Osei</span></div>
+            <div class="tl-summary">Added Da Vinci PDex 2.1.0 as an active validation profile for Observation and MedicationRequest.</div>
+            <div class="row-actions"><button class="btn">View diff</button><button class="btn danger-o">Roll back to v10</button></div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot" style="border-color:var(--border)"></div>
+            <div class="tl-head"><span class="ver">v9</span><span class="badge muted">Superseded</span><span class="tl-when">2026-06-11 08:30 · System (tenant baseline sync)</span></div>
+            <div class="tl-summary">Tenant policy "Default HIPAA Baseline" updated unmapped-terminology handling to Quarantine; pipeline inherited change.</div>
+            <div class="row-actions"><button class="btn">View diff</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const TERM_DATA = {
+  Observation: [
+    {el:"code.coding", src:"Local Lab Code 4471-B", target:"LOINC", ver:"2.77 (2025-12)", sample:"→ 4548-4 Hemoglobin A1c", conf:0.97, status:"ok"},
+    {el:"valueQuantity.unit", src:"mg/dL (source)", target:"UCUM", ver:"2024-revision", sample:"→ mg/dL", conf:1.0, status:"ok"},
+    {el:"interpretation.coding", src:"Local flag 'HH'", target:"SNOMED CT", ver:"2026-03 US Edition", sample:"— no candidate above threshold", conf:0.41, status:"danger"}
+  ],
+  Condition: [
+    {el:"code.coding", src:"ICD-10-CM E11.9", target:"SNOMED CT", ver:"2026-03 US Edition", sample:"→ 44054006 Type 2 diabetes mellitus", conf:0.99, status:"ok"},
+    {el:"bodySite.coding", src:"Local site 'LUQ'", target:"SNOMED CT", ver:"2026-03 US Edition", sample:"→ 68505006 Left upper quadrant", conf:0.88, status:"warn"}
+  ],
+  MedicationRequest: [
+    {el:"medicationCodeableConcept.coding", src:"NDC 00093-7146-01", target:"RxNorm", ver:"2026-07 monthly", sample:"→ 311036 Metformin 500 MG", conf:1.0, status:"ok"},
+    {el:"dosageInstruction.route.coding", src:"Local route 'PO'", target:"SNOMED CT", ver:"2026-03 US Edition", sample:"→ 26643006 Oral route", conf:0.95, status:"ok"}
+  ],
+  Practitioner: [
+    {el:"qualification.code", src:"Local specialty 'IM'", target:"NUCC Taxonomy", ver:"23.1", sample:"→ 207R00000X Internal Medicine", conf:0.93, status:"ok"}
+  ],
+  Patient: []
+};
+const VAL_DATA = {
+  Observation: [
+    {rule:"Observation.status has a required binding", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"},
+    {rule:"Observation.category SHOULD include a US Core category", src:"US Core 6.1.0", strength:"Extensible", floor:"Warning", eff:"Warning"},
+    {rule:"Observation.value[x] SHOULD be UCUM for quantity results", src:"Da Vinci PDex 2.1.0", strength:"Preferred", floor:"Info", eff:"Warning (pipeline raised)"}
+  ],
+  Condition: [
+    {rule:"Condition.clinicalStatus has a required binding", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"},
+    {rule:"Condition.category SHOULD be encounter-diagnosis or problem-list-item", src:"US Core 6.1.0", strength:"Extensible", floor:"Warning", eff:"Warning"}
+  ],
+  MedicationRequest: [
+    {rule:"MedicationRequest.status has a required binding", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"},
+    {rule:"MedicationRequest.intent has a required binding", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"}
+  ],
+  Practitioner: [
+    {rule:"Practitioner.identifier SHOULD include an NPI", src:"US Core 6.1.0", strength:"Extensible", floor:"Warning", eff:"Warning"}
+  ],
+  Patient: [
+    {rule:"Patient.identifier has a required binding (MRN)", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"},
+    {rule:"Patient.gender has a required binding", src:"US Core 6.1.0", strength:"Required", floor:"Error", eff:"Error"}
+  ]
+};
+const SAFE_HARBOR = [
+  ["Names","Patient · Practitioner · RelatedPerson","Redact","ok"],
+  ["Geographic subdivisions smaller than state","Patient · Practitioner","Generalize to state","ok"],
+  ["All dates except year (birth, admission, death…)","Patient · Encounter · Condition.onset · MedicationRequest.authoredOn · Observation.effective","Generalize to year","ok"],
+  ["Telephone numbers","Patient · Practitioner","Redact","ok"],
+  ["Fax numbers","Patient · Practitioner","Redact","muted"],
+  ["Email addresses","Patient · Practitioner","Redact","ok"],
+  ["Social Security numbers","Patient","Redact","ok"],
+  ["Medical record numbers","Patient","Hash (preserve linkage)","ok"],
+  ["Health plan beneficiary numbers","Coverage","Redact","warn"],
+  ["Account numbers","Patient · Account","Redact","warn"],
+  ["Certificate / license numbers","Practitioner","Redact","ok"],
+  ["Vehicle identifiers","—","Keep","muted"],
+  ["Device identifiers and serial numbers","Device","Hash","warn"],
+  ["URLs","DocumentReference","Redact","muted"],
+  ["IP addresses","AuditEvent · Provenance","Redact","warn"],
+  ["Biometric identifiers","—","Keep","muted"],
+  ["Full-face photographs","Patient.photo","Redact","ok"],
+  ["Any other unique identifying number, characteristic, or code","All resource types","Manual review","warn"]
+];
+const STATUS_LABEL = {ok:"Mapped", warn:"Needs mapping", danger:"Unmapped — quarantined", muted:"Not applicable"};
+
+function renderTerminology(res){
+  document.getElementById('term-res-title').textContent = res;
+  const rows = TERM_DATA[res] || [];
+  const body = document.querySelector('#term-table tbody');
+  body.innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td class="mono">${r.el}</td>
+      <td>${r.src}</td>
+      <td>${r.target}</td>
+      <td class="mono">${r.ver}</td>
+      <td>${r.sample}</td>
+      <td class="mono">${(r.conf*100).toFixed(0)}%</td>
+      <td><span class="badge ${r.status}">${r.status==='ok'?'Auto-resolved':r.status==='warn'?'Needs review':'Unmapped'}</span></td>
+    </tr>`).join('') : `<tr><td colspan="7" style="color:var(--muted)">No coded elements on ${res} — terminology resolution not applicable.</td></tr>`;
+}
+function renderValidation(res){
+  document.getElementById('val-res-title').textContent = res;
+  const rows = VAL_DATA[res] || [];
+  const body = document.querySelector('#val-table tbody');
+  body.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.rule}</td>
+      <td><span class="badge muted">${r.src}</span></td>
+      <td>${r.strength}</td>
+      <td><span class="badge ${r.floor==='Error'?'danger':r.floor==='Warning'?'warn':'muted'}">${r.floor}</span></td>
+      <td>${r.eff}</td>
+    </tr>`).join('');
+}
+document.getElementById('sh-body').innerHTML = SAFE_HARBOR.map(r=>`
+  <tr>
+    <td class="cat">${r[0]}</td>
+    <td>${r[1]}</td>
+    <td>${r[2]}</td>
+    <td><span class="badge ${r[3]}">${STATUS_LABEL[r[3]]}</span></td>
+  </tr>`).join('');
+
+const resSelect = document.getElementById('resSelect');
+resSelect.addEventListener('change', ()=>{ renderTerminology(resSelect.value); renderValidation(resSelect.value); });
+renderTerminology(resSelect.value); renderValidation(resSelect.value);
+
+const navItems = document.querySelectorAll('.nav-item[data-view]');
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=> v.hidden = v.id !== 'v-'+name);
+  navItems.forEach(n=> n.classList.toggle('active', n.dataset.view===name));
+}
+navItems.forEach(n=> n.onclick = ()=> showView(n.dataset.view));
+document.querySelectorAll('[data-goto]').forEach(el=> el.addEventListener('click', e=>{ e.preventDefault(); showView(el.dataset.goto); }));
+</script>
+</body>
+</html>
