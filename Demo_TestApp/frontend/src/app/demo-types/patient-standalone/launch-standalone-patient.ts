@@ -333,6 +333,16 @@ export class LaunchStandalonePatientComponent implements OnInit {
     try {
       const result = await this.launchService.loadLaunchResultPatientId(workflowRunId);
       if (result.patientId) {
+        // Account-linking check against Demo_TestApp's OWN backend (not FHIRBridge) — see
+        // PatientStandaloneLaunchService.checkAccountContextLink's remarks. A confirmed mismatch (this
+        // account already linked to a different patient, or this patient already linked to a different
+        // account) blocks the auto-fetch below and surfaces as a real error instead.
+        const link = await this.launchService.checkAccountContextLink(workflowRunId);
+        if (!link.ok) {
+          this.patientError.set(link.message ?? 'This account is already linked to a different patient.');
+          return false;
+        }
+
         this.patientId = result.patientId;
         await this.rememberSession();
         return true;

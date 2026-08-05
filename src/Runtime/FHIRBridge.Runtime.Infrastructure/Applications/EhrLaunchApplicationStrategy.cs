@@ -22,7 +22,13 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
 
     public override ApplicationType Handles => ApplicationType.EhrLaunch;
 
-    // The EHR itself always carries a patient context into the launch (e.g. Provider In-App).
+    // Patient-kind binding — but see EnforceEhrLaunchBindingAsync (InteractiveSourceAuthorizationService): for
+    // THIS application type, the binding is inverted from every other application type. Identity is
+    // "{iss}:{patient}" rather than a caller-supplied identity, precisely because a provider is expected to
+    // launch into MANY different patients' charts over time — that's the normal, intended use of Provider EHR
+    // Launch, not a security violation to guard against. Instead, this pins a given (issuer, patient) pair to
+    // whichever caller identity first established it (tracked in its own CallerIdentity column, not ResourceId) —
+    // a DIFFERENT caller identity later authorizing against that SAME already-bound patient is rejected.
     public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Patient;
 
     public override SourceApplicationDescriptor Describe() => new(

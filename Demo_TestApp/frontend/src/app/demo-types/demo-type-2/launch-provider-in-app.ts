@@ -154,6 +154,19 @@ export class LaunchProviderInAppComponent implements OnInit {
       return;
     }
 
+    // Account-linking check — see Demo_TestApp/backend's AccountContextLinkEntity remarks for what this
+    // enforces (and why it lives here, not in FHIRBridge's own binding table): this app has ground-truth
+    // knowledge of which HealthApp account is logged in, so it can reject a different account claiming a
+    // patient another account already linked. A no-op (ok: true) when there's no session to check against at
+    // all (the genuinely embedded-iframe case) or the request otherwise can't be completed — never blocks the
+    // existing flow on a failure of this check itself, only on an actual, confirmed mismatch.
+    const linkOk = await this.checkAccountContextLink(workflowRunId);
+    if (!linkOk.ok) {
+      this.launchError.set(linkOk.message ?? 'This account is already linked to a different patient.');
+      this.isPatientLoading.set(false);
+      return;
+    }
+
     this.patientService.getPatient(workflowRunId).subscribe({
       next: (patient) => {
         this.patient.set(patient);
@@ -164,6 +177,24 @@ export class LaunchProviderInAppComponent implements OnInit {
         this.isPatientLoading.set(false);
       },
     });
+  }
+
+  private async checkAccountContextLink(workflowRunId: string | null): Promise<{ ok: boolean; message?: string }> {
+    if (!workflowRunId) {
+      return { ok: true };
+    }
+    try {
+      return await firstValueFrom(
+        this.http.get<{ ok: boolean; message?: string }>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/account-context-link/check`,
+          { params: { workflowRunId, audienceType: 'ehrLaunch' }, withCredentials: true },
+        ),
+      );
+    } catch {
+      // Non-fatal — see this method's only caller's remarks. A failed check must never block a launch that
+      // would otherwise have succeeded.
+      return { ok: true };
+    }
   }
 
   displayValue(value: string | null | undefined): string {
