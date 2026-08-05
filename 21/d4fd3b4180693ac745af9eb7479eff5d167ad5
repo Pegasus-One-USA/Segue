@@ -1,0 +1,23 @@
+docs/transform-settings-mechanics.html
+  s_16fb3f2697c4eb::t_0c9d59f6fcd884 1-240
+docs/transform-console-enterprise.html
+  s_16fb3f2697c4eb::t_2bb38336a1a9ed 1-577
+docs/workflow-menu-implementation.html
+  s_16fb3f2697c4eb::t_7c0dd24eaf1424 1-454
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "21d4fd3b4180693ac745af9eb7479eff5d167ad5",
+  "prompts": {},
+  "sessions": {
+    "s_16fb3f2697c4eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c72b984-fd76-4610-95f2-e19855a136f1",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

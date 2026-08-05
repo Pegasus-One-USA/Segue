@@ -1,0 +1,19 @@
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_05e2fbc543b55d::t_1490b22a8c4291 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "3ab4666033b60f7a1abc75c8eba12f107a93eaa1",
+  "prompts": {},
+  "sessions": {
+    "s_05e2fbc543b55d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01d121eb-cdb1-4f9a-86a8-813568df40f8",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

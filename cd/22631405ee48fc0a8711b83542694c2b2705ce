@@ -1,0 +1,22 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_40e3518071d2f8::t_ca956f9902141a 119-123,127-128,132-141,146,153
+  s_40e3518071d2f8::t_2207bb25105e1b 8
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_40e3518071d2f8::t_ce27e0948a696b 1658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "cd22631405ee48fc0a8711b83542694c2b2705ce",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

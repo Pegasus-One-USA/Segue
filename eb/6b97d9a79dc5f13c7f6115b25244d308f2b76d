@@ -1,0 +1,20 @@
+portal/src/app/services/wizard.service.ts
+  s_40e3518071d2f8::t_e614b0debb9228 9
+  s_40e3518071d2f8::t_cbfbcb8d2ddb8d 237-242,246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "eb6b97d9a79dc5f13c7f6115b25244d308f2b76d",
+  "prompts": {},
+  "sessions": {
+    "s_40e3518071d2f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7807872-1ead-4ddf-aa1d-dc67770a3c44",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
