@@ -1,5 +1,5 @@
 import {
-  Component, output, inject, signal, computed, effect, OnInit, DestroyRef, ElementRef, ViewChild,
+  Component, input, output, inject, signal, computed, effect, OnInit, DestroyRef, ElementRef, ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { take } from 'rxjs/operators';
@@ -405,6 +405,11 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
    *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
    *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
   readonly closeAll  = output<void>();
+  /** Whether the OUTER Node Library dialog is currently maximized — this form's own topbar renders the
+   *  maximize/restore button itself (same relocation as closeAll above) since the outer dialog's own
+   *  header row is hidden while this form is showing (see NodeLibraryDialogComponent's .nld-header). */
+  readonly isMaximized = input<boolean>(false);
+  readonly toggleMaximizeRequest = output<void>();
 
   /** Set when the backend rejects a save (e.g. "A source connection named 'X' already exists.") — shown
    *  inline under App Name (the field the user actually needs to change to retry) instead of only as a
@@ -572,6 +577,32 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   private readonly scopeVersionValue    = toSignal(this.form.controls.scopeVersion.valueChanges,    { initialValue: this.form.controls.scopeVersion.value });
   private readonly fullRefreshRecurrenceValue = toSignal(this.form.controls.fullRefreshRecurrence.valueChanges, { initialValue: this.form.controls.fullRefreshRecurrence.value });
   private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
+  // Whole-form bridge (rather than one per control, like the ones above) purely to drive
+  // missingRequiredFields()'s recompute — it needs to re-scan on ANY field changing, not just a few.
+  private readonly formValue = toSignal(this.form.valueChanges, { initialValue: this.form.value });
+
+  /** Live labels of required fields still empty — so the primary button's dimmed state isn't a dead end
+   *  the user has to click-and-guess their way through (see focusFirstInvalidField, which this
+   *  complements) to find out what's actually blocking Save. Walks this.form's controls directly (NOT
+   *  the DOM) so a control still counts even when its section happens to be scrolled out of view or not
+   *  yet rendered — focusFirstInvalidField()'s DOM-first approach only works there because it's called
+   *  after markAllAsTouched() forces a render pass; this runs continuously as the user types, before
+   *  that's ever triggered. The DOM is only consulted afterward, best-effort, for a human label. */
+  protected readonly missingRequiredFields = computed<string[]>(() => {
+    this.formValue();
+    const root = this.formRoot?.nativeElement;
+
+    const labels: string[] = [];
+    for (const name of Object.keys(this.form.controls)) {
+      const ctrl = this.form.get(name);
+      if (!ctrl || ctrl.valid || !ctrl.errors?.['required']) continue;
+
+      const el = root?.querySelector<HTMLElement>(`[formcontrolname="${name}"], [data-control="${name}"]`);
+      const label = el?.closest('.eaf-field')?.querySelector('.eaf-label')?.textContent?.trim();
+      labels.push((label || name).replace(/\s*\*\s*$/, ''));
+    }
+    return labels;
+  });
   private readonly fullRefreshDayOfMonthValue = toSignal(this.form.controls.fullRefreshDayOfMonth.valueChanges, { initialValue: this.form.controls.fullRefreshDayOfMonth.value });
   private readonly fullRefreshTimeValue       = toSignal(this.form.controls.fullRefreshTime.valueChanges,       { initialValue: this.form.controls.fullRefreshTime.value });
   private readonly fullRefreshTimeZoneValue   = toSignal(this.form.controls.fullRefreshTimeZone.valueChanges,   { initialValue: this.form.controls.fullRefreshTimeZone.value });
@@ -818,12 +849,10 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   /**
    * Backend System (and any other audience with showResourcePicker: false) normally derives its scopes from the
    * Data Retrieval Method's own Resource Type control — but that whole section is hidden in entity mode
-   * (showRetrievalSection), so activeRetrievalResourceTypes() is always empty there, which silently sent empty
-   * Scopes to the backend and tripped "Epic scopes are required." (ValidateEpicSourceConnection). Entity mode
-   * always has a usable value in the `resources` control regardless of audience — WizardService.openEntity()
-   * seeds it from the existing connection's dto.retrieval.resourceTypes (or DEFAULT_RESOURCES for a new one)
-   * before this component even initializes — so entity mode reads from there instead, exactly like the
-   * interactive audiences already do in canvas mode.
+   * (showRetrievalSection), so activeRetrievalResourceTypes() is always empty there. Entity mode reads from the
+   * `resources` control instead, regardless of audience — WizardService.openEntity() seeds it from the existing
+   * connection's dto.retrieval.resourceTypes when editing (empty for a brand-new one, same as canvas mode; see
+   * ngOnInit's remarks on why nothing is preselected by default anymore).
    */
   protected readonly showResourcePickerSection = computed(() =>
     this.audienceConfig().showResourcePicker || this.wiz.wizardMode() === 'entity');
@@ -1384,7 +1413,13 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     apply('authzEndpoint', !isLoopback, true);
     apply('callbackUrl',   cfg.showRedirect, true);
     apply('launchUrl',     cfg.showLaunchUrl, true);
-    apply('resources',     this.showResourcePickerSection());
+    // Not required: there's no UI left to hand-pick this (the Resource Type & Scopes picker was removed —
+    // see ngOnInit's remarks), and the backend never needs it upfront either — Epic's base OAuth scopes are
+    // included regardless of resource count, and EpicSourceConnectionScopeSyncService fills in the real,
+    // usage-derived scopes later for any interactive source (EHR-launch/Standalone/Patient) once a workflow
+    // wires it to a destination. Leaving this required with no control to satisfy it made the form
+    // permanently invalid for every showResourcePicker audience.
+    apply('resources',     false);
     apply('clientSecret',  method === 'secret');
     // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
     // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field

@@ -1,35 +1,21 @@
 <app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="close()">
   <div class="nld" [class.nld--maximized]="isMaximized()">
 
-    <!-- ── Header ── identity + persistent controls only. The mapping badges/tool-buttons live in
-         their own row below (.nld-mapping-toolbar) so this row's item count — and so its layout — never
-         depends on how many mapping-canvas actions exist; it fits at any dialog width, minimized or not. -->
+    <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
+         mapping canvas is open (destMappingTitle() truthy) — every other state (plain node browsing,
+         or a node's own Epic/SQL/etc. form) has nothing worth a whole extra row for: the browsing
+         empty-state already shows any context info in its own body, and each form already has its
+         own topbar (title + Back to library + maximize + close — see DestinationWizardComponent's
+         .dw-topbar / EpicAudienceFormComponent's .eaf-topbar). Rendering this unconditionally left an
+         empty-looking bar with nothing but a stray icon + maximize/close in those states. -->
+    @if (destMappingTitle()) {
     <div class="nld-header">
       <div class="nld-header-left">
         <span class="nld-brand-hex">⬡</span>
-        @if (destMappingTitle(); as title) {
-          <h2 class="nld-title">{{ title }}</h2>
-        } @else {
-          <div>
-            <h2 class="nld-title">Node Library</h2>
-            <p class="nld-subtitle">
-              @if (mode() === 'source') {
-                Choose a data source to start your pipeline
-              } @else {
-                Choose the next step — context-aware recommendations applied
-              }
-            </p>
-          </div>
-        }
+        <h2 class="nld-title">{{ destMappingTitle() }}</h2>
       </div>
 
       <div class="nld-header-right">
-        @if (mode() === 'transform' && pickerMeta() && !destMappingTitle()) {
-          <div class="nld-ctx-chips">
-            <span class="nld-ctx-chip">{{ pickerMeta()?.rule }}</span>
-            <span class="nld-ctx-chip">{{ pickerMeta()?.cfg?.context }}</span>
-          </div>
-        }
         <button
           class="nld-maximize"
           type="button"
@@ -50,14 +36,43 @@
             </svg>
           }
         </button>
-        @if (destMappingTitle()) {
-          <button type="button" class="btn btn-secondary btn-sm" (click)="bumpExitMappingTrigger()">Close</button>
-          <button type="button" class="btn btn-primary btn-sm" (click)="bumpSaveMappingTrigger()">Save</button>
-        } @else if (!(showEpicForm() || showDestWizard() || showGenericFhirForm())) {
-          <button class="nld-close" type="button" aria-label="Close dialog" (click)="close()">×</button>
-        }
+        <button type="button" class="btn btn-secondary btn-sm" (click)="bumpExitMappingTrigger()">Close</button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="bumpSaveMappingTrigger()">Save</button>
       </div>
     </div>
+    }
+
+    <!-- ── Floating maximize/close ── for whichever states have no header/topbar of their own to carry
+         them: plain node browsing, and the inline Generic FHIR form (unlike Epic/dest-wizard, it never
+         grew its own topbar). Epic/dest-wizard are excluded here since their .eaf-topbar/.dw-topbar
+         already show these controls next to "← Back to library" — this would just duplicate them.
+         Absolutely positioned over the top-right corner rather than living in a full-width row, since
+         nothing else in these states needs one. -->
+    @if (!destMappingTitle() && !showEpicForm() && !showDestWizard()) {
+      <div class="nld-floating-controls">
+        <button
+          class="nld-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximize()"
+        >
+          @if (isMaximized()) {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
+        <button class="nld-close" type="button" aria-label="Close dialog" (click)="close()">×</button>
+      </div>
+    }
 
     <!-- ── Mapping toolbar ── badges + canvas actions, on their own row so they can wrap independently
          of the title/Close/Save row above at narrow dialog widths, instead of squeezing the title. -->
@@ -69,8 +84,6 @@
         </div>
         <div class="nld-mapping-toolbar-actions">
           <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
-          <button type="button" class="nld-mapping-tool-btn" (click)="bumpPreviewOutputTrigger()">⤢ Preview output</button>
-          <button type="button" class="nld-mapping-tool-btn" title="Save just this mapping's fields/tables as an independent, reusable JSON — not the whole workflow" (click)="bumpSaveSnapshotTrigger()">💾 Save mapping snapshot</button>
         </div>
       </div>
     }
@@ -178,9 +191,11 @@
         <!-- ── Inline Epic Audience Form ─────────────────────────────────── -->
         @if (showEpicForm()) {
           <app-epic-audience-form
+            [isMaximized]="isMaximized()"
             (saved)="onEpicFormSaved()"
             (cancelled)="onEpicFormCancelled()"
             (closeAll)="close()"
+            (toggleMaximizeRequest)="toggleMaximize()"
           />
 
         } @else if (showGenericFhirForm()) {
@@ -202,7 +217,9 @@
 
         } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
 
-          <!-- ── Destination wizard (SQL Server or CSV) ──────────────────── -->
+          <!-- ── Destination wizard (SQL Server or CSV) ── its title/badges/actions while a group's
+               mapping canvas is open live in the top-level .nld-header/.nld-mapping-toolbar above
+               (see destMappingTitle()) — do not duplicate them here. ── -->
           <app-destination-wizard
             [destType]="destWizardType()!"
             [attachNode]="destWizardAttach()!"
@@ -215,9 +232,11 @@
             [saveSnapshotRequest]="saveSnapshotTrigger()"
             [openLoadPayloadRequest]="loadPayloadTrigger()"
             [openPreviewRequest]="previewOutputTrigger()"
+            [isMaximized]="isMaximized()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
             (closeAll)="close()"
+            (toggleMaximizeRequest)="toggleMaximize()"
             (stepChange)="destWizardStep.set($event)"
             (progressChange)="destWizardHasProgressed.set($event)"
             (mappingCanvasActive)="destMappingCanvasActive.set($event)"

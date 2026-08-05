@@ -20,6 +20,26 @@
     @if (wiz.wizardMode() !== 'entity') {
       <div class="eaf-topbar-actions">
         <button class="eaf-cancel-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button
+          class="eaf-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximizeRequest.emit()"
+        >
+          @if (isMaximized()) {
+            <svg class="eaf-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="eaf-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
         <button class="eaf-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
       </div>
     }
@@ -797,9 +817,22 @@
 
   <!-- ── Sticky footer ─────────────────────────────────────────────────────── -->
   <div class="eaf-footer">
+    @if (!isReadonly && form.invalid && missingRequiredFields().length > 0) {
+      <span class="eaf-missing-hint" [title]="missingRequiredFields().join(', ')">
+        {{ missingRequiredFields().length === 1
+          ? '1 required field left: ' + missingRequiredFields()[0]
+          : missingRequiredFields().length + ' required fields left: ' + missingRequiredFields().slice(0, 2).join(', ') + (missingRequiredFields().length > 2 ? ', …' : '') }}
+      </span>
+    }
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      <button class="eaf-btn eaf-btn--primary" type="button" [class.eaf-btn--invalid]="form.invalid" (click)="save()">
+      <button
+        class="eaf-btn eaf-btn--primary"
+        type="button"
+        [class.eaf-btn--invalid]="form.invalid"
+        [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
+        (click)="save()"
+      >
         {{ isEditing ? '✓ Update' : (wiz.wizardMode() === 'entity' ? '✓ Create Source Connection' : '✓ Add to Workflow') }}
       </button>
     }

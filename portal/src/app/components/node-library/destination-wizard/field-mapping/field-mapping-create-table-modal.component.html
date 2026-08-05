@@ -17,6 +17,7 @@
         class="fm-createtable-input"
         [value]="tableName()"
         (input)="onTableNameInput($any($event.target).value)"
+        (keydown.space)="$event.preventDefault()"
         placeholder="e.g. PatientAllergy"
         [disabled]="submitting()"
       />
@@ -48,17 +49,55 @@
 
     @if (relation() === 'child') {
       <div class="fm-createtable-relation-block">
-        <label class="fm-createtable-field">
+        <div class="fm-createtable-field fm-createtable-parent-slot">
           <span class="text-label">Parent table</span>
-          <select
-            class="fm-createtable-select"
-            [value]="parentTable()"
-            (change)="setParentTable($any($event.target).value)"
+          <button
+            type="button"
+            class="fm-createtable-select fm-createtable-parent-trigger"
+            [class.fm-createtable-parent-trigger--open]="parentTableMenuOpen()"
             [disabled]="submitting()"
+            (click)="$event.stopPropagation(); toggleParentTableMenu($event)"
           >
-            @for (t of existingTables(); track t) { <option [value]="t">{{ t }}</option> }
-          </select>
-        </label>
+            <span class="fm-createtable-parent-trigger-text">{{ parentTable() || 'Select a table…' }}</span>
+            <svg class="fm-createtable-parent-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          @if (parentTableMenuOpen() && parentTableMenuStyle(); as pos) {
+            <div
+              class="fm-createtable-parent-panel"
+              [style.top.px]="pos.top"
+              [style.bottom.px]="pos.bottom"
+              [style.left.px]="pos.left"
+              [style.width.px]="pos.width"
+              [style.max-height.px]="pos.maxHeight"
+            >
+              <div class="fm-createtable-parent-search-wrap">
+                <input
+                  #parentTableSearchInput
+                  type="search"
+                  class="fm-createtable-parent-search"
+                  placeholder="Search tables…"
+                  aria-label="Search tables"
+                  [value]="parentTableSearchQuery()"
+                  (input)="onParentTableSearchInput($any($event.target).value)"
+                />
+                @if (parentTableSearchQuery()) {
+                  <button type="button" class="fm-createtable-parent-search-clear" aria-label="Clear search" (click)="clearParentTableSearch()">✕</button>
+                }
+              </div>
+              <div class="fm-createtable-parent-options">
+                @if (filteredExistingTables().length === 0) {
+                  <div class="fm-createtable-parent-no-match">No tables match "{{ parentTableSearchQuery() }}".</div>
+                }
+                @for (t of filteredExistingTables(); track t) {
+                  <button type="button" class="fm-createtable-parent-option" (click)="selectParentTable(t)">{{ t }}</button>
+                }
+              </div>
+            </div>
+          }
+        </div>
         <label class="fm-createtable-field">
           <span class="text-label">Relation column (parent)</span>
           <select

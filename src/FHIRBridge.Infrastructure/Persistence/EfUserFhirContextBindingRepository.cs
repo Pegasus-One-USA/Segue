@@ -17,6 +17,11 @@ public sealed class EfUserFhirContextBindingRepository : IUserFhirContextBinding
         _db.UserFhirContextBindings.FirstOrDefaultAsync(
             x => x.SourceConnectionId == sourceConnectionId && x.UserIdentity == userIdentity, cancellationToken);
 
+    public Task<UserFhirContextBinding?> GetByResourceAsync(Guid sourceConnectionId, FhirContextResourceType resourceType, string resourceId, CancellationToken cancellationToken) =>
+        _db.UserFhirContextBindings.FirstOrDefaultAsync(
+            x => x.SourceConnectionId == sourceConnectionId && x.ResourceType == resourceType && x.ResourceId == resourceId,
+            cancellationToken);
+
     public async Task AddAsync(UserFhirContextBinding binding, CancellationToken cancellationToken)
     {
         await _db.UserFhirContextBindings.AddAsync(binding, cancellationToken);

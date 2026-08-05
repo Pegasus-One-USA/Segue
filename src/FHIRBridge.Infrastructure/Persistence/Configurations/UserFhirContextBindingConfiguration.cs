@@ -14,6 +14,8 @@ public sealed class UserFhirContextBindingConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.UserIdentity).HasMaxLength(200).IsRequired();
         builder.Property(x => x.ResourceType).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.ResourceId).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.CallerIdentity).HasMaxLength(200);
+        builder.Property(x => x.CallerFhirUserId).HasMaxLength(200);
 
         // One binding per (source connection, end user) — the invariant CompleteAsync enforces.
         builder.HasIndex(x => new { x.SourceConnectionId, x.UserIdentity }).IsUnique();

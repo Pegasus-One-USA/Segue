@@ -6,6 +6,7 @@ import { ToastService } from './toast.service';
 import { EPIC_APPS } from '../data/epic-apps.data';
 import { EPIC_ENV } from '../data/epic-environments.data';
 import { EPIC_INGESTION } from '../data/ingestion-modes.data';
+import { FHIR_RESOURCES } from '../data/scope-constants.data';
 import { AppKey, EpicApp } from '../models/epic-app.model';
 import { EnvKey } from '../models/epic-env.model';
 import { SourceNode } from '../models/node.model';
@@ -233,10 +234,16 @@ export class WizardService {
     this.baseUrl.set(dto?.baseUrl ?? EPIC_ENV['sandbox'].base);
     this.token.set(dto?.authentication?.tokenEndpoint ?? '');
     this.authorize.set('');
+    // Entity mode has no Resource Type & Scopes picker UI at all (removed — see epic-audience-form.component.ts's
+    // showResourcePickerSection remarks), so a brand-new connection needs a real, non-empty default here
+    // regardless of audience: ScopeBuilderService.buildScopes returns scopes derived ONLY from this list for a
+    // non-interactive app (Backend System has no "free" base scopes the way EHR-launch/Standalone/Patient do —
+    // see buildScopes), so leaving this empty silently sent scopes: [] to the backend and tripped
+    // ConfigurationService's "Epic scopes are required."
     this.resources.set(
       dto?.retrieval?.resourceTypes?.length
         ? [...dto.retrieval.resourceTypes]
-        : []
+        : [...FHIR_RESOURCES]
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.setMode(gate?.default || 'search');

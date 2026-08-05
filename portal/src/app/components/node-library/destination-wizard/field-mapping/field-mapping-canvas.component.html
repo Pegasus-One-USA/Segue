@@ -83,17 +83,49 @@
       @if (!drawerOpen()) {
       <div class="fm-add-table-slot">
         @if (hasSqlTables()) {
-          <select
-            class="fm-add-table-select"
-            [value]="''"
-            (change)="onAddTableSelectChange(primaryResource, $any($event.target).value); $any($event.target).value = ''"
-          >
-            <option value="" disabled selected>＋ Add a table from your database…</option>
-            <option [value]="createNewTableOption">✎ Create a new table…</option>
-            @for (t of availableTablesToAdd()(primaryResource); track t) {
-              <option [value]="t">{{ t }}</option>
-            }
-          </select>
+          <button
+            type="button"
+            class="fm-add-table-select fm-add-table-createbtn"
+            [class.fm-add-table-select--open]="addTableMenuOpen()"
+            (click)="$event.stopPropagation(); toggleAddTableMenu($event)"
+          >＋ Add a table from your database…</button>
+
+          @if (addTableMenuOpen() && addTableMenuStyle(); as pos) {
+            <div
+              class="fm-add-table-panel"
+              [style.top.px]="pos.top"
+              [style.bottom.px]="pos.bottom"
+              [style.left.px]="pos.left"
+              [style.width.px]="pos.width"
+              [style.max-height.px]="pos.maxHeight"
+            >
+              <div class="fm-add-table-search-wrap">
+                <input
+                  #addTableSearchInput
+                  type="search"
+                  class="fm-add-table-search"
+                  placeholder="Search tables…"
+                  aria-label="Search tables"
+                  [value]="addTableSearchQuery()"
+                  (input)="onAddTableSearchInput($any($event.target).value)"
+                />
+                @if (addTableSearchQuery()) {
+                  <button type="button" class="fm-add-table-search-clear" aria-label="Clear search" (click)="clearAddTableSearch()">✕</button>
+                }
+              </div>
+              <div class="fm-add-table-options">
+                <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, createNewTableOption)">
+                  ✎ Create a new table…
+                </button>
+                @if (addTableSearchQuery() && filteredTablesToAdd(primaryResource).length === 0) {
+                  <div class="fm-add-table-no-match">No tables match "{{ addTableSearchQuery() }}".</div>
+                }
+                @for (t of filteredTablesToAdd(primaryResource); track t) {
+                  <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, t)">{{ t }}</button>
+                }
+              </div>
+            </div>
+          }
         } @else {
           <button
             type="button"

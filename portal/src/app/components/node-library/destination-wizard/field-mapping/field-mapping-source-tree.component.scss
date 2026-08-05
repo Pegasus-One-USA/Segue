@@ -136,8 +136,15 @@
 }
 
 .fm-source-rows {
-  // No flex/overflow here on purpose — the card is height:auto specifically so this area never needs
-  // its own scrollbar; it just grows with the card to show every field.
+  flex: 1;
+  min-height: 0;
+  // Only actually scrolls once the card's own auto height (see .fm-source-card) has been manually
+  // shrunk smaller than the content via the resize handle — flex:1 has nothing extra to consume
+  // against an auto-height parent, so by default this never clips; nothing to scroll. Scoping the
+  // scroll to just this row area (not .fm-source-card as a whole) keeps .fm-source-head — the title
+  // and search box — always pinned in view instead of scrolling away with the fields (matches
+  // field-mapping-target-card.component.scss's .fm-target-rows, which already does this correctly).
+  overflow: auto;
   background: var(--color-surface);
 }
 

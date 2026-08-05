@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, ViewChild, computed, input, output, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, computed, input, output, signal } from '@angular/core';
 import { FM_ADD_COLUMN_DATA_TYPES } from './field-mapping-add-column-modal.component';
 
 export interface FmCreateTableColumnDraft {
@@ -30,6 +30,7 @@ export interface FmCreateTableSubmit {
 })
 export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('parentTableSearchInput') private readonly parentTableSearchInput?: ElementRef<HTMLInputElement>;
 
   /** Already-known table full names (e.g. "dbo.PatientContact") offered as a parent. */
   readonly existingTables = input<string[]>([]);
@@ -57,6 +58,70 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     return cols.length ? cols : ['Id'];
   });
 
+  /** A native <select>'s open option list can't be searched or kept from clipping against an
+   *  ancestor's own overflow — .fm-createtable-dialog scrolls its own body (see its overflow-y: auto),
+   *  which would clip a long table list badly. This custom panel renders position: fixed at
+   *  coordinates measured from the trigger button's own getBoundingClientRect() instead — same
+   *  technique as FieldMappingCanvasComponent's "+ Add a table…" panel. */
+  readonly parentTableMenuOpen = signal(false);
+  readonly parentTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+  readonly parentTableSearchQuery = signal('');
+
+  readonly filteredExistingTables = computed(() => {
+    const query = this.parentTableSearchQuery().trim().toLowerCase();
+    const all = this.existingTables();
+    return query ? all.filter(t => t.toLowerCase().includes(query)) : all;
+  });
+
+  toggleParentTableMenu(event: MouseEvent): void {
+    if (this.parentTableMenuOpen()) {
+      this.closeParentTableMenu();
+      return;
+    }
+
+    const triggerRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const margin = 8;
+    const spaceBelow = window.innerHeight - triggerRect.bottom - margin;
+    const spaceAbove = triggerRect.top - margin;
+    const minUsableHeight = 120;
+
+    this.parentTableMenuStyle.set(
+      spaceBelow >= minUsableHeight || spaceBelow >= spaceAbove
+        ? { top: triggerRect.bottom + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceBelow) }
+        : { bottom: window.innerHeight - triggerRect.top + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceAbove) }
+    );
+    this.parentTableSearchQuery.set('');
+    this.parentTableMenuOpen.set(true);
+    setTimeout(() => this.parentTableSearchInput?.nativeElement.focus());
+  }
+
+  closeParentTableMenu(): void {
+    this.parentTableMenuOpen.set(false);
+    this.parentTableMenuStyle.set(null);
+    this.parentTableSearchQuery.set('');
+  }
+
+  onParentTableSearchInput(value: string): void {
+    this.parentTableSearchQuery.set(value);
+  }
+
+  clearParentTableSearch(): void {
+    this.parentTableSearchQuery.set('');
+    this.parentTableSearchInput?.nativeElement.focus();
+  }
+
+  selectParentTable(table: string): void {
+    this.closeParentTableMenu();
+    this.setParentTable(table);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClickForParentTableMenu(event: MouseEvent): void {
+    if (this.parentTableMenuOpen() && !(event.target as HTMLElement).closest('.fm-createtable-parent-slot')) {
+      this.closeParentTableMenu();
+    }
+  }
+
   ngAfterViewInit(): void {
     this.nameInput?.nativeElement.focus();
   }
@@ -67,7 +132,7 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     return this.columns().every(c => c.name.trim().length > 0);
   }
 
-  onTableNameInput(value: string): void { this.tableName.set(value); }
+  onTableNameInput(value: string): void { this.tableName.set(value.replace(/\s/g, '')); }
 
   onRelationChange(value: 'standalone' | 'child'): void {
     this.relation.set(value);
@@ -109,6 +174,14 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   }
 
   onEscape(): void {
+    // The parent-table panel is a DOM descendant of this modal (needed so position: fixed still
+    // measures against the real viewport, not some transformed ancestor) — an Escape typed into its
+    // search box would otherwise bubble up to this same handler and cancel the WHOLE modal instead of
+    // just closing the panel the user actually meant to dismiss.
+    if (this.parentTableMenuOpen()) {
+      this.closeParentTableMenu();
+      return;
+    }
     if (!this.submitting()) this.cancelled.emit();
   }
 

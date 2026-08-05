@@ -73,6 +73,33 @@ public sealed class PatientEntity
     public DateTime? UpdatedAtUtc { get; set; }
 }
 
+// Permanently links a HealthApp account to the one FHIR patient its first successful launch resolved to — the
+// same "account linking" concept FHIRBridge's own UserFhirContextBindings table enforces platform-wide, but
+// re-homed here specifically because THIS app has ground-truth knowledge of which account is logged in (its own
+// session), whereas FHIRBridge often doesn't (a genuinely embedded EHR-launch iframe can't reliably read a
+// session cookie at all — see Program.cs's /api/provider-in-app-launch-context remarks). This is a UX-layer
+// check on top of FHIRBridge's own gate, not a replacement for it: by the time this table can check anything,
+// FHIRBridge has already run the workflow and fetched the data — it can only decide whether to show an error
+// instead of the result, not prevent the underlying fetch.
+//
+// AudienceType is "PatientStandalone" or "EhrLaunch" (Provider EHR Launch) — enforcement differs between them:
+// - PatientStandalone: strict symmetric 1:1. One account can only ever be linked to one patient, AND one patient
+//   can only ever be claimed by one account — both directions checked.
+// - EhrLaunch: reverse-only. A provider is expected to launch into many different patients' charts over time
+//   (that's normal, not a violation), so the SAME account linking to many DIFFERENT patients is allowed. What's
+//   restricted is a DIFFERENT account later claiming a patient this account already linked.
+// Provider Standalone is deliberately not covered here: its context is the logged-in Practitioner (from Epic's
+// id_token fhirUser claim), which FHIRBridge never surfaces to the launching app at all today — there's no
+// resource id available on this side to link against without a FHIRBridge API change.
+public sealed class AccountContextLinkEntity
+{
+    public int Id { get; set; }
+    public string AccountEmail { get; set; } = string.Empty;
+    public string AudienceType { get; set; } = string.Empty;
+    public string ResourceId { get; set; } = string.Empty;
+    public DateTime CreatedUtc { get; set; }
+}
+
 public sealed class WorkflowSettingsEntity
 {
     public int Id { get; set; }
@@ -144,6 +171,8 @@ public sealed class HealthAppDbContext : DbContext
     }
 
     public DbSet<UserEntity> Users => Set<UserEntity>();
+
+    public DbSet<AccountContextLinkEntity> AccountContextLinks => Set<AccountContextLinkEntity>();
 
     public DbSet<HospitalEntity> Hospitals => Set<HospitalEntity>();
 
