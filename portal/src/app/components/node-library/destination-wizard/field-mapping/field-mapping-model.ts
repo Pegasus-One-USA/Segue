@@ -5,7 +5,7 @@
 // so workflow-build-assembler.service.ts keeps working unmodified.
 
 import {
-  CreateTableRequest, AddColumnRequest, DropColumnRequest, AlterColumnRequest,
+  CreateTableRequest, AddColumnRequest, DropColumnRequest, AlterColumnRequest, DestinationTable,
 } from '../../../../services/destination-schema.service';
 
 /**
@@ -116,24 +116,41 @@ export function migrateLegacyRow(row: LegacyMappingRow): MappingRow {
  * primary (first) source. Callers that also want the full shape for round-tripping the wizard's own
  * UI state should separately persist JSON.stringify(rows) under dest_mappings_v2.
  */
+/**
+ * Flattens the rich MappingRow[] back to the legacy wire shape for dest_mappings (see serializeRowsFlat).
+ * `sqlTables`, when supplied, is used to tag each row `isUpsertKey: true` when its target column is the
+ * destination table's real primary key — see serializeRowsFlat's own doc comment for why.
+ */
 export function serializeRowsFlat(
   rows: MappingRow[],
   targetByResource: Record<string, string>,
-): (LegacyMappingRow & { arrayPolicy: string; approximated: boolean })[] {
+  sqlTables: DestinationTable[] = [],
+): (LegacyMappingRow & { arrayPolicy: string; approximated: boolean; isUpsertKey: boolean })[] {
   return rows.map(row => {
     const primary = row.sources[0];
     const { arrayPolicy, approximated } = resolveArrayPolicy(row);
+    const targetTableName = targetByResource[row.resource] ?? row.tableName;
+    // The upsert key is whichever mapped field lands on the destination table's REAL primary key column
+    // (e.g. PatientId, not necessarily a column named "Id") — not literally whichever field maps the FHIR
+    // resource's own ".id" element. A resource's id often isn't mapped to the PK column at all (it may be
+    // mapped to a natural/business key column instead, with the PK itself being an identity/auto column
+    // fed some other way), so keying off "$.id" alone under-detects. workflow-build-assembler.service.ts's
+    // buildMappingForResource still also matches jsonPath === '$.id' as a fallback for rows saved before
+    // this existed, or when sqlTables (a live-probed/created schema) isn't available to check against.
+    const targetTable = sqlTables.find(t => t.fullName === targetTableName);
+    const isUpsertKey = !!targetTable?.columns.some(c => c.name === row.targetName && c.isPrimaryKey);
     return {
       resource: row.resource,
       field: primary?.label ?? '',
       path: primary?.fhirPath ?? row.childNodeId ?? '',
-      target: targetByResource[row.resource] ?? row.tableName,
+      target: targetTableName,
       column: row.targetName,
       jsonPath: primary?.jsonPath,
       valueType: arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType,
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,
+      isUpsertKey,
     };
   });
 }
