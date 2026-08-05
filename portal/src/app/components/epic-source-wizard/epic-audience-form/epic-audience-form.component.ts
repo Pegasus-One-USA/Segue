@@ -818,12 +818,10 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   /**
    * Backend System (and any other audience with showResourcePicker: false) normally derives its scopes from the
    * Data Retrieval Method's own Resource Type control — but that whole section is hidden in entity mode
-   * (showRetrievalSection), so activeRetrievalResourceTypes() is always empty there, which silently sent empty
-   * Scopes to the backend and tripped "Epic scopes are required." (ValidateEpicSourceConnection). Entity mode
-   * always has a usable value in the `resources` control regardless of audience — WizardService.openEntity()
-   * seeds it from the existing connection's dto.retrieval.resourceTypes (or DEFAULT_RESOURCES for a new one)
-   * before this component even initializes — so entity mode reads from there instead, exactly like the
-   * interactive audiences already do in canvas mode.
+   * (showRetrievalSection), so activeRetrievalResourceTypes() is always empty there. Entity mode reads from the
+   * `resources` control instead, regardless of audience — WizardService.openEntity() seeds it from the existing
+   * connection's dto.retrieval.resourceTypes when editing (empty for a brand-new one, same as canvas mode; see
+   * ngOnInit's remarks on why nothing is preselected by default anymore).
    */
   protected readonly showResourcePickerSection = computed(() =>
     this.audienceConfig().showResourcePicker || this.wiz.wizardMode() === 'entity');
@@ -1384,7 +1382,13 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
     apply('authzEndpoint', !isLoopback, true);
     apply('callbackUrl',   cfg.showRedirect, true);
     apply('launchUrl',     cfg.showLaunchUrl, true);
-    apply('resources',     this.showResourcePickerSection());
+    // Not required: there's no UI left to hand-pick this (the Resource Type & Scopes picker was removed —
+    // see ngOnInit's remarks), and the backend never needs it upfront either — Epic's base OAuth scopes are
+    // included regardless of resource count, and EpicSourceConnectionScopeSyncService fills in the real,
+    // usage-derived scopes later for any interactive source (EHR-launch/Standalone/Patient) once a workflow
+    // wires it to a destination. Leaving this required with no control to satisfy it made the form
+    // permanently invalid for every showResourcePicker audience.
+    apply('resources',     false);
     apply('clientSecret',  method === 'secret');
     // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
     // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
