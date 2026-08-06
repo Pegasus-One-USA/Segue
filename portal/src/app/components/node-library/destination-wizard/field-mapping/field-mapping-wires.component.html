@@ -10,6 +10,15 @@
       <title>Click to configure this mapping</title>
     </path>
   }
+  @for (s of suggestionPaths(); track s.rowKey) {
+    <path
+      class="fm-wire fm-wire--suggestion"
+      [attr.d]="s.d"
+      (click)="onSuggestionClick(s.rowKey)"
+    >
+      <title>Suggested match ({{ (s.confidence * 100) | number: '1.0-0' }}% confidence) — click to accept</title>
+    </path>
+  }
   @if (tempPath()) {
     <path class="fm-wire fm-wire--temp" [attr.d]="tempPath()!.d" [style.stroke]="tempPath()!.stroke" />
   }

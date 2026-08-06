@@ -4,6 +4,7 @@ import {
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
+import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
 import { FieldMappingTargetCardComponent } from './field-mapping-target-card.component';
@@ -222,6 +223,51 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   });
 
   readonly isApproximatedFn = (row: MappingRow) => isApproximated(row);
+
+  // ── near-match auto-suggest ("Suggest mappings" button — never runs on table selection, see
+  // field-mapping-automap.util.ts's suggestMappings doc comment) ──────────────────────────────────
+  private readonly rawSuggestions = signal<MappingSuggestion[]>([]);
+  /** Drops any suggestion whose column has since become really mapped (accepted here, or mapped
+   *  manually elsewhere) — a stale suggestion wire pointing at an already-mapped column would be
+   *  confusing (it reads as "still needs review" when it's actually done). */
+  readonly suggestions = computed<MappingSuggestion[]>(() =>
+    this.rawSuggestions().filter(s => !this.rowForColumnFn(s.row.resource, s.row.tableName, s.row.targetName)),
+  );
+
+  runSuggestMappings(): void {
+    const resource = this.resources()[0];
+    if (!resource) return;
+    const columnsForResource = (r: string): string[] => this.columnsForCardFn(r, this.targetFor(r), false);
+    const result = suggestMappings(this.forest(), this.mappingRows(), this.targetByResource(), columnsForResource);
+
+    if (result.autoMapped.length) {
+      this.mappingRowsChange.emit([...this.mappingRows(), ...result.autoMapped]);
+    }
+    this.rawSuggestions.set(result.suggestions);
+
+    if (!result.autoMapped.length && !result.suggestions.length) {
+      this.toast.info('No new matches', 'No unmapped column matched a source field closely enough to suggest.');
+      return;
+    }
+    const parts: string[] = [];
+    if (result.autoMapped.length) parts.push(`${result.autoMapped.length} mapped automatically`);
+    if (result.suggestions.length) parts.push(`${result.suggestions.length} awaiting your review`);
+    this.toast.success('Suggestions ready', `${parts.join(', ')}.`);
+  }
+
+  onSuggestionClick(e: { resource: string; tableName: string; targetName: string }): void {
+    const match = this.rawSuggestions().find(
+      s => s.row.resource === e.resource && s.row.tableName === e.tableName && s.row.targetName === e.targetName,
+    );
+    if (!match) return;
+    this.mappingRowsChange.emit([...this.mappingRows(), match.row]);
+    this.rawSuggestions.update(list => list.filter(s => s !== match));
+    this.toast.success('Suggestion accepted', `${match.row.sources[0]?.label ?? ''} → ${e.targetName}`);
+  }
+
+  clearSuggestions(): void {
+    this.rawSuggestions.set([]);
+  }
 
   /** All tables (primary + extras) a resource currently targets — used by the mapping-list draft form. */
   tablesForResourceFn = (resource: string): string[] =>

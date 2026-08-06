@@ -1,5 +1,7 @@
 import { Component, computed, inject, input, output } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { MappingRow } from './field-mapping-model';
+import { MappingSuggestion } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 
 export interface FmWirePath {
@@ -7,6 +9,12 @@ export interface FmWirePath {
   d: string;
   stroke: string;
   dashed: boolean;
+}
+
+export interface FmSuggestionPath {
+  rowKey: string;
+  d: string;
+  confidence: number;
 }
 
 export interface FmTempWire {
@@ -26,7 +34,7 @@ export interface FmTempWire {
 @Component({
   selector: 'app-field-mapping-wires',
   standalone: true,
-  imports: [],
+  imports: [DecimalPipe],
   templateUrl: './field-mapping-wires.component.html',
   styleUrl: './field-mapping-wires.component.scss',
 })
@@ -37,13 +45,23 @@ export class FieldMappingWiresComponent {
   readonly resourceColorVar = input.required<(resource: string) => string>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
   readonly tempWire = input<FmTempWire | null>(null);
+  /** Not-yet-accepted candidates from the "Suggest mappings" button (see FieldMappingCanvasComponent) —
+   *  rendered as a lighter dashed wire the user clicks to accept, distinct from an already-real mapped
+   *  row's own dashed wire (which means "approximated", not "unconfirmed"). */
+  readonly suggestions = input<MappingSuggestion[]>([]);
 
   readonly wireClick = output<{ resource: string; tableName: string; targetName: string }>();
+  readonly suggestionClick = output<{ resource: string; tableName: string; targetName: string }>();
 
   onPathClick(rowKey: string): void {
     const [resource, tableName, targetPart] = rowKey.split('::');
     const targetName = targetPart.split('#')[0];
     this.wireClick.emit({ resource, tableName, targetName });
+  }
+
+  onSuggestionClick(rowKey: string): void {
+    const [resource, tableName, targetName] = rowKey.split('::');
+    this.suggestionClick.emit({ resource, tableName, targetName });
   }
 
   readonly paths = computed<FmWirePath[]>(() => {
@@ -75,6 +93,29 @@ export class FieldMappingWiresComponent {
         const a = this.sourceAnchorPoint(s.fhirPath);
         if (a) out.push({ rowKey: `${key}#${i}`, d: this.bezier(a, b), stroke, dashed: approximated });
       });
+    }
+    return out;
+  });
+
+  /** Same anchor-lookup mechanism as `paths` above, just against the suggestions list instead of the
+   *  real rows — both the source leaf and the destination column already register an anchor whether or
+   *  not a real mapping exists yet (a column renders regardless of mapping state), so no new anchor
+   *  plumbing is needed to draw a wire for something not yet confirmed. */
+  readonly suggestionPaths = computed<FmSuggestionPath[]>(() => {
+    this.anchors.version();
+    this.anchors.pan();
+    this.anchors.zoom();
+    const out: FmSuggestionPath[] = [];
+    for (const s of this.suggestions()) {
+      const row = s.row;
+      const key = `${row.resource}::${row.tableName}::${row.targetName}`;
+      const targetAnchor = this.anchors.anchorFor(key);
+      const source = row.sources[0];
+      if (!targetAnchor || !source) continue;
+      const a = this.sourceAnchorPoint(source.fhirPath);
+      if (!a) continue;
+      const b = this.anchors.leftCenter(targetAnchor);
+      out.push({ rowKey: key, d: this.bezier(a, b), confidence: s.confidence });
     }
     return out;
   });

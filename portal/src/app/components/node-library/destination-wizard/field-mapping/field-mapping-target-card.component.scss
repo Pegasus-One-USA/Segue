@@ -6,13 +6,15 @@
   // Wider by default (was 260px) so the header has room for kind + name + search without feeling
   // cramped right out of the gate — still freely resizable beyond this, see below.
   width: 300px;
-  // Auto height — the card always opens tall enough to show every column with no internal scrolling,
-  // regardless of table size. `resize: both` still lets the user manually shrink it afterwards (at which
-  // point .fm-target-rows's own overflow takes over again), it's just never clipped by default.
+  // Auto height, up to max-height — the card opens tall enough to show every column, but a wide table
+  // stops growing past that and scrolls inside .fm-target-rows instead of taller than the canvas itself.
+  // The header (title + search, see .fm-target-head below) stays pinned above that scroll region either
+  // way. `resize: both` still lets the user manually resize beyond this.
   height: auto;
   min-width: 220px;
   max-width: 640px;
   min-height: 160px;
+  max-height: min(640px, 75vh);
   display: flex;
   flex-direction: column;
   // resize needs overflow other than the default `visible` to reliably show the drag handle across

@@ -4,6 +4,13 @@ import {
 import { MappingRow, MappingDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { ChildTableRelation } from './field-mapping-summary.model';
+import { autoCardWidth } from './field-mapping-card-size.util';
+
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 640;
+// Higher base than the source card's — every row here also carries a port dot, an optional type badge,
+// an optional PK/FK badge + key-toggle, and edit/delete buttons, none of which the source tree has.
+const BASE_PADDING_PX = 170;
 
 /** Just the PK/FK-relevant slice of DestinationColumn — this card only ever needs to show a badge. */
 export interface FmColumnKeyInfo {
@@ -157,6 +164,12 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
 
   ngAfterViewInit(): void {
     this.registerRows();
+    // One-time default sized to fit the longest column/target name on this table, in place of the old
+    // flat 300px default — never re-applied afterward (see field-mapping-card-size.util.ts), so it can't
+    // fight the user's own drag-resize later.
+    const longest = Math.max(this.targetValue().length, ...this.columns().map(c => c.length), 0);
+    this.card().nativeElement.style.width = `${autoCardWidth([longest], BASE_PADDING_PX, MIN_WIDTH, MAX_WIDTH)}px`;
+
     // The card is now user-resizable (CSS `resize: both`), which doesn't fire any DOM event or trigger
     // Angular change detection on its own — without this, wires attached to rows inside it would
     // visually lag behind a drag-resize until some unrelated action happened to run ngDoCheck.

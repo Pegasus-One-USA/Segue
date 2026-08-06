@@ -2,6 +2,8 @@
   position: absolute;
   left: 18px; bottom: 18px;
   z-index: 20;
+
+  &--top-right { left: auto; bottom: auto; top: 16px; right: 16px; }
   display: flex; align-items: center; gap: 6px;
   padding: 6px;
   background: var(--color-surface);
