@@ -19,7 +19,7 @@ describe('autoMap', () => {
     expect(added.length).toBe(1);
     expect(added[0].sources[0].fhirPath).toBe('Patient.name.given');
     expect(added[0].targetName).toBe('FirstName');
-    expect(added[0].instance).toEqual({ type: 'all' });
+    expect(added[0].instance).toEqual({ type: 'first' });
   });
 
   it('matches snake_case vs PascalCase via normalization', () => {

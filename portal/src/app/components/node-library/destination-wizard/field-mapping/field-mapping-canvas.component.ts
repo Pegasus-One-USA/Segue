@@ -1025,7 +1025,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
     if (!existing) {
       this.replaceRow(resource, tableName, column, {
-        resource, sources: [source], mode: 'value', instance: { type: 'all' },
+        resource, sources: [source], mode: 'value', instance: { type: 'first' },
         targetName: column, tableName,
       });
       this.toast.info('Mapped', `${source.label} → ${column}`);
@@ -1050,7 +1050,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
     // existing.mode === 'childJson' — a leaf drop takes precedence over a whole-node mapping.
     this.replaceRow(resource, tableName, column, {
-      resource, sources: [source], mode: 'value', instance: { type: 'all' },
+      resource, sources: [source], mode: 'value', instance: { type: 'first' },
       targetName: column, tableName,
     });
     this.toast.info('Replaced', `${source.label} → ${column} (replaced the whole-node JSON mapping).`);

@@ -54,7 +54,7 @@ export function autoMap(
           arrays: match.field.arrays,
         }],
         mode: 'value',
-        instance: { type: 'all' },
+        instance: { type: 'first' },
         targetName: column,
         tableName: targetByResource[resource] ?? '',
       });
