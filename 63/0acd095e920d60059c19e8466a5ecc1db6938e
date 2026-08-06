@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_2fdb9a42f0c996::t_a7afc0ee4a10c0 309-312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "630acd095e920d60059c19e8466a5ecc1db6938e",
+  "prompts": {},
+  "sessions": {
+    "s_2fdb9a42f0c996": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21d2d1a3-ca62-42d7-8909-7a612b198316",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
