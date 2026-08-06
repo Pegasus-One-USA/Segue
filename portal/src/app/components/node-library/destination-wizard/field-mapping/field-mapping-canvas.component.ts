@@ -19,7 +19,6 @@ import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './fi
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
 import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
-import { ZoomDockComponent } from '../../../canvas/zoom-dock/zoom-dock.component';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 
@@ -54,7 +53,6 @@ export interface FmTargetCardSpec {
     FieldMappingEditColumnModalComponent,
     FieldMappingCreateTableModalComponent,
     FieldMappingLoadPayloadModalComponent,
-    ZoomDockComponent,
   ],
   providers: [FieldMappingAnchorService],
   templateUrl: './field-mapping-canvas.component.html',
@@ -119,6 +117,23 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private _lastLoadPayloadTrigger: number | null = null;
   private _lastPreviewTrigger: number | null = null;
 
+  // Same relocated-to-the-dialog-header counter pattern as openLoadPayloadRequest/openPreviewRequest
+  // above, for the "Suggest mappings"/"Clear suggestions" buttons and the zoom-dock controls — moved up
+  // so the canvas's own floating "Suggest mappings" chip and top-right zoom dock can be dropped, giving
+  // the viewport back that chrome and letting them live in the dialog's mapping toolbar instead.
+  readonly runSuggestMappingsRequest = input<number>(0);
+  readonly clearSuggestionsRequest = input<number>(0);
+  readonly zoomInRequest = input<number>(0);
+  readonly zoomOutRequest = input<number>(0);
+  readonly zoomResetRequest = input<number>(0);
+  readonly zoomFitRequest = input<number>(0);
+
+  /** Mirrors suggestions().length / zoomPercent() up to the dialog header, which now renders the
+   *  "Clear N suggestions" label and the zoom-percent readout in its own toolbar (see the requests
+   *  above for the matching down-direction triggers). */
+  readonly suggestionCountChange = output<number>();
+  readonly zoomPercentChange = output<string>();
+
   readonly mappingRowsChange = output<MappingRow[]>();
   readonly targetByResourceChange = output<Record<string, string>>();
   readonly extraTablesChange = output<string[]>();
@@ -163,11 +178,11 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private static readonly SOURCE_KEY = '__source__';
   private readonly cardPositions = signal<Record<string, { x: number; y: number }>>({});
 
-  // Source tree defaults to 400px wide (field-mapping-source-tree.component.scss) starting at x:24, so its
-  // right edge sits at x:424 by default — target cards must start past that with a real gap, not right at
+  // Source tree defaults to 380px wide (field-mapping-source-tree.component.scss) starting at x:24, so its
+  // right edge sits at x:404 by default — target cards must start past that with a real gap, not right at
   // it, or the two panels render touching/overlapping the moment neither has been dragged yet.
-  private static readonly SOURCE_DEFAULT_WIDTH = 400;
-  private static readonly CARD_GAP = 40;
+  private static readonly SOURCE_DEFAULT_WIDTH = 380;
+  private static readonly CARD_GAP = 56;
 
   private defaultPositionFor(key: string, index: number): { x: number; y: number } {
     if (key === FieldMappingCanvasComponent.SOURCE_KEY) return { x: 24, y: 24 };
@@ -292,6 +307,27 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
       const v = this.openPreviewRequest();
       if (this._lastPreviewTrigger === null) { this._lastPreviewTrigger = v; return; }
       if (v !== this._lastPreviewTrigger) { this._lastPreviewTrigger = v; if (v > 0) this.openDrawer(); }
+    });
+    this.watchTrigger(this.runSuggestMappingsRequest, () => this.runSuggestMappings());
+    this.watchTrigger(this.clearSuggestionsRequest, () => this.clearSuggestions());
+    this.watchTrigger(this.zoomInRequest, () => this.zoomIn());
+    this.watchTrigger(this.zoomOutRequest, () => this.zoomOut());
+    this.watchTrigger(this.zoomResetRequest, () => this.resetView());
+    this.watchTrigger(this.zoomFitRequest, () => this.fitToView());
+
+    effect(() => this.suggestionCountChange.emit(this.suggestions().length));
+    effect(() => this.zoomPercentChange.emit(this.zoomPercent()));
+  }
+
+  /** Same baseline-learning behavior as the openLoadPayloadRequest/openPreviewRequest effects above,
+   *  factored out for the newer relocated triggers (suggest/clear/zoom) so each doesn't need its own
+   *  hand-written baseline field. */
+  private watchTrigger(source: () => number, onFire: () => void): void {
+    let last: number | null = null;
+    effect(() => {
+      const v = source();
+      if (last === null) { last = v; return; }
+      if (v !== last) { last = v; if (v > 0) onFire(); }
     });
   }
 

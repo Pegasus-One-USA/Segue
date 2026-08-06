@@ -3,19 +3,20 @@
 .fm-source-card {
   position: absolute;
   z-index: 2;
-  // Wider by default (was 340px) so the header has room for kind + name + search without any of them
-  // feeling cramped right out of the gate — still freely resizable beyond this, see below.
-  width: 400px;
-  // Auto-height so the card grows to fit the payload tree, but only up to max-height — past that,
-  // .fm-source-rows's own overflow takes over so a big resource (e.g. Patient's 184 fields) scrolls
-  // inside the card instead of growing taller than the canvas itself. The header (title + search, see
-  // .fm-source-head below) stays pinned above that scroll region either way. Still freely resizable
-  // (including shorter/taller than this) via the native resize handle below.
+  // Matches FieldMappingCanvasComponent.SOURCE_DEFAULT_WIDTH, which the default target-card position is
+  // offset past with a real gap (see defaultPositionFor); the two must stay in sync or the two panels
+  // can render touching/overlapping before either has been dragged. Still freely resizable wider if the
+  // header ever feels cramped, see below.
+  width: 380px;
+  // Auto-height, uncapped, so the card always grows to fully show the payload tree — even a big
+  // resource (e.g. Patient's 184 fields) — instead of scrolling inside it; the outer canvas viewport's
+  // own pan/scroll (see .fm-scrollbar-track) is what handles a card taller than the visible area, not a
+  // second scrollbar nested inside it. Still freely resizable smaller via the native resize handle below
+  // if the user wants a capped/scrolling view back (see .fm-source-rows's own overflow).
   height: auto;
   min-width: 260px;
   max-width: 720px;
   min-height: 160px;
-  max-height: min(640px, 75vh);
   display: flex;
   flex-direction: column;
   // resize needs overflow other than the default `visible` to reliably show the drag handle across

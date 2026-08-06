@@ -13,6 +13,8 @@
       <div class="nld-header-left">
         <span class="nld-brand-hex">⬡</span>
         <h2 class="nld-title">{{ destMappingTitle() }}</h2>
+        <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
+        <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
       </div>
 
       <div class="nld-header-right">
@@ -74,15 +76,31 @@
       </div>
     }
 
-    <!-- ── Mapping toolbar ── badges + canvas actions, on their own row so they can wrap independently
-         of the title/Close/Save row above at narrow dialog widths, instead of squeezing the title. -->
+    <!-- ── Mapping toolbar ── canvas actions, on their own row so they can wrap independently of the
+         title/badges/Close/Save row above at narrow dialog widths, instead of squeezing the title.
+         Badges (destination type + field count) moved up next to the title itself — see .nld-header-left.
+         Suggest-mappings + zoom-dock controls moved here from the canvas's own floating chrome (see
+         field-mapping-canvas.component.html) — the canvas viewport gets that room back. -->
     @if (destMappingTitle()) {
       <div class="nld-mapping-toolbar">
-        <div class="nld-mapping-toolbar-badges">
-          <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
-          <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
+        <div class="nld-mapping-toolbar-actions">
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpRunSuggestMappingsTrigger()">✨ Suggest mappings</button>
+          @if (destSuggestionCount() > 0) {
+            <button type="button" class="nld-mapping-tool-btn" (click)="bumpClearSuggestionsTrigger()">
+              Clear {{ destSuggestionCount() }} suggestion{{ destSuggestionCount() === 1 ? '' : 's' }}
+            </button>
+          }
         </div>
         <div class="nld-mapping-toolbar-actions">
+          <app-zoom-dock
+            [zoomPercent]="destZoomPercent()"
+            [showFit]="true"
+            [corner]="'inline'"
+            (zoomIn)="bumpZoomInTrigger()"
+            (zoomOut)="bumpZoomOutTrigger()"
+            (reset)="bumpZoomResetTrigger()"
+            (fit)="bumpZoomFitTrigger()"
+          />
           <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
         </div>
       </div>
@@ -232,6 +250,12 @@
             [saveSnapshotRequest]="saveSnapshotTrigger()"
             [openLoadPayloadRequest]="loadPayloadTrigger()"
             [openPreviewRequest]="previewOutputTrigger()"
+            [runSuggestMappingsRequest]="runSuggestMappingsTrigger()"
+            [clearSuggestionsRequest]="clearSuggestionsTrigger()"
+            [zoomInRequest]="zoomInTrigger()"
+            [zoomOutRequest]="zoomOutTrigger()"
+            [zoomResetRequest]="zoomResetTrigger()"
+            [zoomFitRequest]="zoomFitTrigger()"
             [isMaximized]="isMaximized()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
@@ -242,6 +266,8 @@
             (mappingCanvasActive)="destMappingCanvasActive.set($event)"
             (mappingCanvasTitle)="destMappingTitle.set($event)"
             (mappingCountChange)="destMappingCount.set($event)"
+            (suggestionCountChange)="destSuggestionCount.set($event)"
+            (zoomPercentChange)="destZoomPercent.set($event)"
           />
 
         } @else {

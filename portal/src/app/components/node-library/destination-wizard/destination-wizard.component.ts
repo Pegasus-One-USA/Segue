@@ -182,6 +182,18 @@ export class DestinationWizardComponent implements OnInit {
   // own toolbar, so the wizard just forwards these without reacting to them itself.
   readonly openLoadPayloadRequest = input<number>(0);
   readonly openPreviewRequest = input<number>(0);
+  // Same forward-only pattern for the "Suggest mappings"/"Clear suggestions" buttons and the zoom-dock
+  // controls, also relocated to the dialog header.
+  readonly runSuggestMappingsRequest = input<number>(0);
+  readonly clearSuggestionsRequest = input<number>(0);
+  readonly zoomInRequest = input<number>(0);
+  readonly zoomOutRequest = input<number>(0);
+  readonly zoomResetRequest = input<number>(0);
+  readonly zoomFitRequest = input<number>(0);
+  /** Mirrors the canvas's own suggestionCountChange/zoomPercentChange straight up to the dialog header,
+   *  which renders the "Clear N suggestions" label and zoom-percent readout. */
+  readonly suggestionCountChange = output<number>();
+  readonly zoomPercentChange = output<string>();
   /** Whether the OUTER Node Library dialog is currently maximized — this wizard's own topbar (see
    *  .dw-topbar) renders the maximize/restore button itself while its steps are showing, since the
    *  outer dialog's own header row is hidden then (see NodeLibraryDialogComponent's .nld-header) to

@@ -69,20 +69,6 @@
       />
     </div>
 
-    <!-- ── Fixed chrome, top-left — mirrors the "+ Add a table…"/zoom-dock fixed-chrome pattern above,
-         just anchored to the opposite corner since those two now occupy top-right (see
-         field-mapping-canvas.component.scss). ── -->
-    <div class="fm-suggest-slot">
-      <button type="button" class="fm-suggest-btn" (click)="runSuggestMappings()">
-        ✨ Suggest mappings
-      </button>
-      @if (suggestions().length > 0) {
-        <button type="button" class="fm-suggest-clear" (click)="clearSuggestions()">
-          Clear {{ suggestions().length }} suggestion{{ suggestions().length === 1 ? '' : 's' }}
-        </button>
-      }
-    </div>
-
     <!-- ── Chrome that must stay a constant screen size regardless of canvas zoom — siblings of the
          transformed .fm-canvas-inner, never descendants of it. ── -->
     @if (popoverRow(); as row) {
@@ -152,16 +138,6 @@
       </div>
       }
     }
-
-    <app-zoom-dock
-      [zoomPercent]="zoomPercent()"
-      [showFit]="true"
-      [corner]="'top-right'"
-      (zoomIn)="zoomIn()"
-      (zoomOut)="zoomOut()"
-      (reset)="resetView()"
-      (fit)="fitToView()"
-    />
 
     @if (scrollThumbFraction() < 1) {
       <div

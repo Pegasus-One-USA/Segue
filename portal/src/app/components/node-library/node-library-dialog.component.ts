@@ -13,6 +13,7 @@ import { MergeNodeOption } from '../../models/wizard-state.model';
 import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
 import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
 import { GenericFhirSourceFormComponent } from './generic-fhir-source-form/generic-fhir-source-form.component';
+import { ZoomDockComponent } from '../canvas/zoom-dock/zoom-dock.component';
 
 export type LibraryMode = 'source' | 'transform';
 
@@ -112,6 +113,7 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
     EpicAudienceFormComponent,
     DestinationWizardComponent,
     GenericFhirSourceFormComponent,
+    ZoomDockComponent,
   ],
   templateUrl: './node-library-dialog.component.html',
   styleUrl: './node-library-dialog.component.scss',
@@ -206,6 +208,26 @@ export class NodeLibraryDialogComponent {
   readonly previewOutputTrigger = signal(0);
   bumpLoadPayloadTrigger(): void { this.loadPayloadTrigger.update(v => v + 1); }
   bumpPreviewOutputTrigger(): void { this.previewOutputTrigger.update(v => v + 1); }
+
+  // Same pattern again for "Suggest mappings"/"Clear suggestions" and the zoom-dock controls, also
+  // relocated here from the canvas's own floating chrome (see field-mapping-canvas.component.html).
+  readonly runSuggestMappingsTrigger = signal(0);
+  readonly clearSuggestionsTrigger = signal(0);
+  readonly zoomInTrigger = signal(0);
+  readonly zoomOutTrigger = signal(0);
+  readonly zoomResetTrigger = signal(0);
+  readonly zoomFitTrigger = signal(0);
+  bumpRunSuggestMappingsTrigger(): void { this.runSuggestMappingsTrigger.update(v => v + 1); }
+  bumpClearSuggestionsTrigger(): void { this.clearSuggestionsTrigger.update(v => v + 1); }
+  bumpZoomInTrigger(): void { this.zoomInTrigger.update(v => v + 1); }
+  bumpZoomOutTrigger(): void { this.zoomOutTrigger.update(v => v + 1); }
+  bumpZoomResetTrigger(): void { this.zoomResetTrigger.update(v => v + 1); }
+  bumpZoomFitTrigger(): void { this.zoomFitTrigger.update(v => v + 1); }
+
+  // Mirrors the canvas's own suggestions().length / zoomPercent() up to this header (see
+  // DestinationWizardComponent's suggestionCountChange/zoomPercentChange outputs).
+  readonly destSuggestionCount = signal(0);
+  readonly destZoomPercent = signal('100%');
 
   // Whether the whole dialog is expanded to near-fullscreen (see .nld--maximized) — the maximize button
   // lives in several places (mapping-canvas header, floating controls, and each form's own topbar) but
@@ -514,6 +536,8 @@ export class NodeLibraryDialogComponent {
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
     this.destMappingCount.set(0);
+    this.destSuggestionCount.set(0);
+    this.destZoomPercent.set('100%');
     this.showDestWizard.set(true);
   }
 
@@ -548,6 +572,8 @@ export class NodeLibraryDialogComponent {
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
     this.destMappingCount.set(0);
+    this.destSuggestionCount.set(0);
+    this.destZoomPercent.set('100%');
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -622,6 +648,8 @@ export class NodeLibraryDialogComponent {
     this.destMappingCanvasActive.set(false);
     this.destMappingTitle.set(null);
     this.destMappingCount.set(0);
+    this.destSuggestionCount.set(0);
+    this.destZoomPercent.set('100%');
     this.pendingDestSwitch.set(null);
     this.wiz.close();
   }

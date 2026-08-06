@@ -1,4 +1,4 @@
-<div class="zoom-dock" [class.zoom-dock--top-right]="corner() === 'top-right'">
+<div class="zoom-dock" [class.zoom-dock--top-right]="corner() === 'top-right'" [class.zoom-dock--inline]="corner() === 'inline'">
   <button type="button" aria-label="Zoom out" (click)="zoomOut.emit()">−</button>
   <span>{{ zoomPercent() }}</span>
   <button type="button" aria-label="Zoom in" (click)="zoomIn.emit()">+</button>

@@ -5,7 +5,12 @@ import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { autoCardWidth } from './field-mapping-card-size.util';
 
 const MIN_WIDTH = 260;
-const MAX_WIDTH = 720;
+// Capped at FieldMappingCanvasComponent.SOURCE_DEFAULT_WIDTH (380) — the default target-card position
+// is offset past that exact width with a fixed gap (see defaultPositionFor), so this must never size
+// past it or a resource with a long nested label (e.g. Patient's deepest path, ~614px uncapped) pushes
+// the card into the target card with no real gap. Long labels still read fine truncated — see the tree
+// node's own ellipsis — so capping here is a clean tradeoff, not a regression.
+const MAX_WIDTH = 380;
 const BASE_PADDING_PX = 100;
 
 /**
