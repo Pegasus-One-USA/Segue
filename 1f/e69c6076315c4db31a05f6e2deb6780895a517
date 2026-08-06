@@ -1,0 +1,90 @@
+src/FHIRBridge.Application/DTOs/MappingProfileDto.cs
+  s_9b48790bb1404e::t_9f298bf1ef8ec3 17-18
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_9b48790bb1404e::t_21959263e2e360 478-480
+  s_9b48790bb1404e::t_faa43a54d89c6a 477,481-498
+  s_9b48790bb1404e::t_5d5ea187acd573 453-465
+  s_9b48790bb1404e::t_5be0c8c7f9fa89 335-339
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_9b48790bb1404e::t_830afeef0d135a 506-523
+  s_9b48790bb1404e::t_668c1de7938d5d 478-485
+  s_9b48790bb1404e::t_b106457d5bceb8 452-453
+  s_9b48790bb1404e::t_bb1f8376c881a7 499,502
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_9b48790bb1404e::t_914e9e9692544e 198-210,212
+  s_9b48790bb1404e::t_dedb3e6192cd68 298-302
+  s_9b48790bb1404e::t_8d2b6a0564111c 93-99
+  s_9b48790bb1404e::t_73c846f457351d 215-216
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260806120837_BackfillMappingProfileWorkflowId.cs
+  s_9b48790bb1404e::t_e546c18c2b3af9 1-7,22-26,36,67-71,76-78
+  s_9b48790bb1404e::t_90f5fcb5639e1f 8-21,27-35,37-66,72-75
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_9b48790bb1404e::t_92d5d96f765c45 22-24,29-32
+src/FHIRBridge.Application/DTOs/CreateMappingProfileRequest.cs
+  s_9b48790bb1404e::t_42689505065c4a 13-18
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_9b48790bb1404e::t_313399a79d0e38 284,286-292
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_9b48790bb1404e::t_d3a615500ca24b 229-234
+Demo_TestApp/backend/Program.cs
+  s_75dca83bfa1300::t_d639fc5336708b 116-134
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_9b48790bb1404e::t_f1e8e7f35dbc24 135,218,265
+  s_9b48790bb1404e::t_f8bbffcdadfa3d 220,267
+src/FHIRBridge.Domain/Entities/MappingProfile.cs
+  s_9b48790bb1404e::t_393ed7dfa433e4 62-72,80-90
+  s_9b48790bb1404e::t_2da79b2555e2bf 22-23,34,61,91
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_9b48790bb1404e::t_148ef4b8e59613 167-169,171
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  s_9b48790bb1404e::t_314887c0bff72a 46
+  s_9b48790bb1404e::t_bff2e05607392a 57,76
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_9b48790bb1404e::t_485df683ce3294 162-163
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_9b48790bb1404e::t_4d76e94658a0c7 58-62,64-65
+  s_9b48790bb1404e::t_c15c740cf56a96 66-69
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_9b48790bb1404e::t_d391db92825fe1 344,347-354
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_9b48790bb1404e::t_d335525140a426 66-73,75
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_9b48790bb1404e::t_08efc014f236c5 182-186
+  s_9b48790bb1404e::t_e6f99f69716410 211
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_9b48790bb1404e::t_335af5bbc0f998 802-811,825,836-837
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_9b48790bb1404e::t_99ecb017649890 217
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_9b48790bb1404e::t_abd30b6731e4f2 1400-1402,1411-1412
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260806115247_AddWorkflowIdToMappingProfile.cs
+  s_9b48790bb1404e::t_abd30b6731e4f2 1-38
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260806115247_AddWorkflowIdToMappingProfile.Designer.cs
+  s_9b48790bb1404e::t_abd30b6731e4f2 1-4478
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260806120837_BackfillMappingProfileWorkflowId.Designer.cs
+  s_9b48790bb1404e::t_e546c18c2b3af9 1-4478
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "1fe69c6076315c4db31a05f6e2deb6780895a517",
+  "prompts": {},
+  "sessions": {
+    "s_75dca83bfa1300": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15d69f69-0a00-47fb-8b81-5ba6e743e1cb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    },
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
