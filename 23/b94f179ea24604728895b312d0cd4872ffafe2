@@ -1,0 +1,50 @@
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_39163135bbc470::t_3f90fb00e622f7 540,576,652
+  s_39163135bbc470::t_1d956905cd268f 212-231
+  s_39163135bbc470::t_bdafc2b4866c29 116
+  s_39163135bbc470::t_c760b0b7d0f8a0 16,539,575,651
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_39163135bbc470::t_584be15ba66c1a 11-15
+  s_39163135bbc470::t_876464911ef3a2 6-10
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_39163135bbc470::t_7a487dca929ce1 185-196
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_39163135bbc470::t_b8b8b8db6339e0 253-258,269-270
+  s_39163135bbc470::t_8ea82cc49d7b36 81-83,87-92,95-103
+  s_39163135bbc470::t_e34531dd3a7492 16-17,86
+  s_39163135bbc470::t_27864743a30b67 79-80
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_39163135bbc470::t_8f5715b6b34f32 311-331
+  s_39163135bbc470::t_5ee06f70c87816 181-182,184
+  s_39163135bbc470::t_ad63362c3dfab2 185
+  s_39163135bbc470::t_d11f24e66f4ff2 120-136
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_39163135bbc470::t_387dbf72dd56f1 482-489
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_39163135bbc470::t_d648dc38b24fe5 81-84,87
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.ts
+  s_39163135bbc470::t_b65ccbb01fc603 15-18
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.html
+  s_39163135bbc470::t_15e8570fbee7f3 1
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.scss
+  s_39163135bbc470::t_aa623e0197af49 7
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_39163135bbc470::t_cc959b5b620894 8-9,13
+  s_39163135bbc470::t_54649e56ac3b6d 10-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "23b94f179ea24604728895b312d0cd4872ffafe2",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
