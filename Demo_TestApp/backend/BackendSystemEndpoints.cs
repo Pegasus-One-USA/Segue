@@ -108,7 +108,7 @@ public static class BackendSystemEndpoints
         // Practitioner's caller criteria untouched). Each returned Practitioner resource is upserted into the Default
         // Practitioner table, so the view re-reads it through /api/backend-system/practitioners above. Falls back to
         // every referenced id when the request body carries none.
-        app.MapPost("/api/backend-system/practitioners/import", async (ImportPractitionersRequest? request, HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+        app.MapPost("/api/backend-system/practitioners/import", async (ImportPractitionersRequest? request, HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, ProviderStandaloneCallerIdStore providerStandaloneCallerIds, CancellationToken cancellationToken) =>
         {
             if (!TryGetSession(http, sessions))
             {
@@ -144,11 +144,16 @@ public static class BackendSystemEndpoints
             // FHIRBridge passes this through to the source verbatim rather than trying to patient-scope it.
             var criteria = "_id=" + string.Join(",", ids);
             var runUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/run";
+            // callerId: this workflow runs against the Provider Standalone SourceConnection (see this method's own
+            // "(Provider Standalone) FHIRBridge base URL" wording above) — by explicit product decision, Backend
+            // System has no interactive sign-in of its own and instead reuses whichever Provider Standalone token
+            // was authorized most recently. See ProviderStandaloneCallerIdStore's remarks for why this is safe only
+            // as a deliberate, demo-only choice for this app, not a pattern for a real FHIRBridge caller.
             var requestBody = JsonSerializer.Serialize(new
             {
                 patientId = (string?)null,
                 patientSearchCriteria = criteria,
-                callerId = (string?)null,
+                callerId = providerStandaloneCallerIds.Get(),
             });
 
             var client = httpClientFactory.CreateClient("Workflow");

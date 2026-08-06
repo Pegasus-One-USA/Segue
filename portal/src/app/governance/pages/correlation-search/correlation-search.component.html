@@ -189,7 +189,13 @@
                 <td><span [class]="'severity-badge severity-' + x.severity.toLowerCase()">{{ x.severity }}</span></td>
                 <td>{{ x.exceptionType }}</td>
                 <td [title]="x.message">{{ x.userFriendlyMessage || x.message }}</td>
-                <td class="mono">{{ x.errorReferenceId || '—' }}</td>
+                <td class="mono">
+                  @if (x.errorReferenceId) {
+                    <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: x.errorReferenceId }">{{ x.errorReferenceId }}</a>
+                  } @else {
+                    —
+                  }
+                </td>
                 <td class="mono trace-cell" [title]="'TraceId: ' + (x.traceId || '—') + '  SpanId: ' + (x.spanId || '—')">
                   {{ x.traceId ? (x.traceId | slice:0:8) + '…' : '—' }}
                 </td>

@@ -518,7 +518,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       await firstValueFrom(
         this.http.post(
           `${HEALTHAPP_BACKEND_BASE_URL}/api/epic-session`,
-          { patientId: this.patientId, workflowId: this.standaloneWorkflowId },
+          // sessionId lets HealthApp's backend remember which FHIRBridge callerId this sign-in authorized a
+          // token under (see ProviderStandaloneCallerIdStore) — the Backend System role's own Import
+          // Practitioner flow deliberately reuses it, since that role has no interactive sign-in of its own.
+          { patientId: this.patientId, workflowId: this.standaloneWorkflowId, sessionId: this.sessionId },
           { withCredentials: true },
         ),
       );

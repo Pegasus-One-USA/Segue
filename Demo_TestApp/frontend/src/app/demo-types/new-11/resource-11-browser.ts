@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
@@ -31,6 +31,16 @@ type Mode = 'patients' | 'practitioners';
 export class Resource11BrowserComponent implements OnInit {
   readonly loginTypeLabel = input('');
   readonly logout = output<void>();
+  // Set only by ProviderStandaloneNew11Component (see readProviderStandaloneSessionId) — forwarded to
+  // importMissingPractitioners' /api/v11/practitioners/import call so a Provider Standalone source's
+  // CallerId-keyed token cache is found. Other roles (Patient, Backend Services, Provider In-App) leave this
+  // unset; Backend Services in particular needs no CallerId at all (its FhirSourceConfiguration.ApplicationType
+  // is never Standalone/Patient, so BuildStoreKey ignores CallerId regardless).
+  readonly callerId = input<string | null>(null);
+  // Set only by ProviderStandaloneNew11Component (see PROVIDER_STANDALONE_PRACTITIONER_IDS) — an explicit,
+  // curated id list that overrides the "missing ids" auto-discovery for importMissingPractitioners below. Other
+  // roles leave this unset and keep the original auto-discovery behavior.
+  readonly practitionerIds = input<string[] | null>(null);
 
   readonly mode = signal<Mode>('patients');
 
@@ -56,6 +66,12 @@ export class Resource11BrowserComponent implements OnInit {
   private readonly practitionersLoaded = signal(false);
 
   readonly missingPractitioners = signal<MissingPractitioner[]>([]);
+  // True whenever there's something to import — either the usual "missing ids" auto-discovery found rows, or an
+  // explicit curated id list (practitionerIds input) was supplied, which imports unconditionally regardless of
+  // what's already present locally.
+  readonly canImportPractitioners = computed(
+    () => this.missingPractitioners().length > 0 || (this.practitionerIds()?.length ?? 0) > 0,
+  );
   readonly importing = signal(false);
   readonly importMessage = signal<string | null>(null);
   readonly importError = signal<string | null>(null);
@@ -163,14 +179,16 @@ export class Resource11BrowserComponent implements OnInit {
   }
 
   async importMissingPractitioners(): Promise<void> {
-    if (this.importing() || this.missingPractitioners().length === 0) {
+    if (this.importing() || !this.canImportPractitioners()) {
       return;
     }
     this.importing.set(true);
     this.importMessage.set(null);
     this.importError.set(null);
     try {
-      const result = await firstValueFrom(this.resource11.importPractitioners());
+      const result = await firstValueFrom(
+        this.resource11.importPractitioners(this.callerId() ?? undefined, this.practitionerIds() ?? undefined),
+      );
       if (result.status === 'Succeeded') {
         await this.loadPractitioners(); // refresh table + recompute what's still missing
         this.importMessage.set(result.message ?? `Imported ${result.imported ?? 0} practitioner(s).`);

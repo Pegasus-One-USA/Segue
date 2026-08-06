@@ -220,6 +220,11 @@ export class NodeLibraryDialogComponent {
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
 
+  // Guards the overlay's own close (Escape key, or a backdrop click on the rare occasions it's still
+  // enabled) while a form/wizard is open — same "don't silently discard progress" intent as
+  // pendingDestSwitch above, just for exiting the whole dialog instead of switching destination type.
+  readonly pendingCloseConfirm = signal(false);
+
   private readonly destTypeLocked = computed(() =>
     this.showDestWizard() && this.destWizardStep() > 1
   );
@@ -573,6 +578,31 @@ export class NodeLibraryDialogComponent {
   }
 
   close(): void { this._close(); }
+
+  // Bound to app-modal-overlay's (closed) output — fires on Escape unconditionally, and on backdrop
+  // click whenever closeOnBackdropClick is true. Escape isn't covered by that input (see
+  // ModalOverlayComponent.onEscape), so a form/wizard being open is checked here instead: closing outright
+  // would otherwise silently discard whatever the user has entered.
+  onOverlayClosed(): void {
+    if (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) {
+      this.pendingCloseConfirm.set(true);
+      return;
+    }
+    this.close();
+  }
+
+  confirmDiscardClose(): void {
+    this.pendingCloseConfirm.set(false);
+    this.close();
+  }
+
+  cancelDiscardClose(): void {
+    this.pendingCloseConfirm.set(false);
+  }
+
+  onConfirmCloseBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelDiscardClose();
+  }
 
   private _close(): void {
     this.closed.emit();

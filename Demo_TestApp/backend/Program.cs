@@ -43,6 +43,7 @@ builder.Services.AddScoped<MongoPatientDataSourceReader>();
 builder.Services.AddScoped<PatientDataSourceResolver>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<EpicSessionStore>();
+builder.Services.AddSingleton<ProviderStandaloneCallerIdStore>();
 builder.Services.AddHttpClient("Workflow");
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
     .WithOrigins(allowedFrontendOrigin)
@@ -110,6 +111,31 @@ IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') I
     ALTER TABLE [WorkflowSettings]
         ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
         CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
+");
+
+    // EnsureCreated won't add PractitionerEntity's newer columns to an already-existing Practitioner table (see the
+    // EnsureCreated note above) — the table pre-dates NPI/Qualification/etc. being added alongside the global
+    // Practitioner import flow. Idempotent, same pattern as BackendSystemPractitionerImportWorkflowId above; a
+    // no-op on a brand-new DB where EnsureCreated already built every column from the entity model.
+    db.Database.ExecuteSqlRaw(@"
+IF COL_LENGTH('Practitioner', 'Identifier') IS NULL
+    ALTER TABLE [Practitioner] ADD [Identifier] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'NPI') IS NULL
+    ALTER TABLE [Practitioner] ADD [NPI] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'FamilyName') IS NULL
+    ALTER TABLE [Practitioner] ADD [FamilyName] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'GivenName') IS NULL
+    ALTER TABLE [Practitioner] ADD [GivenName] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'MiddleName') IS NULL
+    ALTER TABLE [Practitioner] ADD [MiddleName] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'Gender') IS NULL
+    ALTER TABLE [Practitioner] ADD [Gender] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'Qualification') IS NULL
+    ALTER TABLE [Practitioner] ADD [Qualification] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'Phone') IS NULL
+    ALTER TABLE [Practitioner] ADD [Phone] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('Practitioner', 'Email') IS NULL
+    ALTER TABLE [Practitioner] ADD [Email] NVARCHAR(MAX) NULL;
 ");
 
     // EnsureCreated won't add the AccountContextLinks table to an already-existing HealthAppDb — see
@@ -631,7 +657,7 @@ app.MapGet("/api/patients", async (HttpContext http, SessionStore sessions, Heal
 // (from FHIRBridge's own launch-result) and the last time a real fetch through FHIRBridge actually confirmed it
 // still worked. That's a "last known good" signal, not a live guarantee — the actual authority remains attempting
 // the real /run call, which the frontend already does and falls back gracefully from if this turns out stale.
-app.MapPost("/api/epic-session", (EpicSessionRequest request, HttpContext http, SessionStore sessions, EpicSessionStore epicSessions) =>
+app.MapPost("/api/epic-session", (EpicSessionRequest request, HttpContext http, SessionStore sessions, EpicSessionStore epicSessions, ProviderStandaloneCallerIdStore providerStandaloneCallerIds) =>
 {
     if (!TryGetSession(http, sessions, out var userId, out _))
     {
@@ -639,6 +665,12 @@ app.MapPost("/api/epic-session", (EpicSessionRequest request, HttpContext http, 
     }
 
     epicSessions.Set(userId, request.PatientId, request.WorkflowId, DateTime.UtcNow);
+    // See ProviderStandaloneCallerIdStore's remarks — only the Provider Standalone flow ever sends SessionId
+    // (Patient Standalone's own rememberEpicSession call omits it), so this is a no-op for every other role.
+    if (!string.IsNullOrWhiteSpace(request.SessionId))
+    {
+        providerStandaloneCallerIds.Set(request.SessionId);
+    }
     return Results.Ok();
 });
 
@@ -767,7 +799,7 @@ record LaunchResultPatientId(string? PatientId);
 // PatientId is nullable: the very first OAuth callback often has no specific patient resolved yet (an interactive
 // launch's auto-triggered workflow run has no search criteria to work with) — but the Epic session itself is
 // already live at that point (saved under FHIRBridge's "default" token slot), so it's still worth remembering.
-record EpicSessionRequest(string? PatientId, string WorkflowId);
+record EpicSessionRequest(string? PatientId, string WorkflowId, string? SessionId = null);
 record ResourceEnvelope(string ResourceType, string ResourceId, string Payload);
 record ResourcesEnvelope(List<ResourceEnvelope> Resources);
 
@@ -844,4 +876,24 @@ sealed class EpicSessionStore
     }
 
     public void Remove(int userId) => _sessions.TryRemove(userId, out _);
+}
+
+/// <summary>
+/// In-memory, global (NOT per-user) — the single most recent Provider Standalone sessionId, i.e. the FHIRBridge
+/// callerId that role's own interactive OAuth sign-in last authorized a token under (see
+/// SmartAuthorizationCodeTokenProvider.BuildStoreKey). Deliberately shared across every role: the Backend System
+/// role's own Import Practitioner flow (BackendSystemEndpoints) has no interactive session of its own — by
+/// explicit product decision for this demo app, it reuses whichever Provider Standalone token was authorized
+/// most recently, rather than needing its own separate sign-in. This is a deliberate, demo-only choice: real
+/// production FHIRBridge callers must supply their own genuine callerId (or, for true Backend Services auth,
+/// none at all) — see SmartAuthorizationCodeTokenProvider's CallerId-keyed cache and its cross-account-leakage
+/// remarks for why a real caller must never do this. Wiped on backend restart, same as EpicSessionStore.
+/// </summary>
+sealed class ProviderStandaloneCallerIdStore
+{
+    private volatile string? _sessionId;
+
+    public void Set(string sessionId) => _sessionId = sessionId;
+
+    public string? Get() => _sessionId;
 }

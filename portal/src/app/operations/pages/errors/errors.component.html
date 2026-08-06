@@ -36,46 +36,6 @@
       (input)="errorReferenceId.set($any($event.target).value)"
       (keyup.enter)="load()"
     />
-    <input
-      type="search"
-      class="correlation-input"
-      placeholder="Correlation ID…"
-      [value]="correlationId()"
-      (input)="correlationId.set($any($event.target).value)"
-      (keyup.enter)="load()"
-    />
-    <input
-      type="search"
-      class="correlation-input"
-      placeholder="Execution ID…"
-      [value]="executionId()"
-      (input)="executionId.set($any($event.target).value)"
-      (keyup.enter)="load()"
-    />
-    <input
-      type="search"
-      class="correlation-input"
-      placeholder="Workflow…"
-      [value]="workflowId()"
-      (input)="workflowId.set($any($event.target).value)"
-      (keyup.enter)="load()"
-    />
-
-    <select class="filter-select" [value]="severity()" (change)="severity.set($any($event.target).value)">
-      <option value="">All severities</option>
-      @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
-    </select>
-
-    <select class="filter-select" [value]="category()" (change)="category.set($any($event.target).value)">
-      <option value="">All categories</option>
-      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
-    </select>
-
-    <select class="filter-select" [value]="status()" (change)="status.set($any($event.target).value)">
-      <option value="">All statuses</option>
-      @for (st of statuses; track st) { <option [value]="st">{{ st }}</option> }
-    </select>
-
     <button class="btn" type="button" (click)="load()">Search</button>
     <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
   </div>

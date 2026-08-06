@@ -92,12 +92,16 @@
     } @else {
       <!-- ===== Practitioners (global) + import ===== -->
       <div class="r11-import">
-        @if (missingPractitioners().length > 0) {
+        @if (canImportPractitioners()) {
           <div class="r11-import__head">
-            <span>
-              {{ missingPractitioners().length }} practitioner{{ missingPractitioners().length === 1 ? '' : 's' }}
-              referenced by other records {{ missingPractitioners().length === 1 ? 'is' : 'are' }} not imported yet.
-            </span>
+            @if (missingPractitioners().length > 0) {
+              <span>
+                {{ missingPractitioners().length }} practitioner{{ missingPractitioners().length === 1 ? '' : 's' }}
+                referenced by other records {{ missingPractitioners().length === 1 ? 'is' : 'are' }} not imported yet.
+              </span>
+            } @else {
+              <span>{{ practitionerIds()?.length }} curated practitioner id{{ practitionerIds()?.length === 1 ? '' : 's' }} ready to import.</span>
+            }
             <button type="button" class="r11-import__btn" [disabled]="importing()" (click)="importMissingPractitioners()">
               {{ importing() ? 'Importing…' : 'Import Practitioners' }}
             </button>

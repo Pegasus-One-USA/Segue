@@ -798,6 +798,11 @@ export class DestinationWizardComponent implements OnInit {
     }
     // New destination: no data group is pre-selected — the user picks explicitly, even when an upstream
     // source is connected and could otherwise offer a default.
+    // No explicit New/Existing toggle — the "Existing connection" dropdown is just always there, so load its
+    // options unconditionally instead of waiting for a "switch to Existing" step that no longer exists.
+    if (this.showConnectionModeToggle()) {
+      this._loadExistingOptions();
+    }
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
@@ -1051,6 +1056,7 @@ export class DestinationWizardComponent implements OnInit {
   private _existingBaseline: Record<string, unknown> | null = null;
 
   selectExisting(id: string): void {
+    this.connectionMode.set('existing');
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find(o => o.id === id);
     if (!selected) return;

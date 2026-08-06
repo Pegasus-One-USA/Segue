@@ -1,4 +1,4 @@
-<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="close()">
+<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="onOverlayClosed()">
   <div class="nld" [class.nld--maximized]="isMaximized()">
 
     <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
@@ -70,7 +70,7 @@
             </svg>
           }
         </button>
-        <button class="nld-close" type="button" aria-label="Close dialog" (click)="close()">×</button>
+        <button class="nld-close" type="button" aria-label="Close dialog" (click)="onOverlayClosed()">×</button>
       </div>
     }
 
@@ -453,6 +453,25 @@
           <div class="nld-confirm-actions">
             <button type="button" class="btn btn-secondary" (click)="cancelDestSwitch()">Keep editing</button>
             <button type="button" class="btn btn-danger" (click)="confirmDestSwitch()">Discard &amp; switch</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Confirm before closing the whole dialog while a form/wizard is open -->
+    @if (pendingCloseConfirm()) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmCloseBackdropClick($event)"
+           (keydown.escape)="cancelDiscardClose()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Discard changes?</h3>
+          <p class="nld-confirm-body">
+            You haven't saved this yet. Closing now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDiscardClose()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDiscardClose()">Discard &amp; close</button>
           </div>
         </div>
       </div>

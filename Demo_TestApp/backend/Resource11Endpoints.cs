@@ -19,6 +19,39 @@ public static class Resource11Endpoints
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // CallerId (when sent) is the frontend's own persisted Provider/Patient Standalone session id — see
+    // ProviderStandaloneNew11Component.providerCallerId — forwarded below to FHIRBridge's /run so a CallerId-keyed
+    // interactive token cache (SmartAuthorizationCodeTokenProvider.BuildStoreKey) finds the same token that
+    // session's OAuth sign-in already established, instead of this server-to-server call carrying none.
+    // PractitionerIds (when sent — currently only Provider Standalone's New 11 Practitioner tab does, see
+    // PROVIDER_STANDALONE_PRACTITIONER_IDS) is an explicit, curated id list that wins over the "missing ids"
+    // auto-discovery below (ComputeMissingPractitionersAsync) — every other role/caller keeps that discovery by
+    // simply never sending this.
+    private sealed record Resource11ImportPractitionersRequest(string? CallerId, List<string>? PractitionerIds);
+
+    // Same helper as BackendSystemEndpoints' own (private to each class, so duplicated rather than shared) —
+    // FHIRBridge surfaces a failed run as a non-2xx with a bare {"error":"..."} body; pull that message out when
+    // present, otherwise let the caller fall back to a status-code message.
+    private static string? TryReadErrorMessage(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.String)
+            {
+                return error.GetString();
+            }
+        }
+        catch (JsonException)
+        {
+            // Non-JSON error body — nothing to extract.
+        }
+
+        return null;
+    }
+
     public static void MapResource11Endpoints(this WebApplication app)
     {
         app.MapGet("/api/v11/patients", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, CancellationToken ct) =>
@@ -120,15 +153,25 @@ public static class Resource11Endpoints
         // Calls the current role's configured New 11 workflow URL, expects a { "Resources": [...] } body of
         // Practitioner resources, and upserts each into Practitioner_11. Which workflow runs depends on the logged-in
         // role, so each role imports from its own configured source.
-        app.MapPost("/api/v11/practitioners/import", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, CancellationToken ct) =>
+        app.MapPost("/api/v11/practitioners/import", async (HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, Resource11ImportPractitionersRequest? request, CancellationToken ct) =>
         {
             if (!TryGetSessionRole(http, sessions, out var role))
             {
                 return Results.Unauthorized();
             }
 
-            var missing = await ComputeMissingPractitionersAsync(db, ct);
-            if (missing.Count == 0)
+            var explicitIds = (request?.PractitionerIds ?? [])
+                .Select(id => id?.Trim())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var ids = explicitIds.Count > 0
+                ? explicitIds
+                : (await ComputeMissingPractitionersAsync(db, ct)).Select(m => m.PractitionerId).ToList();
+
+            if (ids.Count == 0)
             {
                 return Results.Ok(new { status = "Succeeded", imported = 0, message = "No missing practitioners to import." });
             }
@@ -143,18 +186,24 @@ public static class Resource11Endpoints
                 return Results.Ok(new { status = "Failed", errorMessage = $"No New 11 workflow is configured for the {role} role. Ask an admin to set its List/Details URL on the Admin → New 11 tab." });
             }
 
-            var idsCsv = string.Join(",", missing.Select(m => m.PractitionerId));
+            // FHIRBridge's WorkflowRunRequest has no "practitionerIds" field — a bare array (or a query-string
+            // practitionerIds= param) is silently ignored, which is why the outbound Epic request came back
+            // unscoped (Practitioner?_count=100) despite these ids being sent. patientSearchCriteria is the field
+            // that actually reaches the source connector; Practitioner is outside the patient compartment, so
+            // FHIRBridge passes an _id= OR-search through to Epic verbatim (same pattern as
+            // BackendSystemEndpoints' own import endpoint).
+            var criteria = "_id=" + string.Join(",", ids);
 
             var client = httpClientFactory.CreateClient("Workflow");
             HttpResponseMessage response;
             try
             {
-                // Pass the missing practitioner ids comma-separated (query string) AND as an array (JSON body) so
-                // the workflow can pull exactly those from the source (Epic).
-                var separator = workflowUrl.Contains('?') ? "&" : "?";
-                var requestUrl = $"{workflowUrl}{separator}practitionerIds={Uri.EscapeDataString(idsCsv)}";
-                var requestBody = JsonSerializer.Serialize(new { practitionerIds = missing.Select(m => m.PractitionerId).ToArray() });
-                response = await client.PostAsync(requestUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), ct);
+                var requestBody = JsonSerializer.Serialize(new
+                {
+                    patientSearchCriteria = criteria,
+                    callerId = request?.CallerId,
+                });
+                response = await client.PostAsync(workflowUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), ct);
             }
             catch (Exception ex)
             {
@@ -163,7 +212,11 @@ public static class Resource11Endpoints
 
             if (!response.IsSuccessStatusCode)
             {
-                return Results.Ok(new { status = "Failed", errorMessage = $"Workflow call failed with status {(int)response.StatusCode}." });
+                // A token/node failure throws past FHIRBridge's orchestrator before the run returns, surfacing as a
+                // non-2xx with a bare {"error":"..."} body — surface that reason rather than just the status code
+                // (same pattern as BackendSystemEndpoints' own import endpoint).
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                return Results.Ok(new { status = "Failed", errorMessage = TryReadErrorMessage(errorBody) ?? $"Workflow call failed with status {(int)response.StatusCode}." });
             }
 
             ResourcesEnvelope? envelope;

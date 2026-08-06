@@ -35,27 +35,15 @@ export class ErrorsComponent implements OnInit {
 
   // Phase 6A – Monitoring → Errors search criteria.
   readonly errorReferenceId = signal('');
-  readonly correlationId = signal('');
-  readonly executionId = signal('');
-  readonly workflowId = signal('');
-  readonly severity = signal('');
-  readonly category = signal('');
-  readonly status = signal('');
-
-  readonly categories = ['Business', 'Validation', 'Infrastructure', 'Authentication', 'Authorization', 'Database', 'Network', 'ExternalSystem', 'Unknown'];
-  readonly severities = ['Error', 'Warning', 'Informational'];
-  readonly statuses = ['Open', 'Resolved'];
 
   readonly displayedCols = [
     'occurredOnUtc', 'errorReferenceId', 'module', 'message', 'whatToDo', 'status', 'correlationId', 'actions',
   ];
 
   ngOnInit(): void {
-    // Seed from query params so a support engineer's deep-link (?errorReferenceId=… or ?correlationId=…) lands pre-filtered.
+    // Seed from query params so a support engineer's deep-link (?errorReferenceId=…) lands pre-filtered.
     const params = this.route.snapshot.queryParamMap;
     this.errorReferenceId.set(params.get('errorReferenceId') ?? '');
-    this.correlationId.set(params.get('correlationId') ?? '');
-    this.executionId.set(params.get('executionId') ?? '');
     this.load();
   }
 
@@ -63,12 +51,6 @@ export class ErrorsComponent implements OnInit {
     this.loading.set(true);
     const search: ErrorLogSearch = {
       errorReferenceId: this.errorReferenceId() || undefined,
-      correlationId: this.correlationId() || undefined,
-      executionId: this.executionId() || undefined,
-      workflowId: this.workflowId() || undefined,
-      severity: this.severity() || undefined,
-      category: this.category() || undefined,
-      status: this.status() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
     };
@@ -86,12 +68,6 @@ export class ErrorsComponent implements OnInit {
 
   reset(): void {
     this.errorReferenceId.set('');
-    this.correlationId.set('');
-    this.executionId.set('');
-    this.workflowId.set('');
-    this.severity.set('');
-    this.category.set('');
-    this.status.set('');
     this.pageIndex.set(0);
     this.load();
   }

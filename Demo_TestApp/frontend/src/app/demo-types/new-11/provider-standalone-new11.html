@@ -7,7 +7,7 @@
   }
 
   @if (new11Enabled && view() === 'new11') {
-    <app-resource-11-browser [loginTypeLabel]="loginTypeLabel()" (logout)="logout.emit()"></app-resource-11-browser>
+    <app-resource-11-browser [loginTypeLabel]="loginTypeLabel()" [callerId]="providerCallerId()" [practitionerIds]="practitionerIds" (logout)="logout.emit()"></app-resource-11-browser>
   } @else {
     <app-launch-standalone-provider [loginTypeLabel]="loginTypeLabel()" (logout)="logout.emit()"></app-launch-standalone-provider>
   }

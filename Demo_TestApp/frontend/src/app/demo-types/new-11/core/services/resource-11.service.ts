@@ -50,11 +50,24 @@ export class Resource11Service {
     );
   }
 
-  // Runs the logged-in role's configured New 11 workflow to fetch + upsert the missing practitioners.
-  importPractitioners(): Observable<ImportResult> {
+  // Runs the logged-in role's configured New 11 workflow to fetch + upsert the missing practitioners. callerId
+  // (when the calling role has one — see ProviderStandaloneNew11Component) is forwarded to FHIRBridge's /run so a
+  // Provider/Patient Standalone source's CallerId-keyed interactive token cache (see
+  // SmartAuthorizationCodeTokenProvider.BuildStoreKey) finds the same token this session's OAuth sign-in already
+  // established, instead of the request carrying none and finding nothing cached. practitionerIds (when sent —
+  // see PROVIDER_STANDALONE_PRACTITIONER_IDS) is an explicit, curated id list that wins server-side over the
+  // "missing ids" auto-discovery every other role still relies on by omitting it.
+  importPractitioners(callerId?: string, practitionerIds?: string[]): Observable<ImportResult> {
+    const body: { callerId?: string; practitionerIds?: string[] } = {};
+    if (callerId) {
+      body.callerId = callerId;
+    }
+    if (practitionerIds?.length) {
+      body.practitionerIds = practitionerIds;
+    }
     return this.http.post<ImportResult>(
       `${BACKEND_BASE_URL}/api/v11/practitioners/import`,
-      {},
+      body,
       { withCredentials: true },
     );
   }

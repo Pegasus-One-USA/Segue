@@ -74,7 +74,9 @@ export class FieldMappingListComponent {
    *  referencesResource is null to clear it back to "written verbatim". */
   readonly referenceResourceChanged = output<{ resource: string; tableName: string; targetName: string; referencesResource: string | null }>();
 
-  readonly collapsed = signal(false);
+  // Auto-hidden on entering Map Fields — the canvas gets the full height by default; toggleCollapsed()
+  // (the existing "Mapping list" header button) still opens it on demand.
+  readonly collapsed = signal(true);
   readonly draft = signal<NewMappingDraft | null>(null);
 
   toggleCollapsed(): void { this.collapsed.update(v => !v); }
