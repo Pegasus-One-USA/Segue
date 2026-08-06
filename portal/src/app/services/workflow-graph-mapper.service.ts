@@ -90,7 +90,7 @@ export class WorkflowGraphMapperService {
 
       if (to.kind === 'merge') continue;
 
-      if (this.isDestination(to) && !this.isMapping(from) && !this.isFhirPassthroughDestination(to)) {
+      if (this.isDestination(to) && !this.isMapping(from) && !this.isFhirDirectDestination(to)) {
         const mappingId = `${to.id}__mapping`;
         if (!requestIds.has(mappingId)) {
           requests.push(this.syntheticMappingRequest(mappingId, from, to, catalog));
@@ -278,14 +278,14 @@ export class WorkflowGraphMapperService {
     return node.kind === 'transform' && node.transformId === 'field-mapping';
   }
 
-  // Mirrors workflow-builder.component.ts's resolveDestinationAttachPoint() skip-insertion logic: a passthrough
-  // FhirRepositoryDestination is exempt from WorkflowGraphValidator's upstream-Mapping-node requirement, so a
-  // direct source/transform -> destination edge should persist as-is rather than getting a synthetic Mapping node
-  // inserted to satisfy a requirement that no longer applies to this node type.
-  private isFhirPassthroughDestination(node: CanvasNode): boolean {
-    return node.kind === 'transform'
-      && node.transformId === 'dest-fhir'
-      && node.fields['dest_fhirMapMode'] !== 'customize';
+  // Mirrors workflow-builder.component.ts's resolveDestinationAttachPoint() skip-insertion logic: a
+  // FhirRepositoryDestination is exempt from WorkflowGraphValidator's upstream-Mapping-node requirement
+  // unconditionally (both "passthrough" and "customize" modes — both are handled directly by
+  // MappingNodeExecutor/FhirFieldTransformApplier against the raw resource batch, neither needs a real Mapping
+  // node's field-mapping engine), so a direct source/transform -> destination edge should persist as-is rather
+  // than getting a synthetic Mapping node inserted to satisfy a requirement that doesn't apply to this node type.
+  private isFhirDirectDestination(node: CanvasNode): boolean {
+    return node.kind === 'transform' && node.transformId === 'dest-fhir';
   }
 
   private isSourceCategory(category: WorkflowNodeCategory | string): boolean {

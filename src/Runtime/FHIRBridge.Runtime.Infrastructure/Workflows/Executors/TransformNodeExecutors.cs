@@ -72,14 +72,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // see WorkflowGraphMapperService.syntheticMappingRequest(), which spreads the destination node's fields
         // (including dest_fhirMapMode and destinationTransformId) onto this node verbatim. A FHIR-repository
         // destination is spec-owned (docs/backend/14-mapping-profile-master-screen-plan.md) — it has no target
-        // columns to map into, so every resource is emitted unchanged rather than routed through the field-mapping
-        // engine below, which requires a configured field list and would otherwise silently emit zero records for
-        // any resource type nobody explicitly mapped. "customize" mode (rename/redact/translate a handful of
-        // fields) is intentionally NOT handled here yet — its rule list has no backend translation built (still a
-        // UI-only stub) — so it falls through to the normal field-mapping path below unchanged.
-        var isFhirPassthrough =
-            string.Equals(ReadStringConfiguration(node, "destinationTransformId"), "dest-fhir", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(ReadStringConfiguration(node, "dest_fhirMapMode"), "customize", StringComparison.OrdinalIgnoreCase);
+        // columns to map into, so every resource is emitted unchanged (or with customize rules applied, below)
+        // rather than routed through the field-mapping engine, which requires a configured field list and would
+        // otherwise silently emit zero records for any resource type nobody explicitly mapped.
+        var isFhirDestination =
+            string.Equals(ReadStringConfiguration(node, "destinationTransformId"), "dest-fhir", StringComparison.OrdinalIgnoreCase);
+        var isFhirCustomize =
+            isFhirDestination && string.Equals(ReadStringConfiguration(node, "dest_fhirMapMode"), "customize", StringComparison.OrdinalIgnoreCase);
+        var isFhirPassthrough = isFhirDestination && !isFhirCustomize;
 
         if (isFhirPassthrough)
         {
@@ -105,6 +105,47 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     ["executor"] = GetType().Name,
                     ["count"] = records.Count,
                     ["passthrough"] = true
+                });
+        }
+
+        // "Customize fields before writing": apply the wizard's per-resource-type transform rules
+        // (dest_fhirCustomRules — see FhirFieldTransformApplier/Aidbox-Customize-Transform-UX-Plan.md) to each
+        // resource's raw JSON before emitting it unchanged otherwise. Each rule is failure-isolated — a bad rule
+        // is recorded as a warning in this node's own output metadata rather than throwing or dropping the record.
+        if (isFhirCustomize)
+        {
+            var rulesByResourceType = FhirCustomRulesParser.Parse(ReadStringConfiguration(node, "dest_fhirCustomRules"));
+            var ruleErrors = new List<string>();
+
+            foreach (var resource in PassThroughNodeExecutor.ReadResourceEnvelopes(inputs))
+            {
+                var sourceJsonForCustomize = Convert.ToString(resource.Payload) ?? "{}";
+                var rules = rulesByResourceType.TryGetValue(resource.ResourceType, out var resourceRules)
+                    ? resourceRules
+                    : Array.Empty<FhirCustomRule>();
+                var transformedJson = FhirFieldTransformApplier.Apply(sourceJsonForCustomize, resource.ResourceType, rules, ruleErrors);
+
+                records.Add(new MappedDestinationRecord(
+                    context.WorkflowRunId,
+                    resource.ResourceType,
+                    resource.ResourceType,
+                    resource.ResourceId,
+                    new Dictionary<string, object?>(),
+                    transformedJson));
+            }
+
+            return new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                new MappedRecordBatch(records),
+                WorkflowDataContract.MappedRecordBatch,
+                new Dictionary<string, object?>
+                {
+                    ["executor"] = GetType().Name,
+                    ["count"] = records.Count,
+                    ["passthrough"] = true,
+                    ["customize"] = true,
+                    ["ruleErrors"] = ruleErrors
                 });
         }
 

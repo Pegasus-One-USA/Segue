@@ -223,12 +223,10 @@ public sealed class MappingNodeExecutorTests
     }
 
     [Fact]
-    public async Task FhirRepository_customize_mode_falls_through_to_normal_field_mapping_not_passthrough()
+    public async Task FhirRepository_customize_mode_with_no_rules_configured_emits_every_resource_unchanged()
     {
-        // "Customize" has no backend rule translation yet (still a UI-only stub) — it must NOT take the new
-        // passthrough shortcut; it goes through the ordinary field-mapping path below, which — with no configured
-        // profile/fields for this resource type — still emits nothing. This proves customize mode is unaffected by
-        // this fix (a deliberate, documented scope boundary, not an accidental regression).
+        // No dest_fhirCustomRules at all (or none scoped to this resource type) — customize mode still takes its
+        // own passthrough-shaped branch (not the field-mapping engine below), it just has zero rules to apply.
         var node = BuildNode(System.Text.Json.JsonSerializer.Serialize(new
         {
             destinationTransformId = "dest-fhir",
@@ -237,16 +235,95 @@ public sealed class MappingNodeExecutorTests
         var executor = new MappingNodeExecutor(EchoFieldsEngine().Object, configurationRepository: null);
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
-        var inputs = new[] { SourceOutput(new ResourceEnvelope("Patient", "1005", """{"resourceType":"Patient","id":"1005"}""")) };
+        var patientJson = """{"resourceType":"Patient","id":"1005"}""";
+        var inputs = new[] { SourceOutput(new ResourceEnvelope("Patient", "1005", patientJson)) };
 
         var output = await executor.ExecuteAsync(context, node, inputs, CancellationToken.None);
         var records = output.Payload.Should().BeOfType<MappedRecordBatch>().Subject.Records
             .OfType<MappedDestinationRecord>().ToList();
 
-        // Inline fallback defaults resourceType to "Patient" with empty fields (see
-        // ResolveResourceMappingConfigsAsync) — mapped.Values.Count == 0, so nothing is emitted, exactly like
-        // today's pre-existing (buggy-for-passthrough, but out of scope here) behavior for an unconfigured node.
-        records.Should().BeEmpty();
+        records.Should().ContainSingle();
+        records[0].SourceJson.Should().Be(patientJson);
+        output.Metadata!["customize"].Should().Be(true);
+    }
+
+    [Fact]
+    public async Task FhirRepository_customize_mode_applies_rules_scoped_to_the_matching_resource_type_only()
+    {
+        var rules = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["Patient"] = new[]
+            {
+                new { field = "active", transform = "booleanConversion", @params = new { trueValues = "Y" } },
+            },
+            // Scoped to a resource type not present in this batch — must have no effect on Observation below.
+            ["Observation"] = new[]
+            {
+                new { field = "status", transform = "typeCast", @params = new { targetType = "integer" } },
+            },
+        });
+        var node = BuildNode(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            destinationTransformId = "dest-fhir",
+            dest_fhirMapMode = "customize",
+            dest_fhirCustomRules = rules,
+        }));
+        var executor = new MappingNodeExecutor(EchoFieldsEngine().Object, configurationRepository: null);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var patientJson = """{"resourceType":"Patient","id":"1005","active":"Y"}""";
+        var observationJson = """{"resourceType":"Observation","id":"obs-1","status":"final"}""";
+        var inputs = new[]
+        {
+            SourceOutput(
+                new ResourceEnvelope("Patient", "1005", patientJson),
+                new ResourceEnvelope("Observation", "obs-1", observationJson)),
+        };
+
+        var output = await executor.ExecuteAsync(context, node, inputs, CancellationToken.None);
+        var records = output.Payload.Should().BeOfType<MappedRecordBatch>().Subject.Records
+            .OfType<MappedDestinationRecord>().ToList();
+
+        var patientRecord = records.Single(r => r.ResourceType == "Patient");
+        patientRecord.SourceJson.Should().Contain("\"active\":true");
+
+        // Observation's rule never applies here (it's scoped to a resource type absent from this batch) —
+        // unchanged, proving rules are matched by the resource's own type, not applied globally.
+        var observationRecord = records.Single(r => r.ResourceType == "Observation");
+        observationRecord.SourceJson.Should().Be(observationJson);
+    }
+
+    [Fact]
+    public async Task FhirRepository_customize_mode_isolates_a_failing_rule_reports_it_but_still_emits_the_resource()
+    {
+        var rules = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["Patient"] = new[]
+            {
+                new { field = "birthDate", transform = "dateFormat", @params = new { } },
+            },
+        });
+        var node = BuildNode(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            destinationTransformId = "dest-fhir",
+            dest_fhirMapMode = "customize",
+            dest_fhirCustomRules = rules,
+        }));
+        var executor = new MappingNodeExecutor(EchoFieldsEngine().Object, configurationRepository: null);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        // birthDate is not a parseable date — the rule must fail in isolation, not throw out of ExecuteAsync.
+        var patientJson = """{"resourceType":"Patient","id":"1005","birthDate":"not-a-date"}""";
+        var inputs = new[] { SourceOutput(new ResourceEnvelope("Patient", "1005", patientJson)) };
+
+        var output = await executor.ExecuteAsync(context, node, inputs, CancellationToken.None);
+        var records = output.Payload.Should().BeOfType<MappedRecordBatch>().Subject.Records
+            .OfType<MappedDestinationRecord>().ToList();
+
+        records.Should().ContainSingle();
+        records[0].SourceJson.Should().Be(patientJson); // unmodified — the failed rule left it as-is
+        var ruleErrors = output.Metadata!["ruleErrors"].Should().BeAssignableTo<List<string>>().Subject;
+        ruleErrors.Should().ContainSingle(e => e.Contains("Patient.birthDate") && e.Contains("dateFormat"));
     }
 
     [Fact]

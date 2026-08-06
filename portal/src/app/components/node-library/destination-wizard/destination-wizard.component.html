@@ -298,12 +298,32 @@
               <div class="dw-select-wrap">
                 <select id="dw-fhir-writeMode" class="dw-select" formControlName="writeMode">
                   <option value="upsert">Upsert by resource id (PUT)</option>
+                  <option value="upsertBundle">Upsert by resource id (Bundle)</option>
                   <option value="conditional">Conditional update by identifier</option>
                 </select>
               </div>
             </div>
 
           </div><!-- /dw-grid-3 -->
+
+          <button
+            type="button"
+            class="dw-btn dw-btn--primary dw-test-connection-btn"
+            [disabled]="probeState() === 'testing' || !fhirForm.get('baseUrl')!.value"
+            (click)="testFhirConnection()"
+          >
+            {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+          </button>
+
+          @if (probeState() === 'testing') {
+            <div class="dw-callout dw-callout--info">Testing connection…</div>
+          }
+          @if (probeState() === 'error') {
+            <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+          }
+          @if (probeState() === 'ok') {
+            <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
+          }
         </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
@@ -520,28 +540,301 @@
           <input type="radio" name="fhirMapMode" [checked]="fhirMapMode() === 'customize'" (change)="selectFhirCustomizeMode()" />
           <div class="dw-fhir-choice-body">
             <span class="dw-fhir-choice-title">Customize fields before writing</span>
-            <span class="dw-hint">Only for redaction, identifier renaming, or code translation — not a full column map.</span>
+            <span class="dw-hint">Apply per-field transforms (date formats, units, codes, references) to specific resources — not a full column map. For redaction/masking, use a De-identification node instead.</span>
           </div>
         </label>
 
         @if (fhirMapMode() === 'customize') {
-          <div class="dw-fhir-rules">
-            @for (rule of fhirCustomRules(); track $index) {
-              <div class="dw-fhir-rule-row">
-                <input class="dw-input" [value]="rule.field" (input)="updateFhirRule($index, 'field', $any($event.target).value)" placeholder="e.g. identifier[0].system" />
-                <div class="dw-select-wrap">
-                  <select class="dw-select" [value]="rule.action" (change)="updateFhirRule($index, 'action', $any($event.target).value)">
-                    <option value="rename">Rename</option>
-                    <option value="redact">Redact</option>
-                    <option value="translate">Translate</option>
-                  </select>
-                </div>
-                <input class="dw-input" [value]="rule.value" (input)="updateFhirRule($index, 'value', $any($event.target).value)" placeholder="new value" />
-                <button type="button" class="dw-clear-btn" title="Remove rule" (click)="removeFhirRule($index)">✕</button>
-              </div>
+          <div class="dw-fhir-resource-tabs">
+            @for (rt of selectedResources(); track rt) {
+              <button
+                type="button"
+                class="dw-fhir-resource-tab"
+                [class.active]="activeRuleResource() === rt"
+                (click)="selectRuleResourceTab(rt)"
+              >
+                {{ rt }} ({{ (fhirCustomRules()[rt] ?? []).length }})
+              </button>
             }
-            <button type="button" class="dw-btn" (click)="addFhirRule()">+ Add rule</button>
           </div>
+
+          @if (activeRuleResource()) {
+            <div class="dw-fhir-rules">
+              @for (rule of rulesForActiveResource(); track $index; let ruleIndex = $index) {
+                <div class="dw-fhir-rule-card">
+                  <button type="button" class="dw-clear-btn" title="Remove rule" (click)="removeFhirRule(ruleIndex)">✕</button>
+
+                  <div class="dw-fhir-rule-row">
+                    <div class="dw-select-wrap">
+                      <select class="dw-select" (change)="onFieldSelectChange(ruleIndex, $any($event.target).value)">
+                        <option value="" disabled [selected]="!rule.field && !rule.customField">Select a field…</option>
+                        @for (f of fieldOptionsFor(activeRuleResource()); track f.path) {
+                          <option [value]="f.path" [selected]="!rule.customField && rule.field === f.path">{{ f.label }}</option>
+                        }
+                        <option value="__custom__" [selected]="rule.customField">Other field (advanced)…</option>
+                      </select>
+                    </div>
+                    @if (rule.customField) {
+                      <input
+                        class="dw-input"
+                        [value]="rule.field"
+                        (input)="updateFhirRule(ruleIndex, {field: $any($event.target).value})"
+                        placeholder="e.g. identifier[0].system"
+                      />
+                    }
+
+                    <div class="dw-select-wrap">
+                      <select class="dw-select" [value]="rule.transform" (change)="onTransformChange(ruleIndex, $any($event.target).value)">
+                        <optgroup label="Value &amp; type">
+                          <option value="dateFormat">Date/time format</option>
+                          <option value="typeCast">Number / string cast</option>
+                          <option value="booleanConversion">Boolean conversion</option>
+                          <option value="unitConversion">Unit conversion (UCUM)</option>
+                          <option value="quantityRange">Quantity / Range assembly</option>
+                          <option value="roundPrecision">Rounding / scaling / precision</option>
+                        </optgroup>
+                        <optgroup label="Codes &amp; terminology">
+                          <option value="codeLookup">Value / code lookup</option>
+                          <option value="codeableConcept">CodeableConcept / Coding builder</option>
+                          <option value="statusCoercion">Status / enum coercion</option>
+                        </optgroup>
+                        <optgroup label="FHIR complex types">
+                          <option value="referenceConstruct">Reference construct</option>
+                          <option value="telecom">Telecom (ContactPoint)</option>
+                          <option value="identifierFormat">Identifier formatting</option>
+                          <option value="humanNameFormat">HumanName parse</option>
+                          <option value="addressParse">Address parse</option>
+                        </optgroup>
+                        <optgroup label="Strings &amp; structure">
+                          <option value="stringClean">String normalization / cleaning</option>
+                          <option value="stringTemplate">Concatenate / template / split</option>
+                          <option value="arrayOp">Array / list operation</option>
+                        </optgroup>
+                        <optgroup label="Data quality">
+                          <option value="coalesce">Default / coalesce</option>
+                          <option value="dateShift">Date math / date-shift</option>
+                          <option value="hashMask">Hashing / masking</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="dw-fhir-rule-params">
+                    @switch (rule.transform) {
+                      @case ('dateFormat') {
+                        <div class="dw-select-wrap">
+                          <select
+                            class="dw-select"
+                            [value]="rule.params['targetFormat'] || 'iso8601'"
+                            (change)="updateFhirRuleParam(ruleIndex, 'targetFormat', $any($event.target).value)"
+                          >
+                            <option value="iso8601">ISO 8601 (recommended)</option>
+                            <option value="custom">Custom pattern</option>
+                          </select>
+                        </div>
+                        @if (rule.params['targetFormat'] === 'custom') {
+                          <input
+                            class="dw-input"
+                            [value]="rule.params['pattern'] || ''"
+                            (input)="updateFhirRuleParam(ruleIndex, 'pattern', $any($event.target).value)"
+                            placeholder="e.g. MM/dd/yyyy"
+                          />
+                        }
+                      }
+                      @case ('typeCast') {
+                        <div class="dw-select-wrap">
+                          <select
+                            class="dw-select"
+                            [value]="rule.params['targetType'] || 'string'"
+                            (change)="updateFhirRuleParam(ruleIndex, 'targetType', $any($event.target).value)"
+                          >
+                            <option value="string">String</option>
+                            <option value="integer">Integer</option>
+                            <option value="decimal">Decimal</option>
+                          </select>
+                        </div>
+                      }
+                      @case ('booleanConversion') {
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['trueValues'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'trueValues', $any($event.target).value)"
+                          placeholder="true values, e.g. Y, 1, yes"
+                        />
+                      }
+                      @case ('unitConversion') {
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['fromUnit'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'fromUnit', $any($event.target).value)"
+                          placeholder="from unit, e.g. lb"
+                        />
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['toUnit'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'toUnit', $any($event.target).value)"
+                          placeholder="to unit, e.g. kg"
+                        />
+                      }
+                      @case ('telecom') {
+                        <div class="dw-select-wrap">
+                          <select
+                            class="dw-select"
+                            [value]="rule.params['system'] || 'phone'"
+                            (change)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)"
+                          >
+                            <option value="phone">Phone</option>
+                            <option value="email">Email</option>
+                            <option value="fax">Fax</option>
+                            <option value="url">URL</option>
+                          </select>
+                        </div>
+                        <div class="dw-select-wrap">
+                          <select
+                            class="dw-select"
+                            [value]="rule.params['use'] || ''"
+                            (change)="updateFhirRuleParam(ruleIndex, 'use', $any($event.target).value)"
+                          >
+                            <option value="">(no use)</option>
+                            <option value="home">Home</option>
+                            <option value="work">Work</option>
+                            <option value="mobile">Mobile</option>
+                          </select>
+                        </div>
+                      }
+                      @case ('referenceConstruct') {
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['targetResourceType'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'targetResourceType', $any($event.target).value)"
+                          placeholder="target resource type, e.g. Organization"
+                        />
+                      }
+                      @case ('quantityRange') {
+                        <div class="dw-select-wrap">
+                          <select class="dw-select" [value]="rule.params['mode'] || 'quantity'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                            <option value="quantity">Single quantity</option>
+                            <option value="range">Low/high range</option>
+                          </select>
+                        </div>
+                        <input class="dw-input" [value]="rule.params['unit'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'unit', $any($event.target).value)" placeholder="unit (UCUM), e.g. mg" />
+                        @if (rule.params['mode'] === 'range') {
+                          <input class="dw-input" [value]="rule.params['delimiter'] || '-'" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. -" />
+                        }
+                      }
+                      @case ('roundPrecision') {
+                        <input class="dw-input" type="number" [value]="rule.params['decimals'] || '2'" (input)="updateFhirRuleParam(ruleIndex, 'decimals', $any($event.target).value)" placeholder="decimal places" />
+                      }
+                      @case ('codeLookup') {
+                        <div class="dw-fhir-lookup-pairs">
+                          @for (pair of getLookupPairs(rule); track $index; let pairIndex = $index) {
+                            <div class="dw-fhir-lookup-pair-row">
+                              <input class="dw-input" [value]="pair.from" (input)="updateLookupPair(ruleIndex, pairIndex, 'from', $any($event.target).value)" placeholder="source value" />
+                              <span>&rarr;</span>
+                              <input class="dw-input" [value]="pair.to" (input)="updateLookupPair(ruleIndex, pairIndex, 'to', $any($event.target).value)" placeholder="target code" />
+                              <button type="button" class="dw-clear-btn" title="Remove mapping" (click)="removeLookupPair(ruleIndex, pairIndex)">✕</button>
+                            </div>
+                          }
+                          <button type="button" class="dw-btn" (click)="addLookupPair(ruleIndex)">+ Add mapping</button>
+                        </div>
+                      }
+                      @case ('statusCoercion') {
+                        <div class="dw-fhir-lookup-pairs">
+                          @for (pair of getLookupPairs(rule); track $index; let pairIndex = $index) {
+                            <div class="dw-fhir-lookup-pair-row">
+                              <input class="dw-input" [value]="pair.from" (input)="updateLookupPair(ruleIndex, pairIndex, 'from', $any($event.target).value)" placeholder="source value" />
+                              <span>&rarr;</span>
+                              <input class="dw-input" [value]="pair.to" (input)="updateLookupPair(ruleIndex, pairIndex, 'to', $any($event.target).value)" placeholder="allowed FHIR code" />
+                              <button type="button" class="dw-clear-btn" title="Remove mapping" (click)="removeLookupPair(ruleIndex, pairIndex)">✕</button>
+                            </div>
+                          }
+                          <button type="button" class="dw-btn" (click)="addLookupPair(ruleIndex)">+ Add mapping</button>
+                        </div>
+                      }
+                      @case ('codeableConcept') {
+                        <input class="dw-input" [value]="rule.params['system'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)" placeholder="system URI" />
+                        <input class="dw-input" [value]="rule.params['display'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'display', $any($event.target).value)" placeholder="display text" />
+                      }
+                      @case ('identifierFormat') {
+                        <input class="dw-input" [value]="rule.params['system'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)" placeholder="system URI, e.g. http://hospital.org/mrn" />
+                      }
+                      @case ('humanNameFormat') {
+                        <input class="dw-input" [value]="rule.params['delimiter'] || ', '" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. ', '" />
+                      }
+                      @case ('addressParse') {
+                        <input class="dw-input" [value]="rule.params['delimiter'] || ','" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. comma" />
+                      }
+                      @case ('stringClean') {
+                        <div class="dw-select-wrap">
+                          <select class="dw-select" [value]="rule.params['mode'] || 'trim'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                            <option value="trim">Trim whitespace</option>
+                            <option value="upper">UPPERCASE</option>
+                            <option value="lower">lowercase</option>
+                            <option value="collapseWhitespace">Collapse internal whitespace</option>
+                          </select>
+                        </div>
+                      }
+                      @case ('stringTemplate') {
+                        <div class="dw-select-wrap">
+                          <select class="dw-select" [value]="rule.params['mode'] || 'template'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                            <option value="template">Template (wrap value)</option>
+                            <option value="split">Split into array</option>
+                          </select>
+                        </div>
+                        @if (rule.params['mode'] === 'split') {
+                          <input class="dw-input" [value]="rule.params['delimiter'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter" />
+                        } @else {
+                          <input class="dw-input" [value]="rule.params['template'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'template', $any($event.target).value)" placeholder="e.g. MRN-{value}" />
+                        }
+                      }
+                      @case ('arrayOp') {
+                        <div class="dw-select-wrap">
+                          <select class="dw-select" [value]="rule.params['operation'] || 'first'" (change)="updateFhirRuleParam(ruleIndex, 'operation', $any($event.target).value)">
+                            <option value="first">Take first element</option>
+                            <option value="filterBySystem">Filter by system</option>
+                            <option value="join">Join into a string</option>
+                          </select>
+                        </div>
+                        @if (rule.params['operation'] === 'filterBySystem') {
+                          <input class="dw-input" [value]="rule.params['filterSystem'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'filterSystem', $any($event.target).value)" placeholder="system to match" />
+                        }
+                        @if (rule.params['operation'] === 'join') {
+                          <input class="dw-input" [value]="rule.params['joinDelimiter'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'joinDelimiter', $any($event.target).value)" placeholder="join delimiter, e.g. ', '" />
+                        }
+                      }
+                      @case ('coalesce') {
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['defaultValue'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'defaultValue', $any($event.target).value)"
+                          placeholder="default value"
+                        />
+                      }
+                      @case ('dateShift') {
+                        <input class="dw-input" type="number" [value]="rule.params['days'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'days', $any($event.target).value)" placeholder="days to shift, e.g. -5" />
+                      }
+                      @case ('hashMask') {
+                        <div class="dw-select-wrap">
+                          <select class="dw-select" [value]="rule.params['mode'] || 'hash'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                            <option value="hash">Hash (SHA-256)</option>
+                            <option value="mask">Mask, keep last N characters</option>
+                          </select>
+                        </div>
+                        @if (rule.params['mode'] === 'mask') {
+                          <input class="dw-input" type="number" [value]="rule.params['showLastN'] || '0'" (input)="updateFhirRuleParam(ruleIndex, 'showLastN', $any($event.target).value)" placeholder="characters to keep" />
+                        }
+                      }
+                    }
+                  </div>
+
+                  @if (rule.field) {
+                    <div class="dw-fhir-rule-preview">{{ fhirRulePreview(rule) }}</div>
+                  }
+                </div>
+              }
+              <button type="button" class="dw-btn" (click)="addFhirRule()">+ Add rule for {{ activeRuleResource() }}</button>
+            </div>
+          }
         }
       </div>
     }
@@ -611,11 +904,11 @@
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
-            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'conditional' ? 'Conditional update by identifier' : 'Upsert by resource id (PUT)' }}</span>
+            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'conditional' ? 'Conditional update by identifier' : fhirForm.value.writeMode === 'upsertBundle' ? 'Upsert by resource id (Bundle)' : 'Upsert by resource id (PUT)' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Field handling</span>
-            <span class="dw-review-val">{{ fhirMapMode() === 'customize' ? ('Custom mapping (' + fhirCustomRules().length + ' rule' + (fhirCustomRules().length === 1 ? '' : 's') + ')') : 'Passthrough — no mapping' }}</span>
+            <span class="dw-review-val">{{ fhirMapMode() === 'customize' ? ('Custom mapping (' + totalFhirRuleCount() + ' rule' + (totalFhirRuleCount() === 1 ? '' : 's') + ')') : 'Passthrough — no mapping' }}</span>
           </div>
         } @else {
           <div class="dw-review-card">

@@ -51,6 +51,32 @@ public sealed class FhirDestinationOAuth2TokenProviderTests
     }
 
     [Fact]
+    public async Task Different_secrets_for_the_same_endpoint_and_client_id_never_share_a_cache_entry()
+    {
+        // Regression test: a cache entry from a PRIOR request with the correct secret must not be reused when a
+        // caller later supplies a different (e.g. wrong, rotated, or mistyped) secret for the same TokenEndpoint/
+        // ClientId/scope — confirmed live via the destination wizard's Test Connection button falsely reporting
+        // "Connected" for an intentionally wrong secret before this fix.
+        var handler = new CapturingHandler();
+        var cache = new Mock<IFhirAccessTokenCache>();
+        var seenKeys = new List<string>();
+        cache.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, CancellationToken>((key, _) => seenKeys.Add(key))
+            .ReturnsAsync((string?)null);
+
+        var provider = new FhirDestinationOAuth2TokenProvider(new HttpClient(handler), cache.Object);
+        var correctSecretOptions = new FhirDestinationOAuth2Options("https://aidbox/auth/token", "cid", "correct-secret", null);
+        var wrongSecretOptions = new FhirDestinationOAuth2Options("https://aidbox/auth/token", "cid", "wrong-secret", null);
+
+        await provider.GetAccessTokenAsync(correctSecretOptions, CancellationToken.None);
+        await provider.GetAccessTokenAsync(wrongSecretOptions, CancellationToken.None);
+
+        seenKeys.Should().HaveCount(2);
+        seenKeys[0].Should().NotBe(seenKeys[1]);
+        handler.CallCount.Should().Be(2); // both went to the real token endpoint — neither was answered from the other's cache entry.
+    }
+
+    [Fact]
     public async Task Non_success_response_throws_with_body_included()
     {
         var handler = new CapturingHandler(HttpStatusCode.Unauthorized, """{"error":"invalid_client"}""");

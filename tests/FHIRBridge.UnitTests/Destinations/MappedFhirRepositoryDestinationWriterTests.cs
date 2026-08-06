@@ -24,8 +24,8 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     private static MappingProfile Mapping() =>
         new("Patient FHIR", "Patient", Guid.NewGuid(), Guid.NewGuid(), "Patient", []);
 
-    private static MappedDestinationRecord Record(string? sourceJson = null) =>
-        new(Guid.NewGuid(), "Patient", "Patient", "123", new Dictionary<string, object?>(), sourceJson);
+    private static MappedDestinationRecord Record(string? sourceJson = null, string sourceResourceId = "123", string resourceType = "Patient") =>
+        new(Guid.NewGuid(), resourceType, resourceType, sourceResourceId, new Dictionary<string, object?>(), sourceJson);
 
     private static PipelineWriteContext Context() => new(true, "Workflow", DateTimeOffset.UtcNow);
 
@@ -149,15 +149,166 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         handler.LastRequestBody.Should().Contain("\"id\":\"123\"");
     }
 
+    // ── dest_fhirWriteMode: "bundle" ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Bundle_mode_sends_one_POST_to_root_with_a_batch_Bundle_body()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(
+            """{"dest_fhirAuthType":"none","dest_fhirWriteMode":"bundle"}""",
+            target: "https://aidbox.example.com/fhir");
+        var record = Record("""{"resourceType":"Patient","id":"123"}""");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.Requests.Should().HaveCount(1);
+        var (request, body) = handler.Requests[0];
+        request.Method.Should().Be(HttpMethod.Post);
+        request.RequestUri!.ToString().Should().Be("https://aidbox.example.com/fhir");
+        body.Should().Contain("\"resourceType\":\"Bundle\"");
+        body.Should().Contain("\"type\":\"batch\"");
+        body.Should().Contain("\"method\":\"PUT\"");
+        body.Should().Contain("\"url\":\"Patient/123\"");
+    }
+
+    [Fact]
+    public async Task Bundle_mode_isolates_one_failed_entry_from_the_other_two()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+                {
+                  "resourceType": "Bundle",
+                  "type": "batch-response",
+                  "entry": [
+                    {"response": {"status": "200 OK"}},
+                    {"response": {"status": "422 Unprocessable Entity", "outcome": {"resourceType":"OperationOutcome","issue":[{"severity":"fatal","code":"invalid","diagnostics":"Referenced resource Organization/xyz does not exist"}]}}},
+                    {"response": {"status": "200 OK"}}
+                  ]
+                }
+                """)
+        };
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record("""{"resourceType":"Patient","id":"p2"}""", sourceResourceId: "p2"),
+            Record("""{"resourceType":"Patient","id":"p3"}""", sourceResourceId: "p3"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        result.WrittenResourceIds.Should().BeEquivalentTo(new[] { "p1", "p3" });
+        result.RecordErrors.Should().ContainSingle();
+        result.RecordErrors!.Single().Should().Be("Patient/p2: Referenced resource Organization/xyz does not exist");
+    }
+
+    [Fact]
+    public async Task Bundle_mode_matches_response_entries_to_records_by_position_not_by_content()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            // Bare status entries with no resource/id info at all — proves matching is purely positional.
+            Content = new StringContent("""
+                {"resourceType":"Bundle","type":"batch-response","entry":[
+                    {"response":{"status":"200 OK"}},
+                    {"response":{"status":"200 OK"}}
+                ]}
+                """)
+        };
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record("""{"resourceType":"Patient","id":"p2"}""", sourceResourceId: "p2"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.WrittenResourceIds.Should().Equal("p1", "p2");
+    }
+
+    [Fact]
+    public async Task Bundle_mode_writes_a_non_FHIR_fallback_record_individually_alongside_the_bundle()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record(sourceJson: null, sourceResourceId: "p2"), // no SourceJson -> non-FHIR fallback path
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().HaveCount(2);
+        handler.Requests[0].Body.Should().Contain("\"resourceType\":\"Bundle\"");
+        handler.Requests[1].Request.Method.Should().Be(HttpMethod.Put);
+        result.Count.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Bundle_mode_throws_when_response_entry_count_does_not_match_request()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"resourceType":"Bundle","type":"batch-response","entry":[{"response":{"status":"200 OK"}}]}""")
+        };
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record("""{"resourceType":"Patient","id":"p2"}""", sourceResourceId: "p2"),
+        };
+
+        var act = () => writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    /// <summary>
+    /// Captures every request sent (not just the last one) so bundle-mode tests can assert on a whole call's worth
+    /// of HTTP traffic; <see cref="LastRequest"/>/<see cref="LastRequestBody"/> stay derived from the same list so
+    /// every pre-existing single-request test keeps working unmodified.
+    /// </summary>
     private sealed class CapturingHandler : HttpMessageHandler
     {
-        public HttpRequestMessage? LastRequest { get; private set; }
-        public string? LastRequestBody { get; private set; }
+        public List<(HttpRequestMessage Request, string? Body)> Requests { get; } = new();
+
+        public HttpRequestMessage? LastRequest => Requests.Count > 0 ? Requests[^1].Request : null;
+        public string? LastRequestBody => Requests.Count > 0 ? Requests[^1].Body : null;
+
+        /// <summary>Test-supplied response builder; when null, defaults to a bare 200 OK for a plain PUT, or (for a
+        /// Bundle POST) an all-succeeded batch-response Bundle with one "200 OK" entry per request entry.</summary>
+        public Func<HttpRequestMessage, string?, HttpResponseMessage>? RespondWith { get; set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            LastRequest = request;
-            LastRequestBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            Requests.Add((request, body));
+
+            if (RespondWith is not null)
+            {
+                return RespondWith(request, body);
+            }
+
+            if (body is not null && body.Contains("\"resourceType\":\"Bundle\"", StringComparison.Ordinal))
+            {
+                var requestEntryCount = System.Text.Json.Nodes.JsonNode.Parse(body)!["entry"]!.AsArray().Count;
+                var responseEntries = string.Join(
+                    ",", Enumerable.Repeat("""{"response":{"status":"200 OK"}}""", requestEntryCount));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        $$"""{"resourceType":"Bundle","type":"batch-response","entry":[{{responseEntries}}]}""")
+                };
+            }
+
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
     }

@@ -103,6 +103,7 @@ export const DESTINATION_ENDPOINTS = {
   schemaPreview:       `${API_V1_BASE}/destinations/schema-preview`,
   schema:              (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
   sftpTest:            `${API_V1_BASE}/destinations/sftp-test`,
+  fhirTest:            `${API_V1_BASE}/destinations/fhir-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,

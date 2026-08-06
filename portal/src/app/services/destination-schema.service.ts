@@ -52,6 +52,17 @@ export interface SftpConnectionTestRequest {
   remoteFolder?: string;
 }
 
+export interface FhirConnectionTestRequest {
+  baseUrl: string;
+  authType: string;
+  tokenEndpoint?: string;
+  clientId?: string;
+  clientSecret?: string;
+  username?: string;
+  password?: string;
+  bearerToken?: string;
+}
+
 export interface ConnectionTestResult {
   connected: boolean;
   error: string | null;
@@ -80,5 +91,10 @@ export class DestinationSchemaService {
   /** Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). */
   testSftp(request: SftpConnectionTestRequest): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.sftpTest, request);
+  }
+
+  /** Tests an ad-hoc FHIR-repository connection (e.g. Aidbox) for a not-yet-saved FhirRepository destination. */
+  testFhir(request: FhirConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.fhirTest, request);
   }
 }

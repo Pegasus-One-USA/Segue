@@ -547,12 +547,13 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   ): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
 
-    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement in passthrough
-    // mode (WorkflowGraphValidator.DestinationRequiresMappedRecords) — a Field Mapping node has no configuration
-    // screen and no way to receive the FHIR-specific signal it would need to behave as a passthrough, so wire the
-    // destination directly to its source/transform parent instead of forcing one in. "customize" mode still needs
-    // real field mapping, so it keeps the normal insertion behavior below.
-    if (transformId === 'dest-fhir' && config?.['dest_fhirMapMode'] !== 'customize') {
+    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement
+    // (WorkflowGraphValidator.DestinationRequiresMappedRecords — unconditional, both modes) — a Field Mapping node
+    // has no configuration screen and no way to receive the FHIR-specific signal it would need. Both "passthrough"
+    // and "customize" modes are handled directly by MappingNodeExecutor/FhirFieldTransformApplier against the raw
+    // resource batch, neither goes through a real Mapping node's field-mapping engine — so wire the destination
+    // directly to its source/transform parent in both cases instead of forcing one in.
+    if (transformId === 'dest-fhir') {
       return attachNode;
     }
 

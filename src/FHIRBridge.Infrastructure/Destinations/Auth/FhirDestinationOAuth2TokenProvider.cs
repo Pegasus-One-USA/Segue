@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 
@@ -26,7 +28,14 @@ public sealed class FhirDestinationOAuth2TokenProvider : IFhirDestinationTokenPr
     public async Task<string> GetAccessTokenAsync(FhirDestinationOAuth2Options options, CancellationToken cancellationToken)
     {
         var scope = string.IsNullOrWhiteSpace(options.Scope) ? null : options.Scope;
-        var cacheKey = $"fhir-dest-token:oauth2|{options.TokenEndpoint}|{options.ClientId}|{scope}";
+        // Fingerprinting the secret (never the plaintext itself) into the cache key is load-bearing, not cosmetic:
+        // without it, a cache entry from an earlier, DIFFERENT secret for this same TokenEndpoint/ClientId/scope
+        // would be reused verbatim for a new (possibly wrong, e.g. just-rotated or mistyped) secret, silently
+        // skipping real validation of whatever was just supplied — confirmed live via the destination wizard's Test
+        // Connection button reporting "Connected" for an intentionally wrong secret, because a still-valid token
+        // cached from the correct secret answered for it instead.
+        var secretFingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(options.ClientSecret)))[..16];
+        var cacheKey = $"fhir-dest-token:oauth2|{options.TokenEndpoint}|{options.ClientId}|{scope}|{secretFingerprint}";
 
         var cached = await _tokenCache.GetAsync(cacheKey, cancellationToken);
         if (cached is not null)

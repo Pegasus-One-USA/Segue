@@ -346,6 +346,11 @@ public static class DependencyInjection
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
+        services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));
+        services.AddScoped<IFhirDestinationConnectionTestService>(sp =>
+            new Destinations.FhirDestinationConnectionTestService(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
         // Read-back of a capped row sample from a relational destination table ("View destination data").
         services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
         // Option A: workflow source nodes reference a real SourceConnection by id; this resolves it to the runtime

@@ -471,6 +471,7 @@ export class WorkflowBuildAssemblerService {
                 'dest_baseUrl',
                 'dest_project',
                 'dest_writeMode',
+                'dest_fhirWriteMode',
                 'dest_tokenEndpoint',
                 'dest_clientId',
                 'dest_username',
