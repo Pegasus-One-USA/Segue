@@ -183,4 +183,55 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
 
         _sut.Validate(Request(DestinationType.Csv, metadata)).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public void FhirRepository_with_no_metadata_passes_matching_todays_absence_of_validation()
+    {
+        _sut.Validate(Request(DestinationType.FhirRepository, metadata: null)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FhirRepository_auth_type_absent_passes_without_requiring_target()
+    {
+        _sut.Validate(Request(DestinationType.FhirRepository, new { })).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FhirRepository_explicit_none_auth_type_passes_without_requiring_target()
+    {
+        _sut.Validate(Request(DestinationType.FhirRepository, new { dest_fhirAuthType = "none" })).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FhirRepository_unsupported_auth_type_fails()
+    {
+        var result = _sut.Validate(Request(DestinationType.FhirRepository, new { dest_fhirAuthType = "made-up" }));
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_fhirAuthType");
+    }
+
+    [Theory]
+    [InlineData("bearer")]
+    [InlineData("basic")]
+    [InlineData("clientCredentials")]
+    public void FhirRepository_non_none_auth_type_without_target_fails(string authType)
+    {
+        var result = _sut.Validate(Request(DestinationType.FhirRepository, new { dest_fhirAuthType = authType }));
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Target");
+    }
+
+    [Theory]
+    [InlineData("bearer")]
+    [InlineData("basic")]
+    [InlineData("clientCredentials")]
+    public void FhirRepository_non_none_auth_type_with_target_passes(string authType)
+    {
+        var request = Request(DestinationType.FhirRepository, new { dest_fhirAuthType = authType }) with
+        {
+            Target = "https://aidbox.example.com/fhir",
+        };
+
+        _sut.Validate(request).IsValid.Should().BeTrue();
+    }
 }

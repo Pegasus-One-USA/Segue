@@ -10,10 +10,63 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
-import { MappingCatalogService } from '../../../services/mapping-catalog.service';
+import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+
+/** All 20 transforms from Aidbox-Necessary-Transformations.md (Aidbox-Customize-Transform-UX-Plan.md's "All 20"
+ *  section) — minus Redact/Rename, which stay the De-identification node's job (see that plan doc's Part 1c).
+ *  codeLookup/statusCoercion (#7/#9) are mechanically identical (a source->target lookup table) but kept as two
+ *  distinct entries for traceability back to the source doc's own numbering. #19/#20 (dateShift/hashMask)
+ *  duplicate the standalone De-identification node's job — implemented here per explicit request, flagged as a
+ *  known overlap in the plan doc, not silently resolved. */
+export type FhirTransformType =
+  | 'dateFormat' | 'typeCast' | 'booleanConversion' | 'unitConversion' | 'quantityRange' | 'roundPrecision'
+  | 'codeLookup' | 'codeableConcept' | 'statusCoercion'
+  | 'referenceConstruct' | 'telecom' | 'identifierFormat' | 'humanNameFormat' | 'addressParse'
+  | 'stringClean' | 'stringTemplate' | 'arrayOp'
+  | 'coalesce' | 'dateShift' | 'hashMask';
+
+export interface FhirCustomRule {
+  field: string;
+  /** True when the user picked "Other field (advanced)" instead of the curated catalog below — reveals a
+   *  free-text FHIRPath input rather than the friendly-label dropdown. */
+  customField?: boolean;
+  transform: FhirTransformType;
+  params: Record<string, string>;
+}
+
+const FHIR_TRANSFORM_LABELS: Record<FhirTransformType, string> = {
+  dateFormat: 'Date/time format',
+  typeCast: 'Number / string cast',
+  booleanConversion: 'Boolean conversion',
+  unitConversion: 'Unit conversion (UCUM)',
+  quantityRange: 'Quantity / Range assembly',
+  roundPrecision: 'Rounding / scaling / precision',
+  codeLookup: 'Value / code lookup',
+  codeableConcept: 'CodeableConcept / Coding builder',
+  statusCoercion: 'Status / enum coercion',
+  referenceConstruct: 'Reference construct',
+  telecom: 'Telecom (ContactPoint)',
+  identifierFormat: 'Identifier formatting',
+  humanNameFormat: 'HumanName parse',
+  addressParse: 'Address parse',
+  stringClean: 'String normalization / cleaning',
+  stringTemplate: 'Concatenate / template / split',
+  arrayOp: 'Array / list operation',
+  coalesce: 'Default / coalesce',
+  dateShift: 'Date math / date-shift',
+  hashMask: 'Hashing / masking',
+};
+
+/** A rule's transform-specific parsed pair list for codeLookup/statusCoercion — stored as a JSON string in
+ *  rule.params['pairs'] since params is a flat string map; parsed/serialized only for the sub-editor UI. */
+export interface FhirLookupPair {
+  from: string;
+  to: string;
+}
+
 import { MappingProfileFormComponent, MappingRow } from './mapping-profile-form.component';
 
 export type { MappingRow };
@@ -37,7 +90,7 @@ export class DestinationWizardComponent implements OnInit {
    *  DestinationConnectionFormComponent's viewChild()+getConfig() embed pattern used by the Settings screens. */
   readonly mappingForm = viewChild(MappingProfileFormComponent);
 
-  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'>();
+  readonly destType   = input.required<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'fhir'>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode   = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -113,6 +166,242 @@ export class DestinationWizardComponent implements OnInit {
     downloadLinkExpiryMinutes: [60, []],
   });
 
+  readonly fhirForm = this.fb.group({
+    name:          ['Aidbox Production', [Validators.required]],
+    baseUrl:       ['', [Validators.required]],
+    project:       ['', []],
+    authType:      ['oauth2', [Validators.required]],
+    writeMode:     ['upsert', []],
+    // ── OAuth2 Client Credentials fields (conditional on authType) ───────────
+    tokenEndpoint: ['', []],
+    clientId:      ['', []],
+    clientSecret:  ['', []],
+    // ── Basic auth fields (conditional) ──────────────────────────────────────
+    username:      ['', []],
+    password:      ['', []],
+    // ── Bearer token field (conditional) ─────────────────────────────────────
+    bearerToken:   ['', []],
+  });
+
+  // ── FHIR field-handling (step 3: passthrough vs. customize) ──────────────
+  // Rules are grouped by resource type (Record keyed by the same resource-type strings selected in step 2's
+  // Data groups) rather than one flat list — a rule with no resource type attached was the exact "which
+  // resource does this apply to" ambiguity this design replaces.
+  readonly fhirMapMode = signal<'passthrough' | 'customize'>('passthrough');
+  readonly fhirCustomRules = signal<Record<string, FhirCustomRule[]>>({});
+  readonly activeRuleResource = signal<string | null>(null);
+
+  // Real, backend-generated FHIR element catalog (MappingCatalogService — the same source the SQL/Mongo/CSV
+  // "Map fields" step already uses, generated from the actual Firely R4 model) rather than a small hand-curated
+  // list — so the field picker actually reflects every real element on the resource, not a guessed-at subset.
+  readonly fhirFieldCatalog = signal<Record<string, FhirElement[]>>({});
+  private readonly _fhirCatalogRequested = new Set<string>();
+
+  private _ensureFhirFieldCatalog(resourceType: string): void {
+    if (this._fhirCatalogRequested.has(resourceType)) return;
+    this._fhirCatalogRequested.add(resourceType);
+    this.catalogSvc.fields(resourceType).subscribe(fields => {
+      if (!fields.length) { this._fhirCatalogRequested.delete(resourceType); return; }
+      // Drop the mapping engine's virtual @token system fields (@runId, @now, ...) — those only resolve inside
+      // MappingNodeExecutor's field-mapping engine, not on the raw resource JSON this screen's rules run against.
+      const real = fields.filter(f => !f.fhirPath.startsWith('@'));
+      this.fhirFieldCatalog.update(m => ({ ...m, [resourceType]: real }));
+    });
+  }
+
+  selectFhirCustomizeMode(): void {
+    this.fhirMapMode.set('customize');
+    if (!this.activeRuleResource() && this.selectedResources().length > 0) {
+      this.activeRuleResource.set(this.selectedResources()[0]);
+    }
+    if (this.activeRuleResource()) {
+      this._ensureFhirFieldCatalog(this.activeRuleResource()!);
+    }
+  }
+
+  selectRuleResourceTab(resourceType: string): void {
+    this.activeRuleResource.set(resourceType);
+    this._ensureFhirFieldCatalog(resourceType);
+  }
+
+  rulesForActiveResource(): FhirCustomRule[] {
+    const rt = this.activeRuleResource();
+    return rt ? (this.fhirCustomRules()[rt] ?? []) : [];
+  }
+
+  fieldOptionsFor(resourceType: string | null): { path: string; label: string }[] {
+    if (!resourceType) return [];
+    return (this.fhirFieldCatalog()[resourceType] ?? []).map(f => ({
+      path: this._withDefaultArrayIndices(f.fhirPath, f.arrays),
+      label: f.label || f.fhirPath,
+    }));
+  }
+
+  // MappingCatalogService's fhirPath is a schema-level path with no array indices (e.g. "identifier.system") —
+  // correct for the SQL/Mongo field-mapping engine (which iterates every array element), but this screen's
+  // FhirFieldTransformApplier needs a concrete instance path (e.g. "identifier[0].system") to navigate one exact
+  // value. Defaults every array-ancestor segment to its first element ("[0]") — the common case (first/primary
+  // entry) — "Other field (advanced)" remains the escape hatch for any other index.
+  private _withDefaultArrayIndices(fhirPath: string, arrays: string[]): string {
+    const arraySet = new Set(arrays);
+    let running = '';
+    return fhirPath
+      .split('.')
+      .map(segment => {
+        running = running ? `${running}.${segment}` : segment;
+        return arraySet.has(running) ? `${segment}[0]` : segment;
+      })
+      .join('.');
+  }
+
+  fhirTransformLabel(t: FhirTransformType): string {
+    return FHIR_TRANSFORM_LABELS[t];
+  }
+
+  addFhirRule(): void {
+    const rt = this.activeRuleResource();
+    if (!rt) return;
+    this.fhirCustomRules.update(rules => ({
+      ...rules,
+      [rt]: [...(rules[rt] ?? []), { field: '', transform: 'dateFormat', params: {} }],
+    }));
+  }
+
+  removeFhirRule(index: number): void {
+    const rt = this.activeRuleResource();
+    if (!rt) return;
+    this.fhirCustomRules.update(rules => ({
+      ...rules,
+      [rt]: (rules[rt] ?? []).filter((_, i) => i !== index),
+    }));
+  }
+
+  updateFhirRule(index: number, patch: Partial<FhirCustomRule>): void {
+    const rt = this.activeRuleResource();
+    if (!rt) return;
+    this.fhirCustomRules.update(rules => ({
+      ...rules,
+      [rt]: (rules[rt] ?? []).map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    }));
+  }
+
+  updateFhirRuleParam(index: number, key: string, value: string): void {
+    const rt = this.activeRuleResource();
+    if (!rt) return;
+    this.fhirCustomRules.update(rules => ({
+      ...rules,
+      [rt]: (rules[rt] ?? []).map((r, i) => (i === index ? { ...r, params: { ...r.params, [key]: value } } : r)),
+    }));
+  }
+
+  onFieldSelectChange(index: number, value: string): void {
+    if (value === '__custom__') {
+      this.updateFhirRule(index, { customField: true, field: '' });
+    } else {
+      this.updateFhirRule(index, { customField: false, field: value });
+    }
+  }
+
+  onTransformChange(index: number, value: string): void {
+    // Reset params on transform change — a previous transform's params (e.g. fromUnit/toUnit) don't carry
+    // any meaning for a newly-chosen transform (e.g. coalesce's defaultValue).
+    this.updateFhirRule(index, { transform: value as FhirTransformType, params: {} });
+  }
+
+  // ── codeLookup / statusCoercion nested pairs sub-editor ───────────────────
+  // params is a flat string map, so the {from,to} pair list is stored as a JSON string under params['pairs'] —
+  // parsed/serialized only here, at the UI edge.
+  getLookupPairs(rule: FhirCustomRule): FhirLookupPair[] {
+    try {
+      const parsed = JSON.parse(rule.params['pairs'] || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private setLookupPairs(index: number, pairs: FhirLookupPair[]): void {
+    this.updateFhirRuleParam(index, 'pairs', JSON.stringify(pairs));
+  }
+
+  addLookupPair(index: number): void {
+    this.setLookupPairs(index, [...this.getLookupPairs(this.rulesForActiveResource()[index]), { from: '', to: '' }]);
+  }
+
+  removeLookupPair(index: number, pairIndex: number): void {
+    this.setLookupPairs(index, this.getLookupPairs(this.rulesForActiveResource()[index]).filter((_, i) => i !== pairIndex));
+  }
+
+  updateLookupPair(index: number, pairIndex: number, key: 'from' | 'to', value: string): void {
+    const pairs = this.getLookupPairs(this.rulesForActiveResource()[index]);
+    this.setLookupPairs(index, pairs.map((p, i) => (i === pairIndex ? { ...p, [key]: value } : p)));
+  }
+
+  totalFhirRuleCount(): number {
+    return Object.values(this.fhirCustomRules()).reduce((sum, rows) => sum + rows.length, 0);
+  }
+
+  fhirFieldLabel(resourceType: string | null, path: string): string {
+    if (!path) return '(no field selected)';
+    const entry = this.fieldOptionsFor(resourceType).find(f => f.path === path);
+    return entry?.label ?? path;
+  }
+
+  /** Plain-language summary shown under each rule — states back in words what the rule does and to what,
+   *  rather than leaving the user to infer meaning from disconnected field/transform/param inputs. */
+  fhirRulePreview(rule: FhirCustomRule): string {
+    const field = this.fhirFieldLabel(this.activeRuleResource(), rule.field);
+    switch (rule.transform) {
+      case 'dateFormat':
+        return `Format ${field} as ${rule.params['targetFormat'] === 'custom' ? (rule.params['pattern'] || 'a custom pattern') : 'ISO 8601'}.`;
+      case 'typeCast':
+        return `Cast ${field} to ${rule.params['targetType'] || 'string'}.`;
+      case 'booleanConversion':
+        return `Convert ${field} to true/false (true values: ${rule.params['trueValues'] || '—'}).`;
+      case 'unitConversion':
+        return `Convert ${field} from ${rule.params['fromUnit'] || '?'} to ${rule.params['toUnit'] || '?'}.`;
+      case 'quantityRange':
+        return rule.params['mode'] === 'range'
+          ? `Split ${field} into a low/high Range (unit: ${rule.params['unit'] || '?'}).`
+          : `Build a Quantity from ${field} (unit: ${rule.params['unit'] || '?'}).`;
+      case 'roundPrecision':
+        return `Round ${field} to ${rule.params['decimals'] || '2'} decimal place(s).`;
+      case 'codeLookup':
+      case 'statusCoercion':
+        return `Map ${field} using ${this.getLookupPairs(rule).length} lookup pair(s).`;
+      case 'codeableConcept':
+        return `Build a CodeableConcept from ${field} (system: ${rule.params['system'] || '?'}).`;
+      case 'telecom':
+        return `Build a ${rule.params['system'] || 'phone'} ContactPoint from ${field}.`;
+      case 'referenceConstruct':
+        return `Build a ${rule.params['targetResourceType'] || '?'} reference from ${field}.`;
+      case 'identifierFormat':
+        return `Build an Identifier from ${field} (system: ${rule.params['system'] || '?'}).`;
+      case 'humanNameFormat':
+        return `Parse ${field} into a HumanName (split on "${rule.params['delimiter'] || ', '}").`;
+      case 'addressParse':
+        return `Parse ${field} into an Address (split on "${rule.params['delimiter'] || ','}").`;
+      case 'stringClean':
+        return `Clean ${field} (${rule.params['mode'] || 'trim'}).`;
+      case 'stringTemplate':
+        return rule.params['mode'] === 'split'
+          ? `Split ${field} on "${rule.params['delimiter'] || ''}".`
+          : `Apply template "${rule.params['template'] || '{value}'}" to ${field}.`;
+      case 'arrayOp':
+        return `Apply ${rule.params['operation'] || 'first'} to ${field}.`;
+      case 'coalesce':
+        return `Default ${field} to "${rule.params['defaultValue'] || ''}" when missing.`;
+      case 'dateShift':
+        return `Shift ${field} by ${rule.params['days'] || '0'} day(s).`;
+      case 'hashMask':
+        return rule.params['mode'] === 'mask'
+          ? `Mask ${field}, keeping the last ${rule.params['showLastN'] || '0'} character(s).`
+          : `Hash ${field} (SHA-256).`;
+      default:
+        return `${this.fhirTransformLabel(rule.transform)} on ${field}.`;
+    }
+  }
+
   // ── data groups ───────────────────────────────────────────────────────────
   // Always the platform's full curated resource set (FHIR_RESOURCES) — every Epic source now requests scopes
   // for all of these regardless of what's picked here, so this no longer needs to derive from (and be capped
@@ -149,6 +438,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -161,14 +451,25 @@ export class DestinationWizardComponent implements OnInit {
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly isCsv        = computed(() => this.destType() === 'csv');
+  readonly isFhir       = computed(() => this.destType() === 'fhir');
+
+  /** Template-only narrowing helper — <app-mapping-profile-form> is never actually bound when isFhir() is true
+   *  (wrapped in @if (!isFhir()) in the template), but Angular's control-flow narrowing doesn't propagate through
+   *  a signal call site (destType() and isFhir() are two independent function calls to the type checker), so the
+   *  wider destType() union needs an explicit cast here rather than widening MappingProfileFormComponent's own
+   *  input type (which genuinely cannot represent a no-mapping-needed destination). */
+  nonFhirDestType(): 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' {
+    return this.destType() as 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres';
+  }
   readonly destLabel    = computed(() =>
     this.destType() === 'sql' ? 'SQL Server'
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'fhir' ? 'Aidbox'
       : 'CSV');
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.isFhir() ? this.fhirForm.value : this.csvForm.value;
     const rows = this.mappingForm()?.mappingRows() ?? [];
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -178,6 +479,10 @@ export class DestinationWizardComponent implements OnInit {
     // SFTP/email/download-link fields are required only while their mode is selected.
     this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
     this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+
+    // FHIR auth fields required only while their auth type is selected.
+    this._syncFhirAuthValidators(this.fhirForm.controls.authType.value);
+    this.fhirForm.controls.authType.valueChanges.subscribe(v => this._syncFhirAuthValidators(v));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -229,6 +534,37 @@ export class DestinationWizardComponent implements OnInit {
     expiry.updateValueAndValidity({ emitEvent: false });
   }
 
+  // Reverse of WorkflowBuildAssemblerService.buildConnectionMetadata's oauth2 -> clientCredentials bridge, for
+  // populating the wizard from an existing DestinationConfiguration's real dest_fhirAuthType value. 'none' has no
+  // representation in this wizard's dropdown (oauth2/basic/bearer only), so it — like an absent value — falls
+  // back to the wizard's default option.
+  private _fhirAuthTypeFromBackend(value: string | undefined): 'oauth2' | 'basic' | 'bearer' {
+    return value === 'basic' || value === 'bearer' ? value : 'oauth2';
+  }
+
+  // Reverse of _save()'s writeMode split above: dest_fhirWriteMode: 'bundle' always means the dropdown's
+  // 'upsertBundle' option, regardless of whatever dest_writeMode says — a destination saved before bundling
+  // existed simply won't have dest_fhirWriteMode at all, and falls through to dest_writeMode as before.
+  private _fhirWriteModeFromBackend(destWriteMode: string | undefined, destFhirWriteMode: string | undefined): string {
+    return destFhirWriteMode === 'bundle' ? 'upsertBundle' : destWriteMode || 'upsert';
+  }
+
+  private _syncFhirAuthValidators(authType: string | null): void {
+    (['tokenEndpoint', 'clientId', 'clientSecret'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    (['username', 'password'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    const bearerToken = this.fhirForm.get('bearerToken')!;
+    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.updateValueAndValidity({ emitEvent: false });
+  }
+
   ngOnInit(): void {
     const edit = this.editNode();
     if (edit) {
@@ -250,6 +586,10 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
+      // FHIR additionally requires a successful Test Connection before advancing — unlike SQL/Mongo/CSV, wrong
+      // credentials here don't surface as a form-validation error (the fields themselves are well-formed strings),
+      // so form validity alone would let someone click through with credentials already known to be wrong.
+      if (this.isFhir()) return this.fhirForm.invalid || this.probeState() !== 'ok';
       return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
@@ -266,7 +606,7 @@ export class DestinationWizardComponent implements OnInit {
     // now reveals exactly which field is missing instead of just silently doing nothing.
     if (this.isNextDisabled()) {
       if (this.step() === 1) {
-        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.csvForm).markAllAsTouched();
+        (this.isSql() ? this.sqlForm : this.isMongo() ? this.mongoForm : this.isFhir() ? this.fhirForm : this.csvForm).markAllAsTouched();
       }
       return;
     }
@@ -288,6 +628,7 @@ export class DestinationWizardComponent implements OnInit {
       this.step.update(x => x - 1);
       // Returning to Configure invalidates a prior probe — force a re-test on the next advance.
       if (this.step() === 1 && this.isSql()) { this.probeState.set('idle'); this.sqlTables.set([]); }
+      if (this.step() === 1 && this.isFhir()) { this.probeState.set('idle'); }
     }
   }
 
@@ -329,6 +670,33 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  // ── FHIR connection test (explicit button — unlike SQL, doesn't gate/auto-run on Next, since there's no
+  //    schema to load first) ───────────────────────────────────────────────
+  testFhirConnection(): void {
+    const v = this.fhirForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc.testFhir({
+      baseUrl:       v.baseUrl ?? '',
+      authType:      v.authType ?? 'oauth2',
+      tokenEndpoint: v.tokenEndpoint ?? undefined,
+      clientId:      v.clientId ?? undefined,
+      clientSecret:  v.clientSecret ?? undefined,
+      username:      v.username ?? undefined,
+      password:      v.password ?? undefined,
+      bearerToken:   v.bearerToken ?? undefined,
+    }).subscribe({
+      next: res => {
+        this.probeState.set(res.connected ? 'ok' : 'error');
+        if (!res.connected) this.probeError.set(res.error ?? 'Connection failed.');
+      },
+      error: err => {
+        this.probeState.set('error');
+        this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
+      },
+    });
+  }
+
   // ── select existing connection ───────────────────────────────────────────
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
    *  the only way back to blank now that there's no explicit New/Existing toggle to switch away from. */
@@ -342,6 +710,9 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables.set([]);
     } else if (this.isMongo()) {
       this.mongoForm.reset();
+    } else if (this.isFhir()) {
+      this.fhirForm.reset();
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
     } else {
       this.csvForm.reset();
       this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
@@ -358,7 +729,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isFhir()
+                ? DestinationWizardComponent.FHIR_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -418,6 +791,25 @@ export class DestinationWizardComponent implements OnInit {
         writeMode:        metadata['dest_writeMode']    || 'upsert',
       });
       this._existingBaseline = this.mongoForm.getRawValue();
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:          metadata['dest_name']          || selected.name,
+        baseUrl:       metadata['dest_baseUrl']       || selected.target || '',
+        project:       metadata['dest_project']       || '',
+        // The backend persists this as dest_fhirAuthType with its own vocabulary (none/bearer/basic/
+        // clientCredentials — see WorkflowBuildAssemblerService.buildConnectionMetadata's bridge comment);
+        // translate it back to the wizard's own authType values here rather than reading the wrong key.
+        authType:      this._fhirAuthTypeFromBackend(metadata['dest_fhirAuthType']),
+        writeMode:     this._fhirWriteModeFromBackend(metadata['dest_writeMode'], metadata['dest_fhirWriteMode']),
+        tokenEndpoint: metadata['dest_tokenEndpoint'] || '',
+        clientId:      metadata['dest_clientId']      || '',
+        clientSecret:  '',
+        username:      metadata['dest_username']      || '',
+        password:      '',
+        bearerToken:   '',
+      });
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
+      this._existingBaseline = this.fhirForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -463,10 +855,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'clientSecret', 'bearerToken']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.isFhir() ? this.fhirForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -517,6 +909,31 @@ export class DestinationWizardComponent implements OnInit {
         collection:       f['dest_collection']  || '',
         writeMode:        f['dest_writeMode']    || 'upsert',
       });
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:          f['dest_name']          || 'Aidbox Production',
+        baseUrl:       f['dest_baseUrl']       || '',
+        project:       f['dest_project']       || '',
+        authType:      f['dest_authType']      || 'oauth2',
+        writeMode:     this._fhirWriteModeFromBackend(f['dest_writeMode'], f['dest_fhirWriteMode']),
+        tokenEndpoint: f['dest_tokenEndpoint'] || '',
+        clientId:      f['dest_clientId']      || '',
+        clientSecret:  '',
+        username:      f['dest_username']      || '',
+        password:      '',
+        bearerToken:   '',
+      });
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
+      if (f['dest_fhirMapMode']) {
+        this.fhirMapMode.set(f['dest_fhirMapMode'] === 'customize' ? 'customize' : 'passthrough');
+      }
+      if (f['dest_fhirCustomRules']) {
+        try { this.fhirCustomRules.set(JSON.parse(f['dest_fhirCustomRules'])); } catch { /* ignore malformed */ }
+      }
+      if (this.fhirMapMode() === 'customize' && this.selectedResources().length > 0) {
+        this.activeRuleResource.set(this.selectedResources()[0]);
+        this._ensureFhirFieldCatalog(this.selectedResources()[0]);
+      }
     } else {
       this.csvForm.patchValue({
         name:         f['dest_name']         || 'CSV Export',
@@ -613,6 +1030,34 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_connectionString'] = v.connectionString ?? '';
       config['dest_collection']       = v.collection       ?? '';
       config['dest_writeMode']        = v.writeMode        ?? 'upsert';
+    } else if (type === 'fhir') {
+      const v = this.fhirForm.value;
+      config['dest_name']      = v.name      ?? '';
+      config['dest_baseUrl']   = v.baseUrl   ?? '';
+      config['dest_project']   = v.project   ?? '';
+      config['dest_authType']  = v.authType  ?? 'oauth2';
+      // "Upsert by resource id (Bundle)" is a third Write-mode option that's really a combination of two
+      // orthogonal things: it's still upsert-by-id semantics (dest_writeMode), just delivered as one bundled
+      // request instead of N individual ones (dest_fhirWriteMode — see MappedFhirRepositoryDestinationWriter's
+      // own doc comment). Folded into one dropdown rather than two separate fields since "conditional update by
+      // identifier" isn't actually implemented server-side yet, so there's no real second dimension to conflict with.
+      const writeMode = v.writeMode ?? 'upsert';
+      config['dest_writeMode']     = writeMode === 'upsertBundle' ? 'upsert' : writeMode;
+      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : 'individual';
+      if (v.authType === 'oauth2') {
+        config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
+        config['dest_clientId']      = v.clientId      ?? '';
+        config['dest_clientSecret']  = v.clientSecret  ?? '';
+      } else if (v.authType === 'basic') {
+        config['dest_username'] = v.username ?? '';
+        config['dest_password'] = v.password ?? '';
+      } else if (v.authType === 'bearer') {
+        config['dest_bearerToken'] = v.bearerToken ?? '';
+      }
+      config['dest_fhirMapMode'] = this.fhirMapMode();
+      if (this.fhirMapMode() === 'customize') {
+        config['dest_fhirCustomRules'] = JSON.stringify(this.fhirCustomRules());
+      }
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -700,7 +1145,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.saved.emit({
       attachNode:  this.attachNode(),
-      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : 'dest-csv',
+      transformId: type === 'sql' ? 'dest-sqlserver' : type === 'mysql' ? 'dest-mysql' : type === 'postgres' ? 'dest-postgres' : type === 'mongo' ? 'dest-mongo' : type === 'fhir' ? 'dest-fhir' : 'dest-csv',
       status:      'enabled',
       config,
     });

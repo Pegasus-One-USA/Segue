@@ -42,6 +42,10 @@
           <strong>CSV</strong>
           <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
         </button>
+        <button type="button" class="dcd-type-card" (click)="chooseType('fhir')">
+          <strong>Aidbox (FHIR)</strong>
+          <span>Write FHIR resources to a FHIR-native store (Aidbox).</span>
+        </button>
       </div>
     } @else {
       <app-destination-connection-form [destType]="chosenType()!" mode="create" />

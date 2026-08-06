@@ -668,7 +668,7 @@ export class EpicAudienceFormComponent implements OnInit, HasUnsavedChanges {
   );
   /** Only meaningful for a Generated/Imported key — an externally-hosted (manual) JWKS URL is whatever the admin
    *  typed, not something FHIRBridge can compute. Null until resolvedSourceConnectionId() is known (i.e., before
-   *  the very first save) — see WorkflowBuilderComponent.reconcileGeneratedJwksUrls() for how the placeholder
+   *  the very first save) — see WorkflowBuilderComponent.reconcileSourceConnectionFields() for how the placeholder
    *  gets corrected once it is. */
   protected readonly liveJwksUrl = computed(() => {
     const id = this.resolvedSourceConnectionId();

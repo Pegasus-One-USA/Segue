@@ -22,7 +22,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
-  'dest-fhir':        { abbr: 'FHR', color: '#00A89D' },
+  'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },

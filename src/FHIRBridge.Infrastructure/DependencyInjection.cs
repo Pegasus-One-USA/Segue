@@ -102,6 +102,16 @@ public static class DependencyInjection
                     destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
         }
 
+        // FhirRepository (e.g. Aidbox) needs an authenticated conformance check (GET {base}/metadata), not the
+        // anonymous HEAD/directory check TargetReachabilityDestinationHealthCheckProvider does above — it gets its
+        // own provider instead of joining that loop. Previously FhirRepository had no registered health check at all.
+        services.AddHttpClient(nameof(Destinations.FhirRepositoryHealthCheckProvider));
+        services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
+            new Destinations.FhirRepositoryHealthCheckProvider(
+                sp.GetRequiredService<ISecretProvider>(),
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
+
         // Registered unconditionally (before the in-memory/DB branch below) — it resolves
         // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
         services.AddSingleton<IAllowedCorsOriginsCache, InProcessAllowedCorsOriginsCache>();
@@ -272,6 +282,11 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
+        services.AddHttpClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider));
+        services.AddScoped<Destinations.Auth.IFhirDestinationTokenProvider>(sp =>
+            new Destinations.Auth.FhirDestinationOAuth2TokenProvider(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider)),
+                sp.GetRequiredService<IFhirAccessTokenCache>()));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
         services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
@@ -331,6 +346,11 @@ public static class DependencyInjection
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
+        services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));
+        services.AddScoped<IFhirDestinationConnectionTestService>(sp =>
+            new Destinations.FhirDestinationConnectionTestService(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
         // Read-back of a capped row sample from a relational destination table ("View destination data").
         services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
         // Option A: workflow source nodes reference a real SourceConnection by id; this resolves it to the runtime
