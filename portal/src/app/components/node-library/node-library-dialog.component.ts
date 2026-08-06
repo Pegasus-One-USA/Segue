@@ -13,9 +13,35 @@ import { MergeNodeOption } from '../../models/wizard-state.model';
 import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
 import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
 import { GenericFhirSourceFormComponent } from './generic-fhir-source-form/generic-fhir-source-form.component';
+import { HealowSourceFormComponent } from './healow-source-form/healow-source-form.component';
+import { MeditechSourceFormComponent } from './meditech-source-form/meditech-source-form.component';
+import { CernerSourceFormComponent } from './cerner-source-form/cerner-source-form.component';
+import { AthenahealthSourceFormComponent } from './athenahealth-source-form/athenahealth-source-form.component';
+import { AllscriptsSourceFormComponent } from './allscripts-source-form/allscripts-source-form.component';
+import { SampleSourceFormComponent } from './sample-source-form/sample-source-form.component';
 import { ZoomDockComponent } from '../canvas/zoom-dock/zoom-dock.component';
 
 export type LibraryMode = 'source' | 'transform';
+
+/** Vendors reachable via an inline config form directly in this dialog (Epic gets its own full-screen
+ *  wizard instead — see showEpicForm — and HL7v2/webhook sources have no interactive form yet, just a
+ *  stub node). Each form component honors the same "host reads getFields(), null means invalid"
+ *  contract as InlineSourceForm below. */
+export type InlineSourceVendor = 'generic-fhir' | 'healow' | 'meditech' | 'cerner' | 'athena' | 'allscripts' | 'sample';
+
+interface InlineSourceForm {
+  getFields(): Record<string, string> | null;
+}
+
+const INLINE_SOURCE_VENDOR_PATTERNS: Record<InlineSourceVendor, RegExp> = {
+  'generic-fhir': /generic.?fhir/i,
+  healow: /healow/i,
+  meditech: /meditech/i,
+  cerner: /cerner/i,
+  athena: /athena/i,
+  allscripts: /allscripts/i,
+  sample: /^sample\b/i,
+};
 
 export interface AddTransformEvent {
   attachNode: CanvasNode;
@@ -113,6 +139,12 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
     EpicAudienceFormComponent,
     DestinationWizardComponent,
     GenericFhirSourceFormComponent,
+    HealowSourceFormComponent,
+    MeditechSourceFormComponent,
+    CernerSourceFormComponent,
+    AthenahealthSourceFormComponent,
+    AllscriptsSourceFormComponent,
+    SampleSourceFormComponent,
     ZoomDockComponent,
   ],
   templateUrl: './node-library-dialog.component.html',
@@ -143,16 +175,20 @@ export class NodeLibraryDialogComponent {
   // ── inline Epic form state ────────────────────────────────────────────────
   readonly showEpicForm = signal(false);
 
-  // ── inline Generic FHIR form state ────────────────────────────────────────
-  readonly showGenericFhirForm = signal(false);
-  readonly genericFhirEditNode = signal<CanvasNode | null>(null);
-  readonly genericFhirForm = viewChild(GenericFhirSourceFormComponent);
+  // ── inline vendor source form state (Generic FHIR, Healow, MEDITECH, Cerner, Athenahealth,
+  // Allscripts, Sample — each its own component, see INLINE_SOURCE_VENDOR_PATTERNS above) ───────────
+  readonly activeSourceFormVendor = signal<InlineSourceVendor | null>(null);
+  readonly sourceFormEditNode = signal<CanvasNode | null>(null);
+  readonly inlineSourceForm = viewChild<InlineSourceForm>('inlineSourceForm');
   readonly genericFhirError = signal<string | null>(null);
+  /** Display name for the currently-open inline source form's title, sourced from the same SOURCES
+   *  list the library sidebar itself renders from — never hardcoded here. */
+  readonly activeSourceFormLabel = computed(() => SOURCES.find(s => s.id === this.activeSourceFormVendor())?.name ?? 'Source');
 
   // ── sidebar collapsed state (auto when a form opens, user-toggleable) ─────
   readonly sidebarPinned = signal(false);
   readonly isSidebarMini = computed(() =>
-    (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) && !this.sidebarPinned()
+    (this.showEpicForm() || this.showDestWizard() || this.activeSourceFormVendor() !== null) && !this.sidebarPinned()
   );
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
@@ -264,8 +300,9 @@ export class NodeLibraryDialogComponent {
           }
           return;
         }
-        if (node && this._isGenericFhirNode(node)) {
-          untracked(() => this.openGenericFhirForm(node));
+        const vendor = node ? this._detectInlineSourceVendor(node) : null;
+        if (vendor) {
+          untracked(() => this.openInlineSourceForm(vendor, node!));
           return;
         }
         untracked(() => this.openEpicForm(id));
@@ -425,8 +462,8 @@ export class NodeLibraryDialogComponent {
       this.openEpicForm();
       return;
     }
-    if (item.id === 'generic-fhir') {
-      this.openGenericFhirForm(null);
+    if (item.id in INLINE_SOURCE_VENDOR_PATTERNS) {
+      this.openInlineSourceForm(item.id as InlineSourceVendor, null);
       return;
     }
     if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres') {
@@ -479,43 +516,51 @@ export class NodeLibraryDialogComponent {
     this.showEpicForm.set(false);
   }
 
-  // ── inline Generic FHIR form ──────────────────────────────────────────────
-  private _isGenericFhirNode(node: CanvasNode): boolean {
-    return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
+  // ── inline vendor source forms (Generic FHIR, Healow, MEDITECH, Cerner, Athenahealth, Allscripts,
+  // Sample) ──────────────────────────────────────────────────────────────────────────────────────
+  private _detectInlineSourceVendor(node: CanvasNode): InlineSourceVendor | null {
+    if (!isSourceNode(node)) return null;
+    const text = node.fields['Connector'] ?? node.connectorLabel ?? '';
+    for (const vendor of Object.keys(INLINE_SOURCE_VENDOR_PATTERNS) as InlineSourceVendor[]) {
+      if (INLINE_SOURCE_VENDOR_PATTERNS[vendor].test(text)) return vendor;
+    }
+    return null;
   }
 
-  openGenericFhirForm(editNode: CanvasNode | null): void {
-    this.genericFhirEditNode.set(editNode);
+  openInlineSourceForm(vendor: InlineSourceVendor, editNode: CanvasNode | null): void {
+    this.activeSourceFormVendor.set(vendor);
+    this.sourceFormEditNode.set(editNode);
     this.genericFhirError.set(null);
-    this.showGenericFhirForm.set(true);
   }
 
-  onGenericFhirFormCancelled(): void {
-    this.showGenericFhirForm.set(false);
-    this.genericFhirEditNode.set(null);
+  onInlineSourceFormCancelled(): void {
+    this.activeSourceFormVendor.set(null);
+    this.sourceFormEditNode.set(null);
     this.genericFhirError.set(null);
   }
 
-  onGenericFhirFormSave(): void {
-    const fields = this.genericFhirForm()?.getFields();
+  onInlineSourceFormSave(): void {
+    const fields = this.inlineSourceForm()?.getFields();
     if (!fields) {
       this.genericFhirError.set('Fix the highlighted fields before saving.');
       return;
     }
 
-    const editNode = this.genericFhirEditNode();
+    const editNode = this.sourceFormEditNode();
     if (editNode) {
       this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
     } else {
+      const vendor = this.activeSourceFormVendor();
+      const src = SOURCES.find(s => s.id === vendor);
       const node: SourceNode = {
         id: this.store.nextNodeId(),
         kind: undefined,
         x: 360,
         y: 300,
         connected: true,
-        abbr: 'R4',
-        color: '#5b6573',
-        connectorLabel: 'Generic FHIR R4',
+        abbr: src?.abbr ?? 'R4',
+        color: src?.color ?? '#5b6573',
+        connectorLabel: src?.name ?? 'Generic FHIR R4',
         fields,
       };
       this.store.addNode(node);
@@ -610,7 +655,7 @@ export class NodeLibraryDialogComponent {
   // ModalOverlayComponent.onEscape), so a form/wizard being open is checked here instead: closing outright
   // would otherwise silently discard whatever the user has entered.
   onOverlayClosed(): void {
-    if (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) {
+    if (this.showEpicForm() || this.showDestWizard() || this.activeSourceFormVendor() !== null) {
       this.pendingCloseConfirm.set(true);
       return;
     }
@@ -636,8 +681,8 @@ export class NodeLibraryDialogComponent {
     this.searchQuery.set('');
     this.sidebarPinned.set(false);
     this.showEpicForm.set(false);
-    this.showGenericFhirForm.set(false);
-    this.genericFhirEditNode.set(null);
+    this.activeSourceFormVendor.set(null);
+    this.sourceFormEditNode.set(null);
     this.genericFhirError.set(null);
     this.showDestWizard.set(false);
     this.destWizardType.set(null);

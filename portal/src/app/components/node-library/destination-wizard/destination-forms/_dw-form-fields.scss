@@ -1,0 +1,128 @@
+// Shared form-field styling for the per-destination-type config forms (sql-server/mysql/postgres/
+// mongo/csv-destination-form). Angular scopes styles per component, so each of those components needs
+// its own copy of these rules to render identically to how they looked inline in
+// destination-wizard.component.scss (which still keeps its own copy for the markup that stayed there,
+// e.g. the "Existing connection" row) — @use this partial rather than re-declaring the rules by hand,
+// so the two never drift apart.
+
+.dw-form { width: 100%; }
+
+.dw-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dw-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  &--full { grid-column: 1 / -1; }
+  &--error .dw-input,
+  &--error .dw-select { border-color: var(--color-error); }
+}
+
+.dw-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dw-req { color: var(--color-error); }
+
+.dw-input {
+  height: 38px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+
+  &::placeholder { color: var(--color-muted-2); }
+}
+
+.dw-select-wrap {
+  position: relative;
+
+  &::after {
+    content: '›';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--color-muted-2);
+    pointer-events: none;
+    font-size: 16px;
+  }
+}
+
+.dw-select {
+  height: 38px;
+  padding: 8px 32px 8px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  outline: none;
+  appearance: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+}
+
+.dw-error {
+  font-size: 11.5px;
+  color: var(--color-error);
+  font-weight: 500;
+}
+
+.dw-hint {
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+.dw-callout {
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+
+  &--info {
+    background: var(--color-info-soft);
+    border: 1px solid color-mix(in srgb, var(--color-info) 35%, white);
+    color: var(--color-info-strong);
+  }
+  &--warn {
+    background: var(--color-warning-soft);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white);
+    color: var(--color-warning-strong);
+  }
+}

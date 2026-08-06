@@ -1,0 +1,363 @@
+<div class="eaf" [formGroup]="form">
+  <div class="eaf-body">
+
+    <!-- ═══════════ SECTION 1: Connection ═══════════════════════════════════ -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">1</span>
+        <span class="eaf-section-title">Connection</span>
+      </div>
+
+      <div class="eaf-grid">
+        <div class="eaf-field" [class.eaf-field--error]="form.controls.name.invalid && form.controls.name.touched">
+          <label class="eaf-label" for="gff-name">Name <span class="eaf-req">*</span></label>
+          <input id="gff-name" class="eaf-input" formControlName="name" placeholder="e.g. Segue Test HAPI Server" />
+          @if (form.controls.name.invalid && form.controls.name.touched) {
+            <p class="eaf-error-msg">Name is required.</p>
+          }
+        </div>
+
+        <div class="eaf-field eaf-field--full" [class.eaf-field--error]="form.controls.baseUrl.invalid && form.controls.baseUrl.touched">
+          <label class="eaf-label" for="gff-baseUrl">FHIR base URL <span class="eaf-req">*</span></label>
+          <input id="gff-baseUrl" class="eaf-input" formControlName="baseUrl" placeholder="https://example.com/fhir" />
+          @if (form.controls.baseUrl.invalid && form.controls.baseUrl.touched) {
+            <p class="eaf-error-msg">Base URL is required — the root FHIR endpoint (e.g. ".../fhir", not the Swagger UI page).</p>
+          }
+          <p class="eaf-hint">No authentication is configured — this connects as an anonymous client, matching a public/test FHIR server.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SECTION 2: Data Retrieval Method ══════════════════════════ -->
+    <!-- Resource Type is deliberately not asked here — the destination node's own "dest_resources" picker already
+         captures it, and the backend derives it from there when this source node has none of its own. -->
+    <div class="eaf-section">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">2</span>
+        <span class="eaf-section-title">Data Retrieval Method</span>
+      </div>
+      <p class="eaf-section-sub">Choose how FHIRBridge receives resource updates from this server.</p>
+
+      <div class="eaf-grid">
+        <div class="eaf-field eaf-field--full">
+          <label class="eaf-label" for="gff-retrievalMethod">Data Retrieval Method <span class="eaf-req">*</span></label>
+          <div class="eaf-select-wrap">
+            <select id="gff-retrievalMethod" class="eaf-select" formControlName="retrievalMethod">
+              @for (m of retrievalMethodOptions; track m.value) {
+                <option [value]="m.value">{{ m.label }}</option>
+              }
+            </select>
+          </div>
+          @if (retrievalMethodConfig(); as method) {
+            <p class="eaf-hint">{{ method.description }}</p>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SECTION 4: Retrieval Configuration ═══════════════════════ -->
+    <div class="eaf-section eaf-section--last">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">3</span>
+        <span class="eaf-section-title">Retrieval Configuration</span>
+        @if (retrievalMethodConfig(); as method) {
+          <span class="eaf-badge-neutral">{{ method.label }}</span>
+        }
+      </div>
+
+      <div class="eaf-grid">
+
+        @if (isPushBased()) {
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-eventType">Event Type <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-eventType" class="eaf-select" formControlName="eventType">
+                <option value="" disabled>— Select —</option>
+                @for (o of eventTypeOptions; track o.value) {
+                  <option [value]="o.value">{{ o.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (isSubscription()) {
+            <div class="eaf-field">
+              <label class="eaf-label" for="gff-notificationPayload">Notification Payload <span class="eaf-req">*</span></label>
+              <div class="eaf-select-wrap">
+                <select id="gff-notificationPayload" class="eaf-select" formControlName="notificationPayload">
+                  @for (o of notificationPayloadOptions; track o.value) {
+                    <option [value]="o.value">{{ o.label }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          }
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-endpointType">Endpoint Type <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-endpointType" class="eaf-select" formControlName="endpointType">
+                @for (o of endpointTypeOptions; track o.value) {
+                  <option [value]="o.value">{{ o.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (isWebhook()) {
+            <div class="eaf-field">
+              <label class="eaf-label" for="gff-payloadFormat">Payload Format <span class="eaf-req">*</span></label>
+              <div class="eaf-select-wrap">
+                <select id="gff-payloadFormat" class="eaf-select" formControlName="payloadFormat">
+                  @for (o of payloadFormatOptions; track o.value) {
+                    <option [value]="o.value">{{ o.label }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          }
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-reconciliationSchedule">Reconciliation Schedule</label>
+            <div class="eaf-select-wrap">
+              <select id="gff-reconciliationSchedule" class="eaf-select" formControlName="reconciliationSchedule">
+                <option value="">— None —</option>
+                @for (o of reconciliationOptions; track o.value) {
+                  <option [value]="o.value">{{ o.label }}</option>
+                }
+              </select>
+            </div>
+            <p class="eaf-hint">Periodic full sync to catch any notifications the server failed to deliver.</p>
+          </div>
+
+        } @else if (isBulkExport()) {
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-exportScope">Export Scope <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-exportScope" class="eaf-select" formControlName="exportScope">
+                <option value="system">System ($export)</option>
+                <option value="group">Group ($export)</option>
+                <option value="patient">Patient ($export)</option>
+              </select>
+            </div>
+          </div>
+
+          @if (form.value.exportScope === 'group') {
+            <div class="eaf-field">
+              <label class="eaf-label" for="gff-groupId">Group ID <span class="eaf-req">*</span></label>
+              <input id="gff-groupId" class="eaf-input" formControlName="groupId" placeholder="e.g. 123" />
+            </div>
+          }
+
+          @if (form.value.exportScope === 'patient') {
+            <div class="eaf-field eaf-field--full">
+              <label class="eaf-label" for="gff-patientIds">Patient ID / Patient List <span class="eaf-req">*</span></label>
+              <textarea id="gff-patientIds" class="eaf-input eaf-textarea" rows="2" formControlName="patientIds" placeholder="Comma-separated Patient FHIR IDs, e.g. 1004"></textarea>
+              <p class="eaf-hint">One or more Patient FHIR IDs to export. Runs on demand — not scheduled.</p>
+            </div>
+          }
+
+          <div class="eaf-field">
+            <span class="eaf-label">&nbsp;</span>
+            <label class="eaf-checkbox-row">
+              <input type="checkbox" formControlName="incrementalCursor" />
+              <span>Incremental Cursor (_since)</span>
+            </label>
+            <p class="eaf-hint">Only export resources changed since the last successful export.</p>
+          </div>
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-outputFormat">FHIR Output Format <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-outputFormat" class="eaf-select" formControlName="fhirOutputFormat">
+                <option value="ndjson">NDJSON (application/fhir+ndjson)</option>
+                <option value="ndjson-gzip">NDJSON (gzip compressed)</option>
+              </select>
+            </div>
+          </div>
+
+        } @else {
+
+          <div class="eaf-field eaf-field--full">
+            <label class="eaf-label" for="gff-searchCriteria">Search Criteria</label>
+            <input id="gff-searchCriteria" class="eaf-input" formControlName="searchCriteria" placeholder="e.g. _id=1004, or subject=Patient/1004" />
+            <p class="eaf-hint">Optional FHIR search parameters appended to every request.</p>
+          </div>
+
+          <div class="eaf-field eaf-field--full">
+            <label class="eaf-label" for="gff-runMode">Run Mode <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-runMode" class="eaf-select" formControlName="runMode">
+                <option value="incremental">Incremental Sync</option>
+                <option value="full">Full Refresh</option>
+                <option value="manual">Manual Only</option>
+              </select>
+            </div>
+            <p class="eaf-hint">Incremental Sync polls only changed records on a short interval; Full Refresh reloads everything on a calendar schedule; Manual Only runs on demand.</p>
+          </div>
+
+          <div class="eaf-field">
+            <span class="eaf-label">&nbsp;</span>
+            <label class="eaf-checkbox-row" [class.eaf-checkbox-row--locked]="incrementalCursorLocked()">
+              <input type="checkbox" formControlName="incrementalCursor" />
+              <span>Incremental Sync (_lastUpdated)</span>
+              @if (incrementalCursorLocked()) {
+                <span class="eaf-tag-fixed">locked — required by Run Mode</span>
+              }
+            </label>
+          </div>
+
+          @if (showPollFrequency()) {
+            <div class="eaf-field" [class.eaf-field--error]="form.controls.schedulePollFrequency.touched && !form.value.schedulePollFrequency && form.value.runMode !== 'manual'">
+              <label class="eaf-label" for="gff-pollFrequency">Schedule / Poll Frequency <span class="eaf-req">*</span></label>
+              <div class="eaf-select-wrap">
+                <select id="gff-pollFrequency" class="eaf-select" formControlName="schedulePollFrequency">
+                  <option value="" disabled>— Select —</option>
+                  @for (o of pollFrequencyOptions; track o.value) {
+                    <option [value]="o.value">{{ o.label }}</option>
+                  }
+                </select>
+              </div>
+              <p class="eaf-hint">Not required when Run Mode is Manual Only — the workflow only runs when triggered.</p>
+            </div>
+          }
+
+        }
+
+        @if (showRecurrence()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-recurrence">Repeat <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-recurrence" class="eaf-select" formControlName="fullRefreshRecurrence">
+                @for (o of fullRefreshRecurrenceOptions; track o.value) {
+                  <option [value]="o.value">{{ o.label }}</option>
+                }
+              </select>
+            </div>
+            <p class="eaf-hint">Full Refresh reloads everything with no incremental filter — anchor it to a specific, low-traffic time rather than a tight interval.</p>
+          </div>
+
+          @if (form.value.fullRefreshRecurrence === 'weekly') {
+            <div class="eaf-field eaf-field--full">
+              <span class="eaf-label">On <span class="eaf-req">*</span></span>
+              <div class="eaf-weekday-picker">
+                @for (o of weekdayOptions; track o.value) {
+                  <label class="eaf-weekday-chip" [class.eaf-weekday-chip--checked]="selectedWeekdays().includes(o.value)">
+                    <input type="checkbox" [checked]="selectedWeekdays().includes(o.value)" (change)="toggleWeekday(o.value)" />
+                    <span>{{ o.label }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+
+          @if (form.value.fullRefreshRecurrence === 'monthly') {
+            <div class="eaf-field">
+              <label class="eaf-label" for="gff-dayOfMonth">Day of month <span class="eaf-req">*</span></label>
+              <div class="eaf-select-wrap">
+                <select id="gff-dayOfMonth" class="eaf-select" formControlName="fullRefreshDayOfMonth">
+                  @for (d of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]; track d) {
+                    <option [value]="d">{{ d }}</option>
+                  }
+                </select>
+              </div>
+              <p class="eaf-hint">Capped at 28 so it fires every month, including February.</p>
+            </div>
+          }
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-time">At <span class="eaf-req">*</span></label>
+            <input id="gff-time" type="time" class="eaf-input" formControlName="fullRefreshTime" />
+          </div>
+
+          <div class="eaf-field">
+            <label class="eaf-label" for="gff-timeZone">Time zone <span class="eaf-req">*</span></label>
+            <div class="eaf-select-wrap">
+              <select id="gff-timeZone" class="eaf-select" formControlName="fullRefreshTimeZone">
+                @for (o of timeZoneOptions; track o.value) {
+                  <option [value]="o.value">{{ o.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="eaf-cron-preview eaf-field--full">
+            <span class="eaf-tag-auto">schedule</span>
+            <span>{{ fullRefreshCronSummary() }}</span>
+          </div>
+        }
+
+        @if (isSearchRest()) {
+          <button type="button" class="eaf-advanced-toggle eaf-field--full" (click)="toggleAdvancedOptions()" [attr.aria-expanded]="advancedOptionsOpen()">
+            <span class="eaf-advanced-toggle__chevron" [class.eaf-advanced-toggle__chevron--open]="advancedOptionsOpen()">›</span>
+            <span>Advanced Search Options</span>
+            <span class="eaf-advanced-toggle__count">{{ advancedOptionsOpen() ? 'Hide' : 'Show' }}</span>
+          </button>
+
+          @if (advancedOptionsOpen()) {
+            <div class="eaf-advanced-panel eaf-field--full">
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-pageSize">Page Size (_count)</label>
+                <input id="gff-pageSize" class="eaf-input" type="text" formControlName="pageSize" placeholder="100" />
+                <p class="eaf-hint">Resources requested per page. The server may cap this lower than requested.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-sortOrder">Sort (_sort)</label>
+                <div class="eaf-select-wrap">
+                  <select id="gff-sortOrder" class="eaf-select" formControlName="sortOrder">
+                    <option value="">— None —</option>
+                    @for (o of sortOptions; track o.value) {
+                      <option [value]="o.value">{{ o.label }}</option>
+                    }
+                  </select>
+                </div>
+                <p class="eaf-hint">Sort order applied to each search request.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-maxRecords">Max Results</label>
+                <input id="gff-maxRecords" class="eaf-input" type="text" formControlName="maxRecordsPerRun" placeholder="e.g. 50000" />
+                <p class="eaf-hint">Safety cap — stops fetching once this many records are returned.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-include">Include Related Resources (_include)</label>
+                <input id="gff-include" class="eaf-input" type="text" formControlName="includeParams" placeholder="Encounter:patient" />
+                <p class="eaf-hint">Comma-separated _include parameters to pull referenced resources in the same response.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-revinclude">Reverse Include (_revinclude)</label>
+                <input id="gff-revinclude" class="eaf-input" type="text" formControlName="revIncludeParams" placeholder="Observation:patient" />
+                <p class="eaf-hint">Comma-separated _revinclude parameters to pull resources that reference the selected type.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-retryPolicy">Retry Policy</label>
+                <div class="eaf-select-wrap">
+                  <select id="gff-retryPolicy" class="eaf-select" formControlName="retryPolicy">
+                    @for (o of retryPolicyOptions; track o.value) {
+                      <option [value]="o.value">{{ o.label }}</option>
+                    }
+                  </select>
+                </div>
+                <p class="eaf-hint">How failed requests are retried before the run is marked failed.</p>
+              </div>
+
+              <div class="eaf-field">
+                <label class="eaf-label" for="gff-timeout">Timeout (seconds)</label>
+                <input id="gff-timeout" class="eaf-input" type="text" formControlName="timeoutSeconds" placeholder="30" />
+                <p class="eaf-hint">Per-request timeout before the connector aborts and retries.</p>
+              </div>
+            </div>
+          }
+        }
+
+      </div>
+    </div>
+
+  </div>
+</div>

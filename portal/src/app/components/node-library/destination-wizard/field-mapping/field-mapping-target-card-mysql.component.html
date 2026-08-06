@@ -5,7 +5,7 @@
     (pointermove)="onHeadPointerMove($event)"
     (pointerup)="onHeadPointerUp($event)"
   >
-    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : 'file' }}</span>
+    <span class="fm-target-kind">table</span>
     <span class="fm-target-name">{{ tableName() || resource() }}</span>
     <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
       <input
@@ -32,7 +32,7 @@
 
   @if (!isExtra()) {
     <div class="fm-target-select-row">
-      <label class="fm-target-select-label" [attr.for]="'fm-target-' + resource()">{{ targetLabel() }}</label>
+      <label class="fm-target-select-label" [attr.for]="'fm-target-' + resource()">Table</label>
       @if (hasSqlTables()) {
         <div class="fm-select-wrap">
           <select
@@ -54,7 +54,7 @@
           [attr.id]="'fm-target-' + resource()"
           [value]="targetValue()"
           (input)="onTargetInput($any($event.target).value)"
-          [placeholder]="destType() === 'sql' ? 'dbo.Patient' : 'patients.csv'"
+          placeholder="dbo.Patient"
         />
       }
     </div>
@@ -123,21 +123,14 @@
         >🗑</button>
       </div>
     }
-    @if (destType() === 'sql') {
-      <div class="fm-target-row fm-target-row--add">
-        <button
-          type="button"
-          class="fm-target-add-btn"
-          [disabled]="!hasValidTarget()"
-          [title]="hasValidTarget() ? '' : 'Select a real destination table above first'"
-          (click)="openAddColumn.emit()"
-        >＋ Add column</button>
-      </div>
-    } @else {
-      <div class="fm-target-row fm-target-row--add">
-        <span class="fm-target-colname">＋ Add column</span>
-        <input class="fm-target-add-input" placeholder="new column name" (keydown)="onNewColumnKeydown($event)" />
-      </div>
-    }
+    <div class="fm-target-row fm-target-row--add">
+      <button
+        type="button"
+        class="fm-target-add-btn"
+        [disabled]="!hasValidTarget()"
+        [title]="hasValidTarget() ? '' : 'Select a real destination table above first'"
+        (click)="openAddColumn.emit()"
+      >＋ Add column</button>
+    </div>
   </div>
 </div>

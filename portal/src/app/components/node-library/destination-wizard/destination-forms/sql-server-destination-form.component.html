@@ -1,0 +1,77 @@
+<form [formGroup]="form()" class="dw-form" autocomplete="off">
+  <div class="dw-grid-3">
+
+    <div class="dw-field" [class.dw-field--error]="form().get('name')!.invalid && form().get('name')!.touched">
+      <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-name" class="dw-input" formControlName="name" placeholder="e.g. SQL Production" />
+      @if (form().get('name')!.invalid && form().get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="form().get('server')!.invalid && form().get('server')!.touched">
+      <label class="dw-label" for="dw-server">SQL Server <span class="dw-req">*</span></label>
+      <input id="dw-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
+      @if (form().get('server')!.invalid && form().get('server')!.touched) {
+        <span class="dw-error">Server host is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="form().get('database')!.invalid && form().get('database')!.touched">
+      <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
+      <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+      @if (form().get('database')!.invalid && form().get('database')!.touched) {
+        <span class="dw-error">Database name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-auth">Authentication <span class="dw-req">*</span></label>
+      <div class="dw-select-wrap">
+        <select id="dw-auth" class="dw-select" formControlName="auth">
+          <option value="sql-auth">SQL Username / Password</option>
+          <option value="managed-identity">Managed Identity</option>
+          <option value="azure-ad">Azure AD</option>
+        </select>
+      </div>
+    </div>
+
+    @if (form().get('auth')!.value === 'sql-auth') {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-username">Username</label>
+        <input id="dw-username" class="dw-input" formControlName="username" placeholder="e.g. sa" autocomplete="off" />
+      </div>
+      <div class="dw-field">
+        <label class="dw-label" for="dw-password">Password</label>
+        <input id="dw-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+      </div>
+    }
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-schema">Schema</label>
+      <input id="dw-schema" class="dw-input" formControlName="schema" placeholder="dbo" />
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-writeMode">Write mode</label>
+      <div class="dw-select-wrap">
+        <select id="dw-writeMode" class="dw-select" formControlName="writeMode">
+          <option value="upsert">Upsert by source id</option>
+          <option value="insert">Insert only</option>
+          <option value="update">Update only</option>
+        </select>
+      </div>
+    </div>
+
+  </div><!-- /dw-grid-3 -->
+</form>
+
+@if (probeState() === 'testing') {
+  <div class="dw-callout dw-callout--info">Testing connection…</div>
+}
+@if (probeState() === 'error') {
+  <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+}
+@if (probeState() === 'ok') {
+  <div class="dw-callout dw-callout--info">Connected — {{ tableCount() }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
+}

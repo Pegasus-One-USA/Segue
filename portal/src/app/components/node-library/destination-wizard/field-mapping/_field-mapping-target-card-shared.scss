@@ -1,3 +1,8 @@
+// Shared styling for the per-destination-type target-card components (field-mapping-target-card-*).
+// Angular scopes styles per component, so each type's component needs its own copy of these rules —
+// @use this partial rather than re-declaring them by hand, so the 5 variants never drift apart
+// visually (the only real differences between them are 2-3 lines of template/behavior, not styling).
+
 :host { display: contents; }
 
 .fm-target-card {
@@ -272,6 +277,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-ink-2);
+}
+
+// Inline rename input (Mongo/CSV's ✎ — a free-text field's name has no real schema to ALTER, so it
+// swaps in right here rather than opening a whole modal) — same footprint as .fm-target-colname so the
+// row's layout doesn't jump when it appears.
+.fm-target-colname-edit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 3px;
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
 }
 
 .fm-target-coltype {

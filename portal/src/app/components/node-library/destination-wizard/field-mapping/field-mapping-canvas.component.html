@@ -26,36 +26,126 @@
         (positionChange)="onSourcePositionChange($event)"
       />
 
-      @for (card of targetCards(); track card.tableName; let i = $index) {
-        <app-field-mapping-target-card
-          [resource]="card.resource"
-          [tableName]="card.tableName"
-          [isExtra]="card.isExtra"
-          [destType]="destType()"
-          [targetValue]="targetFor(card.resource)"
-          [hasSqlTables]="hasSqlTables()"
-          [sqlTableOptions]="sqlTableOptions()"
-          [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
-          [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
-          [columnDataType]="columnTypeOn(card.tableName)"
-          [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
-          [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)"
-          [relation]="relationFor(card.tableName)"
-          [isArmed]="!!armedId()"
-          [isApproximated]="isApproximatedFn"
-          [x]="positionForKey(card.tableName, i).x"
-          [y]="positionForKey(card.tableName, i).y"
-          (targetChange)="onTargetChange(card.resource, $event)"
-          (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
-          (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
-          (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
-          (positionChange)="onCardPositionChange(card.tableName, $event)"
-          (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
-          (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
-          (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
-          (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
-          (createTableRequested)="openCreateTableModal(card.resource, true)"
-        />
+      <!-- ── Target card, one component per destination type (see field-mapping-target-card-sql-server/
+           -mysql/-postgres/-mongo/-csv) — SQL Server/MySQL/Postgres share the same real-schema/"+ Add
+           column" behavior, Mongo/CSV are both free-text-only with no live schema to probe. ── -->
+      @switch (destType()) {
+        @case ('sql') {
+          @for (card of targetCards(); track card.tableName; let i = $index) {
+            <app-field-mapping-target-card-sql-server
+              [resource]="card.resource" [tableName]="card.tableName" [isExtra]="card.isExtra"
+              [targetValue]="targetFor(card.resource)" [hasSqlTables]="hasSqlTables()" [sqlTableOptions]="sqlTableOptions()"
+              [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+              [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+              [columnDataType]="columnTypeOn(card.tableName)" [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+              [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)" [relation]="relationFor(card.tableName)"
+              [isArmed]="!!armedId()" [isApproximated]="isApproximatedFn"
+              [x]="positionForKey(card.tableName, i).x" [y]="positionForKey(card.tableName, i).y"
+              (targetChange)="onTargetChange(card.resource, $event)"
+              (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+              (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+              (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+              (positionChange)="onCardPositionChange(card.tableName, $event)"
+              (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+              (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+              (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+              (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+              (createTableRequested)="openCreateTableModal(card.resource, true)"
+            />
+          }
+        }
+        @case ('mysql') {
+          @for (card of targetCards(); track card.tableName; let i = $index) {
+            <app-field-mapping-target-card-mysql
+              [resource]="card.resource" [tableName]="card.tableName" [isExtra]="card.isExtra"
+              [targetValue]="targetFor(card.resource)" [hasSqlTables]="hasSqlTables()" [sqlTableOptions]="sqlTableOptions()"
+              [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+              [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+              [columnDataType]="columnTypeOn(card.tableName)" [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+              [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)" [relation]="relationFor(card.tableName)"
+              [isArmed]="!!armedId()" [isApproximated]="isApproximatedFn"
+              [x]="positionForKey(card.tableName, i).x" [y]="positionForKey(card.tableName, i).y"
+              (targetChange)="onTargetChange(card.resource, $event)"
+              (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+              (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+              (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+              (positionChange)="onCardPositionChange(card.tableName, $event)"
+              (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+              (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+              (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+              (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+              (createTableRequested)="openCreateTableModal(card.resource, true)"
+            />
+          }
+        }
+        @case ('postgres') {
+          @for (card of targetCards(); track card.tableName; let i = $index) {
+            <app-field-mapping-target-card-postgres
+              [resource]="card.resource" [tableName]="card.tableName" [isExtra]="card.isExtra"
+              [targetValue]="targetFor(card.resource)" [hasSqlTables]="hasSqlTables()" [sqlTableOptions]="sqlTableOptions()"
+              [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+              [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+              [columnDataType]="columnTypeOn(card.tableName)" [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+              [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)" [relation]="relationFor(card.tableName)"
+              [isArmed]="!!armedId()" [isApproximated]="isApproximatedFn"
+              [x]="positionForKey(card.tableName, i).x" [y]="positionForKey(card.tableName, i).y"
+              (targetChange)="onTargetChange(card.resource, $event)"
+              (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+              (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+              (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+              (positionChange)="onCardPositionChange(card.tableName, $event)"
+              (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+              (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+              (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+              (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+              (createTableRequested)="openCreateTableModal(card.resource, true)"
+            />
+          }
+        }
+        @case ('mongo') {
+          @for (card of targetCards(); track card.tableName; let i = $index) {
+            <app-field-mapping-target-card-mongo
+              [resource]="card.resource" [tableName]="card.tableName" [isExtra]="card.isExtra"
+              [targetValue]="targetFor(card.resource)"
+              [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+              [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+              [columnDataType]="columnTypeOn(card.tableName)" [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+              [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)" [relation]="relationFor(card.tableName)"
+              [isArmed]="!!armedId()" [isApproximated]="isApproximatedFn"
+              [x]="positionForKey(card.tableName, i).x" [y]="positionForKey(card.tableName, i).y"
+              (targetChange)="onTargetChange(card.resource, $event)"
+              (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+              (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+              (positionChange)="onCardPositionChange(card.tableName, $event)"
+              (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+              (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+              (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
+              (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+            />
+          }
+        }
+        @default {
+          @for (card of targetCards(); track card.tableName; let i = $index) {
+            <app-field-mapping-target-card-csv
+              [resource]="card.resource" [tableName]="card.tableName" [isExtra]="card.isExtra"
+              [targetValue]="targetFor(card.resource)"
+              [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+              [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+              [columnDataType]="columnTypeOn(card.tableName)" [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+              [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)" [relation]="relationFor(card.tableName)"
+              [isArmed]="!!armedId()" [isApproximated]="isApproximatedFn"
+              [x]="positionForKey(card.tableName, i).x" [y]="positionForKey(card.tableName, i).y"
+              (targetChange)="onTargetChange(card.resource, $event)"
+              (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+              (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+              (positionChange)="onCardPositionChange(card.tableName, $event)"
+              (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+              (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+              (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
+              (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+            />
+          }
+        }
       }
 
       <app-field-mapping-wires
@@ -81,8 +171,10 @@
       />
     }
 
+    <!-- No real "table" concept for a CSV destination — the create-table modal it opens asks for SQL
+         data types (uniqueidentifier, bigint, …) that don't apply to a flat file's columns. -->
     @if (resources()[0]; as primaryResource) {
-      @if (!drawerOpen()) {
+      @if (!drawerOpen() && destType() !== 'csv') {
       <div class="fm-add-table-slot">
         @if (hasSqlTables()) {
           <button

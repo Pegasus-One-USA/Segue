@@ -1,0 +1,125 @@
+<div class="fm-target-card" #card [style.left.px]="x()" [style.top.px]="y()">
+  <div
+    class="fm-target-head"
+    (pointerdown)="onHeadPointerDown($event)"
+    (pointermove)="onHeadPointerMove($event)"
+    (pointerup)="onHeadPointerUp($event)"
+  >
+    <span class="fm-target-kind">file</span>
+    <span class="fm-target-name">{{ tableName() || resource() }}</span>
+    <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
+      <input
+        type="search"
+        class="fm-target-search"
+        placeholder="Search columns…"
+        aria-label="Search columns in this file"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+      @if (isSearching()) {
+        <button type="button" class="fm-target-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
+      }
+    </div>
+    <button type="button" class="fm-target-remove" aria-label="Remove this file" title="Remove this file" (click)="removeTable.emit()">✕</button>
+  </div>
+
+  @if (relationToShow(); as rel) {
+    <div class="fm-target-relation">
+      <span aria-hidden="true">🔗</span>
+      child of <strong>{{ relationParentLabel() }}</strong> via <code>{{ rel.foreignKeyColumnName }}</code> → <code>{{ rel.parentColumn }}</code>
+    </div>
+  }
+
+  @if (!isExtra()) {
+    <div class="fm-target-select-row">
+      <label class="fm-target-select-label" [attr.for]="'fm-target-' + resource()">File name</label>
+      <input
+        class="fm-input"
+        [attr.id]="'fm-target-' + resource()"
+        [value]="targetValue()"
+        (input)="onTargetInput($any($event.target).value)"
+        placeholder="patients.csv"
+      />
+    </div>
+  }
+
+  <div class="fm-target-rows">
+    @if (isSearching() && filteredColumns().length === 0) {
+      <div class="fm-target-no-match">No columns match "{{ searchQuery() }}".</div>
+    }
+    @for (col of filteredColumns(); track col) {
+      <div
+        #columnRow
+        class="fm-target-row"
+        [class.fm-target-row--mapped]="!!rowForColumn()(col)"
+        [class.fm-target-row--armed-target]="isArmed()"
+        role="button"
+        tabindex="0"
+        [attr.aria-label]="col + (rowForColumn()(col) ? ', mapped' : ', unmapped')"
+        [attr.data-fm-drop]="resource() + '::' + tableName() + '::' + col"
+        (keydown)="onColumnKeydown(col, $event)"
+      >
+        <span class="fm-target-port" aria-hidden="true"></span>
+        @if (renamingColumn() === col) {
+          <input
+            class="fm-target-colname-edit"
+            [value]="col"
+            (pointerdown)="$event.stopPropagation()"
+            (keydown)="onRenameKeydown(col, $event)"
+            (blur)="onRenameBlur(col, $event)"
+            #renameInput
+          />
+        } @else {
+          <span class="fm-target-colname">{{ col }}</span>
+        }
+        @if (columnDataType()(col); as dt) {
+          <span class="fm-target-coltype">{{ dt }}</span>
+        }
+        @if (columnKeyInfo()(col); as key) {
+          @if (key.isPrimaryKey) {
+            <span class="fm-target-key fm-target-key--pk" title="Primary key">PK</span>
+          }
+          @if (key.isForeignKey) {
+            <span class="fm-target-key fm-target-key--fk" [title]="key.references ? 'Foreign key → ' + key.references : 'Foreign key'">FK</span>
+          }
+        }
+        @if (rowForColumn()(col)) {
+          <button
+            type="button"
+            class="fm-target-key-toggle"
+            [class.fm-target-key-toggle--active]="isUpsertKeyColumn()(col)"
+            [attr.aria-pressed]="isUpsertKeyColumn()(col)"
+            [title]="isUpsertKeyColumn()(col) ? 'Upsert key for this file — click to unset' : 'Mark as the upsert key for this file'"
+            (click)="toggleUpsertKey.emit(col)"
+          >🔑</button>
+        }
+        @if ((rowForColumn()(col)?.sources?.length ?? 0) > 1) {
+          <span class="fm-target-tag">×{{ rowForColumn()(col)?.sources?.length }}</span>
+        } @else if (rowForColumn()(col)?.mode === 'childJson') {
+          <span class="fm-target-tag">JSON</span>
+        }
+        @if (rowForColumn()(col) && isApproximated()(rowForColumn()(col)!)) {
+          <span class="fm-target-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
+        }
+        <button
+          type="button"
+          class="fm-target-col-edit"
+          aria-label="Rename this column"
+          title="Rename this column"
+          (click)="startRename(col)"
+        >✎</button>
+        <button
+          type="button"
+          class="fm-target-col-delete"
+          aria-label="Delete this column"
+          title="Delete this column"
+          (click)="deleteColumn.emit(col)"
+        >🗑</button>
+      </div>
+    }
+    <div class="fm-target-row fm-target-row--add" [attr.data-fm-drop]="resource() + '::' + tableName() + '::__new__'">
+      <span class="fm-target-colname">＋ Add column</span>
+      <input class="fm-target-add-input" placeholder="new column name" (keydown)="onNewColumnKeydown($event)" (blur)="onNewColumnBlur($event)" />
+    </div>
+  </div>
+</div>

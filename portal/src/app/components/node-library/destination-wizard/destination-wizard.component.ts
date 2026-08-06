@@ -25,6 +25,11 @@ import {
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
+import { SqlServerDestinationFormComponent } from './destination-forms/sql-server-destination-form.component';
+import { MySqlDestinationFormComponent } from './destination-forms/mysql-destination-form.component';
+import { PostgresDestinationFormComponent } from './destination-forms/postgres-destination-form.component';
+import { MongoDestinationFormComponent } from './destination-forms/mongo-destination-form.component';
+import { CsvDestinationFormComponent } from './destination-forms/csv-destination-form.component';
 import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
@@ -129,7 +134,11 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent],
+  imports: [
+    ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent,
+    SqlServerDestinationFormComponent, MySqlDestinationFormComponent, PostgresDestinationFormComponent,
+    MongoDestinationFormComponent, CsvDestinationFormComponent,
+  ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -668,8 +677,6 @@ export class DestinationWizardComponent implements OnInit {
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
-  /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
-  readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
     this.destType() === 'sql' ? 'SQL Server'
       : this.destType() === 'mysql' ? 'MySQL'

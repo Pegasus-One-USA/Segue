@@ -7,7 +7,11 @@ import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
-import { FieldMappingTargetCardComponent } from './field-mapping-target-card.component';
+import { FieldMappingTargetCardSqlServerComponent } from './field-mapping-target-card-sql-server.component';
+import { FieldMappingTargetCardMySqlComponent } from './field-mapping-target-card-mysql.component';
+import { FieldMappingTargetCardPostgresComponent } from './field-mapping-target-card-postgres.component';
+import { FieldMappingTargetCardMongoComponent } from './field-mapping-target-card-mongo.component';
+import { FieldMappingTargetCardCsvComponent } from './field-mapping-target-card-csv.component';
 import { FieldMappingWiresComponent, FmTempWire } from './field-mapping-wires.component';
 import { FmDragStart, FmDragMove, FmDragEnd } from './field-mapping-tree-node.component';
 import { FieldMappingListComponent } from './field-mapping-list.component';
@@ -44,7 +48,11 @@ export interface FmTargetCardSpec {
   standalone: true,
   imports: [
     FieldMappingSourceTreeComponent,
-    FieldMappingTargetCardComponent,
+    FieldMappingTargetCardSqlServerComponent,
+    FieldMappingTargetCardMySqlComponent,
+    FieldMappingTargetCardPostgresComponent,
+    FieldMappingTargetCardMongoComponent,
+    FieldMappingTargetCardCsvComponent,
     FieldMappingWiresComponent,
     FieldMappingListComponent,
     FieldMappingJoinPopoverComponent,
@@ -172,6 +180,11 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly drawerOpen = signal(false);
   /** Free-text column names typed via "+ Add column" that don't have a mapping yet (CSV / un-probed SQL only), keyed by "resource::tableName". */
   private readonly pendingFreeColumns = signal<Record<string, string[]>>({});
+
+  // Drop-target sentinel for a free-text card's own "+ Add column" row (see
+  // field-mapping-target-card-mongo/-csv's template) — lets a payload field be dropped straight onto an
+  // empty card with no columns yet, instead of requiring "type a name, then drag" as two separate steps.
+  private static readonly NEW_FREE_COLUMN_DROP_KEY = '__new__';
 
   // ── freely-draggable card positions ─────────────────────────────────────
   // Keyed by table full-name for target cards (unique per table), plus a reserved key for the source card.
@@ -566,6 +579,40 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   private registerPendingColumn(resource: string, tableName: string, column: string): void {
     const key = `${resource}::${tableName}`;
     this.pendingFreeColumns.update(m => ({ ...m, [key]: [...(m[key] ?? []), column] }));
+  }
+
+  /** Renames a free-text column (Mongo/CSV, or SQL/MySQL/Postgres before a live schema is known) — no
+   *  real ALTER COLUMN involved, just this resource's own local column list + any mapping already
+   *  pointed at the old name. Unlike a real schema column (see openEditColumnModal/submitEditColumn,
+   *  which queues a real ALTER COLUMN + sp_rename), there's nothing to flush on "Add to Pipeline". */
+  onRenameFreeColumn(resource: string, tableName: string, oldName: string, newName: string): void {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (this.columnsForCardFn(resource, tableName, false).includes(trimmed)) {
+      this.toast.warning('Column exists', `${trimmed} is already on ${tableName || resource}.`);
+      return;
+    }
+    const key = `${resource}::${tableName}`;
+    this.pendingFreeColumns.update(m => ({
+      ...m,
+      [key]: (m[key] ?? []).map(c => (c === oldName ? trimmed : c)),
+    }));
+    this.mappingRowsChange.emit(this.mappingRows().map(r =>
+      r.resource === resource && r.tableName === tableName && r.targetName === oldName
+        ? { ...r, targetName: trimmed }
+        : r
+    ));
+    this.toast.success('Column renamed', `${oldName} → ${trimmed}.`);
+  }
+
+  /** Column name auto-derived from a dragged source field/group, for dropping straight onto an empty
+   *  free-text card (see NEW_FREE_COLUMN_DROP_KEY) — same PascalCase-from-path convention already used
+   *  for sqlColumn/csvColumn (see DestinationWizardComponent._toFieldDef / field-mapping-payload.util.ts's
+   *  pushLeaf), so a column created this way looks exactly like one the built-in catalog would have named. */
+  private autoColumnNameFor(sourceId: string, kind: 'group' | 'leaf'): string {
+    const node = findNode(this.forest(), sourceId);
+    const path = kind === 'leaf' ? (node?.field?.fhirPath ?? sourceId) : (node?.label ?? sourceId);
+    return path.split(/[.\s]+/).filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('') || 'Value';
   }
 
   // ── extra tables ("+ Add a table from your database…") ─────────────────
@@ -1064,7 +1111,21 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     if (!dropKey) return;
     const parts = dropKey.split('::');
     if (parts.length !== 3) return;
-    this.completeMapping(sourceId, kind, parts[0], parts[1], parts[2]);
+    const [resource, tableName, column] = parts;
+
+    if (column === FieldMappingCanvasComponent.NEW_FREE_COLUMN_DROP_KEY) {
+      // Dropped straight onto an empty free-text card — create the column (named from the dragged
+      // field/group itself) and map onto it in one motion, instead of requiring "type a name, then drag"
+      // as two separate steps.
+      const name = this.autoColumnNameFor(sourceId, kind);
+      if (!this.columnsForCardFn(resource, tableName, false).includes(name)) {
+        this.registerPendingColumn(resource, tableName, name);
+      }
+      this.completeMapping(sourceId, kind, resource, tableName, name);
+      return;
+    }
+
+    this.completeMapping(sourceId, kind, resource, tableName, column);
   }
 
   // ── keyboard arm-and-target ──────────────────────────────────────────────
