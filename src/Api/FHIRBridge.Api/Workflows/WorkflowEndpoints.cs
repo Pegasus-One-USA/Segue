@@ -90,6 +90,13 @@ public static class WorkflowEndpoints
             // which rolls the transaction back.
             await using var transaction = await configurationRepository.BeginTransactionAsync(cancellationToken);
 
+            // Resolved up front (not just where BuildWorkflow needs it, further below) so the mapping-save loop
+            // can scope each MappingProfile lookup/create to the actual workflow being saved — a brand-new
+            // workflow (no request.WorkflowId) mints its own id here, right when it's first needed, rather than
+            // its mapping profiles being saved workflow-agnostic and BuildWorkflow generating a second, different
+            // new id later that nothing downstream would ever have matched. See MappingProfile.WorkflowId.
+            var workflowId = request.WorkflowId ?? Guid.NewGuid();
+
             // Working copy of the nodes keyed by client id; created-entity ids are injected here so they ride into the
             // saved graph. Node order is preserved from the original request when the definition is rebuilt.
             var nodes = request.Nodes.ToDictionary(node => node.Id, node => node, StringComparer.OrdinalIgnoreCase);
@@ -188,19 +195,25 @@ public static class WorkflowEndpoints
                     sourceConnectionId,
                     destinationId,
                     spec.DestinationObject,
-                    spec.Fields);
-                // Prefer a profile that already exists for this (resourceType, source, destination) combination
-                // over whatever spec.ExistingId says — the canvas can lose track of the real id (see the Mapping
-                // Config Import wizard vs. this endpoint's own simpler field-building path). A found profile whose
-                // MappingJson is set was authored by that richer wizard (proper JsonPath/[*] derivation, DDL, etc.)
-                // and must never be overwritten by this endpoint's cruder, best-effort field list; reuse it as-is.
-                // A found profile with no MappingJson was created by this same endpoint previously — keep updating
-                // it in place. Only create a brand-new profile when none exists yet for this combination at all.
+                    spec.Fields,
+                    WorkflowId: workflowId);
+                // Prefer a profile that already exists for this (resourceType, source, destination, workflow)
+                // combination over whatever spec.ExistingId says — the canvas can lose track of the real id (see
+                // the Mapping Config Import wizard vs. this endpoint's own simpler field-building path). Scoped to
+                // workflowId so a DIFFERENT workflow sharing the same (resourceType, source, destination) triple
+                // never matches here — it gets (or keeps) its own profile instead of this save silently
+                // overwriting that other workflow's mapping. A found profile whose MappingJson is set was
+                // authored by that richer wizard (proper JsonPath/[*] derivation, DDL, etc.) and must never be
+                // overwritten by this endpoint's cruder, best-effort field list; reuse it as-is. A found profile
+                // with no MappingJson was created by this same endpoint previously (by this workflow, or
+                // unclaimed by any) — keep updating it in place, claiming it for this workflow if it wasn't
+                // already. Only create a brand-new profile when none exists yet for this combination at all.
                 var existingMapping = await configurationService.FindMappingProfileAsync(
-                    spec.ResourceType, sourceConnectionId, destinationId, cancellationToken);
+                    spec.ResourceType, sourceConnectionId, destinationId, workflowId, cancellationToken);
                 var mapping = existingMapping switch
                 {
-                    { MappingJson.Length: > 0 } => existingMapping,
+                    { MappingJson.Length: > 0 } => await configurationService.ClaimMappingProfileForWorkflowAsync(
+                        existingMapping.Id, workflowId, cancellationToken),
                     not null => await configurationService.UpdateMappingProfileAsync(existingMapping.Id, mappingRequest, cancellationToken),
                     null => spec.ExistingId is { } existingMappingId
                         ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
@@ -282,8 +295,11 @@ public static class WorkflowEndpoints
             var existingDefinition = request.WorkflowId is { } existingWorkflowId
                 ? await store.GetAsync(existingWorkflowId, cancellationToken)
                 : null;
-            var workflow = BuildWorkflow(
-                request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
+            // Reuses the SAME workflowId the mapping-save loop above already resolved (and scoped every
+            // MappingProfile lookup/create to) — generating a second, different Guid.NewGuid() here for a
+            // brand-new workflow would leave its just-created mapping profiles claimed by an id nothing else
+            // ever ends up matching.
+            var workflow = BuildWorkflow(workflowId, definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
 
             // Everything above (destinations, sources, mappings, the workflow definition itself) is durable only

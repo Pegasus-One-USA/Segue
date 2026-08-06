@@ -179,9 +179,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
     /// <summary>
     /// Resolves one resource type's fields + destination object, preferring (in order): the real MappingProfile
-    /// found by the natural key (resourceType, sourceConnectionId, destinationId) MappingImportService/
-    /// ConfigurationService already de-duplicate on — what actually exists for this node's source/destination
-    /// combination right now, rather than trusting a possibly-stale stamped id; <c>mappingProfileIds</c> — a JSON
+    /// found by the natural key (resourceType, sourceConnectionId, destinationId, this node's own
+    /// WorkflowDefinitionId) MappingImportService/ConfigurationService already de-duplicate on — what actually
+    /// exists for THIS workflow's own source/destination combination right now, rather than trusting a possibly-
+    /// stale stamped id or picking up a different workflow's profile for the same triple (see
+    /// MappingProfile.WorkflowId); <c>mappingProfileIds</c> — a JSON
     /// object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps when a destination selects more
     /// than one resource (see WorkflowEndpoints.cs's Mappings step), for a node saved before sourceConnectionId/
     /// destinationId were stamped onto it; the legacy single <c>mappingProfileId</c> (one resource per node,
@@ -206,7 +208,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (sourceConnectionId != Guid.Empty && destinationId != Guid.Empty)
             {
                 var exactMatch = await _configurationRepository.FindMappingProfileAsync(
-                    resourceType, sourceConnectionId, destinationId, cancellationToken);
+                    resourceType, sourceConnectionId, destinationId, node.WorkflowDefinitionId, cancellationToken);
                 if (exactMatch is not null)
                 {
                     return (exactMatch.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), exactMatch.DestinationObject);

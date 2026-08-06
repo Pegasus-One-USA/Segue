@@ -164,8 +164,11 @@ public sealed class MappingImportService : IMappingImportService
                 }
             }
 
+            // No workflow concept in this import contract (MappingImportRequestDto carries no WorkflowId) — null
+            // preserves this endpoint's original, workflow-agnostic de-dup behavior: match purely on
+            // (ResourceType, SourceConnectionId, DestinationId), same as before WorkflowId existed.
             var existing = await _repository.FindMappingProfileAsync(
-                mapping.ResourceType, importRequest.SourceConnectionId, importRequest.DestinationId, cancellationToken);
+                mapping.ResourceType, importRequest.SourceConnectionId, importRequest.DestinationId, workflowId: null, cancellationToken);
 
             Guid profileId;
             if (existing is not null)

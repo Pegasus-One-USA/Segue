@@ -332,6 +332,11 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         {
             JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
             JsonValueKind.String => element.GetString() ?? string.Empty,
+            // One of joinedFields' own sub-paths resolved to an array-of-strings element (e.g. a "given" name
+            // array) rather than a single scalar — same fix as ConvertElement's String case above, and for the
+            // same reason: falling through to element.ToString() would splice the raw JSON array text
+            // ('["Camila","Maria"]') into the middle of the otherwise human-readable joined value.
+            JsonValueKind.Array => JoinArrayOfStrings(element),
             _ => element.ToString()
         };
     }
@@ -445,7 +450,19 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         return valueType switch
         {
             MappingValueType.String => ValidateLength(
-                element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString(),
+                element.ValueKind switch
+                {
+                    JsonValueKind.String => element.GetString(),
+                    // A field mapped straight from an array-of-strings element (e.g. Patient.name.given,
+                    // Patient.address.line) with no ArrayPolicy fan-out of its own — ResolveAll stops at this
+                    // array without descending into it (no trailing "[*]" on this JsonPath segment), so
+                    // ConvertElement is asked to produce ONE string for the whole array. Falling through to
+                    // element.ToString() below would return the raw JSON array text verbatim (a real,
+                    // user-reported bug: the destination column ended up literally storing
+                    // '["Camila","Maria"]' as text) instead of a human-readable joined value.
+                    JsonValueKind.Array => JoinArrayOfStrings(element),
+                    _ => element.ToString()
+                },
                 maxLength, targetField, errors),
             MappingValueType.Integer => ConvertInteger(element.ToString(), targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors, precision, scale),
@@ -455,6 +472,28 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Json => element.GetRawText(),
             _ => element.ToString()
         };
+    }
+
+    /// <summary>Joins a JSON array's own primitive items into one human-readable string (e.g.
+    /// ["Camila","Maria"] -> "Camila, Maria"). A nested object/array item is skipped rather than dumping its own
+    /// raw JSON into the middle of the joined text — this is for a field whose value genuinely is a flat array
+    /// of strings/numbers/booleans, not an array of structured objects.</summary>
+    private static string JoinArrayOfStrings(JsonElement array)
+    {
+        var parts = new List<string>();
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind is JsonValueKind.String)
+            {
+                parts.Add(item.GetString() ?? string.Empty);
+            }
+            else if (item.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            {
+                parts.Add(item.ToString());
+            }
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static object? ConvertValue(

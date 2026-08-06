@@ -19,10 +19,17 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.MappingJson);
+        // Deliberately no HasOne/FK here — WorkflowDefinition lives in Runtime.Domain, a separate layering
+        // track this project must not depend on. See the WorkflowId doc comment on the entity itself.
+        builder.Property(x => x.WorkflowId);
 
         builder.HasIndex(x => x.SourceConnectionId);
         builder.HasIndex(x => x.SourceConfigurationId);
         builder.HasIndex(x => x.DestinationId);
+        // Powers FindMappingProfileAsync's natural-key lookup (ResourceType, SourceConnectionId, DestinationId,
+        // WorkflowId) — every one of the previous three already has its own index above; this composite covers
+        // the combination those individually can't.
+        builder.HasIndex(x => new { x.ResourceType, x.SourceConnectionId, x.DestinationId, x.WorkflowId });
 
         builder.HasOne<SourceConnection>()
             .WithMany()

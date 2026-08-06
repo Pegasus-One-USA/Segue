@@ -132,7 +132,7 @@ public sealed class MappingNodeExecutorTests
             [new MappingField("Active", "$.active", MappingValueType.Boolean, IsRequired: false, DefaultValue: null, Format: "directField")]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(realProfile);
 
         var executor = new MappingNodeExecutor(
@@ -215,9 +215,9 @@ public sealed class MappingNodeExecutorTests
             ]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(patientProfile);
-        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(observationProfile);
 
         var executor = new MappingNodeExecutor(
@@ -262,9 +262,9 @@ public sealed class MappingNodeExecutorTests
             [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(patientProfile);
-        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MappingProfile?)null);
 
         var executor = new MappingNodeExecutor(

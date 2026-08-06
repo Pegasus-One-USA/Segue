@@ -281,12 +281,15 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     }
 
     public Task<MappingProfile?> FindMappingProfileAsync(
-        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct)
+        string resourceType, Guid sourceConnectionId, Guid destinationId, Guid? workflowId, CancellationToken ct)
     {
-        var match = _mappingProfiles.Values.FirstOrDefault(x =>
-            x.ResourceType == resourceType
-            && x.SourceConnectionId == sourceConnectionId
-            && x.DestinationId == destinationId);
+        var match = _mappingProfiles.Values
+            .Where(x => x.ResourceType == resourceType
+                && x.SourceConnectionId == sourceConnectionId
+                && x.DestinationId == destinationId
+                && (workflowId == null || x.WorkflowId == workflowId || x.WorkflowId == null))
+            .OrderByDescending(x => x.WorkflowId == workflowId)
+            .FirstOrDefault();
         return Task.FromResult(match);
     }
 

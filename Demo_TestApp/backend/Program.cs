@@ -113,6 +113,25 @@ IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') I
         CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
 ");
 
+    // EnsureCreated won't add the Practitioner table itself to an already-existing HealthAppDb — the table was
+    // added to the model after earlier databases were first created. Idempotent, same pattern as
+    // AccountContextLinks below; a no-op on a brand-new DB where EnsureCreated already built it.
+    db.Database.ExecuteSqlRaw(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Practitioner')
+    CREATE TABLE [Practitioner] (
+        [PractitionerId] NVARCHAR(450) NOT NULL CONSTRAINT [PK_Practitioner] PRIMARY KEY,
+        [Identifier] NVARCHAR(MAX) NULL,
+        [NPI] NVARCHAR(MAX) NULL,
+        [FamilyName] NVARCHAR(MAX) NULL,
+        [GivenName] NVARCHAR(MAX) NULL,
+        [MiddleName] NVARCHAR(MAX) NULL,
+        [Gender] NVARCHAR(MAX) NULL,
+        [Qualification] NVARCHAR(MAX) NULL,
+        [Phone] NVARCHAR(MAX) NULL,
+        [Email] NVARCHAR(MAX) NULL
+    );
+");
+
     // EnsureCreated won't add PractitionerEntity's newer columns to an already-existing Practitioner table (see the
     // EnsureCreated note above) — the table pre-dates NPI/Qualification/etc. being added alongside the global
     // Practitioner import flow. Idempotent, same pattern as BackendSystemPractitionerImportWorkflowId above; a

@@ -43,7 +43,7 @@ public sealed class ConfigurationServiceMappingProfileLookupTests
     [Fact]
     public async Task Returns_null_when_no_profile_exists_for_the_combination()
     {
-        var found = await _sut.FindMappingProfileAsync("Patient", Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+        var found = await _sut.FindMappingProfileAsync("Patient", Guid.NewGuid(), Guid.NewGuid(), workflowId: null, CancellationToken.None);
 
         found.Should().BeNull();
     }
@@ -54,7 +54,7 @@ public sealed class ConfigurationServiceMappingProfileLookupTests
         var (sourceId, destinationId) = await AddSourceAndDestinationAsync();
         var created = await _sut.AddMappingProfileAsync(NewMappingRequest(sourceId, destinationId, "Patient"), CancellationToken.None);
 
-        var found = await _sut.FindMappingProfileAsync("Patient", sourceId, destinationId, CancellationToken.None);
+        var found = await _sut.FindMappingProfileAsync("Patient", sourceId, destinationId, workflowId: null, CancellationToken.None);
 
         found.Should().NotBeNull();
         found!.Id.Should().Be(created.Id);
@@ -73,7 +73,7 @@ public sealed class ConfigurationServiceMappingProfileLookupTests
             mappingJson: """{"mappings":[{"resourceType":"Patient"}]}""");
         await _repository.AddMappingProfileAsync(importedProfile, CancellationToken.None);
 
-        var found = await _sut.FindMappingProfileAsync("Patient", sourceId, destinationId, CancellationToken.None);
+        var found = await _sut.FindMappingProfileAsync("Patient", sourceId, destinationId, workflowId: null, CancellationToken.None);
 
         found.Should().NotBeNull();
         found!.Id.Should().Be(importedProfile.Id);

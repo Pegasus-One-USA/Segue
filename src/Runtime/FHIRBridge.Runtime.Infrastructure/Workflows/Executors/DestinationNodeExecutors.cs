@@ -799,14 +799,16 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// Resolves the real MappingProfile for one resource-type group of records within this destination write,
     /// when <see cref="CreateMappingProfiles"/>'s node-embedded <c>resourceMappings</c>/legacy config had nothing
     /// for this resource type. Preferring (in order): the real MappingProfile found by the exact natural key
-    /// (ResourceType, SourceConnectionId, DestinationId) — the SAME key MappingNodeExecutor and
-    /// MappingImportService de-dup on, and the only unambiguous way to identify "the mapping this workflow's own
-    /// source connection actually produces"; a DestinationId + ResourceType-only match for nodes saved before
-    /// sourceConnectionId was stamped onto them (older graphs — this can be ambiguous if more than one profile
-    /// shares a destination + resource type, e.g. a stale one left behind by an earlier/abandoned save, so ties
-    /// break on whichever was modified most recently rather than an arbitrary query order); and finally the
-    /// legacy synthetic profile built straight from whatever "fields" happen to be embedded on the node (kept
-    /// for graphs/tests with none of the above).
+    /// (ResourceType, SourceConnectionId, DestinationId, this node's own WorkflowDefinitionId) — the SAME key
+    /// MappingNodeExecutor and MappingImportService de-dup on, and the only unambiguous way to identify "the
+    /// mapping THIS workflow's own source connection actually produces" rather than a different workflow's
+    /// profile that happens to share the same source/destination (see MappingProfile.WorkflowId); a
+    /// DestinationId + ResourceType-only match for nodes saved before sourceConnectionId was stamped onto them
+    /// (older graphs — this can be ambiguous if more than one profile shares a destination + resource type, e.g.
+    /// a stale one left behind by an earlier/abandoned save, so ties break on whichever was modified most
+    /// recently rather than an arbitrary query order, and a profile a DIFFERENT workflow has already claimed is
+    /// excluded rather than winning that tie); and finally the legacy synthetic profile built straight from
+    /// whatever "fields" happen to be embedded on the node (kept for graphs/tests with none of the above).
     /// </summary>
     private async Task<MappingProfile> ResolveMappingProfileAsync(
         WorkflowNode node,
@@ -820,7 +822,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             if (Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId))
             {
                 var exactMatch = await _configurationRepository.FindMappingProfileAsync(
-                    resourceType, sourceConnectionId, destinationId, cancellationToken);
+                    resourceType, sourceConnectionId, destinationId, node.WorkflowDefinitionId, cancellationToken);
                 if (exactMatch is not null)
                 {
                     return exactMatch;
@@ -831,7 +833,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var match = profiles
                 .Where(profile =>
                     profile.DestinationId == destinationId
-                    && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase)
+                    && (profile.WorkflowId == node.WorkflowDefinitionId || profile.WorkflowId == null))
                 .OrderByDescending(profile => profile.ModifiedOnUtc ?? profile.CreatedOnUtc)
                 .FirstOrDefault();
             if (match is not null)

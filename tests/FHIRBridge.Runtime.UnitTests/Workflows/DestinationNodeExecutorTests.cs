@@ -214,7 +214,7 @@ public sealed class DestinationNodeExecutorTests
         correctProfile.ApplyModified(null, new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc));
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", thisWorkflowsSourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
+        repository.Setup(r => r.FindMappingProfileAsync("Patient", thisWorkflowsSourceConnectionId, destinationId, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(correctProfile);
         repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([wrongConnectionButRecentlyModified, correctProfile]);

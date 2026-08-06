@@ -159,7 +159,8 @@ public static class ConfigurationMapper
             mappingProfile.ModifiedOnUtc,
             mappingProfile.ModifiedBy,
             mappingProfile.SourceConfigurationId,
-            mappingProfile.MappingJson);
+            mappingProfile.MappingJson,
+            mappingProfile.WorkflowId);
     }
 
     public static MappingFieldDto ToDto(MappingField field)

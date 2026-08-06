@@ -449,7 +449,8 @@ public sealed class ConfigurationService : IConfigurationService
             request.DestinationId,
             request.DestinationObject,
             request.Fields.Select(ConfigurationMapper.ToDomain),
-            sourceConfigurationId);
+            sourceConfigurationId,
+            workflowId: request.WorkflowId);
 
         await _repository.AddMappingProfileAsync(mappingProfile, cancellationToken);
 
@@ -474,6 +475,14 @@ public sealed class ConfigurationService : IConfigurationService
             request.DestinationObject,
             request.Fields.Select(ConfigurationMapper.ToDomain),
             sourceConfigurationId);
+        // A workflow-aware caller (the /workflows/build save endpoint) re-saving a profile FindMappingProfileAsync
+        // matched by triple alone (WorkflowId still null — created before this concept existed, or by a
+        // workflow-agnostic caller) claims it now; a caller with no workflow concept (request.WorkflowId null)
+        // leaves whatever's already there untouched, same as before this existed.
+        if (request.WorkflowId is { } workflowId)
+        {
+            mappingProfile.ClaimForWorkflow(workflowId);
+        }
 
         // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
         // UpdateSourceConnectionAsync: Update() replaces the entire owned Fields collection, and EF Core's
@@ -487,11 +496,29 @@ public sealed class ConfigurationService : IConfigurationService
     }
 
     public async Task<MappingProfileDto?> FindMappingProfileAsync(
-        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken cancellationToken)
+        string resourceType, Guid sourceConnectionId, Guid destinationId, Guid? workflowId, CancellationToken cancellationToken)
     {
         var mappingProfile = await _repository.FindMappingProfileAsync(
-            resourceType, sourceConnectionId, destinationId, cancellationToken);
+            resourceType, sourceConnectionId, destinationId, workflowId, cancellationToken);
         return mappingProfile is null ? null : ConfigurationMapper.ToDto(mappingProfile);
+    }
+
+    /// <summary>
+    /// Records that <paramref name="workflowId"/> owns this profile, without touching anything else — for the
+    /// /workflows/build save endpoint's "reuse an import-authored profile as-is" path (a non-null MappingJson
+    /// signals it was authored by the richer Mapping Config Import wizard, whose Fields/DestinationObject this
+    /// endpoint's own cruder field-building path must never overwrite). Skipping this call entirely (as the
+    /// endpoint originally did) left every import-authored profile permanently unclaimed even once a workflow
+    /// referencing it was actually saved — see MappingProfile.ClaimForWorkflow for the no-op-if-already-claimed
+    /// semantics this relies on.
+    /// </summary>
+    public async Task<MappingProfileDto> ClaimMappingProfileForWorkflowAsync(
+        Guid mappingProfileId, Guid workflowId, CancellationToken cancellationToken)
+    {
+        var mappingProfile = await GetMappingProfileRequiredAsync(mappingProfileId, cancellationToken);
+        mappingProfile.ClaimForWorkflow(workflowId);
+        await _repository.UpdateMappingProfileAsync(mappingProfile, cancellationToken);
+        return ConfigurationMapper.ToDto(mappingProfile);
     }
 
     public async Task<MappingProfileDto> SetMappingProfileEnabledAsync(

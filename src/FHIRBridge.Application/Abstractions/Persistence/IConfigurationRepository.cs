@@ -63,9 +63,16 @@ public interface IConfigurationRepository
     Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct);
 
     /// <summary>Looks up an existing mapping profile for the same (ResourceType, SourceConnectionId,
-    /// DestinationId) triple — the idempotency key the mapping-config import endpoint upserts on.</summary>
+    /// DestinationId) triple — the idempotency key the mapping-config import endpoint upserts on.
+    /// <paramref name="workflowId"/> narrows this for a workflow-aware caller (the /workflows/build save
+    /// endpoint, and each Runtime executor resolving its mapping at run time): null (the mapping-config import
+    /// wizard's own call, which has no workflow concept at all) matches purely on the triple as before: any
+    /// profile for it, regardless of which workflow (if any) owns it. A real value matches only a profile
+    /// already claimed by THIS workflow, or one nobody has claimed yet (see MappingProfile.ClaimForWorkflow) —
+    /// never a profile a DIFFERENT workflow already claimed, so two workflows sharing the same triple each get
+    /// their own profile instead of silently overwriting each other's mapping on every save.</summary>
     Task<MappingProfile?> FindMappingProfileAsync(
-        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct);
+        string resourceType, Guid sourceConnectionId, Guid destinationId, Guid? workflowId, CancellationToken ct);
 
     Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct);

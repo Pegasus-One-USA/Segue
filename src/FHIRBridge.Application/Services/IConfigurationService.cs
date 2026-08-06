@@ -55,11 +55,18 @@ public interface IConfigurationService
 
     Task<MappingProfileDto> UpdateMappingProfileAsync(Guid mappingProfileId, CreateMappingProfileRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Looks up a MappingProfile by its natural key (resourceType, sourceConnectionId, destinationId) —
-    /// the same key <c>MappingImportService</c> de-duplicates on. Used by the workflow-build endpoint to detect
-    /// (and reuse) a profile that already exists for this combination instead of creating/overwriting one.</summary>
+    /// <summary>Looks up a MappingProfile by its natural key (resourceType, sourceConnectionId, destinationId,
+    /// workflowId) — see IConfigurationRepository.FindMappingProfileAsync for exactly what workflowId narrows.
+    /// Used by the workflow-build endpoint to detect (and reuse/claim) a profile that already exists for this
+    /// combination instead of creating one, while still letting two different workflows sharing the same
+    /// (resourceType, sourceConnectionId, destinationId) triple each keep their own.</summary>
     Task<MappingProfileDto?> FindMappingProfileAsync(
-        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken cancellationToken);
+        string resourceType, Guid sourceConnectionId, Guid destinationId, Guid? workflowId, CancellationToken cancellationToken);
+
+    /// <summary>Records that <paramref name="workflowId"/> owns this profile, without touching its Fields,
+    /// MappingJson, or DestinationObject — for reusing an import-authored profile as-is on a workflow save.</summary>
+    Task<MappingProfileDto> ClaimMappingProfileForWorkflowAsync(
+        Guid mappingProfileId, Guid workflowId, CancellationToken cancellationToken);
 
     Task<MappingProfileDto> SetMappingProfileEnabledAsync(Guid mappingProfileId, bool isEnabled, CancellationToken cancellationToken);
 

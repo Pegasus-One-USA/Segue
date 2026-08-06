@@ -14,4 +14,5 @@ public sealed record MappingProfileDto(
     DateTime? ModifiedOnUtc,
     string? ModifiedBy,
     Guid? SourceConfigurationId = null,
-    string? MappingJson = null);
+    string? MappingJson = null,
+    Guid? WorkflowId = null);

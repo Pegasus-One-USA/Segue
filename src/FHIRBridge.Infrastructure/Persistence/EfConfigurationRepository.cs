@@ -341,14 +341,17 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         await _db.MappingProfiles.Include(x => x.Fields).FirstOrDefaultAsync(x => x.Id == id, ct);
 
     public async Task<MappingProfile?> FindMappingProfileAsync(
-        string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct) =>
+        string resourceType, Guid sourceConnectionId, Guid destinationId, Guid? workflowId, CancellationToken ct) =>
         await _db.MappingProfiles
             .Include(x => x.Fields)
-            .FirstOrDefaultAsync(
-                x => x.ResourceType == resourceType
-                    && x.SourceConnectionId == sourceConnectionId
-                    && x.DestinationId == destinationId,
-                ct);
+            .Where(x => x.ResourceType == resourceType
+                && x.SourceConnectionId == sourceConnectionId
+                && x.DestinationId == destinationId
+                && (workflowId == null || x.WorkflowId == workflowId || x.WorkflowId == null))
+            // Prefer a profile this exact workflow already claimed over an unclaimed legacy row that also
+            // matches — otherwise a leftover unclaimed row for the same triple could win the tie arbitrarily.
+            .OrderByDescending(x => x.WorkflowId == workflowId)
+            .FirstOrDefaultAsync(ct);
 
     public async Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct)
     {

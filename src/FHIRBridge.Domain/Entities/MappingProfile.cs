@@ -19,7 +19,8 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
         string destinationObject,
         IEnumerable<MappingField> fields,
         Guid? sourceConfigurationId = null,
-        string? mappingJson = null)
+        string? mappingJson = null,
+        Guid? workflowId = null)
     {
         Id = Guid.NewGuid();
         Name = name;
@@ -30,6 +31,7 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
         DestinationObject = destinationObject;
         IsEnabled = true;
         MappingJson = mappingJson;
+        WorkflowId = workflowId;
         ReplaceFields(fields);
     }
 
@@ -57,11 +59,35 @@ public sealed class MappingProfile : AuditableChildEntity<Guid>, IHasAuditDispla
     public IReadOnlyCollection<MappingField> Fields => _fields.AsReadOnly();
 
     /// <summary>
+    /// The workflow this profile belongs to — deliberately a plain, unconstrained Guid rather than an EF
+    /// navigation to Runtime.Domain's WorkflowDefinition: that type lives in a separate layering track
+    /// (Runtime.Domain ← Runtime.Application ← Runtime.Infrastructure per CLAUDE.md), and this project must not
+    /// depend on it. Null on any profile created before this concept existed, or by a workflow-agnostic caller
+    /// (the Mapping Config Import wizard, the standalone Mapping Profiles screen) — those keep matching on
+    /// (ResourceType, SourceConnectionId, DestinationId) alone, same as always. Once two DIFFERENT workflows
+    /// share that same triple, each gets its own profile instead of silently overwriting the other's mapping on
+    /// every save — see ClaimForWorkflow and IConfigurationRepository.FindMappingProfileAsync.
+    /// </summary>
+    public Guid? WorkflowId { get; private set; }
+
+    /// <summary>
     /// The complete, unmodified source JSON this profile was imported from (see the mapping-config import
     /// endpoint) — the source of truth for re-running the ETL later. <see cref="Fields"/> is a queryable
     /// projection of it, not a replacement.
     /// </summary>
     public string? MappingJson { get; private set; }
+
+    /// <summary>
+    /// Adopts an unclaimed (WorkflowId null) profile for the workflow that's re-saving it right now — the
+    /// backward-compatible on-ramp for every profile that existed before WorkflowId did. A no-op once already
+    /// claimed (by this same workflow or, in principle, another — the caller's own lookup already guarantees
+    /// it only ever calls this on a profile that's unclaimed or already its own, so a different existing claim
+    /// is left untouched rather than stolen).
+    /// </summary>
+    public void ClaimForWorkflow(Guid workflowId)
+    {
+        WorkflowId ??= workflowId;
+    }
 
     public void Update(
         string name,
