@@ -306,7 +306,10 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
             var (schema, table) = ParseDestinationObject(lookup.LookupTable);
             var lookupColumn = ValidateIdentifier(lookup.LookupKeyColumn);
-            var sql = $"SELECT TOP (1) [Id] FROM [{schema}].[{table}] WHERE [{lookupColumn}] = @referenceId;";
+            // The referenced table's own natural/business key doubles as its identity here (these destination
+            // schemas have no generic surrogate "Id" column) — selecting the same column back both confirms the
+            // row exists and gives the exact value to store as the FK, without assuming a column that isn't there.
+            var sql = $"SELECT TOP (1) [{lookupColumn}] FROM [{schema}].[{table}] WHERE [{lookupColumn}] = @referenceId;";
 
             await using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@referenceId", lookup.ReferenceId);
