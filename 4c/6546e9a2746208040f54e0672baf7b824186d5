@@ -1,0 +1,80 @@
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.ts
+  s_2ee6ad6a9da4be::t_d8031803d597f5 3,28-34
+  h_44b3eb0c92b6da 11
+  s_2ee6ad6a9da4be::t_649f53f42dba93 7-10,12-13
+  s_2ee6ad6a9da4be::t_4177a16896e19d 35-36
+portal/src/app/operations/pages/errors/errors.component.ts
+  s_2ee6ad6a9da4be::t_d84fe3c1e40e2e 44
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_2ee6ad6a9da4be::t_ead8398055799e 223-227
+  s_2ee6ad6a9da4be::t_b59a4056447161 582-606
+Demo_TestApp/backend/Program.cs
+  s_2ee6ad6a9da4be::t_816c9b3a638201 802
+  s_2ee6ad6a9da4be::t_67913ae0bd8af4 46
+  s_2ee6ad6a9da4be::t_4241c9ffaf0c1c 660,668-673
+  s_2ee6ad6a9da4be::t_2e719ca712c1bb 116-140
+  s_2ee6ad6a9da4be::t_ad63554de2e8fe 880-899
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.html
+  s_2ee6ad6a9da4be::t_f23c9ab5db649a 95,97-104
+Demo_TestApp/frontend/src/app/demo-types/new-11/core/services/resource-11.service.ts
+  s_2ee6ad6a9da4be::t_c7fb2e62ebee86 57-67,70
+  s_2ee6ad6a9da4be::t_7aff0ebc9ac601 53-56
+Demo_TestApp/backend/Resource11Endpoints.cs
+  s_2ee6ad6a9da4be::t_0d98d43f8376c6 215-219
+  s_2ee6ad6a9da4be::t_efc0a7f970b0b5 22-25,31
+  s_2ee6ad6a9da4be::t_f07f5bd7210870 26-30
+  s_2ee6ad6a9da4be::t_37cb2574e2bd50 189-195,203,206
+  s_2ee6ad6a9da4be::t_6574162cfd29f2 163-174
+  s_2ee6ad6a9da4be::t_ce215f5895c47d 156
+  s_2ee6ad6a9da4be::t_7f032c66657491 32-54
+  s_2ee6ad6a9da4be::t_36d49a7f86a710 201-202,204-205
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_2ee6ad6a9da4be::t_a06334cce1c03d 521-524
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_2ee6ad6a9da4be::t_54b92bcc757103 77-79
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_2ee6ad6a9da4be::t_93dabcd1b8a070 1059
+  s_2ee6ad6a9da4be::t_3f73ab7e70481c 801-805
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_2ee6ad6a9da4be::t_9efc52a814c726 192-198
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.ts
+  s_2ee6ad6a9da4be::t_dd4e51a76ec7d9 69-74
+  s_2ee6ad6a9da4be::t_81fa084bd170dc 34-39
+  s_2ee6ad6a9da4be::t_22ef05d85659b8 182
+  s_2ee6ad6a9da4be::t_7d8d74ce02e280 189-191
+  s_2ee6ad6a9da4be::t_1db0fb49b377af 2
+  s_2ee6ad6a9da4be::t_8f685941710e42 40-43
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_2ee6ad6a9da4be::t_a9db273f6ca82e 111
+  s_2ee6ad6a9da4be::t_08d29e8fb5242b 147-151,156
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/core/services/provider-standalone-session-id.ts
+  s_2ee6ad6a9da4be::t_5a069555323069 1
+  s_2ee6ad6a9da4be::t_3876c4b3a5798a 2-23
+Demo_TestApp/frontend/src/app/demo-types/new-11/provider-standalone-new11.html
+  s_2ee6ad6a9da4be::t_1c88d5719273b5 10
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_2ee6ad6a9da4be::t_c16d036e2fbed0 73
+  s_2ee6ad6a9da4be::t_0be2a14761ba38 1
+  s_2ee6ad6a9da4be::t_7aee47501ea6d6 460-478
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "4c6546e9a2746208040f54e0672baf7b824186d5",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_2ee6ad6a9da4be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "083f13e9-6c18-4634-a94d-a13502da640b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
