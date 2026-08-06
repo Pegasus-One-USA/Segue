@@ -1,0 +1,60 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_307711e9d5ce68::t_ee01c054a4ed1d 83-84,87
+  s_307711e9d5ce68::t_1c3c25b9c44c5f 93-136
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_307711e9d5ce68::t_113288172bac42 9-12,17
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.ts
+  s_307711e9d5ce68::t_96eee68347e6d2 100-122
+  s_307711e9d5ce68::t_e34004075411d4 2
+  s_307711e9d5ce68::t_485978d9d1f5f6 4,14-17
+  s_307711e9d5ce68::t_e4d0015cad623e 48-51,54,62-64
+  s_307711e9d5ce68::t_02b02ff9aa7ec1 37
+  s_307711e9d5ce68::t_fd6c212c79cf0e 18-19
+  s_307711e9d5ce68::t_241c3642314d46 65-66
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.scss
+  s_307711e9d5ce68::t_97cf13ff33351d 5-6
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_307711e9d5ce68::t_6371dfa0b2da4e 84-85,159
+  s_307711e9d5ce68::t_05877a5613d694 66,68,72-83
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.scss
+  s_307711e9d5ce68::t_4e71d952e68222 35-46
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_307711e9d5ce68::t_652e58894d49e0 227-271
+  s_307711e9d5ce68::t_8187b5e5459ac2 7
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-wires.component.html
+  s_307711e9d5ce68::t_3fcee304ea85f0 13-21
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-automap.util.ts
+  s_307711e9d5ce68::t_57420091a044a8 1,14-132
+  s_307711e9d5ce68::t_b28e9b06c76bb9 133
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_307711e9d5ce68::t_684d616b0ab546 9-13,18
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.html
+  s_307711e9d5ce68::t_311a3e5f9eef6c 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-card-size.util.ts
+  s_307711e9d5ce68::t_942cbcc38d81fc 1-15
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_307711e9d5ce68::t_03ba36c12a7b11 5-9
+  s_307711e9d5ce68::t_d6eb6c40b693ec 74-78,86-94
+  s_307711e9d5ce68::t_ed7b95e29ca1a7 95-96
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_307711e9d5ce68::t_0d0f62464300a7 7-13
+  s_307711e9d5ce68::t_e1c777cecaf23a 167-172
+portal/src/app/components/canvas/zoom-dock/zoom-dock.component.ts
+  s_307711e9d5ce68::t_eea4821aca850b 14-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b00083d90bde866ccc3998f11f86e3ace3a63cab",
+  "prompts": {},
+  "sessions": {
+    "s_307711e9d5ce68": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4721b0e6-2c23-46cd-9903-4ae113faadee",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
