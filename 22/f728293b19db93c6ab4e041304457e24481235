@@ -1,0 +1,19 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_e513538d1507c4::t_b7303a468060cc 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "22f728293b19db93c6ab4e041304457e24481235",
+  "prompts": {},
+  "sessions": {
+    "s_e513538d1507c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e6cb8caf-627c-43be-8fab-84a84e128fda",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
