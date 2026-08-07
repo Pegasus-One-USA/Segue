@@ -227,6 +227,26 @@ interface ResolvedTable {
   columns: DestinationColumn[];
 }
 
+/** Reads a table's parent/FK relation straight off its own real column metadata — the same live-schema
+ *  signal FieldMappingTargetCardComponent.detectedRelation renders as the canvas's "child of X via Y → Z"
+ *  banner (shared by both so the two can never disagree on what "this table's parent" means). Whichever
+ *  column actually has isForeignKey wins; a table normally has at most one FK back to its logical parent. */
+export function detectRelationFromColumns(
+  columns: readonly { name: string; isForeignKey?: boolean; references?: string | null }[],
+): ChildTableRelation | undefined {
+  for (const column of columns) {
+    if (column.isForeignKey && column.references) {
+      const lastDot = column.references.lastIndexOf('.');
+      return {
+        parentTable: column.references.slice(0, lastDot),
+        parentColumn: column.references.slice(lastDot + 1),
+        foreignKeyColumnName: column.name,
+      };
+    }
+  }
+  return undefined;
+}
+
 function resolveTable(
   fullName: string,
   sqlTables: DestinationTable[],
@@ -236,7 +256,17 @@ function resolveTable(
   rootTableToResource: Record<string, string>,
 ): ResolvedTable {
   const known = sqlTables.find(t => t.fullName === fullName);
-  const declaredRelation = childTableRelationsByTable[fullName];
+  // The live-probed FK metadata (isForeignKey/references, already on every real column) wins over
+  // childTableRelationsByTable when both exist — it's read straight from the database, so it also
+  // covers an already-existing table just picked from the dropdown, not only one created THIS session
+  // via "Create a new table…" (childTableRelationsByTable's only source). Without this fallback, an
+  // existing child table with no manually-declared relation looked exactly like a root table to
+  // computeProcessingOrder's levelFor — tying it with the real root at level 1 and leaving the two
+  // ordered alphabetically, silently picking the wrong one as this resource's DestinationObject whenever
+  // the child table's name happened to sort first (e.g. "ObservationCategories" before "Observations").
+  // Mirrors FieldMappingTargetCardComponent.relationToShow's identical detectedRelation() ?? relation()
+  // priority, so the canvas's own "child of X via Y → Z" banner and what gets saved never disagree.
+  const declaredRelation = (known && detectRelationFromColumns(known.columns)) ?? childTableRelationsByTable[fullName];
   // A genuine child-table relation only makes sense when its declared parent belongs to THIS SAME resource
   // (e.g. PatientAddress's parent "Patient", alongside Patient's own root mapping) — that's what actually
   // proves it's an intra-resource array fan-out, not a real SQL foreign key picked up from live-schema
