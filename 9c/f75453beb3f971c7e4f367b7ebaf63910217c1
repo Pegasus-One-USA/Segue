@@ -1,0 +1,72 @@
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_3b1a7f58768f24::t_70721b5fb22f47 83-84
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_3b1a7f58768f24::t_7ca455fc1f3e47 450-457
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.ts
+  s_3b1a7f58768f24::t_5c28bec6d8493e 32,38-41,44-46
+  s_3b1a7f58768f24::t_9d41bd07998600 1,5,33
+  s_3b1a7f58768f24::t_af0c030d3f3037 34-37
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_3b1a7f58768f24::t_6550951caf8def 317-320
+  s_3b1a7f58768f24::t_b5459e68d1c520 2
+  s_3b1a7f58768f24::t_788b5b0a4b0bbb 57,64-65,73
+  s_3b1a7f58768f24::t_af9ad6fa071cc3 321-323
+  s_e513538d1507c4::t_3177c80aad6a82 324
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_3b1a7f58768f24::t_f5c52902d484a7 3-11
+  s_3b1a7f58768f24::t_d0d68db74589f3 164
+portal/src/app/core/api-endpoints.ts
+  s_3b1a7f58768f24::t_61f389df9c9236 164
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_3b1a7f58768f24::t_68daed9de0354c 14
+  s_3b1a7f58768f24::t_fb386c222cc11e 6-13,15-16
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_3b1a7f58768f24::t_c7c86db58df57d 149-151,155
+  s_3b1a7f58768f24::t_47337236158928 3
+  s_3b1a7f58768f24::t_675ec96b4d5389 112
+  s_3b1a7f58768f24::t_dc99ae1e042ddd 147-148,152-154,156-157
+  s_3b1a7f58768f24::t_c0ffa9186b3fdd 158
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_3b1a7f58768f24::t_b2f1ccdba53427 103-106
+  s_3b1a7f58768f24::t_75425c432232df 116-123
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_3b1a7f58768f24::t_e308d484099c53 90
+  s_3b1a7f58768f24::t_dae9ded378ec29 2
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_3b1a7f58768f24::t_47dd7763ab3322 434-437,440,454-506
+  s_3b1a7f58768f24::t_13bfad211f67ae 2
+  s_3b1a7f58768f24::t_77b62741870a3f 507-508
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_3b1a7f58768f24::t_13e3649966a31f 155
+  s_3b1a7f58768f24::t_d1539d2a0e71cc 30
+  s_3b1a7f58768f24::t_52496e45888405 819
+  s_3b1a7f58768f24::t_868a01abfa988e 157-160
+  s_3b1a7f58768f24::t_34dea4696f0c93 156
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_3b1a7f58768f24::t_701042f904ed7b 2,22,24,27-30,32-40
+  s_3b1a7f58768f24::t_b01f62b67dd2dc 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "9cf75453beb3f971c7e4f367b7ebaf63910217c1",
+  "prompts": {},
+  "sessions": {
+    "s_3b1a7f58768f24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e9e22fe-60af-44d2-8208-640c51f501c1",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_e513538d1507c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e6cb8caf-627c-43be-8fab-84a84e128fda",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

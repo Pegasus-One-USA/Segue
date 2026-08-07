@@ -1,0 +1,29 @@
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_e513538d1507c4::t_9842b1ebf65ac8 18-19,61-62
+  s_e513538d1507c4::t_9bea7f8f45e445 121
+  s_e513538d1507c4::t_fc7ce78e63d954 108-110
+portal/src/styles.scss
+  s_e513538d1507c4::t_585b8064092547 169-173
+  s_e513538d1507c4::t_55f4c6ff37b1ee 346,353
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_e513538d1507c4::t_fb7bd62df8bfea 227,229-232
+  s_e513538d1507c4::t_4d19a53fb46e7e 81
+  s_e513538d1507c4::t_d91347def3852e 155
+  s_e513538d1507c4::t_debeeb16f4006b 118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "93b706372639516564056d84fce5ec678a7677d8",
+  "prompts": {},
+  "sessions": {
+    "s_e513538d1507c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e6cb8caf-627c-43be-8fab-84a84e128fda",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
