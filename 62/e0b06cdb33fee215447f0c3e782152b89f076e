@@ -1,0 +1,28 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_9b48790bb1404e::t_a227825482e6ed 113-115
+  s_9b48790bb1404e::t_561eb83b99cc4e 6
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_9b48790bb1404e::t_e032f877dac04b 230-231,237-249
+  s_9b48790bb1404e::t_7ac8f92b126ab0 232-236
+  s_9b48790bb1404e::t_5a18d3295a786e 259-269
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_9b48790bb1404e::t_157c5f869afaf6 474-483,499,501-508,511,513,516
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_9b48790bb1404e::t_385059115977dd 171-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "62e0b06cdb33fee215447f0c3e782152b89f076e",
+  "prompts": {},
+  "sessions": {
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
