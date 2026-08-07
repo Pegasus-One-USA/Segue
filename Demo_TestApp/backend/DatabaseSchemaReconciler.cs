@@ -54,6 +54,27 @@ public static class DatabaseSchemaReconciler
                 var columnName = property.GetColumnName();
                 if (existingColumns.Contains(columnName))
                 {
+                    // Column already exists -- if the model says non-nullable but a NULL somehow got
+                    // in (e.g. this exact column was added by an earlier, buggy version of this
+                    // reconciler that didn't backfill new rows), heal it the same way a fresh ADD
+                    // COLUMN would have. "WHERE ... IS NULL" no-ops instantly when there's nothing to
+                    // fix, so this is cheap to run unconditionally on every startup, and it's what
+                    // makes this self-healing rather than a one-time fix for today's specific bug.
+                    //
+                    // Primary-key / store-generated columns (identity Ids) are excluded outright: SQL
+                    // Server rejects UPDATE against an IDENTITY column even when zero rows would match
+                    // ("Cannot update identity column 'Id'"), and such a column can never actually be
+                    // NULL anyway, so there's nothing to heal there.
+                    var isStoreGenerated = property.IsPrimaryKey() || property.ValueGenerated == ValueGenerated.OnAdd;
+                    if (!property.IsNullable && !isStoreGenerated)
+                    {
+                        var backfillLiteral = property.GetDefaultValueSql() ?? SqlDefaultLiteralFor(property);
+#pragma warning disable EF1002
+                        db.Database.ExecuteSqlRaw(
+                            $"UPDATE [{tableName}] SET [{columnName}] = {backfillLiteral} WHERE [{columnName}] IS NULL");
+#pragma warning restore EF1002
+                    }
+
                     continue;
                 }
 
@@ -62,18 +83,26 @@ public static class DatabaseSchemaReconciler
                     "SchemaReconciler: adding missing column [{Table}].[{Column}] ({Type}).",
                     tableName, columnName, columnType);
 
-                // Always added NULLable regardless of the model's own nullability -- an existing table
-                // can already have rows, and SQL Server rejects "ADD COLUMN NOT NULL" against a
-                // populated table unless every existing row also gets a value. Nullable-always
-                // sidesteps guessing at a plausible per-column default; application code already
-                // treats most of these flattened fields as optional/nullable anyway.
-                //
-                // EF1002 suppressed: tableName/columnName/columnType come from our own compiled EF
-                // model metadata, never from external/user input -- SQL Server also has no parameter
-                // syntax for identifiers (table/column names), so this can't be rewritten as a
-                // parameterized statement regardless.
+                // A property the model marks non-nullable (e.g. every "= string.Empty"-defaulted
+                // string on WorkflowSettingsEntity) MUST be backfilled on every existing row, not just
+                // added as NULL -- EF Core throws InvalidOperationException ("cannot be set to a null
+                // value because its type is 'string', which is not a nullable type") the moment it
+                // reads back a row where that column is NULL. SQL Server allows "ADD COLUMN NOT NULL"
+                // against a populated table as long as a DEFAULT accompanies it -- it backfills every
+                // existing row with that default automatically, so this avoids both the ALTER failing
+                // outright AND the later read-time exception. A property the model marks nullable is
+                // simply added as NULL; reading NULL into a nullable CLR property is fine.
+                var columnClause = property.IsNullable
+                    ? $"{columnType} NULL"
+                    : $"{columnType} NOT NULL CONSTRAINT [DF_{tableName}_{columnName}] " +
+                      $"DEFAULT ({property.GetDefaultValueSql() ?? SqlDefaultLiteralFor(property)})";
+
+                // EF1002 suppressed: tableName/columnName/columnType/columnClause come from our own
+                // compiled EF model metadata, never from external/user input -- SQL Server also has no
+                // parameter syntax for identifiers (table/column names), so this can't be rewritten as
+                // a parameterized statement regardless.
 #pragma warning disable EF1002
-                db.Database.ExecuteSqlRaw($"ALTER TABLE [{tableName}] ADD [{columnName}] {columnType} NULL");
+                db.Database.ExecuteSqlRaw($"ALTER TABLE [{tableName}] ADD [{columnName}] {columnClause}");
 #pragma warning restore EF1002
             }
         }
@@ -168,5 +197,41 @@ public static class DatabaseSchemaReconciler
         sb.Append(string.Join(",\n", columnDefs));
         sb.Append("\n)");
         return sb.ToString();
+    }
+
+    // Backfill value for a NOT NULL column being added to a table that may already have rows, when the
+    // model itself doesn't specify one via HasDefaultValueSql. Covers every CLR type actually used
+    // across this app's entities today -- throws rather than guessing for anything else, since a wrong
+    // silent guess (e.g. defaulting a domain-specific numeric column to 0) could be worse than a loud
+    // failure that tells you to add a mapping or make the property nullable.
+    private static string SqlDefaultLiteralFor(IProperty property)
+    {
+        if (property.ClrType == typeof(string))
+        {
+            return "''";
+        }
+
+        if (property.ClrType == typeof(bool) || property.ClrType == typeof(int) || property.ClrType == typeof(long)
+            || property.ClrType == typeof(short) || property.ClrType == typeof(decimal)
+            || property.ClrType == typeof(double) || property.ClrType == typeof(float))
+        {
+            return "0";
+        }
+
+        if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTimeOffset))
+        {
+            return "SYSUTCDATETIME()";
+        }
+
+        if (property.ClrType == typeof(Guid))
+        {
+            return "'00000000-0000-0000-0000-000000000000'";
+        }
+
+        throw new NotSupportedException(
+            $"DatabaseSchemaReconciler has no default-literal mapping for CLR type '{property.ClrType}' " +
+            $"(property '{property.Name}') on a NOT NULL column being added to an existing table. Either add " +
+            "a mapping here, make the property nullable in the model, or give it an explicit " +
+            "HasDefaultValueSql(...) in OnModelCreating.");
     }
 }
