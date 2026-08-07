@@ -75,6 +75,12 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HealthAppDbContext>();
     db.Database.EnsureCreated();
 
+    // Generic, model-driven fallback for everything EnsureCreated() can't do to an already-existing
+    // database (add a table a newer entity introduced, add a column a newer property introduced) --
+    // see DatabaseSchemaReconciler's own remarks. Runs before the two reshape/seed blocks below so
+    // they see a schema that already has every table/column the current model expects.
+    DatabaseSchemaReconciler.Reconcile(db, scope.ServiceProvider.GetRequiredService<ILogger<Program>>());
+
     // EnsureCreated won't add the New 11 workflow-settings table to an already-existing HealthAppDb, so ensure it
     // exists (single row, List + Details URL per role, business-named columns) and has its seed row here.
     // Idempotent — safe every startup, a no-op on a brand-new DB where EnsureCreated already built the table. Also
@@ -102,54 +108,11 @@ IF NOT EXISTS (SELECT 1 FROM [Resource11WorkflowSettings] WHERE [Id] = 1)
     VALUES (1,'','','','','','','','');
 ");
 
-    // EnsureCreated won't add a new column to an already-existing WorkflowSettings table (see the EnsureCreated
-    // note above). Add BackendSystemPractitionerImportWorkflowId idempotently so a pre-existing HealthAppDb gets it
-    // (existing rows backfilled to the demo workflow id) without a manual drop — a no-op on a brand-new DB where
-    // EnsureCreated already built the column from the entity model.
-    db.Database.ExecuteSqlRaw(@"
-IF COL_LENGTH('WorkflowSettings', 'BackendSystemPractitionerImportWorkflowId') IS NULL
-    ALTER TABLE [WorkflowSettings]
-        ADD [BackendSystemPractitionerImportWorkflowId] NVARCHAR(MAX) NOT NULL
-        CONSTRAINT [DF_WorkflowSettings_BsPractImport] DEFAULT('17c81a2c-b266-4ed3-9afb-8fc54910f577');
-");
-
-    // EnsureCreated won't add PractitionerEntity's newer columns to an already-existing Practitioner table (see the
-    // EnsureCreated note above) — the table pre-dates NPI/Qualification/etc. being added alongside the global
-    // Practitioner import flow. Idempotent, same pattern as BackendSystemPractitionerImportWorkflowId above; a
-    // no-op on a brand-new DB where EnsureCreated already built every column from the entity model.
-    db.Database.ExecuteSqlRaw(@"
-IF COL_LENGTH('Practitioner', 'Identifier') IS NULL
-    ALTER TABLE [Practitioner] ADD [Identifier] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'NPI') IS NULL
-    ALTER TABLE [Practitioner] ADD [NPI] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'FamilyName') IS NULL
-    ALTER TABLE [Practitioner] ADD [FamilyName] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'GivenName') IS NULL
-    ALTER TABLE [Practitioner] ADD [GivenName] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'MiddleName') IS NULL
-    ALTER TABLE [Practitioner] ADD [MiddleName] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'Gender') IS NULL
-    ALTER TABLE [Practitioner] ADD [Gender] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'Qualification') IS NULL
-    ALTER TABLE [Practitioner] ADD [Qualification] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'Phone') IS NULL
-    ALTER TABLE [Practitioner] ADD [Phone] NVARCHAR(MAX) NULL;
-IF COL_LENGTH('Practitioner', 'Email') IS NULL
-    ALTER TABLE [Practitioner] ADD [Email] NVARCHAR(MAX) NULL;
-");
-
-    // EnsureCreated won't add the AccountContextLinks table to an already-existing HealthAppDb — see
-    // AccountContextLinkEntity's own remarks for what this table is for. Idempotent, same pattern as above.
-    db.Database.ExecuteSqlRaw(@"
-IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AccountContextLinks')
-    CREATE TABLE [AccountContextLinks] (
-        [Id] INT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_AccountContextLinks] PRIMARY KEY,
-        [AccountEmail] NVARCHAR(256) NOT NULL,
-        [AudienceType] NVARCHAR(50) NOT NULL,
-        [ResourceId] NVARCHAR(256) NOT NULL,
-        [CreatedUtc] DATETIME2 NOT NULL CONSTRAINT [DF_AccountContextLinks_CreatedUtc] DEFAULT(SYSUTCDATETIME())
-    );
-");
+    // BackendSystemPractitionerImportWorkflowId (WorkflowSettings), every Practitioner column added
+    // alongside the global Practitioner import flow, and AccountContextLinks itself are now all handled
+    // generically by DatabaseSchemaReconciler.Reconcile above -- no per-column/per-table patch needed
+    // here anymore. New entities/properties added to the model going forward need nothing added here
+    // either; the reconciler picks them up automatically on next startup.
 }
 
 // Serves the Angular build copied into wwwroot/ at deploy time — this backend hosts its own
