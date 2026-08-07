@@ -377,7 +377,15 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             }
 
             transformed ??= new Dictionary<string, object?>(row, StringComparer.OrdinalIgnoreCase);
-            transformed[destinationField] = currentValue;
+            // A FHIR complex-type builder node (HumanNameParsing, AddressParsing, TelecomNormalization,
+            // IdentifierFormatting, ReferenceConstruction) yields a System.Text.Json.Nodes.JsonObject/JsonNode —
+            // see the doc comment on ITransformNode.TransformResult. A destination writer's ADO.NET parameter
+            // binding has no mapping for that CLR type (MappedSqlServerDestinationWriter throws "No mapping
+            // exists from object type ... JsonObject"), so it must be serialized to its JSON text here, the same
+            // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
+            transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
+                ? jsonNode.ToJsonString()
+                : currentValue;
         }
 
         return transformed ?? row;

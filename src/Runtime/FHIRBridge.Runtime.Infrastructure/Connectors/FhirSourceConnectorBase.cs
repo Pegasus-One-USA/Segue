@@ -124,10 +124,17 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             using var response = await SendWithRetryAsync(nextUrl, accessToken, source, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var message = await BuildFailureMessageAsync(nextUrl, response, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                var message = BuildFailureMessage(nextUrl, response, body);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
+                        resourceType, (int)response.StatusCode, message);
+                }
+
+                if (IsNotSupportedOutcome(body))
+                {
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceNotSupportedException(
                         resourceType, (int)response.StatusCode, message);
                 }
 
@@ -490,12 +497,11 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
     }
 
-    private async Task<string> BuildFailureMessageAsync(
+    private string BuildFailureMessage(
         string requestUrl,
         HttpResponseMessage response,
-        CancellationToken cancellationToken)
+        string body)
     {
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var message = $"{SourceDisplayName} request returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {RedactRequestUrl(requestUrl)}.";
 
         if (string.IsNullOrWhiteSpace(body))
@@ -503,13 +509,55 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             return message;
         }
 
-        body = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
-        if (body.Length > 1000)
+        var redactedBody = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
+        if (redactedBody.Length > 1000)
         {
-            body = body[..1000] + "...";
+            redactedBody = redactedBody[..1000] + "...";
         }
 
-        return $"{message} Response body: {body}";
+        return $"{message} Response body: {redactedBody}";
+    }
+
+    /// <summary>
+    /// True when the failed response body is a FHIR <c>OperationOutcome</c> carrying a <c>not-supported</c> issue
+    /// code — e.g. Epic returning 400 for a resource type the tenant's app registration doesn't expose. Distinct
+    /// from a 401/403 (this app isn't authorized) so callers can isolate "this resource type doesn't exist here"
+    /// without treating it as a transient failure worth retrying.
+    /// </summary>
+    private static bool IsNotSupportedOutcome(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("issue", out var issues) ||
+                issues.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var issue in issues.EnumerateArray())
+            {
+                if (issue.TryGetProperty("code", out var code) &&
+                    code.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    string.Equals(code.GetString(), "not-supported", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 
     private static string RedactRequestUrl(string requestUrl)

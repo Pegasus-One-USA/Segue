@@ -98,6 +98,46 @@ public sealed class SourceNodeExecutorAuthorizationTests
     }
 
     [Fact]
+    public async Task Not_supported_child_resource_type_is_skipped_and_siblings_still_complete()
+    {
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var client = new Mock<IFhirSourceClient>();
+        client
+            .Setup(x => x.SearchAsync("Patient", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+        client
+            .Setup(x => x.SearchAsync("MedicationAdministration", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ResourceNotSupportedException(
+                "MedicationAdministration", 400, "Epic FHIR request returned 400 (Bad Request) for .../MedicationAdministration"));
+        client
+            .Setup(x => x.SearchAsync("Condition", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Condition", "c1", "{}", null, null)]);
+
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
+
+        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object);
+        var node = BuildNode(sourceConnectionId, "Patient,MedicationAdministration,Condition");
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
+
+        // Patient + Condition made it through; the not-supported resource type contributed nothing but didn't abort the node.
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(2);
+        output.Metadata!["skippedResourceTypes"].Should().BeAssignableTo<string[]>()
+            .Which.Should().ContainSingle(reason => reason.Contains("MedicationAdministration") && reason.Contains("400"));
+    }
+
+    [Fact]
     public async Task No_skipped_resource_types_leaves_metadata_null()
     {
         var sourceConnectionId = Guid.NewGuid();

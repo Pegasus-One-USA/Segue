@@ -8,7 +8,7 @@ namespace FHIRBridge.Runtime.Domain.Exceptions;
 /// generic <c>catch (Exception)</c> handling around extraction is unaffected unless a caller specifically checks
 /// for this type.
 /// </summary>
-public sealed class ResourceAuthorizationException : InvalidOperationException
+public sealed class ResourceAuthorizationException : InvalidOperationException, IResourceExtractionFailure
 {
     public ResourceAuthorizationException(string resourceType, int statusCode, string reason)
         : base(reason)
@@ -20,4 +20,6 @@ public sealed class ResourceAuthorizationException : InvalidOperationException
     public string ResourceType { get; }
 
     public int StatusCode { get; }
+
+    public string SkipReasonLabel => "not authorized for this app";
 }

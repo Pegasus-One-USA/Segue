@@ -97,7 +97,7 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         };
 
         var items = await query
-            .Skip(skip)
+            .Skip(skip) 
             .Take(take)
             .ToListAsync(ct);
 
