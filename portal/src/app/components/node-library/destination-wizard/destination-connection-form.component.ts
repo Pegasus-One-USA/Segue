@@ -249,6 +249,9 @@ export class DestinationConnectionFormComponent {
       });
   }
 
+  // No tokenEndpoint in the request — for oauth2/clientCredentials the backend discovers it from baseUrl via
+  // GET {baseUrl}/.well-known/smart-configuration and returns it as resolvedTokenEndpoint, patched into this
+  // form's (now-hidden) tokenEndpoint control on success so it still lands in dest_tokenEndpoint at save time.
   private _testFhir(): void {
     const v = this.fhirForm.value;
     this.probeState.set('testing');
@@ -257,7 +260,6 @@ export class DestinationConnectionFormComponent {
       .testFhir({
         baseUrl: v.baseUrl ?? '',
         authType: v.authType ?? 'oauth2',
-        tokenEndpoint: v.tokenEndpoint ?? undefined,
         clientId: v.clientId ?? undefined,
         clientSecret: v.clientSecret ?? undefined,
         username: v.username ?? undefined,
@@ -266,8 +268,15 @@ export class DestinationConnectionFormComponent {
       })
       .subscribe({
         next: res => {
-          this.probeState.set(res.connected ? 'ok' : 'error');
-          if (!res.connected) this.probeError.set(res.error ?? 'Connection failed.');
+          if (!res.connected) {
+            this.probeState.set('error');
+            this.probeError.set(res.error ?? 'Connection failed.');
+            return;
+          }
+          if (res.resolvedTokenEndpoint) {
+            this.fhirForm.patchValue({ tokenEndpoint: res.resolvedTokenEndpoint });
+          }
+          this.probeState.set('ok');
         },
         error: err => {
           this.probeState.set('error');
@@ -354,7 +363,8 @@ export class DestinationConnectionFormComponent {
   }
 
   private _syncFhirAuthValidators(authType: string | null): void {
-    (['tokenEndpoint', 'clientId', 'clientSecret'] as const).forEach(name => {
+    // tokenEndpoint is deliberately NOT in this list — see _testFhir()'s comment.
+    (['clientId', 'clientSecret'] as const).forEach(name => {
       const ctrl = this.fhirForm.get(name)!;
       ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });

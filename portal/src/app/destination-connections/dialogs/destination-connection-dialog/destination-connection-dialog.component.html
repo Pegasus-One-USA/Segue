@@ -100,7 +100,7 @@
       mat-flat-button
       color="primary"
       type="button"
-      [disabled]="saving() || (isCreate && !chosenType())"
+      [disabled]="saving() || (isCreate && !chosenType()) || fhirTestPending()"
       (click)="save()"
     >
       {{ saving() ? 'Saving…' : 'Save' }}

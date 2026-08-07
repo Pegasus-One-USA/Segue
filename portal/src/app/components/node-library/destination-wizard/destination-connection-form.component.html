@@ -143,13 +143,6 @@
       </div>
 
       @if (fhirForm.get('authType')!.value === 'oauth2') {
-        <div class="dw-field" [class.dw-field--error]="fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched">
-          <label class="dw-label" for="dcf-fhir-tokenEndpoint">Token endpoint <span class="dw-req">*</span></label>
-          <input id="dcf-fhir-tokenEndpoint" class="dw-input" formControlName="tokenEndpoint" placeholder="https://tenant.aidbox.app/auth/token" />
-          @if (fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched) {
-            <span class="dw-error">Token endpoint is required.</span>
-          }
-        </div>
         <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched">
           <label class="dw-label" for="dcf-fhir-clientId">Client ID <span class="dw-req">*</span></label>
           <input id="dcf-fhir-clientId" class="dw-input" formControlName="clientId" autocomplete="off" />
@@ -209,7 +202,7 @@
 
   @if (canTestConnection()) {
     <div class="dcf-actions">
-      <button type="button" class="dw-btn" [disabled]="probeState() === 'testing' || !fhirForm.get('baseUrl')!.value" (click)="testConnection()">
+      <button type="button" class="dw-btn" [disabled]="probeState() === 'testing' || fhirForm.invalid" (click)="testConnection()">
         {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
       </button>
     </div>

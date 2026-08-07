@@ -9,7 +9,7 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// </summary>
 public interface IFhirDestinationConnectionTestService
 {
-    Task<ConnectionTestResultDto> TestConnectionAsync(
+    Task<FhirConnectionTestResultDto> TestConnectionAsync(
         FhirConnectionTestRequest request,
         CancellationToken cancellationToken);
 }

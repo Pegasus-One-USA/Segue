@@ -872,7 +872,9 @@
   font-family: inherit;
 
   &:hover:not(:disabled) { background: var(--color-bg); }
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  // 0.4 was hard to read (already-muted ink-2 text, dimmed further) — keep enough contrast that a disabled
+  // button's label is still legible, not just "is this even text or a blank box."
+  &:disabled { opacity: 0.7; cursor: not-allowed; color: var(--color-muted); }
 
   &--primary {
     background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));

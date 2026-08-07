@@ -243,13 +243,6 @@
             </div>
 
             @if (fhirForm.get('authType')!.value === 'oauth2') {
-              <div class="dw-field" [class.dw-field--error]="fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched">
-                <label class="dw-label" for="dw-fhir-tokenEndpoint">Token endpoint <span class="dw-req">*</span></label>
-                <input id="dw-fhir-tokenEndpoint" class="dw-input" formControlName="tokenEndpoint" placeholder="https://tenant.aidbox.app/auth/token" />
-                @if (fhirForm.get('tokenEndpoint')!.invalid && fhirForm.get('tokenEndpoint')!.touched) {
-                  <span class="dw-error">Token endpoint is required.</span>
-                }
-              </div>
               <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched">
                 <label class="dw-label" for="dw-fhir-clientId">Client ID <span class="dw-req">*</span></label>
                 <input id="dw-fhir-clientId" class="dw-input" formControlName="clientId" autocomplete="off" />
@@ -305,26 +298,17 @@
             </div>
 
           </div><!-- /dw-grid-3 -->
-
-          <button
-            type="button"
-            class="dw-btn dw-btn--primary dw-test-connection-btn"
-            [disabled]="probeState() === 'testing' || !fhirForm.get('baseUrl')!.value"
-            (click)="testFhirConnection()"
-          >
-            {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
-          </button>
-
-          @if (probeState() === 'testing') {
-            <div class="dw-callout dw-callout--info">Testing connection…</div>
-          }
-          @if (probeState() === 'error') {
-            <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
-          }
-          @if (probeState() === 'ok') {
-            <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
-          }
         </form>
+
+        @if (probeState() === 'testing') {
+          <div class="dw-callout dw-callout--info">Testing connection…</div>
+        }
+        @if (probeState() === 'error') {
+          <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+        }
+        @if (probeState() === 'ok') {
+          <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
+        }
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -958,12 +942,13 @@
       <button
         class="dw-btn dw-btn--primary"
         type="button"
-        [class.dw-btn--invalid]="isNextDisabled()"
+        [class.dw-btn--invalid]="step() === 1 && isFhir() ? fhirForm.invalid : isNextDisabled()"
         [disabled]="probeState() === 'testing'"
         (click)="next()"
       >
         @if (step() === TOTAL_STEPS) { {{ editNode() ? '✓ Update' : '✓ Add to Workflow' }} }
         @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection & Next' }} }
+        @else if (step() === 1 && isFhir()) { {{ probeState() === 'testing' ? 'Testing…' : 'Test connection and next' }} }
         @else { Next }
       </button>
     </div>

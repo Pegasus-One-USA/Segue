@@ -52,10 +52,12 @@ export interface SftpConnectionTestRequest {
   remoteFolder?: string;
 }
 
+// No tokenEndpoint — for "oauth2"/"clientcredentials" it's discovered server-side from baseUrl via
+// GET {baseUrl}/.well-known/smart-configuration (see FhirDestinationConnectionTestService.DiscoverTokenEndpointAsync)
+// rather than typed by the user.
 export interface FhirConnectionTestRequest {
   baseUrl: string;
   authType: string;
-  tokenEndpoint?: string;
   clientId?: string;
   clientSecret?: string;
   username?: string;
@@ -66,6 +68,12 @@ export interface FhirConnectionTestRequest {
 export interface ConnectionTestResult {
   connected: boolean;
   error: string | null;
+}
+
+/** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the
+ *  (now-hidden) tokenEndpoint form control exactly as if the user had typed it in. */
+export interface FhirConnectionTestResult extends ConnectionTestResult {
+  resolvedTokenEndpoint: string | null;
 }
 
 /**
@@ -94,7 +102,7 @@ export class DestinationSchemaService {
   }
 
   /** Tests an ad-hoc FHIR-repository connection (e.g. Aidbox) for a not-yet-saved FhirRepository destination. */
-  testFhir(request: FhirConnectionTestRequest): Observable<ConnectionTestResult> {
-    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.fhirTest, request);
+  testFhir(request: FhirConnectionTestRequest): Observable<FhirConnectionTestResult> {
+    return this.http.post<FhirConnectionTestResult>(DESTINATION_ENDPOINTS.fhirTest, request);
   }
 }

@@ -550,7 +550,10 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private _syncFhirAuthValidators(authType: string | null): void {
-    (['tokenEndpoint', 'clientId', 'clientSecret'] as const).forEach(name => {
+    // tokenEndpoint is deliberately NOT in this list — it's no longer user-entered. For oauth2/clientCredentials
+    // it's discovered from baseUrl (GET {baseUrl}/.well-known/smart-configuration) during testConnectionAndAdvance()
+    // and patched into this same control, so it still ends up in dest_tokenEndpoint at save time.
+    (['clientId', 'clientSecret'] as const).forEach(name => {
       const ctrl = this.fhirForm.get(name)!;
       ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
@@ -602,6 +605,14 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
+    // FHIR: unlike SQL, isNextDisabled() for FHIR already requires probeState()==='ok' (a deliberate gate —
+    // wrong credentials must not advance). That means the check below would ALWAYS short-circuit here before a
+    // first test ever runs, so this branch must come first: whenever the form itself is valid but not yet
+    // successfully tested, trigger the test instead of falling into the "just mark fields touched" path.
+    if (this.step() === 1 && this.isFhir() && this.fhirForm.valid && this.probeState() !== 'ok' && this.probeState() !== 'testing') {
+      this.testConnectionAndAdvance();
+      return;
+    }
     // The button is only visually dimmed while invalid (see dw-btn--invalid), not hard-disabled — clicking it
     // now reveals exactly which field is missing instead of just silently doing nothing.
     if (this.isNextDisabled()) {
@@ -670,25 +681,40 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
-  // ── FHIR connection test (explicit button — unlike SQL, doesn't gate/auto-run on Next, since there's no
-  //    schema to load first) ───────────────────────────────────────────────
-  testFhirConnection(): void {
+  // ── FHIR connection test (triggered by the footer's own Next button — see next(), mirrors the SQL branch
+  //    right above it) ────────────────────────────────────────────────────────────────────────────────────
+  // No tokenEndpoint in the request — for oauth2/clientCredentials the backend discovers it from baseUrl via
+  // GET {baseUrl}/.well-known/smart-configuration and returns it as resolvedTokenEndpoint. On success we patch that
+  // into this form's (now-hidden) tokenEndpoint control — so it still lands in dest_tokenEndpoint at save time,
+  // exactly as a manually-typed value would have — then advance to step 2 immediately, folding what used to be two
+  // clicks (Test Connection, then Next) into one.
+  testConnectionAndAdvance(): void {
     const v = this.fhirForm.value;
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.testFhir({
-      baseUrl:       v.baseUrl ?? '',
-      authType:      v.authType ?? 'oauth2',
-      tokenEndpoint: v.tokenEndpoint ?? undefined,
-      clientId:      v.clientId ?? undefined,
-      clientSecret:  v.clientSecret ?? undefined,
-      username:      v.username ?? undefined,
-      password:      v.password ?? undefined,
-      bearerToken:   v.bearerToken ?? undefined,
+      baseUrl:      v.baseUrl ?? '',
+      authType:     v.authType ?? 'oauth2',
+      clientId:     v.clientId ?? undefined,
+      clientSecret: v.clientSecret ?? undefined,
+      username:     v.username ?? undefined,
+      password:     v.password ?? undefined,
+      bearerToken:  v.bearerToken ?? undefined,
     }).subscribe({
       next: res => {
-        this.probeState.set(res.connected ? 'ok' : 'error');
-        if (!res.connected) this.probeError.set(res.error ?? 'Connection failed.');
+        if (!res.connected) {
+          this.probeState.set('error');
+          this.probeError.set(res.error ?? 'Connection failed.');
+          return;
+        }
+        if (res.resolvedTokenEndpoint) {
+          this.fhirForm.patchValue({ tokenEndpoint: res.resolvedTokenEndpoint });
+        }
+        this.probeState.set('ok');
+        if (this.step() < this.TOTAL_STEPS) {
+          this.step.update(x => x + 1);
+          this._hasProgressed.set(true);
+        }
       },
       error: err => {
         this.probeState.set('error');

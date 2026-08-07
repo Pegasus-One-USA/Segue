@@ -62,7 +62,7 @@ public sealed class DestinationSchemaController : ControllerBase
     /// destination. Always returns 200 — connection failures come back as <c>connected:false</c> + <c>error</c>.
     /// </summary>
     [HttpPost("fhir-test")]
-    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(FhirConnectionTestResultDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> TestFhirConnection(
         [FromBody] FhirConnectionTestRequest request,
         CancellationToken cancellationToken)

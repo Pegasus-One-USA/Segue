@@ -99,6 +99,15 @@ export class DestinationConnectionDialogComponent {
     this.chosenType.set(type);
   }
 
+  /** FHIR credentials aren't validated server-side the way SQL's are checked against a real schema fetch before
+   *  Save is even possible — a wrong secret would otherwise save silently and only fail later at run time. Only
+   *  relevant when a new secret is actually being entered: create, or edit with "Replace connection secret" on. */
+  fhirTestPending(): boolean {
+    if (this.chosenType() !== 'fhir') return false;
+    if (!this.isCreate && !this.replaceSecret()) return false;
+    return this.connectionForm()?.probeState() !== 'ok';
+  }
+
   toggleReplaceSecret(): void {
     this.replaceSecret.update(v => !v);
   }
