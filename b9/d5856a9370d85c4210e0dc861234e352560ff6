@@ -1,0 +1,129 @@
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.html
+  s_39163135bbc470::t_1843da8aacbef5 1-363
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.scss
+  s_39163135bbc470::t_adc96661968fdb 1-3
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.ts
+  s_39163135bbc470::t_4768cb3c07f184 1-304
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.html
+  s_39163135bbc470::t_b686e7c942b1b2 1-363
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.scss
+  s_39163135bbc470::t_c8c086f3de5b11 1-3
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.ts
+  s_39163135bbc470::t_92142bc9644bc3 1-304
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.html
+  s_39163135bbc470::t_2d955720940c4e 1-363
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.scss
+  s_39163135bbc470::t_e923cb281cff64 1-3
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.ts
+  s_39163135bbc470::t_761b5b6637d99e 1-304
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mysql.component.html
+  s_39163135bbc470::t_4c17458c79c0d8 8,35,57,126-134
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mysql.component.scss
+  s_39163135bbc470::t_70ff4c86351705 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mysql.component.ts
+  s_39163135bbc470::t_38e106c35269c0 4,23-31,34,37-38,40,56-57,60-61,129
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-postgres.component.scss
+  s_39163135bbc470::t_acc381dbd83037 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-postgres.component.ts
+  s_39163135bbc470::t_194c32590eed25 1-231
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.html
+  s_39163135bbc470::t_27ef79435cedfc 1-363
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.scss
+  s_39163135bbc470::t_2c2642f0600535 1-3
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.ts
+  s_39163135bbc470::t_0a49cbc7802593 1-304
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.html
+  s_39163135bbc470::t_4b84666f65bfaf 1-363
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.scss
+  s_39163135bbc470::t_b519dede0491be 1-3
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.ts
+  s_39163135bbc470::t_58cb54f7d49e1d 1-304
+portal/src/app/components/node-library/destination-wizard/destination-forms/_dw-form-fields.scss
+  s_39163135bbc470::t_10b2add298b6a8 1-128
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.html
+  s_39163135bbc470::t_59fa74384c8219 1-134
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.scss
+  s_39163135bbc470::t_933bf1eddb51cb 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_39163135bbc470::t_5a285e293b4501 1-19
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_39163135bbc470::t_4db7353ccc9a70 1-40
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.scss
+  s_39163135bbc470::t_656a0edb155a18 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_39163135bbc470::t_63b6b7cc8bd7ab 1-19
+portal/src/app/components/node-library/destination-wizard/destination-forms/mysql-destination-form.component.html
+  s_39163135bbc470::t_c860198cb8d87c 1-83
+portal/src/app/components/node-library/destination-wizard/destination-forms/mysql-destination-form.component.scss
+  s_39163135bbc470::t_35185ff6405a2b 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/mysql-destination-form.component.ts
+  s_39163135bbc470::t_1383986123b0e5 1-21
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgres-destination-form.component.html
+  s_39163135bbc470::t_95a34c36a5e0c4 1-83
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgres-destination-form.component.scss
+  s_39163135bbc470::t_234bd3c4c2cb33 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgres-destination-form.component.ts
+  s_39163135bbc470::t_0e97726cfbe363 1-21
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.html
+  s_39163135bbc470::t_07b3fc581ddc05 1-77
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.scss
+  s_39163135bbc470::t_05f0260334ce9a 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.ts
+  s_39163135bbc470::t_375c6507c6f3d3 1-22
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_39163135bbc470::t_2df601b80c3134 101-115,117
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_39163135bbc470::t_4fa3fea505389f 28-32,137-141
+portal/src/app/components/node-library/destination-wizard/field-mapping/_field-mapping-target-card-shared.scss
+  s_39163135bbc470::t_5f73bccb679db6 1-5,282-298
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_39163135bbc470::t_2d04e168b4b5ac 29-148,174-175,177
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_39163135bbc470::t_c17dccc6fb5e7f 10-14,51-55,184-188,584-617,1114-1128
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-csv.component.html
+  s_39163135bbc470::t_d80d1cb88b0f3f 1-125
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-csv.component.scss
+  s_39163135bbc470::t_fc6a6d6eb8bce9 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-csv.component.ts
+  s_39163135bbc470::t_5662c28f91ba20 1-233
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mongo.component.html
+  s_39163135bbc470::t_0da381940218a3 1-125
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mongo.component.scss
+  s_39163135bbc470::t_0a42ff97056919 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-mongo.component.ts
+  s_39163135bbc470::t_e5e26df7b9b9b2 1-233
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-postgres.component.html
+  s_39163135bbc470::t_c1e32eaf5e1c5e 1-136
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-sql-server.component.html
+  s_39163135bbc470::t_1dc263dbb14fae 1-136
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-sql-server.component.scss
+  s_39163135bbc470::t_c93b690bbdd596 1
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card-sql-server.component.ts
+  s_39163135bbc470::t_c378b6a7381f0b 1-231
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.html
+  s_39163135bbc470::t_ce67defd39a6c4 1-363
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.scss
+  s_39163135bbc470::t_3340720c3d49b1 1-3
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.ts
+  s_39163135bbc470::t_e439710d3f08c5 1-304
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_39163135bbc470::t_4741eb1934f96e 1,118,205,219,221-223,225-248,253-255
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_39163135bbc470::t_856697227d261b 16-21,26-45,142-147,178-182,184-186,191,303-305,465-466,519-527,530-532,536-538,542-543,549,553-554,561-563,658,684-685
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b9d5856a9370d85c4210e0dc861234e352560ff6",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
