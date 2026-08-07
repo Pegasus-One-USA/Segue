@@ -100,6 +100,10 @@ export class TransformationRuleListComponent implements OnInit {
   readonly resourceTypeOptions = ['Patient', 'Observation', 'Encounter', 'Condition', 'Practitioner'];
 
   readonly loading = signal(true);
+  // Defense-in-depth: the nav tab that links here is already hidden while the feature flag reads hidden
+  // (Settings > System Settings > General, "TransformationRules:Hidden"), but a direct URL nav bypasses
+  // that — this catches it and shows a disabled message instead of the editor.
+  readonly disabled = signal(false);
   readonly groups = signal<RuleTargetGroup[]>([]);
   readonly scopeFilter = signal<TransformScope | ''>('');
   readonly creatingNew = signal(false);
@@ -109,7 +113,14 @@ export class TransformationRuleListComponent implements OnInit {
   private nodeSchemas: TransformNodeSchema[] = [];
 
   ngOnInit(): void {
-    this.load();
+    this.rulesService.isHidden().subscribe(hidden => {
+      this.disabled.set(hidden);
+      if (hidden) {
+        this.loading.set(false);
+      } else {
+        this.load();
+      }
+    });
   }
 
   schemaFor(nodeType: TransformNodeType): TransformNodeSchema | undefined {

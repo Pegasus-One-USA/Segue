@@ -161,6 +161,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   delete:  (id: string) => `${API_V1_BASE}/transformation-rules/${id}`,
   preview: `${API_V1_BASE}/transformation-rules/preview`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
+  hidden: `${API_V1_BASE}/transformation-rules/hidden`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, shareReplay } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay } from 'rxjs';
 import { TRANSFORMATION_RULES_ENDPOINTS } from '../../../../core/api-endpoints';
 import { DestinationType } from '../../../../destination-connections/models/destination-configuration.model';
 
@@ -109,6 +109,7 @@ export class TransformationRulesService {
   private readonly http = inject(HttpClient);
 
   private nodeSchemasCache: Observable<TransformNodeSchema[]> | null = null;
+  private hiddenCache: Observable<boolean> | null = null;
 
   list(filter: {
     scope?: TransformScope; destinationType?: DestinationType; resourceType?: string;
@@ -142,5 +143,17 @@ export class TransformationRulesService {
         .pipe(shareReplay(1));
     }
     return this.nodeSchemasCache;
+  }
+
+  /** Whether the whole feature is currently hidden (Settings &gt; System Settings &gt; General,
+   *  "TransformationRules:Hidden", default false). Cached for the app session like getNodeSchemas() — a
+   *  System Setting change takes effect on next portal reload, not mid-session. Fails safe to `false`
+   *  (visible) if the call errors, since that's the feature's own default. */
+  isHidden(): Observable<boolean> {
+    if (!this.hiddenCache) {
+      this.hiddenCache = this.http.get<{ hidden: boolean }>(TRANSFORMATION_RULES_ENDPOINTS.hidden)
+        .pipe(map(r => r.hidden), catchError(() => of(false)), shareReplay(1));
+    }
+    return this.hiddenCache;
   }
 }

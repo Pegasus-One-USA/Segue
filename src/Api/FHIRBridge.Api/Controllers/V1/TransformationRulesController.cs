@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services.Transforms;
@@ -18,10 +19,25 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class TransformationRulesController : ControllerBase
 {
     private readonly ITransformationRuleService _service;
+    private readonly ISystemSettingsCache _settingsCache;
 
-    public TransformationRulesController(ITransformationRuleService service)
+    public TransformationRulesController(ITransformationRuleService service, ISystemSettingsCache settingsCache)
     {
         _service = service;
+        _settingsCache = settingsCache;
+    }
+
+    /// <summary>Whether the whole feature is currently hidden (Settings &gt; System Settings &gt; General,
+    /// key "TransformationRules:Hidden", default false). Deliberately requires only <see cref="Authorize"/> at
+    /// the class level — not UnifiedAdmin — since any authenticated portal user building a workflow needs to
+    /// know whether to show the Rules button, not just admins.</summary>
+    [HttpGet("hidden")]
+    [ProducesResponseType(typeof(TransformationRulesHiddenDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> IsHidden(CancellationToken cancellationToken)
+    {
+        var hidden = await _settingsCache.GetBoolAsync(
+            TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
+        return Ok(new TransformationRulesHiddenDto(hidden));
     }
 
     /// <summary>Every rule configured for the given filters, across whichever scopes match — the Rules modal

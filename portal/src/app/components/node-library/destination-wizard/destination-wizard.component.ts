@@ -27,6 +27,7 @@ import { MappingProfileImportService } from './field-mapping/mapping-profile-imp
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { TransformRulesDialogComponent, TransformRulesDialogData } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
+import { TransformationRulesService } from './field-mapping/transformation-rules.service';
 import { ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData } from './field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component';
 import { MappingProfileService } from '../../../mapping-profiles/services/mapping-profile.service';
 import { MappingProfileDto, MappingFieldDto } from '../../../mapping-profiles/models/mapping-profile.model';
@@ -151,6 +152,12 @@ export class DestinationWizardComponent implements OnInit {
   private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
   private readonly dialog = inject(MatDialog);
+  private readonly transformationRulesSvc = inject(TransformationRulesService);
+
+  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
+  // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
+  // back, so there's no flash on first paint in the common case.
+  readonly rulesHidden = signal(false);
 
   // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
   readonly savingMappingProfiles = signal(false);
@@ -809,6 +816,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
     const edit = this.editNode();
     if (edit) {

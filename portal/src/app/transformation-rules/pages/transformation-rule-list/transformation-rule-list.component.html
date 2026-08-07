@@ -1,5 +1,14 @@
 <div class="page">
 
+  @if (disabled()) {
+    <div class="page-header">
+      <div>
+        <h1>Transformation Rules</h1>
+        <p class="empty-state">This feature is currently disabled. Ask an administrator to enable it under
+          Settings &gt; System Settings &gt; General ("TransformationRules:Hidden").</p>
+      </div>
+    </div>
+  } @else {
   <div class="page-header">
     <div>
       <h1>Transformation Rules</h1>
@@ -151,6 +160,7 @@
         </div>
       }
     </div>
+  }
   }
 
 </div>

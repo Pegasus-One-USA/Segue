@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -53,13 +54,15 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private readonly IConfigurationRepository? _configurationRepository;
     private readonly IEffectiveRuleResolver? _ruleResolver;
     private readonly ITransformNodeRegistry? _transformNodeRegistry;
+    private readonly ISystemSettingsCache? _settingsCache;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
         IMappingMaterializer? mappingMaterializer = null,
         IConfigurationRepository? configurationRepository = null,
         IEffectiveRuleResolver? ruleResolver = null,
-        ITransformNodeRegistry? transformNodeRegistry = null)
+        ITransformNodeRegistry? transformNodeRegistry = null,
+        ISystemSettingsCache? settingsCache = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
@@ -67,6 +70,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         _configurationRepository = configurationRepository;
         _ruleResolver = ruleResolver;
         _transformNodeRegistry = transformNodeRegistry;
+        _settingsCache = settingsCache;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -306,6 +310,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
+        {
+            return row;
+        }
+
+        var hidden = _settingsCache is null
+            || await _settingsCache.GetBoolAsync(
+                TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
+        if (hidden)
         {
             return row;
         }

@@ -3,6 +3,17 @@ using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
 
+/// <summary>The System Setting key gating the whole transformation-rules feature (Settings &gt; System
+/// Settings &gt; General). Seeded by <c>SystemSettingsSeeder</c> with <see cref="DefaultHidden"/> as the
+/// default value, read via <c>ISystemSettingsCache.GetBoolAsync</c> everywhere the flag is checked (the API's
+/// own hidden-check endpoint, and <c>MappingNodeExecutor</c>'s rule-application step) — one constant so the
+/// key string and its default can never drift between the two.</summary>
+public static class TransformationRulesFeatureFlag
+{
+    public const string SettingKey = "TransformationRules:Hidden";
+    public const bool DefaultHidden = false;
+}
+
 /// <summary>
 /// Declares exactly which config keys each of the 20 transform nodes reads, what kind of control the UI
 /// should render for it, and its default — the single source both the per-field Rules dialog and the

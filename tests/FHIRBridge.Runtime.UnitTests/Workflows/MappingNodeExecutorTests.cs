@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -430,9 +431,13 @@ public sealed class MappingNodeExecutorTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
         var executor = new MappingNodeExecutor(
             engine, mappingMaterializer: null, configurationRepository: repository.Object,
-            ruleResolver: resolver.Object, transformNodeRegistry: registry);
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
         var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
         {
             ["destinationId"] = destinationId.ToString(),
@@ -444,6 +449,61 @@ public sealed class MappingNodeExecutorTests
         var batch = (MappedRecordBatch)output.Payload!;
         var record = (MappedDestinationRecord)batch.Records.Single();
         record.Values["FamilyName"].Should().Be("ROE", "the resolved StringNormalization rule (case=upper) must run before the value is written");
+    }
+
+    /// <summary>
+    /// The feature-flag gate (Settings &gt; System Settings &gt; General, "TransformationRules:Hidden",
+    /// default true): even with a fully wired rule resolver/registry and a resolvable rule, the executor must
+    /// skip applying it while the flag reads hidden — this is what lets the whole rules feature ship dark by
+    /// default without touching any pipeline behavior.
+    /// </summary>
+    [Fact]
+    public async Task Suppresses_rule_application_when_the_feature_flag_reads_hidden()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("FamilyName", "$.name.family", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["FamilyName"] = "roe" }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "upper" }),
+            resourceType: "Patient", destinationField: "FamilyName");
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid>(), null, "$.name.family", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["FamilyName"].Should().Be("roe", "the flag is hidden, so the resolved rule must not be applied");
     }
 
     [Fact]

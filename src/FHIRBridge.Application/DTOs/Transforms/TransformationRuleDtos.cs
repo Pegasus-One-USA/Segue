@@ -80,3 +80,5 @@ public sealed record TransformNodeSchemaDto(
     TransformNodeType NodeType,
     string Label,
     IReadOnlyList<TransformConfigFieldSchema> Fields);
+
+public sealed record TransformationRulesHiddenDto(bool Hidden);
