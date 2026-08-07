@@ -1,0 +1,49 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_8c124f3f2435f0::t_bdcdc72098b682 36
+  s_8c124f3f2435f0::t_4ef3a2655ed739 145
+  s_8c124f3f2435f0::t_8da7bdf53a7584 16
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_8c124f3f2435f0::t_9a74b868b51809 50-51,54-56,58-64
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_8c124f3f2435f0::t_c85970da41bde8 213-220
+  s_8c124f3f2435f0::t_2eb3ba3a54aa50 15-16,21-26
+  s_8c124f3f2435f0::t_202dc79c9be61b 30-36
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_8c124f3f2435f0::t_4b95b99421a0bd 27-28,34
+  s_8c124f3f2435f0::t_e2f6fdab437ba5 760-761,767
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_8c124f3f2435f0::t_9109772766ade9 109,116,127-128,140-142,144-152,154,156,159,161-162,164
+  s_8c124f3f2435f0::t_4bfb8ee61b3bda 70-72,75-80,82,85-86,88-89,91
+  s_8c124f3f2435f0::t_897da4e275245b 87,129
+  s_8c124f3f2435f0::t_dadde8265dcbef 198-199
+  s_8c124f3f2435f0::t_9f2c82a1e9e967 9-11,20
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_8c124f3f2435f0::t_46025be92e9597 662-665
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_8c124f3f2435f0::t_8a637a21bdff39 734-737,740,745,750
+  s_8c124f3f2435f0::t_b063a3dd986fde 1092-1094,1098-1106,1111-1149
+  s_8c124f3f2435f0::t_bc6d6d6ca556d2 191-199
+  s_8c124f3f2435f0::t_bec8e882328e32 1150-1151
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_8c124f3f2435f0::t_7a127aafb132c6 14,24-26
+  s_8c124f3f2435f0::t_43942498ee2503 84-99
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  s_8c124f3f2435f0::t_dfe1ce0082b478 146-149
+  s_8c124f3f2435f0::t_fe8ee2db4c63c9 14-15,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b1da08700f0f58b93e2f4d72d60f8ef4f2c1993c",
+  "prompts": {},
+  "sessions": {
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
