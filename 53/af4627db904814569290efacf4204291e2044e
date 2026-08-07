@@ -1,0 +1,63 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_8c124f3f2435f0::t_05be64ba8cd1cc 11-20,26,29
+  s_8c124f3f2435f0::t_b0ffac85d8322a 46
+  s_8c124f3f2435f0::t_0249f2eb2b732c 69
+  s_8c124f3f2435f0::t_c63ac8b281ba3a 21-25,28,34-41,44-45,47-52
+  s_8c124f3f2435f0::t_0ec68c1487b3c5 178-180
+  s_8c124f3f2435f0::t_5951c7e072fd69 30-33,42-43
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_39163135bbc470::t_21f61648865909 576-599
+  s_39163135bbc470::t_116f71578c5ebb 176-180
+  s_39163135bbc470::t_d4fdfdf7c8235d 1093-1117
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_8c124f3f2435f0::t_efa7bbe3963e11 54-59
+  s_8c124f3f2435f0::t_72816a57462008 89-146
+  s_8c124f3f2435f0::t_615fdce9e556c1 40-42,52-53
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_39163135bbc470::t_541fbf64c90e6d 55
+  s_39163135bbc470::t_abb9ca1d7383f4 83-84,86
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_8c124f3f2435f0::t_7cbcf68659032e 65-79
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_39163135bbc470::t_47efe4e7e7aa04 241-248
+  s_39163135bbc470::t_c86537471929d8 87-91,96-100,103-110
+  s_39163135bbc470::t_c788b5600e656d 2,111,289-290
+  s_39163135bbc470::t_e2dc0f84a73319 257-265,271-288
+  s_39163135bbc470::t_bbf82bf3b08da3 266
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_39163135bbc470::t_1fd69e5dc70cba 50-56
+  s_39163135bbc470::t_d81d07ac4f3af2 135-137
+  s_39163135bbc470::t_c6c0d35d0fd483 113
+  s_39163135bbc470::t_6e85819d71326b 90-101
+  s_39163135bbc470::t_811474377a4d6d 38-49,57-70,72-73
+  s_39163135bbc470::t_6e4bf6e2caa9d2 71
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_39163135bbc470::t_c0eb651b01cef2 417,420-421,446-449,452-453,458-459,461,463,465-466
+  s_39163135bbc470::t_5b97b452ff67c9 260-276
+  s_39163135bbc470::t_98c5d3e5c61e29 433,440-445
+  s_39163135bbc470::t_d6ccb27c8019e5 418-419,422-432,434-439,450-451,454-457,460,462,464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "53af4627db904814569290efacf4204291e2044e",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    },
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
