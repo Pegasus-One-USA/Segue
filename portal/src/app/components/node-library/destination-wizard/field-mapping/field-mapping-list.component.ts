@@ -62,6 +62,21 @@ export class FieldMappingListComponent {
     const scope = new Set(this.resources());
     return this.rows().filter(r => scope.has(r.resource));
   });
+
+  // ── search — filters visibleRows by source field(s) or destination, same shared list/template for
+  // both CSV and SQL destinations (this component has no destType-specific logic to begin with). ──────
+  readonly searchQuery = signal('');
+  readonly displayedRows = computed(() => {
+    const q = this.searchQuery().trim().toLowerCase();
+    if (!q) return this.visibleRows();
+    return this.visibleRows().filter(row =>
+      this.sourceSummary(row).toLowerCase().includes(q) ||
+      `${row.tableName}.${row.targetName}`.toLowerCase().includes(q)
+    );
+  });
+
+  onSearchInput(value: string): void { this.searchQuery.set(value); }
+  clearSearch(): void { this.searchQuery.set(''); }
   /** Every resource selected for this destination, unscoped by which one is currently active — what the
    *  "Resolves to" picker offers, so a reference field on (say) Encounter can still point at Patient even
    *  while only Encounter is the resource being edited. */

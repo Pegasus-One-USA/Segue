@@ -8,15 +8,48 @@
   ></div>
 }
 
-<button type="button" class="fm-list-head" (click)="toggleCollapsed()" [attr.aria-expanded]="!collapsed()">
-  <svg class="fm-list-caret" [class.fm-list-caret--collapsed]="collapsed()" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-  Mapping list
-  <span class="fm-list-count">{{ visibleRows().length }}</span>
+<div
+  class="fm-list-head"
+  role="button"
+  tabindex="0"
+  [attr.aria-expanded]="!collapsed()"
+  (click)="toggleCollapsed()"
+  (keydown.enter)="toggleCollapsed()"
+  (keydown.space)="$event.preventDefault(); toggleCollapsed()"
+>
+  <span class="fm-list-toggle">
+    <svg class="fm-list-caret" [class.fm-list-caret--collapsed]="collapsed()" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Mapping list
+    <span class="fm-list-count">{{ visibleRows().length }}</span>
+  </span>
   <span class="fm-list-spacer"></span>
-  <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
-</button>
+  @if (!collapsed()) {
+    <!-- Filters by source field(s) or destination — same list/template for both CSV and SQL destinations.
+         The input/clear button stop propagation themselves (not this wrapper — an inert div with its own
+         click/keydown handlers isn't focusable, which eslint flags) since the whole row now toggles the
+         accordion on click/Enter/Space, which would otherwise fire while typing a space into the field. -->
+    <div class="fm-list-search-wrap">
+      <input
+        type="search"
+        class="fm-list-search"
+        [class.fm-list-search--clearable]="searchQuery()"
+        placeholder="Search mappings…"
+        aria-label="Search the mapping list"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+      />
+      @if (searchQuery()) {
+        <button type="button" class="fm-list-search-clear" aria-label="Clear search" (click)="$event.stopPropagation(); clearSearch()">✕</button>
+      }
+    </div>
+  } @else {
+    <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
+  }
+</div>
 
 @if (!collapsed()) {
   <div class="fm-list-body">
@@ -33,7 +66,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of visibleRows(); track rowKey(row)) {
+          @for (row of displayedRows(); track rowKey(row)) {
             <tr class="data-table__row">
               <td class="fm-mono">{{ sourceSummary(row) }}</td>
               <td>
@@ -141,6 +174,9 @@
                 <button type="button" class="fm-list-link fm-list-link--danger" (click)="onRemove(row)">Remove</button>
               </td>
             </tr>
+          }
+          @if (searchQuery() && !displayedRows().length && visibleRows().length) {
+            <tr><td colspan="7" class="fm-list-empty">No mappings match "{{ searchQuery() }}".</td></tr>
           }
           @if (!visibleRows().length && !draft()) {
             <tr><td colspan="7" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>

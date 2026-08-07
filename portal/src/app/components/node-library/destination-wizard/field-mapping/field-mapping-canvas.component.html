@@ -52,6 +52,7 @@
           (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+          (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
           (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
         />
       }
@@ -79,8 +80,10 @@
       />
     }
 
+    <!-- No real "table" concept for a CSV destination — the create-table modal it opens asks for SQL
+         data types (uniqueidentifier, bigint, …) that don't apply to a flat file's columns. -->
     @if (resources()[0]; as primaryResource) {
-      @if (!drawerOpen()) {
+      @if (!drawerOpen() && destType() !== 'csv') {
       <div class="fm-add-table-slot">
         @if (hasSqlTables()) {
           <button

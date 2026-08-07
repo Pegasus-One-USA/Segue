@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, computed, inject, input, output, signal, viewChild, viewChildren, AfterViewInit, OnDestroy,
+  Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, viewChildren, AfterViewInit, OnDestroy,
 } from '@angular/core';
 import { MappingRow, MappingDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -84,11 +84,30 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly removeTable = output<void>();
   readonly deleteColumn = output<string>();
   readonly editColumn = output<string>();
+  /** A free-text column's name was changed via the inline rename (✎ on a column with no real schema —
+   *  see isFreeTextColumn) — no real ALTER COLUMN here, unlike editColumn (a real, session-created SQL
+   *  column, which still opens the real edit-column modal), so this is just "now called something else"
+   *  for the parent to reflect locally. */
+  readonly renameColumn = output<{ oldName: string; newName: string }>();
   /** A mapped column's key-toggle button was clicked — the parent decides whether that marks it as this
    *  resource's upsert key or clears it (see FieldMappingCanvasComponent.onToggleUpsertKey). */
   readonly toggleUpsertKey = output<string>();
 
+  /** Which column's name is currently being edited inline (✎ clicked on a free-text column) — null when
+   *  none is. */
+  readonly renamingColumn = signal<string | null>(null);
+  private readonly renameInput = viewChild<ElementRef<HTMLInputElement>>('renameInput');
+
   private dragOffset: { dx: number; dy: number } | null = null;
+
+  constructor() {
+    // Focus + select the rename input's text the moment it renders, so the user can start typing (or
+    // hit Enter to keep the current name) without an extra click.
+    effect(() => {
+      const el = this.renameInput()?.nativeElement;
+      if (el) { el.focus(); el.select(); }
+    });
+  }
 
   /**
    * False when this is the primary card, a live schema is known, and the current target (often just a
@@ -208,6 +227,14 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     return !info || info.origin === 'userCreated';
   }
 
+  /** True when a column has no real schema behind it at all (CSV, or a SQL table before any probe
+   *  succeeds) — its ✎ does a simple inline rename instead of opening the real ALTER-COLUMN modal
+   *  (which needs a real data type to edit alongside the name). A session-created SQL column (userCreated)
+   *  still has a real data type worth editing, so it keeps the modal. */
+  isFreeTextColumn(col: string): boolean {
+    return !this.columnKeyInfo()(col);
+  }
+
   /** "dbo.Patient" -> "Patient" — the relation banner reads better without the repeated schema prefix. */
   relationParentLabel(): string {
     const parent = this.relationToShow()?.parentTable ?? '';
@@ -216,9 +243,38 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
 
   onNewColumnKeydown(ev: KeyboardEvent): void {
     if (ev.key !== 'Enter') return;
-    const input = ev.target as HTMLInputElement;
+    this.commitNewColumn(ev.target as HTMLInputElement);
+  }
+
+  /** Also commits on blur (clicking away), not just Enter — typing a name and then clicking elsewhere
+   *  should still add it rather than silently losing it. */
+  onNewColumnBlur(ev: FocusEvent): void {
+    this.commitNewColumn(ev.target as HTMLInputElement);
+  }
+
+  commitNewColumn(input: HTMLInputElement): void {
     const name = input.value.trim();
     if (name) { this.addFreeColumn.emit(name); input.value = ''; }
+  }
+
+  startRename(column: string): void {
+    this.renamingColumn.set(column);
+  }
+
+  onRenameKeydown(oldName: string, ev: KeyboardEvent): void {
+    if (ev.key === 'Escape') { this.renamingColumn.set(null); return; }
+    if (ev.key !== 'Enter') return;
+    this.commitRename(oldName, ev.target as HTMLInputElement);
+  }
+
+  onRenameBlur(oldName: string, ev: FocusEvent): void {
+    this.commitRename(oldName, ev.target as HTMLInputElement);
+  }
+
+  private commitRename(oldName: string, input: HTMLInputElement): void {
+    const newName = input.value.trim();
+    this.renamingColumn.set(null);
+    if (newName && newName !== oldName) this.renameColumn.emit({ oldName, newName });
   }
 
   onColumnKeydown(column: string, ev: KeyboardEvent): void {
