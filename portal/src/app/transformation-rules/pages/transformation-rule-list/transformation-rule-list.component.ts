@@ -1,0 +1,290 @@
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSelectModule } from '@angular/material/select';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+
+import { ToastService } from '../../../services/toast.service';
+import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
+import {
+  TransformationRulesService, TransformationRule, TransformNodeType, TransformScope, TransformNodeSchema,
+} from '../../../components/node-library/destination-wizard/field-mapping/transformation-rules.service';
+import {
+  ALL_NODE_TYPE_OPTIONS, getApplicableNodeTypes,
+} from '../../../components/node-library/destination-wizard/field-mapping/transform-node-classifier';
+import {
+  RuleConfigFormComponent, applyNodeDefaults,
+} from '../../../components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component';
+
+const DESTINATION_TYPE_OPTIONS: DestinationType[] = [
+  'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'Csv', 'Sftp', 'FhirRepository',
+];
+
+// Only the two broadest scopes are managed here — Field/Workflow rules are always created in context from
+// a specific mapped column's Rules button (TransformRulesDialogComponent), where source/destination are
+// already known; this screen exists precisely because Global/ResourceType/DestinationType rules have no
+// such context to be created from.
+const BROAD_SCOPE_OPTIONS: { value: TransformScope; label: string }[] = [
+  { value: 'Global', label: 'Global — every destination, every resource' },
+  { value: 'ResourceType', label: 'Resource type — any destination' },
+  { value: 'DestinationType', label: 'Destination type — any resource' },
+];
+
+interface RuleStep {
+  id: string | null;
+  nodeType: TransformNodeType;
+  config: Record<string, string>;
+  order: number;
+  saving: boolean;
+}
+
+/** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
+ *  flat rule list the backend returns, keyed by everything except node/config/order (see groupKey). */
+interface RuleTargetGroup {
+  key: string;
+  scope: TransformScope;
+  resourceType: string | null;
+  destinationType: DestinationType | null;
+  destinationField: string | null;
+  sourceField: string | null;
+  steps: RuleStep[];
+  editing: boolean;
+}
+
+function groupKey(r: { scope: TransformScope; resourceType?: string | null; destinationType?: DestinationType | null; destinationField?: string | null; sourceField?: string | null }): string {
+  return [r.scope, r.resourceType ?? '', r.destinationType ?? '', r.destinationField ?? '', r.sourceField ?? ''].join('|');
+}
+
+interface NewTargetForm {
+  scope: TransformScope;
+  resourceType: string;
+  destinationType: DestinationType | '';
+  destinationField: string;
+  sourceField: string;
+}
+
+function emptyTargetForm(): NewTargetForm {
+  return { scope: 'Global', resourceType: '', destinationType: '', destinationField: '', sourceField: '' };
+}
+
+/**
+ * Manages Global/ResourceType/DestinationType-scoped transformation rules — the "set once, applies
+ * everywhere" tiers with no natural home inside any one mapping wizard, since (unlike a Field-level
+ * override) they aren't tied to an already-mapped column. Each target can carry a multi-step chain, same
+ * as the per-field Rules dialog.
+ */
+@Component({
+  selector: 'app-transformation-rule-list',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule, MatButtonModule, MatIconModule, MatSelectModule, MatInputModule,
+    MatFormFieldModule, MatTooltipModule, MatProgressSpinnerModule, RuleConfigFormComponent,
+  ],
+  templateUrl: './transformation-rule-list.component.html',
+  styleUrls: ['./transformation-rule-list.component.scss'],
+})
+export class TransformationRuleListComponent implements OnInit {
+  private readonly rulesService = inject(TransformationRulesService);
+  private readonly catalogService = inject(MappingCatalogService);
+  private readonly toast = inject(ToastService);
+
+  readonly scopeOptions = BROAD_SCOPE_OPTIONS;
+  readonly destinationTypeOptions = DESTINATION_TYPE_OPTIONS;
+  readonly resourceTypeOptions = ['Patient', 'Observation', 'Encounter', 'Condition', 'Practitioner'];
+
+  readonly loading = signal(true);
+  readonly groups = signal<RuleTargetGroup[]>([]);
+  readonly scopeFilter = signal<TransformScope | ''>('');
+  readonly creatingNew = signal(false);
+  readonly newTarget = signal<NewTargetForm>(emptyTargetForm());
+  readonly sourceFieldOptions = signal<FhirElement[]>([]);
+
+  private nodeSchemas: TransformNodeSchema[] = [];
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  schemaFor(nodeType: TransformNodeType): TransformNodeSchema | undefined {
+    return this.nodeSchemas.find(s => s.nodeType === nodeType);
+  }
+
+  applicableNodeTypesFor(group: { sourceField: string | null }) {
+    return group.sourceField ? getApplicableNodeTypes(group.sourceField, null) : ALL_NODE_TYPE_OPTIONS;
+  }
+
+  load(): void {
+    this.loading.set(true);
+    forkJoin({
+      schemas: this.rulesService.getNodeSchemas(),
+      rules: forkJoin(BROAD_SCOPE_OPTIONS.map(o =>
+        new Promise<TransformationRule[]>((resolve, reject) =>
+          this.rulesService.list({ scope: o.value }).subscribe({ next: resolve, error: reject })))),
+    }).subscribe({
+      next: ({ schemas, rules }) => {
+        this.nodeSchemas = schemas;
+        const flat = rules.flat();
+        const byKey = new Map<string, RuleTargetGroup>();
+        for (const r of flat) {
+          const key = groupKey(r);
+          let group = byKey.get(key);
+          if (!group) {
+            group = {
+              key, scope: r.scope, resourceType: r.resourceType ?? null, destinationType: r.destinationType ?? null,
+              destinationField: r.destinationField ?? null, sourceField: r.sourceField ?? null, steps: [], editing: false,
+            };
+            byKey.set(key, group);
+          }
+          group.steps.push({ id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false });
+        }
+        byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
+        this.groups.set(Array.from(byKey.values()).sort((a, b) => a.scope.localeCompare(b.scope)));
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.toast.error('Failed to load transformation rules.');
+      },
+    });
+  }
+
+  get filteredGroups(): RuleTargetGroup[] {
+    const filter = this.scopeFilter();
+    return filter ? this.groups().filter(g => g.scope === filter) : this.groups();
+  }
+
+  // ── Source-field dropdown — populated from the real FHIR catalog once a resource type is chosen ──
+  onResourceTypeChangeForNewTarget(resourceType: string): void {
+    this.newTarget.set({ ...this.newTarget(), resourceType, sourceField: '' });
+    if (resourceType) {
+      this.catalogService.fields(resourceType).subscribe(fields => this.sourceFieldOptions.set(fields));
+    } else {
+      this.sourceFieldOptions.set([]);
+    }
+  }
+
+  setNewTargetScope(scope: TransformScope): void { this.newTarget.set({ ...this.newTarget(), scope }); }
+  setNewTargetDestinationType(dt: DestinationType | ''): void { this.newTarget.set({ ...this.newTarget(), destinationType: dt }); }
+  setNewTargetDestinationField(field: string): void { this.newTarget.set({ ...this.newTarget(), destinationField: field }); }
+  setNewTargetSourceField(sourceField: string): void { this.newTarget.set({ ...this.newTarget(), sourceField }); }
+
+  startNewTarget(): void {
+    this.creatingNew.set(true);
+    this.newTarget.set(emptyTargetForm());
+    this.sourceFieldOptions.set([]);
+  }
+
+  cancelNewTarget(): void {
+    this.creatingNew.set(false);
+  }
+
+  createTarget(): void {
+    const t = this.newTarget();
+    if (t.scope === 'ResourceType' && !t.resourceType.trim()) {
+      this.toast.error('Resource type is required for a resource-type-scoped rule.');
+      return;
+    }
+    if (t.scope === 'DestinationType' && !t.destinationType) {
+      this.toast.error('Destination type is required for a destination-type-scoped rule.');
+      return;
+    }
+
+    const applicable = t.sourceField ? getApplicableNodeTypes(t.sourceField, null) : ALL_NODE_TYPE_OPTIONS;
+    const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    const group: RuleTargetGroup = {
+      key: groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField }),
+      scope: t.scope,
+      resourceType: t.scope === 'ResourceType' ? t.resourceType.trim() : null,
+      destinationType: t.scope === 'DestinationType' ? (t.destinationType || null) : null,
+      destinationField: t.destinationField.trim() || null,
+      sourceField: t.sourceField || null,
+      steps: [{ id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false }],
+      editing: true,
+    };
+    this.groups.set([group, ...this.groups()]);
+    this.creatingNew.set(false);
+  }
+
+  toggleEdit(group: RuleTargetGroup): void {
+    group.editing = !group.editing;
+    this.groups.set([...this.groups()]);
+  }
+
+  addStep(group: RuleTargetGroup): void {
+    const applicable = this.applicableNodeTypesFor(group);
+    const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    group.steps.push({ id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false });
+    this.groups.set([...this.groups()]);
+  }
+
+  onNodeTypeChange(step: RuleStep, nodeType: TransformNodeType): void {
+    step.nodeType = nodeType;
+    step.config = applyNodeDefaults(this.schemaFor(nodeType), {});
+    this.groups.set([...this.groups()]);
+  }
+
+  moveStep(group: RuleTargetGroup, step: RuleStep, direction: -1 | 1): void {
+    const index = group.steps.indexOf(step);
+    const swapWith = index + direction;
+    if (swapWith < 0 || swapWith >= group.steps.length) return;
+    [group.steps[index], group.steps[swapWith]] = [group.steps[swapWith], group.steps[index]];
+    group.steps.forEach((s, i) => { s.order = i; });
+    this.groups.set([...this.groups()]);
+    group.steps.filter(s => s.id).forEach(s => this.saveStep(group, s, { silent: true }));
+  }
+
+  saveStep(group: RuleTargetGroup, step: RuleStep, opts: { silent?: boolean } = {}): void {
+    step.saving = true;
+    this.groups.set([...this.groups()]);
+    this.rulesService.save({
+      id: step.id,
+      scope: group.scope,
+      nodeType: step.nodeType,
+      config: step.config,
+      resourceType: group.resourceType,
+      destinationType: group.destinationType,
+      destinationField: group.destinationField,
+      sourceField: group.sourceField,
+      order: step.order,
+    }).subscribe({
+      next: saved => {
+        step.id = saved.id;
+        step.saving = false;
+        this.groups.set([...this.groups()]);
+        if (!opts.silent) this.toast.success('Rule saved.');
+      },
+      error: () => {
+        step.saving = false;
+        this.groups.set([...this.groups()]);
+        if (!opts.silent) this.toast.error('Failed to save the rule.');
+      },
+    });
+  }
+
+  removeStep(group: RuleTargetGroup, step: RuleStep): void {
+    const remove = () => {
+      group.steps = group.steps.filter(s => s !== step);
+      if (group.steps.length === 0) {
+        this.groups.set(this.groups().filter(g => g !== group));
+      } else {
+        this.groups.set([...this.groups()]);
+      }
+    };
+
+    if (step.id) {
+      this.rulesService.delete(step.id).subscribe({
+        next: () => { this.toast.success('Rule removed.'); remove(); },
+        error: () => this.toast.error('Failed to delete the rule.'),
+      });
+    } else {
+      remove();
+    }
+  }
+}

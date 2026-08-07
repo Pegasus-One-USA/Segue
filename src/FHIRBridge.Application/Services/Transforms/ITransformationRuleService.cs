@@ -1,0 +1,32 @@
+using FHIRBridge.Application.DTOs.Transforms;
+using FHIRBridge.Domain.Enums;
+
+namespace FHIRBridge.Application.Services.Transforms;
+
+/// <summary>
+/// Application-facing surface over <see cref="Abstractions.Persistence.ITransformationRuleRepository"/> +
+/// <see cref="IEffectiveRuleResolver"/> + <see cref="ITransformNodeRegistry"/>: CRUD for rule rows, and
+/// resolve-then-apply previewing so the wizard/Rules modal can show exactly what will happen to a real value.
+/// </summary>
+public interface ITransformationRuleService
+{
+    Task<List<TransformationRuleDto>> ListRulesAsync(
+        TransformScope? scope,
+        DestinationType? destinationType,
+        string? resourceType,
+        string? destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem = null,
+        string? sourceField = null,
+        CancellationToken cancellationToken = default);
+
+    Task<TransformationRuleDto> SaveRuleAsync(SaveTransformationRuleRequest request, CancellationToken cancellationToken = default);
+
+    Task DeleteRuleAsync(Guid ruleId, CancellationToken cancellationToken = default);
+
+    Task<TransformPreviewResult> PreviewAsync(TransformPreviewRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>The config schema for every node type — what keys it reads, what control to render, and its
+    /// default — so the UI never has to hand-maintain a duplicate copy of this metadata.</summary>
+    IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas();
+}

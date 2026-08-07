@@ -1,0 +1,174 @@
+.page {
+  padding: 24px;
+  max-width: 960px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  h1 { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
+  p { font-size: 13.5px; color: var(--color-muted); margin: 0; max-width: 70ch; }
+}
+
+.form-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+
+  h3 { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 14px; }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 14px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.list-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+
+  .scope-filter { width: 280px; }
+}
+
+.empty-state {
+  color: var(--color-muted);
+  font-size: 13.5px;
+  padding: 16px 0;
+}
+
+.groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.group-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 18px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__target {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+
+    .target-label { font-weight: 600; font-size: 14px; color: var(--color-ink); }
+    .tag {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      color: var(--color-primary);
+      background: var(--color-primary-soft);
+      padding: 2px 7px;
+      border-radius: 100px;
+      margin-left: 6px;
+    }
+  }
+
+  &__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+}
+
+.scope-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 100px;
+  white-space: nowrap;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+
+  &--resourcetype { background: #fef3c7; color: #b45309; }
+  &--destinationtype { background: #dbeafe; color: #1d4ed8; }
+  &--global { background: #e5e7eb; color: #374151; }
+}
+
+// ─── Step chain (shared shape with the per-field Rules dialog) ────────────
+.step-card {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  padding: 12px;
+  background: var(--color-bg);
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+
+  &__order {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+
+    .step-number {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-reorder {
+      display: flex;
+      flex-direction: column;
+
+      button { width: 24px; height: 24px; line-height: 24px; }
+      mat-icon { font-size: 16px; height: 16px; width: 16px; }
+    }
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .node-select { width: 100%; }
+}
+
+.add-step-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}

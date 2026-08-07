@@ -16,6 +16,7 @@ const WORKFLOW_CONFIGURATION_SECTIONS: WorkflowConfigurationSection[] = [
   { label: 'Source Connections', route: 'source-connections', icon: 'input', permissions: ['sourceconnections.view'] },
   { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['configuration.write'] },
   { label: 'Mapping Profiles', route: 'mapping-profiles', icon: 'swap_horiz', permissions: ['configuration.write'] },
+  { label: 'Transformation Rules', route: 'transformation-rules', icon: 'tune', permissions: ['configuration.write'] },
 ];
 
 @Component({

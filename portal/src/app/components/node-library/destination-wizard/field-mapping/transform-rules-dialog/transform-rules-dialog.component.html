@@ -1,0 +1,138 @@
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>tune</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2 mat-dialog-title>Transformation Rules</h2>
+      <p>
+        {{ data.resourceType }} &mdash; {{ data.destinationType }}
+        @if (data.sourceSystem) { <span>&mdash; from {{ data.sourceSystem }}</span> }
+      </p>
+    </div>
+    <button mat-icon-button class="dialog-close" (click)="close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <mat-dialog-content>
+    @if (loading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="28" color="primary"></mat-spinner>
+        <span>Resolving effective rules…</span>
+      </div>
+    } @else {
+      <div class="rules-list">
+        @for (row of rows(); track row.tableName + '.' + row.targetName) {
+          <div class="rule-row">
+            <div class="rule-row__header">
+              <div class="rule-row__column">
+                <span class="column-name">{{ row.targetName }}</span>
+                <span class="table-name">{{ row.tableName }}{{ row.sourceField ? ' ← ' + row.sourceField : '' }}</span>
+              </div>
+
+              <div class="rule-row__status">
+                @if (row.effectiveScope) {
+                  <span class="scope-chip" [class]="'scope-chip--' + row.effectiveScope.toLowerCase()">
+                    {{ row.effectiveScope }} default
+                  </span>
+                  @if (row.effectiveNodeType) {
+                    <span class="node-chip">{{ row.effectiveNodeType }}</span>
+                  }
+                } @else {
+                  <span class="scope-chip scope-chip--none">No rule</span>
+                }
+              </div>
+
+              <button mat-stroked-button class="override-btn" (click)="toggleEdit(row)">
+                <mat-icon>{{ row.editing ? 'expand_less' : 'edit' }}</mat-icon>
+                {{ row.steps.length > 0 ? 'Edit rules (' + row.steps.length + ')' : 'Add rule' }}
+              </button>
+            </div>
+
+            <div class="rule-row__preview">
+              <input
+                matInput
+                class="preview-input"
+                placeholder="Sample value to preview…"
+                [(ngModel)]="row.previewSample"
+                (keyup.enter)="runPreview(row)"
+              />
+              <button mat-button class="preview-btn" [disabled]="row.previewLoading" (click)="runPreview(row)">
+                @if (row.previewLoading) {
+                  <mat-spinner diameter="16"></mat-spinner>
+                } @else {
+                  Preview
+                }
+              </button>
+              @if (row.previewOutput !== null) {
+                <span class="preview-output">→ {{ row.previewOutput }}</span>
+              }
+            </div>
+
+            @if (row.editing) {
+              <div class="rule-row__editor">
+                @for (step of row.steps; track step.id ?? $index; let stepIndex = $index; let isFirst = $first; let isLast = $last) {
+                  <div class="step-card">
+                    <div class="step-card__order">
+                      <span class="step-number">{{ stepIndex + 1 }}</span>
+                      <div class="step-reorder">
+                        <button mat-icon-button [disabled]="isFirst" (click)="moveStep(row, step, -1)" matTooltip="Run earlier">
+                          <mat-icon>arrow_upward</mat-icon>
+                        </button>
+                        <button mat-icon-button [disabled]="isLast" (click)="moveStep(row, step, 1)" matTooltip="Run later">
+                          <mat-icon>arrow_downward</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="step-card__content">
+                      <mat-form-field appearance="outline" class="node-select">
+                        <mat-label>Node type</mat-label>
+                        <mat-select [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
+                          @for (opt of row.applicableNodeTypes; track opt.value) {
+                            <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+
+                      <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+
+                      <div class="step-card__actions">
+                        <button mat-button color="warn" [disabled]="step.saving" (click)="removeStep(row, step)">
+                          Remove step
+                        </button>
+                        <button mat-flat-button color="primary" [disabled]="step.saving" (click)="saveStep(row, step)">
+                          @if (step.saving) {
+                            <mat-spinner diameter="16"></mat-spinner>
+                          } @else {
+                            Save step
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <button mat-stroked-button class="add-step-btn" (click)="addStep(row)">
+                  <mat-icon>add</mat-icon> Add another step
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </mat-dialog-content>
+
+  <mat-divider></mat-divider>
+
+  <div class="dialog-actions">
+    <button mat-flat-button color="primary" (click)="close()">Done</button>
+  </div>
+
+</div>

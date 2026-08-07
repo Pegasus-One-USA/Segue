@@ -189,6 +189,8 @@ public static class DependencyInjection
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
+            services.AddScoped<ISchemaMappingRepository, EfSchemaMappingRepository>();
+            services.AddScoped<ITransformationRuleRepository, EfTransformationRuleRepository>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IBulkExportJobRepository, EfBulkExportJobRepository>();

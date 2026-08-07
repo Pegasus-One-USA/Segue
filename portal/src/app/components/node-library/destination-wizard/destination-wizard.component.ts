@@ -25,6 +25,11 @@ import {
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { TransformRulesDialogComponent, TransformRulesDialogData } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
+import { ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData } from './field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component';
+import { MappingProfileService } from '../../../mapping-profiles/services/mapping-profile.service';
+import { MappingProfileDto, MappingFieldDto } from '../../../mapping-profiles/models/mapping-profile.model';
 import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
@@ -129,7 +134,7 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent],
+  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent, MatDialogModule],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -142,8 +147,10 @@ export class DestinationWizardComponent implements OnInit {
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
   private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
+  private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
+  private readonly dialog = inject(MatDialog);
 
   // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
   readonly savingMappingProfiles = signal(false);
@@ -910,6 +917,145 @@ export class DestinationWizardComponent implements OnInit {
   private mappingRowsSnapshot: MappingRow[] | null = null;
   private targetByResourceSnapshot: Record<string, string> | null = null;
   readonly pendingExitConfirm = signal(false);
+
+  /** The real backend DestinationType for whichever destination family this wizard instance is
+   *  configuring — same ternary already used inline at every mapping-profiles/import call site
+   *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
+  private resolveDestinationTypeForRules(): DestinationType {
+    if (this.isMongo()) return 'Mongo';
+    if (!this.isSql()) return 'Csv';
+    return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
+  }
+
+  /** Opens the Rules modal for one resource's already-mapped columns — shows whichever rule is
+   *  currently in effect (resolved via the Global/DestinationType/ResourceType/Field/Workflow scope
+   *  chain) and lets the user add/edit a field-level override. Unlike "Map", this never mutates
+   *  mappingRows() itself, so there's no snapshot/discard-guard needed around it. */
+  openRulesForResource(resource: string): void {
+    const columns = this.mappingRows()
+      .filter(r => r.resource === resource)
+      .map(r => ({
+        tableName: r.tableName,
+        targetName: r.targetName,
+        sourceField: r.sources[0]?.fhirPath ?? null,
+        sourceValueType: r.sources[0]?.valueType ?? null,
+      }));
+
+    if (columns.length === 0) {
+      this.toast.error(`Map at least one field for ${resource} before configuring its transformation rules.`);
+      return;
+    }
+
+    this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(TransformRulesDialogComponent, {
+      width: '680px',
+      maxWidth: '95vw',
+      restoreFocus: false,
+      data: {
+        resourceType: resource,
+        destinationType: this.resolveDestinationTypeForRules(),
+        sourceSystem: this.sourceVendor() || null,
+        columns,
+      },
+    });
+  }
+
+  /** "Select Existing" is only offered once a real sourceConnectionId, destinationId, and vendor are all
+   *  known — i.e. the source was picked via "Existing Epic Connection" rather than typed in fresh (a brand-new
+   *  inline source has no sourceConnectionId until the whole workflow is built; see wizard.service.ts's save()).
+   *  Destination is real by this point in virtually every case, since provisionDestinationConnection() runs
+   *  right after Step 1. */
+  readonly canSelectExistingProfile = computed(() =>
+    !!this.sourceConnectionId() && !!(this.selectedExistingId() ?? this.resolvedDestinationId()) && !!this.sourceVendor());
+
+  openExistingProfilePicker(resource: string): void {
+    const sourceConnectionId = this.sourceConnectionId();
+    const destinationId = this.selectedExistingId() ?? this.resolvedDestinationId();
+    if (!sourceConnectionId || !destinationId) return;
+
+    this.dialog.open<ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData, MappingProfileDto | null>(
+      ExistingMappingProfileDialogComponent,
+      {
+        width: '640px',
+        maxWidth: '95vw',
+        restoreFocus: false,
+        data: { resourceType: resource, sourceConnectionId, destinationId },
+      },
+    ).afterClosed().subscribe(profile => {
+      if (profile) this._applyExistingProfile(resource, profile);
+    });
+  }
+
+  /** MappingProfile.DestinationObject is stored as the bare table name (e.g. "Patient_NewMapped"), but
+   *  targetCards() in the canvas only renders a target card when targetFor(resource) matches an entry in
+   *  sqlTableOptions() — which holds the schema-qualified fullName (e.g. "dbo.Patient_NewMapped"). Applying
+   *  the bare name straight through silently drops the target card (canvas renders with nothing on it,
+   *  even though mappingRows() is populated) rather than erroring, so this resolves it against the live
+   *  probed schema first. Returns null (caller warns) when the destination's schema wasn't probed with a
+   *  matching table at all — a real "the two don't line up" case, not just a naming quirk. */
+  private _resolveDestinationObjectForCanvas(destinationObject: string): string | null {
+    if (!this.isSql()) return destinationObject; // CSV/Mongo targets are never schema-qualified
+    const table = this.sqlTables().find(t =>
+      t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
+      t.tableName.toLowerCase() === destinationObject.toLowerCase());
+    return table?.fullName ?? null;
+  }
+
+  /** MappingFieldDto carries jsonPath, not the canvas's fhirPath — and the canvas's wire overlay
+   *  (field-mapping-wires.component.ts's sourceAnchorPoint) looks up the source tree anchor by fhirPath
+   *  exactly, in the "${resource}.${relPath}" form buildForest() assigns each leaf (see
+   *  field-mapping-tree.util.ts). A guessed fhirPath (e.g. stripping "$." off jsonPath) essentially never
+   *  matches that id — the column still renders "mapped" (driven by mappingRows/targetName matching, not
+   *  by the wire), but no connector line draws, which reads as broken even though the mapping itself is
+   *  intact. Resolving against the same FHIR catalog the rest of the wizard already uses (availableFields)
+   *  gets the real fhirPath — matched by jsonPath first (exact, since both come from the same catalog),
+   *  falling back to the destination column name for the rare field the catalog doesn't carry. */
+  private _resolveFhirPath(resource: string, f: MappingFieldDto): { fhirPath: string; label: string; arrays?: string[] } {
+    const catalog = this.availableFields(resource);
+    const byJsonPath = f.jsonPath ? catalog.find(c => c.jsonPath === f.jsonPath) : undefined;
+    const byColumnName = byJsonPath ?? catalog.find(c =>
+      c.sqlColumn.toLowerCase() === f.targetField.toLowerCase() || c.csvColumn.toLowerCase() === f.targetField.toLowerCase());
+    if (byColumnName) return { fhirPath: byColumnName.path, label: byColumnName.label, arrays: byColumnName.arrays };
+    return { fhirPath: `${resource}.${f.targetField}`, label: f.targetField };
+  }
+
+  /** Replaces one resource's mapping rows and target with an existing MappingProfile's saved fields —
+   *  every other resource's rows are left untouched. */
+  private _applyExistingProfile(resource: string, profile: MappingProfileDto): void {
+    const resolvedTarget = this._resolveDestinationObjectForCanvas(profile.destinationObject);
+    if (!resolvedTarget) {
+      this.toast.error(
+        'Target table not found',
+        `"${profile.destinationObject}" isn't in this destination's probed schema — the fields were not applied. Probe the schema (or pick the right table) first.`,
+      );
+      return;
+    }
+
+    const newRows: MappingRow[] = profile.fields.map(f => {
+      const resolved = this._resolveFhirPath(resource, f);
+      return {
+        resource,
+        sources: [{
+          fhirPath: resolved.fhirPath,
+          label: resolved.label,
+          jsonPath: f.jsonPath,
+          valueType: f.valueType,
+          arrays: resolved.arrays,
+        }],
+        mode: 'value',
+        instance: f.arrayPolicy === 'RepeatParent' ? { type: 'all', aggregate: 'rows' } : { type: 'first' },
+        targetName: f.targetField,
+        tableName: resolvedTarget,
+        isRequired: f.isRequired,
+        defaultValue: f.defaultValue ?? null,
+        format: f.format ?? null,
+        isUpsertKey: f.isUpsertKey ?? false,
+      };
+    });
+
+    this.mappingRows.update(rows => [...rows.filter(r => r.resource !== resource), ...newRows]);
+    this.targetByResource.update(m => ({ ...m, [resource]: resolvedTarget }));
+    this.toast.success('Mapping profile applied', `Loaded "${profile.name}" for ${resource}.`);
+  }
 
   openGroupMapping(resource: string): void {
     this.mappingRowsSnapshot = structuredClone(this.mappingRows());

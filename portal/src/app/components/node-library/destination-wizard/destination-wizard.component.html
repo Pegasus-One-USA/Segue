@@ -447,6 +447,20 @@
                 <td class="dw-groups-name">{{ r }}</td>
                 <td class="dw-groups-actions">
                   <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">Map</button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-secondary"
+                    title="Configure transformation rules for this resource's mapped fields"
+                    (click)="openRulesForResource(r)"
+                  >Rules</button>
+                  @if (canSelectExistingProfile()) {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-secondary"
+                      title="Reuse a mapping profile already saved for this source connection, destination, and resource type"
+                      (click)="openExistingProfilePicker(r)"
+                    >Select Existing</button>
+                  }
                 </td>
               </tr>
             }

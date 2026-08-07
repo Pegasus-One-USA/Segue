@@ -152,6 +152,17 @@ export const MAPPING_PROFILES_ENDPOINTS = {
   import: `${API_V1_BASE}/mapping-profiles/import`,
 };
 
+// ─── Transformation Rules (TransformationRulesController — api/v1/transformation-rules) ───
+// The 5-level scope chain (Global/DestinationType/ResourceType/Field/Workflow) that decides which of the 20
+// field-level transform nodes applies to a mapped column — backs the destination wizard's "Rules" button.
+export const TRANSFORMATION_RULES_ENDPOINTS = {
+  list:    `${API_V1_BASE}/transformation-rules`,
+  save:    `${API_V1_BASE}/transformation-rules`,
+  delete:  (id: string) => `${API_V1_BASE}/transformation-rules/${id}`,
+  preview: `${API_V1_BASE}/transformation-rules/preview`,
+  nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
+};
+
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──
 // SuperAdmin-only: widens which browser origins the API's Portal CORS policy allows.
 export const CORS_ORIGINS_ENDPOINTS = {

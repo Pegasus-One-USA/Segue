@@ -1,0 +1,248 @@
+:host { display: block; }
+
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  width: 640px;
+  max-width: 95vw;
+  overflow: hidden;
+}
+
+// ─── Header (mirrors assign-roles-dialog conventions) ──────────────────────
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    mat-icon { color: var(--color-primary); font-size: 22px; height: 22px; width: 22px; }
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+
+    h2 {
+      font-size: 18px;
+      line-height: 1.3;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin: 0;
+    }
+  }
+}
+
+.dialog-close {
+  color: var(--color-muted) !important;
+  &:hover { background: var(--color-bg) !important; }
+}
+
+mat-dialog-content {
+  padding: 4px 24px 16px !important;
+  overflow-y: auto;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+// ─── Rule rows ───────────────────────────────────────────────────────────
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.rule-row {
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  padding: 12px 0;
+
+  &:last-child { border-bottom: none; }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+
+    .column-name { font-weight: 600; font-size: 14px; color: var(--color-ink); }
+    .table-name { font-size: 11.5px; color: var(--color-muted); }
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+
+    .preview-input {
+      flex: 1;
+      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid var(--color-border, #e5e7eb);
+      border-radius: 6px;
+      background: var(--color-bg);
+    }
+
+    .preview-btn { min-width: 72px; }
+
+    .preview-output {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12.5px;
+      color: var(--color-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+  }
+
+  &__editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+}
+
+// ─── One step in a field's rule chain ───────────────────────────────────
+// Layout: a slim order/reorder sidebar on the left, the step's own fields/config/actions stacked in a
+// column filling the rest — the sidebar and the content column sit side by side (row), the content
+// column's own children stack (column), so the two direction rules never actually collide.
+.step-card {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  padding: 12px;
+  background: var(--color-bg);
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+
+  &__order {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+
+    .step-number {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-reorder {
+      display: flex;
+      flex-direction: column;
+
+      button { width: 24px; height: 24px; line-height: 24px; }
+      mat-icon { font-size: 16px; height: 16px; width: 16px; }
+    }
+  }
+
+  .node-select { width: 100%; }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
+.step-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.add-step-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}
+
+.override-btn {
+  font-size: 12.5px;
+  white-space: nowrap;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}
+
+// ─── Scope / node chips ──────────────────────────────────────────────────
+.scope-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 100px;
+  white-space: nowrap;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+
+  &--workflow { background: #f3e8ff; color: #7c3aed; }
+  &--field { background: var(--color-primary-soft); color: var(--color-primary); }
+  &--resourcetype { background: #fef3c7; color: #b45309; }
+  &--destinationtype { background: #dbeafe; color: #1d4ed8; }
+  &--global { background: #e5e7eb; color: #374151; }
+  &--none { background: #f3f4f6; color: var(--color-muted); }
+}
+
+.node-chip {
+  font-size: 10.5px;
+  font-family: 'Roboto Mono', monospace;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 24px;
+}

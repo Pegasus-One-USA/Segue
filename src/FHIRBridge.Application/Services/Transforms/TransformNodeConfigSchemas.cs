@@ -1,0 +1,163 @@
+using FHIRBridge.Application.DTOs.Transforms;
+using FHIRBridge.Domain.Enums;
+
+namespace FHIRBridge.Application.Services.Transforms;
+
+/// <summary>
+/// Declares exactly which config keys each of the 20 transform nodes reads, what kind of control the UI
+/// should render for it, and its default — the single source both the per-field Rules dialog and the
+/// Global Rules screen render their config editor from, instead of a raw JSON textarea. Keep this in sync
+/// with each node's own <c>config.Get(...)</c> calls in <c>Services/Transforms/Nodes/</c> — this is the
+/// contract those calls are honoring.
+/// </summary>
+public static class TransformNodeConfigSchemas
+{
+    private static TransformConfigFieldSchema Text(
+        string key, string label, string? defaultValue = null, string? placeholder = null) =>
+        new(key, label, "text", null, defaultValue, placeholder);
+
+    private static TransformConfigFieldSchema Select(string key, string label, string[] options, string defaultValue) =>
+        new(key, label, "select", options, defaultValue);
+
+    private static TransformConfigFieldSchema Checkbox(string key, string label, bool defaultValue) =>
+        new(key, label, "checkbox", null, defaultValue.ToString());
+
+    private static readonly IReadOnlyDictionary<TransformNodeType, TransformNodeSchemaDto> Schemas =
+        new Dictionary<TransformNodeType, TransformNodeSchemaDto>
+        {
+            [TransformNodeType.DateTimeFormat] = new(TransformNodeType.DateTimeFormat, "Date/Time Format",
+            [
+                Select("targetType", "Target type", ["date", "dateTime", "instant"], "dateTime"),
+            ]),
+            [TransformNodeType.NumberCast] = new(TransformNodeType.NumberCast, "Number Cast",
+            [
+                Select("targetType", "Target type", ["integer", "decimal"], "decimal"),
+            ]),
+            [TransformNodeType.BooleanConversion] = new(TransformNodeType.BooleanConversion, "Boolean Conversion",
+            [
+                Text("trueValues", "True values (comma-separated)", "y,yes,1,t,true,+"),
+                Text("falseValues", "False values (comma-separated)", "n,no,0,f,false,-"),
+            ]),
+            [TransformNodeType.UnitConversion] = new(TransformNodeType.UnitConversion, "Unit Conversion (UCUM)",
+            [
+                Text("sourceUnit", "Source unit", "lb_av"),
+                Text("targetUnit", "Target unit", "kg"),
+                Text("targetCode", "Target UCUM code (optional — defaults to target unit)", placeholder: "e.g. kg"),
+                Text("factor", "Conversion factor (optional override)", placeholder: "e.g. 18.0182 for mg/dL↔mmol/L glucose"),
+                Select("direction", "Factor direction", ["multiply", "divide"], "multiply"),
+                Text("precision", "Decimal places", "1"),
+            ]),
+            [TransformNodeType.QuantityRangeAssembly] = new(TransformNodeType.QuantityRangeAssembly, "Quantity/Range Assembly",
+            [
+                Text("unit", "Unit", placeholder: "e.g. mg/L"),
+            ]),
+            [TransformNodeType.RoundingScaling] = new(TransformNodeType.RoundingScaling, "Rounding/Scaling",
+            [
+                Text("decimalPlaces", "Decimal places", "2"),
+                Text("scaleFactor", "Scale factor", "1"),
+                Text("clampMin", "Clamp minimum (optional)", placeholder: "e.g. 0"),
+                Text("clampMax", "Clamp maximum (optional)", placeholder: "e.g. 100"),
+            ]),
+            [TransformNodeType.ValueCodeMapping] = new(TransformNodeType.ValueCodeMapping, "Value/Code Mapping",
+            [
+                Text("map", "Lookup map (JSON object)", "{}"),
+                Checkbox("caseInsensitive", "Case-insensitive match", true),
+                Select("unmatchedPolicy", "When nothing matches", ["null", "passThrough", "error"], "null"),
+            ]),
+            [TransformNodeType.CodeableConceptBuilder] = new(TransformNodeType.CodeableConceptBuilder, "CodeableConcept Builder",
+            [
+                Text("system", "Code system (e.g. LOINC, SNOMED, ICD10, RXNORM)", placeholder: "LOINC"),
+                Text("display", "Display text (optional)", placeholder: "e.g. Glucose"),
+                Checkbox("includeText", "Include CodeableConcept.text", true),
+            ]),
+            [TransformNodeType.StatusEnumCoercion] = new(TransformNodeType.StatusEnumCoercion, "Status/Enum Coercion",
+            [
+                Text("map", "Lookup map (JSON object)", "{}"),
+                Text("fallback", "Fallback value when nothing matches", "unknown"),
+            ]),
+            [TransformNodeType.ReferenceConstruction] = new(TransformNodeType.ReferenceConstruction, "Reference Construction",
+            [
+                Text("resourceType", "Target resource type", "Patient"),
+                Select("style", "Reference style", ["relative", "absolute", "urn"], "relative"),
+                Text("baseUrl", "Base URL (only for absolute style)", placeholder: "e.g. https://fhir.example.com/r4"),
+                Text("display", "Display text (optional)", placeholder: "e.g. Jane Roe"),
+            ]),
+            [TransformNodeType.IdentifierFormatting] = new(TransformNodeType.IdentifierFormatting, "Identifier Formatting",
+            [
+                Text("system", "Assigning authority URI", placeholder: "e.g. http://hl7.org/fhir/sid/us-npi"),
+                Text("typeCode", "Identifier type code (e.g. MR, NPI, SSN)", placeholder: "NPI"),
+                Text("padLength", "Zero-pad to length (optional)", "0"),
+            ]),
+            [TransformNodeType.HumanNameParsing] = new(TransformNodeType.HumanNameParsing, "HumanName Parsing",
+            [
+                Select("pattern", "Input pattern", ["FirstLast", "LastFirstMiddle"], "FirstLast"),
+                Checkbox("setText", "Set HumanName.text", true),
+            ]),
+            [TransformNodeType.AddressParsing] = new(TransformNodeType.AddressParsing, "Address Parsing",
+            [
+                Select("use", "Use", ["home", "work", "temp", "old"], "home"),
+            ]),
+            [TransformNodeType.TelecomNormalization] = new(TransformNodeType.TelecomNormalization, "Telecom Normalization",
+            [
+                Select("use", "Use", ["home", "work", "mobile", "temp", "old"], "mobile"),
+            ]),
+            [TransformNodeType.StringNormalization] = new(TransformNodeType.StringNormalization, "String Normalization",
+            [
+                Select("case", "Case", ["none", "upper", "lower", "title"], "none"),
+                Text("regexPattern", "Regex replace — pattern (optional)", placeholder: "e.g. \\s+ — leave blank to skip"),
+                Text("regexReplacement", "Regex replace — replacement (optional)", placeholder: "e.g. \" \" (single space)"),
+                Text("maxLength", "Max length (optional, 0 = no limit)", "0"),
+            ]),
+            [TransformNodeType.ConcatenationTemplating] = new(TransformNodeType.ConcatenationTemplating, "Concatenation/Templating",
+            [
+                Select("mode", "Mode", ["concat", "split"], "concat"),
+                Text("separator", "Join separator (concat mode)", " "),
+                Text("splitDelimiter", "Split delimiter (split mode)", ","),
+            ]),
+            [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
+            [
+                Select("operation", "Operation", ["first", "last", "nth", "dedupe", "join", "count"], "first"),
+                Text("index", "Index (nth operation)", "0"),
+                Text("separator", "Join separator (join operation)", ","),
+            ]),
+            [TransformNodeType.DefaultNullHandling] = new(TransformNodeType.DefaultNullHandling, "Default/Null Handling",
+            [
+                Text("default", "Default value when nothing present (optional)", placeholder: "e.g. unknown"),
+                Text("sentinels", "Sentinel values treated as empty (comma-separated)", "N/A,UNKNOWN,9999"),
+            ]),
+            [TransformNodeType.DateMathAge] = new(TransformNodeType.DateMathAge, "Date Math/Age",
+            [
+                Select("operation", "Operation", ["age", "add", "shift"], "age"),
+                Text("referenceDate", "Reference date (age operation, optional — defaults to today)", placeholder: "e.g. 2026-01-01"),
+                Checkbox("redactOver89", "Redact ages over 89 (Safe Harbor)", true),
+                Text("duration", "ISO-8601 day duration, e.g. P30D (add operation)", "P0D"),
+                Text("days", "Fixed day offset (shift operation)", "0"),
+            ]),
+            [TransformNodeType.HashingMasking] = new(TransformNodeType.HashingMasking, "Hashing/Masking",
+            [
+                Select("mode", "Mode", ["hash", "mask", "redact"], "mask"),
+                Text("keepLength", "Characters to keep visible (mask mode)", "4"),
+                Text("token", "Replacement token (redact mode)", placeholder: "e.g. [REDACTED]"),
+            ]),
+        };
+
+    public static IReadOnlyList<TransformNodeSchemaDto> All => Schemas.Values.ToList();
+
+    public static TransformNodeSchemaDto? Get(TransformNodeType nodeType) =>
+        Schemas.GetValueOrDefault(nodeType);
+
+    /// <summary>The default config a newly-added step of this node type should start with, ready to use
+    /// as-is or tweak — never an empty <c>{}</c>.</summary>
+    public static Dictionary<string, string> DefaultConfig(TransformNodeType nodeType)
+    {
+        var schema = Get(nodeType);
+        if (schema is null)
+        {
+            return [];
+        }
+
+        return schema.Fields
+            .Where(f => f.DefaultValue is not null)
+            .ToDictionary(f => f.Key, f => f.DefaultValue!);
+    }
+}

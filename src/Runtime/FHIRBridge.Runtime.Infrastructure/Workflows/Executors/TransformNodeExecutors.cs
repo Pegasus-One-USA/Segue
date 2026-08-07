@@ -4,6 +4,9 @@ using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Application.Services.Transforms;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
@@ -48,16 +51,22 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private readonly IJsonMappingEngine? _mappingEngine;
     private readonly IMappingMaterializer? _mappingMaterializer;
     private readonly IConfigurationRepository? _configurationRepository;
+    private readonly IEffectiveRuleResolver? _ruleResolver;
+    private readonly ITransformNodeRegistry? _transformNodeRegistry;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
         IMappingMaterializer? mappingMaterializer = null,
-        IConfigurationRepository? configurationRepository = null)
+        IConfigurationRepository? configurationRepository = null,
+        IEffectiveRuleResolver? ruleResolver = null,
+        ITransformNodeRegistry? transformNodeRegistry = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
         _mappingMaterializer = mappingMaterializer;
         _configurationRepository = configurationRepository;
+        _ruleResolver = ruleResolver;
+        _transformNodeRegistry = transformNodeRegistry;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -71,6 +80,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         var configuredDestinationObject = ReadStringConfiguration(node, "destinationObject") ?? configuredResourceType;
         Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId);
         Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
+
+        // Resolved once per node execution (not per record) — both are stable for this whole batch, and the
+        // transform-rule resolver only needs them, never the full entities.
+        var destinationType = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
+        var sourceSystem = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
+        // Caches each field's resolved rule chain for the lifetime of this ExecuteAsync call — the same
+        // (resourceType, destinationField, sourceField) combination recurs once per record in the batch, and
+        // re-querying the resolver/repository for every single record would be wasted round trips for a rule
+        // set that can't have changed mid-batch.
+        var ruleCache = new Dictionary<string, IReadOnlyList<TransformationRule>>();
 
         var records = new List<MappedDestinationRecord>();
         // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
@@ -104,6 +123,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 skippedResourceTypes.Add(resourceType);
                 continue;
             }
+
+            // Which source JsonPath fed each destination column — lets the transform-rule resolver prefer a
+            // source-field-specific rule (see EffectiveRuleResolver.PreferSourceFieldSpecific) the same way it
+            // already prefers a source-system-specific one, without the resolver needing to re-derive it itself.
+            var sourceFieldByTarget = fields
+                .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().JsonPath, StringComparer.OrdinalIgnoreCase);
 
             foreach (var resource in group)
             {
@@ -148,9 +174,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
                     foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
                     {
+                        var transformedRow = await ApplyTransformRulesAsync(
+                            parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
+                            context.WorkflowRunId, ruleCache, cancellationToken);
+
                         records.Add(new MappedDestinationRecord(
                             context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
-                            parentRow, sourceJson, childTables, referenceLookups));
+                            transformedRow, sourceJson, childTables, referenceLookups));
                     }
                 }
             }
@@ -231,6 +261,114 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (null, configuredDestinationObject);
+    }
+
+    private async Task<DestinationType?> ResolveDestinationTypeAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        if (_configurationRepository is null || destinationId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        return destination?.DestinationType;
+    }
+
+    private async Task<string?> ResolveSourceSystemAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    {
+        if (_configurationRepository is null || sourceConnectionId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+        return sourceConnection?.SourceSystemType.ToString();
+    }
+
+    /// <summary>
+    /// Runs every already-mapped value in <paramref name="row"/> through whichever transform-rule chain
+    /// currently applies to its destination field (Workflow → Field → ResourceType → DestinationType → Global,
+    /// via <see cref="IEffectiveRuleResolver"/>) — the same resolve-then-apply logic
+    /// <c>TransformationRuleService.PreviewAsync</c> uses, inlined here with a per-execution cache so a batch
+    /// of many records only resolves each field's rule chain once. A no-op (returns <paramref name="row"/>
+    /// unchanged) when the rule engine's dependencies weren't supplied or no destination type could be
+    /// resolved — existing pipelines with no rules configured, or running without this optional wiring, are
+    /// completely unaffected.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, object?>> ApplyTransformRulesAsync(
+        IReadOnlyDictionary<string, object?> row,
+        string resourceType,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        DestinationType? destinationType,
+        string? sourceSystem,
+        Guid workflowRunId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
+        {
+            return row;
+        }
+
+        Dictionary<string, object?>? transformed = null;
+
+        foreach (var (destinationField, value) in row)
+        {
+            sourceFieldByTarget.TryGetValue(destinationField, out var sourceField);
+            var cacheKey = $"{resourceType}|{destinationField}|{sourceField}";
+
+            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            {
+                rules = await _ruleResolver.ResolveAsync(
+                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                ruleCache[cacheKey] = rules;
+            }
+
+            if (rules.Count == 0)
+            {
+                continue;
+            }
+
+            var currentValue = value;
+            foreach (var rule in rules)
+            {
+                var node = _transformNodeRegistry.Get(rule.NodeType);
+                Dictionary<string, string> config;
+                try
+                {
+                    config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(rule.ConfigJson) ?? [];
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // A corrupted ConfigJson is a data-integrity problem with the rule row itself, not this
+                    // record — skip this one rule rather than let a JSON parse error take down the whole batch.
+                    continue;
+                }
+
+                var result = node.Execute(currentValue, config, secret: null);
+                if (result.Success)
+                {
+                    currentValue = result.Value;
+                    continue;
+                }
+
+                currentValue = rule.ErrorPolicy switch
+                {
+                    TransformErrorPolicy.PassThrough => currentValue,
+                    _ => null
+                };
+
+                if (rule.ErrorPolicy is TransformErrorPolicy.Fail or TransformErrorPolicy.RouteToDeadLetter)
+                {
+                    break;
+                }
+            }
+
+            transformed ??= new Dictionary<string, object?>(row, StringComparer.OrdinalIgnoreCase);
+            transformed[destinationField] = currentValue;
+        }
+
+        return transformed ?? row;
     }
 
     protected override object CreatePayload(

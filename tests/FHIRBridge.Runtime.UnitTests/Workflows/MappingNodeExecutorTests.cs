@@ -2,6 +2,8 @@ using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Services.Transforms;
+using FHIRBridge.Application.Services.Transforms.Nodes;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -390,6 +392,79 @@ public sealed class MappingNodeExecutorTests
         records.Should().ContainSingle();
         records[0].ResourceType.Should().Be("Patient");
         records[0].DestinationObject.Should().Be("patients.csv");
+    }
+
+    /// <summary>
+    /// End-to-end proof that the transform-rule engine is actually wired into this executor: when a
+    /// destination and the rule dependencies are supplied, a resolved rule is applied to the mapped value
+    /// before it lands in the record — the whole point of this wiring (see FHIRBridge.Application.Services
+    /// .Transforms). Uses a REAL TransformNodeRegistry/StringNormalizationNode (not a fake) so this proves the
+    /// actual node execution path, not just that a mock was called.
+    /// </summary>
+    [Fact]
+    public async Task Applies_a_resolved_transform_rule_to_the_mapped_value_before_it_is_written()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("FamilyName", "$.name.family", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["FamilyName"] = "roe" }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "upper" }),
+            resourceType: "Patient", destinationField: "FamilyName");
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid>(), null, "$.name.family", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["FamilyName"].Should().Be("ROE", "the resolved StringNormalization rule (case=upper) must run before the value is written");
+    }
+
+    [Fact]
+    public async Task Is_a_no_op_when_no_rule_dependencies_are_supplied_existing_behavior_unchanged()
+    {
+        var fields = new[]
+        {
+            new MappingFieldDto("FamilyName", "$.name.family", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["FamilyName"] = "roe" }, Errors: []));
+        // No configurationRepository, no ruleResolver, no transformNodeRegistry — the optional-dependency path.
+        var executor = new MappingNodeExecutor(engine, mappingMaterializer: null, configurationRepository: null);
+        var node = CreateNode("Patient", "Patient", fields);
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        ((MappedDestinationRecord)batch.Records.Single()).Values["FamilyName"].Should().Be("roe");
     }
 
     private static WorkflowNode CreateNode(

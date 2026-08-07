@@ -69,6 +69,15 @@ export const SETTINGS_ROUTES: Routes = [
                 m => m.MappingProfileListComponent
               ),
           },
+          {
+            path: 'transformation-rules',
+            canActivate: [permissionGuard],
+            data: { permissions: ['configuration.write'] },
+            loadComponent: () =>
+              import('../transformation-rules/pages/transformation-rule-list/transformation-rule-list.component').then(
+                m => m.TransformationRuleListComponent
+              ),
+          },
           { path: '', redirectTo: 'source-connections', pathMatch: 'full' },
         ],
       },
