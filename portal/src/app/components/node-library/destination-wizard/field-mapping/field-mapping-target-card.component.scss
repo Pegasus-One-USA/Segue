@@ -257,6 +257,23 @@
   color: var(--color-ink-2);
 }
 
+// Inline rename input (✎ on a free-text column — no real schema to ALTER, so it swaps in right here
+// instead of opening the real edit-column modal) — same footprint as .fm-target-colname so the row's
+// layout doesn't jump when it appears.
+.fm-target-colname-edit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 3px;
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
 .fm-target-coltype {
   flex: 0 0 auto;
   font-family: var(--font-mono);
@@ -395,6 +412,56 @@
   &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
   &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
   &:disabled:hover { text-decoration: none; }
+}
+
+// Free-text row (CSV, or a not-yet-probed SQL table) — input + a real, clickable "add" button, instead
+// of relying on Enter/blur alone to feel like anything happened. Tinted background + a leading "+"
+// chip mark it as its own distinct affordance rather than blending in with the plain column rows below.
+.fm-target-row--add-free {
+  gap: var(--space-4, 6px);
+  background: var(--color-primary-soft);
+
+  &:hover { background: var(--color-primary-soft); }
+}
+
+.fm-target-add-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+
+  &:hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-add-btn--icon {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark); text-decoration: none; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+  &:disabled { background: var(--color-border); color: var(--color-muted-2); cursor: not-allowed; }
 }
 
 @media (prefers-reduced-motion: reduce) {

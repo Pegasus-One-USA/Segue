@@ -35,6 +35,42 @@
 
 
   <div class="fm-target-rows">
+    @if (destType() === 'sql') {
+      <div class="fm-target-row fm-target-row--add">
+        <button
+          type="button"
+          class="fm-target-add-btn"
+          [disabled]="!hasValidTarget()"
+          [title]="hasValidTarget() ? '' : 'Select a real destination table above first'"
+          (click)="openAddColumn.emit()"
+        >＋ Add column</button>
+      </div>
+    } @else {
+      <div class="fm-target-row fm-target-row--add fm-target-row--add-free" [attr.data-fm-drop]="resource() + '::' + tableName() + '::__new__'">
+        <button
+          type="button"
+          class="fm-target-add-icon"
+          title="Add column"
+          aria-label="Focus the new column name field"
+          (click)="newColumnInput.focus()"
+        >＋</button>
+        <input
+          #newColumnInput
+          class="fm-target-add-input"
+          placeholder="Add new column"
+          (keydown)="onNewColumnKeydown($event)"
+          (blur)="onNewColumnBlur($event)"
+        />
+        <button
+          type="button"
+          class="fm-target-add-btn fm-target-add-btn--icon"
+          [disabled]="!newColumnInput.value.trim()"
+          title="Add column"
+          aria-label="Add column"
+          (click)="commitNewColumn(newColumnInput); newColumnInput.focus()"
+        >Add</button>
+      </div>
+    }
     @if (isSearching() && filteredColumns().length === 0) {
       <div class="fm-target-no-match">No columns match "{{ searchQuery() }}".</div>
     }
@@ -51,7 +87,18 @@
         (keydown)="onColumnKeydown(col, $event)"
       >
         <span class="fm-target-port" aria-hidden="true"></span>
-        <span class="fm-target-colname">{{ col }}</span>
+        @if (renamingColumn() === col) {
+          <input
+            class="fm-target-colname-edit"
+            [value]="col"
+            (pointerdown)="$event.stopPropagation()"
+            (keydown)="onRenameKeydown(col, $event)"
+            (blur)="onRenameBlur(col, $event)"
+            #renameInput
+          />
+        } @else {
+          <span class="fm-target-colname">{{ col }}</span>
+        }
         @if (columnDataType()(col); as dt) {
           <span class="fm-target-coltype">{{ dt }}</span>
         }
@@ -63,7 +110,7 @@
             <span class="fm-target-key fm-target-key--fk" [title]="key.references ? 'Foreign key → ' + key.references : 'Foreign key'">FK</span>
           }
         }
-        @if (rowForColumn()(col)) {
+        @if (rowForColumn()(col) && destType() !== 'csv') {
           <button
             type="button"
             class="fm-target-key-toggle"
@@ -85,9 +132,9 @@
           <button
             type="button"
             class="fm-target-col-edit"
-            aria-label="Edit this column's name or data type"
-            title="Edit this column's name or data type"
-            (click)="editColumn.emit(col)"
+            [attr.aria-label]="isFreeTextColumn(col) ? 'Rename this column' : 'Edit this column\'s name or data type'"
+            [title]="isFreeTextColumn(col) ? 'Rename this column' : 'Edit this column\'s name or data type'"
+            (click)="isFreeTextColumn(col) ? startRename(col) : editColumn.emit(col)"
           >✎</button>
           <button
             type="button"
@@ -97,22 +144,6 @@
             (click)="deleteColumn.emit(col)"
           >🗑</button>
         }
-      </div>
-    }
-    @if (destType() === 'sql') {
-      <div class="fm-target-row fm-target-row--add">
-        <button
-          type="button"
-          class="fm-target-add-btn"
-          [disabled]="!hasValidTarget()"
-          [title]="hasValidTarget() ? '' : 'Select a real destination table above first'"
-          (click)="openAddColumn.emit()"
-        >＋ Add column</button>
-      </div>
-    } @else {
-      <div class="fm-target-row fm-target-row--add">
-        <span class="fm-target-colname">＋ Add column</span>
-        <input class="fm-target-add-input" placeholder="new column name" (keydown)="onNewColumnKeydown($event)" />
       </div>
     }
   </div>
