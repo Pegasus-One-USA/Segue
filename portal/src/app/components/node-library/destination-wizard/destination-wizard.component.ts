@@ -188,9 +188,15 @@ export class DestinationWizardComponent implements OnInit {
   // Independent of the two above: saves/restores ONLY the mapping-screen state (see MappingSnapshot) —
   // never touches the workflow-level `saved` output, PipelineStore, or node.fields at all.
   readonly saveSnapshotRequest = input<number>(0);
-  private _lastExitTrigger = 0;
-  private _lastSaveTrigger = 0;
-  private _lastSaveSnapshotTrigger = 0;
+  // null until each effect below has observed a real (post-input-binding) value — these counters live on
+  // an ancestor (NodeLibraryDialogComponent) that outlives this wizard and never resets, so a freshly
+  // (re)opened wizard must learn its baseline from whatever the counter already is, not assume 0, or it
+  // mistakes an old, already-handled click (e.g. Close from a previous time this destination node was
+  // configured) for a fresh one and fires the action with no user input this time — see the exact same
+  // fix in FieldMappingCanvasComponent for openLoadPayloadRequest/openPreviewRequest.
+  private _lastExitTrigger: number | null = null;
+  private _lastSaveTrigger: number | null = null;
+  private _lastSaveSnapshotTrigger: number | null = null;
   // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
   // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
   // own toolbar, so the wizard just forwards these without reacting to them itself.
@@ -725,18 +731,23 @@ export class DestinationWizardComponent implements OnInit {
     });
     effect(() => this.mappingCountChange.emit(this.mappingRows().length));
 
-    // Header-level Close/Save trigger counters — react only on an actual increment, never on the
-    // initial read (both start at 0, so the first effect run must not fire either action).
+    // Header-level Close/Save trigger counters — react only on an actual increment while this wizard
+    // instance is alive. The first run just learns the real baseline (whatever the ancestor's counter
+    // already sits at) rather than acting on it — that first value is never "the user just clicked",
+    // it's this instance catching up.
     effect(() => {
       const v = this.exitMappingRequest();
+      if (this._lastExitTrigger === null) { this._lastExitTrigger = v; return; }
       if (v !== this._lastExitTrigger) { this._lastExitTrigger = v; if (v > 0) this.requestExitMapping(); }
     });
     effect(() => {
       const v = this.saveMappingRequest();
+      if (this._lastSaveTrigger === null) { this._lastSaveTrigger = v; return; }
       if (v !== this._lastSaveTrigger) { this._lastSaveTrigger = v; if (v > 0) this.saveGroupMapping(); }
     });
     effect(() => {
       const v = this.saveSnapshotRequest();
+      if (this._lastSaveSnapshotTrigger === null) { this._lastSaveSnapshotTrigger = v; return; }
       if (v !== this._lastSaveSnapshotTrigger) { this._lastSaveSnapshotTrigger = v; if (v > 0) this.saveMappingSnapshot(); }
     });
 
@@ -1078,13 +1089,64 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   /** "Save" below the canvas — keeps whatever's mapped so far, returns to the group list, and shows the
-   *  canonical Mapping JSON built from every resource mapped so far (not just this one). */
+   *  canonical Mapping JSON built from every resource mapped so far (not just this one). Blocked by
+   *  validateMappingForSave: the canvas stays open (never closeGroupMapping()s) until every error for
+   *  this resource is fixed, so nothing wrong ever actually gets persisted. */
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
-    this.closeGroupMapping();
     if (!group) return;
+    const errors = this.validateMappingForSave(group);
+    if (errors.length > 0) {
+      this.toast.error(
+        `Fix ${errors.length} mapping issue${errors.length === 1 ? '' : 's'} before saving`,
+        errors.join(' '),
+      );
+      return;
+    }
+    this.closeGroupMapping();
     if (this.canSaveMappingSummary()) this.buildAndShowMappingSummary();
     else this.toast.success('Mapping saved', `${group} mapping progress saved.`);
+  }
+
+  /** Catches mappings that would silently write wrong or lost data rather than letting them through
+   *  unnoticed — checked right before "Save" is allowed to actually persist anything (see
+   *  saveGroupMapping). Table/column-existence checks are skipped entirely when there's no live SQL
+   *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
+  private validateMappingForSave(resource: string): string[] {
+    const errors: string[] = [];
+    const rows = this.mappingRows().filter(r => r.resource === resource);
+    if (rows.length === 0) return errors; // nothing mapped yet isn't itself an error — Save just no-ops.
+
+    const knownTables = this.hasSqlTables() ? new Set(this.sqlTableOptions()) : null;
+    const targetCounts = new Map<string, number>();
+
+    for (const row of rows) {
+      if (row.mode === 'value' && row.sources.length === 0) {
+        errors.push(`"${row.targetName}" on ${row.tableName} has no source field selected.`);
+        continue;
+      }
+
+      if (knownTables && !knownTables.has(row.tableName)) {
+        errors.push(`${row.tableName} no longer exists in the destination database — remove or retarget "${row.targetName}".`);
+        continue;
+      }
+
+      if (knownTables && !this.columnsForTableFn(row.tableName).includes(row.targetName)) {
+        errors.push(`"${row.targetName}" no longer exists in ${row.tableName}'s columns.`);
+        continue;
+      }
+
+      const key = `${row.tableName}::${row.targetName}`;
+      targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
+    }
+
+    for (const [key, count] of targetCounts) {
+      if (count <= 1) continue;
+      const [tableName, targetName] = key.split('::');
+      errors.push(`${tableName}.${targetName} is mapped ${count} times — only one mapping would actually be written.`);
+    }
+
+    return errors;
   }
 
   /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */

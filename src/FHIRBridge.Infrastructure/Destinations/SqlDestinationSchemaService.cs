@@ -24,11 +24,14 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 {
+    // __EFMigrationsHistory excluded: EF Core's own migration-bookkeeping table, not a real destination
+    // table — it lives in an ordinary schema (dbo) so the schema-name filter alone doesn't catch it.
     private const string InformationSchemaSql = """
         SELECT table_schema, table_name, column_name, data_type, is_nullable, character_maximum_length,
             numeric_precision, numeric_scale
         FROM information_schema.columns
         WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'mysql', 'performance_schema', 'sys')
+            AND table_name <> '__EFMigrationsHistory'
         ORDER BY table_schema, table_name, ordinal_position
         """;
 
@@ -754,11 +757,14 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         }
     }
 
+    // __EFMigrationsHistory excluded: EF Core's own migration-bookkeeping table, not a real destination
+    // table — it lives in an ordinary schema (dbo) so the schema-name filter alone doesn't catch it.
     private const string SqlServerColumnsSql = """
         SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH,
             NUMERIC_PRECISION, NUMERIC_SCALE
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA')
+            AND TABLE_NAME <> '__EFMigrationsHistory'
         ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION;
         """;
 

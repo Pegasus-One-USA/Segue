@@ -45,7 +45,6 @@
           [isApproximated]="isApproximatedFn"
           [x]="positionForKey(card.tableName, i).x"
           [y]="positionForKey(card.tableName, i).y"
-          (targetChange)="onTargetChange(card.resource, $event)"
           (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
@@ -54,7 +53,6 @@
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
-          (createTableRequested)="openCreateTableModal(card.resource, true)"
         />
       }
 

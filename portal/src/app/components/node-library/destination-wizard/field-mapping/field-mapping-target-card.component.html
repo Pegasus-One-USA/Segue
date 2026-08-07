@@ -11,6 +11,7 @@
       <input
         type="search"
         class="fm-target-search"
+        [class.fm-target-search--clearable]="isSearching()"
         placeholder="Search columns…"
         aria-label="Search columns in this table"
         [value]="searchQuery()"
@@ -20,7 +21,9 @@
         <button type="button" class="fm-target-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
       }
     </div>
-    <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">✕</button>
+    <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+    </button>
   </div>
 
   @if (relationToShow(); as rel) {
@@ -30,35 +33,6 @@
     </div>
   }
 
-  @if (!isExtra()) {
-    <div class="fm-target-select-row">
-      <label class="fm-target-select-label" [attr.for]="'fm-target-' + resource()">{{ targetLabel() }}</label>
-      @if (hasSqlTables()) {
-        <div class="fm-select-wrap">
-          <select
-            class="fm-select"
-            [attr.id]="'fm-target-' + resource()"
-            [value]="targetValue()"
-            (change)="onTargetInput($any($event.target).value); $any($event.target).value = targetValue()"
-          >
-            <option value="" disabled [selected]="!hasValidTarget()">Select a table…</option>
-            <option [value]="createTableOption">✎ Create a new table…</option>
-            @for (t of sqlTableOptions(); track t) {
-              <option [value]="t" [selected]="t === targetValue()">{{ t }}</option>
-            }
-          </select>
-        </div>
-      } @else {
-        <input
-          class="fm-input"
-          [attr.id]="'fm-target-' + resource()"
-          [value]="targetValue()"
-          (input)="onTargetInput($any($event.target).value)"
-          [placeholder]="destType() === 'sql' ? 'dbo.Patient' : 'patients.csv'"
-        />
-      }
-    </div>
-  }
 
   <div class="fm-target-rows">
     @if (isSearching() && filteredColumns().length === 0) {
@@ -107,20 +81,22 @@
         @if (rowForColumn()(col) && isApproximated()(rowForColumn()(col)!)) {
           <span class="fm-target-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
         }
-        <button
-          type="button"
-          class="fm-target-col-edit"
-          aria-label="Edit this column's name or data type"
-          title="Edit this column's name or data type"
-          (click)="editColumn.emit(col)"
-        >✎</button>
-        <button
-          type="button"
-          class="fm-target-col-delete"
-          aria-label="Delete this column"
-          title="Delete this column"
-          (click)="deleteColumn.emit(col)"
-        >🗑</button>
+        @if (canEditColumn(col)) {
+          <button
+            type="button"
+            class="fm-target-col-edit"
+            aria-label="Edit this column's name or data type"
+            title="Edit this column's name or data type"
+            (click)="editColumn.emit(col)"
+          >✎</button>
+          <button
+            type="button"
+            class="fm-target-col-delete"
+            aria-label="Delete this column"
+            title="Delete this column"
+            (click)="deleteColumn.emit(col)"
+          >🗑</button>
+        }
       </div>
     }
     @if (destType() === 'sql') {

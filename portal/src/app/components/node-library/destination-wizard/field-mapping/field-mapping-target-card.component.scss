@@ -6,20 +6,18 @@
   // Wider by default (was 260px) so the header has room for kind + name + search without feeling
   // cramped right out of the gate — still freely resizable beyond this, see below.
   width: 300px;
-  // Auto height, up to max-height — the card opens tall enough to show every column, but a wide table
-  // stops growing past that and scrolls inside .fm-target-rows instead of taller than the canvas itself.
-  // The header (title + search, see .fm-target-head below) stays pinned above that scroll region either
-  // way. `resize: both` still lets the user manually resize beyond this.
+  // Always tall enough to show every column — no vertical cap/scroll, so the card is never a second
+  // scroll region competing with the canvas's own pan/zoom. Only width is user-resizable (resize:
+  // horizontal below); height simply tracks content.
   height: auto;
   min-width: 220px;
   max-width: 640px;
   min-height: 160px;
-  max-height: min(640px, 75vh);
   display: flex;
   flex-direction: column;
   // resize needs overflow other than the default `visible` to reliably show the drag handle across
   // browsers — `auto` here (not `hidden`), same reasoning as the join popover's own resize handle.
-  resize: both;
+  resize: horizontal;
   overflow: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -69,19 +67,28 @@
   opacity: 0.8;
 }
 
+// A circular chip (not bare glyph-on-transparent like .fm-target-search-clear) so this destructive,
+// whole-table action reads as visually distinct from the inline "clear search" affordance next to it —
+// the red-tinted hover reinforces that this one removes something, rather than just clearing a filter.
 .fm-target-remove {
   flex-shrink: 0;
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.16);
   border: none;
+  border-radius: 50%;
   color: var(--color-on-primary);
-  opacity: 0.75;
   cursor: pointer;
-  padding: 2px 4px;
-  font-size: 13px;
-  line-height: 1;
+  padding: 0;
+  transition: background var(--transition-base), color var(--transition-base);
 
-  &:hover { opacity: 1; }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3); border-radius: var(--radius-sm); }
+  &:hover { background: var(--color-error); color: var(--color-on-primary); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3); }
+
+  svg { display: block; }
 }
 
 .fm-target-name {
@@ -99,17 +106,14 @@
 // .fm-source-search — kept in sync intentionally (one card is dark, one is teal, both need the same
 // translucent-white approach rather than a standard surface input that wouldn't read on either).
 .fm-target-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  position: relative;
   flex: 1;
   min-width: 0;
   cursor: default;
 }
 
 .fm-target-search {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   height: 24px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-pill, 999px);
@@ -119,6 +123,9 @@
   font-size: 12px;
   font-family: inherit;
   cursor: text;
+
+  // Room for the clear button once it appears, so typed text never sits underneath it.
+  &--clearable { padding-right: 22px; }
 
   &::placeholder { color: rgba(255, 255, 255, 0.65); }
   &::-webkit-search-cancel-button { display: none; }
@@ -130,19 +137,31 @@
   }
 }
 
+// Sits inside the search field itself (not a separate control floating beside it) — same positioning
+// technique as the canvas's own "Add a table" search (field-mapping-canvas.component.scss's
+// .fm-add-table-search-clear), adapted to this card's dark-glass-on-teal header treatment.
 .fm-target-search-clear {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  background: none;
+  background: rgba(255, 255, 255, 0.22);
   border: none;
+  border-radius: 50%;
   color: var(--color-on-primary);
-  opacity: 0.75;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 9px;
   line-height: 1;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm, 6px);
+  padding: 0;
+  transition: background var(--transition-base);
 
-  &:hover { opacity: 1; background: rgba(255, 255, 255, 0.14); }
+  &:hover { background: rgba(255, 255, 255, 0.38); }
   &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
 }
 
@@ -151,15 +170,6 @@
   text-align: center;
   font-size: 12.5px;
   color: var(--color-muted);
-}
-
-.fm-target-select-row {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .fm-target-relation {
@@ -182,38 +192,11 @@
   }
 }
 
-.fm-target-select-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-}
-
-.fm-select-wrap { position: relative; }
-
-.fm-select, .fm-input {
-  width: 100%;
-  font-family: var(--font-family);
-  font-size: 13px;
-  padding: var(--space-2) var(--space-6);
-  border: 1.5px solid var(--color-border-input);
-  border-radius: var(--radius-base);
-  background: var(--color-surface);
-  color: var(--color-ink);
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
-
-  &:focus-visible {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-mid);
-  }
-}
-
 .fm-target-rows {
   flex: 1;
   min-height: 0;
-  // Only actually scrolls once the card's own auto height (see .fm-target-card) has been manually
-  // shrunk smaller than the content via the resize handle — flex:1 has nothing extra to consume
-  // against an auto-height parent, so by default this never clips; nothing to scroll.
+  // The card's height is uncapped and only horizontally resizable (see .fm-target-card), so in practice
+  // this never actually clips/scrolls — kept as a safety net only.
   overflow: auto;
   background: var(--color-surface);
 }

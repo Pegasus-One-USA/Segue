@@ -659,13 +659,10 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** Also the direct entry point when no live schema exists at all (!hasSqlTables()) — there's no
-   *  dropdown of existing tables to choose from in that case, so this is the only "add a table" option.
-   *  asPrimary defaults to "whatever this resource actually needs right now": explicit true from the
-   *  target-card's own "Table" select (it only offers "✎ Create a new table…" when its card is even
-   *  showing, i.e. already valid — a deliberate swap); otherwise auto-detected from the canvas-level
-   *  "+ Add a table…" control, which is the ONLY entry point while there's no primary card to have a
-   *  select of its own yet. */
+  /** The only "create a table" entry point — the target card itself has no table picker of its own
+   *  (see field-mapping-target-card.component.html), so this is reached exclusively from the canvas-level
+   *  "+ Add a table…" control. asPrimary auto-detects "whatever this resource actually needs right now":
+   *  becomes this resource's primary table if it doesn't have a valid one yet, otherwise an extra table. */
   openCreateTableModal(resource: string, asPrimary?: boolean): void {
     this.creatingTableResource = resource;
     this.creatingTableAsPrimary = asPrimary ?? !this.isPrimaryTargetValid(resource);

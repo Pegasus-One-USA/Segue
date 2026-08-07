@@ -47,11 +47,21 @@ export class FieldMappingListComponent {
   // total space it shares with the canvas, not a guessed constant.
   private readonly anchors = inject(FieldMappingAnchorService);
 
+  /** Every mapping across the whole destination, not just the resource currently being edited — see
+   *  visibleRows for the resource-scoped list this panel actually displays. */
   readonly rows = input.required<MappingRow[]>();
   /** Scoped to whichever single resource is currently being edited (see DestinationWizardComponent's
-   *  activeMappingGroup) — used for the "+ Add mapping" draft form's own resource picker. NOT what the
-   *  reference-lookup "Resolves to" picker should use; see allResources below. */
+   *  activeMappingGroup) — used for the "+ Add mapping" draft form's own resource picker, and to scope
+   *  which of `rows` this panel actually shows (see visibleRows). NOT what the reference-lookup
+   *  "Resolves to" picker should use; see allResources below. */
   readonly resources = input.required<string[]>();
+  /** What this panel actually renders — `rows` scoped down to the resource(s) currently being edited, so
+   *  e.g. Practitioner's mappings don't show up while mapping Patient just because they share a
+   *  destination. */
+  readonly visibleRows = computed(() => {
+    const scope = new Set(this.resources());
+    return this.rows().filter(r => scope.has(r.resource));
+  });
   /** Every resource selected for this destination, unscoped by which one is currently active — what the
    *  "Resolves to" picker offers, so a reference field on (say) Encounter can still point at Patient even
    *  while only Encounter is the resource being edited. */

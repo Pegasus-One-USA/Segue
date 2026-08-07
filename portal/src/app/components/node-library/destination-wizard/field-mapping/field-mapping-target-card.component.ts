@@ -12,20 +12,28 @@ const MAX_WIDTH = 640;
 // an optional PK/FK badge + key-toggle, and edit/delete buttons, none of which the source tree has.
 const BASE_PADDING_PX = 170;
 
-/** Just the PK/FK-relevant slice of DestinationColumn — this card only ever needs to show a badge. */
+/** Just the slice of DestinationColumn this card needs — a PK/FK badge, plus origin to decide whether
+ *  edit/delete are offered at all (see canEditColumn). */
 export interface FmColumnKeyInfo {
   isPrimaryKey?: boolean;
   isForeignKey?: boolean;
   references?: string | null;
+  /** Absent (e.g. every real probe() response) means an already-existing column on a real, live
+   *  database table — never edited/deleted from here, since that would be a silent, un-reviewed schema
+   *  change against a table other things may already depend on. 'userCreated' means it was added THIS
+   *  session, on this canvas (a brand-new table's own columns, or "+ Add column" on an existing table) —
+   *  nothing has been built against it outside this canvas yet, so it's still safe to edit/delete. */
+  origin?: 'probed' | 'userCreated';
 }
 
 /**
- * One destination card per resource — the table/file-name selector (unchanged from the original
- * step-3 markup) plus one row per existing destination column. Columns come from the live SQL schema
- * probe when available, or render as an editable free-text row (CSV, or SQL not yet probed) — exactly
- * today's fallback behavior, just restyled. "+ Add column" opens a real ALTER TABLE modal for any SQL
- * card — connected or not, matching "+ Add a table"'s same not-gated-behind-a-probe behavior; CSV has
- * no real schema to alter, so it keeps the free-text/local-only row.
+ * One destination card per resource — one row per existing destination column; which table/file this
+ * card represents is chosen entirely via the canvas-level "+ Add a table…" control (see
+ * FieldMappingCanvasComponent.openCreateTableModal/onAddExtraTable), not by anything on the card itself.
+ * Columns come from the live SQL schema probe when available, or render as an editable free-text row
+ * (CSV, or SQL not yet probed) — exactly today's fallback behavior, just restyled. "+ Add column" opens
+ * a real ALTER TABLE modal for any SQL card — connected or not, matching "+ Add a table"'s same
+ * not-gated-behind-a-probe behavior; CSV has no real schema to alter, so it keeps the free-text/local-only row.
  */
 @Component({
   selector: 'app-field-mapping-target-card',
@@ -69,7 +77,6 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly x = input.required<number>();
   readonly y = input.required<number>();
 
-  readonly targetChange = output<string>();
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
   readonly columnActivate = output<string>();
@@ -80,11 +87,6 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   /** A mapped column's key-toggle button was clicked — the parent decides whether that marks it as this
    *  resource's upsert key or clears it (see FieldMappingCanvasComponent.onToggleUpsertKey). */
   readonly toggleUpsertKey = output<string>();
-  /** The "✎ Create a new table…" sentinel option was picked in the primary target select — the parent
-   *  opens the real create-table modal and, on success, makes the result this resource's primary
-   *  target (see FieldMappingCanvasComponent.openCreateTableModal's asPrimary flag). */
-  readonly createTableRequested = output<void>();
-  readonly createTableOption = '__create_new_table__';
 
   private dragOffset: { dx: number; dy: number } | null = null;
 
@@ -208,17 +210,19 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     });
   }
 
-  targetLabel(): string { return this.destType() === 'sql' ? 'Table' : 'File name'; }
+  /** Edit/delete are only offered for a column this canvas actually created — a real pre-existing column
+   *  probed from the live database is display-only here. No real column metadata at all (CSV, or a SQL
+   *  table before any probe succeeds) means there's no live schema to protect either way, so those
+   *  free-text rows stay fully editable, same as always. */
+  canEditColumn(col: string): boolean {
+    const info = this.columnKeyInfo()(col);
+    return !info || info.origin === 'userCreated';
+  }
 
   /** "dbo.Patient" -> "Patient" — the relation banner reads better without the repeated schema prefix. */
   relationParentLabel(): string {
     const parent = this.relationToShow()?.parentTable ?? '';
     return parent.includes('.') ? parent.slice(parent.lastIndexOf('.') + 1) : parent;
-  }
-
-  onTargetInput(value: string): void {
-    if (value === this.createTableOption) { this.createTableRequested.emit(); return; }
-    this.targetChange.emit(value);
   }
 
   onNewColumnKeydown(ev: KeyboardEvent): void {

@@ -13,7 +13,7 @@
     <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
   Mapping list
-  <span class="fm-list-count">{{ rows().length }}</span>
+  <span class="fm-list-count">{{ visibleRows().length }}</span>
   <span class="fm-list-spacer"></span>
   <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
 </button>
@@ -33,7 +33,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of rows(); track rowKey(row)) {
+          @for (row of visibleRows(); track rowKey(row)) {
             <tr class="data-table__row">
               <td class="fm-mono">{{ sourceSummary(row) }}</td>
               <td>
@@ -142,7 +142,7 @@
               </td>
             </tr>
           }
-          @if (!rows().length && !draft()) {
+          @if (!visibleRows().length && !draft()) {
             <tr><td colspan="7" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
           }
         </tbody>
