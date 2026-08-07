@@ -16,7 +16,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
-  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema,
+  TransformationRulesService, TransformNodeType, TransformNodeSchema,
 } from '../transformation-rules.service';
 import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
