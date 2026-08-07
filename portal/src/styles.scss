@@ -166,6 +166,11 @@ html {
   --color-info:         var(--ref-blue-500);
   --color-info-soft:    var(--ref-blue-50);
 
+  /* "Workflow" scope badge (transformation-rules scope chip) — not brand-overridable, same rationale
+     as --color-info: a fixed platform accent rather than a tenant-facing brand color. */
+  --color-workflow-soft:   color-mix(in srgb, var(--ref-purple-500) 12%, white);
+  --color-workflow-strong: color-mix(in srgb, var(--ref-purple-500) 65%, black);
+
   /* Strong foreground — text/icon on the matching *-soft background (badges,
      table-action buttons). Derived from the brand tone (not a fixed ref-*-900)
      so a tenant's actual color choice carries through here too. */
@@ -338,12 +343,14 @@ html[data-theme='dark'] {
   --color-error:        color-mix(in srgb, var(--brand-error) 78%, white);
   --color-error-soft:   color-mix(in srgb, var(--brand-error) 35%, var(--color-surface));
   --color-info:         #60A5FA;  --color-info-soft:    #0E2A47;
+  --color-workflow-soft:   color-mix(in srgb, var(--ref-purple-500) 35%, var(--color-surface));
 
   /* Strong status foregrounds — lifted further for AA on the dark soft backgrounds */
   --color-success-strong: color-mix(in srgb, var(--brand-success) 55%, white);
   --color-warning-strong: color-mix(in srgb, var(--brand-warning) 55%, white);
   --color-error-strong:   color-mix(in srgb, var(--brand-error) 55%, white);
   --color-info-strong:    #93C5FD;
+  --color-workflow-strong: color-mix(in srgb, var(--ref-purple-500) 55%, white);
 
   /* Shadows read stronger on dark backgrounds */
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.40);
