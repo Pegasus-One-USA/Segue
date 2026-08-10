@@ -43,6 +43,15 @@ export interface TransformationRule {
   /** 'Whole' (default) runs the node once against the value as-is; 'PerItem' runs it once per element when
    *  the mapped value is a real collection. */
   arrayMode: TransformArrayMode;
+  /** Where in the source resource's own JSON this rule's output should be written back, for a FHIR-native
+   *  destination (Aidbox/Medplum/any other FhirRepository-typed config) to receive the transformed value —
+   *  a flat/tabular destination (SQL/Csv/Mongo) always sees the transformed value regardless, via the
+   *  destination field mapping above, so this only matters for FHIR-native destinations. Null (default) means
+   *  "don't patch — that destination keeps seeing the original source coding." Dot-separated path, no leading
+   *  "$.", e.g. "code" or "component[0].valueQuantity" — usually the PARENT of the source field a
+   *  structure-building node (CodeableConceptBuilder, UnitConversion, ReferenceConstruction) reads from,
+   *  since its output replaces a whole element, not the bare leaf value it was fed. */
+  fhirWriteBackJsonPath?: string | null;
 }
 
 export interface SaveTransformationRuleRequest {
@@ -62,6 +71,7 @@ export interface SaveTransformationRuleRequest {
   isEnabled?: boolean;
   onNullDefaultValue?: string | null;
   arrayMode?: TransformArrayMode;
+  fhirWriteBackJsonPath?: string | null;
 }
 
 export interface TransformPreviewRequest {

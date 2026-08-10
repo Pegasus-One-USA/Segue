@@ -359,6 +359,9 @@ public static class DependencyInjection
 
         services.AddSingleton<LocalTerminologyLookupService>();
         services.AddScoped<LoincTerminologyLookupService>();
+        services.AddScoped<Icd10TerminologyLookupService>();
+        services.AddScoped<SnomedTerminologyLookupService>();
+        services.AddScoped<RxNormTerminologyLookupService>();
         services.AddScoped<ILoincReleaseClient, LoincReleaseClient>();
         services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
         services.AddScoped<ISnomedImportService, SnomedImportService>();

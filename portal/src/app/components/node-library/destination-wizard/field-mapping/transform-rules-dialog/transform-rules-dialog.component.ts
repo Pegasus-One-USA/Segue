@@ -46,6 +46,7 @@ interface RuleStep {
   onNullDefaultValue: string | null;
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
+  fhirWriteBackJsonPath: string | null;
 }
 
 interface ColumnRuleRow {
@@ -131,6 +132,7 @@ export class TransformRulesDialogComponent implements OnInit {
               onNullDefaultValue: r.onNullDefaultValue ?? null,
               errorPolicy: r.errorPolicy,
               arrayMode: r.arrayMode,
+              fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
             }));
 
           return {
@@ -239,6 +241,7 @@ export class TransformRulesDialogComponent implements OnInit {
       onNullDefaultValue: r.onNullDefaultValue ?? null,
       errorPolicy: r.errorPolicy,
       arrayMode: r.arrayMode,
+      fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
     }));
     row.editing = true;
     row.viewingInherited = false;
@@ -258,6 +261,7 @@ export class TransformRulesDialogComponent implements OnInit {
       onNullDefaultValue: null,
       errorPolicy: 'NullOut',
       arrayMode: 'Whole',
+      fhirWriteBackJsonPath: null,
     });
     this.rows.set([...this.rows()]);
   }
@@ -279,6 +283,11 @@ export class TransformRulesDialogComponent implements OnInit {
 
   setArrayMode(step: RuleStep, value: TransformArrayMode): void {
     step.arrayMode = value;
+    this.rows.set([...this.rows()]);
+  }
+
+  setFhirWriteBackJsonPath(step: RuleStep, value: string): void {
+    step.fhirWriteBackJsonPath = value.trim() || null;
     this.rows.set([...this.rows()]);
   }
 
@@ -370,6 +379,7 @@ export class TransformRulesDialogComponent implements OnInit {
       onNullDefaultValue: step.onNullDefaultValue,
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
+      fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

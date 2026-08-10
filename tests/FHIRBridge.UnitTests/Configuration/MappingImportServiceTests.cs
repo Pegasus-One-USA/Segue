@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
@@ -21,9 +22,19 @@ namespace FHIRBridge.UnitTests.Configuration;
 /// </summary>
 public sealed class MappingImportServiceTests
 {
+    private sealed class FakeFhirElementCatalog : IFhirElementCatalog
+    {
+        private readonly Dictionary<string, IReadOnlyList<FhirElementDto>> _fieldsByResourceType;
+        public FakeFhirElementCatalog(Dictionary<string, IReadOnlyList<FhirElementDto>> fieldsByResourceType) => _fieldsByResourceType = fieldsByResourceType;
+        public string FhirVersion => "4.0.1";
+        public IReadOnlyList<string> ResourceTypes => _fieldsByResourceType.Keys.ToList();
+        public IReadOnlyList<FhirElementDto> Fields(string resourceType) =>
+            _fieldsByResourceType.TryGetValue(resourceType, out var fields) ? fields : [];
+    }
+
     private static (IMappingImportService Service, InMemoryConfigurationRepository Repository,
         RecordingSchemaProvider Provider, Guid DestinationId, Guid SourceConnectionId) CreateSut(
-        IReadOnlyList<string> existingDestinationTables)
+        IReadOnlyList<string> existingDestinationTables, IFhirElementCatalog? fhirElementCatalog = null)
     {
         var repository = new InMemoryConfigurationRepository();
         var destination = new DestinationConfiguration(
@@ -44,7 +55,8 @@ public sealed class MappingImportServiceTests
         var service = new MappingImportService(
             repository,
             destinationSchemaServiceMock.Object,
-            factory.Object);
+            factory.Object,
+            fhirElementCatalog);
 
         return (service, repository, provider, destination.Id, Guid.NewGuid());
     }
@@ -381,6 +393,73 @@ public sealed class MappingImportServiceTests
           ]
         }
         """;
+
+    /// <summary>
+    /// Regression test for a real production bug: a Condition.code column's stored arrayContext
+    /// ("Condition.code.coding") naively wildcards EVERY segment it spans ("code" AND "coding"), producing
+    /// "$.code[*].coding[*].code" — but Condition.code is a single 0..1 CodeableConcept, not itself repeating;
+    /// only "coding" is. That malformed path resolves to zero matches in JsonMappingEngine.ResolveAll, so the
+    /// column silently mapped to null for every resource. The fix: when the FHIR element catalog has a real,
+    /// known entry for this exact fhirPath, use its own pre-computed (and correct) JsonPath directly instead
+    /// of re-deriving one from arrayContext's segment count.
+    /// </summary>
+    [Fact]
+    public async Task Import_prefers_the_catalogs_own_JsonPath_over_the_arrayContext_heuristic_when_a_real_element_matches()
+    {
+        var catalog = new FakeFhirElementCatalog(new Dictionary<string, IReadOnlyList<FhirElementDto>>
+        {
+            ["Condition"] = new List<FhirElementDto>
+            {
+                new("Code › Coding › Code", "$.code.coding[*].code", "code.coding.code", "0..*", "String", true, ["code.coding"], []),
+            },
+        });
+        var (service, repository, _, destinationId, sourceConnectionId) = CreateSut(existingDestinationTables: ["Condition"], catalog);
+
+        const string body = """
+            {
+              "source": "EPIC",
+              "destination": "SQL",
+              "sourceConnectionId": "SOURCE_CONNECTION_ID",
+              "destinationId": "DESTINATION_ID",
+              "mappings": [
+                {
+                  "resourceType": "Condition",
+                  "rank": 1,
+                  "generatedAt": "2026-07-21T16:10:52.564Z",
+                  "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": "no schema changes" },
+                  "processingOrder": [ { "step": 1, "table": "Condition", "level": 1, "dependsOn": null, "note": null } ],
+                  "destination": { "type": "mssql", "label": "MSSQL Server" },
+                  "tables": [
+                    {
+                      "name": "Condition",
+                      "isNew": false,
+                      "relation": null,
+                      "columns": [
+                        {
+                          "column": "Code",
+                          "mode": "directField",
+                          "sources": ["Condition.code.coding.code"],
+                          "instance": { "arrayContext": "Condition.code.coding", "type": "first", "aggregate": "rows" }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var requestJson = body
+            .Replace("SOURCE_CONNECTION_ID", sourceConnectionId.ToString())
+            .Replace("DESTINATION_ID", destinationId.ToString());
+
+        await service.ImportAsync(Parse(requestJson), CancellationToken.None);
+
+        var profiles = await repository.GetMappingProfilesAsync(CancellationToken.None);
+        var profile = profiles.Single();
+        var codeField = profile.Fields.Single(f => f.TargetField == "Code");
+        codeField.JsonPath.Should().Be("$.code.coding[*].code",
+            "the catalog's own known-correct JsonPath must win over the buggy arrayContext-derived guess");
+    }
 
     private static string FullPatientFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
         {

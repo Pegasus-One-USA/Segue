@@ -35,4 +35,31 @@ public static class TransformNodeApplier
 
         return TransformResult.Ok(results.ToArray());
     }
+
+    /// <summary>Async twin of <see cref="ExecuteWithArrayMode"/> — routes through <see cref="ITransformNode.ExecuteAsync"/>
+    /// so a node backed by a real dependency (e.g. a DB-backed terminology lookup) can await it, while every other
+    /// node's default <see cref="ITransformNode.ExecuteAsync"/> body just wraps its synchronous <c>Execute</c>.</summary>
+    public static async Task<TransformResult> ExecuteWithArrayModeAsync(
+        ITransformNode node, object? value, IReadOnlyDictionary<string, string> config, string? secret,
+        TransformArrayMode arrayMode, CancellationToken cancellationToken = default)
+    {
+        if (arrayMode != TransformArrayMode.PerItem || value is null or string || value is not IEnumerable items)
+        {
+            return await node.ExecuteAsync(value, config, secret, cancellationToken);
+        }
+
+        var results = new List<object?>();
+        foreach (var item in items)
+        {
+            var result = await node.ExecuteAsync(item, config, secret, cancellationToken);
+            if (!result.Success)
+            {
+                return result;
+            }
+
+            results.Add(result.Value);
+        }
+
+        return TransformResult.Ok(results.ToArray());
+    }
 }
