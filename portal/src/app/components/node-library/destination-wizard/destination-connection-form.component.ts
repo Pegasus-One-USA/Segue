@@ -22,12 +22,13 @@ export class DestinationConnectionFormComponent {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
 
-  readonly destType = input.required<'sql' | 'csv'>();
+  readonly destType = input.required<'sql' | 'csv' | 'fhir'>();
   readonly mode = input<DestinationConnectionFormMode>('create');
   /** dest_* keyed config bag — the same shape DestinationWizardComponent stores on a CanvasNode's fields. */
   readonly initialConfig = input<Record<string, string> | null>(null);
 
   readonly isSql = computed(() => this.destType() === 'sql');
+  readonly isFhir = computed(() => this.destType() === 'fhir');
   readonly isReadOnly = computed(() => this.mode() === 'view');
 
   readonly sqlForm = this.fb.group({
@@ -67,6 +68,25 @@ export class DestinationConnectionFormComponent {
     downloadLinkExpiryMinutes: [60, []],
   });
 
+  // Field-for-field identical to DestinationWizardComponent's own fhirForm — duplicated rather than shared
+  // (see this component's header comment) so the already-shipped, live-verified canvas wizard is never touched.
+  readonly fhirForm = this.fb.group({
+    name:          ['Aidbox Production', [Validators.required]],
+    baseUrl:       ['', [Validators.required]],
+    project:       ['', []],
+    authType:      ['oauth2', [Validators.required]],
+    writeMode:     ['upsert', []],
+    // ── OAuth2 Client Credentials fields (conditional on authType) ───────────
+    tokenEndpoint: ['', []],
+    clientId:      ['', []],
+    clientSecret:  ['', []],
+    // ── Basic auth fields (conditional) ──────────────────────────────────────
+    username:      ['', []],
+    password:      ['', []],
+    // ── Bearer token field (conditional) ─────────────────────────────────────
+    bearerToken:   ['', []],
+  });
+
   readonly sqlTables = signal<DestinationTable[]>([]);
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
@@ -81,6 +101,9 @@ export class DestinationConnectionFormComponent {
       }
     });
 
+    this._syncFhirAuthValidators(this.fhirForm.controls.authType.value);
+    this.fhirForm.controls.authType.valueChanges.subscribe(v => this._syncFhirAuthValidators(v));
+
     effect(() => {
       const config = this.initialConfig();
       untracked(() => {
@@ -94,27 +117,32 @@ export class DestinationConnectionFormComponent {
         if (readOnly) {
           this.sqlForm.disable({ emitEvent: false });
           this.csvForm.disable({ emitEvent: false });
+          this.fhirForm.disable({ emitEvent: false });
         } else {
           this.sqlForm.enable({ emitEvent: false });
           this.csvForm.enable({ emitEvent: false });
+          this.fhirForm.enable({ emitEvent: false });
           this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
+          this._syncFhirAuthValidators(this.fhirForm.controls.authType.value);
         }
       });
     });
   }
 
   isValid(): boolean {
-    return this.isSql() ? this.sqlForm.valid : this.csvForm.valid;
+    return this.isSql() ? this.sqlForm.valid : this.isFhir() ? this.fhirForm.valid : this.csvForm.valid;
   }
 
   canTestConnection(): boolean {
     if (this.isReadOnly()) return false;
-    return this.isSql() || this.csvForm.controls.deliveryMode.value === 'sftp';
+    return this.isSql() || this.isFhir() || this.csvForm.controls.deliveryMode.value === 'sftp';
   }
 
   testConnection(): void {
     if (this.isSql()) {
       this._testSql();
+    } else if (this.isFhir()) {
+      this._testFhir();
     } else {
       this._testCsvSftp();
     }
@@ -139,6 +167,27 @@ export class DestinationConnectionFormComponent {
       if ((v.auth ?? 'sql-auth') === 'sql-auth') {
         config['dest_username'] = v.username ?? '';
         config['dest_password'] = v.password ?? '';
+      }
+    } else if (this.isFhir()) {
+      const v = this.fhirForm.getRawValue();
+      config['dest_name'] = v.name ?? '';
+      config['dest_baseUrl'] = v.baseUrl ?? '';
+      config['dest_project'] = v.project ?? '';
+      config['dest_authType'] = v.authType ?? 'oauth2';
+      // Mirrors DestinationWizardComponent._save()'s fhir branch exactly: "Bundle" write mode is really two
+      // orthogonal backend fields folded into one dropdown (see that component's own doc comment).
+      const writeMode = v.writeMode ?? 'upsert';
+      config['dest_writeMode'] = writeMode === 'upsertBundle' ? 'upsert' : writeMode;
+      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : 'individual';
+      if (v.authType === 'oauth2') {
+        config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
+        config['dest_clientId'] = v.clientId ?? '';
+        config['dest_clientSecret'] = v.clientSecret ?? '';
+      } else if (v.authType === 'basic') {
+        config['dest_username'] = v.username ?? '';
+        config['dest_password'] = v.password ?? '';
+      } else if (v.authType === 'bearer') {
+        config['dest_bearerToken'] = v.bearerToken ?? '';
       }
     } else {
       const v = this.csvForm.getRawValue();
@@ -200,6 +249,42 @@ export class DestinationConnectionFormComponent {
       });
   }
 
+  // No tokenEndpoint in the request — for oauth2/clientCredentials the backend discovers it from baseUrl via
+  // GET {baseUrl}/.well-known/smart-configuration and returns it as resolvedTokenEndpoint, patched into this
+  // form's (now-hidden) tokenEndpoint control on success so it still lands in dest_tokenEndpoint at save time.
+  private _testFhir(): void {
+    const v = this.fhirForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc
+      .testFhir({
+        baseUrl: v.baseUrl ?? '',
+        authType: v.authType ?? 'oauth2',
+        clientId: v.clientId ?? undefined,
+        clientSecret: v.clientSecret ?? undefined,
+        username: v.username ?? undefined,
+        password: v.password ?? undefined,
+        bearerToken: v.bearerToken ?? undefined,
+      })
+      .subscribe({
+        next: res => {
+          if (!res.connected) {
+            this.probeState.set('error');
+            this.probeError.set(res.error ?? 'Connection failed.');
+            return;
+          }
+          if (res.resolvedTokenEndpoint) {
+            this.fhirForm.patchValue({ tokenEndpoint: res.resolvedTokenEndpoint });
+          }
+          this.probeState.set('ok');
+        },
+        error: err => {
+          this.probeState.set('error');
+          this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
+        },
+      });
+  }
+
   private _testCsvSftp(): void {
     const v = this.csvForm.value;
     this.probeState.set('testing');
@@ -238,6 +323,22 @@ export class DestinationConnectionFormComponent {
         writeMode: f['dest_writeMode'] || 'upsert',
         requireSsl: f['dest_requireSsl'] === 'true',
       });
+    } else if (this.isFhir()) {
+      const writeMode = f['dest_fhirWriteMode'] === 'bundle' ? 'upsertBundle' : f['dest_writeMode'] || 'upsert';
+      this.fhirForm.patchValue({
+        name: f['dest_name'] || '',
+        baseUrl: f['dest_baseUrl'] || '',
+        project: f['dest_project'] || '',
+        authType: f['dest_authType'] || 'oauth2',
+        writeMode,
+        tokenEndpoint: f['dest_tokenEndpoint'] || '',
+        clientId: f['dest_clientId'] || '',
+        clientSecret: '',
+        username: f['dest_username'] || '',
+        password: '',
+        bearerToken: '',
+      });
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
     } else {
       this.csvForm.patchValue({
         name: f['dest_name'] || '',
@@ -259,6 +360,23 @@ export class DestinationConnectionFormComponent {
         downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
       });
     }
+  }
+
+  private _syncFhirAuthValidators(authType: string | null): void {
+    // tokenEndpoint is deliberately NOT in this list — see _testFhir()'s comment.
+    (['clientId', 'clientSecret'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    (['username', 'password'] as const).forEach(name => {
+      const ctrl = this.fhirForm.get(name)!;
+      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+      ctrl.updateValueAndValidity({ emitEvent: false });
+    });
+    const bearerToken = this.fhirForm.get('bearerToken')!;
+    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.updateValueAndValidity({ emitEvent: false });
   }
 
   private _syncDeliveryModeValidators(deliveryMode: string | null): void {

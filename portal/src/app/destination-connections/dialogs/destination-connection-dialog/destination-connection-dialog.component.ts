@@ -11,17 +11,18 @@ import {
   DestinationConfigurationDto,
   DestinationType,
 } from '../../models/destination-configuration.model';
-import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../utils/destination-connection-secret.util';
+import { buildConnectionMetadata, buildFhirSecretBlob, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../utils/destination-connection-secret.util';
 
 export interface DestinationConnectionDialogData {
   mode: 'create' | 'edit' | 'view';
   destination?: DestinationConfigurationDto;
 }
 
-/** Maps the entity's full 21-value enum down to the two form shapes this screen (and the workflow wizard) support. */
-function toFormType(t: DestinationType): 'sql' | 'csv' | null {
+/** Maps the entity's full 21-value enum down to the three form shapes this screen (and the workflow wizard) support. */
+function toFormType(t: DestinationType): 'sql' | 'csv' | 'fhir' | null {
   if (t === 'SqlServer' || t === 'AzureSql' || t === 'PostgreSql' || t === 'MySql') return 'sql';
   if (t === 'Csv' || t === 'Sftp') return 'csv';
+  if (t === 'FhirRepository') return 'fhir';
   return null;
 }
 
@@ -62,7 +63,7 @@ export class DestinationConnectionDialogComponent {
 
   // Create: the user picks a type before the rich connection form appears. Edit/view: the type is fixed,
   // derived from the saved destination — this screen only lets you *replace* an existing secret, not retype it.
-  readonly chosenType = signal<'sql' | 'csv' | null>(
+  readonly chosenType = signal<'sql' | 'csv' | 'fhir' | null>(
     this.isCreate ? null : toFormType(this.data.destination!.destinationType),
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
@@ -94,8 +95,17 @@ export class DestinationConnectionDialogComponent {
     }
   }
 
-  chooseType(type: 'sql' | 'csv'): void {
+  chooseType(type: 'sql' | 'csv' | 'fhir'): void {
     this.chosenType.set(type);
+  }
+
+  /** FHIR credentials aren't validated server-side the way SQL's are checked against a real schema fetch before
+   *  Save is even possible — a wrong secret would otherwise save silently and only fail later at run time. Only
+   *  relevant when a new secret is actually being entered: create, or edit with "Replace connection secret" on. */
+  fhirTestPending(): boolean {
+    if (this.chosenType() !== 'fhir') return false;
+    if (!this.isCreate && !this.replaceSecret()) return false;
+    return this.connectionForm()?.probeState() !== 'ok';
   }
 
   toggleReplaceSecret(): void {
@@ -137,21 +147,34 @@ export class DestinationConnectionDialogComponent {
             secretName: newSecretName(name),
             target: null,
             inlineSecret: buildSqlConnectionString(config),
-            connectionMetadataJson: buildConnectionMetadata(config, true),
+            connectionMetadataJson: buildConnectionMetadata(config, 'sql'),
           }
-        : {
-            name,
-            // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson
-            // field (dest_deliveryMode), not the DestinationType — a single writer dispatches on it internally.
-            destinationType: 'Csv',
-            keyVaultName: 'workflow-secrets',
-            secretName: newSecretName(name),
-            target: config['dest_filePattern'] || null,
-            // Only SFTP delivery actually reads this secret; the other three modes never resolve it, so any
-            // placeholder value is fine there.
-            inlineSecret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
-            connectionMetadataJson: buildConnectionMetadata(config, false),
-          };
+        : type === 'fhir'
+          ? {
+              name,
+              destinationType: 'FhirRepository',
+              keyVaultName: 'workflow-secrets',
+              secretName: newSecretName(name),
+              // Required by CreateDestinationConfigurationRequestValidator.ValidateFhirRepositoryMetadata
+              // whenever dest_fhirAuthType isn't 'none' — the form always sets an auth type, so this is
+              // effectively always required in practice.
+              target: config['dest_baseUrl'] || null,
+              inlineSecret: buildFhirSecretBlob(config),
+              connectionMetadataJson: buildConnectionMetadata(config, 'fhir'),
+            }
+          : {
+              name,
+              // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson
+              // field (dest_deliveryMode), not the DestinationType — a single writer dispatches on it internally.
+              destinationType: 'Csv',
+              keyVaultName: 'workflow-secrets',
+              secretName: newSecretName(name),
+              target: config['dest_filePattern'] || null,
+              // Only SFTP delivery actually reads this secret; the other three modes never resolve it, so any
+              // placeholder value is fine there.
+              inlineSecret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
+              connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
+            };
 
     this._submit(() => this.svc.create(request));
   }
@@ -178,13 +201,16 @@ export class DestinationConnectionDialogComponent {
         this.errorMessage.set('Fix the highlighted connection fields before saving.');
         return;
       }
-      const isSql = this.chosenType() === 'sql';
-      request.inlineSecret = isSql
-        ? buildSqlConnectionString(config)
-        : config['dest_deliveryMode'] === 'sftp'
-          ? buildSftpUri(config)
-          : '';
-      request.connectionMetadataJson = buildConnectionMetadata(config, isSql);
+      const type = this.chosenType();
+      request.inlineSecret =
+        type === 'sql'
+          ? buildSqlConnectionString(config)
+          : type === 'fhir'
+            ? buildFhirSecretBlob(config)
+            : config['dest_deliveryMode'] === 'sftp'
+              ? buildSftpUri(config)
+              : '';
+      request.connectionMetadataJson = buildConnectionMetadata(config, type === 'sql' ? 'sql' : type === 'fhir' ? 'fhir' : 'csv');
     }
 
     this._submit(() => this.svc.update(destination.id, request));

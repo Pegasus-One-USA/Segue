@@ -18,13 +18,16 @@ public sealed class DestinationSchemaController : ControllerBase
 {
     private readonly IDestinationSchemaService _schemaService;
     private readonly ICsvDestinationConnectionTestService _csvConnectionTestService;
+    private readonly IFhirDestinationConnectionTestService _fhirConnectionTestService;
 
     public DestinationSchemaController(
         IDestinationSchemaService schemaService,
-        ICsvDestinationConnectionTestService csvConnectionTestService)
+        ICsvDestinationConnectionTestService csvConnectionTestService,
+        IFhirDestinationConnectionTestService fhirConnectionTestService)
     {
         _schemaService = schemaService;
         _csvConnectionTestService = csvConnectionTestService;
+        _fhirConnectionTestService = fhirConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -121,4 +124,15 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] SftpConnectionTestRequest request,
         CancellationToken cancellationToken)
         => Ok(await _csvConnectionTestService.TestSftpConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc FHIR-repository connection (e.g. Aidbox) for a not-yet-saved <c>FhirRepository</c>
+    /// destination. Always returns 200 — connection failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("fhir-test")]
+    [ProducesResponseType(typeof(FhirConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestFhirConnection(
+        [FromBody] FhirConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _fhirConnectionTestService.TestConnectionAsync(request, cancellationToken));
 }

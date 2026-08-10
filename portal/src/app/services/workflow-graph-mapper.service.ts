@@ -35,6 +35,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-postgres': 'PostgreSqlDestinationNode',
   'dest-mongo': 'MongoDestinationNode',
   'dest-csv': 'CsvDestinationNode',
+  'dest-fhir': 'FhirRepositoryDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',
   anomaly: 'AnomalyDetectionNode',
@@ -44,7 +45,9 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
 // Credential fields captured by the wizards for connection-secret assembly. They are redacted from the persisted
 // graph so plaintext secrets never land in WorkflowNodes.ConfigurationJson; create-on-save reads them straight from
 // the in-memory store to build the encrypted inlineSecret instead.
-const SECRET_FIELD_KEYS = new Set(['dest_password', 'dest_sftpPassword', 'dest_connectionString']);
+const SECRET_FIELD_KEYS = new Set([
+  'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
+]);
 
 @Injectable({ providedIn: 'root' })
 export class WorkflowGraphMapperService {
@@ -87,7 +90,7 @@ export class WorkflowGraphMapperService {
 
       if (to.kind === 'merge') continue;
 
-      if (this.isDestination(to) && !this.isMapping(from)) {
+      if (this.isDestination(to) && !this.isMapping(from) && !this.isFhirDirectDestination(to)) {
         const mappingId = `${to.id}__mapping`;
         if (!requestIds.has(mappingId)) {
           requests.push(this.syntheticMappingRequest(mappingId, from, to, catalog));
@@ -273,6 +276,16 @@ export class WorkflowGraphMapperService {
 
   private isMapping(node: CanvasNode): boolean {
     return node.kind === 'transform' && node.transformId === 'field-mapping';
+  }
+
+  // Mirrors workflow-builder.component.ts's resolveDestinationAttachPoint() skip-insertion logic: a
+  // FhirRepositoryDestination is exempt from WorkflowGraphValidator's upstream-Mapping-node requirement
+  // unconditionally (both "passthrough" and "customize" modes — both are handled directly by
+  // MappingNodeExecutor/FhirFieldTransformApplier against the raw resource batch, neither needs a real Mapping
+  // node's field-mapping engine), so a direct source/transform -> destination edge should persist as-is rather
+  // than getting a synthetic Mapping node inserted to satisfy a requirement that doesn't apply to this node type.
+  private isFhirDirectDestination(node: CanvasNode): boolean {
+    return node.kind === 'transform' && node.transformId === 'dest-fhir';
   }
 
   private isSourceCategory(category: WorkflowNodeCategory | string): boolean {

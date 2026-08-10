@@ -479,7 +479,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId);
+    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId, e.config);
 
     const siblings = this.store.outboundEdges(attachNode.id).length;
     const node: TransformNode = {
@@ -518,8 +518,22 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
    *    resolves its fields from whichever mappingProfileId ends up on the node). Clone the Mapping node instead —
    *    same upstream parent, starting from the same field config — so each destination keeps its own dedicated node.
    */
-  private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
+  private resolveDestinationAttachPoint(
+    attachNode: CanvasNode,
+    transformId: string,
+    config?: Record<string, string>,
+  ): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
+
+    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement
+    // (WorkflowGraphValidator.DestinationRequiresMappedRecords — unconditional, both modes) — a Field Mapping node
+    // has no configuration screen and no way to receive the FHIR-specific signal it would need. Both "passthrough"
+    // and "customize" modes are handled directly by MappingNodeExecutor/FhirFieldTransformApplier against the raw
+    // resource batch, neither goes through a real Mapping node's field-mapping engine — so wire the destination
+    // directly to its source/transform parent in both cases instead of forcing one in.
+    if (transformId === 'dest-fhir') {
+      return attachNode;
+    }
 
     const isMappingNode = attachNode.kind === 'transform' && (attachNode as TransformNode).transformId === 'field-mapping';
     if (!isMappingNode) {
@@ -616,7 +630,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       const node = this.store.byId(nodeId);
       if (node?.kind === 'transform') {
         const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
+        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir') {
           // Edit destination node — open library in transform mode with parent as origin.
           const parent = this.store.parentOf(nodeId);
           this.editingNodeId.set(nodeId);
