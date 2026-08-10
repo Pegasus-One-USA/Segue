@@ -64,3 +64,22 @@ export interface ResourceHistoryEntry {
   itemCount: number | null;
   recordedAtUtc: string;
 }
+
+export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
+
+/** Matches the backend's WorkflowNodeRunHistoryDto — one row per node that actually started this run, with
+ *  its real outcome (success, failure, or cancellation) always present, unlike ResourceHistoryEntry which
+ *  only ever reflects the success path. */
+export interface NodeRunHistoryEntry {
+  workflowNodeRunId: string;
+  nodeType: string;
+  rank: number;
+  subRank: number;
+  status: NodeRunStatus;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  contract: string | null;
+  payloadJson: string | null;
+  itemCount: number | null;
+}

@@ -131,6 +131,21 @@ export class TransformationRulesService {
     return this.http.get<TransformationRule[]>(qs ? `${TRANSFORMATION_RULES_ENDPOINTS.list}?${qs}` : TRANSFORMATION_RULES_ENDPOINTS.list);
   }
 
+  /** The actual rule(s) currently in effect for one field (real id + full config, not a value trace) — lets
+   *  the wizard's Rules dialog show/clone what's really running instead of starting an override from blank
+   *  schema defaults. Resolves the same Workflow &gt; Field &gt; ResourceType &gt; DestinationType &gt; Global
+   *  chain as preview(). */
+  getEffectiveRules(filter: {
+    destinationType: DestinationType; resourceType: string; destinationField: string;
+    resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
+  }): Observable<TransformationRule[]> {
+    const params = new URLSearchParams();
+    Object.entries(filter).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) params.set(key, String(value));
+    });
+    return this.http.get<TransformationRule[]>(`${TRANSFORMATION_RULES_ENDPOINTS.effective}?${params.toString()}`);
+  }
+
   save(request: SaveTransformationRuleRequest): Observable<TransformationRule> {
     return this.http.post<TransformationRule>(TRANSFORMATION_RULES_ENDPOINTS.save, request);
   }

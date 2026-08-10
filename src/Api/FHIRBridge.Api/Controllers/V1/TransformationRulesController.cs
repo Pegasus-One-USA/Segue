@@ -107,4 +107,24 @@ public sealed class TransformationRulesController : ControllerBase
         var result = await _service.PreviewAsync(request, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>The actual rule row(s) currently in effect for one field (id, full config, scope) — used to
+    /// show/clone what's really running when there's no Field-level rule of its own yet, instead of the wizard's
+    /// "Add rule" starting from blank schema defaults.</summary>
+    [HttpGet("effective")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(typeof(List<TransformationRuleDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetEffectiveRules(
+        [FromQuery] DestinationType destinationType,
+        [FromQuery] string resourceType,
+        [FromQuery] string destinationField,
+        [FromQuery] Guid? resourcePipelineRouteId,
+        [FromQuery] string? sourceSystem,
+        [FromQuery] string? sourceField,
+        CancellationToken cancellationToken)
+    {
+        var rules = await _service.GetEffectiveRulesAsync(
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+        return Ok(rules);
+    }
 }

@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
 import {
+  NodeRunHistoryEntry,
   PagedResult,
   ResourceHistoryEntry,
   RouteExecution,
@@ -36,6 +37,13 @@ export class ExecutionHistoryApiService {
   resources(id: string, page = 1, pageSize = 25): Observable<PagedResult<ResourceHistoryEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<ResourceHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.resources(id), { params });
+  }
+
+  /** One row per node that actually started this run — success, failure, or cancellation always shown,
+   *  unlike resources() which is silent about anything that didn't succeed. */
+  nodeRuns(id: string, page = 1, pageSize = 25): Observable<PagedResult<NodeRunHistoryEntry>> {
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    return this.http.get<PagedResult<NodeRunHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.nodeRuns(id), { params });
   }
 
   /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles. */

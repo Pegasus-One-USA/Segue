@@ -13,8 +13,9 @@
     <div>
       <h1>Transformation Rules</h1>
       <p>Global, resource-type, and destination-type defaults — applied automatically everywhere they match,
-        without needing to be re-configured per workflow. Field-specific rules are set from the "Rules"
-        button on a mapped column instead.</p>
+        without needing to be re-configured per workflow. A per-column override is set from the "Rules" button
+        on a mapped column instead; a source-field-only rule (matched wherever that field appears, any resource
+        type) is created here too, via "Field" scope.</p>
     </div>
     @if (!creatingNew()) {
       <button mat-flat-button color="primary" (click)="startNewTarget()">
@@ -58,9 +59,11 @@
         }
 
         <mat-form-field appearance="outline">
-          <mat-label>Source field (optional)</mat-label>
+          <mat-label>{{ newTarget().scope === 'Field' ? 'Source field (required)' : 'Source field (optional)' }}</mat-label>
           <mat-select [ngModel]="newTarget().sourceField" (ngModelChange)="setNewTargetSourceField($event)">
-            <mat-option value="">Any source field</mat-option>
+            @if (newTarget().scope !== 'Field') {
+              <mat-option value="">Any source field</mat-option>
+            }
             @for (f of sourceFieldOptions(); track f.fhirPath) {
               <mat-option [value]="f.fhirPath">{{ f.label }}</mat-option>
             }

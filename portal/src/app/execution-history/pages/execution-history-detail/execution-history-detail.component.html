@@ -66,44 +66,66 @@
   <div class="table-card">
     <div class="table-meta">
       <span class="entries-info">What each node fetched, transformed, and wrote for this run</span>
+      <button class="btn-link" type="button" (click)="toggleAllExpanded()">
+        <mat-icon>{{ allExpanded() ? 'unfold_less' : 'unfold_more' }}</mat-icon>
+        {{ allExpanded() ? 'Collapse all' : 'Expand all' }}
+      </button>
     </div>
 
     <div class="resource-list">
-      @for (entry of resources().items; track entry.id) {
-        <div class="resource-row">
+      @for (entry of nodeRuns().items; track entry.workflowNodeRunId) {
+        <div class="resource-row" [class]="'resource-row--' + entry.status.toLowerCase()">
           <div
             class="resource-summary"
             role="button"
             tabindex="0"
-            [attr.aria-expanded]="expandedId() === entry.id"
-            (click)="toggleExpanded(entry.id)"
-            (keydown.enter)="toggleExpanded(entry.id)"
-            (keydown.space)="toggleExpanded(entry.id); $event.preventDefault()"
+            [attr.aria-expanded]="isExpanded(entry.workflowNodeRunId)"
+            (click)="toggleExpanded(entry.workflowNodeRunId)"
+            (keydown.enter)="toggleExpanded(entry.workflowNodeRunId)"
+            (keydown.space)="toggleExpanded(entry.workflowNodeRunId); $event.preventDefault()"
           >
             <span class="cell-primary">{{ entry.nodeType }}</span>
-            <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
+            <span class="status-badge" [class]="statusClass(entry.status)">{{ entry.status }}</span>
+            @if (entry.contract) {
+              <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
+            }
             <span class="cell-muted">{{ entry.itemCount !== null ? entry.itemCount + ' item(s)' : '' }}</span>
-            <span class="cell-muted">{{ entry.recordedAtUtc | date:'MMM d, h:mm:ss a' }}</span>
-            <mat-icon class="chevron">{{ expandedId() === entry.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span class="cell-muted">{{ (entry.completedAt ?? entry.startedAt) | date:'MMM d, h:mm:ss a' }}</span>
+            <mat-icon class="chevron">{{ isExpanded(entry.workflowNodeRunId) ? 'expand_less' : 'expand_more' }}</mat-icon>
           </div>
 
-          @if (expandedId() === entry.id) {
+          @if (isExpanded(entry.workflowNodeRunId)) {
             <div class="resource-detail">
-              <pre>{{ formatJson(entry.payloadJson) }}</pre>
+              <div class="resource-detail__toolbar">
+                <button class="btn-copy" type="button" (click)="copyNodeDetail(entry)" title="Copy">
+                  <mat-icon>content_copy</mat-icon> Copy
+                </button>
+              </div>
+              @if (entry.errorMessage) {
+                <div class="node-error-banner">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>{{ entry.errorMessage }}</span>
+                </div>
+              }
+              @if (entry.payloadJson) {
+                <pre>{{ formatJson(entry.payloadJson) }}</pre>
+              } @else if (!entry.errorMessage) {
+                <p class="no-output-note">This node completed with no recorded output.</p>
+              }
             </div>
           }
         </div>
       } @empty {
         <div class="empty-state">
           <mat-icon>bolt</mat-icon>
-          <p>No node output recorded for this run yet.</p>
+          <p>No nodes have started for this run yet.</p>
         </div>
       }
     </div>
 
-    @if (resources().totalCount > pageSize()) {
+    @if (nodeRuns().totalCount > pageSize()) {
       <mat-paginator
-        [length]="resources().totalCount"
+        [length]="nodeRuns().totalCount"
         [pageSize]="pageSize()"
         [pageIndex]="pageIndex()"
         [pageSizeOptions]="[10, 25, 50, 100]"

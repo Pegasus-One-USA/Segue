@@ -26,6 +26,20 @@ public interface ITransformationRuleService
 
     Task<TransformPreviewResult> PreviewAsync(TransformPreviewRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The actual rule row(s) currently in effect for one field — the same Workflow → Field →
+    /// ResourceType → DestinationType → Global resolution <see cref="PreviewAsync"/> uses, but returning the
+    /// real, editable <see cref="TransformationRuleDto"/> (id, full config) rather than just a value trace.
+    /// Lets the wizard's Rules dialog show/clone what's really running for a field with no Field-level rule of
+    /// its own, instead of starting an override from blank schema defaults.</summary>
+    Task<List<TransformationRuleDto>> GetEffectiveRulesAsync(
+        DestinationType destinationType,
+        string resourceType,
+        string destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem,
+        string? sourceField,
+        CancellationToken cancellationToken = default);
+
     /// <summary>The config schema for every node type — what keys it reads, what control to render, and its
     /// default — so the UI never has to hand-maintain a duplicate copy of this metadata.</summary>
     IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas();

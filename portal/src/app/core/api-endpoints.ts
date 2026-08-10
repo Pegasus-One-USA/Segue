@@ -162,6 +162,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   preview: `${API_V1_BASE}/transformation-rules/preview`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
+  effective: `${API_V1_BASE}/transformation-rules/effective`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──
@@ -229,6 +230,7 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+  nodeRuns:  (id: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

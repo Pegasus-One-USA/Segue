@@ -28,14 +28,17 @@ const DESTINATION_TYPE_OPTIONS: DestinationType[] = [
   'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'Csv', 'Sftp', 'FhirRepository',
 ];
 
-// Only the two broadest scopes are managed here — Field/Workflow rules are always created in context from
-// a specific mapped column's Rules button (TransformRulesDialogComponent), where source/destination are
-// already known; this screen exists precisely because Global/ResourceType/DestinationType rules have no
-// such context to be created from.
+// Global/ResourceType/DestinationType have no natural home inside any one mapping wizard, so they're always
+// created here. 'Field' is a special case: the wizard's Rules button (TransformRulesDialogComponent) creates
+// the common kind — tied to one resource type + one already-mapped column — but a Field rule with NO
+// resource type (matched purely by source field name, e.g. "wherever birthDate shows up") has no wizard
+// context to be created from either, so it's managed here too. Workflow (tied to one pipeline run) still has
+// no UI anywhere.
 const BROAD_SCOPE_OPTIONS: { value: TransformScope; label: string }[] = [
   { value: 'Global', label: 'Global — every destination, every resource' },
   { value: 'ResourceType', label: 'Resource type — any destination' },
   { value: 'DestinationType', label: 'Destination type — any resource' },
+  { value: 'Field', label: 'Field — matched by source field, any resource type' },
 ];
 
 interface RuleStep {
@@ -146,7 +149,10 @@ export class TransformationRuleListComponent implements OnInit {
     }).subscribe({
       next: ({ schemas, rules }) => {
         this.nodeSchemas = schemas;
-        const flat = rules.flat();
+        // A Field-scoped rule with a resource type set belongs to the wizard's per-column Rules button
+        // (TransformRulesDialogComponent) — this screen only owns the resource-agnostic kind (no resource
+        // type), so the wizard's own rules never show up here to be edited out of their context.
+        const flat = rules.flat().filter(r => r.scope !== 'Field' || !r.resourceType);
         const byKey = new Map<string, RuleTargetGroup>();
         for (const r of flat) {
           const key = groupKey(r);
@@ -212,6 +218,10 @@ export class TransformationRuleListComponent implements OnInit {
     }
     if (t.scope === 'DestinationType' && !t.destinationType) {
       this.toast.error('Destination type is required for a destination-type-scoped rule.');
+      return;
+    }
+    if (t.scope === 'Field' && !t.sourceField) {
+      this.toast.error('Source field is required for a field-scoped rule — that’s what it matches on instead of a resource type.');
       return;
     }
 

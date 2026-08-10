@@ -80,4 +80,54 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 
         return new WorkflowPagedResult<WorkflowNodeRunPayloadDto>(items, totalCount, page, take);
     }
+
+    public async Task<WorkflowPagedResult<WorkflowNodeRunHistoryDto>> GetNodeRunHistoryPagedAsync(
+        Guid workflowRunId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var nodeRunsQuery = _dbContext.WorkflowNodeRuns
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId);
+
+        var totalCount = await nodeRunsQuery.CountAsync(cancellationToken);
+
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+
+        var nodeRuns = await nodeRunsQuery
+            .OrderBy(x => x.Rank).ThenBy(x => x.SubRank).ThenBy(x => x.StartedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+        var nodeRunIds = nodeRuns.Select(x => x.Id).ToList();
+        var payloadsByNodeRunId = await _dbContext.WorkflowNodeRunPayloads
+            .AsNoTracking()
+            .Where(p => nodeRunIds.Contains(p.WorkflowNodeRunId))
+            .ToListAsync(cancellationToken);
+
+        // A node run can, in principle, have recorded more than one payload — take the earliest, matching what
+        // GetPagedAsync would surface first for the same node run.
+        var payloadByNodeRunId = payloadsByNodeRunId
+            .GroupBy(p => p.WorkflowNodeRunId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.RecordedAtUtc).First());
+
+        var items = nodeRuns.Select(nodeRun =>
+        {
+            payloadByNodeRunId.TryGetValue(nodeRun.Id, out var payload);
+            return new WorkflowNodeRunHistoryDto(
+                nodeRun.Id,
+                nodeRun.NodeType,
+                nodeRun.Rank,
+                nodeRun.SubRank,
+                nodeRun.Status.ToString(),
+                nodeRun.ErrorMessage,
+                nodeRun.StartedAt,
+                nodeRun.CompletedAt,
+                payload?.Contract,
+                payload is null ? null : _encryptor.Decrypt(payload.PayloadJson),
+                payload?.ItemCount);
+        }).ToList();
+
+        return new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, totalCount, page, take);
+    }
 }
