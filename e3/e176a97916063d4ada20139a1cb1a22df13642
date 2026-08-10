@@ -1,0 +1,24 @@
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_9b48790bb1404e::t_1f85720eb744af 371-392
+  s_9b48790bb1404e::t_ffaed41e7ed463 507-511
+  s_9b48790bb1404e::t_aec055b6d81005 86-98
+  s_9b48790bb1404e::t_5dfdba004d405d 364-370
+  s_9b48790bb1404e::t_7786a34f505788 352-363
+  s_9b48790bb1404e::t_3c669b7e80517f 393-394,504-506,512-513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "e3e176a97916063d4ada20139a1cb1a22df13642",
+  "prompts": {},
+  "sessions": {
+    "s_9b48790bb1404e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7b131af-2dbe-4964-9cb7-a26cb1e288be",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
