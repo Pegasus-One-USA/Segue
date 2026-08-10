@@ -102,7 +102,7 @@ export class WorkflowBuildAssemblerService {
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      // Existing-source pick left untouched (see EpicAudienceFormComponent.save()'s resolvedSourceConnectionId) —
+      // Existing-source pick left untouched (see EhrVendorSourceFormComponent.save()'s resolvedSourceConnectionId) —
       // skip entirely, no create/update. Mirrors destinationResolved below: a connection another workflow also
       // points at can't be mutated by this save, and the backend resolves sourceConnectionId straight off this
       // node's own config for the Mappings step regardless.

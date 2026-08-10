@@ -1,0 +1,9 @@
+// Plain pass-through host — stretches to whatever the consuming page's layout gives it so the hosted
+// EhrVendorSourceFormComponent's own `:host { flex: 1 }` (ehr-vendor-source-form.component.scss) has a flex
+// container to stretch against, matching how the old EpicAudienceFormComponent sized itself directly.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}

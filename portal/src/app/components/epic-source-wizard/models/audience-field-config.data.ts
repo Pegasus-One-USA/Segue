@@ -5,7 +5,7 @@ export type EpicAudience = 'provider-ehr-launch' | 'provider-standalone' | 'back
 // All four audiences now show a connection form; only the redirect/launch/retrieval
 // shape differs between them.
 //
-// Lives in its own file (rather than epic-audience-form.component.ts) so WizardService can read it too —
+// Lives in its own file (rather than ehr-vendor-source-form.component.ts) so WizardService can read it too —
 // WizardService.save()'s entity-mode branch needs to know whether the selected audience wants an `interactive`
 // or `retrieval` payload without importing the component itself, which would create a circular dependency
 // (the component already injects WizardService).

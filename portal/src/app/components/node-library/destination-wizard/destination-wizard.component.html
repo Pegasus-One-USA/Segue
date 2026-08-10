@@ -98,274 +98,18 @@
         </div>
       }
 
-      @if (isSql()) {
-        <form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-3">
-
-            <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
-              <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
-              <input id="dw-name" class="dw-input" formControlName="name" placeholder="e.g. SQL Production" />
-              @if (sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched) {
-                <span class="dw-error">Destination name is required.</span>
-              }
-            </div>
-
-            <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
-              <label class="dw-label" for="dw-server">{{ showSslToggle() ? 'Host' : 'SQL Server' }} <span class="dw-req">*</span></label>
-              <input id="dw-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
-              @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
-                <span class="dw-error">Server host is required.</span>
-              }
-            </div>
-
-            <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
-              <label class="dw-label" for="dw-database">Database <span class="dw-req">*</span></label>
-              <input id="dw-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
-              @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
-                <span class="dw-error">Database name is required.</span>
-              }
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-auth">Authentication <span class="dw-req">*</span></label>
-              <div class="dw-select-wrap">
-                <select id="dw-auth" class="dw-select" formControlName="auth">
-                  <option value="sql-auth">SQL Username / Password</option>
-                  @if (!showSslToggle()) {
-                    <option value="managed-identity">Managed Identity</option>
-                    <option value="azure-ad">Azure AD</option>
-                  }
-                </select>
-              </div>
-            </div>
-
-            @if (sqlForm.get('auth')!.value === 'sql-auth') {
-              <div class="dw-field">
-                <label class="dw-label" for="dw-username">Username</label>
-                <input id="dw-username" class="dw-input" formControlName="username" placeholder="e.g. sa" autocomplete="off" />
-              </div>
-              <div class="dw-field">
-                <label class="dw-label" for="dw-password">Password</label>
-                <input id="dw-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
-              </div>
-            }
-
-            @if (showSslToggle()) {
-              <div class="dw-field dw-field--checkbox">
-                <label class="dw-label">
-                  <input type="checkbox" formControlName="requireSsl" />
-                  Require SSL
-                </label>
-                <span class="dw-hint">Enable for managed providers that enforce SSL (e.g. AWS RDS). Leave off for local/docker instances without SSL configured.</span>
-              </div>
-            }
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-schema">Schema</label>
-              <input id="dw-schema" class="dw-input" formControlName="schema" placeholder="dbo" />
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-writeMode">Write mode</label>
-              <div class="dw-select-wrap">
-                <select id="dw-writeMode" class="dw-select" formControlName="writeMode">
-                  <option value="upsert">Upsert by source id</option>
-                  <option value="insert">Insert only</option>
-                  <option value="update">Update only</option>
-                </select>
-              </div>
-            </div>
-
-          </div><!-- /dw-grid-3 -->
-        </form>
-
-        @if (probeState() === 'testing') {
-          <div class="dw-callout dw-callout--info">Testing connection…</div>
-        }
-        @if (probeState() === 'error') {
-          <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
-        }
-        @if (probeState() === 'ok') {
-          <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) loaded. Choose tables &amp; columns in Map fields.</div>
-        }
-      } @else if (isMongo()) {
-        <form [formGroup]="mongoForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-2">
-
-            <div class="dw-field" [class.dw-field--error]="mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched">
-              <label class="dw-label" for="dw-mongo-name">Destination name <span class="dw-req">*</span></label>
-              <input id="dw-mongo-name" class="dw-input" formControlName="name" placeholder="e.g. MongoDB Production" />
-              @if (mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched) {
-                <span class="dw-error">Destination name is required.</span>
-              }
-            </div>
-
-            <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
-              <label class="dw-label" for="dw-mongo-conn">Connection string <span class="dw-req">*</span></label>
-              <input id="dw-mongo-conn" type="password" class="dw-input" formControlName="connectionString"
-                placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
-              @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
-                <span class="dw-error">Connection string is required.</span>
-              }
-            </div>
-
-            <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
-              <label class="dw-label" for="dw-mongo-collection">Collection <span class="dw-req">*</span></label>
-              <input id="dw-mongo-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
-              @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
-                <span class="dw-error">Collection name is required.</span>
-              }
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-mongo-writeMode">Write mode</label>
-              <div class="dw-select-wrap">
-                <select id="dw-mongo-writeMode" class="dw-select" formControlName="writeMode">
-                  <option value="upsert">Upsert by source id</option>
-                  <option value="insert">Insert only</option>
-                </select>
-              </div>
-            </div>
-
-          </div><!-- /dw-grid-2 -->
-        </form>
-      } @else {
-        <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
-          <div class="dw-grid-2">
-
-            <div class="dw-field" [class.dw-field--error]="csvForm.get('name')!.invalid && csvForm.get('name')!.touched">
-              <label class="dw-label" for="dw-name">Destination name <span class="dw-req">*</span></label>
-              <input id="dw-name" class="dw-input" formControlName="name" placeholder="e.g. CSV Export - SFTP" />
-              @if (csvForm.get('name')!.invalid && csvForm.get('name')!.touched) {
-                <span class="dw-error">Destination name is required.</span>
-              }
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-deliveryMode">Delivery mode <span class="dw-req">*</span></label>
-              <div class="dw-select-wrap">
-                <select id="dw-deliveryMode" class="dw-select" formControlName="deliveryMode">
-                  <option value="download">Download (returned directly from the run)</option>
-                  <option value="email">Email</option>
-                  <option value="sftp">SFTP</option>
-                  <option value="downloadUrl">Download link</option>
-                </select>
-              </div>
-              @if (csvForm.get('deliveryMode')!.value === 'download') {
-                <span class="dw-hint">
-                  Only works when this destination's route is triggered manually — not on a schedule or webhook.
-                </span>
-              }
-            </div>
-
-            <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched">
-              <label class="dw-label" for="dw-filePattern">File name pattern <span class="dw-req">*</span></label>
-              <input id="dw-filePattern" class="dw-input" formControlName="filePattern" placeholder="{resource}_{yyyyMMdd_HHmmss}.csv" />
-              @if (csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched) {
-                <span class="dw-error">File name pattern is required.</span>
-              }
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-delimiter">Delimiter</label>
-              <div class="dw-select-wrap">
-                <select id="dw-delimiter" class="dw-select" formControlName="delimiter">
-                  <option value="comma">Comma (,)</option>
-                  <option value="pipe">Pipe (|)</option>
-                  <option value="tab">Tab</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="dw-field">
-              <label class="dw-label" for="dw-encoding">Encoding</label>
-              <div class="dw-select-wrap">
-                <select id="dw-encoding" class="dw-select" formControlName="encoding">
-                  <option value="utf-8">UTF-8</option>
-                  <option value="utf-8-bom">UTF-8 with BOM</option>
-                </select>
-              </div>
-            </div>
-
-            @if (csvForm.get('deliveryMode')!.value === 'sftp') {
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
-                <label class="dw-label" for="dw-sftpHost">SFTP host <span class="dw-req">*</span></label>
-                <input id="dw-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.company.com" />
-                @if (csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched) {
-                  <span class="dw-error">SFTP host is required.</span>
-                }
-              </div>
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched">
-                <label class="dw-label" for="dw-sftpPort">Port</label>
-                <input id="dw-sftpPort" type="number" class="dw-input" formControlName="sftpPort" />
-              </div>
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched">
-                <label class="dw-label" for="dw-sftpUsername">Username <span class="dw-req">*</span></label>
-                <input id="dw-sftpUsername" class="dw-input" formControlName="sftpUsername" autocomplete="off" />
-                @if (csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched) {
-                  <span class="dw-error">SFTP username is required.</span>
-                }
-              </div>
-
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
-                <label class="dw-label" for="dw-sftpPassword">Password <span class="dw-req">*</span></label>
-                <input id="dw-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
-                @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
-                  <span class="dw-error">SFTP password is required.</span>
-                }
-              </div>
-
-              <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
-                <label class="dw-label" for="dw-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-                <input id="dw-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
-                @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
-                  <span class="dw-error">Remote folder is required.</span>
-                }
-              </div>
-            }
-
-            @if (csvForm.get('deliveryMode')!.value === 'email') {
-              <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched">
-                <label class="dw-label" for="dw-emailTo">Recipient(s) <span class="dw-req">*</span></label>
-                <input id="dw-emailTo" class="dw-input" formControlName="emailTo" placeholder="alice@company.com, bob@company.com" />
-                @if (csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched) {
-                  <span class="dw-error">At least one recipient is required.</span>
-                }
-              </div>
-
-              <div class="dw-field dw-field--full">
-                <label class="dw-label" for="dw-emailCc">Cc</label>
-                <input id="dw-emailCc" class="dw-input" formControlName="emailCc" placeholder="optional, comma-separated" />
-              </div>
-
-              <div class="dw-field dw-field--full">
-                <label class="dw-label" for="dw-emailSubjectTemplate">Subject template</label>
-                <input id="dw-emailSubjectTemplate" class="dw-input" formControlName="emailSubjectTemplate" />
-                <span class="dw-hint">Placeholders: {{ '{{RouteName}}' }}, {{ '{{RunDate}}' }}, {{ '{{RowCount}}' }}</span>
-              </div>
-
-              <div class="dw-field dw-field--full">
-                <label class="dw-label" for="dw-emailBodyTemplate">Body template</label>
-                <textarea id="dw-emailBodyTemplate" class="dw-input" rows="3" formControlName="emailBodyTemplate"></textarea>
-              </div>
-            }
-
-            @if (csvForm.get('deliveryMode')!.value === 'downloadUrl') {
-              <div class="dw-field" [class.dw-field--error]="csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched">
-                <label class="dw-label" for="dw-downloadLinkExpiryMinutes">Link expiry (minutes) <span class="dw-req">*</span></label>
-                <input id="dw-downloadLinkExpiryMinutes" type="number" class="dw-input" formControlName="downloadLinkExpiryMinutes" />
-                @if (csvForm.get('downloadLinkExpiryMinutes')!.invalid && csvForm.get('downloadLinkExpiryMinutes')!.touched) {
-                  <span class="dw-error">Enter a value between 1 and 10080 minutes (7 days).</span>
-                }
-              </div>
-            }
-
-          </div><!-- /dw-grid-2 -->
-        </form>
-      }
     }
+
+    <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
+         type (see destination-forms/destination-form.registry.ts). Kept mounted for the wizard's whole
+         lifetime once created — only visually hidden outside Step 1 (dw-hidden) — so Steps 2-4 keep reading
+         live values off it directly (the mapping canvas's connectionInfo/csvDelimiterKey, Step 4's review),
+         same as the old inline sqlForm/csvForm/mongoForm did just by staying alive as class fields. Each
+         component renders its own Test Connection button/callouts (SQL family/CSV-via-SFTP) in its own
+         template now, instead of the wizard rendering them inline. ── -->
+    <div [class.dw-hidden]="!isStepActive(1)">
+      <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="activeFormInputs()" />
+    </div>
 
     <!-- ═══ STEP 2: Data groups ═══════════════════════════════════════════ -->
     @if (isStepActive(2)) {
@@ -485,7 +229,7 @@
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
-          [csvDelimiterKey]="csvForm.value.delimiter ?? 'comma'"
+          [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
           [columnsForTable]="columnsForTableFn"
           [dataTypeForTable]="dataTypeForTableColumnFn"
@@ -539,49 +283,49 @@
         @if (isSql()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ sqlForm.value.name }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">SQL Server</span>
-            <span class="dw-review-val dw-mono">{{ sqlForm.value.server || '—' }}</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_server'] || '—' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Database</span>
-            <span class="dw-review-val">{{ sqlForm.value.database || '—' }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_database'] || '—' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Auth</span>
-            <span class="dw-review-val">{{ sqlForm.value.auth }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_auth'] }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
-            <span class="dw-review-val">{{ sqlForm.value.writeMode }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
           </div>
         } @else if (isMongo()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ mongoForm.value.name }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Collection</span>
-            <span class="dw-review-val dw-mono">{{ mongoForm.value.collection || '—' }}</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_collection'] || '—' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
-            <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
           </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ csvForm.value.name }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Delivery mode</span>
-            <span class="dw-review-val">{{ csvForm.value.deliveryMode }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_deliveryMode'] }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">File pattern</span>
-            <span class="dw-review-val dw-mono">{{ csvForm.value.filePattern }}</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_filePattern'] }}</span>
           </div>
         }
         <div class="dw-review-card">

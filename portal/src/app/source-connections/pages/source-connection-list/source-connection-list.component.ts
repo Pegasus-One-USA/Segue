@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, effect } from '@angular/core';
+import { Component, OnInit, inject, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -14,7 +14,14 @@ import { ISourceConnectionService } from '../../services/i-source-connection.ser
 import { ApplicationTypeModel, SourceConnectionModel, SourceSortColumn, SortOrder } from '../../models/source-connection.model';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { WizardService } from '../../../services/wizard.service';
-import { EpicAudienceFormComponent } from '../../../components/epic-source-wizard/epic-audience-form/epic-audience-form.component';
+import { EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from '../../../components/node-library/source-form.registry';
+import { EpicSourceFormComponent } from '../../../components/node-library/epic-source-form/epic-source-form.component';
+import { CernerSourceFormComponent } from '../../../components/node-library/cerner-source-form/cerner-source-form.component';
+import { AthenahealthSourceFormComponent } from '../../../components/node-library/athenahealth-source-form/athenahealth-source-form.component';
+import { AllscriptsSourceFormComponent } from '../../../components/node-library/allscripts-source-form/allscripts-source-form.component';
+import { HealowSourceFormComponent } from '../../../components/node-library/healow-source-form/healow-source-form.component';
+import { MeditechSourceFormComponent } from '../../../components/node-library/meditech-source-form/meditech-source-form.component';
+import { SampleSourceFormComponent } from '../../../components/node-library/sample-source-form/sample-source-form.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
@@ -32,7 +39,13 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
     MatTooltipModule,
     DisableWithoutPermissionDirective,
     HideWithoutPermissionDirective,
-    EpicAudienceFormComponent,
+    EpicSourceFormComponent,
+    CernerSourceFormComponent,
+    AthenahealthSourceFormComponent,
+    AllscriptsSourceFormComponent,
+    HealowSourceFormComponent,
+    MeditechSourceFormComponent,
+    SampleSourceFormComponent,
     PaginationBarComponent,
   ],
   templateUrl: './source-connection-list.component.html',
@@ -89,6 +102,28 @@ export class SourceConnectionListComponent implements OnInit {
     { value: 'NewEHRTwo',           label: 'NewEHR Two' },
     { value: 'Sample',              label: 'Sample' },
   ];
+
+  /** Vendors offered when creating a brand-new Source Connection — narrower than ehrOptions (the row-list
+   *  filter) above: only vendors with their own dedicated, WizardService-backed entity-mode form (see
+   *  EHR_VENDOR_TO_SOURCE_FORM_KEY / SELF_CONTAINED_SOURCE_FORM_KEYS in node-library). GenericFhir/Hl7v2 have no
+   *  entity-mode-capable form of their own (they're canvas-only, "headless" getFields() forms — see
+   *  node-library-dialog.component.ts) — offering them here would silently create nothing on Save. Replaces the
+   *  in-form EHR `<select>` this page used to delegate vendor choice to before that control was removed from the
+   *  shared engine (see ehr-vendor-source-form.component.ts).
+   */
+  readonly createVendorOptions = this.ehrOptions.filter(o => o.value in EHR_VENDOR_TO_SOURCE_FORM_KEY && o.value !== 'GenericFhir' && o.value !== 'Hl7v2');
+
+  readonly addVendor = signal<EhrVendor>('Epic');
+
+  /** Which registered per-vendor form to render for the currently-open entity-mode dialog — driven by
+   *  wiz.ehrType() (seeded from the row being viewed/edited, or from addVendor() for a brand-new connection; see
+   *  openAdd()). Falls back to 'epic' for a legacy row persisted under a vendor with no dedicated entity-mode
+   *  form (GenericFhir/Hl7v2/NewEHR/NewEHRTwo) — same "Epic form regardless of vendor" behavior this page always
+   *  had before the per-vendor split, now scoped to just that legacy fallback case. */
+  readonly currentEntityFormKey = computed(() => {
+    const key = EHR_VENDOR_TO_SOURCE_FORM_KEY[this.wiz.ehrType()];
+    return key && SELF_CONTAINED_SOURCE_FORM_KEYS.has(key) ? key : 'epic';
+  });
 
   private static readonly APPLICATION_TYPE_LABELS: Record<string, string> = {
     EhrLaunch:  'Provider EHR Launch',
@@ -222,8 +257,14 @@ export class SourceConnectionListComponent implements OnInit {
     this.load();
   }
 
-  openAdd(): void {
+  /** Opens the "Create" flow for a brand-new Source Connection under the given vendor (see the vendor `<select>`
+   *  next to "New Source Connection" in the template, bound to addVendor). Replaces this page's old reliance on
+   *  the in-form EHR `<select>` — openEntity(null) itself always seeds wiz.ehrType to 'Epic', so it's set again
+   *  right after, and the entity-mode-CREATE branch of EhrVendorSourceFormComponent's own vendor-sync effect
+   *  keeps it there once the matching wrapper (see currentEntityFormKey) mounts. */
+  openAdd(vendor: EhrVendor = this.addVendor()): void {
     this.wiz.openEntity(null);
+    this.wiz.ehrType.set(vendor);
   }
 
   openView(connection: SourceConnectionModel): void {
