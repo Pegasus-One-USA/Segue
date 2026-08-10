@@ -253,6 +253,45 @@
 
 .dw-section-spacer { flex: 1; }
 
+.dw-group-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 260px;
+  max-width: 100%;
+}
+
+.dw-group-search-input {
+  width: 100%;
+  padding: 7px 28px 7px 12px;
+  border: 1px solid var(--color-border, #d8dce2);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--color-ink);
+  background: var(--color-surface, #fff);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary, #2563eb);
+  }
+}
+
+.dw-group-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+
+  &:hover { color: var(--color-ink); }
+}
+
 /* ── Form ─────────────────────────────────────────────────────────────────── */
 .dw-form { width: 100%; }
 

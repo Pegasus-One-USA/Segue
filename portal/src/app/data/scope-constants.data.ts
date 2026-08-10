@@ -7,12 +7,17 @@ export const FHIR_RESOURCES: string[] = [
   'MedicationRequest', 'MedicationAdministration',
 ];
 
-/** The 11 FHIR resource types Epic sources/destinations actually support end-to-end — the
- *  canonical list surfaced in the Epic source wizard's scope generation and the destination
- *  wizard's data-group picker. */
+/** FHIR resource types Epic sources/destinations support — the canonical list surfaced in the Epic
+ *  source wizard's scope generation and the destination wizard's data-group picker. Keep in sync with
+ *  SupportedFhirResourceTypes.All (backend) — the original MVP1 11 plus the resources added once their
+ *  Epic templates (src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates) existed to catalog them. */
 export const SUPPORTED_RESOURCE_TYPES: string[] = [
   'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
   'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
+  'Appointment', 'CarePlan', 'CareTeam', 'Communication', 'CommunicationRequest', 'Device',
+  'DocumentReference', 'FamilyMemberHistory', 'ImagingStudy', 'Immunization', 'Location', 'Medication',
+  'MedicationDispense', 'MedicationStatement', 'Organization', 'PractitionerRole', 'Provenance',
+  'Questionnaire', 'QuestionnaireResponse', 'RelatedPerson', 'Schedule', 'Slot', 'Specimen', 'Task',
 ];
 
 export const CODED_RESOURCES: string[] = [
