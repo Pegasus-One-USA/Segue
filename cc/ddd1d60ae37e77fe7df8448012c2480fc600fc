@@ -1,0 +1,53 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_2601dc831ddd56::t_55bc3ac02d7afd 380-388
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorAuthorizationTests.cs
+  s_d403f22a017b57::t_b417cc039e771c 100-139
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/WorkflowRunCancelledException.cs
+  s_d403f22a017b57::t_c73a012e18af26 4-9,15
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_d403f22a017b57::t_2c0d4a49c6de85 127-128,135-140,514,516-517
+  s_d403f22a017b57::t_7f8c891c4cd51b 500,503,512-513,515,518-529,531,534-560
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/ResourceNotSupportedException.cs
+  s_d403f22a017b57::t_d1b4d737f19d22 1-26
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/ResourceAuthorizationException.cs
+  s_d403f22a017b57::t_e3bb05b6d560e4 11,23-24
+src/Runtime/FHIRBridge.Runtime.Domain/Exceptions/IResourceExtractionFailure.cs
+  s_d403f22a017b57::t_cdfd019d7d6a88 1-17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_d403f22a017b57::t_42b4c02a258bb7 462,465-468,472,476
+  s_d403f22a017b57::t_df65ce867ae3e8 776
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_26202082a1cf9f::t_2be67eedf258b6 100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "ccddd1d60ae37e77fe7df8448012c2480fc600fc",
+  "prompts": {},
+  "sessions": {
+    "s_2601dc831ddd56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15f2b100-cfd2-4a67-988d-40ee247f1a63",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_26202082a1cf9f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e22b5f6d-b00e-4387-889d-ede3efd400e9",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d403f22a017b57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b6eb23d-570d-4651-9e8f-24dc6dc3d687",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

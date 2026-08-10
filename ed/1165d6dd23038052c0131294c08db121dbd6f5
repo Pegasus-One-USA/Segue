@@ -1,0 +1,19 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_39163135bbc470::t_50ab4adbddc0f4 267,271,275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "ed1165d6dd23038052c0131294c08db121dbd6f5",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}
