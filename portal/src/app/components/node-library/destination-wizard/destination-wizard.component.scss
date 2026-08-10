@@ -264,15 +264,15 @@
 .dw-group-search-input {
   width: 100%;
   padding: 7px 28px 7px 12px;
-  border: 1px solid var(--color-border, #d8dce2);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   font-size: 12.5px;
   color: var(--color-ink);
-  background: var(--color-surface, #fff);
+  background: var(--color-surface);
 
   &:focus {
     outline: none;
-    border-color: var(--color-primary, #2563eb);
+    border-color: var(--color-primary);
   }
 }
 
