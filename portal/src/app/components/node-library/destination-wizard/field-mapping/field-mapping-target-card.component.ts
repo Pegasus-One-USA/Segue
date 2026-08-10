@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { MappingRow, MappingDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, detectRelationFromColumns } from './field-mapping-summary.model';
 import { autoCardWidth } from './field-mapping-card-size.util';
 
 const MIN_WIDTH = 220;
@@ -129,20 +129,9 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    * picked from the database dropdown that just happens to have a real FK constraint. Whichever column
    * actually has isForeignKey wins; a table normally has at most one FK back to its logical parent.
    */
-  readonly detectedRelation = computed<ChildTableRelation | undefined>(() => {
-    for (const col of this.columns()) {
-      const info = this.columnKeyInfo()(col);
-      if (info?.isForeignKey && info.references) {
-        const lastDot = info.references.lastIndexOf('.');
-        return {
-          parentTable: info.references.slice(0, lastDot),
-          parentColumn: info.references.slice(lastDot + 1),
-          foreignKeyColumnName: col,
-        };
-      }
-    }
-    return undefined;
-  });
+  readonly detectedRelation = computed<ChildTableRelation | undefined>(() =>
+    detectRelationFromColumns(this.columns().map(name => ({ name, ...this.columnKeyInfo()(name) }))),
+  );
 
   /** DB-detected relation wins when known; falls back to the explicit `relation` input for a table whose
    *  columns aren't live yet (e.g. right after creation, before a re-probe, or CSV with no real schema). */

@@ -168,11 +168,13 @@ export function serializeRowsFlat(
 
     const resolvedPolicy = resolveArrayPolicy(row);
     const { approximated } = resolvedPolicy;
-    // RepeatParent ("this array field's parent row is repeated once per item") only makes sense on the
-    // resource's OWN root table — off it, the equivalent backend concept is SeparateDestination (the
-    // array's items become rows of the child table instead), mirroring MappingImportService
-    // .ResolveArrayMetadata's identical isRootTable branch.
-    const arrayPolicy: string = (isChildTable && resolvedPolicy.arrayPolicy === 'RepeatParent')
+    // The instance selection (first/all/nth/criteria) is only a meaningful choice on the resource's OWN
+    // root table. Off it, there's no such thing as "first item only" — the whole reason a field targets a
+    // separate child table is to become its own row there, so it must always be SeparateDestination
+    // regardless of which instance type was picked (mirroring MappingImportService.ResolveArrayMetadata's
+    // identical isRootTable branch). Only StoreJson is exempt: a childJson row embeds the whole node as one
+    // JSON blob rather than fanning out into per-item rows, so it keeps its own resolved policy untouched.
+    const arrayPolicy: string = (isChildTable && resolvedPolicy.arrayPolicy !== 'StoreJson')
       ? 'SeparateDestination'
       : resolvedPolicy.arrayPolicy;
 

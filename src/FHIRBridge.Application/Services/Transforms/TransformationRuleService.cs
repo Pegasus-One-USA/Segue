@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -11,13 +12,18 @@ public sealed class TransformationRuleService : ITransformationRuleService
     private readonly ITransformationRuleRepository _repository;
     private readonly IEffectiveRuleResolver _resolver;
     private readonly ITransformNodeRegistry _nodeRegistry;
+    private readonly IAppSecretAccessor? _secretAccessor;
 
     public TransformationRuleService(
-        ITransformationRuleRepository repository, IEffectiveRuleResolver resolver, ITransformNodeRegistry nodeRegistry)
+        ITransformationRuleRepository repository,
+        IEffectiveRuleResolver resolver,
+        ITransformNodeRegistry nodeRegistry,
+        IAppSecretAccessor? secretAccessor = null)
     {
         _repository = repository;
         _resolver = resolver;
         _nodeRegistry = nodeRegistry;
+        _secretAccessor = secretAccessor;
     }
 
     public async Task<List<TransformationRuleDto>> ListRulesAsync(
@@ -55,13 +61,15 @@ public sealed class TransformationRuleService : ITransformationRuleService
                 request.SourceField,
                 request.Order,
                 request.OnNull,
-                request.ErrorPolicy);
+                request.ErrorPolicy,
+                request.OnNullDefaultValue,
+                request.ArrayMode);
             rule.SetEnabled(request.IsEnabled);
             await _repository.AddAsync(rule, cancellationToken);
             return ToDto(rule);
         }
 
-        existing.Update(configJson, request.Order, request.OnNull, request.ErrorPolicy);
+        existing.Update(configJson, request.Order, request.OnNull, request.ErrorPolicy, request.OnNullDefaultValue, request.ArrayMode);
         existing.SetEnabled(request.IsEnabled);
         await _repository.UpdateAsync(existing, cancellationToken);
         return ToDto(existing);
@@ -93,9 +101,25 @@ public sealed class TransformationRuleService : ITransformationRuleService
 
         foreach (var rule in rules)
         {
+            if (TransformNullPolicy.IsNullOrEmpty(currentValue))
+            {
+                var handled = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
+                steps.Add(new TransformStepTrace(rule.NodeType, rule.Scope, currentValue, handled, true, null));
+                currentValue = handled;
+                if (stopChain)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
             var node = _nodeRegistry.Get(rule.NodeType);
             var config = JsonSerializer.Deserialize<Dictionary<string, string>>(rule.ConfigJson) ?? [];
-            var result = node.Execute(currentValue, config, secret: null);
+            var secret = rule.NodeType is Domain.Enums.TransformNodeType.HashingMasking or Domain.Enums.TransformNodeType.DateMathAge
+                ? _secretAccessor?.TransformHashingKey
+                : null;
+            var result = TransformNodeApplier.ExecuteWithArrayMode(node, currentValue, config, secret, rule.ArrayMode);
 
             steps.Add(new TransformStepTrace(rule.NodeType, rule.Scope, currentValue, result.Value, result.Success, result.Error));
 
@@ -136,5 +160,7 @@ public sealed class TransformationRuleService : ITransformationRuleService
         rule.Order,
         rule.OnNull,
         rule.ErrorPolicy,
-        rule.IsEnabled);
+        rule.IsEnabled,
+        rule.OnNullDefaultValue,
+        rule.ArrayMode);
 }

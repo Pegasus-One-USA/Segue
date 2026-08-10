@@ -20,7 +20,7 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
     private GeneratedFileDownloadLinkService CreateService(string signingSecret = "test-secret")
     {
         var secretAccessor = new AppSecretAccessor();
-        secretAccessor.Initialize(jwtSigningKey: "unused", downloadLinkSigningSecret: signingSecret);
+        secretAccessor.Initialize(jwtSigningKey: "unused", downloadLinkSigningSecret: signingSecret, transformHashingKey: "unused");
 
         var settingsCache = new Mock<ISystemSettingsCache>();
         settingsCache

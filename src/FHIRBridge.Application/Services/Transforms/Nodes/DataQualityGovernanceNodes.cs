@@ -28,7 +28,21 @@ public sealed class DefaultNullHandlingNode : ITransformNode
         }
 
         var defaultValue = config.GetOrNull("default");
-        return TransformResult.Ok(defaultValue);
+        if (defaultValue is not null)
+        {
+            return TransformResult.Ok(defaultValue);
+        }
+
+        // Nothing present and no default configured: optionally emit a structured data-absent-reason marker
+        // (as a JsonObject, same as the FHIR complex-type builder nodes) instead of a bare null — a FHIR-native
+        // destination writer can translate this into a real `_field.extension` data-absent-reason; a
+        // SQL-shaped destination just sees a null column, since the marker only round-trips through JSON.
+        if (config.GetBool("addDataAbsentReason", false))
+        {
+            return TransformResult.Ok(new System.Text.Json.Nodes.JsonObject { ["_dataAbsentReason"] = config.Get("dataAbsentReasonCode", "unknown") });
+        }
+
+        return TransformResult.Ok(null);
     }
 }
 
@@ -65,14 +79,21 @@ public sealed class DateMathAgeNode : ITransformNode
                 return TransformResult.Ok(age);
 
             case "add":
-                var days = ParseIsoDurationDays(config.Get("duration", "P0D"));
-                return TransformResult.Ok(date.AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                var shifted = ApplyIsoDuration(date, config.Get("duration", "P0D"));
+                return TransformResult.Ok(shifted.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
             case "shift":
-                // Fixed per-request offset from config; a true per-patient seeded offset needs a keyed generator
-                // supplied by the caller (via `secret`) so the same patient always shifts by the same amount —
-                // out of scope for this simplified node.
-                var shiftDays = config.GetInt("days", 0);
+                // Per-patient seeded offset (de-id date-shift): HMAC(secret, patientId) mod a configurable
+                // window gives every date belonging to one patient the SAME offset, preserving inter-event
+                // intervals, while different patients get different (but still stable) offsets. `_patientId` is
+                // a reserved, caller-populated (never persisted) config key — see MappingNodeExecutor's
+                // ApplyTransformRulesAsync. Falls back to the fixed `days` config when either input is missing
+                // (no vault secret wired, or the caller didn't supply a patient id), matching pre-existing
+                // behavior rather than failing pipelines that don't need per-patient consistency.
+                var patientId = config.GetOrNull("_patientId");
+                var shiftDays = !string.IsNullOrEmpty(secret) && patientId is not null
+                    ? SeededShiftDays(secret, patientId, config.GetInt("maxShiftDays", 60))
+                    : config.GetInt("days", 0);
                 return TransformResult.Ok(date.AddDays(shiftDays).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
             default:
@@ -80,10 +101,31 @@ public sealed class DateMathAgeNode : ITransformNode
         }
     }
 
-    private static int ParseIsoDurationDays(string duration)
+    /// <summary>Adds a full ISO-8601 date duration (<c>P[n]Y[n]M[n]D</c> — the date-only subset; a time-of-day
+    /// component after "T" is not meaningful for a date-precision shift and is ignored).</summary>
+    private static DateTime ApplyIsoDuration(DateTime date, string duration)
     {
-        var match = System.Text.RegularExpressions.Regex.Match(duration, @"^P(-?\d+)D$");
-        return match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+        var match = System.Text.RegularExpressions.Regex.Match(duration, @"^P(?:(-?\d+)Y)?(?:(-?\d+)M)?(?:(-?\d+)D)?$");
+        if (!match.Success)
+        {
+            return date;
+        }
+
+        var years = match.Groups[1].Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+        var months = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 0;
+        var days = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : 0;
+        return date.AddYears(years).AddMonths(months).AddDays(days);
+    }
+
+    /// <summary>Deterministic, patient-stable offset in [-maxShiftDays, +maxShiftDays], derived from an
+    /// HMAC-SHA256 of the patient id keyed by the vault secret — same algorithm family as
+    /// <see cref="HashingMaskingNode"/>'s hash mode, so both de-id primitives share one key.</summary>
+    private static int SeededShiftDays(string secret, string patientId, int maxShiftDays)
+    {
+        var hash = System.Security.Cryptography.HMACSHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(secret), System.Text.Encoding.UTF8.GetBytes(patientId));
+        var magnitude = BitConverter.ToUInt32(hash, 0) % (uint)((2 * maxShiftDays) + 1);
+        return (int)magnitude - maxShiftDays;
     }
 }
 

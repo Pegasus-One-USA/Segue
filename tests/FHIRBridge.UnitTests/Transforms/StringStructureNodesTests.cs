@@ -36,6 +36,28 @@ public sealed class StringStructureNodesTests
     }
 
     [Fact]
+    public void StringNormalizationNode_strips_diacritics_by_default()
+    {
+        new StringNormalizationNode().Execute("jóhn", new Dictionary<string, string>(), null).Value.Should().Be("john");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_fills_a_positional_template()
+    {
+        var config = new Dictionary<string, string> { ["template"] = "Dr. {0} {1}" };
+        var result = new ConcatenationTemplatingNode().Execute(new object?[] { "Jane", "Roe" }, config, null);
+        result.Value.Should().Be("Dr. Jane Roe");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_splits_using_a_regex_delimiter_when_configured()
+    {
+        var config = new Dictionary<string, string> { ["mode"] = "split", ["splitDelimiter"] = @"\s*,\s*", ["splitIsRegex"] = "true" };
+        var result = new ConcatenationTemplatingNode().Execute("A, B,C", config, null);
+        result.Value.Should().BeEquivalentTo(new[] { "A", "B", "C" });
+    }
+
+    [Fact]
     public void ConcatenationTemplatingNode_joins_non_null_parts_with_a_separator()
     {
         var result = new ConcatenationTemplatingNode().Execute(
@@ -65,5 +87,33 @@ public sealed class StringStructureNodesTests
         var result = new ArrayListOperationsNode().Execute(
             new object?[] { "a", "a", "b" }, new Dictionary<string, string> { ["operation"] = "dedupe" }, null);
         result.Value.Should().BeEquivalentTo(new[] { "a", "b" });
+    }
+
+    [Fact]
+    public void ArrayListOperationsNode_filters_by_direct_value_equality()
+    {
+        var config = new Dictionary<string, string> { ["operation"] = "filter", ["predicateValue"] = "MRN" };
+        var result = new ArrayListOperationsNode().Execute(new object?[] { "MRN", "NPI" }, config, null);
+        result.Value.Should().BeEquivalentTo(new[] { "MRN" });
+    }
+
+    [Fact]
+    public void ArrayListOperationsNode_filters_json_objects_by_a_predicate_field()
+    {
+        var mrn = new System.Text.Json.Nodes.JsonObject { ["system"] = "MRN", ["value"] = "123" };
+        var npi = new System.Text.Json.Nodes.JsonObject { ["system"] = "NPI", ["value"] = "456" };
+        var config = new Dictionary<string, string> { ["operation"] = "filter", ["predicateField"] = "system", ["predicateValue"] = "MRN" };
+        var result = new ArrayListOperationsNode().Execute(new object?[] { mrn, npi }, config, null);
+        var filtered = ((object?[])result.Value!).Cast<System.Text.Json.Nodes.JsonObject>().ToList();
+        filtered.Should().HaveCount(1);
+        filtered[0]["value"]!.GetValue<string>().Should().Be("123");
+    }
+
+    [Fact]
+    public void ArrayListOperationsNode_flattens_one_level_of_nested_arrays()
+    {
+        var config = new Dictionary<string, string> { ["operation"] = "flatten" };
+        var result = new ArrayListOperationsNode().Execute(new object?[] { new object?[] { "a", "b" }, "c" }, config, null);
+        result.Value.Should().BeEquivalentTo(new[] { "a", "b", "c" });
     }
 }

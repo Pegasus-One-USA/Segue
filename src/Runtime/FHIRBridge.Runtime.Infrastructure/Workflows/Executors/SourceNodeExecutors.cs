@@ -459,21 +459,21 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                         ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
                         : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
             }
-            catch (FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException authorizationException)
+            catch (Exception extractionFailure) when (extractionFailure is FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure failure)
             {
                 // Patient (or whichever type seeds the cohort) is the parent every sibling resource type here is
-                // scoped off — if it isn't authorized, there is no partial result to isolate: cancel the whole run
-                // rather than silently running the other types unscoped or not at all. A non-parent type failing
-                // the same way just means less data, not an unrunnable workflow, so it's skipped and the rest of
-                // the node's fetch continues.
+                // scoped off — if it can't be fetched (unauthorized, or not supported by this source at all),
+                // there is no partial result to isolate: cancel the whole run rather than silently running the
+                // other types unscoped or not at all. A non-parent type failing the same way just means less
+                // data, not an unrunnable workflow, so it's skipped and the rest of the node's fetch continues.
                 if (isPatientType)
                 {
                     throw new FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException(
-                        type, authorizationException.Message, authorizationException);
+                        type, extractionFailure.Message, extractionFailure);
                 }
 
                 skippedResourceTypes.Add(
-                    $"{type}: not authorized for this app ({authorizationException.StatusCode}) — {authorizationException.Message}");
+                    $"{type}: {failure.SkipReasonLabel} ({failure.StatusCode}) — {extractionFailure.Message}");
                 continue;
             }
 
@@ -773,7 +773,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 var result = await client.SearchAsync(resourceType, effectiveSource, timeoutCts?.Token ?? cancellationToken);
                 return result;
             }
-            catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException
+            catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure
                 && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
                 // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a

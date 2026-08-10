@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
@@ -15,7 +16,8 @@ public sealed class TransformationRuleServiceTests
     private static ITransformNodeRegistry CreateRegistry() => new TransformNodeRegistry(
     [
         new DateTimeFormatNode(),
-        new DefaultNullHandlingNode()
+        new DefaultNullHandlingNode(),
+        new HashingMaskingNode()
     ]);
 
     [Fact]
@@ -60,6 +62,49 @@ public sealed class TransformationRuleServiceTests
         result.FinalValue.Should().Be("raw-value");
         result.EffectiveScope.Should().BeNull();
         result.Steps.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PreviewAsync_substitutes_the_configured_default_instead_of_running_the_node_when_input_is_missing()
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        var rule = new TransformationRule(
+            TransformScope.ResourceType, TransformNodeType.DateTimeFormat,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
+            resourceType: "Patient", order: 0, onNull: NullPolicy.Default, onNullDefaultValue: "1900-01-01");
+        repository
+            .Setup(x => x.GetResourceTypeScopedAsync("Patient", "BirthDate", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+        SetupEmptyRepository(repository, exceptResourceType: true);
+
+        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+
+        var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "BirthDate", null));
+
+        result.FinalValue.Should().Be("1900-01-01", "the node must not run at all when OnNull is Default — the default value IS the output");
+    }
+
+    [Fact]
+    public async Task PreviewAsync_resolves_the_hash_key_via_the_secret_accessor_for_HashingMasking_rules()
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        var rule = new TransformationRule(
+            TransformScope.Global, TransformNodeType.HashingMasking,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["mode"] = "hash" }));
+        SetupEmptyRepository(repository);
+        repository
+            .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var secretAccessor = new Mock<IAppSecretAccessor>();
+        secretAccessor.SetupGet(x => x.TransformHashingKey).Returns("vault-secret");
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), secretAccessor.Object);
+
+        var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "MRN", "A12345"));
+
+        result.Steps.Should().ContainSingle().Which.Success.Should().BeTrue("the accessor must supply the hash key so the node doesn't fail for lack of a secret");
     }
 
     [Fact]
@@ -121,14 +166,18 @@ public sealed class TransformationRuleServiceTests
         repository.Verify(x => x.DeleteAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private static void SetupEmptyRepository(Mock<ITransformationRuleRepository> repository)
+    private static void SetupEmptyRepository(Mock<ITransformationRuleRepository> repository, bool exceptResourceType = false)
     {
         repository.Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository.Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        repository.Setup(x => x.GetResourceTypeScopedAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+        if (!exceptResourceType)
+        {
+            repository.Setup(x => x.GetResourceTypeScopedAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+        }
+
         repository.Setup(x => x.GetDestinationTypeScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository.Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))

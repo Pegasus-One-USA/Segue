@@ -102,6 +102,39 @@
 
                       <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
 
+                      <div class="step-card__advanced">
+                        <mat-form-field appearance="outline" class="config-control">
+                          <mat-label>On missing input</mat-label>
+                          <mat-select [ngModel]="step.onNull" (ngModelChange)="setOnNull(step, $event)">
+                            <mat-option value="Skip">Skip (leave as-is)</mat-option>
+                            <mat-option value="Default">Substitute a default</mat-option>
+                            <mat-option value="Error">Treat as an error</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                        @if (step.onNull === 'Default') {
+                          <mat-form-field appearance="outline" class="config-control">
+                            <mat-label>Default value</mat-label>
+                            <input matInput [ngModel]="step.onNullDefaultValue" (ngModelChange)="setOnNullDefaultValue(step, $event)" />
+                          </mat-form-field>
+                        }
+                        <mat-form-field appearance="outline" class="config-control">
+                          <mat-label>On error</mat-label>
+                          <mat-select [ngModel]="step.errorPolicy" (ngModelChange)="setErrorPolicy(step, $event)">
+                            <mat-option value="NullOut">Null out</mat-option>
+                            <mat-option value="PassThrough">Pass through</mat-option>
+                            <mat-option value="Fail">Fail</mat-option>
+                            <mat-option value="RouteToDeadLetter">Route to dead letter</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="config-control">
+                          <mat-label>Array mode</mat-label>
+                          <mat-select [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
+                            <mat-option value="Whole">Whole value</mat-option>
+                            <mat-option value="PerItem">Per item</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+
                       <div class="step-card__actions">
                         <button mat-button color="warn" [disabled]="step.saving" (click)="removeStep(row, step)">
                           Remove step

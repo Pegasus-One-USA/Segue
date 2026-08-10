@@ -20,6 +20,21 @@ public sealed class CodesTerminologyNodesTests
     }
 
     [Fact]
+    public void ValueCodeMappingNode_emits_a_full_coding_when_configured()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["map"] = """{"M":"male"}""",
+            ["emitCoding"] = "true",
+            ["codingSystem"] = "http://hl7.org/fhir/administrative-gender",
+        };
+        var result = new ValueCodeMappingNode().Execute("M", config, null);
+        var coding = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        coding["code"]!.GetValue<string>().Should().Be("male");
+        coding["system"]!.GetValue<string>().Should().Be("http://hl7.org/fhir/administrative-gender");
+    }
+
+    [Fact]
     public void CodeableConceptBuilderNode_resolves_a_short_system_key_to_its_canonical_uri()
     {
         var config = new Dictionary<string, string> { ["system"] = "LOINC", ["display"] = "Glucose" };
@@ -29,6 +44,21 @@ public sealed class CodesTerminologyNodesTests
         coding["system"]!.GetValue<string>().Should().Be("http://loinc.org");
         coding["code"]!.GetValue<string>().Should().Be("2339-0");
         concept["text"]!.GetValue<string>().Should().Be("Glucose");
+    }
+
+    [Fact]
+    public void CodeableConceptBuilderNode_supports_a_second_coding_alongside_the_primary_one()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["system"] = "LOINC",
+            ["additionalCodings"] = """[{"system":"SNOMED","code":"1234","display":"Something"}]""",
+        };
+        var result = new CodeableConceptBuilderNode().Execute("2339-0", config, null);
+        var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        var codings = concept["coding"]!.AsArray();
+        codings.Should().HaveCount(2);
+        ((System.Text.Json.Nodes.JsonObject)codings[1]!)["system"]!.GetValue<string>().Should().Be("http://snomed.info/sct");
     }
 
     [Fact]

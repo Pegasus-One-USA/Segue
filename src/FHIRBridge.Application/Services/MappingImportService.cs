@@ -471,11 +471,16 @@ public sealed class MappingImportService : IMappingImportService
     /// encoded onto <see cref="MappingField.Format"/> by <see cref="BuildJsonPathAndFormat"/>.
     /// </summary>
     /// <remarks>
-    /// <see cref="ArrayPolicy.RepeatParent"/> only makes sense for the profile's own root table (it fans out
-    /// extra rows of that SAME table) — it must never be chosen for a genuinely separate destination table.
-    /// A separate table always needs <paramref name="tableRelation"/> to link its rows back to a parent; if
-    /// one is missing, that's a payload/spec problem surfaced via <paramref name="warnings"/> rather than a
-    /// silent misclassification onto the root table.
+    /// The instance selection ("first"/"all"/etc.) only has meaning on the profile's own root table — it picks
+    /// which occurrence(s) of a repeating element land in THAT SAME table's row(s) (<see cref="ArrayPolicy.FirstItem"/>
+    /// or <see cref="ArrayPolicy.RepeatParent"/>). A genuinely separate destination table exists specifically so
+    /// each occurrence becomes its own row there, so it must always resolve to <see cref="ArrayPolicy.SeparateDestination"/>
+    /// regardless of which instance type was selected — checking <paramref name="tableName"/> against
+    /// <paramref name="destinationObject"/> must happen BEFORE inspecting <see cref="InstanceSelectorDto.Type"/>,
+    /// or "first" (the payload's default selection) would wrongly collapse a child table's repeating rows into a
+    /// single row merged onto the parent table instead. A separate table always needs <paramref name="tableRelation"/>
+    /// to link its rows back to a parent; if one is missing, that's a payload/spec problem surfaced via
+    /// <paramref name="warnings"/> rather than a silent misclassification onto the root table.
     /// </remarks>
     private static (ArrayPolicy Policy, string? Cardinality, string? ArrayAncestors) ResolveArrayMetadata(
         InstanceSelectorDto? instance,
@@ -490,24 +495,24 @@ public sealed class MappingImportService : IMappingImportService
             return (ArrayPolicy.Scalar, null, null);
         }
 
+        var isRootTable = string.Equals(tableName, destinationObject, StringComparison.OrdinalIgnoreCase);
+        if (!isRootTable)
+        {
+            if (tableRelation is null)
+            {
+                warnings.Add(
+                    $"'{resourceType}': table '{tableName}' has repeating field(s) but no declared relation back to " +
+                    $"root table '{destinationObject}' — its rows cannot be linked to a parent row.");
+            }
+
+            return (ArrayPolicy.SeparateDestination, "OneToMany", instance.ArrayContext);
+        }
+
         if (string.Equals(instance.Type, "first", StringComparison.OrdinalIgnoreCase))
         {
             return (ArrayPolicy.FirstItem, "OneToMany", instance.ArrayContext);
         }
 
-        var isRootTable = string.Equals(tableName, destinationObject, StringComparison.OrdinalIgnoreCase);
-        if (isRootTable)
-        {
-            return (ArrayPolicy.RepeatParent, "OneToMany", instance.ArrayContext);
-        }
-
-        if (tableRelation is null)
-        {
-            warnings.Add(
-                $"'{resourceType}': table '{tableName}' has repeating field(s) but no declared relation back to " +
-                $"root table '{destinationObject}' — its rows cannot be linked to a parent row.");
-        }
-
-        return (ArrayPolicy.SeparateDestination, "OneToMany", instance.ArrayContext);
+        return (ArrayPolicy.RepeatParent, "OneToMany", instance.ArrayContext);
     }
 }
