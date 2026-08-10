@@ -23,6 +23,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
   'dest-fhir':        { abbr: 'FHR', color: '#00A89D' },
+  'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },

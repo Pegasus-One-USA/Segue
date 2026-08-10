@@ -275,6 +275,20 @@ export class DestinationWizardComponent implements OnInit {
     writeMode:        ['upsert', []],
   });
 
+  readonly medplumForm = this.fb.group({
+    name:             ['Medplum Production', [Validators.required]],
+    // The FHIR R4 base URL — becomes the DestinationConfiguration.target (e.g. https://api.medplum.com/fhir/R4).
+    baseUrl:          ['', [Validators.required]],
+    // The client secret OR PEM private key — treated as a whole as the opaque secret (see SECRET_FIELD_KEYS:
+    // dest_medplumSecret). Never round-trips back from the API, same as Mongo's connectionString.
+    secret:           ['', [Validators.required]],
+    clientId:         ['', [Validators.required]],
+    authMethod:       ['client_secret', []],   // or 'private_key_jwt'
+    writeMode:        ['per_record', []],       // or 'async_batch'
+    batchSize:        ['100', []],
+    identifierSystem: ['', []],
+  });
+
   readonly csvForm = this.fb.group({
     name:         ['CSV Export', [Validators.required]],
     deliveryMode: ['download', [Validators.required]],
@@ -679,6 +693,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -688,6 +703,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
+  // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
+  readonly isMedplum    = computed(() => this.destType() === 'medplum');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
@@ -695,6 +713,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'medplum' ? 'Medplum'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -704,7 +723,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.isMedplum() ? this.medplumForm.value : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -851,7 +870,7 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.isMedplum() ? this.medplumForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
@@ -942,6 +961,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isMedplum()) return 'Medplum';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
   }
@@ -1221,7 +1241,7 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql() && !this.isMongo()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+    if (!this.isSql() && !this.isMongo() && !this.isMedplum()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
@@ -1236,6 +1256,8 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables.set([]);
     } else if (this.isMongo()) {
       this.mongoForm.reset();
+    } else if (this.isMedplum()) {
+      this.medplumForm.reset();
     } else {
       this.csvForm.reset();
       this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
@@ -1252,7 +1274,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isMedplum()
+                ? DestinationWizardComponent.MEDPLUM_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1312,6 +1336,18 @@ export class DestinationWizardComponent implements OnInit {
         writeMode:        metadata['dest_writeMode']    || 'upsert',
       });
       this._existingBaseline = this.mongoForm.getRawValue();
+    } else if (this.isMedplum()) {
+      this.medplumForm.patchValue({
+        name:             metadata['dest_name']                   || selected.name,
+        baseUrl:          metadata['dest_medplumBaseUrl']         || selected.target || '',
+        secret:           '',
+        clientId:         metadata['dest_medplumClientId']        || '',
+        authMethod:       metadata['dest_medplumAuthMethod']      || 'client_secret',
+        writeMode:        metadata['dest_medplumWriteMode']       || 'per_record',
+        batchSize:        metadata['dest_medplumBatchSize']       || '100',
+        identifierSystem: metadata['dest_medplumIdentifierSystem'] || '',
+      });
+      this._existingBaseline = this.medplumForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -1356,10 +1392,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'secret']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.isMedplum() ? this.medplumForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -1606,6 +1642,17 @@ export class DestinationWizardComponent implements OnInit {
         collection:       f['dest_collection']  || '',
         writeMode:        f['dest_writeMode']    || 'upsert',
       });
+    } else if (this.isMedplum()) {
+      this.medplumForm.patchValue({
+        name:             f['dest_name']                    || 'Medplum Production',
+        baseUrl:          f['dest_medplumBaseUrl']          || '',
+        secret:           '',
+        clientId:         f['dest_medplumClientId']         || '',
+        authMethod:       f['dest_medplumAuthMethod']       || 'client_secret',
+        writeMode:        f['dest_medplumWriteMode']        || 'per_record',
+        batchSize:        f['dest_medplumBatchSize']        || '100',
+        identifierSystem: f['dest_medplumIdentifierSystem'] || '',
+      });
     } else {
       this.csvForm.patchValue({
         name:         f['dest_name']         || 'CSV Export',
@@ -1744,6 +1791,16 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_connectionString'] = v.connectionString ?? '';
       config['dest_collection']       = v.collection       ?? '';
       config['dest_writeMode']        = v.writeMode        ?? 'upsert';
+    } else if (this.isMedplum()) {
+      const v = this.medplumForm.value;
+      config['dest_name']                   = v.name             ?? '';
+      config['dest_medplumBaseUrl']         = v.baseUrl          ?? '';
+      config['dest_medplumSecret']          = v.secret           ?? '';
+      config['dest_medplumClientId']        = v.clientId         ?? '';
+      config['dest_medplumAuthMethod']      = v.authMethod       ?? 'client_secret';
+      config['dest_medplumWriteMode']       = v.writeMode        ?? 'per_record';
+      config['dest_medplumBatchSize']       = v.batchSize        ?? '100';
+      config['dest_medplumIdentifierSystem'] = v.identifierSystem ?? '';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1784,7 +1841,8 @@ export class DestinationWizardComponent implements OnInit {
     const config = this._buildConnectionConfig();
     const isSql = this.isSql();
     const isMongo = this.isMongo();
-    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const isMedplum = this.isMedplum();
+    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1804,6 +1862,17 @@ export class DestinationWizardComponent implements OnInit {
           secretName,
           target: config['dest_collection'] || null,
           inlineSecret: config['dest_connectionString'] || '',
+          connectionMetadataJson: buildConnectionMetadata(config, false),
+        }
+      : isMedplum
+      ? {
+          name,
+          destinationType: 'Medplum',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          // FHIR base URL is the target; the client secret / PEM key is the whole opaque inlineSecret.
+          target: config['dest_medplumBaseUrl'] || null,
+          inlineSecret: config['dest_medplumSecret'] || '',
           connectionMetadataJson: buildConnectionMetadata(config, false),
         }
       : {
@@ -1929,6 +1998,7 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'mysql' ? 'dest-mysql'
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
+          : type === 'medplum' ? 'dest-medplum'
           : 'dest-csv',
         status:      'enabled',
         config,

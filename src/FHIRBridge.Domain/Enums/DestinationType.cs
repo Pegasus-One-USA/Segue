@@ -23,5 +23,6 @@ public enum DestinationType
     Avro = 18,
     Protobuf = 19,
     Databricks = 20,
-    Mongo = 21
+    Mongo = 21,
+    Medplum = 22
 }

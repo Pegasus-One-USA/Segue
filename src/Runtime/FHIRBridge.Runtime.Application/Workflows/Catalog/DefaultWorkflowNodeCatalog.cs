@@ -43,6 +43,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.MySqlDestination),
         Destination(WorkflowNodeTypes.MongoDestination),
         Destination(WorkflowNodeTypes.PostgreSqlDestination),
+        Destination(WorkflowNodeTypes.MedplumDestination),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql destinations are exposed in the palette.
         // The writers below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
@@ -199,6 +200,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "dest-mysql",
             WorkflowNodeTypes.MongoDestination => "dest-mongo",
             WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
+            WorkflowNodeTypes.MedplumDestination => "dest-medplum",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -216,6 +218,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "MySQL",
             WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
+            WorkflowNodeTypes.MedplumDestination => "Medplum (FHIR)",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -233,6 +236,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
+            WorkflowNodeTypes.MedplumDestination => "Write FHIR resources to a Medplum FHIR R4 store (idempotent upsert).",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

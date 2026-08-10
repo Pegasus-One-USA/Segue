@@ -68,7 +68,12 @@ export function buildConnectionMetadata(f: Record<string, string>, isSql: boolea
        // MongoDB — the connection string itself lives only in the encrypted secret (see the mongo branch
        // in destination-wizard.component.ts's provisionDestinationConnection); collection/writeMode aren't
        // secret, so they round-trip here the same way SQL's non-secret fields do.
-       'dest_collection', 'dest_writeMode'];
+       'dest_collection', 'dest_writeMode',
+       // Medplum (FHIR) — the base URL becomes the DestinationConfiguration.target and the client secret /
+       // PEM key becomes the encrypted inlineSecret (dest_medplumSecret, redacted); everything else is
+       // non-secret connection metadata that round-trips here.
+       'dest_medplumClientId', 'dest_medplumAuthMethod', 'dest_medplumWriteMode',
+       'dest_medplumBatchSize', 'dest_medplumIdentifierSystem'];
   const metadata: Record<string, string> = {};
   for (const key of keys) {
     if (f[key] !== undefined) metadata[key] = f[key];

@@ -361,8 +361,11 @@ export class WorkflowBuildAssemblerService {
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isMedplum =
+      node.nodeType.includes('Medplum') ||
+      (fields['__transformId'] ?? '') === 'dest-medplum';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -416,6 +419,24 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    if (isMedplum) {
+      return {
+        name,
+        destinationType: 'Medplum',
+        keyVaultName,
+        secretName,
+        // The FHIR base URL is the destination target; the client secret / PEM private key is treated as the
+        // whole opaque secret (see destination-wizard.component.ts's medplumForm) — same "don't touch an
+        // already-provisioned secret unless the user actually typed a new one" guard the SQL/SFTP/Mongo branches use.
+        target: fields['dest_medplumBaseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !fields['dest_medplumSecret']
+            ? null
+            : fields['dest_medplumSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'medplum'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -442,7 +463,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum',
   ): string {
     const keys =
       kind === 'sql'
@@ -458,6 +479,15 @@ export class WorkflowBuildAssemblerService {
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          : kind === 'medplum'
+          ? [
+              'dest_name',
+              'dest_medplumClientId',
+              'dest_medplumAuthMethod',
+              'dest_medplumWriteMode',
+              'dest_medplumBatchSize',
+              'dest_medplumIdentifierSystem',
+            ]
           : [
               'dest_name',
               'dest_deliveryMode',

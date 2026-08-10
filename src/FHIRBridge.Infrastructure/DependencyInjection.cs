@@ -311,6 +311,14 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedDatabricksDestinationWriter));
         services.AddScoped<MappedDatabricksDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
+        services.AddHttpClient(nameof(MedplumTokenProvider));
+        services.AddHttpClient(nameof(MappedMedplumDestinationWriter));
+        // The Medplum token provider signs a private_key_jwt assertion with the same RS384 factory Epic uses. It is
+        // normally registered by the runtime-infrastructure DI; TryAdd makes the configured plane self-sufficient
+        // (no-op when the runtime DI already registered it).
+        services.TryAddSingleton<IBackendServicesJwtFactory, FHIRBridge.Runtime.Infrastructure.Auth.BackendServicesJwtFactory>();
+        services.AddSingleton<IMedplumTokenProvider, MedplumTokenProvider>();
+        services.AddScoped<MappedMedplumDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);

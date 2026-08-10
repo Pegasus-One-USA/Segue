@@ -229,6 +229,77 @@
 
           </div><!-- /dw-grid-2 -->
         </form>
+      } @else if (isMedplum()) {
+        <form [formGroup]="medplumForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="medplumForm.get('name')!.invalid && medplumForm.get('name')!.touched">
+              <label class="dw-label" for="dw-medplum-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-medplum-name" class="dw-input" formControlName="name" placeholder="e.g. Medplum Production" />
+              @if (medplumForm.get('name')!.invalid && medplumForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="medplumForm.get('baseUrl')!.invalid && medplumForm.get('baseUrl')!.touched">
+              <label class="dw-label" for="dw-medplum-baseUrl">FHIR base URL <span class="dw-req">*</span></label>
+              <input id="dw-medplum-baseUrl" class="dw-input" formControlName="baseUrl"
+                placeholder="https://api.medplum.com/fhir/R4" />
+              @if (medplumForm.get('baseUrl')!.invalid && medplumForm.get('baseUrl')!.touched) {
+                <span class="dw-error">FHIR base URL is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="medplumForm.get('clientId')!.invalid && medplumForm.get('clientId')!.touched">
+              <label class="dw-label" for="dw-medplum-clientId">Client ID <span class="dw-req">*</span></label>
+              <input id="dw-medplum-clientId" class="dw-input" formControlName="clientId" placeholder="e.g. 0193c5…" />
+              @if (medplumForm.get('clientId')!.invalid && medplumForm.get('clientId')!.touched) {
+                <span class="dw-error">Client ID is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched">
+              <label class="dw-label" for="dw-medplum-secret">Client secret / private key <span class="dw-req">*</span></label>
+              <input id="dw-medplum-secret" type="password" class="dw-input" formControlName="secret"
+                placeholder="client secret or PEM private key" autocomplete="new-password" />
+              @if (medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched) {
+                <span class="dw-error">A client secret or private key is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-medplum-authMethod">Auth method</label>
+              <div class="dw-select-wrap">
+                <select id="dw-medplum-authMethod" class="dw-select" formControlName="authMethod">
+                  <option value="client_secret">Client secret</option>
+                  <option value="private_key_jwt">Private key JWT</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-medplum-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-medplum-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="per_record">Per record</option>
+                  <option value="async_batch">Async batch</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-medplum-batchSize">Batch size</label>
+              <input id="dw-medplum-batchSize" class="dw-input" formControlName="batchSize" placeholder="100" />
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-medplum-identifierSystem">Identifier system</label>
+              <input id="dw-medplum-identifierSystem" class="dw-input" formControlName="identifierSystem"
+                placeholder="e.g. https://fhirbridge.example/mrn" />
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -407,7 +478,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -569,6 +640,23 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
+          </div>
+        } @else if (isMedplum()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ medplumForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ medplumForm.value.baseUrl || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth method</span>
+            <span class="dw-review-val">{{ medplumForm.value.authMethod }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ medplumForm.value.writeMode }}</span>
           </div>
         } @else {
           <div class="dw-review-card">

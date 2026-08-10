@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone throwaway POC for the Medplum integration (docs/backend/15-medplum-integration-plan.md §11 phase 1).
+    Deliberately NOT part of FHIRBridge.sln: it validates the auth + upsert + read-back contract end-to-end against a
+    live (hosted) Medplum project without pulling in the Infrastructure project's dependency graph.
+    Run it with the dotnet run command shown in README.md.
+    It uses only the BCL (System.Net.Http + System.Text.Json), mirroring the logic in MappedMedplumDestinationWriter.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Medplum.Poc</RootNamespace>
+    <AssemblyName>medplum-poc</AssemblyName>
+  </PropertyGroup>
+
+</Project>

@@ -23,7 +23,8 @@ export type DestinationType =
   | 'Avro'
   | 'Protobuf'
   | 'Databricks'
-  | 'Mongo';
+  | 'Mongo'
+  | 'Medplum';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
  *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */
