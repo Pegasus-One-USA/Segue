@@ -1,0 +1,138 @@
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_3b1a7f58768f24::t_71b092193b6a07 47-50
+  s_3b1a7f58768f24::t_28710a51208e09 227-230
+  s_3b1a7f58768f24::t_0a68d174294c32 245-248,258-274
+  s_3b1a7f58768f24::t_fbe55509ad6ef2 301-304
+  s_3b1a7f58768f24::t_d9c0e6caaff81a 161-164
+  s_3b1a7f58768f24::t_90a7022797a065 18,275-277
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_3b1a7f58768f24::t_b4450c110c94f8 102-108,115-118
+  s_3b1a7f58768f24::t_a54e7536123593 278-279
+  s_3b1a7f58768f24::t_a14843fc1bf7ca 21-33,40,45-58
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_3b1a7f58768f24::t_a9ebd1a33b9ebf 203-212
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_3b1a7f58768f24::t_99ab5935417ab2 23
+tests/FHIRBridge.UnitTests/Transforms/CodesTerminologyNodesTests.cs
+  s_3b1a7f58768f24::t_a0938436bdca84 50-63
+  s_3b1a7f58768f24::t_278908937cd3b5 22-36,49
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_3b1a7f58768f24::t_4e263b706b2235 19-20
+  s_3b1a7f58768f24::t_025cbe8ab00fee 68-109
+  s_3b1a7f58768f24::t_42a75a54e13814 3,67
+  s_3b1a7f58768f24::t_a6fb401b45470c 169,175-180
+src/FHIRBridge.Application/Abstractions/Security/AppSecretReferences.cs
+  s_3b1a7f58768f24::t_36ad9ac8e9bca9 15-19
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_3b1a7f58768f24::t_452fc0689dc50a 38-40
+  s_3b1a7f58768f24::t_97b395e81d6373 19-21
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_3b1a7f58768f24::t_72f95f438fc7ce 119-121
+  s_3b1a7f58768f24::t_91390f18577141 104-116,122
+  s_3b1a7f58768f24::t_4042fc5807db41 64-66,72
+  s_3b1a7f58768f24::t_51c2c824ab2e93 3,15,18-21,26
+  s_3b1a7f58768f24::t_61096a27a01bf1 163-165
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_3b1a7f58768f24::t_89bb59f6a24041 90,93-96
+  s_3b1a7f58768f24::t_2026c317eeaff8 28-40,103
+  s_3b1a7f58768f24::t_09120689851271 110,113-120
+  s_3b1a7f58768f24::t_01b2f9369c9837 97-102,104-109,111-112,121-126,129
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_3b1a7f58768f24::t_3bee22f547af8a 42,47
+  s_3b1a7f58768f24::t_20b2ffd62dfc05 73,80-81,88
+  s_3b1a7f58768f24::t_ada9831fd4e5a7 98,100,102
+  s_3b1a7f58768f24::t_279a6e2ceefd24 136,141-144,148,151-152,158-159,166-168
+  s_3b1a7f58768f24::t_7dc4d611bb1a60 114-116,121-122,127-128
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260808005904_AddTransformationRuleOnNullDefaultAndArrayMode.Designer.cs
+  s_3b1a7f58768f24::t_0e401ce83ed7df 1-4665
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_3b1a7f58768f24::t_4f775e2f0dca5c 2,12,25-30,102-103
+  s_3b1a7f58768f24::t_868595cbeb1ce9 64-78
+  s_3b1a7f58768f24::t_3732b65991dcb5 145-146
+  s_3b1a7f58768f24::t_46412cc2eeaac3 153-181
+  s_3b1a7f58768f24::t_e083ea93d3722f 98-101,104-118
+src/FHIRBridge.Application/Services/Transforms/Nodes/DataQualityGovernanceNodes.cs
+  s_3b1a7f58768f24::t_fa549b08619f17 31-45,107
+  s_3b1a7f58768f24::t_b68d2301fe7d33 82-83,86-96,104-106,108-123,125-128
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_3b1a7f58768f24::t_c3203641ffa52c 105-137
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_3b1a7f58768f24::t_09672de61367cb 23-46
+  s_3b1a7f58768f24::t_31c8dc096e5620 60-68
+  s_3b1a7f58768f24::t_e7b055faf701ad 112-118
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_3b1a7f58768f24::t_0e401ce83ed7df 3182-3186,3244-3247
+tests/FHIRBridge.UnitTests/Transforms/StringStructureNodesTests.cs
+  s_3b1a7f58768f24::t_c2f9d7413aec33 38-59
+  s_3b1a7f58768f24::t_ef1e4c2458789c 91-118
+tests/FHIRBridge.UnitTests/Transforms/DataQualityGovernanceNodesTests.cs
+  s_3b1a7f58768f24::t_35025ef92209b3 49-72
+  s_3b1a7f58768f24::t_ae53ba32376c67 23-31,48
+src/FHIRBridge.Domain/Enums/TransformArrayMode.cs
+  s_3b1a7f58768f24::t_869b8b674921ef 1-10
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_3b1a7f58768f24::t_dfd55720f5c963 166-175
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretAccessor.cs
+  s_3b1a7f58768f24::t_dc6db857b8b8d4 16-17
+src/FHIRBridge.Application/Services/Transforms/TransformNullPolicy.cs
+  s_3b1a7f58768f24::t_97cbd239004fd8 1-39
+src/FHIRBridge.Application/Services/Transforms/FhirPrimitiveValidator.cs
+  s_3b1a7f58768f24::t_7f66847d7685c5 1-33
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_3b1a7f58768f24::t_3f0eb462ad0754 32-33,35
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_3b1a7f58768f24::t_cd49675f815d10 63-64
+  s_3b1a7f58768f24::t_6d1e7cf85b524a 19
+  s_3b1a7f58768f24::t_70a5c48944f3a4 41-45
+src/FHIRBridge.Infrastructure/Security/AppSecretAccessor.cs
+  s_3b1a7f58768f24::t_94e75a78a43793 16-18,22,35-38
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  s_3b1a7f58768f24::t_1f0f32c9b7a1d7 25-26
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_3b1a7f58768f24::t_2a8c8311c0718a 274-275,278-279,281-290,292-293,295-298,309-310,312-315
+  s_3b1a7f58768f24::t_b6d03bf195096c 145-149,151-153,159,163-177,181-196
+  s_3b1a7f58768f24::t_a6b0f8023a7157 21-27,31-46,291,294
+  s_3b1a7f58768f24::t_b13ccca0f50116 246-252
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260808005904_AddTransformationRuleOnNullDefaultAndArrayMode.cs
+  s_3b1a7f58768f24::t_0e401ce83ed7df 1-41
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_3b1a7f58768f24::t_5daa7369a02ee2 146-178
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  s_3b1a7f58768f24::t_b0baff6baeaaa9 80-88,94-100,106-107
+  s_3b1a7f58768f24::t_c958f12cdf0ddd 30-32,47-48
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_3b1a7f58768f24::t_20136beefcf172 93-102
+  s_3b1a7f58768f24::t_0f0b24c82c62b7 18-35,56
+  s_3b1a7f58768f24::t_34ef02f12ecee8 57-65,74
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_3b1a7f58768f24::t_2c6f1bbc2a8bdc 6
+  s_3b1a7f58768f24::t_d92f2f5298b350 59,67-68,77
+  s_3b1a7f58768f24::t_109b3d16bac7c1 187
+  s_3b1a7f58768f24::t_9779d4b462191b 352-362,391
+  s_3b1a7f58768f24::t_d5b53f452fe174 376-390
+  s_3b1a7f58768f24::t_8aef380ad0898c 314
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_3b1a7f58768f24::t_b1f0bea56f10ae 19,195-197
+  s_3b1a7f58768f24::t_b98c9251a4de63 124-127
+  s_3b1a7f58768f24::t_8129a53f8b3b4f 282-285
+  s_3b1a7f58768f24::t_f00ed652c2d1b3 170-173,178-194
+  s_3b1a7f58768f24::t_cc0f84f668aa45 45-48
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_3b1a7f58768f24::t_8864edfef935de 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "43574de3ae383801067e71bd5220a733f2d1b293",
+  "prompts": {},
+  "sessions": {
+    "s_3b1a7f58768f24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e9e22fe-60af-44d2-8208-640c51f501c1",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
