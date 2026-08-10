@@ -479,7 +479,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId, e.config);
+    const attachNode = this.resolveDestinationAttachPoint(e.attachNode, e.transformId);
 
     const siblings = this.store.outboundEdges(attachNode.id).length;
     const node: TransformNode = {
@@ -518,11 +518,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
    *    resolves its fields from whichever mappingProfileId ends up on the node). Clone the Mapping node instead —
    *    same upstream parent, starting from the same field config — so each destination keeps its own dedicated node.
    */
-  private resolveDestinationAttachPoint(
-    attachNode: CanvasNode,
-    transformId: string,
-    config?: Record<string, string>,
-  ): CanvasNode {
+  private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
 
     // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement
