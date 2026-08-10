@@ -191,7 +191,7 @@
                 <td [title]="x.message">{{ x.userFriendlyMessage || x.message }}</td>
                 <td class="mono">
                   @if (x.errorReferenceId) {
-                    <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: x.errorReferenceId }">{{ x.errorReferenceId }}</a>
+                    <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ correlationId: r.correlationId }" title="View every error from this run">{{ x.errorReferenceId }}</a>
                   } @else {
                     —
                   }

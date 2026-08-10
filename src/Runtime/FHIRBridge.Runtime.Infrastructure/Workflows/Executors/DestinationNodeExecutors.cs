@@ -600,7 +600,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
             workflowName,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            CorrelationId: context.CorrelationId);
 
         int written;
         string? downloadUrl;

@@ -452,6 +452,60 @@ public sealed class MappingNodeExecutorTests
     }
 
     /// <summary>
+    /// End-to-end proof that the real destination type reaches the node automatically — a Unit Conversion
+    /// rule writing into a SQL destination gets just the plain number, never the full FHIR Quantity object,
+    /// even though nothing in the rule's own saved config says "flatten this." The executor infers it from
+    /// the workflow's actual destination.
+    /// </summary>
+    [Fact]
+    public async Task Unit_conversion_writes_a_plain_number_not_a_quantity_object_for_a_sql_destination()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("Value", "$.valueQuantity.value", MappingValueType.Decimal, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Observation", DestinationObject: "Observation"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["Value"] = 38.9m }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Global, TransformNodeType.UnitConversion,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1" }));
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid>(), null, "$.valueQuantity.value", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new UnitConversionNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Observation", "Observation", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Observation", "o1", """{"resourceType":"Observation"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["Value"].Should().Be(102.0m);
+    }
+
+    /// <summary>
     /// The feature-flag gate (Settings &gt; System Settings &gt; General, "TransformationRules:Hidden",
     /// default true): even with a fully wired rule resolver/registry and a resolvable rule, the executor must
     /// skip applying it while the flag reads hidden — this is what lets the whole rules feature ship dark by

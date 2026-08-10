@@ -182,13 +182,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
                     foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
                     {
-                        var transformedRow = await ApplyTransformRulesAsync(
+                        var (transformedRow, fhirWriteBackPatches) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, cancellationToken);
+                        var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
+                            ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
+                            : sourceJson;
 
                         records.Add(new MappedDestinationRecord(
                             context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
-                            transformedRow, sourceJson, childTables, referenceLookups));
+                            transformedRow, patchedSourceJson, childTables, referenceLookups));
                     }
                 }
             }
@@ -303,7 +306,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     /// resolved — existing pipelines with no rules configured, or running without this optional wiring, are
     /// completely unaffected.
     /// </summary>
-    private async Task<IReadOnlyDictionary<string, object?>> ApplyTransformRulesAsync(
+    private async Task<(IReadOnlyDictionary<string, object?> Values, IReadOnlyList<(string Path, object? Value)>? FhirWriteBackPatches)> ApplyTransformRulesAsync(
         IReadOnlyDictionary<string, object?> row,
         string resourceType,
         IReadOnlyDictionary<string, string> sourceFieldByTarget,
@@ -312,11 +315,12 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         Guid workflowRunId,
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
         string resourceId,
+        string? sourceJson,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
         {
-            return row;
+            return (row, null);
         }
 
         var hidden = _settingsCache is null
@@ -324,10 +328,15 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
         if (hidden)
         {
-            return row;
+            return (row, null);
         }
 
         Dictionary<string, object?>? transformed = null;
+        // Only populated for a FhirRepository-typed destination, and only when a rule in the field's chain sets
+        // FhirWriteBackJsonPath — see TransformationRule.FhirWriteBackJsonPath's doc comment. Applied by the
+        // caller against this resource's own SourceJson so an Aidbox/Medplum-style destination receives the
+        // transformed value too, not just the flat Values a SQL/Csv/Mongo destination reads.
+        List<(string Path, object? Value)>? fhirWriteBackPatches = null;
 
         foreach (var (destinationField, value) in row)
         {
@@ -347,8 +356,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             }
 
             var currentValue = value;
+            string? writeBackPath = null;
             foreach (var rule in rules)
             {
+                if (!string.IsNullOrWhiteSpace(rule.FhirWriteBackJsonPath))
+                {
+                    writeBackPath = rule.FhirWriteBackJsonPath;
+                }
+
                 if (TransformNullPolicy.IsNullOrEmpty(currentValue))
                 {
                     currentValue = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
@@ -379,16 +394,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     secret = _secretAccessor?.TransformHashingKey;
                 }
 
-                // Reserved, caller-populated key (never persisted) — DateMathAge's per-patient seeded shift
+                // Reserved, caller-populated keys (never persisted). DateMathAge's per-patient seeded shift
                 // needs "the patient this row belongs to," which for a Patient-resource row is simply its own
                 // id; other resource types (Observation, Encounter, ...) would need reference resolution this
                 // generic loop doesn't have, so they fall back to DateMathAge's fixed `days` config instead.
+                config[ReservedTransformConfigKeys.DestinationType] = destinationType.Value.ToString();
                 if (rule.NodeType == TransformNodeType.DateMathAge && string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase))
                 {
-                    config["_patientId"] = resourceId;
+                    config[ReservedTransformConfigKeys.PatientId] = resourceId;
                 }
 
-                var result = TransformNodeApplier.ExecuteWithArrayMode(node, currentValue, config, secret, rule.ArrayMode);
+                if (rule.NodeType == TransformNodeType.CodeableConceptBuilder)
+                {
+                    var siblingDisplay = FhirSourceJsonPatcher.TryReadSiblingDisplay(sourceJson, sourceField);
+                    if (siblingDisplay is not null)
+                    {
+                        config[ReservedTransformConfigKeys.SourceDisplayHint] = siblingDisplay;
+                    }
+                }
+
+                var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, rule.ArrayMode, cancellationToken);
                 if (result.Success)
                 {
                     currentValue = result.Value;
@@ -407,6 +432,12 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 }
             }
 
+            if (writeBackPath is not null && destinationType.Value == DestinationType.FhirRepository)
+            {
+                fhirWriteBackPatches ??= [];
+                fhirWriteBackPatches.Add((writeBackPath, currentValue));
+            }
+
             transformed ??= new Dictionary<string, object?>(row, StringComparer.OrdinalIgnoreCase);
             // A FHIR complex-type builder node (HumanNameParsing, AddressParsing, TelecomNormalization,
             // IdentifierFormatting, ReferenceConstruction) yields a System.Text.Json.Nodes.JsonObject/JsonNode —
@@ -419,7 +450,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 : currentValue;
         }
 
-        return transformed ?? row;
+        return (transformed ?? row, fhirWriteBackPatches);
     }
 
     protected override object CreatePayload(

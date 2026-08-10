@@ -5,15 +5,14 @@ import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
 import { ErrorLogEntry } from '../../../operations/models/operations.model';
 
-/** Hides per-record failure rows (Severity "Error") that share a reference id with a "PartialSuccess"
- *  Informational summary row — that summary already describes the batch failure, so the individual
- *  "An unexpected error occurred…" rows underneath it are redundant here. They're still reachable in full
- *  by clicking the summary's Reference ID, which now covers every error captured for the same run. */
+/** Hides per-record failure rows (Severity "Error") whenever a "PartialSuccess" Informational summary is also
+ *  present in this same correlationId-scoped result — that summary already describes the batch failure, so the
+ *  individual "An unexpected error occurred…" rows underneath it are redundant here. Each keeps its own unique
+ *  ErrorReferenceId (ErrorLogs.ErrorReferenceId is uniquely indexed, so it can't be shared across rows), but
+ *  they're still reachable in full via the summary's Reference ID link, which navigates by correlationId. */
 function visibleErrors(errors: ErrorLogEntry[]): ErrorLogEntry[] {
-  const summarizedReferenceIds = new Set(
-    errors.filter(x => x.exceptionType === 'PartialSuccess' && x.errorReferenceId).map(x => x.errorReferenceId),
-  );
-  return errors.filter(x => x.exceptionType === 'PartialSuccess' || !summarizedReferenceIds.has(x.errorReferenceId));
+  const hasSummary = errors.some(x => x.exceptionType === 'PartialSuccess');
+  return hasSummary ? errors.filter(x => x.exceptionType === 'PartialSuccess' || x.severity !== 'Error') : errors;
 }
 
 export interface TimelineEntry {
