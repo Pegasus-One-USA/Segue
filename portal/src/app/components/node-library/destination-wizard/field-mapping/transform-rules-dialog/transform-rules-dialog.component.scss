@@ -200,6 +200,16 @@ mat-dialog-content {
   min-width: 0;
 }
 
+.step-card__advanced {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--color-border);
+
+  .config-control { flex: 1 1 160px; }
+}
+
 .add-step-btn {
   align-self: flex-start;
   font-size: 12.5px;

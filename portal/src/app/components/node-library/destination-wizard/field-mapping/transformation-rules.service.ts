@@ -16,6 +16,7 @@ export type TransformNodeType =
 
 export type NullPolicy = 'Skip' | 'Default' | 'Error';
 export type TransformErrorPolicy = 'Fail' | 'NullOut' | 'PassThrough' | 'RouteToDeadLetter';
+export type TransformArrayMode = 'Whole' | 'PerItem';
 
 export interface TransformationRule {
   id: string;
@@ -37,6 +38,11 @@ export interface TransformationRule {
   onNull: NullPolicy;
   errorPolicy: TransformErrorPolicy;
   isEnabled: boolean;
+  /** Substitute value used when onNull is 'Default' — the node is skipped and this becomes the output. */
+  onNullDefaultValue?: string | null;
+  /** 'Whole' (default) runs the node once against the value as-is; 'PerItem' runs it once per element when
+   *  the mapped value is a real collection. */
+  arrayMode: TransformArrayMode;
 }
 
 export interface SaveTransformationRuleRequest {
@@ -54,6 +60,8 @@ export interface SaveTransformationRuleRequest {
   onNull?: NullPolicy;
   errorPolicy?: TransformErrorPolicy;
   isEnabled?: boolean;
+  onNullDefaultValue?: string | null;
+  arrayMode?: TransformArrayMode;
 }
 
 export interface TransformPreviewRequest {

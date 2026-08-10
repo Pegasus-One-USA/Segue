@@ -16,7 +16,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
-  TransformationRulesService, TransformNodeType, TransformNodeSchema,
+  TransformationRulesService, TransformNodeType, TransformNodeSchema, NullPolicy, TransformErrorPolicy, TransformArrayMode,
 } from '../transformation-rules.service';
 import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
@@ -42,6 +42,10 @@ interface RuleStep {
   order: number;
   isNew: boolean;
   saving: boolean;
+  onNull: NullPolicy;
+  onNullDefaultValue: string | null;
+  errorPolicy: TransformErrorPolicy;
+  arrayMode: TransformArrayMode;
 }
 
 interface ColumnRuleRow {
@@ -117,6 +121,10 @@ export class TransformRulesDialogComponent implements OnInit {
               order: r.order,
               isNew: false,
               saving: false,
+              onNull: r.onNull,
+              onNullDefaultValue: r.onNullDefaultValue ?? null,
+              errorPolicy: r.errorPolicy,
+              arrayMode: r.arrayMode,
             }));
 
           return {
@@ -159,7 +167,31 @@ export class TransformRulesDialogComponent implements OnInit {
       order: row.steps.length,
       isNew: true,
       saving: false,
+      onNull: 'Skip',
+      onNullDefaultValue: null,
+      errorPolicy: 'NullOut',
+      arrayMode: 'Whole',
     });
+    this.rows.set([...this.rows()]);
+  }
+
+  setOnNull(step: RuleStep, value: NullPolicy): void {
+    step.onNull = value;
+    this.rows.set([...this.rows()]);
+  }
+
+  setOnNullDefaultValue(step: RuleStep, value: string): void {
+    step.onNullDefaultValue = value;
+    this.rows.set([...this.rows()]);
+  }
+
+  setErrorPolicy(step: RuleStep, value: TransformErrorPolicy): void {
+    step.errorPolicy = value;
+    this.rows.set([...this.rows()]);
+  }
+
+  setArrayMode(step: RuleStep, value: TransformArrayMode): void {
+    step.arrayMode = value;
     this.rows.set([...this.rows()]);
   }
 
@@ -247,6 +279,10 @@ export class TransformRulesDialogComponent implements OnInit {
       sourceSystem: this.data.sourceSystem,
       sourceField: row.sourceField,
       order: step.order,
+      onNull: step.onNull,
+      onNullDefaultValue: step.onNullDefaultValue,
+      errorPolicy: step.errorPolicy,
+      arrayMode: step.arrayMode,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

@@ -15,6 +15,7 @@ import { DestinationType } from '../../../destination-connections/models/destina
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformScope, TransformNodeSchema,
+  NullPolicy, TransformErrorPolicy, TransformArrayMode,
 } from '../../../components/node-library/destination-wizard/field-mapping/transformation-rules.service';
 import {
   ALL_NODE_TYPE_OPTIONS, getApplicableNodeTypes,
@@ -43,6 +44,10 @@ interface RuleStep {
   config: Record<string, string>;
   order: number;
   saving: boolean;
+  onNull: NullPolicy;
+  onNullDefaultValue: string | null;
+  errorPolicy: TransformErrorPolicy;
+  arrayMode: TransformArrayMode;
 }
 
 /** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
@@ -153,7 +158,10 @@ export class TransformationRuleListComponent implements OnInit {
             };
             byKey.set(key, group);
           }
-          group.steps.push({ id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false });
+          group.steps.push({
+            id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false,
+            onNull: r.onNull, onNullDefaultValue: r.onNullDefaultValue ?? null, errorPolicy: r.errorPolicy, arrayMode: r.arrayMode,
+          });
         }
         byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
         this.groups.set(Array.from(byKey.values()).sort((a, b) => a.scope.localeCompare(b.scope)));
@@ -216,7 +224,10 @@ export class TransformationRuleListComponent implements OnInit {
       destinationType: t.scope === 'DestinationType' ? (t.destinationType || null) : null,
       destinationField: t.destinationField.trim() || null,
       sourceField: t.sourceField || null,
-      steps: [{ id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false }],
+      steps: [{
+        id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false,
+        onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+      }],
       editing: true,
     };
     this.groups.set([group, ...this.groups()]);
@@ -231,13 +242,36 @@ export class TransformationRuleListComponent implements OnInit {
   addStep(group: RuleTargetGroup): void {
     const applicable = this.applicableNodeTypesFor(group);
     const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
-    group.steps.push({ id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false });
+    group.steps.push({
+      id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false,
+      onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+    });
     this.groups.set([...this.groups()]);
   }
 
   onNodeTypeChange(step: RuleStep, nodeType: TransformNodeType): void {
     step.nodeType = nodeType;
     step.config = applyNodeDefaults(this.schemaFor(nodeType), {});
+    this.groups.set([...this.groups()]);
+  }
+
+  setOnNull(step: RuleStep, value: NullPolicy): void {
+    step.onNull = value;
+    this.groups.set([...this.groups()]);
+  }
+
+  setOnNullDefaultValue(step: RuleStep, value: string): void {
+    step.onNullDefaultValue = value;
+    this.groups.set([...this.groups()]);
+  }
+
+  setErrorPolicy(step: RuleStep, value: TransformErrorPolicy): void {
+    step.errorPolicy = value;
+    this.groups.set([...this.groups()]);
+  }
+
+  setArrayMode(step: RuleStep, value: TransformArrayMode): void {
+    step.arrayMode = value;
     this.groups.set([...this.groups()]);
   }
 
@@ -264,6 +298,10 @@ export class TransformationRuleListComponent implements OnInit {
       destinationField: group.destinationField,
       sourceField: group.sourceField,
       order: step.order,
+      onNull: step.onNull,
+      onNullDefaultValue: step.onNullDefaultValue,
+      errorPolicy: step.errorPolicy,
+      arrayMode: step.arrayMode,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

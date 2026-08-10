@@ -27,7 +27,9 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         string? sourceField = null,
         int order = 0,
         NullPolicy onNull = NullPolicy.Skip,
-        TransformErrorPolicy errorPolicy = TransformErrorPolicy.NullOut)
+        TransformErrorPolicy errorPolicy = TransformErrorPolicy.NullOut,
+        string? onNullDefaultValue = null,
+        TransformArrayMode arrayMode = TransformArrayMode.Whole)
     {
         Id = Guid.NewGuid();
         Scope = scope;
@@ -42,6 +44,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         Order = order;
         OnNull = onNull;
         ErrorPolicy = errorPolicy;
+        OnNullDefaultValue = onNullDefaultValue;
+        ArrayMode = arrayMode;
         IsEnabled = true;
     }
 
@@ -73,17 +77,34 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
     public int Order { get; private set; }
     public NullPolicy OnNull { get; private set; }
     public TransformErrorPolicy ErrorPolicy { get; private set; }
+
+    /// <summary>Substitute value used when <see cref="OnNull"/> is <see cref="NullPolicy.Default"/> — the
+    /// node is not run at all in that case; this value becomes the output directly.</summary>
+    public string? OnNullDefaultValue { get; private set; }
+
+    /// <summary>Whole-value (default, unchanged historical behavior) vs per-item application when the
+    /// mapped value is a real collection — see <see cref="TransformArrayMode"/>.</summary>
+    public TransformArrayMode ArrayMode { get; private set; }
+
     public bool IsEnabled { get; private set; } = true;
 
     string? IHasAuditDisplayName.AuditDisplayName =>
         $"{Scope} {NodeType}" + (DestinationField is null ? string.Empty : $" → {DestinationField}");
 
-    public void Update(string configJson, int order, NullPolicy onNull, TransformErrorPolicy errorPolicy)
+    public void Update(
+        string configJson,
+        int order,
+        NullPolicy onNull,
+        TransformErrorPolicy errorPolicy,
+        string? onNullDefaultValue = null,
+        TransformArrayMode arrayMode = TransformArrayMode.Whole)
     {
         ConfigJson = configJson;
         Order = order;
         OnNull = onNull;
         ErrorPolicy = errorPolicy;
+        OnNullDefaultValue = onNullDefaultValue;
+        ArrayMode = arrayMode;
     }
 
     public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;

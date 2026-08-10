@@ -18,18 +18,44 @@ public sealed class DateTimeFormatNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
+        // A bare year ("2020") or year-month ("2020-05") is valid FHIR `date` precision on its own — parsing it
+        // via DateTimeOffset.TryParse would fabricate day=1 (and month=1 for a bare year), which the spec
+        // explicitly forbids. Emit the FHIR partial-date form directly instead of ever reaching TryParse.
+        if (Regex.IsMatch(raw, @"^\d{4}(-\d{2})?$"))
+        {
+            if (config.Get("targetType", "dateTime") != "date" && !config.GetBool("allowPartialDate", false))
+            {
+                return TransformResult.Fail($"'{raw}' has only year/year-month precision — set target type to 'date' or enable allowPartialDate.");
+            }
+
+            return TransformResult.Ok(raw);
+        }
+
         if (!TryParse(raw, out var parsed))
         {
             return TransformResult.Fail($"Unable to parse '{raw}' as a date/time.");
         }
 
         var targetType = config.Get("targetType", "dateTime");
-        return TransformResult.Ok(targetType switch
+        var formatted = targetType switch
         {
             "date" => parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             "instant" => parsed.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz", CultureInfo.InvariantCulture),
             _ => parsed.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture)
-        });
+        };
+
+        var valid = targetType switch
+        {
+            "date" => FhirPrimitiveValidator.IsValidDate(formatted),
+            "instant" => FhirPrimitiveValidator.IsValidInstant(formatted),
+            _ => FhirPrimitiveValidator.IsValidDateTime(formatted)
+        };
+        if (!valid)
+        {
+            return TransformResult.Fail($"Formatted value '{formatted}' failed FHIR {targetType} validation.");
+        }
+
+        return TransformResult.Ok(formatted);
     }
 
     private static bool TryParse(string raw, out DateTimeOffset parsed)
@@ -73,14 +99,23 @@ public sealed class NumberCastNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        var cleaned = StripPattern.Replace(raw, string.Empty);
+        // Locale decimal-comma ("1234,50" meaning 1234.50): swap comma/dot BEFORE stripping, so the decimal
+        // marker survives and the thousands separator (now a dot) gets stripped along with everything else.
+        var normalized = config.Get("decimalSeparator", "dot") == "comma"
+            ? raw.Replace(".", string.Empty).Replace(',', '.')
+            : raw;
+
+        var cleaned = StripPattern.Replace(normalized, string.Empty);
         if (!decimal.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
         {
             return TransformResult.Fail($"'{raw}' is not numeric.");
         }
 
         var targetType = config.Get("targetType", "decimal");
-        return TransformResult.Ok(targetType == "integer" ? Math.Round(parsed, 0, MidpointRounding.AwayFromZero) : parsed);
+        var result = targetType == "integer" ? Math.Round(parsed, 0, MidpointRounding.AwayFromZero) : parsed;
+        return FhirPrimitiveValidator.IsValidDecimalString(result.ToString(CultureInfo.InvariantCulture))
+            ? TransformResult.Ok(result)
+            : TransformResult.Fail($"'{result}' failed FHIR decimal validation.");
     }
 }
 
@@ -240,7 +275,8 @@ public sealed class RoundingScalingNode : ITransformNode
         var scaled = input * scaleFactor;
 
         var places = config.GetInt("decimalPlaces", 2);
-        var rounded = Math.Round(scaled, places, MidpointRounding.AwayFromZero);
+        var midpoint = config.Get("roundingMode", "halfUp") == "halfEven" ? MidpointRounding.ToEven : MidpointRounding.AwayFromZero;
+        var rounded = Math.Round(scaled, places, midpoint);
 
         if (decimal.TryParse(config.GetOrNull("clampMin"), NumberStyles.Float, CultureInfo.InvariantCulture, out var min))
         {

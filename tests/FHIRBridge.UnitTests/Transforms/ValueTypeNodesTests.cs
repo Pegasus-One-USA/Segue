@@ -21,6 +21,30 @@ public sealed class ValueTypeNodesTests
     }
 
     [Fact]
+    public void DateTimeFormatNode_does_not_fabricate_a_day_for_year_only_input_when_target_is_dateTime()
+    {
+        var result = new DateTimeFormatNode().Execute("2020", new Dictionary<string, string> { ["targetType"] = "dateTime" }, null);
+        result.Success.Should().BeFalse("a year-only value has no day/month to fabricate for a dateTime target");
+    }
+
+    [Fact]
+    public void DateTimeFormatNode_passes_through_a_year_only_value_unchanged_when_target_is_date()
+    {
+        var result = new DateTimeFormatNode().Execute("2020", new Dictionary<string, string> { ["targetType"] = "date" }, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().Be("2020");
+    }
+
+    [Fact]
+    public void DateTimeFormatNode_allows_partial_date_for_a_non_date_target_when_explicitly_enabled()
+    {
+        var config = new Dictionary<string, string> { ["targetType"] = "dateTime", ["allowPartialDate"] = "true" };
+        var result = new DateTimeFormatNode().Execute("2020-05", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().Be("2020-05");
+    }
+
+    [Fact]
     public void NumberCastNode_strips_separators_and_preserves_precision()
     {
         var result = new NumberCastNode().Execute("1,234.50", new Dictionary<string, string> { ["targetType"] = "decimal" }, null);
@@ -31,6 +55,15 @@ public sealed class ValueTypeNodesTests
     public void NumberCastNode_returns_null_not_zero_for_empty_string()
     {
         new NumberCastNode().Execute("", new Dictionary<string, string>(), null).Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void NumberCastNode_parses_a_locale_decimal_comma_value()
+    {
+        var config = new Dictionary<string, string> { ["decimalSeparator"] = "comma" };
+        var result = new NumberCastNode().Execute("1.234,50", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().Be(1234.50m);
     }
 
     [Theory]
@@ -75,5 +108,12 @@ public sealed class ValueTypeNodesTests
     {
         var config = new Dictionary<string, string> { ["decimalPlaces"] = "1" };
         new RoundingScalingNode().Execute(83.914m, config, null).Value.Should().Be(83.9m);
+    }
+
+    [Fact]
+    public void RoundingScalingNode_rounds_half_to_even_when_configured()
+    {
+        var config = new Dictionary<string, string> { ["decimalPlaces"] = "0", ["roundingMode"] = "halfEven" };
+        new RoundingScalingNode().Execute(2.5m, config, null).Value.Should().Be(2m, "half-even rounds 2.5 down to the nearest even integer");
     }
 }

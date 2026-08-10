@@ -29,8 +29,10 @@ public static class AppSecretProvisioner
             secretProvider, secretWriter, AppSecretReferences.JwtSigningKey, logger, cancellationToken);
         var downloadLinkSigningSecret = await EnsureSecretAsync(
             secretProvider, secretWriter, AppSecretReferences.DownloadLinkSigningSecret, logger, cancellationToken);
+        var transformHashingKey = await EnsureSecretAsync(
+            secretProvider, secretWriter, AppSecretReferences.TransformHashingKey, logger, cancellationToken);
 
-        accessor.Initialize(jwtSigningKey, downloadLinkSigningSecret);
+        accessor.Initialize(jwtSigningKey, downloadLinkSigningSecret, transformHashingKey);
     }
 
     private static async Task<string> EnsureSecretAsync(

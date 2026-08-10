@@ -22,6 +22,8 @@ public sealed class TransformationRuleConfiguration : IEntityTypeConfiguration<T
         builder.Property(x => x.Order).IsRequired();
         builder.Property(x => x.OnNull).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.ErrorPolicy).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(x => x.OnNullDefaultValue).HasMaxLength(500);
+        builder.Property(x => x.ArrayMode).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
 
         // Speeds up the resolver's per-tier lookups (GetFieldScopedAsync/GetResourceTypeScopedAsync/etc.).

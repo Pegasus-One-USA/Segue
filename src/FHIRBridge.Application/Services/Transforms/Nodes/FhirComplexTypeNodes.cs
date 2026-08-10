@@ -18,8 +18,31 @@ public sealed class ReferenceConstructionNode : ITransformNode
         }
 
         var resourceType = config.Get("resourceType", "Patient");
+        var allowedTargetTypes = config.GetOrNull("allowedTargetTypes")?
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (allowedTargetTypes is { Length: > 0 } && !allowedTargetTypes.Contains(resourceType, StringComparer.OrdinalIgnoreCase))
+        {
+            return TransformResult.Fail($"'{resourceType}' is not one of the allowed target types ({string.Join(", ", allowedTargetTypes)}).");
+        }
+
         var style = config.Get("style", "relative");
         var id = raw.Contains('/') ? raw[(raw.LastIndexOf('/') + 1)..] : raw;
+
+        if (style == "logical")
+        {
+            var identifierSystem = config.Get("identifierSystem");
+            var logicalResult = new JsonObject
+            {
+                ["identifier"] = new JsonObject { ["system"] = identifierSystem, ["value"] = id }
+            };
+            var logicalDisplay = config.GetOrNull("display");
+            if (logicalDisplay is not null)
+            {
+                logicalResult["display"] = logicalDisplay;
+            }
+
+            return TransformResult.Ok(logicalResult);
+        }
 
         var reference = style switch
         {
@@ -119,23 +142,58 @@ public sealed class HumanNameParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
+        var prefixTokens = config.Get("prefixTokens", "Dr,Mr,Mrs,Ms,Miss")
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var suffixTokens = config.Get("suffixTokens", "Jr,Sr,II,III,IV,MD,PhD")
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
         string family;
-        string[] given;
+        List<string> given;
+        string? prefix = null;
+        string? suffix = null;
 
         if (config.Get("pattern", "FirstLast") == "LastFirstMiddle" || raw.Contains(','))
         {
             var parts = raw.Split(',', 2, StringSplitOptions.TrimEntries);
             family = parts[0];
-            given = parts.Length > 1 ? parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries) : [];
+            given = parts.Length > 1 ? [.. parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries)] : [];
         }
         else
         {
-            var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            family = parts.Length > 0 ? parts[^1] : raw;
-            given = parts.Length > 1 ? parts[..^1] : [];
+            var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+            {
+                prefix = parts[0];
+                parts.RemoveAt(0);
+            }
+
+            if (parts.Count > 0 && suffixTokens.Contains(parts[^1].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+            {
+                suffix = parts[^1];
+                parts.RemoveAt(parts.Count - 1);
+            }
+
+            family = parts.Count > 0 ? parts[^1] : raw;
+            given = parts.Count > 1 ? parts[..^1] : [];
         }
 
         var name = new JsonObject { ["family"] = family, ["given"] = new JsonArray(given.Select(g => (JsonNode)g).ToArray()) };
+        if (prefix is not null)
+        {
+            name["prefix"] = new JsonArray((JsonNode)prefix);
+        }
+
+        if (suffix is not null)
+        {
+            name["suffix"] = new JsonArray((JsonNode)suffix);
+        }
+
+        var use = config.GetOrNull("use");
+        if (use is not null)
+        {
+            name["use"] = use;
+        }
+
         if (config.GetBool("setText", true))
         {
             name["text"] = raw;
@@ -185,6 +243,13 @@ public sealed class AddressParsingNode : ITransformNode
         }
 
         address["use"] = config.Get("use", "home");
+        var type = config.GetOrNull("type");
+        if (type is not null)
+        {
+            address["type"] = type;
+        }
+
+        address["country"] = config.Get("country", "US");
         return TransformResult.Ok(address);
     }
 }
@@ -206,14 +271,31 @@ public sealed class TelecomNormalizationNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
+        var rank = config.GetOrNull("rank");
+
         if (EmailPattern.IsMatch(raw))
         {
-            return TransformResult.Ok(new JsonObject
+            var email = new JsonObject { ["system"] = "email", ["value"] = raw, ["use"] = config.Get("use", "home") };
+            if (rank is not null)
             {
-                ["system"] = "email",
-                ["value"] = raw,
-                ["use"] = config.Get("use", "home")
-            });
+                email["rank"] = int.TryParse(rank, out var emailRank) ? emailRank : null;
+            }
+
+            return TransformResult.Ok(email);
+        }
+
+        // "system" config can explicitly force fax/url instead of the phone-vs-email auto-detection above —
+        // there's no reliable free-text signal to detect fax/url from the raw value itself.
+        var explicitSystem = config.GetOrNull("system");
+        if (explicitSystem is "fax" or "url")
+        {
+            var result = new JsonObject { ["system"] = explicitSystem, ["value"] = raw, ["use"] = config.Get("use", "work") };
+            if (rank is not null)
+            {
+                result["rank"] = int.TryParse(rank, out var explicitRank) ? explicitRank : null;
+            }
+
+            return TransformResult.Ok(result);
         }
 
         var digits = NonDigit.Replace(raw, string.Empty);
@@ -224,11 +306,12 @@ public sealed class TelecomNormalizationNode : ITransformNode
             _ => raw.StartsWith('+') ? raw : $"+{digits}"
         };
 
-        return TransformResult.Ok(new JsonObject
+        var phone = new JsonObject { ["system"] = "phone", ["value"] = normalized, ["use"] = config.Get("use", "mobile") };
+        if (rank is not null)
         {
-            ["system"] = "phone",
-            ["value"] = normalized,
-            ["use"] = config.Get("use", "mobile")
-        });
+            phone["rank"] = int.TryParse(rank, out var phoneRank) ? phoneRank : null;
+        }
+
+        return TransformResult.Ok(phone);
     }
 }

@@ -25,7 +25,19 @@ public sealed class ValueCodeMappingNode : ITransformNode
         var match = map.FirstOrDefault(kv => comparer.Equals(kv.Key, raw));
         if (match.Key is not null)
         {
-            return TransformResult.Ok(match.Value);
+            if (!config.GetBool("emitCoding", false))
+            {
+                return TransformResult.Ok(match.Value);
+            }
+
+            var coding = new JsonObject { ["code"] = match.Value };
+            var system = config.GetOrNull("codingSystem");
+            if (system is not null)
+            {
+                coding["system"] = system;
+            }
+
+            return TransformResult.Ok(coding);
         }
 
         return config.Get("unmatchedPolicy", "null") switch
@@ -75,13 +87,46 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         var systemUri = SystemUris.GetValueOrDefault(systemKey, systemKey);
         var display = config.GetOrNull("display");
 
-        var coding = new JsonObject { ["system"] = systemUri, ["code"] = code };
+        var primaryCoding = new JsonObject { ["system"] = systemUri, ["code"] = code };
         if (display is not null)
         {
-            coding["display"] = display;
+            primaryCoding["display"] = display;
         }
 
-        var concept = new JsonObject { ["coding"] = new JsonArray(coding) };
+        var codings = new JsonArray(primaryCoding);
+
+        // Optional second/third coding for the same concept (e.g. a local code alongside its standard
+        // translation) — a JSON array of {system,code,display} objects, kept separate from the primary
+        // system/code/display fields above so the common single-coding case stays a flat config, not JSON.
+        var additional = config.GetOrNull("additionalCodings");
+        if (additional is not null)
+        {
+            try
+            {
+                var extra = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, string>>>(additional) ?? [];
+                foreach (var entry in extra)
+                {
+                    var extraSystemKey = entry.GetValueOrDefault("system");
+                    var extraCoding = new JsonObject
+                    {
+                        ["system"] = extraSystemKey is null ? null : SystemUris.GetValueOrDefault(extraSystemKey, extraSystemKey),
+                        ["code"] = entry.GetValueOrDefault("code")
+                    };
+                    if (entry.TryGetValue("display", out var extraDisplay))
+                    {
+                        extraCoding["display"] = extraDisplay;
+                    }
+
+                    codings.Add(extraCoding);
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return TransformResult.Fail($"'additionalCodings' is not valid JSON: '{additional}'.");
+            }
+        }
+
+        var concept = new JsonObject { ["coding"] = codings };
         if (config.GetBool("includeText", true))
         {
             concept["text"] = display ?? code;

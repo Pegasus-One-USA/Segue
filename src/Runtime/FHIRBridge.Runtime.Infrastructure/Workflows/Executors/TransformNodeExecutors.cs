@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Services.Transforms;
@@ -55,6 +56,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private readonly IEffectiveRuleResolver? _ruleResolver;
     private readonly ITransformNodeRegistry? _transformNodeRegistry;
     private readonly ISystemSettingsCache? _settingsCache;
+    private readonly IAppSecretAccessor? _secretAccessor;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
@@ -62,7 +64,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IConfigurationRepository? configurationRepository = null,
         IEffectiveRuleResolver? ruleResolver = null,
         ITransformNodeRegistry? transformNodeRegistry = null,
-        ISystemSettingsCache? settingsCache = null)
+        ISystemSettingsCache? settingsCache = null,
+        IAppSecretAccessor? secretAccessor = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
@@ -71,6 +74,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         _ruleResolver = ruleResolver;
         _transformNodeRegistry = transformNodeRegistry;
         _settingsCache = settingsCache;
+        _secretAccessor = secretAccessor;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -180,7 +184,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var transformedRow = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, cancellationToken);
 
                         records.Add(new MappedDestinationRecord(
                             context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
@@ -307,6 +311,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string? sourceSystem,
         Guid workflowRunId,
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        string resourceId,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
@@ -344,6 +349,17 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             var currentValue = value;
             foreach (var rule in rules)
             {
+                if (TransformNullPolicy.IsNullOrEmpty(currentValue))
+                {
+                    currentValue = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
+                    if (stopChain)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
                 var node = _transformNodeRegistry.Get(rule.NodeType);
                 Dictionary<string, string> config;
                 try
@@ -357,7 +373,22 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     continue;
                 }
 
-                var result = node.Execute(currentValue, config, secret: null);
+                string? secret = null;
+                if (rule.NodeType is TransformNodeType.HashingMasking or TransformNodeType.DateMathAge)
+                {
+                    secret = _secretAccessor?.TransformHashingKey;
+                }
+
+                // Reserved, caller-populated key (never persisted) — DateMathAge's per-patient seeded shift
+                // needs "the patient this row belongs to," which for a Patient-resource row is simply its own
+                // id; other resource types (Observation, Encounter, ...) would need reference resolution this
+                // generic loop doesn't have, so they fall back to DateMathAge's fixed `days` config instead.
+                if (rule.NodeType == TransformNodeType.DateMathAge && string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase))
+                {
+                    config["_patientId"] = resourceId;
+                }
+
+                var result = TransformNodeApplier.ExecuteWithArrayMode(node, currentValue, config, secret, rule.ArrayMode);
                 if (result.Success)
                 {
                     currentValue = result.Value;

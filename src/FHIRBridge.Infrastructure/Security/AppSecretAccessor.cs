@@ -13,10 +13,13 @@ public sealed class AppSecretAccessor : IAppSecretAccessor
 
     public string DownloadLinkSigningSecret { get; private set; } = string.Empty;
 
-    public void Initialize(string jwtSigningKey, string downloadLinkSigningSecret)
+    public string TransformHashingKey { get; private set; } = string.Empty;
+
+    public void Initialize(string jwtSigningKey, string downloadLinkSigningSecret, string transformHashingKey)
     {
         JwtSigningKey = jwtSigningKey;
         DownloadLinkSigningSecret = downloadLinkSigningSecret;
+        TransformHashingKey = transformHashingKey;
     }
 
     public void Update(SecretReference secretReference, string newValue)
@@ -28,6 +31,10 @@ public sealed class AppSecretAccessor : IAppSecretAccessor
         else if (secretReference == AppSecretReferences.DownloadLinkSigningSecret)
         {
             DownloadLinkSigningSecret = newValue;
+        }
+        else if (secretReference == AppSecretReferences.TransformHashingKey)
+        {
+            TransformHashingKey = newValue;
         }
         else
         {
