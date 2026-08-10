@@ -1,4 +1,6 @@
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -14,8 +16,15 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 // (a new "request") reads back what a previous context wrote.
 public sealed class WorkflowSqlStoreTests
 {
-    private readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // static, not per-instance: xUnit gives every [Fact] its own class instance, so instance fields here
+    // would mean a fresh InMemory database name (and a fresh EF internal service provider) per test method —
+    // EF warns-as-error once more than 20 such distinct configurations exist across a full run, and this
+    // suite is close enough to that ceiling that this class alone tipped it over. Sharing one database across
+    // every Fact here is safe: each test already keys its own rows with fresh random GUIDs (WorkflowId,
+    // WorkflowRunId, TransformationRule.Id, ...), so there's no cross-test collision risk — xUnit runs
+    // methods within one class sequentially by default anyway.
+    private static readonly InMemoryDatabaseRoot _root = new();
+    private static readonly string _databaseName = Guid.NewGuid().ToString();
 
     private FHIRBridgeDbContext CreateContext()
     {
@@ -276,6 +285,58 @@ public sealed class WorkflowSqlStoreTests
             counts[WorkflowRunStatus.Cancelled].Should().Be(0);
             counts[WorkflowRunStatus.PartialSuccess].Should().Be(0);
             counts[WorkflowRunStatus.AwaitingBulkExport].Should().Be(0);
+        }
+    }
+
+    // Scenario B: a Field-scoped TransformationRule authored with no resource type / destination field of
+    // its own — matched purely by source field name, so it applies wherever that source field is mapped, on
+    // any resource type, into any destination column. Previously GetFieldScopedAsync required an exact match
+    // on both, so a rule like this could never match anything at all. Both cases live in one Fact (rather
+    // than one each) reusing this class's own CreateContext() — every additional [Fact] in an EF-InMemory
+    // test class gets its own fresh database name (xUnit gives each Fact a new class instance), and EF
+    // warns-as-error once more than 20 such distinct configurations exist across a full test run; this
+    // suite is already close to that ceiling.
+    [Fact]
+    public async Task Field_rules_with_no_resource_type_match_by_source_field_alone_but_a_specific_rule_still_wins()
+    {
+        var blanket = new TransformationRule(
+            TransformScope.Field, TransformNodeType.DateTimeFormat, "{}",
+            resourceType: null, destinationField: null, sourceField: "birthDate");
+        blanket.MarkCreated("test@example.com");
+
+        await using (var context = CreateContext())
+        {
+            context.TransformationRules.Add(blanket);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var readContext = CreateContext())
+        {
+            var repository = new EfTransformationRuleRepository(readContext);
+            var forPatient = await repository.GetFieldScopedAsync("Patient", "BirthDate", null, "birthDate", CancellationToken.None);
+            var forPractitioner = await repository.GetFieldScopedAsync("Practitioner", "DOB", null, "birthDate", CancellationToken.None);
+
+            forPatient.Should().ContainSingle().Which.Id.Should().Be(blanket.Id);
+            forPractitioner.Should().ContainSingle().Which.Id.Should().Be(blanket.Id);
+        }
+
+        var specific = new TransformationRule(
+            TransformScope.Field, TransformNodeType.HashingMasking, "{}",
+            resourceType: "Patient", destinationField: "BirthDate", sourceField: "birthDate");
+        specific.MarkCreated("test@example.com");
+
+        await using (var context = CreateContext())
+        {
+            context.TransformationRules.Add(specific);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var readContext = CreateContext())
+        {
+            var repository = new EfTransformationRuleRepository(readContext);
+            var rules = await repository.GetFieldScopedAsync("Patient", "BirthDate", null, "birthDate", CancellationToken.None);
+
+            rules.Should().HaveCount(2, "the repository returns every candidate — the resolver picks the most specific one");
         }
     }
 }

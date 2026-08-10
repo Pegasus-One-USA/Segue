@@ -1,0 +1,150 @@
+{
+  "resourceType": "Communication",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "instantiatesCanonical": [
+    "<Canonical · 0..*>"
+  ],
+  "instantiatesUri": [
+    "<Uri · 0..*>"
+  ],
+  "basedOn": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "partOf": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "inResponseTo": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "status": "<Code · 1..1 · required>",
+  "statusReason": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "priority": "<Code · 0..1>",
+  "medium": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "subject": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "topic": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "about": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "encounter": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "sent": "<DateTime · 0..1>",
+  "received": "<DateTime · 0..1>",
+  "recipient": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "sender": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "reasonCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "reasonReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "payload": [
+    {
+      "contentString": "<String · 0..1>",
+      "contentAttachment": {
+        "contentType": "<Code · 0..1>",
+        "url": "<Url · 0..1>",
+        "title": "<String · 0..1>"
+      },
+      "contentReference": {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "note": [
+    {
+      "authorString": "<String · 0..1>",
+      "time": "<DateTime · 0..1>",
+      "text": "<Markdown · 1..1 · required>"
+    }
+  ]
+}

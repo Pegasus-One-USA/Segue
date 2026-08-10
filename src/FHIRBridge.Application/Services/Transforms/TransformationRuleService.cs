@@ -144,6 +144,20 @@ public sealed class TransformationRuleService : ITransformationRuleService
         return new TransformPreviewResult(currentValue, rules[0].Scope, steps);
     }
 
+    public async Task<List<TransformationRuleDto>> GetEffectiveRulesAsync(
+        DestinationType destinationType,
+        string resourceType,
+        string destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem,
+        string? sourceField,
+        CancellationToken cancellationToken = default)
+    {
+        var rules = await _resolver.ResolveAsync(
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+        return rules.Select(ToDto).ToList();
+    }
+
     public IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas() => TransformNodeConfigSchemas.All;
 
     private static TransformationRuleDto ToDto(TransformationRule rule) => new(

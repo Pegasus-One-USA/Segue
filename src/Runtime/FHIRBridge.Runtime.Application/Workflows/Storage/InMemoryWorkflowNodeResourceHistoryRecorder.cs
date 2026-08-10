@@ -61,4 +61,30 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
                 take));
         }
     }
+
+    /// <summary>This non-durable recorder never sees <c>WorkflowNodeRun</c> rows (status/error live on the
+    /// entity persisted by the SQL-backed store), so it can only ever report the successes it recorded —
+    /// failed/cancelled nodes aren't representable here. Callers that need real per-node status should use the
+    /// SQL-backed recorder (<c>AddWorkflowSqlPersistence</c>).</summary>
+    public Task<WorkflowPagedResult<WorkflowNodeRunHistoryDto>> GetNodeRunHistoryPagedAsync(
+        Guid workflowRunId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var matching = _payloads
+                .Where(entry => entry.WorkflowRunId == workflowRunId)
+                .Select(entry => entry.Dto)
+                .OrderBy(dto => dto.RecordedAtUtc)
+                .ToList();
+
+            var take = Math.Clamp(pageSize, 1, 200);
+            var skip = Math.Max(0, (page - 1) * take);
+
+            var items = matching.Skip(skip).Take(take).Select(dto => new WorkflowNodeRunHistoryDto(
+                dto.WorkflowNodeRunId, dto.NodeType, 0, 0, "Succeeded", null,
+                dto.RecordedAtUtc, dto.RecordedAtUtc, dto.Contract, dto.PayloadJson, dto.ItemCount)).ToList();
+
+            return Task.FromResult(new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, matching.Count, page, take));
+        }
+    }
 }

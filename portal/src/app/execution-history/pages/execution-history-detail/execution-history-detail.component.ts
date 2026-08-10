@@ -6,7 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { ToastService } from '../../../services/toast.service';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
-import { PagedResult, ResourceHistoryEntry, RouteExecution } from '../../models/execution-history.model';
+import { NodeRunHistoryEntry, PagedResult, RouteExecution } from '../../models/execution-history.model';
 
 @Component({
   selector: 'app-execution-history-detail',
@@ -22,9 +22,10 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly execution   = signal<RouteExecution | null>(null);
-  readonly resources   = signal<PagedResult<ResourceHistoryEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
+  readonly nodeRuns    = signal<PagedResult<NodeRunHistoryEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly loading      = signal(false);
-  readonly expandedId   = signal<string | null>(null);
+  readonly expandedIds  = signal<Set<string>>(new Set());
+  readonly allExpanded  = signal(false);
   readonly pageIndex    = signal(0);
   readonly pageSize     = signal(10);
 
@@ -37,15 +38,18 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     }
 
     this.api.byId(this.runId).subscribe(execution => this.execution.set(execution));
-    this.loadResources();
+    this.loadNodeRuns();
   }
 
-  loadResources(): void {
+  loadNodeRuns(): void {
     this.loading.set(true);
-    this.api.resources(this.runId, this.pageIndex() + 1, this.pageSize()).subscribe({
+    this.api.nodeRuns(this.runId, this.pageIndex() + 1, this.pageSize()).subscribe({
       next: result => {
-        this.resources.set(result);
+        this.nodeRuns.set(result);
         this.loading.set(false);
+        if (this.allExpanded()) {
+          this.expandedIds.set(new Set(result.items.map(x => x.workflowNodeRunId)));
+        }
       },
       error: () => this.loading.set(false),
     });
@@ -54,11 +58,27 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   onPageChange(e: PageEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
-    this.loadResources();
+    this.loadNodeRuns();
   }
 
   toggleExpanded(entryId: string): void {
-    this.expandedId.set(this.expandedId() === entryId ? null : entryId);
+    const next = new Set(this.expandedIds());
+    if (next.has(entryId)) {
+      next.delete(entryId);
+    } else {
+      next.add(entryId);
+    }
+    this.expandedIds.set(next);
+  }
+
+  isExpanded(entryId: string): boolean {
+    return this.expandedIds().has(entryId);
+  }
+
+  toggleAllExpanded(): void {
+    const expandAll = !this.allExpanded();
+    this.allExpanded.set(expandAll);
+    this.expandedIds.set(expandAll ? new Set(this.nodeRuns().items.map(x => x.workflowNodeRunId)) : new Set());
   }
 
   back(): void {
@@ -92,8 +112,8 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     }
   }
 
-  contractClass(contract: string): string {
-    return 'contract-' + contract.toLowerCase();
+  contractClass(contract: string | null): string {
+    return 'contract-' + (contract ?? 'none').toLowerCase();
   }
 
   copyCorrelationId(): void {
@@ -102,6 +122,19 @@ export class ExecutionHistoryDetailComponent implements OnInit {
 
     navigator.clipboard.writeText(correlationId).then(
       () => this.toast.show('Copied', 'Correlation ID copied to clipboard.'),
+      () => this.toast.show('Copy failed', 'Select the text manually.'),
+    );
+  }
+
+  /** Copies whatever's actually shown in the expanded panel for this node — the formatted payload on
+   *  success, or the error message when it failed/was cancelled — so there's always something sensible to
+   *  copy regardless of outcome. */
+  copyNodeDetail(entry: NodeRunHistoryEntry): void {
+    const text = entry.payloadJson ? this.formatJson(entry.payloadJson) : (entry.errorMessage ?? '');
+    if (!text) { return; }
+
+    navigator.clipboard.writeText(text).then(
+      () => this.toast.show('Copied', `${entry.nodeType} details copied to clipboard.`),
       () => this.toast.show('Copy failed', 'Select the text manually.'),
     );
   }

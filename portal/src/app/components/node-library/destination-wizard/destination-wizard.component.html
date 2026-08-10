@@ -116,10 +116,26 @@
       <div class="dw-section-head">
         <span class="dw-section-num">2</span>
         <span class="dw-section-title">Select data groups</span>
+        <div class="dw-section-spacer"></div>
+        <div class="dw-group-search">
+          <input
+            type="text"
+            class="dw-group-search-input"
+            placeholder="Search resources…"
+            [value]="groupSearchQuery()"
+            (input)="onGroupSearchInput($any($event.target).value)"
+          />
+          @if (groupSearchQuery()) {
+            <button type="button" class="dw-group-search-clear" (click)="clearGroupSearch()" aria-label="Clear search">✕</button>
+          }
+        </div>
         <span class="dw-section-hint">Choose which FHIR resources to include in this destination.</span>
       </div>
+      @if (filteredGroups().length === 0) {
+        <div class="dw-callout">No resources match "{{ groupSearchQuery() }}".</div>
+      }
       <div class="dw-resources">
-        @for (r of availableGroups(); track r) {
+        @for (r of filteredGroups(); track r) {
           <button
             type="button"
             class="dw-resource-card"

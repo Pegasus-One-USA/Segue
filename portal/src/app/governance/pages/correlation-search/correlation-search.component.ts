@@ -3,6 +3,18 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
+import { ErrorLogEntry } from '../../../operations/models/operations.model';
+
+/** Hides per-record failure rows (Severity "Error") that share a reference id with a "PartialSuccess"
+ *  Informational summary row — that summary already describes the batch failure, so the individual
+ *  "An unexpected error occurred…" rows underneath it are redundant here. They're still reachable in full
+ *  by clicking the summary's Reference ID, which now covers every error captured for the same run. */
+function visibleErrors(errors: ErrorLogEntry[]): ErrorLogEntry[] {
+  const summarizedReferenceIds = new Set(
+    errors.filter(x => x.exceptionType === 'PartialSuccess' && x.errorReferenceId).map(x => x.errorReferenceId),
+  );
+  return errors.filter(x => x.exceptionType === 'PartialSuccess' || !summarizedReferenceIds.has(x.errorReferenceId));
+}
 
 export interface TimelineEntry {
   timeUtc: string;
@@ -97,7 +109,12 @@ export class CorrelationSearchComponent implements OnInit {
 
   readonly timeline = computed<TimelineEntry[]>(() => {
     const r = this.result();
-    return r ? buildTimeline(r) : [];
+    return r ? buildTimeline({ ...r, errors: visibleErrors(r.errors) }) : [];
+  });
+
+  readonly visibleErrorRows = computed<ErrorLogEntry[]>(() => {
+    const r = this.result();
+    return r ? visibleErrors(r.errors) : [];
   });
 
   setViewMode(mode: 'sections' | 'timeline'): void {

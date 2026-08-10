@@ -313,6 +313,20 @@ export class DestinationWizardComponent implements OnInit {
   // needs the full list to choose from).
   readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
   readonly selectedResources = signal<string[]>([]);
+  readonly groupSearchQuery = signal<string>('');
+  readonly filteredGroups = computed(() => {
+    const q = this.groupSearchQuery().trim().toLowerCase();
+    if (!q) return this.availableGroups();
+    return this.availableGroups().filter(r => r.toLowerCase().includes(q));
+  });
+
+  onGroupSearchInput(value: string): void {
+    this.groupSearchQuery.set(value);
+  }
+
+  clearGroupSearch(): void {
+    this.groupSearchQuery.set('');
+  }
 
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
@@ -1531,6 +1545,14 @@ export class DestinationWizardComponent implements OnInit {
     if (f['dest_mapping_summary_v1']) {
       try {
         this.loadMappingSummary(JSON.parse(f['dest_mapping_summary_v1']) as MappingSummaryDocument);
+        // loadMappingSummary derives selectedResources solely from resources that have actual mapped
+        // columns in the doc — a resource checked in Step 2 but never given a field mapping in Step 3
+        // is absent from it, so it would otherwise lose its checkmark on reopen. Union dest_resources
+        // back in, since that field is always the full, authoritative Step-2 selection.
+        if (f['dest_resources']) {
+          const fromDestResources = f['dest_resources'].split(',').filter(Boolean);
+          this.selectedResources.update(list => Array.from(new Set([...list, ...fromDestResources])));
+        }
         return;
       } catch { /* fall through to the older loaders below */ }
     }

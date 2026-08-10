@@ -108,6 +108,7 @@
   &--resourcetype { background: var(--color-warning-soft); color: var(--color-warning-strong); }
   &--destinationtype { background: var(--color-info-soft); color: var(--color-info-strong); }
   &--global { background: var(--color-border); color: var(--color-ink-2); }
+  &--field { background: var(--color-primary-soft); color: var(--color-primary); }
 }
 
 // ─── Step chain (shared shape with the per-field Rules dialog) ────────────

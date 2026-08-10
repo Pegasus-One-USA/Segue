@@ -1,0 +1,149 @@
+{
+  "resourceType": "Location",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>",
+    "profile": [
+      "<Canonical · 0..*>"
+    ],
+    "security": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
+    ],
+    "tag": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>",
+        "userSelected": "<boolean · 0..1>"
+      }
+    ]
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ],
+  "status": "<Code · 0..1>",
+  "operationalStatus": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "name": "<String · 0..1>",
+  "alias": [
+    "<String · 0..*>"
+  ],
+  "description": "<String · 0..1>",
+  "mode": "<Code · 0..1>",
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "telecom": [
+    {
+      "system": "<Code · 0..1>",
+      "value": "<String · 0..1>",
+      "use": "<Code · 0..1>",
+      "rank": "<positiveInt · 0..1>"
+    }
+  ],
+  "address": {
+    "use": "<Code · 0..1>",
+    "type": "<Code · 0..1>",
+    "text": "<String · 0..1>",
+    "line": [
+      "<String · 0..*>"
+    ],
+    "city": "<String · 0..1>",
+    "district": "<String · 0..1>",
+    "state": "<String · 0..1>",
+    "postalCode": "<String · 0..1>",
+    "country": "<String · 0..1>"
+  },
+  "physicalType": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "position": {
+    "longitude": "<Decimal · 1..1 · required>",
+    "latitude": "<Decimal · 1..1 · required>",
+    "altitude": "<Decimal · 0..1>"
+  },
+  "managingOrganization": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "partOf": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "hoursOfOperation": [
+    {
+      "daysOfWeek": [
+        "<Code · 0..*>"
+      ],
+      "allDay": "<boolean · 0..1>",
+      "openingTime": "<Time · 0..1>",
+      "closingTime": "<Time · 0..1>"
+    }
+  ],
+  "availabilityExceptions": "<String · 0..1>",
+  "endpoint": [
+    {
+      "reference": "<String · 0..1>",
+      "type": "<Uri · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ]
+}

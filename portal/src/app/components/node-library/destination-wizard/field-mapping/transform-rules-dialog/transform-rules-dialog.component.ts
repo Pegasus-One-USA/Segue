@@ -16,7 +16,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
-  TransformationRulesService, TransformNodeType, TransformNodeSchema, NullPolicy, TransformErrorPolicy, TransformArrayMode,
+  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, NullPolicy, TransformErrorPolicy, TransformArrayMode,
 } from '../transformation-rules.service';
 import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
@@ -60,6 +60,12 @@ interface ColumnRuleRow {
   previewSample: string;
   previewOutput: string | null;
   previewLoading: boolean;
+  /** Read-only view of the rule(s) actually resolved for this field when there's no Field-level rule of its
+   *  own yet (effectiveScope is broader than 'Field') — populated lazily the first time the scope chip is
+   *  clicked. Null until fetched, distinct from an empty array (fetched, nothing found). */
+  inheritedRules: TransformationRule[] | null;
+  viewingInherited: boolean;
+  loadingInherited: boolean;
 }
 
 @Component({
@@ -139,6 +145,9 @@ export class TransformRulesDialogComponent implements OnInit {
             previewSample: '',
             previewOutput: null,
             previewLoading: false,
+            inheritedRules: null,
+            viewingInherited: false,
+            loadingInherited: false,
           };
         }));
         this.loading.set(false);
@@ -153,8 +162,86 @@ export class TransformRulesDialogComponent implements OnInit {
   toggleEdit(row: ColumnRuleRow): void {
     row.editing = !row.editing;
     if (row.editing && row.steps.length === 0) {
+      if (this.effectiveScopeIsInherited(row)) {
+        this.overrideFromInherited(row);
+        return;
+      }
       this.addStep(row);
     }
+    this.rows.set([...this.rows()]);
+  }
+
+  /** True when there's a rule resolved for this field that ISN'T already sitting in `row.steps` ready to
+   *  edit inline — a broader tier (ResourceType/DestinationType/Global), or a Field-scoped rule matched by
+   *  source field alone with no resource type of its own (so it doesn't show up in the per-resource-type
+   *  `fieldRules` fetch `loadRows()` does). Either way there's something to view/clone rather than nothing. */
+  effectiveScopeIsInherited(row: ColumnRuleRow): boolean {
+    return !!row.effectiveScope && row.steps.length === 0;
+  }
+
+  /** Click handler for the scope chip — read-only, never creates or edits anything. */
+  toggleInheritedView(row: ColumnRuleRow): void {
+    if (!this.effectiveScopeIsInherited(row)) {
+      return;
+    }
+
+    row.viewingInherited = !row.viewingInherited;
+    if (row.viewingInherited && row.inheritedRules === null) {
+      this.fetchInheritedRules(row, () => undefined);
+    }
+    this.rows.set([...this.rows()]);
+  }
+
+  /** Starts a Field-level override pre-filled from the currently-resolved rule(s), instead of blank schema
+   *  defaults — fixes "Add rule" previously discarding what's actually running. */
+  overrideFromInherited(row: ColumnRuleRow): void {
+    if (row.inheritedRules !== null) {
+      this.cloneIntoEditableSteps(row, row.inheritedRules);
+      return;
+    }
+
+    this.fetchInheritedRules(row, rules => this.cloneIntoEditableSteps(row, rules));
+  }
+
+  private fetchInheritedRules(row: ColumnRuleRow, onLoaded: (rules: TransformationRule[]) => void): void {
+    row.loadingInherited = true;
+    this.rows.set([...this.rows()]);
+    this.rulesService.getEffectiveRules({
+      destinationType: this.data.destinationType,
+      resourceType: this.data.resourceType,
+      destinationField: row.targetName,
+      sourceSystem: this.data.sourceSystem,
+      sourceField: row.sourceField,
+    }).subscribe({
+      next: rules => {
+        row.inheritedRules = rules;
+        row.loadingInherited = false;
+        this.rows.set([...this.rows()]);
+        onLoaded(rules);
+      },
+      error: () => {
+        row.loadingInherited = false;
+        this.rows.set([...this.rows()]);
+        this.toast.error('Failed to load the inherited rule.');
+      },
+    });
+  }
+
+  private cloneIntoEditableSteps(row: ColumnRuleRow, rules: TransformationRule[]): void {
+    row.steps = rules.map((r, i): RuleStep => ({
+      id: null,
+      nodeType: r.nodeType,
+      config: { ...(r.config ?? {}) },
+      order: i,
+      isNew: true,
+      saving: false,
+      onNull: r.onNull,
+      onNullDefaultValue: r.onNullDefaultValue ?? null,
+      errorPolicy: r.errorPolicy,
+      arrayMode: r.arrayMode,
+    }));
+    row.editing = true;
+    row.viewingInherited = false;
     this.rows.set([...this.rows()]);
   }
 

@@ -37,9 +37,22 @@
 
               <div class="rule-row__status">
                 @if (row.effectiveScope) {
-                  <span class="scope-chip" [class]="'scope-chip--' + row.effectiveScope.toLowerCase()">
-                    {{ row.effectiveScope }} default
-                  </span>
+                  @if (effectiveScopeIsInherited(row)) {
+                    <button
+                      type="button"
+                      class="scope-chip scope-chip--clickable"
+                      [class]="'scope-chip--' + row.effectiveScope.toLowerCase()"
+                      (click)="toggleInheritedView(row)"
+                      matTooltip="Click to view the actual rule"
+                    >
+                      {{ row.effectiveScope }} default
+                      <mat-icon class="scope-chip__caret">{{ row.viewingInherited ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    </button>
+                  } @else {
+                    <span class="scope-chip" [class]="'scope-chip--' + row.effectiveScope.toLowerCase()">
+                      {{ row.effectiveScope }} default
+                    </span>
+                  }
                   @if (row.effectiveNodeType) {
                     <span class="node-chip">{{ row.effectiveNodeType }}</span>
                   }
@@ -53,6 +66,39 @@
                 {{ row.steps.length > 0 ? 'Edit rules (' + row.steps.length + ')' : 'Add rule' }}
               </button>
             </div>
+
+            @if (row.viewingInherited) {
+              <div class="inherited-view">
+                @if (row.loadingInherited) {
+                  <div class="inherited-view__loading">
+                    <mat-spinner diameter="16"></mat-spinner>
+                    <span>Loading the effective rule…</span>
+                  </div>
+                } @else if (row.inheritedRules && row.inheritedRules.length > 0) {
+                  @for (rule of row.inheritedRules; track rule.id) {
+                    <div class="inherited-rule">
+                      <span class="node-chip">{{ rule.nodeType }}</span>
+                      <div class="inherited-rule__config">
+                        @for (entry of (rule.config | keyvalue); track entry.key) {
+                          <span class="config-pair"><strong>{{ entry.key }}</strong>: {{ entry.value }}</span>
+                        }
+                        @if ((rule.config | keyvalue).length === 0) {
+                          <span class="config-pair config-pair--empty">No configuration</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                  <p class="inherited-view__hint">
+                    This is defined in Settings → Transformation Rules and applies to more than just this field.
+                  </p>
+                  <button mat-stroked-button class="override-btn" (click)="overrideFromInherited(row)">
+                    <mat-icon>content_copy</mat-icon> Override for this field
+                  </button>
+                } @else {
+                  <p class="inherited-view__hint">No rule found.</p>
+                }
+              </div>
+            }
 
             <div class="rule-row__preview">
               <input

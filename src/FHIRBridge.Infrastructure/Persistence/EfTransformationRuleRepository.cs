@@ -27,14 +27,18 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 (x.SourceField == null || x.SourceField == sourceField))
             .ToListAsync(cancellationToken);
 
+    // ResourceType and DestinationField are null-or-match here (not required exact, unlike Workflow scope) —
+    // a Field rule can be authored "by source field alone," matching wherever that source field is mapped
+    // regardless of resource type or destination column name, same "specific beats blanket" pattern the
+    // broader tiers already use for DestinationField.
     public async Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
         string resourceType, string destinationField, string? sourceSystem, string? sourceField,
         CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
                 x.Scope == TransformScope.Field &&
-                x.ResourceType == resourceType &&
-                x.DestinationField == destinationField &&
+                (x.ResourceType == null || x.ResourceType == resourceType) &&
+                (x.DestinationField == null || x.DestinationField == destinationField) &&
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
                 (x.SourceField == null || x.SourceField == sourceField))
             .ToListAsync(cancellationToken);

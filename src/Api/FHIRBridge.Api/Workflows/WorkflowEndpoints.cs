@@ -1188,6 +1188,26 @@ public static class WorkflowEndpoints
         })
         .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Same drill-down, but always one row per node that actually started — success, failure, or
+        // cancellation — instead of only ever showing nodes that wrote a success-path output payload. Fixes
+        // failed nodes being silently absent from the Execution History screen.
+        group.MapGet("/workflow-runs/{runId:guid}/node-runs", async (
+            Guid runId,
+            int? page,
+            int? pageSize,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetNodeRunHistoryPagedAsync(
+                runId,
+                page is > 0 ? page.Value : 1,
+                pageSize is > 0 ? pageSize.Value : 25,
+                cancellationToken);
+
+            return Results.Ok(result);
+        })
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         group.MapPost("/workflows/{workflowId:guid}/activate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
