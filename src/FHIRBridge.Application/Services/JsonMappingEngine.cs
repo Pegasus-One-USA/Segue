@@ -83,6 +83,19 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
             var values = resolved.Select(r => r.Value).ToList();
 
+            // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
+            // delimited string on the parent row" — no ArrayPolicy value represents that (see
+            // MappingImportService.ResolveArrayMetadata's doc comment on why it's encoded onto Format
+            // instead), so whatever ArrayPolicy got stored alongside it must never run in its place here.
+            // RepeatParent would fan this resource into one row per occurrence that then upsert-collide on
+            // the same key, silently keeping only the last; FirstItem would silently drop every occurrence
+            // but the first. Checked before the switch so it wins regardless of which policy was stored.
+            if (HasCsvAggregate(field.Format))
+            {
+                parent[field.TargetField] = JoinValues(values);
+                continue;
+            }
+
             switch (policy)
             {
                 case ArrayPolicy.RepeatParent:
@@ -336,6 +349,49 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         };
     }
 
+    /// <summary>True when the field's Format carries the "aggregate=csv" marker BuildJsonPathAndFormat
+    /// stamps for the "combine all values into one delimited string" instance selection — regardless of
+    /// which mode (directField/joinedFields/wholeNodeAsJson) it's paired with.</summary>
+    private static bool HasCsvAggregate(string? format) =>
+        format?.Contains("aggregate=csv", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Joins already-converted field values (one per resolved occurrence) into one delimited
+    /// string — the parent-row counterpart to JoinArrayOfStrings, operating on .NET values already produced
+    /// by ConvertElement rather than raw JsonElements.</summary>
+    private static string JoinValues(IEnumerable<object?> values) =>
+        string.Join(", ", values.Select(v => v?.ToString() ?? string.Empty));
+
+    /// <summary>True for a plain single-source field ("directField", or "directField;aggregate=csv") — the
+    /// only shape where "the whole array, as one column" is this field's own deliberate choice rather than a
+    /// side effect of some other feature (joinedFields, wholeNodeAsJson) that already has its own, different
+    /// handling for a repeating element.</summary>
+    private static bool IsDirectField(string? format) =>
+        format?.StartsWith("directField", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Joins a JSON array's own scalar items ("given":["Camila","Maria"]) into one delimited string
+    /// ("Camila, Maria") instead of letting element.ToString() fall through to the array's raw JSON text
+    /// ("[\"Camila\",\"Maria\"]") — the field's own JsonPath resolved to the whole array (no trailing "[*]"
+    /// to fan it out into separate rows/columns), so this is the only representation a single String/Json
+    /// column can hold. Nested objects/arrays inside the array are skipped rather than stringified, since
+    /// there's no sensible flat-text form for those.</summary>
+    private static string JoinArrayOfStrings(JsonElement array)
+    {
+        var parts = new List<string>();
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind is JsonValueKind.String)
+            {
+                parts.Add(item.GetString() ?? string.Empty);
+            }
+            else if (item.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            {
+                parts.Add(item.ToString());
+            }
+        }
+
+        return string.Join(", ", parts);
+    }
+
     /// <summary>
     /// Resolves a JSONPath into every matching element, supporting `[*]` (fan-out) and `[n]` (fixed index).
     /// Each match carries its array index path so SeparateDestination / RepeatParent can align rows.
@@ -445,7 +501,16 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         return valueType switch
         {
             MappingValueType.String => ValidateLength(
-                element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString(),
+                element.ValueKind switch
+                {
+                    JsonValueKind.String => element.GetString(),
+                    // Only a plain directField's own array collapses into a delimited string here — a
+                    // joinedFields sub-path resolving to an array goes through ElementToJoinString instead
+                    // (a distinct, multi-source concern), and wholeNodeAsJson fields never reach this
+                    // String branch at all (their ValueType is Json, handled below).
+                    JsonValueKind.Array when IsDirectField(format) => JoinArrayOfStrings(element),
+                    _ => element.ToString()
+                },
                 maxLength, targetField, errors),
             MappingValueType.Integer => ConvertInteger(element.ToString(), targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors, precision, scale),
