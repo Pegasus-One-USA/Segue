@@ -204,6 +204,10 @@ export class NodeLibraryDialogComponent {
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
+  // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
+  // selectItem()'s switch-type guard can check isStep1Dirty() procedurally at click time — see
+  // DestinationWizardComponent.isStep1Dirty() for why destWizardHasProgressed alone isn't enough.
+  private readonly destWizardRef = viewChild(DestinationWizardComponent);
 
   // FHIR resource types the pipeline's source(s) pull — union of every source node's saved "Resources" field plus the
   // active wizard selection. Passed to the destination wizard so its data groups mirror the source's Resource Type.
@@ -283,6 +287,12 @@ export class NodeLibraryDialogComponent {
   readonly destMappingCount = signal(0);
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
+
+  // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
+  // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
+  // (cancel() on the wizard itself has no notion of "has this progressed" — that lives here, driven by
+  // destWizardHasProgressed — so it always emits `cancelled` unconditionally and lets this gate decide.)
+  readonly pendingDestCancel = signal(false);
 
   // Guards the overlay's own close (Escape key, or a backdrop click on the rare occasions it's still
   // enabled) while a form/wizard is open — same "don't silently discard progress" intent as
@@ -464,17 +474,28 @@ export class NodeLibraryDialogComponent {
     // Any registered source type (Epic, the other EHR vendors, Generic FHIR, HL7v2, Sample, ...) jumps straight
     // into its own config form — a single registry lookup instead of one `if (item.id === '...')` per source.
     if (item.isSource && SOURCE_FORM_REGISTRY[item.id]) {
+      // Re-clicking the vendor that's already open would otherwise call openSourceForm() again — for the
+      // WizardService-backed vendors (see SELF_CONTAINED_SOURCE_FORM_KEYS) that re-runs wiz.open(), which
+      // repopulates every field signal from the underlying node/defaults and wipes whatever the user has
+      // typed but not yet saved. Already showing this exact vendor's form — no-op.
+      if (this.openSourceFormType() === item.id) return;
       this.openSourceForm(item.id);
       return;
     }
     if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres') {
       const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' =
         item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : 'csv';
-      // Switching type after the user has already filled in later steps would
-      // silently discard that progress — confirm first.
-      if (this.showDestWizard() && this.destWizardType() !== type && this.destWizardHasProgressed()) {
-        this.pendingDestSwitch.set(type);
-        return;
+      if (this.showDestWizard()) {
+        // Already showing this exact destination type — _openDestWizard() unconditionally resets step,
+        // attach node and mapping state, which would wipe the form for no reason. No-op instead.
+        if (this.destWizardType() === type) return;
+        // Switching to a *different* type after the user has already filled in later steps — or just typed
+        // into Step 1 without ever clicking Next/Save (destWizardHasProgressed alone misses that; see
+        // DestinationWizardComponent.isStep1Dirty()) — would silently discard that progress. Confirm first.
+        if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
+          this.pendingDestSwitch.set(type);
+          return;
+        }
       }
       this._openDestWizard(type);
       return;
@@ -627,6 +648,32 @@ export class NodeLibraryDialogComponent {
   }
 
   onDestWizardCancelled(): void {
+    // The dest wizard's own "← Back to library" button emits this unconditionally (it has no notion of
+    // "has this progressed") — unlike switching destination type or closing the whole dialog, this used to
+    // discard silently, including the common case of typing into Step 1 and backing out without ever
+    // clicking Next/Save (destWizardHasProgressed alone misses that — see isStep1Dirty()). Same "don't lose
+    // unsaved work" guard as pendingDestSwitch/pendingCloseConfirm.
+    if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
+      this.pendingDestCancel.set(true);
+      return;
+    }
+    this._resetDestWizard();
+  }
+
+  confirmDestCancel(): void {
+    this.pendingDestCancel.set(false);
+    this._resetDestWizard();
+  }
+
+  cancelDestCancel(): void {
+    this.pendingDestCancel.set(false);
+  }
+
+  onConfirmCancelBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelDestCancel();
+  }
+
+  private _resetDestWizard(): void {
     this.showDestWizard.set(false);
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);

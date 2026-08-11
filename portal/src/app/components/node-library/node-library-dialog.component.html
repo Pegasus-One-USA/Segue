@@ -543,6 +543,26 @@
       </div>
     }
 
+    <!-- Confirm before backing out of an in-progress destination config to the library -->
+    @if (pendingDestCancel()) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmCancelBackdropClick($event)"
+           (keydown.escape)="cancelDestCancel()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Discard changes?</h3>
+          <p class="nld-confirm-body">
+            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Going back to the library now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDestCancel()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDestCancel()">Discard &amp; go back</button>
+          </div>
+        </div>
+      </div>
+    }
+
     <!-- Confirm before closing the whole dialog while a form/wizard is open -->
     @if (pendingCloseConfirm()) {
       <div class="nld-confirm-backdrop" tabindex="0"

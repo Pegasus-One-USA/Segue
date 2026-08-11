@@ -32,7 +32,7 @@ export class CanvasComponent {
   protected readonly appSvc  = inject(ApplicabilityService);
 
   // ── events upward ─────────────────────────────────────────────────────────
-  readonly openWizard          = output<string | undefined>();
+  readonly openWizard          = output<string>();
   readonly openTransformPicker = output<string>();
   readonly openSourcePicker    = output<void>();
   /** Node-level "Copy checkpoint URL" (Phase 1) — the parent owns the saved workflow id, so it makes the API call. */

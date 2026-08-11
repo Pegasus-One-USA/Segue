@@ -306,6 +306,15 @@ export class DestinationWizardComponent implements OnInit {
   // instance becomes available, instead of relying on it already being there like the old FormGroup fields.
   private readonly _pendingFormPatch = signal<{ fields: Record<string, string>; target: string | null; isExistingSelection?: boolean } | null>(null);
 
+  // Snapshot of Step 1's raw form value taken once, right after the outlet's child first exists — either
+  // its blank defaults (brand-new destination) or right after _populateFromNode()'s/selectExisting()'s
+  // queued patch has flushed onto it (editing/reusing), same ordering the _pendingFormPatch effect below
+  // relies on. Compared against the live value by isStep1Dirty() to tell "closed without ever really
+  // touching Step 1" (safe to discard silently) apart from "typed something but never clicked Next/Save"
+  // (needs the same confirm-before-discard treatment as switching type or closing the whole dialog already
+  // get via _hasProgressed — see cancel()/node-library-dialog's onDestWizardCancelled()).
+  private _step1Baseline: Record<string, unknown> | null = null;
+
   // ── data groups ───────────────────────────────────────────────────────────
   // Always the full curated FHIR resource list — not derived from the upstream source's own
   // selection, since the destination's resource picks are independent of whatever the source
@@ -733,13 +742,23 @@ export class DestinationWizardComponent implements OnInit {
       const outlet = this.formOutlet();
       const pending = this._pendingFormPatch();
       if (!outlet || !pending) return;
-      const form = outlet.componentInstance as WizardDestinationFormApi | null;
-      if (!form) return;
-      untracked(() => {
-        form.patchFrom(pending.fields, pending.target);
-        if (pending.isExistingSelection) this._existingBaseline = form.getRawValue();
-        this._pendingFormPatch.set(null);
-      });
+      // Deferred via afterNextRender() even on this first attempt, not just the retries inside
+      // _flushPendingFormPatch — applying the patch synchronously here (mid-render, since this effect fires
+      // as part of the newly-created component's own initial change-detection pass) flips the Step 1 form
+      // from invalid to valid *during* that same pass, which trips NG0100
+      // (ExpressionChangedAfterItHasBeenCheckedError) on isNextDisabled()'s "Test connection & Next" binding.
+      // Running after the render is done avoids fighting Angular's own dev-mode consistency check.
+      untracked(() => afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector }));
+    });
+
+    // Captures Step 1's pristine baseline exactly once per wizard instance — runs right after the effect
+    // above on the same flush (registration order), so a queued edit/existing-connection patch has already
+    // landed on the form by the time this reads it. Same retry rationale as that effect (see
+    // _flushPendingFormPatch's doc comment) — getRawValue() can hit the exact same not-ready-yet outlet.
+    effect(() => {
+      const outlet = this.formOutlet();
+      if (!outlet || this._step1Baseline !== null) return;
+      untracked(() => afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector }));
     });
 
     effect(() => this.stepChange.emit(this.step()));
@@ -785,6 +804,46 @@ export class DestinationWizardComponent implements OnInit {
       const sourceVendor = this.sourceVendor();
       for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId, sourceVendor);
     });
+  }
+
+  /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
+   *  Re-reads formOutlet() fresh on every attempt rather than closing over a single snapshot, because the
+   *  failure mode here isn't just "the SQL-family wrapper's nested viewChild throws" (see the try/catch
+   *  below) — NgComponentOutlet's own directive instance can already exist (formOutlet() truthy) *before*
+   *  it has actually instantiated its dynamic child, so `outlet.componentInstance` alone can be `null` with
+   *  nothing thrown at all. That's a silent, permanent drop: neither `formOutlet()` nor `_pendingFormPatch()`
+   *  change again afterward, so the effect that got us here never re-fires on its own. Retrying via
+   *  afterNextRender() on *both* the "still null" and "threw" cases is what actually closes the gap. */
+  private _flushPendingFormPatch(pending: { fields: Record<string, string>; target: string | null; isExistingSelection?: boolean }): void {
+    const form = this.formOutlet()?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector });
+      return;
+    }
+    try {
+      form.patchFrom(pending.fields, pending.target);
+      if (pending.isExistingSelection) this._existingBaseline = form.getRawValue();
+      this._pendingFormPatch.set(null);
+    } catch (err) {
+      console.error('Step 1 form was not ready to restore its saved values — retrying after next render.', err);
+      afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector });
+    }
+  }
+
+  /** Captures Step 1's pristine baseline the moment the form actually exists — see isStep1Dirty(). Same
+   *  "outlet exists but componentInstance is still null" race as _flushPendingFormPatch above, so it
+   *  retries the same way rather than reading formOutlet() once and giving up. */
+  private _captureStep1Baseline(): void {
+    const form = this.formOutlet()?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector });
+      return;
+    }
+    try {
+      this._step1Baseline = form.getRawValue();
+    } catch {
+      afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector });
+    }
   }
 
   private readonly _requested = new Set<string>();
@@ -1287,6 +1346,21 @@ export class DestinationWizardComponent implements OnInit {
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
     const current = this.activeForm()?.getRawValue() ?? {};
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
+  }
+
+  /** True once Step 1's form has been edited away from its pristine baseline (see _step1Baseline) — the
+   *  "there's something here worth confirming before discarding" check for leaving Step 1 *without* ever
+   *  advancing past it (_hasProgressed alone misses this: it only flips true once the user clicks Next/Save
+   *  — see _advancePastStep1()/_save()). Used alongside _hasProgressed, never instead of it, by both
+   *  cancel() here and node-library-dialog's switch-type guard. Secret fields excluded, same rationale and
+   *  key list as hasExistingChanged(). */
+  isStep1Dirty(): boolean {
+    if (!this._step1Baseline) return false;
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
+    const current = this.activeForm()?.getRawValue() ?? {};
+    return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._step1Baseline));
   }
 
   /**

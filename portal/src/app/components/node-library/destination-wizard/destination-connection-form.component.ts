@@ -1,4 +1,4 @@
-import { Component, Type, computed, effect, input, signal, untracked, viewChild } from '@angular/core';
+import { Component, Type, computed, effect, inject, input, signal, untracked, viewChild, afterNextRender, Injector } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { DestinationConfigFormComponent } from '../../shared/config-form/config-form.contract';
@@ -37,6 +37,7 @@ export class DestinationConnectionFormComponent {
 
   private readonly formOutlet = viewChild(NgComponentOutlet);
   private readonly _pendingPatch = signal<Record<string, string> | null>(null);
+  private readonly injector = inject(Injector);
 
   constructor() {
     effect(() => {
@@ -50,13 +51,36 @@ export class DestinationConnectionFormComponent {
       const outlet = this.formOutlet();
       const pending = this._pendingPatch();
       if (!outlet || !pending) return;
-      const form = outlet.componentInstance as WizardDestinationFormApi | null;
-      if (!form) return;
-      untracked(() => {
-        form.patchFrom(pending);
-        this._pendingPatch.set(null);
-      });
+      // Deferred via afterNextRender() even on this first attempt, not just the retries inside
+      // _flushPendingPatch — applying the patch synchronously here (mid-render, since this effect fires as
+      // part of the newly-created component's own initial change-detection pass) flips the form from
+      // invalid to valid *during* that same pass, which trips NG0100
+      // (ExpressionChangedAfterItHasBeenCheckedError) on whatever "disabled" binding reads isValid(). Running
+      // after the render is done avoids fighting Angular's own dev-mode consistency check.
+      untracked(() => afterNextRender(() => this._flushPendingPatch(pending), { injector: this.injector }));
     });
+  }
+
+  /** NgComponentOutlet's directive instance can exist (formOutlet() truthy) before it has actually
+   *  instantiated its dynamic child — outlet.componentInstance is null with nothing thrown at all in that
+   *  case, and the SQL-family wrappers' further nested viewChild can also throw once patchFrom() is called
+   *  too early (see DestinationWizardComponent's identical _flushPendingFormPatch). Either way this is a
+   *  silent, permanent drop unless retried: neither formOutlet() nor _pendingPatch() change again on their
+   *  own once we get here, so re-reading formOutlet() fresh via afterNextRender() is what actually closes
+   *  the gap, for both the "still null" and "threw" cases. */
+  private _flushPendingPatch(pending: Record<string, string>): void {
+    const form = this.formOutlet()?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._flushPendingPatch(pending), { injector: this.injector });
+      return;
+    }
+    try {
+      form.patchFrom(pending);
+      this._pendingPatch.set(null);
+    } catch (err) {
+      console.error('Destination form was not ready to restore its saved values — retrying after next render.', err);
+      afterNextRender(() => this._flushPendingPatch(pending), { injector: this.injector });
+    }
   }
 
   private activeForm(): WizardDestinationFormApi | null {
