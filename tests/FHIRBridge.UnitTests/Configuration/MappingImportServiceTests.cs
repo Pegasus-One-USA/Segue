@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.DTOs;
@@ -62,6 +63,20 @@ public sealed class MappingImportServiceTests
     }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
+
+    /// <summary>Stamps <c>existingMappingProfileId</c> onto every entry in "mappings" — the same field the real
+    /// wizard save flow round-trips from a prior import's response (see ResourceMappingDto.ExistingMappingProfileId)
+    /// so a re-import updates the caller's own profile instead of creating a new one.</summary>
+    private static JsonElement WithExistingMappingProfileId(string json, Guid existingMappingProfileId)
+    {
+        var node = JsonNode.Parse(json)!.AsObject();
+        foreach (var mapping in node["mappings"]!.AsArray())
+        {
+            mapping!.AsObject()["existingMappingProfileId"] = existingMappingProfileId.ToString();
+        }
+
+        return JsonDocument.Parse(node.ToJsonString()).RootElement;
+    }
 
     [Fact]
     public async Task Import_creates_new_tables_adds_columns_and_persists_all_column_modes()
@@ -216,7 +231,14 @@ public sealed class MappingImportServiceTests
         var first = await service.ImportAsync(body, CancellationToken.None);
         var firstProfileId = first.Profiles[0].MappingProfileId;
 
-        var second = await service.ImportAsync(body, CancellationToken.None);
+        // Idempotency is no longer implicit (re-posting the same resourceType/source/destination triple used
+        // to silently find-and-reuse whatever profile already matched it — the exact mechanism that let one
+        // workflow's re-import overwrite a DIFFERENT workflow's profile sharing that triple). The caller must
+        // now round-trip the id the first call returned, same as the real wizard save flow does — see
+        // ResourceMappingDto.ExistingMappingProfileId.
+        var secondBody = WithExistingMappingProfileId(FullPatientFixture(sourceConnectionId, destinationId), firstProfileId);
+
+        var second = await service.ImportAsync(secondBody, CancellationToken.None);
         var secondResult = second.Profiles[0];
 
         secondResult.MappingProfileId.Should().Be(firstProfileId);

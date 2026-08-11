@@ -181,6 +181,35 @@ public sealed class WorkflowNodeRunPayloadEntityTypeConfiguration : IEntityTypeC
     }
 }
 
+public sealed class FieldLineageEntryEntityTypeConfiguration : IEntityTypeConfiguration<FieldLineageEntry>
+{
+    public void Configure(EntityTypeBuilder<FieldLineageEntry> builder)
+    {
+        builder.ToTable("FieldLineageEntries");
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.WorkflowRunId).IsRequired();
+        builder.Property(x => x.WorkflowNodeId).IsRequired();
+        builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.ResourceId).HasMaxLength(256).IsRequired();
+        builder.Property(x => x.DestinationField).HasMaxLength(300).IsRequired();
+        builder.Property(x => x.SourceField).HasMaxLength(500);
+        builder.Property(x => x.NodeOrder).IsRequired();
+        builder.Property(x => x.NodeType).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.ConfigJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.SourceValueJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.DestinationValueJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.Success).IsRequired();
+        builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
+        builder.Property(x => x.DurationMs);
+        builder.Property(x => x.RecordedAtUtc).IsRequired();
+
+        builder.HasIndex(x => x.WorkflowRunId);
+        builder.HasIndex(x => new { x.WorkflowRunId, x.ResourceType, x.ResourceId });
+        builder.HasIndex(x => x.RecordedAtUtc);
+    }
+}
+
 public sealed class WorkflowNodeRunEntityTypeConfiguration : IEntityTypeConfiguration<WorkflowNodeRun>
 {
     public void Configure(EntityTypeBuilder<WorkflowNodeRun> builder)

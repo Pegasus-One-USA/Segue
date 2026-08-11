@@ -69,6 +69,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
     public DbSet<WorkflowNodeRun> WorkflowNodeRuns => Set<WorkflowNodeRun>();
     public DbSet<WorkflowNodeRunPayload> WorkflowNodeRunPayloads => Set<WorkflowNodeRunPayload>();
+    public DbSet<FieldLineageEntry> FieldLineageEntries => Set<FieldLineageEntry>();
 
     // Governance: immutable audit/access/authentication trail + mutable security-event triage.
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();

@@ -1,11 +1,14 @@
+using System.Diagnostics;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Mapping;
+using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Application.Messaging;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -57,6 +60,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private readonly ITransformNodeRegistry? _transformNodeRegistry;
     private readonly ISystemSettingsCache? _settingsCache;
     private readonly IAppSecretAccessor? _secretAccessor;
+    private readonly ILineageCaptureDispatcher? _lineageCaptureDispatcher;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
@@ -65,7 +69,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IEffectiveRuleResolver? ruleResolver = null,
         ITransformNodeRegistry? transformNodeRegistry = null,
         ISystemSettingsCache? settingsCache = null,
-        IAppSecretAccessor? secretAccessor = null)
+        IAppSecretAccessor? secretAccessor = null,
+        ILineageCaptureDispatcher? lineageCaptureDispatcher = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
     {
         _mappingEngine = mappingEngine;
@@ -75,6 +80,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         _transformNodeRegistry = transformNodeRegistry;
         _settingsCache = settingsCache;
         _secretAccessor = secretAccessor;
+        _lineageCaptureDispatcher = lineageCaptureDispatcher;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -121,7 +127,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             var resourceType = group.Key;
             var (fields, destinationObject) = await ResolveResourceMappingAsync(
                 node, resourceType, configuredResourceType, configuredFields, configuredDestinationObject,
-                sourceConnectionId, destinationId, cancellationToken);
+                cancellationToken);
 
             if (fields is null)
             {
@@ -182,12 +188,38 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
                     foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])
                     {
-                        var (transformedRow, fhirWriteBackPatches) = await ApplyTransformRulesAsync(
+                        var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
                             context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
+
+                        if (_lineageCaptureDispatcher is not null && lineageEntries is { Count: > 0 })
+                        {
+                            // Fire-and-continue: EnqueueAsync only ever writes to a channel/publishes to a
+                            // broker — it never waits on the actual FieldLineageEntries insert, which happens
+                            // out-of-band in the Worker (see LineageCaptureProcessor). A publish failure here
+                            // must never fail the resource's own transform/write, so it's swallowed, not awaited
+                            // into the caller's exception path.
+                            try
+                            {
+                                await _lineageCaptureDispatcher.EnqueueAsync(
+                                    new LineageCaptureCommand(
+                                        context.WorkflowRunId,
+                                        node.Id,
+                                        resource.ResourceType,
+                                        resource.ResourceId,
+                                        lineageEntries,
+                                        Guid.NewGuid().ToString("N")),
+                                    cancellationToken);
+                            }
+                            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                            {
+                                // Lineage is diagnostic/audit data, not correctness-critical — losing a batch of
+                                // it must never take down the pipeline run that produced it.
+                            }
+                        }
 
                         records.Add(new MappedDestinationRecord(
                             context.WorkflowRunId, resource.ResourceType, destinationObject, resource.ResourceId,
@@ -219,18 +251,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
-    /// Resolves one resource type's fields + destination object, preferring (in order): the real MappingProfile
-    /// found by the natural key (resourceType, sourceConnectionId, destinationId) MappingImportService/
-    /// ConfigurationService already de-duplicate on — what actually exists for this node's source/destination
-    /// combination right now, rather than trusting a possibly-stale stamped id; <c>mappingProfileIds</c> — a JSON
-    /// object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps when a destination selects more
-    /// than one resource (see WorkflowEndpoints.cs's Mappings step), for a node saved before sourceConnectionId/
-    /// destinationId were stamped onto it; the legacy single <c>mappingProfileId</c> (one resource per node,
+    /// Resolves one resource type's fields + destination object, preferring (in order): <c>mappingProfileIds</c>
+    /// — a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node
+    /// (see WorkflowEndpoints.cs's Mappings step) — the id THIS node itself saved, so resolving by it can never
+    /// pick up a different workflow's profile; the legacy single <c>mappingProfileId</c> (one resource per node,
     /// pre-dating multi-resource destinations) — only for the node's OWN configured resource type, since it can
     /// only ever refer to one specific profile; and finally the node's own inline "fields"/"destinationObject"
     /// config (no repository composed, or a hand-authored node) — again only for its own configured resource
-    /// type. Returns null Fields when nothing resolves — the caller skips that resource type entirely rather than
-    /// guessing with another resource type's shape.
+    /// type. Deliberately does NOT fall back to searching MappingProfile by the natural key (resourceType,
+    /// sourceConnectionId, destinationId): that triple is shared by any workflow built on the same source
+    /// connection + destination + resource type, so a search-based fallback would silently resolve to (and,
+    /// once profiles diverge, keep flapping onto) a DIFFERENT workflow's profile — the exact "Invalid column
+    /// name" incident this replaces. Returns null Fields when nothing resolves — the caller skips that resource
+    /// type entirely rather than guessing with another resource type's shape or another workflow's profile.
     /// </summary>
     private async Task<(IReadOnlyCollection<MappingFieldDto>? Fields, string DestinationObject)> ResolveResourceMappingAsync(
         WorkflowNode node,
@@ -238,29 +271,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string configuredResourceType,
         IReadOnlyCollection<MappingFieldDto> configuredFields,
         string configuredDestinationObject,
-        Guid sourceConnectionId,
-        Guid destinationId,
         CancellationToken cancellationToken)
     {
-        if (_configurationRepository is not null)
+        if (_configurationRepository is not null && ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
         {
-            if (sourceConnectionId != Guid.Empty && destinationId != Guid.Empty)
+            var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
+            if (profile is not null)
             {
-                var exactMatch = await _configurationRepository.FindMappingProfileAsync(
-                    resourceType, sourceConnectionId, destinationId, cancellationToken);
-                if (exactMatch is not null)
-                {
-                    return (exactMatch.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), exactMatch.DestinationObject);
-                }
-            }
-
-            if (ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
-            {
-                var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
-                if (profile is not null)
-                {
-                    return (profile.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), profile.DestinationObject);
-                }
+                return (profile.Fields.Select(ConfigurationMapper.ToDto).Where(f => f.IsEnabled).ToArray(), profile.DestinationObject);
             }
         }
 
@@ -306,7 +324,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     /// resolved — existing pipelines with no rules configured, or running without this optional wiring, are
     /// completely unaffected.
     /// </summary>
-    private async Task<(IReadOnlyDictionary<string, object?> Values, IReadOnlyList<(string Path, object? Value)>? FhirWriteBackPatches)> ApplyTransformRulesAsync(
+    private async Task<(IReadOnlyDictionary<string, object?> Values, IReadOnlyList<(string Path, object? Value)>? FhirWriteBackPatches, IReadOnlyList<LineageHopEntryDto>? LineageEntries)> ApplyTransformRulesAsync(
         IReadOnlyDictionary<string, object?> row,
         string resourceType,
         IReadOnlyDictionary<string, string> sourceFieldByTarget,
@@ -320,7 +338,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
         {
-            return (row, null);
+            return (row, null, null);
         }
 
         var hidden = _settingsCache is null
@@ -328,7 +346,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
         if (hidden)
         {
-            return (row, null);
+            return (row, null, null);
         }
 
         Dictionary<string, object?>? transformed = null;
@@ -337,6 +355,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // caller against this resource's own SourceJson so an Aidbox/Medplum-style destination receives the
         // transformed value too, not just the flat Values a SQL/Csv/Mongo destination reads.
         List<(string Path, object? Value)>? fhirWriteBackPatches = null;
+        // Buffered in-memory only — see LineageCaptureCommand's doc comment for why this never touches the DB
+        // directly. Null (not an empty list) whenever there's no dispatcher wired up, so a pipeline with lineage
+        // capture disabled pays zero allocation cost for it.
+        List<LineageHopEntryDto>? lineageEntries = _lineageCaptureDispatcher is null ? null : [];
 
         foreach (var (destinationField, value) in row)
         {
@@ -357,8 +379,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
             var currentValue = value;
             string? writeBackPath = null;
+            var nodeOrder = 0;
             foreach (var rule in rules)
             {
+                var hopIndex = nodeOrder++;
                 if (!string.IsNullOrWhiteSpace(rule.FhirWriteBackJsonPath))
                 {
                     writeBackPath = rule.FhirWriteBackJsonPath;
@@ -413,7 +437,23 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     }
                 }
 
+                var hopInput = currentValue;
+                var hopStopwatch = lineageEntries is null ? null : Stopwatch.StartNew();
                 var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, rule.ArrayMode, cancellationToken);
+                hopStopwatch?.Stop();
+
+                lineageEntries?.Add(new LineageHopEntryDto(
+                    destinationField,
+                    sourceField,
+                    hopIndex,
+                    rule.NodeType.ToString(),
+                    rule.ConfigJson,
+                    SerializeLineageValue(hopInput),
+                    result.Success ? SerializeLineageValue(result.Value) : null,
+                    result.Success,
+                    result.Success ? null : result.Error,
+                    hopStopwatch?.Elapsed.TotalMilliseconds));
+
                 if (result.Success)
                 {
                     currentValue = result.Value;
@@ -450,7 +490,32 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 : currentValue;
         }
 
-        return (transformed ?? row, fhirWriteBackPatches);
+        return (transformed ?? row, fhirWriteBackPatches, lineageEntries);
+    }
+
+    /// <summary>Best-effort JSON serialization of a hop's before/after value for lineage storage — a lineage
+    /// record that fails to serialize a value (e.g. an unexpected CLR type) should still record the hop with
+    /// that side blank, not throw and lose the whole entry.</summary>
+    private static string? SerializeLineageValue(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is System.Text.Json.Nodes.JsonNode jsonNode)
+        {
+            return jsonNode.ToJsonString();
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Serialize(value);
+        }
+        catch (NotSupportedException)
+        {
+            return value.ToString();
+        }
     }
 
     protected override object CreatePayload(
@@ -496,36 +561,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return records.Count > 0 ? records : null;
-    }
-
-    private static Dictionary<string, Guid> ReadProfileIds(WorkflowNode node)
-    {
-        var mappingProfileIds = ReadConfiguration<Dictionary<string, string>>(node, "mappingProfileIds");
-        var result = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        if (mappingProfileIds is { Count: > 0 })
-        {
-            foreach (var (resourceType, id) in mappingProfileIds)
-            {
-                if (Guid.TryParse(id, out var parsed))
-                {
-                    result[resourceType] = parsed;
-                }
-            }
-
-            if (result.Count > 0)
-            {
-                return result;
-            }
-        }
-
-        var single = ReadStringConfiguration(node, "mappingProfileId");
-        var legacyResourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
-        if (Guid.TryParse(single, out var singleId))
-        {
-            result[legacyResourceType] = singleId;
-        }
-
-        return result;
     }
 }
 

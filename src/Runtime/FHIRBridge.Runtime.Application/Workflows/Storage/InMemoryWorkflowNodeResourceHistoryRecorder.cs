@@ -87,4 +87,13 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
             return Task.FromResult(new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, matching.Count, page, take));
         }
     }
+
+    /// <summary>This non-durable recorder never sees <c>FieldLineageEntry</c> rows either (those are written by
+    /// the Worker's lineage-capture consumer straight to SQL, not through this recorder) — always empty here.
+    /// Callers that need real field lineage should use the SQL-backed recorder (<c>AddWorkflowSqlPersistence</c>).</summary>
+    public Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
+        Guid workflowRunId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new WorkflowPagedResult<FieldLineageChainDto>([], 0, page, Math.Clamp(pageSize, 1, 200)));
+    }
 }

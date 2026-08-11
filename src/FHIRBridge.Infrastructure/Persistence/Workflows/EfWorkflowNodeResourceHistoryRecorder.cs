@@ -130,4 +130,45 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 
         return new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, totalCount, page, take);
     }
+
+    public async Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
+        Guid workflowRunId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var entries = await _dbContext.FieldLineageEntries
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId)
+            .ToListAsync(cancellationToken);
+
+        // Grouped in-memory (not via EF GroupBy translation) so a field's hop chain — usually a handful of
+        // rows — is assembled once per chain rather than split across whatever page boundary the raw rows
+        // happened to land on.
+        var chains = entries
+            .GroupBy(x => (x.ResourceId, x.ResourceType, x.DestinationField, x.SourceField))
+            .OrderBy(g => g.Key.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Key.DestinationField, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new FieldLineageChainDto(
+                g.Key.ResourceType,
+                g.Key.ResourceId,
+                g.Key.DestinationField,
+                g.Key.SourceField,
+                g.OrderBy(x => x.NodeOrder)
+                    .Select(x => new FieldLineageHopDto(
+                        x.NodeOrder,
+                        x.NodeType,
+                        x.ConfigJson,
+                        x.SourceValueJson,
+                        x.DestinationValueJson,
+                        x.Success,
+                        x.ErrorMessage,
+                        x.DurationMs))
+                    .ToArray()))
+            .ToList();
+
+        var totalCount = chains.Count;
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = chains.Skip(skip).Take(take).ToList();
+
+        return new WorkflowPagedResult<FieldLineageChainDto>(items, totalCount, page, take);
+    }
 }

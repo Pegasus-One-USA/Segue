@@ -7,6 +7,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Infrastructure.Security;
@@ -189,22 +190,27 @@ public static class WorkflowEndpoints
                     destinationId,
                     spec.DestinationObject,
                     spec.Fields);
-                // Prefer a profile that already exists for this (resourceType, source, destination) combination
-                // over whatever spec.ExistingId says — the canvas can lose track of the real id (see the Mapping
-                // Config Import wizard vs. this endpoint's own simpler field-building path). A found profile whose
-                // MappingJson is set was authored by that richer wizard (proper JsonPath/[*] derivation, DDL, etc.)
-                // and must never be overwritten by this endpoint's cruder, best-effort field list; reuse it as-is.
-                // A found profile with no MappingJson was created by this same endpoint previously — keep updating
-                // it in place. Only create a brand-new profile when none exists yet for this combination at all.
-                var existingMapping = await configurationService.FindMappingProfileAsync(
-                    spec.ResourceType, sourceConnectionId, destinationId, cancellationToken);
+                // Resolve strictly by spec.ExistingId — the id this exact node/resource saved last time (round-
+                // tripped by the canvas). Never by searching for "the" profile matching (resourceType, source,
+                // destination): that triple is shared by any workflow built on the same source connection +
+                // destination + resource type, so a search-based fallback would silently find and attach to a
+                // DIFFERENT workflow's profile — and then either overwrite it (data loss for that other
+                // workflow) or, once that workflow next builds, get its own mapping silently rewritten out from
+                // under it (the "Invalid column name" incident this replaces). A found profile whose MappingJson
+                // is set was authored by the richer Mapping Config Import wizard (proper JsonPath/[*] derivation,
+                // DDL, etc.) and must never be overwritten by this endpoint's cruder, best-effort field list —
+                // reused as-is. No id at all means a genuinely first-ever save for this node/resource: always
+                // create a new profile rather than adopting one that happens to match the triple.
+                var existingMapping = spec.ExistingId is { } existingMappingId
+                    ? await configurationRepository.GetMappingProfileAsync(existingMappingId, cancellationToken) is { } found
+                        ? ConfigurationMapper.ToDto(found)
+                        : null
+                    : null;
                 var mapping = existingMapping switch
                 {
                     { MappingJson.Length: > 0 } => existingMapping,
                     not null => await configurationService.UpdateMappingProfileAsync(existingMapping.Id, mappingRequest, cancellationToken),
-                    null => spec.ExistingId is { } existingMappingId
-                        ? await configurationService.UpdateMappingProfileAsync(existingMappingId, mappingRequest, cancellationToken)
-                        : await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken),
+                    null => await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken),
                 };
                 mappingIds[spec.NodeId] = mapping.Id;
 
@@ -1199,6 +1205,25 @@ public static class WorkflowEndpoints
             CancellationToken cancellationToken) =>
         {
             var result = await recorder.GetNodeRunHistoryPagedAsync(
+                runId,
+                page is > 0 ? page.Value : 1,
+                pageSize is > 0 ? pageSize.Value : 25,
+                cancellationToken);
+
+            return Results.Ok(result);
+        })
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Field-level lineage: one chain per (resource, destination field), each carrying the full
+        // source -> node -> node -> destination hop chain the transform-rule engine produced for it.
+        group.MapGet("/workflow-runs/{runId:guid}/field-lineage", async (
+            Guid runId,
+            int? page,
+            int? pageSize,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetFieldLineagePagedAsync(
                 runId,
                 page is > 0 ? page.Value : 1,
                 pageSize is > 0 ? pageSize.Value : 25,

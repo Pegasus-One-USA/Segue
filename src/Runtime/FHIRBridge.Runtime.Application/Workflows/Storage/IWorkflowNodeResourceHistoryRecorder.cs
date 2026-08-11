@@ -32,6 +32,15 @@ public interface IWorkflowNodeResourceHistoryRecorder
         int page,
         int pageSize,
         CancellationToken cancellationToken);
+
+    /// <summary>One chain per (resource, destination field) touched by this run's transform-rule execution —
+    /// see <see cref="FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry"/> for the underlying per-hop rows. Grouped
+    /// server-side so a field's hop chain is never split across a page boundary.</summary>
+    Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
+        Guid workflowRunId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 }
 
 public sealed record WorkflowPagedResult<T>(
@@ -64,3 +73,24 @@ public sealed record WorkflowNodeRunHistoryDto(
     string? Contract,
     string? PayloadJson,
     int? ItemCount);
+
+/// <summary>One node hop in a destination field's transform-rule chain — see
+/// <see cref="FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry"/> for the persisted shape this projects from.</summary>
+public sealed record FieldLineageHopDto(
+    int NodeOrder,
+    string NodeType,
+    string ConfigJson,
+    string? SourceValueJson,
+    string? DestinationValueJson,
+    bool Success,
+    string? ErrorMessage,
+    double? DurationMs);
+
+/// <summary>A destination field's full source-to-destination lineage for one resource in this run, ordered by
+/// <see cref="FieldLineageHopDto.NodeOrder"/>.</summary>
+public sealed record FieldLineageChainDto(
+    string ResourceType,
+    string ResourceId,
+    string DestinationField,
+    string? SourceField,
+    IReadOnlyList<FieldLineageHopDto> Hops);

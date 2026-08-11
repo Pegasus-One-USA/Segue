@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
 import {
+  FieldLineageChain,
   NodeRunHistoryEntry,
   PagedResult,
   ResourceHistoryEntry,
@@ -44,6 +45,13 @@ export class ExecutionHistoryApiService {
   nodeRuns(id: string, page = 1, pageSize = 25): Observable<PagedResult<NodeRunHistoryEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<NodeRunHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.nodeRuns(id), { params });
+  }
+
+  /** One row per (resource, destination field) touched by this run's transform-rule chain, each carrying its
+   *  full source -> node -> node -> destination hop chain. */
+  fieldLineage(id: string, page = 1, pageSize = 25): Observable<PagedResult<FieldLineageChain>> {
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    return this.http.get<PagedResult<FieldLineageChain>>(EXECUTION_HISTORY_ENDPOINTS.fieldLineage(id), { params });
   }
 
   /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles. */

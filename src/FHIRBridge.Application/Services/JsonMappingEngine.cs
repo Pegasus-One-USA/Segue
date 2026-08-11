@@ -626,7 +626,21 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        var isParsed = string.IsNullOrWhiteSpace(format)
+        // `format` doubles as this field's column-mode marker ("directField", "directField;aggregate=csv",
+        // "joinedFields;delimiter=...", "wholeNodeAsJson" — see MappingImportService.BuildJsonPathAndFormat)
+        // on every field BuildJsonPathAndFormat ever stamps, which is every field imported through the normal
+        // pipeline. None of those are valid DateTime.TryParseExact patterns, so treating a mode-marker value
+        // as an exact-parse format here always fails, silently nulling every Date/DateTime-typed field
+        // (reproduced: Patient.birthDate mapped to NULL with Format="directField"). Only genuinely attempt
+        // TryParseExact for a format that isn't one of these known markers — i.e. a real caller-supplied
+        // date pattern for a non-ISO source (e.g. HL7 v2's "yyyyMMdd"), which no current column type stamps
+        // but the exact-format path exists to support.
+        var isModeMarker = format is not null && (
+            format.StartsWith("directField", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
+
+        var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
             ? DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
             : DateTime.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
 

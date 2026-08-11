@@ -63,6 +63,20 @@
     </div>
   }
 
+  <div class="lineage-tabs">
+    <button
+      type="button"
+      [class.active]="activeTab() === 'nodeRuns'"
+      (click)="setTab('nodeRuns')"
+    >Node runs</button>
+    <button
+      type="button"
+      [class.active]="activeTab() === 'fieldLineage'"
+      (click)="setTab('fieldLineage')"
+    >Field lineage</button>
+  </div>
+
+  @if (activeTab() === 'nodeRuns') {
   <div class="table-card">
     <div class="table-meta">
       <span class="entries-info">What each node fetched, transformed, and wrote for this run</span>
@@ -135,5 +149,89 @@
       ></mat-paginator>
     }
   </div>
+  }
+
+  @if (activeTab() === 'fieldLineage') {
+  <div class="table-card">
+    <div class="table-meta">
+      <span class="entries-info">Every destination field this run touched, traced back through each transformation node</span>
+    </div>
+
+    <div class="resource-list">
+      @for (chain of fieldLineageChains().items; track fieldKey(chain)) {
+        <div class="resource-row" [class.resource-row--failed]="!chainSucceeded(chain)">
+          <div
+            class="resource-summary"
+            role="button"
+            tabindex="0"
+            [attr.aria-expanded]="isFieldExpanded(fieldKey(chain))"
+            (click)="toggleFieldExpanded(fieldKey(chain))"
+            (keydown.enter)="toggleFieldExpanded(fieldKey(chain))"
+            (keydown.space)="toggleFieldExpanded(fieldKey(chain)); $event.preventDefault()"
+          >
+            <span class="cell-primary mono">{{ chain.destinationField }}</span>
+            <span class="cell-muted">{{ chainSummary(chain) }}</span>
+            <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
+              {{ chain.hops.length }} node{{ chain.hops.length === 1 ? '' : 's' }}
+            </span>
+            <mat-icon class="chevron">{{ isFieldExpanded(fieldKey(chain)) ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </div>
+
+          @if (isFieldExpanded(fieldKey(chain))) {
+            <div class="resource-detail">
+              <div class="lineage-chain">
+                @for (hop of chain.hops; track hop.nodeOrder) {
+                  <div class="lineage-hop" [class.lineage-hop--failed]="!hop.success">
+                    <div class="lineage-hop__header">
+                      <span class="lineage-hop__index">{{ $index + 1 }}</span>
+                      <span class="lineage-hop__name">{{ hop.nodeType }}</span>
+                      @if (hop.durationMs !== null) {
+                        <span class="cell-muted">{{ hop.durationMs | number:'1.0-2' }} ms</span>
+                      }
+                    </div>
+                    <div class="lineage-hop__values">
+                      <div class="lineage-hop__value">
+                        <span class="stat-label">Before</span>
+                        <span class="mono">{{ formatLineageValue(hop.sourceValueJson) }}</span>
+                      </div>
+                      <mat-icon class="lineage-hop__arrow">arrow_forward</mat-icon>
+                      <div class="lineage-hop__value">
+                        <span class="stat-label">After</span>
+                        <span class="mono">{{ formatLineageValue(hop.destinationValueJson) }}</span>
+                      </div>
+                    </div>
+                    @if (hop.errorMessage) {
+                      <div class="node-error-banner">
+                        <mat-icon>error_outline</mat-icon>
+                        <span>{{ hop.errorMessage }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      } @empty {
+        <div class="empty-state">
+          <mat-icon>timeline</mat-icon>
+          <p>No field lineage recorded for this run.</p>
+        </div>
+      }
+    </div>
+
+    @if (fieldLineageChains().totalCount > fieldLineagePageSize()) {
+      <mat-paginator
+        [length]="fieldLineageChains().totalCount"
+        [pageSize]="fieldLineagePageSize()"
+        [pageIndex]="fieldLineagePageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onFieldLineagePageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
+    }
+  </div>
+  }
 
 </div>

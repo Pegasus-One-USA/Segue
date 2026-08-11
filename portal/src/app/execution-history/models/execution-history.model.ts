@@ -83,3 +83,25 @@ export interface NodeRunHistoryEntry {
   payloadJson: string | null;
   itemCount: number | null;
 }
+
+/** Matches the backend's FieldLineageHopDto — one transform node's before/after value for a destination field. */
+export interface FieldLineageHop {
+  nodeOrder: number;
+  nodeType: string;
+  configJson: string;
+  sourceValueJson: string | null;
+  destinationValueJson: string | null;
+  success: boolean;
+  errorMessage: string | null;
+  durationMs: number | null;
+}
+
+/** Matches the backend's FieldLineageChainDto — one destination field's full source-to-destination chain for
+ *  one resource in this run, ordered by FieldLineageHop.nodeOrder. */
+export interface FieldLineageChain {
+  resourceType: string;
+  resourceId: string;
+  destinationField: string;
+  sourceField: string | null;
+  hops: FieldLineageHop[];
+}

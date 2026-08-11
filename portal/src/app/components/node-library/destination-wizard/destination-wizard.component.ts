@@ -29,6 +29,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { TransformRulesDialogComponent, TransformRulesDialogData } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
 import { TransformationRulesService } from './field-mapping/transformation-rules.service';
 import { ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData } from './field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component';
+import { PromoteMappingProfileDialogComponent, PromoteMappingProfileDialogData } from './field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component';
 import { MappingProfileService } from '../../../mapping-profiles/services/mapping-profile.service';
 import { MappingProfileDto, MappingFieldDto } from '../../../mapping-profiles/models/mapping-profile.model';
 import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
@@ -210,6 +211,11 @@ export class DestinationWizardComponent implements OnInit {
   readonly zoomOutRequest = input<number>(0);
   readonly zoomResetRequest = input<number>(0);
   readonly zoomFitRequest = input<number>(0);
+  // "Mark as Master" — unlike the forward-only triggers above, this wizard reacts to it directly (same
+  // baseline-learning pattern as exitMappingRequest/saveMappingRequest): it needs the currently-open
+  // resource's node/profile context, which only this component has.
+  readonly markAsMasterRequest = input<number>(0);
+  private _lastMarkAsMasterTrigger: number | null = null;
   /** Mirrors the canvas's own suggestionCountChange/zoomPercentChange straight up to the dialog header,
    *  which renders the "Clear N suggestions" label and zoom-percent readout. */
   readonly suggestionCountChange = output<number>();
@@ -764,6 +770,11 @@ export class DestinationWizardComponent implements OnInit {
       if (this._lastSaveSnapshotTrigger === null) { this._lastSaveSnapshotTrigger = v; return; }
       if (v !== this._lastSaveSnapshotTrigger) { this._lastSaveSnapshotTrigger = v; if (v > 0) this.saveMappingSnapshot(); }
     });
+    effect(() => {
+      const v = this.markAsMasterRequest();
+      if (this._lastMarkAsMasterTrigger === null) { this._lastMarkAsMasterTrigger = v; return; }
+      if (v !== this._lastMarkAsMasterTrigger) { this._lastMarkAsMasterTrigger = v; if (v > 0) this.markActiveGroupAsMaster(); }
+    });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
     // over the built-in fallback once loaded. Deduped via _requested, keyed on sourceConnectionId too —
@@ -1015,6 +1026,43 @@ export class DestinationWizardComponent implements OnInit {
       },
     ).afterClosed().subscribe(profile => {
       if (profile) this._applyExistingProfile(resource, profile);
+    });
+  }
+
+  /** "Mark as Master" for whichever resource's mapping canvas is currently open — promotes the mapping
+   *  profile this Field Mapping node already saved for that resource into a new, independently-named master
+   *  template (see MappingProfileService.promoteToMaster). Requires the mapping to have been saved at least
+   *  once already (so a real profile id exists to clone from); the button stays enabled regardless, but this
+   *  guards with a clear toast rather than silently no-op-ing. */
+  markActiveGroupAsMaster(): void {
+    const resource = this.activeMappingGroup();
+    if (!resource) return;
+
+    const mappingNode = this.pipelineStore.byId(this.attachNode().id);
+    const existingIds = this._parseExistingMappingProfileIds(mappingNode?.fields ?? {});
+    const profileId = existingIds[resource];
+    if (!profileId) {
+      this.toast.show('Save the mapping first', `Save "${resource}"'s mapping at least once before marking it as a master template.`);
+      return;
+    }
+
+    this.dialog.open<PromoteMappingProfileDialogComponent, PromoteMappingProfileDialogData, string | null>(
+      PromoteMappingProfileDialogComponent,
+      {
+        width: '480px',
+        maxWidth: '95vw',
+        restoreFocus: false,
+        data: { resourceType: resource, suggestedName: `${resource} — ${this.destLabel()}` },
+      },
+    ).afterClosed().subscribe(name => {
+      if (!name) return;
+      this.mappingProfileSvc.promoteToMaster(profileId, name).subscribe({
+        next: () => this.toast.success('Master mapping saved', `"${name}" is now available via "Select Existing".`),
+        error: err => {
+          const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to save the master mapping.';
+          this.toast.show('Master mapping not saved', typeof msg === 'string' ? msg : 'Failed to save the master mapping.');
+        },
+      });
     });
   }
 
@@ -1393,6 +1441,25 @@ export class DestinationWizardComponent implements OnInit {
       candidate = `${desiredName}-${suffix}`;
     }
     return candidate;
+  }
+
+  /** Reads a Field Mapping node's own previously-saved mappingProfileIds map (falling back to the legacy
+   *  singular mappingProfileId, attributed to this node's primary resource, for a node saved before the map
+   *  existed) — mirrors WorkflowBuildAssemblerService.parseExistingMappingProfileIds so both save paths agree
+   *  on which id belongs to which resource. */
+  private _parseExistingMappingProfileIds(fields: Record<string, string>): Record<string, string> {
+    const raw = fields['mappingProfileIds'];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, string>;
+      } catch {
+        // fall through to the legacy singular field below
+      }
+    }
+    const legacyId = fields['mappingProfileId'];
+    const primaryResource = this.selectedResources()[0];
+    return legacyId && primaryResource ? { [primaryResource]: legacyId } : {};
   }
 
   hasSqlTables(): boolean {
@@ -1926,6 +1993,13 @@ export class DestinationWizardComponent implements OnInit {
       this.mappingRows(), this.targetByResource(), this.sqlTables(), this.childTableRelationsByTable(),
     ));
     config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
+    // This wizard's own Field Mapping node's previously-saved profile id per resource (mappingProfileIds,
+    // falling back to the legacy singular mappingProfileId for the primary resource) — passed through so the
+    // import call below updates THOSE exact profiles rather than letting the backend search for "the" profile
+    // matching (resourceType, sourceConnectionId, destinationId), a triple more than one workflow can share.
+    const mappingNodeForIds = this.pipelineStore.byId(this.attachNode().id);
+    const existingMappingProfileIdByResource = this._parseExistingMappingProfileIds(mappingNodeForIds?.fields ?? {});
+
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
     // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
     // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
@@ -1941,6 +2015,7 @@ export class DestinationWizardComponent implements OnInit {
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
       targetByResource: this.targetByResource(),
+      existingMappingProfileIdByResource,
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
 
@@ -1973,16 +2048,28 @@ export class DestinationWizardComponent implements OnInit {
           } else {
             this.toast.success('Mapping profile saved', `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`);
           }
-          // Stamp the real, server-assigned mappingProfileId straight onto the Field Mapping node this wizard is
-          // attached to — without this, the id this call just returned is discarded, workflow-build-assembler.service.ts
-          // sends existingId: null on Save, and /workflows/build mints an unrelated duplicate profile instead of
-          // reusing this one (one mapping profile per destination, so only the primary/first resource is wired).
-          const primary = result.profiles.find(p => p.resourceType === doc.mappings[0]?.resourceType) ?? result.profiles[0];
-          if (primary && primary.mappingProfileId !== EMPTY_GUID) {
+          // Stamp every resource's real, server-assigned mappingProfileId straight onto the Field Mapping node
+          // this wizard is attached to — without this, the ids this call just returned are discarded, the next
+          // save's existingMappingProfileIdByResource comes back empty, and both this endpoint and
+          // /workflows/build would mint fresh, unrelated duplicate profiles instead of reusing these (and, pre-
+          // fix, fall back to searching by (resourceType, sourceConnectionId, destinationId) — the exact search
+          // that let one workflow's save silently overwrite another's profile). Keeps the legacy singular
+          // mappingProfileId in sync too (primary resource only) for anything still reading that older field.
+          const succeeded = result.profiles.filter(p => p.mappingProfileId !== EMPTY_GUID);
+          if (succeeded.length > 0) {
             const mappingNode = this.pipelineStore.byId(this.attachNode().id);
             if (mappingNode) {
+              const mappingProfileIds = {
+                ...this._parseExistingMappingProfileIds(mappingNode.fields ?? {}),
+                ...Object.fromEntries(succeeded.map(p => [p.resourceType, p.mappingProfileId])),
+              };
+              const primary = succeeded.find(p => p.resourceType === doc.mappings[0]?.resourceType) ?? succeeded[0];
               this.pipelineStore.updateNode(mappingNode.id, {
-                fields: { ...mappingNode.fields, mappingProfileId: primary.mappingProfileId },
+                fields: {
+                  ...mappingNode.fields,
+                  mappingProfileId: primary.mappingProfileId,
+                  mappingProfileIds: JSON.stringify(mappingProfileIds),
+                },
               });
             }
           }

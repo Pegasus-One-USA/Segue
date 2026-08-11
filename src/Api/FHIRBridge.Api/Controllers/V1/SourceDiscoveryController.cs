@@ -17,10 +17,14 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class SourceDiscoveryController : ControllerBase
 {
     private readonly ISourceEndpointProbeService _probeService;
+    private readonly IBackendAuthScopeProbeService _backendAuthScopeProbeService;
 
-    public SourceDiscoveryController(ISourceEndpointProbeService probeService)
+    public SourceDiscoveryController(
+        ISourceEndpointProbeService probeService,
+        IBackendAuthScopeProbeService backendAuthScopeProbeService)
     {
         _probeService = probeService;
+        _backendAuthScopeProbeService = backendAuthScopeProbeService;
     }
 
     [HttpPost("probe")]
@@ -64,5 +68,30 @@ public sealed class SourceDiscoveryController : ControllerBase
         }
 
         return Ok(new SourceDiscoveryProbeResult(smart, resourceTypes, resourceTypesError, smartConfigurationError));
+    }
+
+    /// <summary>
+    /// Backend System (SMART Backend Services) only: performs a real client_credentials + private_key_jwt exchange
+    /// against Epic's token endpoint using a signing key already provisioned into the secret store, and returns the
+    /// scopes Epic actually granted the app — the wizard's Discover action calls this to show what the app is really
+    /// allowed to do, as opposed to the scopes the server merely advertises support for.
+    /// </summary>
+    [HttpPost("backend-auth-scopes")]
+    [ProducesResponseType(typeof(BackendAuthScopesResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BackendAuthScopes(
+        [FromBody] BackendAuthScopesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.TokenEndpoint) ||
+            string.IsNullOrWhiteSpace(request.ClientId) ||
+            string.IsNullOrWhiteSpace(request.PrivateKeyVaultName) ||
+            string.IsNullOrWhiteSpace(request.PrivateKeySecretName))
+        {
+            return BadRequest("tokenEndpoint, clientId, privateKeyVaultName, and privateKeySecretName are required.");
+        }
+
+        var result = await _backendAuthScopeProbeService.ProbeGrantedScopesAsync(request, cancellationToken);
+        return Ok(result);
     }
 }

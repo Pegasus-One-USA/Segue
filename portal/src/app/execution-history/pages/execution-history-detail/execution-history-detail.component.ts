@@ -6,7 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { ToastService } from '../../../services/toast.service';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
-import { NodeRunHistoryEntry, PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { FieldLineageChain, NodeRunHistoryEntry, PagedResult, RouteExecution } from '../../models/execution-history.model';
 
 @Component({
   selector: 'app-execution-history-detail',
@@ -29,6 +29,14 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   readonly pageIndex    = signal(0);
   readonly pageSize     = signal(10);
 
+  readonly activeTab = signal<'nodeRuns' | 'fieldLineage'>('nodeRuns');
+  readonly fieldLineageChains = signal<PagedResult<FieldLineageChain>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
+  readonly fieldLineageLoading = signal(false);
+  readonly expandedFieldKeys = signal<Set<string>>(new Set());
+  readonly fieldLineagePageIndex = signal(0);
+  readonly fieldLineagePageSize = signal(10);
+  private fieldLineageLoaded = false;
+
   private runId = '';
 
   ngOnInit(): void {
@@ -39,6 +47,70 @@ export class ExecutionHistoryDetailComponent implements OnInit {
 
     this.api.byId(this.runId).subscribe(execution => this.execution.set(execution));
     this.loadNodeRuns();
+  }
+
+  setTab(tab: 'nodeRuns' | 'fieldLineage'): void {
+    this.activeTab.set(tab);
+    if (tab === 'fieldLineage' && !this.fieldLineageLoaded) {
+      this.fieldLineageLoaded = true;
+      this.loadFieldLineage();
+    }
+  }
+
+  loadFieldLineage(): void {
+    this.fieldLineageLoading.set(true);
+    this.api.fieldLineage(this.runId, this.fieldLineagePageIndex() + 1, this.fieldLineagePageSize()).subscribe({
+      next: result => {
+        this.fieldLineageChains.set(result);
+        this.fieldLineageLoading.set(false);
+      },
+      error: () => this.fieldLineageLoading.set(false),
+    });
+  }
+
+  onFieldLineagePageChange(e: PageEvent): void {
+    this.fieldLineagePageIndex.set(e.pageIndex);
+    this.fieldLineagePageSize.set(e.pageSize);
+    this.loadFieldLineage();
+  }
+
+  fieldKey(chain: FieldLineageChain): string {
+    return `${chain.resourceId}|${chain.destinationField}`;
+  }
+
+  toggleFieldExpanded(key: string): void {
+    const next = new Set(this.expandedFieldKeys());
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    this.expandedFieldKeys.set(next);
+  }
+
+  isFieldExpanded(key: string): boolean {
+    return this.expandedFieldKeys().has(key);
+  }
+
+  /** "via Date normalization → Date shift → ..." summary for the collapsed row. */
+  chainSummary(chain: FieldLineageChain): string {
+    const nodeNames = chain.hops.map(h => h.nodeType).join(' → ');
+    return chain.sourceField ? `${chain.sourceField} via ${nodeNames}` : `via ${nodeNames}`;
+  }
+
+  chainSucceeded(chain: FieldLineageChain): boolean {
+    return chain.hops.every(h => h.success);
+  }
+
+  /** Pretty-prints a hop's before/after value — these are JSON-encoded scalars/objects, same convention as
+   *  formatJson() for node payloads below. */
+  formatLineageValue(json: string | null): string {
+    if (json === null) return '—';
+    try {
+      return JSON.stringify(JSON.parse(json));
+    } catch {
+      return json;
+    }
   }
 
   loadNodeRuns(): void {

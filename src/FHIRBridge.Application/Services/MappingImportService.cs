@@ -168,8 +168,16 @@ public sealed class MappingImportService : IMappingImportService
                 }
             }
 
-            var existing = await _repository.FindMappingProfileAsync(
-                mapping.ResourceType, importRequest.SourceConnectionId, importRequest.DestinationId, cancellationToken);
+            // Resolve strictly by the id the caller already knows (round-tripped from a prior import of this
+            // exact node/resource) — never by searching for "the" profile matching (ResourceType,
+            // SourceConnectionId, DestinationId). That triple is shared by any workflow built on the same
+            // source connection + destination + resource type, so searching on it would silently find and
+            // overwrite a DIFFERENT workflow's profile (the "Invalid column name" incident this replaces).
+            // No id means a genuinely first-ever save for this node/resource — always create a new profile
+            // rather than adopting one that happens to match the triple.
+            var existing = mapping.ExistingMappingProfileId is { } existingProfileId
+                ? await _repository.GetMappingProfileAsync(existingProfileId, cancellationToken)
+                : null;
 
             Guid profileId;
             if (existing is not null)
