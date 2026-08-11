@@ -204,15 +204,15 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "Optional — leave both blank to just use the default *.azurecontainerapps.io URLs. Setting a domain here needs a two-phase deploy: (1) deploy once with these left blank, find the fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId outputs on this deployment afterward, add a CNAME and a TXT record (asuid.<your domain>) at your DNS provider using those values, wait for DNS to propagate; (2) come back, fill in the domain(s) below, and redeploy — that provisions a free managed certificate and binds it."
+              "text": "Optional custom domains need TWO deploys (Azure cannot create a managed SSL cert before the hostname exists on the app).\n\nPhase 1 — Register hostname only:\n• Enter your domain(s) below\n• Leave \"Bind managed SSL certificates now\" UNCHECKED\n• Deploy — hostnames are registered (no SSL yet)\n• From deployment outputs, copy fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId\n• At your DNS provider create: CNAME (your domain → the *.azurecontainerapps.io FQDN) and TXT (asuid.<your domain> = verification id)\n• Wait until DNS has propagated\n\nPhase 2 — Bind free managed SSL:\n• Redeploy with the SAME domain values\n• CHECK \"Bind managed SSL certificates now\"\n• Deploy — Azure issues and binds the certificate\n\nLeaving both domains blank keeps the default *.azurecontainerapps.io URLs. Do not check Bind SSL on the first domain deploy or you will hit RequireCustomHostnameInEnvironment.\n\nFallback: containerization/scripts/manage-custom-domain.ps1|.sh (Info → Add → Bind) against an already-deployed app."
             }
           },
           {
             "name": "fhirbridgeAppCustomDomain",
             "type": "Microsoft.Common.TextBox",
-            "label": "FHIRBridge app custom domain",
+            "label": "FHIRBridge / Segue app custom domain",
             "defaultValue": "",
-            "toolTip": "e.g. app.customer.com. Leave blank to keep the default *.azurecontainerapps.io URL.",
+            "toolTip": "e.g. app.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
             "constraints": {
               "required": false
             }
@@ -222,10 +222,17 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Demo app custom domain",
             "defaultValue": "",
-            "toolTip": "e.g. demo.customer.com. Leave blank to keep the default *.azurecontainerapps.io URL.",
+            "toolTip": "e.g. demo.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
             "constraints": {
               "required": false
             }
+          },
+          {
+            "name": "bindCustomDomainCertificates",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Bind managed SSL certificates now (Phase 2 only)",
+            "defaultValue": false,
+            "toolTip": "Check ONLY after Phase 1 registered the hostnames and DNS CNAME + asuid TXT have propagated. Unchecked = register hostname only (Phase 1)."
           }
         ]
       },
@@ -266,6 +273,7 @@
       "workerSize": "[steps('containerSizing').workerSize]",
       "fhirbridgeAppCustomDomain": "[steps('customDomains').fhirbridgeAppCustomDomain]",
       "demoAppCustomDomain": "[steps('customDomains').demoAppCustomDomain]",
+      "bindCustomDomainCertificates": "[steps('customDomains').bindCustomDomainCertificates]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "fhirbridgevendor8ae7f3.azurecr.io",
       "imageRegistryUsername": "one-click-pull",
