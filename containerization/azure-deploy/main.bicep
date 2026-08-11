@@ -187,6 +187,11 @@ resource redisDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2
   properties: { shareQuota: 10 }
 }
 
+resource keysDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+  name: '${storageAccount.name}/default/keys-data'
+  properties: { shareQuota: 1 }
+}
+
 resource sqlDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   parent: containerAppEnv
   name: 'sql-data'
@@ -213,6 +218,20 @@ resource redisDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01
     }
   }
   dependsOn: [redisDataShare]
+}
+
+resource keysDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  parent: containerAppEnv
+  name: 'keys-data'
+  properties: {
+    azureFile: {
+      accountName: storageAccount.name
+      accountKey: storageAccount.listKeys().keys[0].value
+      shareName: 'keys-data'
+      accessMode: 'ReadWrite'
+    }
+  }
+  dependsOn: [keysDataShare]
 }
 
 // --- SQL Server Express (internal only, single replica — Azure Files isn't safe for concurrent
@@ -380,7 +399,13 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
           ], !empty(demoAppCustomDomain) ? [
             { name: 'Portal__AllowedOrigins__1', value: 'https://${demoAppCustomDomain}' }
           ] : [])
+          volumeMounts: [
+            { volumeName: 'keys-data', mountPath: '/app/keys' }
+          ]
         }
+      ]
+      volumes: [
+        { name: 'keys-data', storageType: 'AzureFile', storageName: keysDataStorage.name }
       ]
       scale: { minReplicas: 1, maxReplicas: 3 }
     }
@@ -501,8 +526,10 @@ output resourceManifest array = [
   workerApp.id
   sqlDataStorage.id
   redisDataStorage.id
+  keysDataStorage.id
   sqlDataShare.id
   redisDataShare.id
+  keysDataShare.id
   containerAppEnv.id
   storageAccount.id
   logAnalytics.id

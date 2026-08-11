@@ -246,7 +246,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates 12 new resources in the selected resource group, and nothing outside it:\n\n• 5 Container Apps — SQL Server Express, Redis, FHIRBridge (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 5\n• 1 Log Analytics workspace (required by Container Apps for logs/metrics — not optional)\n• 1 Storage Account with 2 Azure File shares (persistent data for SQL Server and Redis)\n\nSQL Server and Redis are reachable only from the other apps in this environment, never the public internet. The full list of resource IDs this deployment creates is also saved as a 'resourceManifest' output on the deployment itself, viewable afterward under this deployment's history — that exact list is what the cleanup script uses to tear this down precisely later."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• 5 Container Apps — SQL Server Express, Redis, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 5\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Data Protection keys)\n\nCustom domains are optional and require a two-phase deploy (hostname first, then Bind SSL) — see the Custom Domains step. SQL Server and Redis are internal-only. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
