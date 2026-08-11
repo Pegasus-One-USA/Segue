@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Messaging;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -12,20 +13,27 @@ namespace FHIRBridge.Infrastructure.Messaging;
 /// waits on this call; it only waits on <see cref="ILineageCaptureDispatcher.EnqueueAsync"/> handing the batch to
 /// the transport. Deduplicates by <see cref="LineageCaptureCommand.MessageId"/> like every other message handler
 /// in this codebase (see <see cref="PipelineRunCommandHandler"/>) since a redelivered message must not double-insert.
+/// A hop's before/after value can carry raw PHI (birthdates, names, clinical values), so both are encrypted at
+/// rest with the same <see cref="IPhiFieldEncryptor"/> used for <c>WorkflowNodeRunPayload.PayloadJson</c>
+/// (<c>EfWorkflowNodeResourceHistoryRecorder</c>) — <see cref="ConfigJson"/> stays plaintext since it only ever
+/// carries rule configuration (format strings, target types), never a patient value.
 /// </summary>
 public sealed class LineageCaptureCommandHandler : ILineageCaptureCommandHandler
 {
     private readonly FHIRBridgeDbContext _dbContext;
     private readonly IProcessedMessageStore _processedMessageStore;
+    private readonly IPhiFieldEncryptor _encryptor;
     private readonly ILogger<LineageCaptureCommandHandler> _logger;
 
     public LineageCaptureCommandHandler(
         FHIRBridgeDbContext dbContext,
         IProcessedMessageStore processedMessageStore,
+        IPhiFieldEncryptor encryptor,
         ILogger<LineageCaptureCommandHandler> logger)
     {
         _dbContext = dbContext;
         _processedMessageStore = processedMessageStore;
+        _encryptor = encryptor;
         _logger = logger;
     }
 
@@ -49,14 +57,24 @@ public sealed class LineageCaptureCommandHandler : ILineageCaptureCommandHandler
             entry.NodeOrder,
             entry.NodeType,
             entry.ConfigJson,
-            entry.SourceValueJson,
-            entry.DestinationValueJson,
+            EncryptOrNull(entry.SourceValueJson),
+            EncryptOrNull(entry.DestinationValueJson),
             entry.Success,
             entry.ErrorMessage,
             entry.DurationMs,
-            recordedAtUtc));
+            entry.ExecutedAtUtc,
+            recordedAtUtc,
+            command.SourceSystemType,
+            command.SourceConnectionName,
+            command.DestinationTypeName,
+            command.DestinationName));
 
         await _dbContext.FieldLineageEntries.AddRangeAsync(entries, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private string? EncryptOrNull(string? plaintext)
+    {
+        return plaintext is null ? null : _encryptor.Encrypt(plaintext);
     }
 }

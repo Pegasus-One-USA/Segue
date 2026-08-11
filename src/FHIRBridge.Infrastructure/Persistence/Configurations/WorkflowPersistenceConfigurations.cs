@@ -202,7 +202,12 @@ public sealed class FieldLineageEntryEntityTypeConfiguration : IEntityTypeConfig
         builder.Property(x => x.Success).IsRequired();
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
         builder.Property(x => x.DurationMs);
+        builder.Property(x => x.ExecutedAtUtc).IsRequired();
         builder.Property(x => x.RecordedAtUtc).IsRequired();
+        builder.Property(x => x.SourceSystemType).HasMaxLength(50);
+        builder.Property(x => x.SourceConnectionName).HasMaxLength(200);
+        builder.Property(x => x.DestinationTypeName).HasMaxLength(50);
+        builder.Property(x => x.DestinationName).HasMaxLength(200);
 
         builder.HasIndex(x => x.WorkflowRunId);
         builder.HasIndex(x => new { x.WorkflowRunId, x.ResourceType, x.ResourceId });

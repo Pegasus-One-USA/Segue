@@ -27,7 +27,12 @@ public sealed class FieldLineageEntry
         bool success,
         string? errorMessage,
         double? durationMs,
-        DateTimeOffset recordedAtUtc)
+        DateTimeOffset executedAtUtc,
+        DateTimeOffset recordedAtUtc,
+        string? sourceSystemType = null,
+        string? sourceConnectionName = null,
+        string? destinationTypeName = null,
+        string? destinationName = null)
     {
         Id = id == Guid.Empty ? Guid.NewGuid() : id;
         WorkflowRunId = workflowRunId;
@@ -44,7 +49,12 @@ public sealed class FieldLineageEntry
         Success = success;
         ErrorMessage = errorMessage;
         DurationMs = durationMs;
+        ExecutedAtUtc = executedAtUtc;
         RecordedAtUtc = recordedAtUtc;
+        SourceSystemType = sourceSystemType;
+        SourceConnectionName = sourceConnectionName;
+        DestinationTypeName = destinationTypeName;
+        DestinationName = destinationName;
     }
 
     public Guid Id { get; }
@@ -57,10 +67,27 @@ public sealed class FieldLineageEntry
     public int NodeOrder { get; }
     public string NodeType { get; }
     public string ConfigJson { get; }
+
+    /// <summary>Encrypted at rest via <see cref="Application.Abstractions.Security.IPhiFieldEncryptor"/> — a
+    /// hop's before/after value can carry raw PHI (birthdates, names, clinical values). Never read directly;
+    /// always go through <c>LineageCaptureCommandHandler</c>/<c>EfWorkflowNodeResourceHistoryRecorder</c>.</summary>
     public string? SourceValueJson { get; }
     public string? DestinationValueJson { get; }
     public bool Success { get; }
     public string? ErrorMessage { get; }
     public double? DurationMs { get; }
+
+    /// <summary>When this specific hop actually ran — distinct from <see cref="RecordedAtUtc"/> (when the
+    /// whole resource's batch of hops was persisted).</summary>
+    public DateTimeOffset ExecutedAtUtc { get; }
     public DateTimeOffset RecordedAtUtc { get; }
+
+    /// <summary>Resolved once per node execution (same for every hop/resource in the batch) — the source
+    /// connection's vendor and configured display name.</summary>
+    public string? SourceSystemType { get; }
+    public string? SourceConnectionName { get; }
+
+    /// <summary>Resolved once per node execution — the destination's type and configured display name.</summary>
+    public string? DestinationTypeName { get; }
+    public string? DestinationName { get; }
 }

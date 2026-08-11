@@ -96,9 +96,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
 
         // Resolved once per node execution (not per record) — both are stable for this whole batch, and the
-        // transform-rule resolver only needs them, never the full entities.
-        var destinationType = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
-        var sourceSystem = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
+        // transform-rule resolver only needs the type/system-type, never the full entities. The display names
+        // are only for the lineage row (see LineageCaptureCommand's SourceConnectionName/DestinationName) —
+        // the transform-rule resolver itself never sees them.
+        var (destinationType, destinationName) = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
+        var (sourceSystem, sourceConnectionName) = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
         // Caches each field's resolved rule chain for the lifetime of this ExecuteAsync call — the same
         // (resourceType, destinationField, sourceField) combination recurs once per record in the batch, and
         // re-querying the resolver/repository for every single record would be wasted round trips for a rule
@@ -211,7 +213,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                                         resource.ResourceType,
                                         resource.ResourceId,
                                         lineageEntries,
-                                        Guid.NewGuid().ToString("N")),
+                                        Guid.NewGuid().ToString("N"))
+                                    {
+                                        SourceSystemType = sourceSystem,
+                                        SourceConnectionName = sourceConnectionName,
+                                        DestinationTypeName = destinationType?.ToString(),
+                                        DestinationName = destinationName,
+                                    },
                                     cancellationToken);
                             }
                             catch (Exception) when (!cancellationToken.IsCancellationRequested)
@@ -292,26 +300,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return (null, configuredDestinationObject);
     }
 
-    private async Task<DestinationType?> ResolveDestinationTypeAsync(Guid destinationId, CancellationToken cancellationToken)
+    private async Task<(DestinationType? Type, string? Name)> ResolveDestinationTypeAsync(Guid destinationId, CancellationToken cancellationToken)
     {
         if (_configurationRepository is null || destinationId == Guid.Empty)
         {
-            return null;
+            return (null, null);
         }
 
         var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
-        return destination?.DestinationType;
+        return (destination?.DestinationType, destination?.Name);
     }
 
-    private async Task<string?> ResolveSourceSystemAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+    private async Task<(string? SystemType, string? Name)> ResolveSourceSystemAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         if (_configurationRepository is null || sourceConnectionId == Guid.Empty)
         {
-            return null;
+            return (null, null);
         }
 
         var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
-        return sourceConnection?.SourceSystemType.ToString();
+        return (sourceConnection?.SourceSystemType.ToString(), sourceConnection?.Name);
     }
 
     /// <summary>
@@ -438,6 +446,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 }
 
                 var hopInput = currentValue;
+                var hopExecutedAtUtc = DateTimeOffset.UtcNow;
                 var hopStopwatch = lineageEntries is null ? null : Stopwatch.StartNew();
                 var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, rule.ArrayMode, cancellationToken);
                 hopStopwatch?.Stop();
@@ -452,7 +461,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     result.Success ? SerializeLineageValue(result.Value) : null,
                     result.Success,
                     result.Success ? null : result.Error,
-                    hopStopwatch?.Elapsed.TotalMilliseconds));
+                    hopStopwatch?.Elapsed.TotalMilliseconds,
+                    hopExecutedAtUtc));
 
                 if (result.Success)
                 {

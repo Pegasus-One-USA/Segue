@@ -6,12 +6,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { ToastService } from '../../../services/toast.service';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
-import { FieldLineageChain, NodeRunHistoryEntry, PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { NodeRunHistoryEntry, PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { FieldLineagePanelComponent } from '../../components/field-lineage-panel/field-lineage-panel.component';
 
 @Component({
   selector: 'app-execution-history-detail',
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterLink, MatIconModule, MatButtonModule, MatPaginatorModule],
+  imports: [CommonModule, DatePipe, RouterLink, MatIconModule, MatButtonModule, MatPaginatorModule, FieldLineagePanelComponent],
   templateUrl: './execution-history-detail.component.html',
   styleUrls: ['./execution-history-detail.component.scss'],
 })
@@ -30,14 +31,9 @@ export class ExecutionHistoryDetailComponent implements OnInit {
   readonly pageSize     = signal(10);
 
   readonly activeTab = signal<'nodeRuns' | 'fieldLineage'>('nodeRuns');
-  readonly fieldLineageChains = signal<PagedResult<FieldLineageChain>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
-  readonly fieldLineageLoading = signal(false);
-  readonly expandedFieldKeys = signal<Set<string>>(new Set());
-  readonly fieldLineagePageIndex = signal(0);
-  readonly fieldLineagePageSize = signal(10);
-  private fieldLineageLoaded = false;
 
-  private runId = '';
+  /** Public (not private) — bound into <app-field-lineage-panel [runId]="runId"> once that tab is shown. */
+  runId = '';
 
   ngOnInit(): void {
     this.runId = this.route.snapshot.paramMap.get('id') ?? '';
@@ -51,66 +47,6 @@ export class ExecutionHistoryDetailComponent implements OnInit {
 
   setTab(tab: 'nodeRuns' | 'fieldLineage'): void {
     this.activeTab.set(tab);
-    if (tab === 'fieldLineage' && !this.fieldLineageLoaded) {
-      this.fieldLineageLoaded = true;
-      this.loadFieldLineage();
-    }
-  }
-
-  loadFieldLineage(): void {
-    this.fieldLineageLoading.set(true);
-    this.api.fieldLineage(this.runId, this.fieldLineagePageIndex() + 1, this.fieldLineagePageSize()).subscribe({
-      next: result => {
-        this.fieldLineageChains.set(result);
-        this.fieldLineageLoading.set(false);
-      },
-      error: () => this.fieldLineageLoading.set(false),
-    });
-  }
-
-  onFieldLineagePageChange(e: PageEvent): void {
-    this.fieldLineagePageIndex.set(e.pageIndex);
-    this.fieldLineagePageSize.set(e.pageSize);
-    this.loadFieldLineage();
-  }
-
-  fieldKey(chain: FieldLineageChain): string {
-    return `${chain.resourceId}|${chain.destinationField}`;
-  }
-
-  toggleFieldExpanded(key: string): void {
-    const next = new Set(this.expandedFieldKeys());
-    if (next.has(key)) {
-      next.delete(key);
-    } else {
-      next.add(key);
-    }
-    this.expandedFieldKeys.set(next);
-  }
-
-  isFieldExpanded(key: string): boolean {
-    return this.expandedFieldKeys().has(key);
-  }
-
-  /** "via Date normalization → Date shift → ..." summary for the collapsed row. */
-  chainSummary(chain: FieldLineageChain): string {
-    const nodeNames = chain.hops.map(h => h.nodeType).join(' → ');
-    return chain.sourceField ? `${chain.sourceField} via ${nodeNames}` : `via ${nodeNames}`;
-  }
-
-  chainSucceeded(chain: FieldLineageChain): boolean {
-    return chain.hops.every(h => h.success);
-  }
-
-  /** Pretty-prints a hop's before/after value — these are JSON-encoded scalars/objects, same convention as
-   *  formatJson() for node payloads below. */
-  formatLineageValue(json: string | null): string {
-    if (json === null) return '—';
-    try {
-      return JSON.stringify(JSON.parse(json));
-    } catch {
-      return json;
-    }
   }
 
   loadNodeRuns(): void {

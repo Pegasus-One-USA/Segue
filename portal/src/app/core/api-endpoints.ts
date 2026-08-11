@@ -234,6 +234,8 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
   nodeRuns:  (id: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs`,
   fieldLineage: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/field-lineage`,
+  lineageSummary: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/summary`,
+  lineageResourceTree: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/resource-tree`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

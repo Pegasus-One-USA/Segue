@@ -84,7 +84,8 @@ export interface NodeRunHistoryEntry {
   itemCount: number | null;
 }
 
-/** Matches the backend's FieldLineageHopDto — one transform node's before/after value for a destination field. */
+/** Matches the backend's FieldLineageHopDto — one transform node's before/after value for a destination field.
+ *  sourceValueJson/destinationValueJson arrive here already decrypted server-side. */
 export interface FieldLineageHop {
   nodeOrder: number;
   nodeType: string;
@@ -94,6 +95,7 @@ export interface FieldLineageHop {
   success: boolean;
   errorMessage: string | null;
   durationMs: number | null;
+  executedAtUtc: string;
 }
 
 /** Matches the backend's FieldLineageChainDto — one destination field's full source-to-destination chain for
@@ -104,4 +106,39 @@ export interface FieldLineageChain {
   destinationField: string;
   sourceField: string | null;
   hops: FieldLineageHop[];
+  sourceSystemType: string | null;
+  sourceConnectionName: string | null;
+  destinationTypeName: string | null;
+  destinationName: string | null;
+}
+
+/** Filters over the field-lineage endpoint — backs the Lineage panel's Group-by-Field/Patient/Node toggle and
+ *  free-text search. Matches the backend's FieldLineageFilter (all optional; omit for "no filter"). */
+export interface FieldLineageFilter {
+  resourceType?: string;
+  destinationField?: string;
+  resourceId?: string;
+  nodeType?: string;
+  search?: string;
+}
+
+/** Matches the backend's LineageSummaryDto — run-wide field-lineage totals for the Lineage panel's stat strip. */
+export interface LineageSummary {
+  resourcesProcessed: number;
+  fieldsTransformed: number;
+  transformationNodesExecuted: number;
+  successRate: number;
+}
+
+/** Matches the backend's FieldSummaryDto — one destination field's footprint within a resource type. */
+export interface FieldSummary {
+  destinationField: string;
+  resourceCount: number;
+}
+
+/** Matches the backend's ResourceTypeSummaryDto — backs the Lineage panel's resource-tree sidebar. */
+export interface ResourceTypeSummary {
+  resourceType: string;
+  resourceCount: number;
+  fields: FieldSummary[];
 }

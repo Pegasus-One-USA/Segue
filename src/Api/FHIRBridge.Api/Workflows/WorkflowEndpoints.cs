@@ -1215,20 +1215,53 @@ public static class WorkflowEndpoints
         .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Field-level lineage: one chain per (resource, destination field), each carrying the full
-        // source -> node -> node -> destination hop chain the transform-rule engine produced for it.
+        // source -> node -> node -> destination hop chain the transform-rule engine produced for it. The
+        // filter params back the portal's Group-by-Field/Patient/Node toggle and free-text search — all the
+        // same query, just filtered differently (see FieldLineageFilter's remarks).
         group.MapGet("/workflow-runs/{runId:guid}/field-lineage", async (
             Guid runId,
             int? page,
             int? pageSize,
+            string? resourceType,
+            string? destinationField,
+            string? resourceId,
+            string? nodeType,
+            string? search,
             IWorkflowNodeResourceHistoryRecorder recorder,
             CancellationToken cancellationToken) =>
         {
+            var filter = new FieldLineageFilter(resourceType, destinationField, resourceId, nodeType, search);
             var result = await recorder.GetFieldLineagePagedAsync(
                 runId,
                 page is > 0 ? page.Value : 1,
                 pageSize is > 0 ? pageSize.Value : 25,
+                filter,
                 cancellationToken);
 
+            return Results.Ok(result);
+        })
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Run-wide field-lineage totals — backs the Lineage tab's stat strip (resources processed, fields
+        // transformed, transformation nodes executed, success rate).
+        group.MapGet("/workflow-runs/{runId:guid}/lineage/summary", async (
+            Guid runId,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetLineageSummaryAsync(runId, cancellationToken);
+            return Results.Ok(result);
+        })
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Every resource type touched by this run's field lineage, with the destination fields under it and
+        // how many distinct resources hit each one — backs the Lineage tab's resource-tree sidebar.
+        group.MapGet("/workflow-runs/{runId:guid}/lineage/resource-tree", async (
+            Guid runId,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetLineageResourceTreeAsync(runId, cancellationToken);
             return Results.Ok(result);
         })
         .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);

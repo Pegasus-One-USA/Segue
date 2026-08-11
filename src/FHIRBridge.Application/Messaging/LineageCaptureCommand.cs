@@ -15,7 +15,8 @@ public sealed record LineageHopEntryDto(
     string? DestinationValueJson,
     bool Success,
     string? ErrorMessage,
-    double? DurationMs);
+    double? DurationMs,
+    DateTimeOffset ExecutedAtUtc);
 
 /// <summary>
 /// A batch of field-lineage hops for one resource, published to the messaging transport by the transform executor
@@ -29,4 +30,16 @@ public sealed record LineageCaptureCommand(
     string ResourceType,
     string ResourceId,
     IReadOnlyList<LineageHopEntryDto> Entries,
-    string MessageId);
+    string MessageId)
+{
+    /// <summary>The source connection's vendor (Epic, Healow, ...) and configured display name — resolved once
+    /// per node execution by <c>MappingNodeExecutor.ResolveSourceSystemAsync</c>, the same values already used
+    /// to pick the transform-rule chain, just also carried onto the persisted lineage row for display.</summary>
+    public string? SourceSystemType { get; init; }
+    public string? SourceConnectionName { get; init; }
+
+    /// <summary>The destination's type (SqlServer, FhirRepository, ...) and configured display name — resolved
+    /// once per node execution by <c>MappingNodeExecutor.ResolveDestinationTypeAsync</c>.</summary>
+    public string? DestinationTypeName { get; init; }
+    public string? DestinationName { get; init; }
+}
