@@ -1,0 +1,39 @@
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_95cc6aed975c5c::t_89ac8830510a09 546-565
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_95cc6aed975c5c::t_f7238f95211801 291-296
+  s_95cc6aed975c5c::t_1bab791d534faa 207-210
+  s_95cc6aed975c5c::t_ec54484c400ab0 477-481,488-498
+  s_95cc6aed975c5c::t_92034061f715df 651-676
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_95cc6aed975c5c::t_1c0aa483f6430d 1351-1365
+  s_95cc6aed975c5c::t_4ab311d24ff903 756-757
+  s_95cc6aed975c5c::t_4de806785c9bc2 309-317
+  s_95cc6aed975c5c::t_86b811ffb208c5 745-751,761
+  s_95cc6aed975c5c::t_b945db7d584603 752-755,758-760
+  s_95cc6aed975c5c::t_8fb141a8f42896 809-848
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_95cc6aed975c5c::t_e824ed004d3f0f 1
+  s_95cc6aed975c5c::t_4b11118a2593df 54-60
+  s_95cc6aed975c5c::t_4b072804d60699 84-85
+  s_95cc6aed975c5c::t_623d378ac5dbee 40
+  s_95cc6aed975c5c::t_338d0acbd17117 64-83
+portal/src/app/components/canvas/canvas.component.ts
+  s_95cc6aed975c5c::t_645a88b83b9223 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "1ff6d9db065f6b54ed2ba1c80e3bf42144108cac",
+  "prompts": {},
+  "sessions": {
+    "s_95cc6aed975c5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ad20581-3289-4c5a-bbed-0cf542124ef0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
