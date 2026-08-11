@@ -1,0 +1,21 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component.ts
+  s_39f35e8505b8b8::t_e791b76afdca34 4
+  s_39f35e8505b8b8::t_f3a14763ae3ccb 22
+  s_39f35e8505b8b8::t_feacc1489d8787 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7ebde2aa0df3ff9fda1cd07c1cea67aeca03a691",
+  "prompts": {},
+  "sessions": {
+    "s_39f35e8505b8b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b1949323-c82b-47aa-a02f-b7ca118930da",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
