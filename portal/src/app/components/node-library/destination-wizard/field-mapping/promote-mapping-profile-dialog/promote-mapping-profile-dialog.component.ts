@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { A11yModule } from '@angular/cdk/a11y';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -18,7 +19,7 @@ export interface PromoteMappingProfileDialogData {
 @Component({
   selector: 'app-promote-mapping-profile-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [CommonModule, FormsModule, A11yModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   template: `
     <h2 mat-dialog-title>Mark as Master — {{ data.resourceType }}</h2>
     <mat-dialog-content class="pmpd-content">
@@ -28,7 +29,7 @@ export interface PromoteMappingProfileDialogData {
       </p>
       <mat-form-field appearance="outline" class="pmpd-field">
         <mat-label>Master mapping name</mat-label>
-        <input matInput [(ngModel)]="name" maxlength="200" autofocus />
+        <input matInput [(ngModel)]="name" maxlength="200" cdkFocusInitial />
       </mat-form-field>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
