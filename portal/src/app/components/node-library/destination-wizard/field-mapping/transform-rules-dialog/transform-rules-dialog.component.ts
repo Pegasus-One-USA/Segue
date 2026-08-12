@@ -9,16 +9,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 
 import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, NullPolicy, TransformErrorPolicy, TransformArrayMode,
 } from '../transformation-rules.service';
-import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS } from '../transform-node-classifier';
+import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS, nodeAbbr, nodeAccentVar } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
 
 export interface TransformRulesDialogData {
@@ -73,7 +70,7 @@ interface ColumnRuleRow {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
-    MatDividerModule, MatTooltipModule, MatSelectModule, MatInputModule, MatFormFieldModule, RuleConfigFormComponent,
+    MatDividerModule, MatTooltipModule, RuleConfigFormComponent,
   ],
   templateUrl: './transform-rules-dialog.component.html',
   styleUrls: ['./transform-rules-dialog.component.scss'],
@@ -88,12 +85,32 @@ export class TransformRulesDialogComponent implements OnInit {
   readonly rows = signal<ColumnRuleRow[]>([]);
   private nodeSchemas: TransformNodeSchema[] = [];
 
+  /** Maximizes to the same bounded "XL modal" size the Node Library Dialog itself uses (min(92vw,
+   *  1100px) / min(88vh, 740px)) — NOT true edge-to-edge fullscreen. A per-column rule chain never needs
+   *  the whole screen the way the mapping canvas does; capping it here keeps rounded corners/shadow
+   *  intact and avoids dwarfing the wizard dialog sitting behind it. */
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void {
+    const next = !this.isMaximized();
+    this.isMaximized.set(next);
+    this.dialogRef.updateSize(next ? 'min(92vw, 1100px)' : '680px', next ? 'min(88vh, 740px)' : '');
+  }
+
   ngOnInit(): void {
     this.loadRows();
   }
 
   schemaFor(nodeType: TransformNodeType): TransformNodeSchema | undefined {
     return this.nodeSchemas.find(s => s.nodeType === nodeType);
+  }
+
+  /** Purely cosmetic lookups for the step-chain visualization (badge glyph, rank-color accent, and the
+   *  plain-language label for a chip's tooltip) — no state, no side effects, same underlying node data
+   *  every other part of this dialog already reads. */
+  protected readonly nodeAbbr = nodeAbbr;
+  protected readonly nodeAccentVar = nodeAccentVar;
+  nodeLabel(nodeType: TransformNodeType): string {
+    return ALL_NODE_TYPE_OPTIONS.find(o => o.value === nodeType)?.label ?? nodeType;
   }
 
   private loadRows(): void {

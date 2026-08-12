@@ -1026,7 +1026,11 @@ export class DestinationWizardComponent implements OnInit {
 
     this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(TransformRulesDialogComponent, {
       width: '680px',
-      maxWidth: '95vw',
+      // NOT a tighter cap like '95vw' — MatDialogConfig's maxWidth/maxHeight apply once at open and
+      // aren't revisited by dialogRef.updateSize() later, so a smaller static cap here would silently
+      // clamp TransformRulesDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
+      maxWidth: '100vw',
+      maxHeight: '100vh',
       restoreFocus: false,
       data: {
         resourceType: resource,

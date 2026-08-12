@@ -193,8 +193,20 @@ export class MappingProfileListComponent implements OnInit {
   private _openDialog(data: MappingProfileDialogData, successMessage: string): void {
     this.dialog
       .open(MappingProfileDialogComponent, {
-        width: '760px',
-        maxWidth: '95vw',
+        // Same "XL modal" size the design system already defines for exactly this kind of large dialog
+        // (§11: min(92vw, 1100px) / min(88vh, 740px) — what NodeLibraryDialogComponent itself uses on the
+        // workflow-builder canvas) instead of forcing near-fullscreen by default. Reads as an appropriately
+        // sized dialog rather than a mostly-empty near-fullscreen one before a resource type is picked; the
+        // maximize button (see MappingProfileDialogComponent.toggleMaximize) still covers whoever needs
+        // the full 100vw/100vh canvas room.
+        width: 'min(92vw, 1100px)',
+        height: 'min(88vh, 740px)',
+        // maxWidth/maxHeight stay at the full 100vw/100vh (not a tighter cap) — MatDialogConfig's
+        // maxWidth/maxHeight are applied once at open and aren't updated by dialogRef.updateSize() later,
+        // so a tighter static cap here would silently clamp
+        // MappingProfileDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
+        maxWidth: '100vw',
+        maxHeight: '100vh',
         disableClose: true,
         restoreFocus: false,
         data,

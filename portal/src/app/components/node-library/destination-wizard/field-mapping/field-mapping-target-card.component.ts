@@ -74,6 +74,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly relation = input<ChildTableRelation | undefined>(undefined);
   readonly isArmed = input.required<boolean>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
+  /** See FieldMappingCanvasComponent.schemaAuthoringEnabled's doc comment — false hides the real
+   *  "+ Add column" trigger for a probed SQL table (no live credentials to back the ALTER TABLE it
+   *  would open). Defaults true so the Destination Wizard is unaffected. */
+  readonly schemaAuthoringEnabled = input(true);
   readonly x = input.required<number>();
   readonly y = input.required<number>();
 

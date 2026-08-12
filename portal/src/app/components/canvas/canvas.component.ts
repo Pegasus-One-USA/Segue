@@ -258,6 +258,15 @@ export class CanvasComponent {
     return node?.kind === 'merge';
   }
 
+  /** The Field Mapping transform node can't be deleted from the context menu — every destination node
+   *  downstream of it depends on its mapping to actually write anything, so removing it silently breaks
+   *  the pipeline instead of prompting the usual "delete this and its connections" confirmation. */
+  protected ctxNodeIsFieldMapping(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    return node?.kind === 'transform' && node.transformId === 'field-mapping';
+  }
+
   ctxToggleCheckpoint(): void {
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;

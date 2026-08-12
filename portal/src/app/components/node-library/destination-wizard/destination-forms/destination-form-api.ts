@@ -48,6 +48,15 @@ export interface SqlFamilyFormApi extends WizardDestinationFormApi {
   getProbeRequest(): DestinationProbeRequest;
 }
 
+/** NOT keyed on `testConnection` — CsvDestinationFormComponent and SftpDestinationFormComponent each
+ *  define their own unrelated `testConnection()`/`probeState` pair too (an SFTP-delivery-mode probe,
+ *  gated on deliveryMode === 'sftp'), so that check duck-typed them as SQL-family forms as well. That
+ *  misrouted DestinationWizardComponent.next() through the SQL-only "test then advance" branch for a
+ *  CSV form set to any other delivery mode: CSV's own testConnection() correctly no-ops (delivery mode
+ *  isn't 'sftp'), its callback param is silently ignored (TS structurally allows a narrower function
+ *  there), and next() then hits its own unconditional `return` — Step 1 done nothing at all, with zero
+ *  console/network evidence. `getProbeRequest` only exists on the real SQL-family wrappers (SqlServer/
+ *  AzureSql/MySql/PostgreSql) — see destination-forms/*.ts — so it's an unambiguous discriminator. */
 export function isSqlFamilyForm(x: WizardDestinationFormApi | null | undefined): x is SqlFamilyFormApi {
-  return !!x && typeof (x as Partial<SqlFamilyFormApi>).testConnection === 'function';
+  return !!x && typeof (x as Partial<SqlFamilyFormApi>).getProbeRequest === 'function';
 }
