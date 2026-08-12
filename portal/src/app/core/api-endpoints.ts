@@ -119,6 +119,7 @@ export const MAPPING_PROFILE_ENDPOINTS = {
   byId:      (id: string) => `${API_V1_BASE}/mapping-profiles/${id}`,
   activate:   (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/activate`,
   deactivate: (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/deactivate`,
+  promoteToMaster: (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/promote-to-master`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as DESTINATION_ENDPOINTS.usage: the
   // usage check has to walk every workflow's node config (plus route-level references), which only the
   // Runtime workflow store + IConfigurationRepository together can answer.
@@ -221,6 +222,7 @@ export const RXNORM_ENDPOINTS = {
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
+  backendAuthScopes: `${API_V1_BASE}/source-discovery/backend-auth-scopes`,
 };
 
 // ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
@@ -231,6 +233,10 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
   nodeRuns:  (id: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs`,
+  nodeRunPayload: (id: string, nodeRunId: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs/${nodeRunId}/payload`,
+  fieldLineage: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/field-lineage`,
+  lineageSummary: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/summary`,
+  lineageResourceTree: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/resource-tree`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

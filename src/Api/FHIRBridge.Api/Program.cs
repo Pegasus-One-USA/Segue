@@ -16,6 +16,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
+using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Infrastructure.Security;
@@ -149,6 +150,12 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("FHIRBr
 {
     builder.Services.AddWorkflowSqlPersistence(builder.Configuration);
 }
+
+// Field-level lineage capture's consumer also runs in this host, not just the Worker (see
+// LineageCaptureProcessor's remarks): POST /workflows/{id}/run executes the whole pipeline synchronously here,
+// and the InMemory messaging provider's channel is in-process-only — without a local consumer, lineage
+// published during a manual/interactive run would sit unread forever.
+builder.Services.AddHostedService<LineageCaptureProcessor>();
 
 // Backs RunStatusHub — pushes workflow-run status changes (Running/Succeeded/Failed) to the Dashboard and
 // Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's

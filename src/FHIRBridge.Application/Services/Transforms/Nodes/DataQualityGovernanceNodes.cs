@@ -90,7 +90,7 @@ public sealed class DateMathAgeNode : ITransformNode
                 // ApplyTransformRulesAsync. Falls back to the fixed `days` config when either input is missing
                 // (no vault secret wired, or the caller didn't supply a patient id), matching pre-existing
                 // behavior rather than failing pipelines that don't need per-patient consistency.
-                var patientId = config.GetOrNull("_patientId");
+                var patientId = config.GetOrNull(ReservedTransformConfigKeys.PatientId);
                 var shiftDays = !string.IsNullOrEmpty(secret) && patientId is not null
                     ? SeededShiftDays(secret, patientId, config.GetInt("maxShiftDays", 60))
                     : config.GetInt("days", 0);

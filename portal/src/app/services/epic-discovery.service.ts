@@ -34,6 +34,21 @@ interface ProbeResponse {
   smartConfigurationError: string | null;
 }
 
+export interface BackendAuthScopesRequest {
+  tokenEndpoint: string;
+  clientId: string;
+  keyId: string | null;
+  privateKeyVaultName: string;
+  privateKeySecretName: string;
+  scope: string;
+}
+
+export interface BackendAuthScopesResult {
+  success: boolean;
+  grantedScopes: string[];
+  error: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class EpicDiscoveryService {
   private readonly http = inject(HttpClient);
@@ -59,5 +74,14 @@ export class EpicDiscoveryService {
         smartConfigurationError: response.smartConfigurationError ?? null,
       })),
     );
+  }
+
+  /**
+   * Backend System only: runs a real client_credentials + private_key_jwt exchange against Epic's token endpoint
+   * using a signing key already provisioned into the secret store, and returns the scopes Epic actually granted the
+   * app — never the access token itself.
+   */
+  testBackendAuthScopes(request: BackendAuthScopesRequest): Observable<BackendAuthScopesResult> {
+    return this.http.post<BackendAuthScopesResult>(SOURCE_DISCOVERY_ENDPOINTS.backendAuthScopes, request);
   }
 }

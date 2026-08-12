@@ -1,0 +1,260 @@
+<div class="lineage-panel">
+
+  @if (summary(); as s) {
+    <div class="stat-strip">
+      <div class="stat-card">
+        <mat-icon>view_in_ar</mat-icon>
+        <div>
+          <span class="stat-value">{{ s.resourcesProcessed }}</span>
+          <span class="stat-label">Resources Processed</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <mat-icon>list_alt</mat-icon>
+        <div>
+          <span class="stat-value">{{ s.fieldsTransformed }}</span>
+          <span class="stat-label">Fields Transformed</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <mat-icon>hub</mat-icon>
+        <div>
+          <span class="stat-value">{{ s.transformationNodesExecuted }}</span>
+          <span class="stat-label">Transformation Nodes</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <mat-icon>check_circle</mat-icon>
+        <div>
+          <span class="stat-value">{{ (s.successRate * 100) | number:'1.0-0' }}%</span>
+          <span class="stat-label">Success Rate</span>
+        </div>
+      </div>
+    </div>
+  }
+
+  <div class="lineage-toolbar">
+    <div class="group-by-toggle">
+      <button type="button" [class.active]="groupBy() === 'field'" (click)="setGroupBy('field')">Group by Field</button>
+      <button type="button" [class.active]="groupBy() === 'patient'" (click)="setGroupBy('patient')">Group by Patient</button>
+      <button type="button" [class.active]="groupBy() === 'node'" (click)="setGroupBy('node')">Group by Node</button>
+    </div>
+    <div class="search-box">
+      <mat-icon>search</mat-icon>
+      <input
+        type="text"
+        [placeholder]="groupBy() === 'field' ? 'Search fields...' : groupBy() === 'patient' ? 'Search by resource ID...' : 'Search by node type...'"
+        [value]="searchText()"
+        (input)="onSearchChange($any($event.target).value)"
+      />
+    </div>
+  </div>
+
+  <div class="lineage-body">
+
+    @if (groupBy() === 'field') {
+      <div class="resource-tree">
+        <div class="resource-tree__header">Resources</div>
+        @for (resourceType of resourceTree(); track resourceType.resourceType) {
+          <div class="tree-node">
+            <div
+              class="tree-node__type"
+              role="button"
+              tabindex="0"
+              [attr.aria-expanded]="isResourceTypeExpanded(resourceType.resourceType)"
+              (click)="toggleResourceType(resourceType.resourceType)"
+              (keydown.enter)="toggleResourceType(resourceType.resourceType)"
+              (keydown.space)="toggleResourceType(resourceType.resourceType); $event.preventDefault()"
+            >
+              <mat-icon class="chevron">{{ isResourceTypeExpanded(resourceType.resourceType) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+              <span>{{ resourceType.resourceType }}</span>
+              <span class="tree-node__count">({{ resourceType.resourceCount }})</span>
+            </div>
+            @if (isResourceTypeExpanded(resourceType.resourceType)) {
+              @for (field of resourceType.fields; track field.destinationField) {
+                <div
+                  class="tree-node__field"
+                  role="button"
+                  tabindex="0"
+                  [class.active]="selectedResourceType() === resourceType.resourceType && selectedField() === field.destinationField"
+                  (click)="selectField(resourceType.resourceType, field.destinationField)"
+                  (keydown.enter)="selectField(resourceType.resourceType, field.destinationField)"
+                  (keydown.space)="selectField(resourceType.resourceType, field.destinationField); $event.preventDefault()"
+                >
+                  <span>{{ field.destinationField }}</span>
+                  <span class="tree-node__count">({{ field.resourceCount }})</span>
+                </div>
+              }
+            }
+          </div>
+        } @empty {
+          <p class="empty-note">No lineage recorded for this run.</p>
+        }
+      </div>
+    }
+
+    <div class="lineage-table" [class.lineage-table--full]="groupBy() !== 'field'">
+      <p class="group-by-hint">{{ groupByLabel() }}</p>
+
+      @if (selectedField()) {
+        <div class="active-filter">
+          <span class="mono">{{ selectedResourceType() }}.{{ selectedField() }}</span>
+          <button type="button" class="btn-clear" (click)="clearFieldSelection()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+
+      <table class="data-table">
+        <thead class="data-table__header">
+          <tr>
+            <th>Resource</th>
+            <th>Field</th>
+            <th>Source Value</th>
+            <th></th>
+            <th>Transformed Value</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (chain of chains().items; track chain.resourceId + chain.destinationField) {
+            <tr class="data-table__row" (click)="openDetail(chain)">
+              <td class="mono">{{ chain.resourceId }}</td>
+              <td class="mono">{{ chain.destinationField }}</td>
+              <td class="mono">{{ firstSourceValue(chain) }}</td>
+              <td><mat-icon class="arrow-icon">arrow_forward</mat-icon></td>
+              <td class="mono">{{ lastDestinationValue(chain) }}</td>
+              <td>
+                <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
+                  {{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
+                </span>
+              </td>
+              <td><mat-icon class="chevron">chevron_right</mat-icon></td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <mat-icon>timeline</mat-icon>
+                  <p>No matching field lineage found.</p>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (chains().totalCount > pageSize()) {
+        <mat-paginator
+          [length]="chains().totalCount"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
+          [pageSizeOptions]="[10, 25, 50, 100]"
+          showFirstLastButtons
+          (page)="onPageChange($event)"
+          class="table-paginator"
+        ></mat-paginator>
+      }
+    </div>
+
+    @if (selectedChain(); as chain) {
+      <div class="detail-panel">
+        <div class="detail-panel__header">
+          <div>
+            <span class="cell-primary mono">{{ chain.destinationField }}</span>
+            <span class="cell-muted">({{ chain.resourceType }})</span>
+          </div>
+          <button type="button" class="btn-clear" (click)="closeDetail()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <div class="detail-panel__tabs">
+          <button type="button" [class.active]="detailTab() === 'flow'" (click)="setDetailTab('flow')">Lineage Flow</button>
+          <button type="button" [class.active]="detailTab() === 'details'" (click)="setDetailTab('details')">Details</button>
+          <button type="button" [class.active]="detailTab() === 'nodeInfo'" (click)="setDetailTab('nodeInfo')">Node Info</button>
+        </div>
+
+        <div class="detail-panel__body">
+
+          @if (detailTab() === 'flow') {
+            <div class="flow-card flow-card--source">
+              <mat-icon>storage</mat-icon>
+              <div>
+                <span class="flow-card__title">Source System</span>
+                <span class="cell-muted">{{ chain.sourceConnectionName ?? chain.sourceSystemType ?? 'Unknown source' }}</span>
+                <span class="mono">{{ chain.resourceType }}.{{ chain.sourceField ?? chain.destinationField }}</span>
+              </div>
+              <span class="flow-card__value mono">{{ firstSourceValue(chain) }}</span>
+            </div>
+            <mat-icon class="flow-arrow">arrow_downward</mat-icon>
+
+            @for (hop of chain.hops; track hop.nodeOrder) {
+              <div class="flow-card flow-card--node" [class.flow-card--failed]="!hop.success">
+                <mat-icon>settings</mat-icon>
+                <div>
+                  <span class="flow-card__title">Transformation Node #{{ hop.nodeOrder + 1 }}</span>
+                  <span class="cell-muted">{{ hop.nodeType }}</span>
+                  <span class="cell-muted">{{ formatConfig(hop.configJson) }}</span>
+                </div>
+                <span class="flow-card__value mono">{{ formatValue(hop.destinationValueJson) }}</span>
+              </div>
+              @if (!$last) {
+                <mat-icon class="flow-arrow">arrow_downward</mat-icon>
+              }
+            }
+
+            <mat-icon class="flow-arrow">arrow_downward</mat-icon>
+            <div class="flow-card flow-card--destination">
+              <mat-icon>dns</mat-icon>
+              <div>
+                <span class="flow-card__title">Destination System</span>
+                <span class="cell-muted">{{ chain.destinationName ?? chain.destinationTypeName ?? 'Unknown destination' }}</span>
+                <span class="mono">{{ chain.resourceType }}.{{ chain.destinationField }}</span>
+              </div>
+              <span class="flow-card__value mono">{{ lastDestinationValue(chain) }}</span>
+            </div>
+          }
+
+          @if (detailTab() === 'details') {
+            <div class="detail-grid">
+              <div class="detail-cell"><span class="stat-label">Resource Type</span><span class="cell-primary">{{ chain.resourceType }}</span></div>
+              <div class="detail-cell"><span class="stat-label">Resource ID</span><span class="cell-primary mono">{{ chain.resourceId }}</span></div>
+              <div class="detail-cell"><span class="stat-label">Source Field</span><span class="cell-primary mono">{{ chain.sourceField ?? '—' }}</span></div>
+              <div class="detail-cell"><span class="stat-label">Destination Field</span><span class="cell-primary mono">{{ chain.destinationField }}</span></div>
+              <div class="detail-cell"><span class="stat-label">Nodes in Chain</span><span class="cell-primary">{{ chain.hops.length }}</span></div>
+              <div class="detail-cell">
+                <span class="stat-label">Status</span>
+                <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
+                  {{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
+                </span>
+              </div>
+            </div>
+          }
+
+          @if (detailTab() === 'nodeInfo') {
+            <div class="node-info-list">
+              @for (hop of chain.hops; track hop.nodeOrder) {
+                <div class="node-info-row">
+                  <span class="node-info-row__index">{{ hop.nodeOrder + 1 }}</span>
+                  <div class="node-info-row__body">
+                    <span class="cell-primary">{{ hop.nodeType }}</span>
+                    <span class="cell-muted">{{ formatConfig(hop.configJson) }}</span>
+                    <span class="cell-muted">{{ hop.executedAtUtc | date:'MMM d, y, h:mm:ss a' }} · {{ hop.durationMs | number:'1.0-2' }} ms</span>
+                    @if (hop.errorMessage) {
+                      <span class="node-info-row__error">{{ hop.errorMessage }}</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+        </div>
+      </div>
+    }
+
+  </div>
+
+</div>

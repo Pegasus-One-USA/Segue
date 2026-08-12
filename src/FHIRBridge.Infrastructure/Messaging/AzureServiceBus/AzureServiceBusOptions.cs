@@ -11,5 +11,6 @@ public sealed class AzureServiceBusOptions
     public string? FullyQualifiedNamespace { get; set; }
     public string PipelineRunsQueue { get; set; } = "pipeline-runs";
     public string WebhookIngestionQueue { get; set; } = "webhook-ingestion";
+    public string LineageCaptureQueue { get; set; } = "lineage-capture";
     public int MaxConcurrentCalls { get; set; } = 5;
 }

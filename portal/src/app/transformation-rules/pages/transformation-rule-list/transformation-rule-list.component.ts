@@ -48,6 +48,7 @@ interface RuleStep {
   onNullDefaultValue: string | null;
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
+  fhirWriteBackJsonPath: string | null;
 }
 
 /** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
@@ -164,6 +165,7 @@ export class TransformationRuleListComponent implements OnInit {
           group.steps.push({
             id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false,
             onNull: r.onNull, onNullDefaultValue: r.onNullDefaultValue ?? null, errorPolicy: r.errorPolicy, arrayMode: r.arrayMode,
+            fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
           });
         }
         byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
@@ -250,6 +252,7 @@ export class TransformationRuleListComponent implements OnInit {
       steps: [{
         id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false,
         onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+        fhirWriteBackJsonPath: null,
       }],
       editing: true,
     };
@@ -268,6 +271,7 @@ export class TransformationRuleListComponent implements OnInit {
     group.steps.push({
       id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false,
       onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+      fhirWriteBackJsonPath: null,
     });
     this.groups.set([...this.groups()]);
   }
@@ -298,6 +302,11 @@ export class TransformationRuleListComponent implements OnInit {
     this.groups.set([...this.groups()]);
   }
 
+  setFhirWriteBackJsonPath(step: RuleStep, value: string): void {
+    step.fhirWriteBackJsonPath = value.trim() || null;
+    this.groups.set([...this.groups()]);
+  }
+
   moveStep(group: RuleTargetGroup, step: RuleStep, direction: -1 | 1): void {
     const index = group.steps.indexOf(step);
     const swapWith = index + direction;
@@ -325,6 +334,7 @@ export class TransformationRuleListComponent implements OnInit {
       onNullDefaultValue: step.onNullDefaultValue,
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
+      fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

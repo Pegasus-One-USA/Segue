@@ -1,5 +1,6 @@
 using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
+using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Infrastructure.Security;
@@ -70,6 +71,13 @@ builder.Services.AddHostedService<Worker>();
 builder.Services.Configure<ScheduleDispatcherOptions>(builder.Configuration.GetSection("ScheduleDispatcher"));
 builder.Services.AddHostedService<ScheduleDispatcherWorker>();
 builder.Services.AddHostedService<PipelineRunCommandProcessor>();
+
+// Field-level lineage capture: MappingNodeExecutor buffers per-hop lineage in-memory during transform execution
+// and publishes a LineageCaptureCommand per resource rather than writing FieldLineageEntries synchronously — this
+// processor is where that write actually happens, off the transform pipeline's own execution path. Also
+// registered in the Api host (see its Program.cs) — a manual/interactive workflow run executes synchronously
+// inside Api, and the InMemory transport is in-process-only, so Api needs its own local consumer too.
+builder.Services.AddHostedService<LineageCaptureProcessor>();
 
 // Closes a separate, previously-silent gap found while reviewing the scheduling path: WebhookIngestionController
 // (Api host) already enqueues a WebhookIngestionCommand on every inbound webhook via IWebhookIngestionDispatcher —

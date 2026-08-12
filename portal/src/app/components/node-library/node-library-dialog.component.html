@@ -91,6 +91,7 @@
               Clear {{ destSuggestionCount() }} suggestion{{ destSuggestionCount() === 1 ? '' : 's' }}
             </button>
           }
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpMarkAsMasterTrigger()">★ Mark as Master</button>
         </div>
         <div class="nld-mapping-toolbar-actions">
           <app-zoom-dock
@@ -311,6 +312,7 @@
             [openPreviewRequest]="previewOutputTrigger()"
             [runSuggestMappingsRequest]="runSuggestMappingsTrigger()"
             [clearSuggestionsRequest]="clearSuggestionsTrigger()"
+            [markAsMasterRequest]="markAsMasterTrigger()"
             [zoomInRequest]="zoomInTrigger()"
             [zoomOutRequest]="zoomOutTrigger()"
             [zoomResetRequest]="zoomResetTrigger()"

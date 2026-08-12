@@ -480,6 +480,13 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   protected readonly authMethodAuto = signal(false);
   protected readonly testStatus   = signal<'idle' | 'running' | 'ok' | 'fail'>('idle');
 
+  // Backend System only: scopes Epic actually granted the app from a real client_credentials + private_key_jwt
+  // exchange run as part of Discover (requested with the fixed wildcard scope 'system/*.*') — distinct from
+  // scopesSupported above, which is only what the server advertises, not what this specific app is allowed.
+  protected readonly grantedScopesStatus = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
+  protected readonly grantedScopes       = signal<string[]>([]);
+  protected readonly grantedScopesError  = signal<string | null>(null);
+
   protected readonly form = this.fb.nonNullable.group({
     audience:          ['provider-ehr-launch' as EpicAudience, Validators.required],
     environment:       ['sandbox', Validators.required],
@@ -1853,6 +1860,9 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     if (!url) { this.toast.show('URL required', 'Enter the FHIR Base URL first.'); return; }
     const envKey: EnvKey = this.form.controls.environment.value === 'production' ? 'production' : 'sandbox';
     this.discStatus.set('loading');
+    this.grantedScopesStatus.set('idle');
+    this.grantedScopes.set([]);
+    this.grantedScopesError.set(null);
 
     this.discovery.discover(url, envKey).subscribe({
       next: (result) => {
@@ -1900,6 +1910,9 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
           this.wiz.token.set(dv.tokenEndpoint);
           this.wiz.authorize.set(dv.authzEndpoint);
         }
+        if (this.audience() === 'backend-system' && !result.smartConfigurationError) {
+          this.runBackendAuthScopeProbe(dv.tokenEndpoint);
+        }
         this.wiz.baseUrl.set(url);
         this.wiz.setDiscovered(true);
         this.discStatus.set('done');
@@ -1921,6 +1934,45 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
         const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Check the URL or enter endpoints manually.';
         this.toast.show('Discovery failed', msg);
         this._captureBaselineIfAwaiting();
+      },
+    });
+  }
+
+  /** Backend System only: fired from runDiscover() once the token endpoint resolves — exchanges the fixed
+   *  wildcard scope 'system/*.*' via client_credentials + private_key_jwt using whatever clientId/signing-key
+   *  fields are already on the form, and shows the scopes Epic actually granted. Silently skipped when the
+   *  signing key hasn't been configured yet (nothing to sign with) rather than surfacing an error. */
+  private runBackendAuthScopeProbe(tokenEndpoint: string): void {
+    const clientId = this.form.controls.clientId.value.trim();
+    const keyId = this.form.controls.jwtKid.value.trim();
+    const privateKeyVaultName = this.form.controls.privateKeyRef.value.trim();
+    const privateKeySecretName = this.form.controls.privateKeySecretName.value.trim();
+    if (!clientId || !tokenEndpoint || !privateKeyVaultName || !privateKeySecretName) {
+      return;
+    }
+
+    this.grantedScopesStatus.set('loading');
+    // Epic's system scope grammar has no literal wildcard access-level ('system/*.*' is invalid and gets rejected
+    // as invalid_scope) — the access level must be a real suffix: '.read' for v1 (coarse), '.rs' for v2 (granular),
+    // matching whichever version scopeString() above already uses for this connection.
+    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
+    this.discovery.testBackendAuthScopes({
+      tokenEndpoint, clientId, keyId: keyId || null, privateKeyVaultName, privateKeySecretName,
+      scope: `system/*.${suffix}`,
+    }).subscribe({
+      next: (result) => {
+        if (result.success) {
+          this.grantedScopes.set(result.grantedScopes);
+          this.grantedScopesStatus.set('done');
+        } else {
+          this.grantedScopesError.set(result.error ?? 'Epic did not grant any scopes.');
+          this.grantedScopesStatus.set('error');
+        }
+      },
+      error: (err) => {
+        const msg = typeof err?.error?.error === 'string' ? err.error.error : 'Could not authenticate with Epic.';
+        this.grantedScopesError.set(msg);
+        this.grantedScopesStatus.set('error');
       },
     });
   }

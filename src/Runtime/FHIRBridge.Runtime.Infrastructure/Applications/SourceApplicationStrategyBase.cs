@@ -32,6 +32,11 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
     public virtual Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         Task.CompletedTask;
 
+    /// <summary>Unknown by default; every concrete strategy overrides to delegate to its own token provider (see
+    /// <see cref="ISourceApplicationStrategy.GetGrantedScopeAsync"/>).</summary>
+    public virtual Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(null);
+
     public SourceApplicationValidationResult Validate(FhirSourceConfiguration source)
     {
         ArgumentNullException.ThrowIfNull(source);

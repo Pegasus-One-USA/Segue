@@ -68,7 +68,46 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         var succeededEntry = result.Items.Single(x => x.WorkflowNodeRunId == succeededNodeRun.Id);
         succeededEntry.Status.Should().Be("Succeeded");
         succeededEntry.ErrorMessage.Should().BeNull();
-        succeededEntry.PayloadJson.Should().Be("{\"count\":1}");
+        succeededEntry.Contract.Should().Be("ResourceBatch");
+        succeededEntry.ItemCount.Should().Be(1);
+        // The list never decrypts a payload — see WorkflowNodeRunHistoryDto.PayloadJson's remarks. Fetching the
+        // real value is GetNodeRunPayloadAsync's job, covered separately below.
+        succeededEntry.PayloadJson.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetNodeRunPayloadAsync_returns_the_decrypted_payload_for_one_node_run()
+    {
+        var workflowRunId = Guid.NewGuid();
+        var nodeRunId = Guid.NewGuid();
+
+        await using (var context = CreateContext())
+        {
+            context.WorkflowNodeRunPayloads.Add(new WorkflowNodeRunPayload(
+                Guid.NewGuid(), workflowRunId, nodeRunId, "EpicSourceNode", "ResourceBatch", "{\"count\":1}", 1, DateTimeOffset.UtcNow));
+            await context.SaveChangesAsync();
+        }
+
+        await using var readContext = CreateContext();
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+
+        var result = await recorder.GetNodeRunPayloadAsync(workflowRunId, nodeRunId, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Contract.Should().Be("ResourceBatch");
+        result.PayloadJson.Should().Be("{\"count\":1}");
+        result.ItemCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetNodeRunPayloadAsync_returns_null_when_the_node_run_never_wrote_a_payload()
+    {
+        await using var readContext = CreateContext();
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+
+        var result = await recorder.GetNodeRunPayloadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        result.Should().BeNull();
     }
 
     [Fact]

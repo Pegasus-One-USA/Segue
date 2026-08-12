@@ -141,6 +141,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("PriorNodeOutputsJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("RequestedResourceTypesJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -3219,6 +3222,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("FhirWriteBackJsonPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -3583,6 +3590,98 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasKey("MessageId");
 
                     b.ToTable("ProcessedMessages", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DestinationField")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("DestinationName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DestinationTypeName")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DestinationValueJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double?>("DurationMs")
+                        .HasColumnType("float");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset>("ExecutedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("NodeOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResourceId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("SourceConnectionName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SourceField")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SourceSystemType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SourceValueJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("WorkflowNodeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("WorkflowRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedAtUtc");
+
+                    b.HasIndex("WorkflowRunId");
+
+                    b.HasIndex("WorkflowRunId", "ResourceType", "ResourceId");
+
+                    b.ToTable("FieldLineageEntries", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition", b =>

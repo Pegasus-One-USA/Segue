@@ -40,4 +40,31 @@ public sealed class DistributedFhirAccessTokenCache : IFhirAccessTokenCache
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
             cancellationToken);
     }
+
+    public Task<string?> GetScopeAsync(string cacheKey, CancellationToken cancellationToken)
+    {
+        return _cache.GetStringAsync(ScopeKey(cacheKey), cancellationToken);
+    }
+
+    public Task SetScopeAsync(string cacheKey, string? scope, DateTimeOffset expiresOnUtc, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return Task.CompletedTask;
+        }
+
+        var ttl = expiresOnUtc - DateTimeOffset.UtcNow - ExpirySkew;
+        if (ttl <= TimeSpan.Zero)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _cache.SetStringAsync(
+            ScopeKey(cacheKey),
+            scope,
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl },
+            cancellationToken);
+    }
+
+    private static string ScopeKey(string cacheKey) => $"{cacheKey}:scope";
 }

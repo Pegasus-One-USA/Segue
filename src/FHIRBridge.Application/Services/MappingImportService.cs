@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -21,15 +22,18 @@ public sealed class MappingImportService : IMappingImportService
     private readonly IConfigurationRepository _repository;
     private readonly IDestinationSchemaService _destinationSchemaService;
     private readonly IMappingSchemaProviderFactory _schemaProviderFactory;
+    private readonly IFhirElementCatalog? _fhirElementCatalog;
 
     public MappingImportService(
         IConfigurationRepository repository,
         IDestinationSchemaService destinationSchemaService,
-        IMappingSchemaProviderFactory schemaProviderFactory)
+        IMappingSchemaProviderFactory schemaProviderFactory,
+        IFhirElementCatalog? fhirElementCatalog = null)
     {
         _repository = repository;
         _destinationSchemaService = destinationSchemaService;
         _schemaProviderFactory = schemaProviderFactory;
+        _fhirElementCatalog = fhirElementCatalog;
     }
 
     public async Task<MappingImportResultDto> ImportAsync(JsonElement request, CancellationToken cancellationToken)
@@ -164,8 +168,16 @@ public sealed class MappingImportService : IMappingImportService
                 }
             }
 
-            var existing = await _repository.FindMappingProfileAsync(
-                mapping.ResourceType, importRequest.SourceConnectionId, importRequest.DestinationId, cancellationToken);
+            // Resolve strictly by the id the caller already knows (round-tripped from a prior import of this
+            // exact node/resource) — never by searching for "the" profile matching (ResourceType,
+            // SourceConnectionId, DestinationId). That triple is shared by any workflow built on the same
+            // source connection + destination + resource type, so searching on it would silently find and
+            // overwrite a DIFFERENT workflow's profile (the "Invalid column name" incident this replaces).
+            // No id means a genuinely first-ever save for this node/resource — always create a new profile
+            // rather than adopting one that happens to match the triple.
+            var existing = mapping.ExistingMappingProfileId is { } existingProfileId
+                ? await _repository.GetMappingProfileAsync(existingProfileId, cancellationToken)
+                : null;
 
             Guid profileId;
             if (existing is not null)
@@ -345,7 +357,7 @@ public sealed class MappingImportService : IMappingImportService
     /// <c>JsonMappingEngine.ResolveAll</c>). A multi-segment array context (e.g. a repeating field nested inside
     /// another repeating element, such as "contact.relationship") gets a wildcard on each of its segments.
     /// </summary>
-    private static (string JsonPath, string Format) BuildJsonPathAndFormat(ColumnMappingDto column, string resourceType)
+    private (string JsonPath, string Format) BuildJsonPathAndFormat(ColumnMappingDto column, string resourceType)
     {
         var aggregate = column.Instance?.Aggregate;
         var aggregateSuffix = !string.IsNullOrWhiteSpace(aggregate) && !string.Equals(aggregate, "rows", StringComparison.OrdinalIgnoreCase)
@@ -377,9 +389,22 @@ public sealed class MappingImportService : IMappingImportService
         };
     }
 
-    private static string BuildResolvableJsonPath(string rawPath, string resourceType, string? arrayContext)
+    private string BuildResolvableJsonPath(string rawPath, string resourceType, string? arrayContext)
     {
         var strippedPath = StripResourceTypePrefix(rawPath, resourceType);
+
+        // Prefer the FHIR element catalog's own pre-computed JsonPath when this exact fhirPath is a known,
+        // real element: it already knows precisely which ancestor segment(s) are genuinely repeating arrays
+        // versus merely a non-repeating object on the way to one (e.g. Condition.code.coding.code — only
+        // "coding" repeats, "code" itself is a single 0..1 CodeableConcept) — a distinction the segment-count
+        // heuristic below can't make from arrayContext's dotted string alone, and got wrong in production
+        // (stored as "$.code[*].coding[*].code", wildcarding "code" too, which silently resolved to nothing).
+        var catalogMatch = _fhirElementCatalog?.Fields(resourceType)
+            .FirstOrDefault(f => string.Equals(f.FhirPath, strippedPath, StringComparison.OrdinalIgnoreCase));
+        if (catalogMatch is not null)
+        {
+            return catalogMatch.JsonPath;
+        }
 
         if (string.IsNullOrWhiteSpace(arrayContext))
         {

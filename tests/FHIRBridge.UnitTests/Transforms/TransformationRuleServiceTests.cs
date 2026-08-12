@@ -17,7 +17,8 @@ public sealed class TransformationRuleServiceTests
     [
         new DateTimeFormatNode(),
         new DefaultNullHandlingNode(),
-        new HashingMaskingNode()
+        new HashingMaskingNode(),
+        new UnitConversionNode()
     ]);
 
     [Fact]
@@ -171,6 +172,36 @@ public sealed class TransformationRuleServiceTests
             DestinationType.SqlServer, "Patient", "BirthDate", null, SourceField: "birthDate"));
 
         result.Steps.Should().ContainSingle().Which.NodeType.Should().Be(TransformNodeType.DefaultNullHandling);
+    }
+
+    [Theory]
+    [InlineData(DestinationType.FhirRepository, true)]
+    [InlineData(DestinationType.SqlServer, false)]
+    public async Task PreviewAsync_automatically_passes_the_real_destination_type_to_the_node(
+        DestinationType destinationType, bool expectFullQuantityObject)
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        var rule = new TransformationRule(
+            TransformScope.Global, TransformNodeType.UnitConversion,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1" }));
+        SetupEmptyRepository(repository);
+        repository
+            .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+
+        var result = await service.PreviewAsync(new TransformPreviewRequest(destinationType, "Observation", "Value", 38.9m));
+
+        if (expectFullQuantityObject)
+        {
+            result.FinalValue.Should().BeOfType<System.Text.Json.Nodes.JsonObject>(
+                "a FHIR-native destination should get the real Quantity structure, without the caller asking for it explicitly");
+        }
+        else
+        {
+            result.FinalValue.Should().Be(102.0m, "a flat destination should get just the number, without the caller asking for it explicitly");
+        }
     }
 
     [Fact]

@@ -270,6 +270,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
+        services.AddHttpClient(nameof(BackendAuthScopeProbeService));
         services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
         services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
@@ -359,6 +360,9 @@ public static class DependencyInjection
 
         services.AddSingleton<LocalTerminologyLookupService>();
         services.AddScoped<LoincTerminologyLookupService>();
+        services.AddScoped<Icd10TerminologyLookupService>();
+        services.AddScoped<SnomedTerminologyLookupService>();
+        services.AddScoped<RxNormTerminologyLookupService>();
         services.AddScoped<ILoincReleaseClient, LoincReleaseClient>();
         services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
         services.AddScoped<ISnomedImportService, SnomedImportService>();
@@ -488,6 +492,7 @@ public static class DependencyInjection
         services.AddScoped<IEpicSourceConnectionScopeSyncService, EpicSourceConnectionScopeSyncService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
+        services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
         services.AddHealthChecks()

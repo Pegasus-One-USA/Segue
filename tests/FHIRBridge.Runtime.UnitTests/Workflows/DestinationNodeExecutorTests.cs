@@ -139,85 +139,30 @@ public sealed class DestinationNodeExecutorTests
     }
 
     /// <summary>
-    /// Regression test for a real production bug: two MappingProfiles existed for the same (DestinationId,
-    /// ResourceType) pair — a stale one left behind by an earlier/abandoned wizard save (missing a resolvable
-    /// "$.id" field entirely) alongside the current correct one. Picking whichever GetMappingProfilesAsync
-    /// happened to return first threw "Invalid column name 'SourceResourceId'" when the stale profile won.
-    /// Must always prefer the most recently modified match.
+    /// Regression test for a real production bug: two workflows shared the same (DestinationId, ResourceType)
+    /// pair — resolving "the" profile by that shared pair (even with a most-recently-modified tie-break) let
+    /// one workflow's save silently pick up (and, on its own next save, overwrite) a DIFFERENT workflow's
+    /// profile, eventually throwing "Invalid column name" once the two profiles' shapes diverged. The fix:
+    /// resolve strictly by THIS node's own mappingProfileIds — an id it saved itself — never by searching
+    /// every profile sharing the same destination + resource type.
     /// </summary>
     [Fact]
-    public async Task When_multiple_profiles_match_the_same_destination_and_resource_type_the_most_recently_modified_one_wins()
+    public async Task Resolves_the_profile_by_this_nodes_own_mappingProfileIds_never_by_searching_profiles_sharing_the_same_destination_and_resource_type()
     {
         var destinationId = Guid.NewGuid();
-        var staleProfile = new MappingProfile(
-            "Patient (stale)", "Patient", Guid.NewGuid(), destinationId, "Patient",
-            [new MappingField("Name", "$.name[*].text", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
-        staleProfile.ApplyModified(null, new DateTime(2026, 7, 24, 0, 0, 0, DateTimeKind.Utc));
-
-        var currentProfile = new MappingProfile(
-            "Patient (current)", "Patient", Guid.NewGuid(), destinationId, "Patient",
-            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
-        currentProfile.ApplyModified(null, new DateTime(2026, 7, 28, 0, 0, 0, DateTimeKind.Utc));
-
-        var repository = new Mock<IConfigurationRepository>();
-        // Deliberately returned stale-first — the fix must not depend on incidental query order.
-        repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([staleProfile, currentProfile]);
-
-        MappingProfile? capturedProfile = null;
-        var writer = new Mock<IConfiguredDestinationWriter>();
-        writer.Setup(w => w.WriteAsync(
-                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
-                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
-            .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
-                (_, profile, _, _, _) => capturedProfile = profile)
-            .ReturnsAsync((DestinationConfiguration _, MappingProfile _, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _)
-                => new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(records.Count));
-
-        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
-        writerFactory.Setup(f => f.Create(DestinationType.SqlServer)).Returns(writer.Object);
-
-        var executor = new SqlServerDestinationNodeExecutor(writerFactory.Object, configurationRepository: repository.Object);
-        var node = CreateDestinationNode(destinationId);
-        var patientRecord = new MappedDestinationRecord(
-            Guid.NewGuid(), "Patient", "Patient", "p1", new Dictionary<string, object?> { ["PatientId"] = "p1" });
-        var upstream = new WorkflowNodeOutput(
-            Guid.NewGuid(), WorkflowNodeTypes.Mapping, new MappedRecordBatch([patientRecord]), WorkflowDataContract.MappedRecordBatch);
-
-        await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
-
-        capturedProfile.Should().NotBeNull();
-        capturedProfile!.Name.Should().Be("Patient (current)");
-    }
-
-    /// <summary>
-    /// When the destination node config carries sourceConnectionId (stamped by /workflows/build alongside
-    /// destinationId), the exact natural-key match (ResourceType, SourceConnectionId, DestinationId) — the same
-    /// key MappingNodeExecutor and MappingImportService de-dup on — must win outright, without even needing the
-    /// most-recently-modified tie-break: a stale profile sharing the same DestinationId + ResourceType but a
-    /// DIFFERENT SourceConnectionId must never be picked, no matter how recently it was touched.
-    /// </summary>
-    [Fact]
-    public async Task An_exact_natural_key_match_wins_over_a_more_recently_modified_but_wrong_source_connection_profile()
-    {
-        var destinationId = Guid.NewGuid();
-        var thisWorkflowsSourceConnectionId = Guid.NewGuid();
-
-        var wrongConnectionButRecentlyModified = new MappingProfile(
+        var otherWorkflowsProfile = new MappingProfile(
             "Patient (other workflow)", "Patient", Guid.NewGuid(), destinationId, "Patient",
             [new MappingField("Name", "$.name[*].text", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
-        wrongConnectionButRecentlyModified.ApplyModified(null, new DateTime(2026, 7, 28, 0, 0, 0, DateTimeKind.Utc));
+        otherWorkflowsProfile.ApplyModified(null, new DateTime(2026, 7, 28, 0, 0, 0, DateTimeKind.Utc));
 
-        var correctProfile = new MappingProfile(
-            "Patient (this workflow)", "Patient", thisWorkflowsSourceConnectionId, destinationId, "Patient",
+        var thisWorkflowsProfile = new MappingProfile(
+            "Patient (this workflow)", "Patient", Guid.NewGuid(), destinationId, "Patient",
             [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
-        correctProfile.ApplyModified(null, new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc));
+        thisWorkflowsProfile.ApplyModified(null, new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc));
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", thisWorkflowsSourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(correctProfile);
-        repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([wrongConnectionButRecentlyModified, correctProfile]);
+        repository.Setup(r => r.GetMappingProfileAsync(thisWorkflowsProfile.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(thisWorkflowsProfile);
 
         MappingProfile? capturedProfile = null;
         var writer = new Mock<IConfiguredDestinationWriter>();
@@ -233,7 +178,8 @@ public sealed class DestinationNodeExecutorTests
         writerFactory.Setup(f => f.Create(DestinationType.SqlServer)).Returns(writer.Object);
 
         var executor = new SqlServerDestinationNodeExecutor(writerFactory.Object, configurationRepository: repository.Object);
-        var node = CreateDestinationNode(destinationId, sourceConnectionId: thisWorkflowsSourceConnectionId);
+        var node = CreateDestinationNode(
+            destinationId, mappingProfileIds: new Dictionary<string, string> { ["Patient"] = thisWorkflowsProfile.Id.ToString() });
         var patientRecord = new MappedDestinationRecord(
             Guid.NewGuid(), "Patient", "Patient", "p1", new Dictionary<string, object?> { ["PatientId"] = "p1" });
         var upstream = new WorkflowNodeOutput(
@@ -244,10 +190,14 @@ public sealed class DestinationNodeExecutorTests
         capturedProfile.Should().NotBeNull();
         capturedProfile!.Name.Should().Be("Patient (this workflow)");
         repository.Verify(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()), Times.Never,
-            "the exact natural-key match succeeded, so the ambiguous DestinationId-only fallback must never even run");
+            "resolution must never search across every profile sharing this destination + resource type — that search is exactly what let one workflow's save leak into another's");
+        repository.Verify(r => r.FindMappingProfileAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never,
+            "resolution must never search by the (resourceType, sourceConnectionId, destinationId) triple — more than one workflow can share it");
     }
 
-    private static WorkflowNode CreateDestinationNode(Guid destinationId, string? writeMode = null, Guid? sourceConnectionId = null)
+    private static WorkflowNode CreateDestinationNode(
+        Guid destinationId, string? writeMode = null, Guid? sourceConnectionId = null,
+        IReadOnlyDictionary<string, string>? mappingProfileIds = null)
     {
         var config = new Dictionary<string, object>
         {
@@ -263,6 +213,11 @@ public sealed class DestinationNodeExecutorTests
         if (sourceConnectionId is not null)
         {
             config["sourceConnectionId"] = sourceConnectionId.ToString()!;
+        }
+
+        if (mappingProfileIds is not null)
+        {
+            config["mappingProfileIds"] = mappingProfileIds;
         }
 
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "destination-node-test", 1);

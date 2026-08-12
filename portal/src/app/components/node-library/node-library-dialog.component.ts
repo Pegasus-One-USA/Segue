@@ -263,6 +263,10 @@ export class NodeLibraryDialogComponent {
   readonly zoomOutTrigger = signal(0);
   readonly zoomResetTrigger = signal(0);
   readonly zoomFitTrigger = signal(0);
+  // Same pattern for "Mark as Master" — promotes the currently-open resource's mapping into a new,
+  // independently-named master template other workflows can later find via "Select Existing".
+  readonly markAsMasterTrigger = signal(0);
+  bumpMarkAsMasterTrigger(): void { this.markAsMasterTrigger.update(v => v + 1); }
   bumpRunSuggestMappingsTrigger(): void { this.runSuggestMappingsTrigger.update(v => v + 1); }
   bumpClearSuggestionsTrigger(): void { this.clearSuggestionsTrigger.update(v => v + 1); }
   bumpZoomInTrigger(): void { this.zoomInTrigger.update(v => v + 1); }

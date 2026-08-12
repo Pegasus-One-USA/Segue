@@ -209,6 +209,10 @@
                           <option value="PerItem">Per item</option>
                         </select>
                       </div>
+                      <mat-form-field appearance="outline" class="config-control" matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from.">
+                        <mat-label>FHIR write-back path (advanced)</mat-label>
+                        <input matInput [ngModel]="step.fhirWriteBackJsonPath" (ngModelChange)="setFhirWriteBackJsonPath(step, $event)" placeholder="e.g. code" />
+                      </mat-form-field>
                     </div>
 
                     <div class="step-card__actions">

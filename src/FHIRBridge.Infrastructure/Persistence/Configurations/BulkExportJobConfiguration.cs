@@ -22,6 +22,7 @@ public sealed class BulkExportJobConfiguration : IEntityTypeConfiguration<BulkEx
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.PriorNodeOutputsJson).HasColumnType("nvarchar(max)");
         builder.Property(x => x.ContextJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.RequestedResourceTypesJson).HasColumnType("nvarchar(max)");
 
         // Backs BulkExportPollWorker's due-job query.
         builder.HasIndex(x => new { x.Status, x.NextPollNotBeforeUtc });
