@@ -28,6 +28,7 @@ public static class MessagingServiceCollectionExtensions
         }));
         services.AddScoped<IPipelineRunCommandHandler, PipelineRunCommandHandler>();
         services.AddScoped<IWebhookIngestionCommandHandler, WebhookIngestionCommandHandler>();
+        services.AddScoped<ILineageCaptureCommandHandler, LineageCaptureCommandHandler>();
 
         var provider = configuration["Messaging:Provider"];
 
@@ -84,6 +85,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<AzureServiceBusPublisher>();
         services.AddSingleton<IPipelineRunDispatcher, AzureServiceBusPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, AzureServiceBusWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, AzureServiceBusLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(AzureServiceBusMessageConsumer<>));
         services.AddSingleton<IQueueMonitorProvider, AzureServiceBusQueueMonitorProvider>();
 
@@ -111,6 +113,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<RabbitMqPublisher>();
         services.AddSingleton<IPipelineRunDispatcher, RabbitMqPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, RabbitMqWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, RabbitMqLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(RabbitMqMessageConsumer<>));
         services.AddSingleton<IQueueMonitorProvider, RabbitMqQueueMonitorProvider>();
 
@@ -122,6 +125,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton(typeof(InMemoryMessageChannel<>));
         services.AddSingleton<IPipelineRunDispatcher, InMemoryPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, InMemoryWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, InMemoryLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(InMemoryMessageConsumer<>));
         services.AddSingleton<IQueueMonitorProvider, NullQueueMonitorProvider>();
 

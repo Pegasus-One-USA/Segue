@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
@@ -73,9 +74,20 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         ["NPI"] = "http://hl7.org/fhir/sid/us-npi"
     };
 
+    private readonly ITerminologyLookupService? _terminologyLookupService;
+
+    public CodeableConceptBuilderNode(ITerminologyLookupService? terminologyLookupService = null)
+    {
+        _terminologyLookupService = terminologyLookupService;
+    }
+
     public TransformNodeType NodeType => TransformNodeType.CodeableConceptBuilder;
 
-    public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
+    public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret) =>
+        ExecuteAsync(value, config, secret).GetAwaiter().GetResult();
+
+    public async Task<TransformResult> ExecuteAsync(
+        object? value, IReadOnlyDictionary<string, string> config, string? secret, CancellationToken cancellationToken = default)
     {
         var code = value?.ToString();
         if (string.IsNullOrWhiteSpace(code))
@@ -86,6 +98,37 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         var systemKey = config.Get("system");
         var systemUri = SystemUris.GetValueOrDefault(systemKey, systemKey);
         var display = config.GetOrNull("display");
+
+        // Display resolution order: (1) an author-hand-typed value always wins outright; (2) the local
+        // terminology DB, when lookup isn't explicitly disabled; (3) whatever display the SOURCE resource's own
+        // JSON already carried alongside this code (e.g. Epic's own Coding.display) — only available in a real
+        // pipeline run, never in TransformationRuleService's preview, since that needs the whole resource JSON;
+        // (4) the bare code itself, same as this node's original, still-documented fallback. Each tier only
+        // fires if every earlier one had nothing — a DB/JSON miss never fails the transform, it just falls
+        // through.
+        if (display is null && _terminologyLookupService is not null && config.GetBool("resolveDisplayFromTerminology", true))
+        {
+            var lookup = await _terminologyLookupService.LookupAsync(systemUri, code, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(lookup?.Display))
+            {
+                display = lookup.Display;
+            }
+        }
+
+        if (display is null)
+        {
+            display = config.GetOrNull(ReservedTransformConfigKeys.SourceDisplayHint);
+        }
+
+        // A flat/tabular destination column (a SQL varchar report column, a CSV field) often wants just the
+        // human-readable text, not the machine-readable system+code structure — same reasoning as
+        // ValueCodeMappingNode's emitCoding checkbox, just defaulting the opposite way since this node's whole
+        // purpose is normally to BUILD the structured concept. Skips building the coding array/additionalCodings
+        // entirely rather than building it and discarding it.
+        if (string.Equals(config.Get("outputShape", "object"), "displayTextOnly", StringComparison.OrdinalIgnoreCase))
+        {
+            return TransformResult.Ok(display ?? code);
+        }
 
         var primaryCoding = new JsonObject { ["system"] = systemUri, ["code"] = code };
         if (display is not null)

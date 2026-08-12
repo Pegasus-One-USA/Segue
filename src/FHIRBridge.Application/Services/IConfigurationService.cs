@@ -64,6 +64,17 @@ public interface IConfigurationService
     Task<MappingProfileDto> SetMappingProfileEnabledAsync(Guid mappingProfileId, bool isEnabled, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Promotes a workflow's own mapping profile into a new, independently-named master template other
+    /// workflows can find and clone via "Select Existing" — always inserts a brand-new
+    /// <see cref="Domain.Entities.MappingProfile"/> row (copying <paramref name="sourceMappingProfileId"/>'s
+    /// resource type/source connection/destination/destination object/fields under the new name), never
+    /// finds-and-overwrites an existing profile. Promoting is a one-time snapshot: the new master and the
+    /// workflow's own profile are independent from this point on — editing one never affects the other.
+    /// </summary>
+    Task<MappingProfileDto> PromoteMappingProfileToMasterAsync(
+        Guid sourceMappingProfileId, string masterName, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Number of <see cref="Domain.Entities.ResourcePipelineRoute"/> records that reference this mapping profile —
     /// as their primary mapping, as one of their composite <c>ResourceMappings</c>, or as a parent reference target.
     /// A non-zero count means <see cref="DeleteMappingProfileAsync"/> would fail against the Restrict FK; callers

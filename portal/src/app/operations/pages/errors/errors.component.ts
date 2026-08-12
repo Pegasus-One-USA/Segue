@@ -35,15 +35,19 @@ export class ErrorsComponent implements OnInit {
 
   // Phase 6A – Monitoring → Errors search criteria.
   readonly errorReferenceId = signal('');
+  readonly correlationId = signal('');
 
   readonly displayedCols = [
     'occurredOnUtc', 'errorReferenceId', 'module', 'message', 'whatToDo', 'status', 'correlationId', 'actions',
   ];
 
   ngOnInit(): void {
-    // Seed from query params so a support engineer's deep-link (?errorReferenceId=…) lands pre-filtered.
+    // Seed from query params so a support engineer's deep-link (?errorReferenceId=… or ?correlationId=…) lands
+    // pre-filtered. correlationId is the one that pulls up every error from a run — errorReferenceId identifies
+    // only the one row it was minted for (ErrorLogs.ErrorReferenceId is unique per row, never shared across a run).
     const params = this.route.snapshot.queryParamMap;
     this.errorReferenceId.set(params.get('errorReferenceId') ?? '');
+    this.correlationId.set(params.get('correlationId') ?? '');
     this.load();
   }
 
@@ -51,6 +55,7 @@ export class ErrorsComponent implements OnInit {
     this.loading.set(true);
     const search: ErrorLogSearch = {
       errorReferenceId: this.errorReferenceId() || undefined,
+      correlationId: this.correlationId() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
     };
@@ -68,6 +73,7 @@ export class ErrorsComponent implements OnInit {
 
   reset(): void {
     this.errorReferenceId.set('');
+    this.correlationId.set('');
     this.pageIndex.set(0);
     this.load();
   }

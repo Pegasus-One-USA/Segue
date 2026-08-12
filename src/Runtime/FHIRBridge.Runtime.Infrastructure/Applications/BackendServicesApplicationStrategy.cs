@@ -39,6 +39,9 @@ public sealed class BackendServicesApplicationStrategy : SourceApplicationStrate
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _smartBackendServices.GetAccessTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _smartBackendServices.GetGrantedScopeAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);

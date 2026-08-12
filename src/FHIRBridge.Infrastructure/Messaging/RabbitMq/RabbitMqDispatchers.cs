@@ -37,3 +37,20 @@ public sealed class RabbitMqWebhookIngestionDispatcher : IWebhookIngestionDispat
         return _publisher.PublishAsync(_options.WebhookIngestionQueue, command.MessageId, command, cancellationToken);
     }
 }
+
+public sealed class RabbitMqLineageCaptureDispatcher : ILineageCaptureDispatcher
+{
+    private readonly RabbitMqPublisher _publisher;
+    private readonly RabbitMqOptions _options;
+
+    public RabbitMqLineageCaptureDispatcher(RabbitMqPublisher publisher, IOptions<RabbitMqOptions> options)
+    {
+        _publisher = publisher;
+        _options = options.Value;
+    }
+
+    public Task EnqueueAsync(LineageCaptureCommand command, CancellationToken cancellationToken)
+    {
+        return _publisher.PublishAsync(_options.LineageCaptureQueue, command.MessageId, command, cancellationToken);
+    }
+}

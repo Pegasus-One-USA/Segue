@@ -196,6 +196,19 @@ public sealed class UnitConversionNode : ITransformNode
         var precision = config.GetInt("precision", 1);
         converted = Math.Round(converted, precision, MidpointRounding.AwayFromZero);
 
+        // Automatic, destination-aware output shape: a FHIR-native destination (Aidbox/Medplum/Azure Health
+        // Data Services) gets the real Quantity structure with unit/code/system attached; a flat destination
+        // (SQL, Csv, Mongo, ...) gets just the number — a Quantity object would otherwise land as a literal
+        // JSON string in a column meant to hold a plain decimal. Absent destination info (e.g. a direct unit
+        // test calling this node without the caller-populated reserved key) defaults to the full structure,
+        // matching this node's original, still-documented behavior.
+        var destinationTypeName = config.GetOrNull(ReservedTransformConfigKeys.DestinationType);
+        var isFhirNativeDestination = destinationTypeName is null || destinationTypeName == DestinationType.FhirRepository.ToString();
+        if (!isFhirNativeDestination)
+        {
+            return TransformResult.Ok(converted);
+        }
+
         var quantity = new JsonObject
         {
             ["value"] = converted,

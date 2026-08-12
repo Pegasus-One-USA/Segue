@@ -12,5 +12,6 @@ public sealed class RabbitMqOptions
     public string VirtualHost { get; set; } = "/";
     public string PipelineRunsQueue { get; set; } = "pipeline-runs";
     public string WebhookIngestionQueue { get; set; } = "webhook-ingestion";
+    public string LineageCaptureQueue { get; set; } = "lineage-capture";
     public ushort PrefetchCount { get; set; } = 10;
 }

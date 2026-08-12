@@ -461,6 +461,30 @@
   }
 }
 
+/* ── Backend System: scopes Epic actually granted the app (real client_credentials exchange) ────────────── */
+.eaf-granted-scopes {
+  margin-top: 10px;
+  color: var(--color-error-strong);
+  font-weight: 700;
+  font-size: 14px;
+
+  &--error {
+    padding: 10px 14px;
+    border-radius: 9px;
+    background: var(--color-error-soft);
+    border: 1px solid color-mix(in srgb, var(--color-error) 35%, white);
+  }
+}
+
+.eaf-granted-scopes-title {
+  margin: 0 0 4px;
+}
+
+.eaf-granted-scopes-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 /* ── Advanced options disclosure (Search REST) ───────────────────────────────── */
 .eaf-advanced-toggle {
   display: flex;

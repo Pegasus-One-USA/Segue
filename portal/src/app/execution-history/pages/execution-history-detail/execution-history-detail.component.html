@@ -63,6 +63,20 @@
     </div>
   }
 
+  <div class="lineage-tabs">
+    <button
+      type="button"
+      [class.active]="activeTab() === 'nodeRuns'"
+      (click)="setTab('nodeRuns')"
+    >Node runs</button>
+    <button
+      type="button"
+      [class.active]="activeTab() === 'fieldLineage'"
+      (click)="setTab('fieldLineage')"
+    >Field lineage</button>
+  </div>
+
+  @if (activeTab() === 'nodeRuns') {
   <div class="table-card">
     <div class="table-meta">
       <span class="entries-info">What each node fetched, transformed, and wrote for this run</span>
@@ -107,10 +121,17 @@
                   <span>{{ entry.errorMessage }}</span>
                 </div>
               }
-              @if (entry.payloadJson) {
-                <pre>{{ formatJson(entry.payloadJson) }}</pre>
-              } @else if (!entry.errorMessage) {
-                <p class="no-output-note">This node completed with no recorded output.</p>
+              @if (isLoadingPayload(entry.workflowNodeRunId)) {
+                <div class="payload-loading">
+                  <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
+                  <span>Loading node output…</span>
+                </div>
+              } @else {
+                @if (payloadJsonFor(entry.workflowNodeRunId); as payloadJson) {
+                  <pre>{{ formatJson(payloadJson) }}</pre>
+                } @else if (!entry.errorMessage) {
+                  <p class="no-output-note">This node completed with no recorded output.</p>
+                }
               }
             </div>
           }
@@ -135,5 +156,10 @@
       ></mat-paginator>
     }
   </div>
+  }
+
+  @if (activeTab() === 'fieldLineage') {
+    <app-field-lineage-panel [runId]="runId" />
+  }
 
 </div>

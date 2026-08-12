@@ -37,3 +37,20 @@ public sealed class AzureServiceBusWebhookIngestionDispatcher : IWebhookIngestio
         return _publisher.PublishAsync(_options.WebhookIngestionQueue, command.MessageId, command, cancellationToken);
     }
 }
+
+public sealed class AzureServiceBusLineageCaptureDispatcher : ILineageCaptureDispatcher
+{
+    private readonly AzureServiceBusPublisher _publisher;
+    private readonly AzureServiceBusOptions _options;
+
+    public AzureServiceBusLineageCaptureDispatcher(AzureServiceBusPublisher publisher, IOptions<AzureServiceBusOptions> options)
+    {
+        _publisher = publisher;
+        _options = options.Value;
+    }
+
+    public Task EnqueueAsync(LineageCaptureCommand command, CancellationToken cancellationToken)
+    {
+        return _publisher.PublishAsync(_options.LineageCaptureQueue, command.MessageId, command, cancellationToken);
+    }
+}

@@ -86,6 +86,31 @@ public sealed class ValueTypeNodesTests
     }
 
     [Fact]
+    public void UnitConversionNode_emits_the_full_quantity_for_a_fhir_native_destination()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1",
+            ["_destinationType"] = "FhirRepository",
+        };
+        var result = new UnitConversionNode().Execute(38.9m, config, null);
+        var quantity = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        quantity["value"]!.GetValue<decimal>().Should().Be(102.0m);
+    }
+
+    [Fact]
+    public void UnitConversionNode_emits_just_the_number_for_a_flat_sql_destination()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1",
+            ["_destinationType"] = "SqlServer",
+        };
+        var result = new UnitConversionNode().Execute(38.9m, config, null);
+        result.Value.Should().Be(102.0m, "a flat SQL column can't hold a JSON-shaped Quantity");
+    }
+
+    [Fact]
     public void QuantityRangeAssemblyNode_parses_a_leading_comparator()
     {
         var result = new QuantityRangeAssemblyNode().Execute("<0.5", new Dictionary<string, string> { ["unit"] = "mg/L" }, null);

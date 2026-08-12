@@ -24,6 +24,22 @@
   flex-wrap: wrap;
 }
 
+.filter-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.btn-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .correlation-input {
   flex: 0 0 240px;
   padding: 8px 12px;
