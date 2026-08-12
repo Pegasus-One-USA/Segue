@@ -54,6 +54,30 @@ public sealed class BlobDestinationSettingsTests
         settings.ContainerName.Should().Be("from-metadata");
     }
 
+    [Theory]
+    [InlineData("FHIR_Export")] // uppercase/underscore — Azure rejects with InvalidResourceName
+    [InlineData("ab")] // too short (min 3)
+    [InlineData("-fhir")] // leading hyphen
+    [InlineData("fhir-")] // trailing hyphen
+    [InlineData("fhir--export")] // consecutive hyphens
+    public void Invalid_Azure_container_name_throws(string container)
+    {
+        var act = () => BlobDestinationSettings.Parse(Destination(container, null));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("fhir")]
+    [InlineData("fhirbridge-exports")]
+    [InlineData("a23")] // exactly 3 chars, minimum length
+    public void Valid_Azure_container_name_passes(string container)
+    {
+        var settings = BlobDestinationSettings.Parse(Destination(container, null));
+
+        settings.ContainerName.Should().Be(container);
+    }
+
     [Fact]
     public void Missing_container_on_both_Target_and_metadata_throws()
     {

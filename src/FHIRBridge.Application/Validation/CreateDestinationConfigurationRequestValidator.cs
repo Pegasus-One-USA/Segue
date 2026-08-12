@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
 using FluentValidation;
@@ -66,12 +67,28 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         }
     }
 
+    /// <summary>
+    /// Azure Blob container naming rules: 3-63 characters, lowercase letters/digits/hyphens only, must start and
+    /// end with a letter or digit, no consecutive hyphens. A name violating this is accepted by this API but
+    /// rejected by Azure itself with an opaque "InvalidResourceName" error at write time — catching it here
+    /// gives the wizard an inline, actionable error instead.
+    /// </summary>
+    private static readonly Regex BlobContainerNameRegex = new(
+        @"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", RegexOptions.Compiled);
+
     private static void ValidateBlobMetadata(
         ValidationContext<CreateDestinationConfigurationRequest> context,
         IReadOnlyDictionary<string, string> metadata)
     {
         RequireField(context, metadata, "dest_blobAuthMode", "Authentication mode is required.");
         RequireField(context, metadata, "dest_blobContainer", "Container name is required.");
+        RequirePattern(
+            context,
+            metadata,
+            "dest_blobContainer",
+            BlobContainerNameRegex,
+            "Container name must be 3-63 characters: lowercase letters, numbers, and single hyphens only "
+                + "(no leading, trailing, or double hyphens).");
 
         var authMode = metadata.GetValueOrDefault("dest_blobAuthMode", "connectionString");
         switch (authMode)
@@ -128,6 +145,21 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         string message)
     {
         if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            context.AddFailure(key, message);
+        }
+    }
+
+    /// <summary>Skips silently when the field is missing/blank — pair with <see cref="RequireField"/> for
+    /// presence so a missing value doesn't also report as "wrong format".</summary>
+    private static void RequirePattern(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        Regex pattern,
+        string message)
+    {
+        if (metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) && !pattern.IsMatch(value))
         {
             context.AddFailure(key, message);
         }

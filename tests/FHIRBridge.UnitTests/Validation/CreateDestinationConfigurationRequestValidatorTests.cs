@@ -201,6 +201,22 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
         _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("FHIR_Export")]
+    [InlineData("ab")]
+    [InlineData("-fhir")]
+    [InlineData("fhir-")]
+    [InlineData("fhir--export")]
+    public void Blob_container_name_violating_Azure_naming_rules_fails(string container)
+    {
+        var metadata = new { dest_blobAuthMode = "connectionString", dest_blobContainer = container };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobContainer");
+    }
+
     [Fact]
     public void Blob_accountKey_mode_missing_account_name_fails()
     {

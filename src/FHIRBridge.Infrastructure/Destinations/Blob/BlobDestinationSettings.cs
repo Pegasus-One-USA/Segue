@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Entities;
 
 namespace FHIRBridge.Infrastructure.Destinations.Blob;
@@ -26,6 +27,9 @@ public sealed record BlobDestinationSettings(
     /// <summary>Every mode except Managed Identity needs the resolved Key Vault secret as credential material.</summary>
     public bool RequiresSecret => AuthMode != BlobDestinationAuthMode.ManagedIdentity;
 
+    private static readonly Regex ContainerNameRegex = new(
+        @"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", RegexOptions.Compiled);
+
     public static BlobDestinationSettings Parse(DestinationConfiguration destination)
     {
         var json = destination.ConnectionMetadataJson;
@@ -38,6 +42,17 @@ public sealed record BlobDestinationSettings(
         {
             throw new InvalidOperationException(
                 $"Destination '{destination.Name}' has no blob container configured (Target or dest_blobContainer).");
+        }
+
+        // Azure rejects an invalid container name with an opaque "InvalidResourceName" 400 at write time — the
+        // request-level validator (CreateDestinationConfigurationRequestValidator) catches this for new/edited
+        // destinations, but this is the last line of defense for a legacy row saved before that check existed.
+        if (!ContainerNameRegex.IsMatch(containerName))
+        {
+            throw new InvalidOperationException(
+                $"'{containerName}' is not a valid Azure Blob container name for destination '{destination.Name}' — "
+                    + "use 3-63 characters: lowercase letters, numbers, and single hyphens only "
+                    + "(no leading, trailing, or double hyphens).");
         }
 
         var accountName = ConnectionMetadataReader.GetString(json, "dest_blobAccountName");

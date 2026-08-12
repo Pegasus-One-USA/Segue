@@ -277,7 +277,10 @@ export class DestinationWizardComponent implements OnInit {
 
   readonly blobForm = this.fb.group({
     name:           ['Azure Blob Export', [Validators.required]],
-    container:      ['', [Validators.required]],
+    // Azure container naming rules: 3-63 chars, lowercase letters/digits/hyphens, no leading/trailing/double
+    // hyphens. A name violating this is rejected by Azure at write time with an opaque "InvalidResourceName"
+    // error — catching it here up front avoids that round trip.
+    container:      ['', [Validators.required, Validators.pattern(/^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/)]],
     authMode:       ['connectionString', [Validators.required]],
     // The one secret control for every auth mode (connection string / account key / SAS / client secret) —
     // its label swaps per authMode in the template. Never repopulated by selectExisting()/_populateFromNode()

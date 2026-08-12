@@ -244,8 +244,10 @@
             <div class="dw-field" [class.dw-field--error]="blobForm.get('container')!.invalid && blobForm.get('container')!.touched">
               <label class="dw-label" for="dw-blob-container">Container name <span class="dw-req">*</span></label>
               <input id="dw-blob-container" class="dw-input" formControlName="container" placeholder="e.g. fhirbridge-exports" />
-              @if (blobForm.get('container')!.invalid && blobForm.get('container')!.touched) {
+              @if (blobForm.get('container')!.hasError('required') && blobForm.get('container')!.touched) {
                 <span class="dw-error">Container name is required.</span>
+              } @else if (blobForm.get('container')!.hasError('pattern') && blobForm.get('container')!.touched) {
+                <span class="dw-error">3-63 characters: lowercase letters, numbers, and single hyphens only (no leading, trailing, or double hyphens).</span>
               }
             </div>
 
