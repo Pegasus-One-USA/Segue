@@ -295,6 +295,11 @@ export class DestinationWizardComponent implements OnInit {
     managedIdentityClientId:    ['', []],
     pathPrefix:                 ['', []],
     createContainerIfNotExists: [true, []],
+    // Append: every run writes a new timestamped NDJSON blob (object storage's natural "write-once" shape,
+    // e.g. for a data-lake consumer) — no "update a record" concept. Upsert: one blob per record, named by
+    // whichever field is flagged as the upsert key on the mapping canvas (falling back to the record's own
+    // source id) — re-running overwrites that exact blob in place, matching how SQL/Mongo's writeMode works.
+    writeMode: ['append', []],
   });
 
   readonly csvForm = this.fb.group({
@@ -1412,6 +1417,7 @@ export class DestinationWizardComponent implements OnInit {
         managedIdentityClientId: metadata['dest_blobManagedIdentityClientId'] || '',
         pathPrefix:              metadata['dest_blobPathPrefix']           || '',
         createContainerIfNotExists: metadata['dest_blobCreateContainerIfNotExists'] !== 'false',
+        writeMode:               metadata['dest_writeMode']                || 'append',
       });
       this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
       this._existingBaseline = this.blobForm.getRawValue();
@@ -1673,10 +1679,15 @@ export class DestinationWizardComponent implements OnInit {
       const def = this.defFor(r);
       // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
       // collection name of its own, so it reuses the same table name as a sensible default collection.
-      // Blob's per-resource target becomes the blob name stem (MappingProfile.DestinationObject), not a
-      // container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
-      // from the same file-name-shaped default CSV uses.
-      targets[r] = type === 'csv' || type === 'blob' ? def.csvFile : def.sqlTable;
+      // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject), not
+      // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
+      // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      targets[r] = type === 'csv'
+        ? def.csvFile
+        : type === 'blob'
+          ? def.csvFile.replace(/\.csv$/i, '')
+          : def.sqlTable;
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -1729,6 +1740,7 @@ export class DestinationWizardComponent implements OnInit {
         managedIdentityClientId: f['dest_blobManagedIdentityClientId'] || '',
         pathPrefix:              f['dest_blobPathPrefix']           || '',
         createContainerIfNotExists: f['dest_blobCreateContainerIfNotExists'] !== 'false',
+        writeMode:               f['dest_writeMode']                || 'append',
       });
       this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
     } else {
@@ -1891,6 +1903,7 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_blobManagedIdentityClientId']   = v.managedIdentityClientId ?? '';
       config['dest_blobPathPrefix']                = v.pathPrefix     ?? '';
       config['dest_blobCreateContainerIfNotExists'] = String(v.createContainerIfNotExists ?? true);
+      config['dest_writeMode']                     = v.writeMode      ?? 'append';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';

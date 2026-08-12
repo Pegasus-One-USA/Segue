@@ -29,11 +29,15 @@ public sealed class MappedBlobStorageDestinationWriterTests
     private static DestinationConfiguration Destination(string? connectionMetadataJson = null) =>
         new("Blob Export", DestinationType.BlobStorage, new SecretReference("kv", "secret"), "fhir", connectionMetadataJson);
 
-    private static MappingProfile Mapping() =>
-        new("Patient Blob", "Patient", Guid.NewGuid(), Guid.NewGuid(), "Patient", []);
+    private static MappingProfile Mapping(string destinationObject = "Patient", IEnumerable<MappingField>? fields = null) =>
+        new("Patient Blob", "Patient", Guid.NewGuid(), Guid.NewGuid(), destinationObject, fields ?? []);
 
-    private static MappedDestinationRecord Record(string id = "p1") =>
-        new(Guid.NewGuid(), "Patient", "Patient", id, new Dictionary<string, object?> { ["Name"] = "Alice" });
+    private static MappingField UpsertKeyField(string targetField = "PatientId") =>
+        new(TargetField: targetField, JsonPath: "$.id", ValueType: MappingValueType.String,
+            IsRequired: false, DefaultValue: null, Format: null, IsUpsertKey: true);
+
+    private static MappedDestinationRecord Record(string id = "p1", IReadOnlyDictionary<string, object?>? values = null) =>
+        new(Guid.NewGuid(), "Patient", "Patient", id, values ?? new Dictionary<string, object?> { ["Name"] = "Alice" });
 
     private static PipelineWriteContext Context() => new(true, "Patient Export Workflow", DateTimeOffset.UtcNow);
 
@@ -248,5 +252,185 @@ public sealed class MappedBlobStorageDestinationWriterTests
         var act = () => CreateWriter().WriteAsync(Destination(), Mapping(), [Record()], Context(), CancellationToken.None);
 
         await act.Should().ThrowAsync<RequestFailedException>();
+    }
+
+    [Fact]
+    public async Task Append_mode_strips_a_known_extension_from_the_destination_object_stem()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        _container
+            .Setup(c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateContainerResponse());
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        await CreateWriter().WriteAsync(
+            Destination(), Mapping(destinationObject: "patients.csv"), [Record()], Context(), CancellationToken.None);
+
+        capturedName.Should().NotBeNull();
+        capturedName!.Should().StartWith("patients_").And.NotContain(".csv");
+    }
+
+    [Fact]
+    public async Task Append_mode_strips_a_write_mode_suffix_from_the_destination_object_stem()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        _container
+            .Setup(c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateContainerResponse());
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        await CreateWriter().WriteAsync(
+            Destination(), Mapping(destinationObject: "Patient;mode=upsert"), [Record()], Context(), CancellationToken.None);
+
+        capturedName.Should().NotBeNull();
+        capturedName!.Should().StartWith("Patient_").And.NotContain(";").And.NotContain("mode");
+    }
+
+    [Fact]
+    public async Task Upsert_mode_writes_one_blob_per_record_named_by_the_upsert_key()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        var capturedNames = new List<string>();
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedNames.Add(name))
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        var records = new[]
+        {
+            Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" }),
+            Record("p2", new Dictionary<string, object?> { ["PatientId"] = "xyz-789" }),
+        };
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_writeMode":"upsert"}"""), mapping, records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        capturedNames.Should().BeEquivalentTo(["Patient/abc-123.json", "Patient/xyz-789.json"]);
+        blob.Verify(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Upsert_mode_falls_back_to_SourceResourceId_when_no_upsert_key_field_is_configured()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_writeMode":"upsert"}"""), Mapping(), [Record("source-res-1")], Context(), CancellationToken.None);
+
+        capturedName.Should().Be("Patient/source-res-1.json");
+    }
+
+    [Fact]
+    public async Task Upsert_mode_uses_a_unique_name_when_no_key_is_resolvable_at_all()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        var capturedNames = new List<string>();
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedNames.Add(name))
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "Patient", null, new Dictionary<string, object?> { ["Name"] = "Alice" }),
+        };
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_writeMode":"upsert"}"""), Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        capturedNames.Should().ContainSingle();
+        capturedNames[0].Should().MatchRegex(@"^Patient/\d{17}_[0-9a-f]{32}\.json$");
+    }
+
+    [Fact]
+    public async Task Upsert_mode_uploads_a_single_records_JSON_with_json_content_type()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+        BlobUploadOptions? capturedOptions = null;
+        Stream? capturedStream = null;
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<Stream, BlobUploadOptions, CancellationToken>((stream, options, _) =>
+            {
+                capturedStream = new MemoryStream();
+                stream.CopyTo(capturedStream);
+                capturedStream.Position = 0;
+                capturedOptions = options;
+            })
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_writeMode":"upsert"}"""),
+            mapping,
+            [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123", ["Name"] = "Alice" })],
+            Context(),
+            CancellationToken.None);
+
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.HttpHeaders!.ContentType.Should().Be("application/json");
+        capturedOptions.Metadata!["sourceResourceId"].Should().Be("p1");
+        var content = Encoding.UTF8.GetString(((MemoryStream)capturedStream!).ToArray());
+        content.Should().Contain("Alice").And.NotContain(Environment.NewLine);
+    }
+
+    [Fact]
+    public async Task Upsert_mode_still_creates_the_container_when_enabled_and_supported()
+    {
+        SetupTarget(supportsContainerCreate: true);
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+        _container
+            .Setup(c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateContainerResponse());
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_writeMode":"upsert"}"""), Mapping(fields: [UpsertKeyField()]),
+            [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })], Context(), CancellationToken.None);
+
+        _container.Verify(
+            c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

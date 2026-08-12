@@ -22,7 +22,8 @@ public sealed record BlobDestinationSettings(
     string? AuthorityHost,
     string? PathPrefix,
     bool CreateContainerIfNotExists,
-    string? AccessTier)
+    string? AccessTier,
+    BlobWriteMode WriteMode)
 {
     /// <summary>Every mode except Managed Identity needs the resolved Key Vault secret as credential material.</summary>
     public bool RequiresSecret => AuthMode != BlobDestinationAuthMode.ManagedIdentity;
@@ -94,8 +95,18 @@ public sealed record BlobDestinationSettings(
             AuthorityHost: ConnectionMetadataReader.GetString(json, "dest_blobAuthorityHost"),
             PathPrefix: ConnectionMetadataReader.GetString(json, "dest_blobPathPrefix")?.Trim('/'),
             CreateContainerIfNotExists: ParseBool(ConnectionMetadataReader.GetString(json, "dest_blobCreateContainerIfNotExists"), true),
-            AccessTier: ConnectionMetadataReader.GetString(json, "dest_blobAccessTier"));
+            AccessTier: ConnectionMetadataReader.GetString(json, "dest_blobAccessTier"),
+            // Same dest_writeMode key SQL/Mongo already use — but defaulting to Append (not Upsert, unlike
+            // those two) since Append is Blob's original, only-ever-shipped behavior; changing the default here
+            // would silently change what every already-configured Blob destination does on its next run.
+            WriteMode: ParseWriteMode(ConnectionMetadataReader.GetString(json, "dest_writeMode")));
     }
+
+    private static BlobWriteMode ParseWriteMode(string? raw) => raw?.Trim().ToLowerInvariant() switch
+    {
+        "upsert" => BlobWriteMode.Upsert,
+        _ => BlobWriteMode.Append,
+    };
 
     private static BlobDestinationAuthMode ParseAuthMode(string? raw) => raw?.Trim().ToLowerInvariant() switch
     {

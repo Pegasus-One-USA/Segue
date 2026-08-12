@@ -251,6 +251,19 @@
               }
             </div>
 
+            <div class="dw-field">
+              <label class="dw-label" for="dw-blob-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-blob-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="append">Append (new blob every run)</option>
+                  <option value="upsert">Upsert (update existing record)</option>
+                </select>
+              </div>
+              @if (blobForm.get('writeMode')!.value === 'upsert') {
+                <span class="dw-hint">Overwrites the blob for a record's upsert-key value (set the 🔑 on a field in Map fields) — falls back to the record's own source id if no key is set.</span>
+              }
+            </div>
+
             <div class="dw-field dw-field--full">
               <label class="dw-label" for="dw-blob-authMode">Authentication</label>
               <div class="dw-select-wrap">
@@ -749,6 +762,10 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Authentication</span>
             <span class="dw-review-val">{{ blobForm.value.authMode }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ blobForm.value.writeMode === 'upsert' ? 'Upsert (update existing record)' : 'Append (new blob every run)' }}</span>
           </div>
           @if (blobForm.value.pathPrefix) {
             <div class="dw-review-card">

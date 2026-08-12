@@ -65,7 +65,10 @@ export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' |
       : kind === 'blob'
         ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
            'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
-           'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists']
+           'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
+           // Same generic dest_writeMode key SQL/Mongo use — Append vs Upsert (one blob per record, keyed by
+           // whichever mapped field is flagged as the upsert key on the mapping canvas).
+           'dest_writeMode']
         : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
            'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
            'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',

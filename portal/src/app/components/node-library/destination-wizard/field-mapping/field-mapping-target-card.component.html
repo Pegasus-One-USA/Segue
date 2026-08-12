@@ -5,7 +5,7 @@
     (pointermove)="onHeadPointerMove($event)"
     (pointerup)="onHeadPointerUp($event)"
   >
-    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : 'file' }}</span>
+    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : destType() === 'blob' ? 'blob' : 'file' }}</span>
     <span class="fm-target-name">{{ tableName() || resource() }}</span>
     <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
       <input

@@ -184,4 +184,24 @@ public sealed class BlobDestinationSettingsTests
 
         settings.PathPrefix.Should().Be("fhirbridge/patient");
     }
+
+    [Fact]
+    public void WriteMode_defaults_to_Append_when_missing()
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", "{}"));
+
+        settings.WriteMode.Should().Be(BlobWriteMode.Append);
+    }
+
+    [Theory]
+    [InlineData("upsert", BlobWriteMode.Upsert)]
+    [InlineData("Upsert", BlobWriteMode.Upsert)]
+    [InlineData("append", BlobWriteMode.Append)]
+    [InlineData("not-a-real-mode", BlobWriteMode.Append)]
+    public void WriteMode_is_parsed_case_insensitively_with_Append_fallback(string raw, BlobWriteMode expected)
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", $$"""{"dest_writeMode":"{{raw}}"}"""));
+
+        settings.WriteMode.Should().Be(expected);
+    }
 }

@@ -280,6 +280,7 @@
       <li><a href="#features">What was built</a></li>
       <li><a href="#auth-modes">Authentication modes — all five, and where to get each value</a></li>
       <li><a href="#container-name">Container naming rules &amp; validation</a></li>
+      <li><a href="#write-modes">Write modes — Append vs Upsert</a></li>
       <li><a href="#architecture">Architecture — how a write happens</a></li>
       <li><a href="#backend-files">Backend — files</a></li>
       <li><a href="#backend-tests">Backend — tests</a></li>
@@ -304,8 +305,9 @@
   <div class="summary-grid">
     <div class="card"><div class="num">5</div><div class="label">supported auth modes</div></div>
     <div class="card"><div class="num">3</div><div class="label">currently enabled in the wizard</div></div>
-    <div class="card"><div class="num">6</div><div class="label">new backend files</div></div>
-    <div class="card"><div class="num">66+</div><div class="label">backend unit tests passing</div></div>
+    <div class="card"><div class="num">2</div><div class="label">write modes — Append / Upsert</div></div>
+    <div class="card"><div class="num">7</div><div class="label">new backend files</div></div>
+    <div class="card"><div class="num">78+</div><div class="label">backend unit tests passing</div></div>
     <div class="card"><div class="num">3</div><div class="label">layers of container-name validation</div></div>
   </div>
 
@@ -431,7 +433,47 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
           -fhir (leading hyphen), fhir- (trailing hyphen),
           fhir--export (consecutive hyphens)</code></pre>
 
-  <h2 id="architecture"><span class="num">5.</span>Architecture — how a write happens</h2>
+  <h2 id="write-modes"><span class="num">5.</span>Write modes — Append vs Upsert</h2>
+  <p class="section-intro">
+    A destination-level <strong>Write mode</strong> field on the Blob form now decides how a batch of mapped
+    records becomes blob(s) — matching the same choice SQL/Mongo already expose via their own write-mode
+    control, so re-running a pipeline can either always add new data or actually update existing records,
+    your choice per destination.
+  </p>
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>Append</h3><span class="pill pill-active">Default</span></div>
+    <div class="auth-mode-value">wizard value: <code>append</code></div>
+    <p>The original, only-ever-shipped behavior. Every pipeline run writes one brand-new, timestamped NDJSON
+    blob containing that run's whole batch — object storage's natural "write-once" shape, suited to a
+    data-lake / audit-trail consumer reading an append-only stream. There is no "update a record" concept in
+    this mode at all.</p>
+    <pre><code>container/prefix/Patient_20260812130455123.ndjson
+container/prefix/Patient_20260812140212871.ndjson   &lt;- a new file every run, nothing overwritten</code></pre>
+  </div>
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>Upsert</h3></div>
+    <div class="auth-mode-value">wizard value: <code>upsert</code></div>
+    <p>Gives Blob real "update a record" semantics matching SQL/Mongo's own upsert mode. Each record gets its
+    own blob, named by whichever mapped field is flagged as the <strong>upsert key</strong> on the mapping
+    canvas (the same 🔑 toggle SQL/Mongo already use) — falling back to the record's own source resource id
+    if no key field is designated. Re-running the pipeline <strong>overwrites that exact blob</strong> instead
+    of accumulating a new one.</p>
+    <pre><code>container/prefix/Patient/abc-123.json   &lt;- overwritten in place if Patient abc-123 changes on the next run
+container/prefix/Patient/xyz-789.json</code></pre>
+    <table class="spec-table">
+      <tr><th>Key resolution order</th><td>1) the mapped field flagged <code>IsUpsertKey</code> for this resource type, if any. 2) the record's own <code>SourceResourceId</code>. 3) if neither resolves, the record still gets written (never silently dropped) under a one-off unique name — it just can't be reliably updated next run without a stable identity to key off of.</td></tr>
+      <tr><th>Content format</th><td>One plain JSON object per blob (<code>application/json</code>), not NDJSON — there's only ever one record per blob in this mode.</td></tr>
+    </table>
+  </div>
+  <div class="callout warn">
+    <strong>A mixed multi-resource-type batch now splits per resource type either way</strong>
+    Blob was added to the workflow engine's per-resource-type write splitting (the same mechanism SQL/Mongo
+    already used) — a destination fed records from several resource types in one batch now gets one write
+    call (and, in Append mode, one blob; in Upsert mode, one folder) per resource type, instead of everything
+    landing in a single blob whose metadata could only ever name one of the resource types actually inside it.
+  </div>
+
+  <h2 id="architecture"><span class="num">6.</span>Architecture — how a write happens</h2>
   <div class="flow-steps">
     <div class="flow-step">
       <div class="step-num">1</div>
@@ -451,7 +493,7 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
     </div>
   </div>
 
-  <h2 id="backend-files"><span class="num">6.</span>Backend — files</h2>
+  <h2 id="backend-files"><span class="num">7.</span>Backend — files</h2>
   <p class="section-intro">All new files live under <code>src/FHIRBridge.Infrastructure/Destinations/Blob/</code>.</p>
   <table class="file-table">
     <tr><th>File</th><th>Status</th><th>What it does</th></tr>
@@ -486,9 +528,19 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
       <td class="why">Dedicated reachability check, replacing the generic URL-HEAD check that no longer fits.</td>
     </tr>
     <tr>
+      <td class="file-path">Blob/BlobWriteMode.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The two-value enum (Append/Upsert) driving §5's write-mode behavior.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Adds Blob to <code>MultiTableRelationalDestinationTypes</code> (splits a mixed multi-resource-type batch into one write call per resource type) while explicitly skipping the SQL-only <code>;mode=...</code> suffix splice for Blob, which would otherwise corrupt its blob name.</td>
+    </tr>
+    <tr>
       <td class="file-path">Destinations/MappedBlobStorageDestinationWriter.cs</td>
       <td class="status"><span class="pill pill-modified">Modified</span></td>
-      <td class="why">Rewritten to use the SDK factory instead of a raw <code>HttpClient.PutAsync</code>.</td>
+      <td class="why">Rewritten to use the SDK factory instead of a raw <code>HttpClient.PutAsync</code>; now dispatches to Append or Upsert per <code>BlobDestinationSettings.WriteMode</code>, and strips a stray extension/write-mode suffix from the destination-object stem before naming a blob.</td>
     </tr>
     <tr>
       <td class="file-path">Destinations/TargetReachabilityDestinationHealthCheckProvider.cs</td>
@@ -517,30 +569,31 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
     </tr>
   </table>
 
-  <h2 id="backend-tests"><span class="num">7.</span>Backend — tests</h2>
+  <h2 id="backend-tests"><span class="num">8.</span>Backend — tests</h2>
   <table class="file-table">
     <tr><th>File</th><th>Coverage</th></tr>
-    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation, per-mode required-field errors, container-name validation (valid/invalid cases).</td></tr>
+    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation, per-mode required-field errors, container-name validation (valid/invalid cases), write-mode parsing/default (Append/Upsert, case-insensitive, unrecognized falls back to Append).</td></tr>
     <tr><td class="file-path">BlobContainerClientFactoryTests.cs</td><td class="why">Client construction for all five auth modes (URI, account name, shared-key credential presence), the legacy-SAS coercion, cache hit/rotation-busts-cache behavior — all network-free since client construction alone never calls Azure.</td></tr>
-    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), and error propagation — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
+    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), error propagation, extension/write-mode-suffix stripping from the destination-object stem, and every Upsert-mode case (one blob per record, key resolution order, JSON content type, unique fallback name) — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
     <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases and container-name-format cases.</td></tr>
   </table>
 
-  <h2 id="frontend-files"><span class="num">8.</span>Frontend — files</h2>
+  <h2 id="frontend-files"><span class="num">9.</span>Frontend — files</h2>
   <table class="file-table">
     <tr><th>File</th><th>What changed</th></tr>
-    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">New <code>blobForm</code> group, auth-mode-conditional fields, per-mode validators, and every extension point the SQL/Mongo/CSV forms already had (review summary, select-existing, edit-existing, save/provision).</td></tr>
+    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">New <code>blobForm</code> group (including the <strong>Write mode</strong> select), auth-mode-conditional fields, per-mode validators, every extension point the SQL/Mongo/CSV forms already had (review summary, select-existing, edit-existing, save/provision), and a fixed default per-resource target seed (no more double <code>.csv</code> extension).</td></tr>
+    <tr><td class="file-path">field-mapping-target-card.component.html</td><td class="why">The canvas card's kind label now says "blob" for a Blob destination instead of the generic "file" it shared with CSV/Mongo.</td></tr>
     <tr><td class="file-path">field-mapping-model.ts</td><td class="why"><code>MappingDestType</code> widened to include <code>'blob'</code>.</td></tr>
     <tr><td class="file-path">phase-config.service.ts</td><td class="why"><code>dest-blob</code> unblocked from the Phase-1 palette gate.</td></tr>
     <tr><td class="file-path">node-library-dialog.component.ts</td><td class="why">Every destination-type dispatch list (open wizard, lock while editing, type-to-form mapping, label) extended with <code>dest-blob</code>.</td></tr>
     <tr><td class="file-path">workflow-builder.component.ts</td><td class="why">Its own separate copy of the destination-type allowlist (missed in the first pass) extended with <code>dest-blob</code> — this is what gated the node's edit icon.</td></tr>
     <tr><td class="file-path">workflow-graph-mapper.service.ts</td><td class="why"><code>FALLBACK_NODE_TYPES['dest-blob'] = 'BlobDestinationNode'</code>; <code>dest_blobSecret</code> added to the redacted-secret key set.</td></tr>
-    <tr><td class="file-path">workflow-build-assembler.service.ts</td><td class="why">Blob branch in the destination-request builder, mirroring the SQL/Mongo/CSV branches (secret handling, target, metadata key list).</td></tr>
+    <tr><td class="file-path">workflow-build-assembler.service.ts / destination-connection-secret.util.ts</td><td class="why">Blob branch in the destination-request builder, mirroring the SQL/Mongo/CSV branches (secret handling, target, metadata key list) — both key lists now include <code>dest_writeMode</code>.</td></tr>
     <tr><td class="file-path">destination-connection-secret.util.ts</td><td class="why"><code>buildConnectionMetadata</code>'s boolean <code>isSql</code> parameter widened to a <code>'sql' | 'csv' | 'blob'</code> string, plus the blob metadata key list.</td></tr>
     <tr><td class="file-path">destination-connection-dialog.component.ts</td><td class="why">Updated call sites for the widened <code>buildConnectionMetadata</code> signature (the standalone admin screen doesn't yet support creating/editing Blob directly — see §10).</td></tr>
   </table>
 
-  <h2 id="workflow-catalog"><span class="num">9.</span>The workflow node catalog gate</h2>
+  <h2 id="workflow-catalog"><span class="num">10.</span>The workflow node catalog gate</h2>
   <p>
     There are <strong>two independent phase gates</strong> that both had to list Blob before it would work
     end to end — missing either one produces a real error even though the other is correct:
@@ -558,7 +611,7 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
     same switch statements every other destination type uses.
   </div>
 
-  <h2 id="limitations"><span class="num">10.</span>Known limitations &amp; follow-ups</h2>
+  <h2 id="limitations"><span class="num">11.</span>Known limitations &amp; follow-ups</h2>
   <ul class="feature-list">
     <li><strong>Managed Identity / Service Principal hidden in the wizard.</strong> Fully implemented on both ends, but the two dropdown options are commented out for now (see §3) — a deliberate, easily-reversed scope decision, not a bug.</li>
     <li><strong>Standalone Destination Connections admin screen doesn't support Blob yet.</strong> That screen's <code>toFormType()</code> only recognizes SQL/CSV — the same gap that already exists for MongoDB there, so this is consistent with existing precedent rather than a regression. Blob destinations can only be created/edited from the workflow canvas wizard.</li>
@@ -566,7 +619,7 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
     <li><strong>No automated Azurite integration test.</strong> An <code>azurite</code> service was added to <code>docker-compose.yml</code> for manual local testing, but there's no automated integration test exercising a real (emulated) container yet.</li>
   </ul>
 
-  <h2 id="troubleshooting"><span class="num">11.</span>Troubleshooting — real errors seen and their fixes</h2>
+  <h2 id="troubleshooting"><span class="num">12.</span>Troubleshooting — real errors seen and their fixes</h2>
 
   <h4>400 InvalidResourceName — "The specified resource name contains invalid characters"</h4>
   <p><strong>Cause:</strong> the container name doesn't follow Azure's naming rules (see §4) — typically uppercase letters or underscores.</p>
@@ -581,9 +634,9 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
   <p><strong>Cause:</strong> a Blob node created during earlier development, before the phase-config, workflow-catalog, and workflow-builder fixes were all in place. Its saved <code>transformId</code>/state predates the fix and doesn't self-heal on edit (editing only merges form fields, it doesn't re-derive <code>transformId</code>).</p>
   <p><strong>Fix:</strong> delete the old node and re-add "Azure Blob Storage" fresh from the Node Library — a newly created node now works end to end.</p>
 
-  <h2 id="verification"><span class="num">12.</span>Verification</h2>
+  <h2 id="verification"><span class="num">13.</span>Verification</h2>
   <ul class="feature-list">
-    <li><strong>Backend:</strong> full solution build succeeds; 66+ Blob-specific unit tests pass, plus the full <code>FHIRBridge.UnitTests</code> and <code>FHIRBridge.ArchitectureTests</code> suites (one pre-existing, unrelated failure in <code>DestinationExecutionHistoryGateTests</code> confirmed present on the baseline branch too).</li>
+    <li><strong>Backend:</strong> full solution build succeeds; 78+ Blob-specific unit tests pass (556/557 across the whole <code>FHIRBridge.UnitTests</code> suite — the one failure, <code>DestinationExecutionHistoryGateTests</code>, is pre-existing and confirmed present on the baseline branch too), plus all 6 <code>FHIRBridge.ArchitectureTests</code> and all <code>FHIRBridge.Runtime.UnitTests</code> (same one pre-existing, unrelated failure there as well).</li>
     <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
     <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account.</li>
   </ul>
