@@ -494,7 +494,8 @@ export class WorkflowBuildAssemblerService {
                 'dest_blobManagedIdentityClientId',
                 'dest_blobPathPrefix',
                 'dest_blobCreateContainerIfNotExists',
-                'dest_writeMode',
+                'dest_blobGranularity',
+                'dest_blobRecordMode',
               ]
             : [
               'dest_name',

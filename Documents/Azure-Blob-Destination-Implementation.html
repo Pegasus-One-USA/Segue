@@ -280,7 +280,7 @@
       <li><a href="#features">What was built</a></li>
       <li><a href="#auth-modes">Authentication modes — all five, and where to get each value</a></li>
       <li><a href="#container-name">Container naming rules &amp; validation</a></li>
-      <li><a href="#write-modes">Write modes — Append vs Upsert</a></li>
+      <li><a href="#write-modes">Write modes — Delivery (Bulk/Individual) &amp; Record mode (Insert/Upsert/Update)</a></li>
       <li><a href="#architecture">Architecture — how a write happens</a></li>
       <li><a href="#backend-files">Backend — files</a></li>
       <li><a href="#backend-tests">Backend — tests</a></li>
@@ -305,9 +305,9 @@
   <div class="summary-grid">
     <div class="card"><div class="num">5</div><div class="label">supported auth modes</div></div>
     <div class="card"><div class="num">3</div><div class="label">currently enabled in the wizard</div></div>
-    <div class="card"><div class="num">2</div><div class="label">write modes — Append / Upsert</div></div>
-    <div class="card"><div class="num">7</div><div class="label">new backend files</div></div>
-    <div class="card"><div class="num">78+</div><div class="label">backend unit tests passing</div></div>
+    <div class="card"><div class="num">2</div><div class="label">independent settings — Delivery &amp; Record mode</div></div>
+    <div class="card"><div class="num">8</div><div class="label">new backend files</div></div>
+    <div class="card"><div class="num">91+</div><div class="label">backend unit tests passing</div></div>
     <div class="card"><div class="num">3</div><div class="label">layers of container-name validation</div></div>
   </div>
 
@@ -433,44 +433,64 @@ Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
           -fhir (leading hyphen), fhir- (trailing hyphen),
           fhir--export (consecutive hyphens)</code></pre>
 
-  <h2 id="write-modes"><span class="num">5.</span>Write modes — Append vs Upsert</h2>
+  <h2 id="write-modes"><span class="num">5.</span>Write modes — two independent settings</h2>
   <p class="section-intro">
-    A destination-level <strong>Write mode</strong> field on the Blob form now decides how a batch of mapped
-    records becomes blob(s) — matching the same choice SQL/Mongo already expose via their own write-mode
-    control, so re-running a pipeline can either always add new data or actually update existing records,
-    your choice per destination.
+    The Blob form (Configure step, right after Container name) has <strong>two independent settings</strong>
+    controlling how mapped records become blob(s) — deliberately split apart rather than folded into one
+    dropdown, since they answer two different questions: how many records share a blob, and (only once that's
+    "one blob per record") what happens to a record relative to whatever already exists at its key.
   </p>
+  <table class="spec-table">
+    <tr><th><strong>1. Delivery</strong></th><td>How many records share one blob — <strong>Bulk upload</strong> (all records, one blob) or <strong>Individual records</strong> (one blob per record).</td></tr>
+    <tr><th><strong>2. Record mode</strong></th><td>Only shown once Delivery is set to Individual. Decides what happens to a single record's blob relative to whatever's already there under its key — <strong>Insert</strong>, <strong>Upsert</strong>, or <strong>Update</strong>.</td></tr>
+  </table>
+
+  <h3>Setting 1 — Delivery: Bulk upload vs Individual records</h3>
   <div class="auth-mode">
-    <div class="auth-mode-head"><h3>Append</h3><span class="pill pill-active">Default</span></div>
-    <div class="auth-mode-value">wizard value: <code>append</code></div>
+    <div class="auth-mode-head"><h4>Bulk upload — all records in one blob</h4><span class="pill pill-active">Default</span></div>
+    <div class="auth-mode-value">wizard value: <code>bulk</code></div>
     <p>The original, only-ever-shipped behavior. Every pipeline run writes one brand-new, timestamped NDJSON
     blob containing that run's whole batch — object storage's natural "write-once" shape, suited to a
-    data-lake / audit-trail consumer reading an append-only stream. There is no "update a record" concept in
-    this mode at all.</p>
-    <pre><code>container/prefix/Patient_20260812130455123.ndjson
+    data-lake / audit-trail consumer reading an append-only stream. There is no per-record identity or "update
+    a record" concept at this setting, regardless of Record mode (which doesn't apply here at all).</p>
+    <pre><code>container/prefix/Patient_20260812130455123.ndjson    &lt;- ALL of this run's Patient records, one file
 container/prefix/Patient_20260812140212871.ndjson   &lt;- a new file every run, nothing overwritten</code></pre>
   </div>
   <div class="auth-mode">
-    <div class="auth-mode-head"><h3>Upsert</h3></div>
-    <div class="auth-mode-value">wizard value: <code>upsert</code></div>
-    <p>Gives Blob real "update a record" semantics matching SQL/Mongo's own upsert mode. Each record gets its
-    own blob, named by whichever mapped field is flagged as the <strong>upsert key</strong> on the mapping
-    canvas (the same 🔑 toggle SQL/Mongo already use) — falling back to the record's own source resource id
-    if no key field is designated. Re-running the pipeline <strong>overwrites that exact blob</strong> instead
-    of accumulating a new one.</p>
-    <pre><code>container/prefix/Patient/abc-123.json   &lt;- overwritten in place if Patient abc-123 changes on the next run
-container/prefix/Patient/xyz-789.json</code></pre>
-    <table class="spec-table">
-      <tr><th>Key resolution order</th><td>1) the mapped field flagged <code>IsUpsertKey</code> for this resource type, if any. 2) the record's own <code>SourceResourceId</code>. 3) if neither resolves, the record still gets written (never silently dropped) under a one-off unique name — it just can't be reliably updated next run without a stable identity to key off of.</td></tr>
-      <tr><th>Content format</th><td>One plain JSON object per blob (<code>application/json</code>), not NDJSON — there's only ever one record per blob in this mode.</td></tr>
-    </table>
+    <div class="auth-mode-head"><h4>Individual records — one blob per record</h4></div>
+    <div class="auth-mode-value">wizard value: <code>individual</code></div>
+    <p>Each record gets its own blob, named by whichever mapped field is flagged as the <strong>upsert key</strong>
+    on the mapping canvas (the same 🔑 toggle SQL/Mongo already use) — falling back to the record's own source
+    resource id if no key field is designated. Selecting this reveals the <strong>Record mode</strong> setting
+    below, which decides exactly what "one blob per record" means when that blob already exists from a
+    previous run.</p>
+    <pre><code>container/prefix/Patient/abc-123.json
+container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one folder per resource type</code></pre>
   </div>
+
+  <h3>Setting 2 — Record mode (Individual delivery only): Insert vs Upsert vs Update</h3>
+  <table class="spec-table">
+    <tr><th>Insert</th><td><strong>Always add new.</strong> Every record gets a brand-new blob — even a record already written before gets another one, never overwriting the last. The blob name is suffixed with a fresh timestamp + GUID every time specifically so it can never collide.</td></tr>
+    <tr><th>Upsert</th><td><strong>Update if it exists, else insert.</strong> Writes to the key-derived blob path unconditionally — creates it if absent, overwrites it if present. This is the default, and the natural behavior of a plain blob upload (no existence check needed).</td></tr>
+    <tr><th>Update</th><td><strong>Only if it exists.</strong> Only overwrites the key-derived blob path if it's already there; if it isn't, the record is skipped entirely — never creates a new blob. Requires one extra existence check per record.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Key resolution order (all three modes)</strong>
+    1) the mapped field flagged <code>IsUpsertKey</code> for this resource type, if any. 2) the record's own
+    <code>SourceResourceId</code>. 3) if neither resolves: <strong>Insert</strong> still writes under a
+    uniquified name; <strong>Upsert</strong> still writes under a one-off unique name (it just can't be
+    reliably updated next run without a stable identity); <strong>Update</strong> has nothing to check
+    existence against, so it skips the record rather than guessing.
+  </div>
+  <p>Content format for Individual delivery is always one plain JSON object per blob (<code>application/json</code>), not NDJSON — there's only ever one record per blob at this setting, regardless of Record mode.</p>
+
   <div class="callout warn">
     <strong>A mixed multi-resource-type batch now splits per resource type either way</strong>
     Blob was added to the workflow engine's per-resource-type write splitting (the same mechanism SQL/Mongo
     already used) — a destination fed records from several resource types in one batch now gets one write
-    call (and, in Append mode, one blob; in Upsert mode, one folder) per resource type, instead of everything
-    landing in a single blob whose metadata could only ever name one of the resource types actually inside it.
+    call (and, at Bulk delivery, one blob; at Individual delivery, one folder) per resource type, instead of
+    everything landing in a single blob whose metadata could only ever name one of the resource types actually
+    inside it.
   </div>
 
   <h2 id="architecture"><span class="num">6.</span>Architecture — how a write happens</h2>
@@ -528,9 +548,14 @@ container/prefix/Patient/xyz-789.json</code></pre>
       <td class="why">Dedicated reachability check, replacing the generic URL-HEAD check that no longer fits.</td>
     </tr>
     <tr>
-      <td class="file-path">Blob/BlobWriteMode.cs</td>
+      <td class="file-path">Blob/BlobDeliveryGranularity.cs</td>
       <td class="status"><span class="pill pill-new">New</span></td>
-      <td class="why">The two-value enum (Append/Upsert) driving §5's write-mode behavior.</td>
+      <td class="why">The Delivery enum (Bulk/Individual) — §5, Setting 1.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobRecordMode.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The Record mode enum (Insert/Upsert/Update), meaningful only when Delivery is Individual — §5, Setting 2.</td>
     </tr>
     <tr>
       <td class="file-path">Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td>
@@ -572,16 +597,16 @@ container/prefix/Patient/xyz-789.json</code></pre>
   <h2 id="backend-tests"><span class="num">8.</span>Backend — tests</h2>
   <table class="file-table">
     <tr><th>File</th><th>Coverage</th></tr>
-    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation, per-mode required-field errors, container-name validation (valid/invalid cases), write-mode parsing/default (Append/Upsert, case-insensitive, unrecognized falls back to Append).</td></tr>
+    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation, per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback).</td></tr>
     <tr><td class="file-path">BlobContainerClientFactoryTests.cs</td><td class="why">Client construction for all five auth modes (URI, account name, shared-key credential presence), the legacy-SAS coercion, cache hit/rotation-busts-cache behavior — all network-free since client construction alone never calls Azure.</td></tr>
-    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), error propagation, extension/write-mode-suffix stripping from the destination-object stem, and every Upsert-mode case (one blob per record, key resolution order, JSON content type, unique fallback name) — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
+    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), error propagation, extension/write-mode-suffix stripping from the destination-object stem, Bulk-delivery default, and every Individual-delivery case across all three Record modes (Insert never collides even for a repeated key, Upsert's key resolution order and JSON content type, Update's overwrite-if-exists/skip-if-not/skip-with-no-key behavior) — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
     <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases and container-name-format cases.</td></tr>
   </table>
 
   <h2 id="frontend-files"><span class="num">9.</span>Frontend — files</h2>
   <table class="file-table">
     <tr><th>File</th><th>What changed</th></tr>
-    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">New <code>blobForm</code> group (including the <strong>Write mode</strong> select), auth-mode-conditional fields, per-mode validators, every extension point the SQL/Mongo/CSV forms already had (review summary, select-existing, edit-existing, save/provision), and a fixed default per-resource target seed (no more double <code>.csv</code> extension).</td></tr>
+    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">New <code>blobForm</code> group (including the <strong>Delivery</strong> select and its conditionally-shown <strong>Record mode</strong> select), auth-mode-conditional fields, per-mode validators, every extension point the SQL/Mongo/CSV forms already had (review summary, select-existing, edit-existing, save/provision), and a fixed default per-resource target seed (no more double <code>.csv</code> extension).</td></tr>
     <tr><td class="file-path">field-mapping-target-card.component.html</td><td class="why">The canvas card's kind label now says "blob" for a Blob destination instead of the generic "file" it shared with CSV/Mongo.</td></tr>
     <tr><td class="file-path">field-mapping-model.ts</td><td class="why"><code>MappingDestType</code> widened to include <code>'blob'</code>.</td></tr>
     <tr><td class="file-path">phase-config.service.ts</td><td class="why"><code>dest-blob</code> unblocked from the Phase-1 palette gate.</td></tr>
@@ -636,7 +661,7 @@ container/prefix/Patient/xyz-789.json</code></pre>
 
   <h2 id="verification"><span class="num">13.</span>Verification</h2>
   <ul class="feature-list">
-    <li><strong>Backend:</strong> full solution build succeeds; 78+ Blob-specific unit tests pass (556/557 across the whole <code>FHIRBridge.UnitTests</code> suite — the one failure, <code>DestinationExecutionHistoryGateTests</code>, is pre-existing and confirmed present on the baseline branch too), plus all 6 <code>FHIRBridge.ArchitectureTests</code> and all <code>FHIRBridge.Runtime.UnitTests</code> (same one pre-existing, unrelated failure there as well).</li>
+    <li><strong>Backend:</strong> full solution build succeeds; 91+ Blob-specific unit tests pass (569/570 across the whole <code>FHIRBridge.UnitTests</code> suite — the one failure, <code>DestinationExecutionHistoryGateTests</code>, is pre-existing and confirmed present on the baseline branch too), plus all 6 <code>FHIRBridge.ArchitectureTests</code> and all <code>FHIRBridge.Runtime.UnitTests</code> (same one pre-existing, unrelated failure there as well).</li>
     <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
     <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account.</li>
   </ul>

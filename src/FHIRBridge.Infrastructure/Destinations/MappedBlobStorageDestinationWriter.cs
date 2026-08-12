@@ -16,9 +16,13 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// pre-signed-URL-PUT convention <see cref="MappedDestinationSerialization.WriteTextTargetAsync"/> still serves
 /// for S3/NDJSON/etc. <see cref="DestinationConfiguration.Target"/> is the container name here, not a file stem,
 /// so the blob name is built from the mapping profile's destination object instead of
-/// <see cref="MappedDestinationSerialization.BuildFileName"/>. Supports two write modes (see
-/// <see cref="BlobDestinationSettings.WriteMode"/>): <see cref="WriteAppendAsync"/> (the original, default
-/// behavior) and <see cref="WriteUpsertAsync"/> (one blob per record, overwritten in place on re-run).
+/// <see cref="MappedDestinationSerialization.BuildFileName"/>.
+///
+/// Two independent settings decide what gets written (see <see cref="BlobDestinationSettings"/>):
+/// <see cref="BlobDestinationSettings.Granularity"/> picks <see cref="WriteBulkAsync"/> (the whole batch in one
+/// blob) or <see cref="WriteIndividualAsync"/> (one blob per record); when Individual is selected,
+/// <see cref="BlobDestinationSettings.RecordMode"/> further decides whether each record's blob is always freshly
+/// added (Insert), created-or-overwritten (Upsert), or only ever overwritten if it already exists (Update).
 /// </summary>
 public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationWriter
 {
@@ -69,18 +73,18 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
             }
         }
 
-        return settings.WriteMode == BlobWriteMode.Upsert
-            ? await WriteUpsertAsync(target, mappingProfile, records, context, settings, cancellationToken)
-            : await WriteAppendAsync(target, mappingProfile, records, context, settings, cancellationToken);
+        return settings.Granularity == BlobDeliveryGranularity.Individual
+            ? await WriteIndividualAsync(target, mappingProfile, records, context, settings, cancellationToken)
+            : await WriteBulkAsync(target, mappingProfile, records, context, settings, cancellationToken);
     }
 
     /// <summary>
-    /// Original/default behavior: the whole batch becomes one new timestamped NDJSON blob — object storage's
-    /// natural "write-once" shape, suited to a data-lake/audit-trail consumer reading an append-only stream.
-    /// Every run produces a new file; there is no "this is the same record as last time" concept here at all
-    /// (see <see cref="WriteUpsertAsync"/> for that).
+    /// Bulk delivery: the whole batch becomes one new timestamped NDJSON blob — object storage's natural
+    /// "write-once" shape, suited to a data-lake/audit-trail consumer reading an append-only stream. Every run
+    /// produces a new file; there is no per-record identity or "update in place" concept here at all (see
+    /// <see cref="WriteIndividualAsync"/> for that).
     /// </summary>
-    private static async Task<DestinationWriteResult> WriteAppendAsync(
+    private static async Task<DestinationWriteResult> WriteBulkAsync(
         BlobDestinationTarget target,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
@@ -88,7 +92,7 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
         BlobDestinationSettings settings,
         CancellationToken cancellationToken)
     {
-        var blobName = BuildAppendBlobName(mappingProfile, settings);
+        var blobName = BuildBulkBlobName(mappingProfile, settings);
         var blobClient = target.Container.GetBlobClient(blobName);
         var content = MappedDestinationSerialization.ToNdjson(records);
 
@@ -109,14 +113,15 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
     }
 
     /// <summary>
-    /// One blob per record, named by the mapped field flagged <c>IsUpsertKey</c> (falling back to
-    /// <see cref="MappedDestinationRecord.SourceResourceId"/>, same fallback <see cref="MappedSqlServerDestinationWriter"/>
-    /// uses) — re-running the pipeline overwrites that exact blob instead of accumulating a new one, giving Blob
-    /// the same "update a record" semantics SQL/Mongo already have. A record with no resolvable key at all still
-    /// gets written (never silently dropped), but under a one-off unique name — it can't be reliably "updated"
-    /// next run without a stable identity to key off of.
+    /// Individual delivery: one blob per record, named by the mapped field flagged <c>IsUpsertKey</c> (falling
+    /// back to <see cref="MappedDestinationRecord.SourceResourceId"/>, same fallback
+    /// <see cref="MappedSqlServerDestinationWriter"/> uses). <see cref="BlobDestinationSettings.RecordMode"/>
+    /// decides what happens relative to whatever's already at that key: <c>Insert</c> always adds a fresh blob
+    /// (uniquified so it never collides), <c>Upsert</c> creates-or-overwrites unconditionally, and <c>Update</c>
+    /// only overwrites a blob that already exists, skipping the record entirely if it doesn't (checked via one
+    /// extra existence call per record).
     /// </summary>
-    private static async Task<DestinationWriteResult> WriteUpsertAsync(
+    private static async Task<DestinationWriteResult> WriteIndividualAsync(
         BlobDestinationTarget target,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
@@ -125,29 +130,81 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
         CancellationToken cancellationToken)
     {
         var keyField = ResolveUpsertKeyField(mappingProfile);
-        var folder = BuildUpsertFolder(mappingProfile, settings);
+        var folder = BuildIndividualFolder(mappingProfile, settings);
+        var written = 0;
 
         foreach (var record in records)
         {
             var keyValue = ResolveKeyValue(record, keyField);
-            var blobName = keyValue is not null
-                ? $"{folder}/{SanitizePathSegment(keyValue)}.json"
-                : $"{folder}/{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.json";
-            var blobClient = target.Container.GetBlobClient(blobName);
 
-            using var payload = new MemoryStream(Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToJson(record)));
-            await blobClient.UploadAsync(
-                payload,
-                new BlobUploadOptions
+            if (settings.RecordMode == BlobRecordMode.Insert)
+            {
+                // Never overwrites: the name is always uniquified, even when a stable key resolved, so a
+                // repeated "insert" of the same logical record just accumulates another blob rather than
+                // replacing the last one.
+                var stem = keyValue is not null ? SanitizePathSegment(keyValue) : "record";
+                var blobName = $"{folder}/{stem}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.json";
+                await UploadRecordAsync(target, blobName, mappingProfile, record, context, settings, cancellationToken);
+                written++;
+                continue;
+            }
+
+            if (keyValue is null)
+            {
+                // Upsert with no resolvable identity still writes (under a one-off unique name — it can't be
+                // reliably updated next run without a stable key). Update has nothing to check existence
+                // against without a key at all, so it skips rather than guessing.
+                if (settings.RecordMode == BlobRecordMode.Update)
                 {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" },
-                    Metadata = BuildRecordMetadata(mappingProfile, record, context),
-                    AccessTier = settings.AccessTier is null ? null : (AccessTier?)new AccessTier(settings.AccessTier),
-                },
-                cancellationToken);
+                    continue;
+                }
+
+                var blobName = $"{folder}/{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.json";
+                await UploadRecordAsync(target, blobName, mappingProfile, record, context, settings, cancellationToken);
+                written++;
+                continue;
+            }
+
+            var keyedBlobName = $"{folder}/{SanitizePathSegment(keyValue)}.json";
+
+            if (settings.RecordMode == BlobRecordMode.Update)
+            {
+                var blobClient = target.Container.GetBlobClient(keyedBlobName);
+                var exists = await blobClient.ExistsAsync(cancellationToken);
+                if (!exists.Value)
+                {
+                    continue;
+                }
+            }
+
+            await UploadRecordAsync(target, keyedBlobName, mappingProfile, record, context, settings, cancellationToken);
+            written++;
         }
 
-        return new DestinationWriteResult(records.Count);
+        return new DestinationWriteResult(written);
+    }
+
+    private static async Task UploadRecordAsync(
+        BlobDestinationTarget target,
+        string blobName,
+        MappingProfile mappingProfile,
+        MappedDestinationRecord record,
+        PipelineWriteContext context,
+        BlobDestinationSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var blobClient = target.Container.GetBlobClient(blobName);
+
+        using var payload = new MemoryStream(Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToJson(record)));
+        await blobClient.UploadAsync(
+            payload,
+            new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" },
+                Metadata = BuildRecordMetadata(mappingProfile, record, context),
+                AccessTier = settings.AccessTier is null ? null : (AccessTier?)new AccessTier(settings.AccessTier),
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -211,17 +268,19 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
         return suffixIndex < 0 ? destinationObject : destinationObject[..suffixIndex];
     }
 
-    private static string BuildAppendBlobName(MappingProfile mappingProfile, BlobDestinationSettings settings)
+    private static string CleanStem(MappingProfile mappingProfile) =>
+        SanitizePathSegment(StripKnownExtension(StripWriteModeSuffix(mappingProfile.DestinationObject)));
+
+    private static string BuildBulkBlobName(MappingProfile mappingProfile, BlobDestinationSettings settings)
     {
-        var cleanStem = SanitizePathSegment(StripKnownExtension(StripWriteModeSuffix(mappingProfile.DestinationObject)));
-        var fileName = $"{cleanStem}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.ndjson";
+        var fileName = $"{CleanStem(mappingProfile)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.ndjson";
 
         return string.IsNullOrWhiteSpace(settings.PathPrefix) ? fileName : $"{settings.PathPrefix}/{fileName}";
     }
 
-    private static string BuildUpsertFolder(MappingProfile mappingProfile, BlobDestinationSettings settings)
+    private static string BuildIndividualFolder(MappingProfile mappingProfile, BlobDestinationSettings settings)
     {
-        var folder = SanitizePathSegment(StripKnownExtension(StripWriteModeSuffix(mappingProfile.DestinationObject)));
+        var folder = CleanStem(mappingProfile);
 
         return string.IsNullOrWhiteSpace(settings.PathPrefix) ? folder : $"{settings.PathPrefix}/{folder}";
     }

@@ -65,6 +65,8 @@ public sealed class MappedBlobStorageDestinationWriterTests
                 blobSequenceNumber: 0),
             Mock.Of<Response>());
 
+    private static Response<bool> ExistsResponse(bool exists) => Response.FromValue(exists, Mock.Of<Response>());
+
     [Fact]
     public async Task Empty_record_set_short_circuits_without_touching_the_client_factory()
     {
@@ -432,5 +434,115 @@ public sealed class MappedBlobStorageDestinationWriterTests
         _container.Verify(
             c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Insert_mode_never_reuses_a_name_even_for_the_same_key_twice()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        var capturedNames = new List<string>();
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedNames.Add(name))
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        var records = new[]
+        {
+            Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" }),
+            Record("p2", new Dictionary<string, object?> { ["PatientId"] = "abc-123" }), // same key, again
+        };
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"insert"}"""),
+            mapping, records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        capturedNames.Should().HaveCount(2);
+        capturedNames[0].Should().NotBe(capturedNames[1]); // never collides, even for the same logical key
+        capturedNames.Should().OnlyContain(name => name.StartsWith("Patient/abc-123_"));
+    }
+
+    [Fact]
+    public async Task Update_mode_overwrites_a_record_whose_blob_already_exists()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+        blob.Setup(b => b.ExistsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(ExistsResponse(true));
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"update"}"""),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })],
+            Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        blob.Verify(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_mode_skips_a_record_whose_blob_does_not_exist_yet()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+        blob.Setup(b => b.ExistsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(ExistsResponse(false));
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"update"}"""),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })],
+            Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        blob.Verify(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_mode_skips_a_record_with_no_resolvable_key_without_checking_existence()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "Patient", null, new Dictionary<string, object?> { ["Name"] = "Alice" }),
+        };
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"update"}"""),
+            Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        blob.Verify(b => b.ExistsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        blob.Verify(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Bulk_granularity_is_the_default_when_nothing_is_configured()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        _container.Setup(c => c.GetBlobClient(It.IsAny<string>())).Returns(blob.Object);
+        _container
+            .Setup(c => c.CreateIfNotExistsAsync(It.IsAny<PublicAccessType>(), It.IsAny<IDictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateContainerResponse());
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var result = await CreateWriter().WriteAsync(Destination(), Mapping(), [Record(), Record("p2")], Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2); // both records landed in the same bulk blob
+        blob.Verify(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

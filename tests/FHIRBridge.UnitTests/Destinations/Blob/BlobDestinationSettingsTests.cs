@@ -186,22 +186,55 @@ public sealed class BlobDestinationSettingsTests
     }
 
     [Fact]
-    public void WriteMode_defaults_to_Append_when_missing()
+    public void Granularity_defaults_to_Bulk_when_missing()
     {
         var settings = BlobDestinationSettings.Parse(Destination("fhir", "{}"));
 
-        settings.WriteMode.Should().Be(BlobWriteMode.Append);
+        settings.Granularity.Should().Be(BlobDeliveryGranularity.Bulk);
     }
 
     [Theory]
-    [InlineData("upsert", BlobWriteMode.Upsert)]
-    [InlineData("Upsert", BlobWriteMode.Upsert)]
-    [InlineData("append", BlobWriteMode.Append)]
-    [InlineData("not-a-real-mode", BlobWriteMode.Append)]
-    public void WriteMode_is_parsed_case_insensitively_with_Append_fallback(string raw, BlobWriteMode expected)
+    [InlineData("individual", BlobDeliveryGranularity.Individual)]
+    [InlineData("Individual", BlobDeliveryGranularity.Individual)]
+    [InlineData("bulk", BlobDeliveryGranularity.Bulk)]
+    [InlineData("not-a-real-value", BlobDeliveryGranularity.Bulk)]
+    public void Granularity_is_parsed_case_insensitively_with_Bulk_fallback(string raw, BlobDeliveryGranularity expected)
     {
-        var settings = BlobDestinationSettings.Parse(Destination("fhir", $$"""{"dest_writeMode":"{{raw}}"}"""));
+        var settings = BlobDestinationSettings.Parse(
+            Destination("fhir", $$"""{"dest_blobGranularity":"{{raw}}"}"""));
 
-        settings.WriteMode.Should().Be(expected);
+        settings.Granularity.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("append", BlobDeliveryGranularity.Bulk)]
+    [InlineData("upsert", BlobDeliveryGranularity.Individual)]
+    public void Granularity_falls_back_to_the_legacy_dest_writeMode_key_when_dest_blobGranularity_is_absent(
+        string legacyRaw, BlobDeliveryGranularity expected)
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", $$"""{"dest_writeMode":"{{legacyRaw}}"}"""));
+
+        settings.Granularity.Should().Be(expected);
+    }
+
+    [Fact]
+    public void RecordMode_defaults_to_Upsert_when_missing()
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", "{}"));
+
+        settings.RecordMode.Should().Be(BlobRecordMode.Upsert);
+    }
+
+    [Theory]
+    [InlineData("insert", BlobRecordMode.Insert)]
+    [InlineData("Insert", BlobRecordMode.Insert)]
+    [InlineData("upsert", BlobRecordMode.Upsert)]
+    [InlineData("update", BlobRecordMode.Update)]
+    [InlineData("not-a-real-value", BlobRecordMode.Upsert)]
+    public void RecordMode_is_parsed_case_insensitively_with_Upsert_fallback(string raw, BlobRecordMode expected)
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", $$"""{"dest_blobRecordMode":"{{raw}}"}"""));
+
+        settings.RecordMode.Should().Be(expected);
     }
 }

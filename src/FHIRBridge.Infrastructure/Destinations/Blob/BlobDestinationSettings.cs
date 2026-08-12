@@ -23,7 +23,8 @@ public sealed record BlobDestinationSettings(
     string? PathPrefix,
     bool CreateContainerIfNotExists,
     string? AccessTier,
-    BlobWriteMode WriteMode)
+    BlobDeliveryGranularity Granularity,
+    BlobRecordMode RecordMode)
 {
     /// <summary>Every mode except Managed Identity needs the resolved Key Vault secret as credential material.</summary>
     public bool RequiresSecret => AuthMode != BlobDestinationAuthMode.ManagedIdentity;
@@ -96,16 +97,33 @@ public sealed record BlobDestinationSettings(
             PathPrefix: ConnectionMetadataReader.GetString(json, "dest_blobPathPrefix")?.Trim('/'),
             CreateContainerIfNotExists: ParseBool(ConnectionMetadataReader.GetString(json, "dest_blobCreateContainerIfNotExists"), true),
             AccessTier: ConnectionMetadataReader.GetString(json, "dest_blobAccessTier"),
-            // Same dest_writeMode key SQL/Mongo already use — but defaulting to Append (not Upsert, unlike
-            // those two) since Append is Blob's original, only-ever-shipped behavior; changing the default here
-            // would silently change what every already-configured Blob destination does on its next run.
-            WriteMode: ParseWriteMode(ConnectionMetadataReader.GetString(json, "dest_writeMode")));
+            Granularity: ParseGranularity(json),
+            RecordMode: ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode")));
     }
 
-    private static BlobWriteMode ParseWriteMode(string? raw) => raw?.Trim().ToLowerInvariant() switch
+    /// <summary>
+    /// Reads the current <c>dest_blobGranularity</c> key first; falls back to the short-lived
+    /// <c>dest_writeMode</c> key an earlier iteration of this feature used ("append"/"upsert") for any row
+    /// saved during that window, so it doesn't silently change behavior. Defaults to Bulk either way — Bulk
+    /// is Blob's original, only-ever-shipped behavior, so an unconfigured row must keep doing that.
+    /// </summary>
+    private static BlobDeliveryGranularity ParseGranularity(string? json)
     {
-        "upsert" => BlobWriteMode.Upsert,
-        _ => BlobWriteMode.Append,
+        var raw = ConnectionMetadataReader.GetString(json, "dest_blobGranularity")
+            ?? ConnectionMetadataReader.GetString(json, "dest_writeMode");
+
+        return raw?.Trim().ToLowerInvariant() switch
+        {
+            "individual" or "upsert" => BlobDeliveryGranularity.Individual,
+            _ => BlobDeliveryGranularity.Bulk,
+        };
+    }
+
+    private static BlobRecordMode ParseRecordMode(string? raw) => raw?.Trim().ToLowerInvariant() switch
+    {
+        "insert" => BlobRecordMode.Insert,
+        "update" => BlobRecordMode.Update,
+        _ => BlobRecordMode.Upsert,
     };
 
     private static BlobDestinationAuthMode ParseAuthMode(string? raw) => raw?.Trim().ToLowerInvariant() switch

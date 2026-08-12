@@ -252,17 +252,37 @@
             </div>
 
             <div class="dw-field">
-              <label class="dw-label" for="dw-blob-writeMode">Write mode</label>
+              <label class="dw-label" for="dw-blob-granularity">Delivery</label>
               <div class="dw-select-wrap">
-                <select id="dw-blob-writeMode" class="dw-select" formControlName="writeMode">
-                  <option value="append">Append (new blob every run)</option>
-                  <option value="upsert">Upsert (update existing record)</option>
+                <select id="dw-blob-granularity" class="dw-select" formControlName="granularity">
+                  <option value="bulk">Bulk upload (all records in one blob)</option>
+                  <option value="individual">Individual records (one blob per record)</option>
                 </select>
               </div>
-              @if (blobForm.get('writeMode')!.value === 'upsert') {
-                <span class="dw-hint">Overwrites the blob for a record's upsert-key value (set the 🔑 on a field in Map fields) — falls back to the record's own source id if no key is set.</span>
+              @if (blobForm.get('granularity')!.value === 'bulk') {
+                <span class="dw-hint">Every run writes one new blob containing the whole batch — no existing blob is ever updated.</span>
               }
             </div>
+
+            @if (blobForm.get('granularity')!.value === 'individual') {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-blob-recordMode">Record mode</label>
+                <div class="dw-select-wrap">
+                  <select id="dw-blob-recordMode" class="dw-select" formControlName="recordMode">
+                    <option value="insert">Insert — always add new</option>
+                    <option value="upsert">Upsert — update if exists, else insert</option>
+                    <option value="update">Update — only if exists</option>
+                  </select>
+                </div>
+                @if (blobForm.get('recordMode')!.value === 'insert') {
+                  <span class="dw-hint">Every record gets a brand-new blob, even one already written before — nothing is ever overwritten.</span>
+                } @else if (blobForm.get('recordMode')!.value === 'upsert') {
+                  <span class="dw-hint">Creates the record's blob if it doesn't exist yet, or overwrites it if it does — keyed by the field flagged 🔑 in Map fields (falls back to the record's own source id).</span>
+                } @else {
+                  <span class="dw-hint">Only overwrites a record's blob if one already exists under its key — a record with no existing blob is skipped, never created.</span>
+                }
+              </div>
+            }
 
             <div class="dw-field dw-field--full">
               <label class="dw-label" for="dw-blob-authMode">Authentication</label>
@@ -764,9 +784,15 @@
             <span class="dw-review-val">{{ blobForm.value.authMode }}</span>
           </div>
           <div class="dw-review-card">
-            <span class="dw-review-key">Write mode</span>
-            <span class="dw-review-val">{{ blobForm.value.writeMode === 'upsert' ? 'Upsert (update existing record)' : 'Append (new blob every run)' }}</span>
+            <span class="dw-review-key">Delivery</span>
+            <span class="dw-review-val">{{ blobForm.value.granularity === 'individual' ? 'Individual records (one blob per record)' : 'Bulk upload (all records in one blob)' }}</span>
           </div>
+          @if (blobForm.value.granularity === 'individual') {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Record mode</span>
+              <span class="dw-review-val">{{ blobForm.value.recordMode === 'insert' ? 'Insert — always add new' : blobForm.value.recordMode === 'update' ? 'Update — only if exists' : 'Upsert — update if exists, else insert' }}</span>
+            </div>
+          }
           @if (blobForm.value.pathPrefix) {
             <div class="dw-review-card">
               <span class="dw-review-key">Path prefix</span>
