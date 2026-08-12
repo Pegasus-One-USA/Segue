@@ -153,29 +153,36 @@
                 <div class="step-card">
                   <div class="step-card__content">
                     <div class="step-card__fields">
-                      <div class="form-field node-select">
-                        <div class="node-select__label-row">
-                          <span class="step-number">{{ stepIndex + 1 }}</span>
-                          <label [for]="'node-type-' + stepIndex">Node type</label>
-                        </div>
-                        <div class="node-select__input-row">
-                          <div class="step-reorder">
-                            <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(group, step, -1)" matTooltip="Run earlier">
-                              <mat-icon>arrow_upward</mat-icon>
-                            </button>
-                            <button type="button" class="step-reorder-btn" [disabled]="isLast" (click)="moveStep(group, step, 1)" matTooltip="Run later">
-                              <mat-icon>arrow_downward</mat-icon>
-                            </button>
+                      <div class="step-card__fields-row step-card__fields-row--node">
+                        <div class="form-field node-select">
+                          <div class="node-select__label-row">
+                            <span class="step-number">{{ stepIndex + 1 }}</span>
+                            <label [for]="'node-type-' + stepIndex">Node type</label>
                           </div>
-                          <select [id]="'node-type-' + stepIndex" [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
-                            @for (opt of applicableNodeTypesFor(group); track opt.value) {
-                              <option [value]="opt.value">{{ opt.label }}</option>
-                            }
-                          </select>
+                          <div class="node-select__input-row">
+                            <select [id]="'node-type-' + stepIndex" [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
+                              @for (opt of applicableNodeTypesFor(group); track opt.value) {
+                                <option [value]="opt.value">{{ opt.label }}</option>
+                              }
+                            </select>
+                            <div class="step-reorder">
+                              <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(group, step, -1)" matTooltip="Run earlier">
+                                <mat-icon>arrow_upward</mat-icon>
+                              </button>
+                              <button type="button" class="step-reorder-btn" [disabled]="isLast" (click)="moveStep(group, step, 1)" matTooltip="Run later">
+                                <mat-icon>arrow_downward</mat-icon>
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                      <!-- A separate row (its own flex-wrap context), not a sibling flex item sharing
+                           .step-card__fields-row--node's row — see transform-rules-dialog.component.scss's
+                           identical rule for why this, not a flex-wrap break inside one shared row. -->
+                      <div class="step-card__fields-row step-card__fields-row--config">
+                        <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                      </div>
                     </div>
 
                     <div class="step-card__advanced">
@@ -209,10 +216,13 @@
                           <option value="PerItem">Per item</option>
                         </select>
                       </div>
-                      <mat-form-field appearance="outline" class="config-control" matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from.">
-                        <mat-label>FHIR write-back path (advanced)</mat-label>
-                        <input matInput [ngModel]="step.fhirWriteBackJsonPath" (ngModelChange)="setFhirWriteBackJsonPath(step, $event)" placeholder="e.g. code" />
-                      </mat-form-field>
+                      <div
+                        class="form-field config-control"
+                        matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from."
+                      >
+                        <label [for]="'fhir-writeback-' + stepIndex">FHIR write-back path (advanced)</label>
+                        <input [id]="'fhir-writeback-' + stepIndex" [ngModel]="step.fhirWriteBackJsonPath" (ngModelChange)="setFhirWriteBackJsonPath(step, $event)" placeholder="e.g. code" />
+                      </div>
                     </div>
 
                     <div class="step-card__actions">

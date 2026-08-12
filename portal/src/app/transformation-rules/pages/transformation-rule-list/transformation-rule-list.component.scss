@@ -274,40 +274,47 @@
   &__content {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 16px;
     flex: 1;
     min-width: 0;
   }
 
-  // Node type + whatever fields the selected node's own schema needs (e.g. Date/Time Format's Target
-  // type + its checkbox) flow together in one wrapping row, instead of each stacking on its own full-
-  // width line — that either stretched a short field the whole card's width, or (capping it instead)
-  // left a big blank gap beside a now-narrow card. Wrapping fills the row with as many fields as
-  // actually fit at a sane width each, and adds a line only once it runs out of room.
+  // Two genuinely separate rows — Node type on its own, the selected node's own schema fields on the row
+  // below — rather than one flex-wrap row where the break between them depended on the row's available
+  // width. Two sibling block divs (each its own flex container) stack unconditionally; there's no width
+  // math that can put them back on the same line. See transform-rules-dialog.component.scss's identical
+  // rule for why (the two entry points are kept structurally identical, not just visually similar).
   &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  &__fields-row {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: 8px 12px;
+    gap: 16px 12px;
+  }
 
-    // Same 160px basis as &__advanced below (not the 260px this used to be) — see
-    // transform-rules-dialog.component.scss's identical rule for why: at 260px, 3 fields in this row
-    // (Node type + up to 2 schema fields) never fit the dialog's own narrower content width, so the 3rd
-    // field wrapped onto its own line and stretched full-width alone instead of matching its siblings.
-    // This page renders the same step-card at a wider column, but sizing it identically to the dialog
-    // keeps the two entry points visually consistent rather than drifting apart at different bases.
-    // NOT a flex rule on app-rule-config-form itself — that element is display: contents (see
-    // RuleConfigFormComponent's own styles), so it has no box of its own to apply flex properties to;
-    // its .config-control children are the real flex items here, direct siblings of .node-select in
-    // this exact row (see the ::ng-deep rule below for their sizing).
-    // .node-select's basis is 160px + 26px, not the same 160px as its siblings — see
+  &__fields-row--node {
+    // .node-select's basis is 160px + 26px, not the same 160px as the config row's fields — see
     // transform-rules-dialog.component.scss's identical rule for why: the 26px is exactly the reorder
     // arrows' own footprint (20px column + 6px gap, both living inside .node-select's own flex-item box,
     // see .node-select__input-row below), added back so that budget goes to the arrows specifically and
-    // the <select> itself still gets the same 160px (plus its even share of grown space) as every
-    // sibling .config-control's own select — equal-width dropdown BOXES, not just an equal-width outer
+    // the <select> itself still gets the same 160px (plus its even share of grown space) as its
+    // counterparts in the config row — an equal-width dropdown BOX, not just an equal-width outer
     // wrapper that happens to hide a narrower select inside it.
-    .node-select { flex: 1 1 186px; width: auto; min-width: 0; }
+    .node-select { flex: 1 1 186px; width: auto; min-width: 0; max-width: 340px; }
+  }
+
+  &__fields-row--config {
+    // app-rule-config-form now owns its own CSS Grid internally (see RuleConfigFormComponent's styles) —
+    // it's the row's only child, so this just needs to let that grid have the row's full width rather
+    // than sizing itself to content.
+    display: block;
+
+    app-rule-config-form { display: block; width: 100%; }
   }
 
   &__actions {
@@ -319,25 +326,12 @@
   &__advanced {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
-    padding-top: 4px;
+    gap: 16px 12px;
+    padding-top: 12px;
     border-top: 1px dashed var(--color-border);
 
     .config-control { flex: 1 1 160px; }
   }
-
-  // Same 160px basis and flex-grow: 1 as .node-select right above — so every field in this row (Node
-  // type plus whatever the node's own schema needs) grows evenly together, matching &__advanced's own
-  // "grow together, fill the row" look, at a basis this row can actually fit 3 fields into without
-  // wrapping (see .node-select's own note right above for why 260px didn't). RuleConfigFormComponent's
-  // own .config-control defaults to flex: 1 1 200px; overridden here only to match .node-select's basis,
-  // not to cap growth. ::ng-deep is required (that class is encapsulated inside the child component's
-  // own template styles) — scoped to just this page's step cards so the Rules dialog's own sizing is
-  // untouched (it carries the identical override in its own stylesheet instead). Scoped to the <div>
-  // variant specifically — the checkbox field is a <label> carrying the same base class plus
-  // .config-control--checkbox, whose own flex-basis: 100% deliberately keeps it on its own full-width
-  // row; a tag-less selector here would silently cancel that too.
-  ::ng-deep app-rule-config-form div.config-control { flex: 1 1 160px; min-width: 0; }
 }
 
 // A plain flex row (NOT an inline badge inside the label's text, and NOT position: absolute either —
@@ -353,17 +347,20 @@
 }
 
 .step-number {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 15px;
-  height: 15px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
+  border: 1px solid var(--color-primary-mid);
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
+  line-height: 1;
 }
 
 // Reorder arrows sit inside the Node type field itself, immediately left of its own select — not in a

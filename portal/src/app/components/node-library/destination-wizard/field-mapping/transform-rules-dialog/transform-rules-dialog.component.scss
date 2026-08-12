@@ -68,17 +68,27 @@
 .header-trail {
   display: flex;
   align-items: center;
-  gap: 2px;
+  // 2px read as pills and chevrons crowded right up against each other with no breathing room, rather
+  // than a clean, evenly-spaced trail — 6px gives each segment its own visual space.
+  gap: 6px;
   margin-top: 3px;
 
   &__pill {
+    // A pill is its own tiny flex row (not just inline text) with an explicit line-height, not the
+    // browser's own default for 12px/700 text (which varies by font metrics) — so every pill's text sits
+    // dead-center in its own padding box by a known number, the same reasoning as the checkbox label fix
+    // elsewhere in this file, rather than each pill (and the chevron beside it) landing at a slightly
+    // different baseline.
+    display: inline-flex;
+    align-items: center;
     font-size: 12px;
+    line-height: 15px;
     font-weight: 600;
     color: var(--color-ink-2);
     background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-pill);
-    padding: 2px 10px;
+    padding: 3px 10px;
     white-space: nowrap;
 
     &--dest { color: var(--color-primary-dark); background: var(--color-primary-soft); border-color: var(--color-primary-mid); }
@@ -423,17 +433,23 @@ mat-dialog-content {
 // extra binding needed here) rather than a flat teal, so the badge agrees with this step's own chip in
 // the chain-trail above and its card's own left-edge accent.
 .step-number {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 15px;
-  height: 15px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--tn-accent, var(--color-primary)) 16%, white);
-  color: var(--tn-accent, var(--color-primary));
-  font-size: 9px;
+  // Plain, unconditional tokens — not color-mix()/--tn-accent — the earlier accent-matched version
+  // rendered with invisible "1" text in testing; this trades the nice-to-have per-node-type tint for a
+  // badge that's guaranteed to actually show its number.
+  border: 1px solid var(--color-primary-mid);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  font-size: 10px;
   font-weight: 700;
+  line-height: 1;
 }
 
 // Reorder arrows sit inside the Node type field itself, immediately left of its own select — not in a
@@ -481,50 +497,53 @@ mat-dialog-content {
 .step-card__content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
   flex: 1;
   min-width: 0;
 }
 
-// Node type + whatever fields the selected node's own schema needs flow together in one wrapping row —
-// see transformation-rule-list.component.scss's identical rule for why (a lone field otherwise stretches
-// to fill this whole column instead of sizing to its own content).
+// Two genuinely separate rows — Node type on its own, the selected node's own schema fields on the row
+// below — rather than one flex-wrap row where a break between them depended on the row's available width
+// (or, before that, an invisible flex-basis:100% spacer forcing a break inside the row). Two sibling block
+// divs (each its own flex container) stack unconditionally; there's no width math that can put them back
+// on the same line. See transformation-rule-list.component.scss's identical rule for why.
 .step-card__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-card__fields-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 8px 12px;
+  gap: 16px 12px;
+}
 
-  // Same 160px basis as .step-card__advanced below (not the 260px this used to be) — at that wider
-  // basis, 3 fields (Node type + 2 schema fields, e.g. NumberCast's Target type + Decimal separator)
-  // never fit this dialog's own content width (~520-600px): 3 × 260px alone exceeds it before the 12px
-  // gaps are even added, so the row's 3rd field wrapped onto its own line and stretched full-width alone
-  // instead of matching its two siblings above. 160px × 3 comfortably fits both the default and
-  // maximized dialog widths, so flex-grow: 1 (unchanged) spreads all three evenly across one row —
-  // exactly the .step-card__advanced row's already-working "fields spread out to fill the space, all
-  // equally" look, just applied at a basis this specific row can actually satisfy without wrapping.
-  // NOT a flex rule on app-rule-config-form itself — that element is display: contents (see
-  // RuleConfigFormComponent's own styles), so it has no box of its own to apply flex properties to; its
-  // .config-control children are the real flex items here, direct siblings of .node-select in this
-  // exact row rather than items of a second, separately-sized flex row nested one level down.
-  // .node-select's basis is 160px + 26px — NOT the same 160px as its siblings. The 26px isn't an
-  // arbitrary nudge: it's exactly .node-select__input-row's reorder-arrow column (20px, see
+.step-card__fields-row--node {
+  // .node-select's basis is 186px (160px + 26px) — NOT the same 160px as the config row's fields. The
+  // 26px isn't an arbitrary nudge: it's exactly .node-select__input-row's reorder-arrow column (20px, see
   // .step-reorder-btn) plus its 6px gap to the select. Those two elements live INSIDE .node-select's own
   // flex-item box, sharing its width budget with the <select> — so without this compensation, the select
-  // itself would render 26px narrower than Target type/Decimal separator's selects even though the outer
-  // .node-select column measured the same total width as them. Adding the arrows' own footprint back to
-  // the basis means that budget goes to the arrows specifically, leaving the select the same 160px (plus
-  // its even share of any extra grown space) as every sibling .config-control — the actual dropdown BOXES
-  // end up equal-width, not just the invisible outer wrapper.
-  .node-select { flex: 1 1 186px; width: auto; min-width: 0; }
-  ::ng-deep div.config-control { flex: 1 1 160px; min-width: 0; }
+  // itself would render 26px narrower than its config-row counterparts even though the outer .node-select
+  // column measured the same total width as them.
+  .node-select { flex: 1 1 186px; width: auto; min-width: 0; max-width: 340px; }
+}
+
+.step-card__fields-row--config {
+  // app-rule-config-form now owns its own CSS Grid internally (see RuleConfigFormComponent's styles) —
+  // it's the row's only child, so this just needs to let that grid have the row's full width rather than
+  // sizing itself to content.
+  display: block;
+
+  app-rule-config-form { display: block; width: 100%; }
 }
 
 .step-card__advanced {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  padding-top: 4px;
+  gap: 16px 12px;
+  padding-top: 12px;
   border-top: 1px dashed var(--color-border);
 
   .config-control { flex: 1 1 160px; }

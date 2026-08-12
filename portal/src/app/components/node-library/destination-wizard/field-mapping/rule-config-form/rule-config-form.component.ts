@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TransformNodeSchema } from '../transformation-rules.service';
+import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformation-rules.service';
 
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
  *  already have gets the schema's default; keys the config already sets (e.g. loaded from a saved rule)
@@ -28,7 +28,7 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
   imports: [CommonModule, FormsModule],
   template: `
     <div class="rule-config-form">
-      @for (field of schema?.fields ?? []; track field.key) {
+      @for (field of orderedFields(); track field.key) {
         @switch (field.inputKind) {
           @case ('select') {
             <div class="config-control">
@@ -42,12 +42,16 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
           }
           @case ('checkbox') {
             <label class="config-control config-control--checkbox">
-              <input
-                type="checkbox"
-                [ngModel]="(config[field.key] ?? field.defaultValue) === 'true'"
-                (ngModelChange)="setValue(field.key, $event ? 'true' : 'false')"
-              />
-              {{ field.label }}
+              <span class="checkbox-visual">
+                <input
+                  type="checkbox"
+                  class="checkbox-visual__input"
+                  [ngModel]="(config[field.key] ?? field.defaultValue) === 'true'"
+                  (ngModelChange)="setValue(field.key, $event ? 'true' : 'false')"
+                />
+                <span class="checkbox-visual__box"></span>
+              </span>
+              <span class="config-control--checkbox__label">{{ field.label }}</span>
             </label>
           }
           @default {
@@ -68,106 +72,21 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
       }
     </div>
   `,
-  // Vertical label-above-input, per the app's own form spec (§8.3) — matches mapping-profile-dialog's
-  // .mpd-meta-field convention rather than Material's floating-label outline, which this dynamic,
-  // schema-driven form (rendered inline inside both the per-column Rules dialog and the Transformation
-  // Rules page's step editor) previously used.
-  //
-  // :host + .rule-config-form both display: contents — this component renders inline next to a sibling
-  // "Node type" field owned by its HOST (step-card__fields, a flex-wrap row in both consumers). Giving
-  // .config-control its own matching flex-wrap row here instead just creates a SECOND, separate flex
-  // context nested one level down — getting every CSS value (label height, gap, flex-basis) to match the
-  // host's row byte-for-byte is fragile, and any tiny drift between the two shows up as a field that's a
-  // few pixels off from its true siblings. display: contents removes both this component's host element
-  // and its own wrapping div from the box tree entirely, so .config-control (and the checkbox/no-config
-  // fallback) become genuine flex ITEMS of the host's own step-card__fields row — one flex context, not
-  // two kept in sync by hand.
-  styles: [`
-    :host { display: contents; }
-    .rule-config-form { display: contents; }
-
-    .config-control {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1 1 200px;
-
-      // display: block + min-height (not just font-size) — matches the outer "Node type" field's own
-      // label sizing exactly (see transformation-rule-list/transform-rules-dialog's .form-field label) —
-      // both sit as siblings in the same wrapping row, so a two-line label here (e.g. "Sentinel values
-      // treated as empty (comma-separated)") must reserve the identical height as a shorter neighbor's
-      // one-line label, or their inputs land at different Y positions.
-      label {
-        display: block;
-        min-height: 34px;
-        font-size: 13px;
-        font-weight: 600;
-        line-height: 1.3;
-        color: var(--color-ink-2);
-      }
-
-      select, input {
-        height: 42px;
-        padding: 0 12px;
-        border: 1.5px solid var(--color-border-input);
-        border-radius: var(--radius-base);
-        font-size: 13.5px;
-        color: var(--color-ink);
-        background-color: var(--color-surface);
-        box-sizing: border-box;
-        transition: border-color var(--transition-base, 150ms ease);
-
-        &:hover { border-color: var(--color-muted); }
-        &:focus-visible {
-          outline: none;
-          border-color: var(--color-primary);
-          box-shadow: 0 0 0 3px var(--color-primary-mid);
-        }
-      }
-
-      // Matches "Node type"'s own select exactly (see transform-rules-dialog/transformation-rule-list's
-      // .form-field select) — same custom chevron, same reset of the browser's own native arrow, so this
-      // field and its sibling "Node type" render the identical dropdown glyph in the identical spot
-      // instead of each browser drawing its own.
-      select {
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        cursor: pointer;
-        padding-right: 32px;
-        // A data: URI SVG can't reference a CSS custom property, so this one hex is unavoidable — it's
-        // --color-muted's own value (#64748B), not a stand-in for a token that could be used instead.
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748B' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 12px center;
-        background-size: 10px 7px;
-      }
-    }
-
-    .config-control--checkbox {
-      flex-basis: 100%;
-      flex-direction: row;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--color-ink-2);
-      cursor: pointer;
-
-      input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        margin: 0;
-        accent-color: var(--color-primary);
-      }
-    }
-
-    .no-config { font-size: 12.5px; color: var(--color-muted); margin: 0; }
-  `],
+  styleUrls: ['./rule-config-form.component.scss'],
 })
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+
+  /** Checkbox fields always render last, after every text/select field — a lone toggle reads better as a
+   *  trailing "also do this" option than sitting wherever the schema happened to declare it. Reordering
+   *  the actual array (not a CSS order: override) keeps DOM/tab order in sync with visual order. */
+  orderedFields(): TransformConfigFieldSchema[] {
+    const fields = this.schema?.fields ?? [];
+    const rest = fields.filter(f => f.inputKind !== 'checkbox');
+    const checkboxes = fields.filter(f => f.inputKind === 'checkbox');
+    return [...rest, ...checkboxes];
+  }
 
   setValue(key: string, value: string): void {
     this.config[key] = value;

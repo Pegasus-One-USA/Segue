@@ -167,6 +167,22 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     return 'contract-' + (contract ?? 'none').toLowerCase();
   }
 
+  /** One glyph per pipeline stage's output contract — mirrors the Runtime Plane topology (extraction →
+   *  governance → transform → output → audit) so the node marker reads as "what kind of step is this"
+   *  at a glance, not just a generic bolt. */
+  private static readonly CONTRACT_ICONS: Record<string, string> = {
+    resourcebatch: 'download',
+    normalizedresourcebatch: 'rule',
+    mappedrecordbatch: 'sync_alt',
+    deidentifiedbatch: 'shield',
+    destinationwriteresult: 'upload',
+    auditresult: 'fact_check',
+  };
+
+  contractIcon(contract: string | null): string {
+    return ExecutionHistoryDetailComponent.CONTRACT_ICONS[(contract ?? '').toLowerCase()] ?? 'bolt';
+  }
+
   copyCorrelationId(): void {
     const correlationId = this.execution()?.correlationId;
     if (!correlationId) { return; }
