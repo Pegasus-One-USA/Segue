@@ -1214,6 +1214,19 @@ public static class WorkflowEndpoints
         })
         .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Split out of the list above so expanding a node's row only pays the decryption cost for that one
+        // node's payload — not every node in the page (a source node's payload can hold thousands of resources).
+        group.MapGet("/workflow-runs/{runId:guid}/node-runs/{nodeRunId:guid}/payload", async (
+            Guid runId,
+            Guid nodeRunId,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await recorder.GetNodeRunPayloadAsync(runId, nodeRunId, cancellationToken);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        })
+        .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // Field-level lineage: one chain per (resource, destination field), each carrying the full
         // source -> node -> node -> destination hop chain the transform-rule engine produced for it. The
         // filter params back the portal's Group-by-Field/Patient/Node toggle and free-text search — all the

@@ -11,7 +11,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// and generic FHIR R4 servers that authenticate with a client id + secret rather than SMART backend-services JWTs.
 /// Tokens are cached per (token endpoint, client, scopes) until shortly before expiry.
 /// </summary>
-public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvider
+public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvider, IFhirGrantedScopeProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IFhirAccessTokenCache _tokenCache;
@@ -35,7 +35,7 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
         }
 
         var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
-        var cacheKey = $"fhir-token:oauth2|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+        var cacheKey = BuildCacheKey(source, scopes);
         var cached = await _tokenCache.GetAsync(cacheKey, cancellationToken);
         if (cached is not null)
         {
@@ -68,9 +68,26 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
         }
 
         var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : 300;
-        await _tokenCache.SetAsync(cacheKey, token.AccessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn), cancellationToken);
+        var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+        await _tokenCache.SetAsync(cacheKey, token.AccessToken, expiresOnUtc, cancellationToken);
+        await _tokenCache.SetScopeAsync(cacheKey, token.Scope, expiresOnUtc, cancellationToken);
         return token.AccessToken;
     }
+
+    /// <summary>
+    /// Returns this connection's actual granted <c>scope</c> response, minting a token first if none is cached yet
+    /// (client-credentials is non-interactive, so this never needs to wait on a user). Null if the token endpoint
+    /// never echoed a <c>scope</c> back.
+    /// </summary>
+    public async Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        await GetAccessTokenAsync(source, cancellationToken);
+        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
+        return await _tokenCache.GetScopeAsync(BuildCacheKey(source, scopes), cancellationToken);
+    }
+
+    private static string BuildCacheKey(FhirSourceConfiguration source, string scopes) =>
+        $"fhir-token:oauth2|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
 
     private sealed class TokenResponse
     {
@@ -79,5 +96,8 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
 
         [JsonPropertyName("expires_in")]
         public int ExpiresInSeconds { get; set; }
+
+        [JsonPropertyName("scope")]
+        public string? Scope { get; set; }
     }
 }

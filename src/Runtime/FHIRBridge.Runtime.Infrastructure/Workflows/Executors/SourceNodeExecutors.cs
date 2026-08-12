@@ -1,4 +1,5 @@
-using FHIRBridge.Application.DTOs;
+﻿using FHIRBridge.Application.DTOs;
+using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
@@ -21,8 +22,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -36,8 +38,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -51,8 +54,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -66,8 +70,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -81,8 +86,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -96,8 +102,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -111,8 +118,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -126,8 +134,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -156,6 +165,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? _bulkExportJobRepository;
     private readonly IGlobalExceptionManager? _exceptionManager;
+    private readonly IFhirAccessTokenProvider? _accessTokenProvider;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -166,7 +176,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IFhirBulkExportClient? bulkExportClient = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
-        IGlobalExceptionManager? exceptionManager = null)
+        IGlobalExceptionManager? exceptionManager = null,
+        IFhirAccessTokenProvider? accessTokenProvider = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -177,6 +188,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _workflowDefinitionStore = workflowDefinitionStore;
         _bulkExportJobRepository = bulkExportJobRepository;
         _exceptionManager = exceptionManager;
+        _accessTokenProvider = accessTokenProvider;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -347,10 +359,42 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             && !string.IsNullOrWhiteSpace(source.ExportScope)
             && BulkExportScopes.Parse(source.ExportScope) is BulkExportScope.System or BulkExportScope.Group;
 
+        // A Group export scoped to just Patient hits the Epic bug above (business-rule 59159) — but only because
+        // Group export makes Epic resolve membership internally. Resolving the Group's membership ourselves via a
+        // plain FHIR read and re-issuing the job as a Patient-scoped export (with those ids and _type=Patient)
+        // sidesteps the bug entirely, AND stops Epic from processing every other resource type it's authorized
+        // for just to hand back the one type this node actually wants.
+        //
+        // The Group id used for a Bulk Data $export isn't guaranteed to be a normal, GET-able FHIR Group resource
+        // (confirmed on Epic: some Group export ids 404 on a plain read despite being valid for $export) — when
+        // membership can't be resolved that way, fall back to requesting Patient alongside ONE other
+        // already-authorized resource type (known from this session's granted SMART scopes, not read from
+        // anywhere) instead of omitting _type entirely. Epic's bug only triggers when Patient is the sole type, so
+        // two types still avoids it, while limiting Epic's work to 2 resource types instead of every authorized
+        // one. groupExportRequestTypes (not executionOrder) carries that throwaway type into the request only —
+        // executionOrder below stays exactly ["Patient"], so the throwaway type's fetched data is never looked up
+        // from batchedBulkResourcesByType, never added to this node's output, never processed further.
+        var groupExportRequestTypes = executionOrder;
+        if (explicitSystemOrGroupExport
+            && BulkExportScopes.Parse(source.ExportScope) == BulkExportScope.Group
+            && executionOrder is [{ } onlyResourceType] && string.Equals(onlyResourceType, "Patient", StringComparison.OrdinalIgnoreCase))
+        {
+            var groupPatientIds = await ResolveGroupPatientIdsAsync(client, source, context, node, cancellationToken);
+            if (groupPatientIds.Count > 0)
+            {
+                source = source with { ExportScope = "patient", PatientIds = groupPatientIds, GroupId = null };
+                explicitSystemOrGroupExport = false;
+            }
+            else if (PickThrowawayResourceType(source) is { } throwawayResourceType)
+            {
+                groupExportRequestTypes = [onlyResourceType, throwawayResourceType];
+            }
+        }
+
         IReadOnlyDictionary<string, IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>>? batchedBulkResourcesByType = null;
         if (explicitSystemOrGroupExport)
         {
-            var batchedRequest = BuildBatchedBulkExportRequest(source, executionOrder);
+            var batchedRequest = BuildBatchedBulkExportRequest(source, groupExportRequestTypes);
 
             // A System/Group export is exactly one $export job for this whole node (every resource type batched
             // into it, per the comment above) — the one shape simple enough to defer safely. Kick it off and hand
@@ -373,7 +417,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     triggeredBy: context.TriggeredBy,
                     workflowRunId: context.WorkflowRunId,
                     workflowNodeId: node.Id,
-                    contextJson: System.Text.Json.JsonSerializer.Serialize(context));
+                    contextJson: System.Text.Json.JsonSerializer.Serialize(context),
+                    requestedResourceTypesJson: System.Text.Json.JsonSerializer.Serialize(executionOrder));
                 job.MarkKickedOff(statusUrl);
                 await _bulkExportJobRepository.AddAsync(job, cancellationToken);
 
@@ -397,15 +442,42 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     StringComparer.OrdinalIgnoreCase);
         }
 
-        // Authorization session check: the connection's granted SMART scopes (source.Scopes — the authoritative
-        // record of what the IdP actually granted, see the comment above on resourceTypes resolution) are logged
-        // every time this node runs, not just when something is missing, so Correlation Search's Errors section
-        // always shows what this run was authorized for. Best-effort: a governance-logging hiccup must never
-        // abort the extraction itself (CaptureExpectedAsync already swallows internally).
+        // Real-granted-scope check: source.Scopes is only what FHIRBridge itself requested/configured — the IdP can
+        // silently narrow that at token time (an interactive user declining a scope on Epic's consent screen, or a
+        // backend-services registration the IdP only partially approved). Reading back what the token endpoint
+        // actually granted (cheap for Backend Services, which can mint/reuse a cached token on demand; a pure cache
+        // read for the interactive types, which cannot mint one without a user present) lets this pre-flight check
+        // catch that narrowing directly instead of only ever discovering it via a reactive 401/403 per resource type.
+        // Best-effort and additive only: unavailable (no provider wired, nothing cached yet, or the IdP never echoes
+        // a scope back — e.g. Epic's SMART Backend Services token response commonly omits it) falls back to
+        // source.Scopes, i.e. exactly the pre-existing configured-vs-configured check.
+        string? actualGrantedScope = null;
+        if (_accessTokenProvider is IFhirGrantedScopeProvider grantedScopeProvider)
+        {
+            try
+            {
+                actualGrantedScope = await grantedScopeProvider.GetGrantedScopeAsync(source, cancellationToken);
+            }
+            catch
+            {
+                // Token acquisition itself may legitimately fail here (e.g. an interactive source with no session
+                // yet) — the reactive path below (and the existing configured-scope check) still applies unchanged.
+            }
+        }
+
+        var effectiveGrantedScopes = !string.IsNullOrWhiteSpace(actualGrantedScope)
+            ? actualGrantedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : source.Scopes;
+
+        // Authorization session check: the connection's granted SMART scopes (effectiveGrantedScopes — the real
+        // grant when known, else the configured/requested scopes, see above) are logged every time this node runs,
+        // not just when something is missing, so Correlation Search's Errors section always shows what this run was
+        // authorized for. Best-effort: a governance-logging hiccup must never abort the extraction itself
+        // (CaptureExpectedAsync already swallows internally).
         if (_exceptionManager is not null)
         {
-            var grantedScopesSummary = source.Scopes is { Count: > 0 }
-                ? string.Join(", ", source.Scopes)
+            var grantedScopesSummary = effectiveGrantedScopes is { Count: > 0 }
+                ? string.Join(", ", effectiveGrantedScopes)
                 : "(none granted)";
             await _exceptionManager.CaptureExpectedAsync(
                 new ExpectedFailure(
@@ -423,7 +495,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // Only enforced when the connection actually declares resource-scoped SMART grants — a source with no
         // scopes at all (e.g. Sample, or a non-interactive connection FHIRBridge doesn't track scopes for) has
         // nothing to check against, so every resource type it's configured for is attempted unchanged.
-        var grantedResourceScopes = DeriveResourceTypesFromScopes(source.Scopes);
+        var grantedResourceScopes = DeriveResourceTypesFromScopes(effectiveGrantedScopes);
 
         IReadOnlyList<string>? cohortPatientIds = null;
         var resources = new List<ResourceEnvelope>();
@@ -436,7 +508,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page;
             try
             {
-                if (grantedResourceScopes.Count > 0 && !IsResourceTypeAuthorized(type, source.Scopes))
+                if (grantedResourceScopes.Count > 0 && !IsResourceTypeAuthorized(type, effectiveGrantedScopes))
                 {
                     // Caught immediately below — same Patient(cancel)/child(skip) handling as a reactive 401/403
                     // from the FHIR server, except this fires before any request is sent, so a known-missing scope
@@ -444,7 +516,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
                         type,
                         0,
-                        $"no granted SMART scope authorizes '{type}' for this session (granted: {(source.Scopes is { Count: > 0 } ? string.Join(", ", source.Scopes) : "none")})");
+                        $"no granted SMART scope authorizes '{type}' for this session (granted: {(effectiveGrantedScopes is { Count: > 0 } ? string.Join(", ", effectiveGrantedScopes) : "none")})");
                 }
 
                 page = useBulkExport
@@ -702,6 +774,19 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return resourceTypes;
     }
 
+    /// <summary>Picks one already-authorized resource type other than "Patient" — purely to ride alongside Patient
+    /// in a Group $export's <c>_type</c> so Epic's lone-Patient bug (business-rule 59159) doesn't trigger. Never
+    /// derived from what the workflow actually wants (that's <c>executionOrder</c>) — this is throwaway, its data
+    /// is discarded before this node's output is built (see the call site). Deterministic (first match in scope
+    /// order) so the same connection always picks the same type, not a random one each run. Null when the only
+    /// granted scope is Patient itself — nothing else to add, so the caller keeps the pre-existing omit-_type
+    /// behavior as a last resort.</summary>
+    private static string? PickThrowawayResourceType(FhirSourceConfiguration source)
+    {
+        return DeriveResourceTypesFromScopes(source.Scopes)
+            .FirstOrDefault(type => !string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// True if at least one of <paramref name="grantedScopes"/> covers <paramref name="resourceType"/> — same scope
     /// shape as <see cref="DeriveResourceTypesFromScopes"/> (<c>{context}/{ResourceType}.{permissions}</c>), plus a
@@ -800,6 +885,78 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             Since: source.Since,
             PatientIds: null,
             OutputFormat: source.OutputFormat);
+    }
+
+    // Reads the Group resource itself (a plain FHIR GET, not a bulk job) and pulls out its member Patient ids —
+    // lets a Group export scoped to just "Patient" be re-issued as a Patient-scoped export instead (see the
+    // call site above), sidestepping the Epic Group-export bug entirely rather than working around it by fetching
+    // every resource type. Best-effort: this app may not be granted Group.read, the Group id may not exist on
+    // this server, or the read may simply fail transiently — any of those just falls back to the pre-existing
+    // Group-scoped behavior (unscoped, every resource type), never breaks the run.
+    private async Task<IReadOnlyList<string>> ResolveGroupPatientIdsAsync(
+        IFhirSourceClient client,
+        FhirSourceConfiguration source,
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(source.GroupId))
+        {
+            return [];
+        }
+
+        try
+        {
+            // A direct read, not a search — confirmed on Epic that Group?_id=X can reject an id
+            // (OperationOutcome "Invalid FHIR ID provided" / "No valid FHIR IDs provided") that GET Group/X
+            // resolves without issue, even though it's the exact same id the $export kickoff URL already uses.
+            var group = await client.ReadByIdAsync("Group", source.GroupId, source, cancellationToken);
+            return group is null ? [] : ExtractMemberPatientIds(group.RawJson);
+        }
+        catch (Exception exception)
+        {
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureExpectedAsync(
+                    new ExpectedFailure(
+                        "GroupMembershipResolutionFailed",
+                        $"Could not resolve Group '{source.GroupId}' membership ({exception.Message}); falling back to an unscoped Group export."),
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        Severity: "Informational",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: node.WorkflowDefinitionId.ToString(),
+                        ExecutionId: context.WorkflowRunId.ToString()),
+                    cancellationToken);
+            }
+
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<string> ExtractMemberPatientIds(string groupRawJson)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(groupRawJson);
+        if (!document.RootElement.TryGetProperty("member", out var members) ||
+            members.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var ids = new List<string>();
+        foreach (var member in members.EnumerateArray())
+        {
+            if (member.TryGetProperty("entity", out var entity) &&
+                entity.TryGetProperty("reference", out var referenceProperty) &&
+                referenceProperty.ValueKind == System.Text.Json.JsonValueKind.String &&
+                referenceProperty.GetString() is { Length: > 0 } reference &&
+                reference.StartsWith("Patient/", StringComparison.OrdinalIgnoreCase))
+            {
+                ids.Add(reference["Patient/".Length..]);
+            }
+        }
+
+        return ids;
     }
 
     // Projects the resolved source's bulk-export settings onto a $export request for one resource type — mirrors the

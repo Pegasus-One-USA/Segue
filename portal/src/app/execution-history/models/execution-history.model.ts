@@ -69,7 +69,8 @@ export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
 
 /** Matches the backend's WorkflowNodeRunHistoryDto — one row per node that actually started this run, with
  *  its real outcome (success, failure, or cancellation) always present, unlike ResourceHistoryEntry which
- *  only ever reflects the success path. */
+ *  only ever reflects the success path. payloadJson is always null here — the list never decrypts a node's
+ *  output; fetch it on demand via ExecutionHistoryApiService.nodeRunPayload() once a row is expanded. */
 export interface NodeRunHistoryEntry {
   workflowNodeRunId: string;
   nodeType: string;
@@ -79,6 +80,15 @@ export interface NodeRunHistoryEntry {
   errorMessage: string | null;
   startedAt: string;
   completedAt: string | null;
+  contract: string | null;
+  payloadJson: string | null;
+  itemCount: number | null;
+}
+
+/** Matches the backend's WorkflowNodeRunPayloadDetailDto — one node run's decrypted output, fetched only when
+ *  its row is expanded (see ExecutionHistoryApiService.nodeRunPayload()). */
+export interface NodeRunPayloadDetail {
+  workflowNodeRunId: string;
   contract: string | null;
   payloadJson: string | null;
   itemCount: number | null;

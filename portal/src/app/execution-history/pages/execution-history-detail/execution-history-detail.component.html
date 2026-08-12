@@ -121,10 +121,17 @@
                   <span>{{ entry.errorMessage }}</span>
                 </div>
               }
-              @if (entry.payloadJson) {
-                <pre>{{ formatJson(entry.payloadJson) }}</pre>
-              } @else if (!entry.errorMessage) {
-                <p class="no-output-note">This node completed with no recorded output.</p>
+              @if (isLoadingPayload(entry.workflowNodeRunId)) {
+                <div class="payload-loading">
+                  <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
+                  <span>Loading node output…</span>
+                </div>
+              } @else {
+                @if (payloadJsonFor(entry.workflowNodeRunId); as payloadJson) {
+                  <pre>{{ formatJson(payloadJson) }}</pre>
+                } @else if (!entry.errorMessage) {
+                  <p class="no-output-note">This node completed with no recorded output.</p>
+                }
               }
             </div>
           }

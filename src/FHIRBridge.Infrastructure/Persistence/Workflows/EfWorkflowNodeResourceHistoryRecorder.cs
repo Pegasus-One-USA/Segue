@@ -100,9 +100,13 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
             .ToListAsync(cancellationToken);
 
         var nodeRunIds = nodeRuns.Select(x => x.Id).ToList();
+        // Projected, not the full entity — PayloadJson can hold megabytes of encrypted ciphertext per row (a
+        // source node's fetched batch), and this list never decrypts it (see WorkflowNodeRunHistoryDto.PayloadJson's
+        // remarks), so selecting it here would still pay SQL Server's transfer cost for nothing.
         var payloadsByNodeRunId = await _dbContext.WorkflowNodeRunPayloads
             .AsNoTracking()
             .Where(p => nodeRunIds.Contains(p.WorkflowNodeRunId))
+            .Select(p => new { p.WorkflowNodeRunId, p.Contract, p.ItemCount, p.RecordedAtUtc })
             .ToListAsync(cancellationToken);
 
         // A node run can, in principle, have recorded more than one payload — take the earliest, matching what
@@ -124,11 +128,28 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
                 nodeRun.StartedAt,
                 nodeRun.CompletedAt,
                 payload?.Contract,
-                payload is null ? null : _encryptor.Decrypt(payload.PayloadJson),
+                // Deliberately not decrypted here — see WorkflowNodeRunHistoryDto.PayloadJson's remarks.
+                // Contract/ItemCount are plaintext columns, so the row can still render fully collapsed.
+                null,
                 payload?.ItemCount);
         }).ToList();
 
         return new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, totalCount, page, take);
+    }
+
+    public async Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
+        Guid workflowRunId, Guid workflowNodeRunId, CancellationToken cancellationToken)
+    {
+        var payload = await _dbContext.WorkflowNodeRunPayloads
+            .AsNoTracking()
+            .Where(p => p.WorkflowRunId == workflowRunId && p.WorkflowNodeRunId == workflowNodeRunId)
+            .OrderBy(p => p.RecordedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return payload is null
+            ? null
+            : new WorkflowNodeRunPayloadDetailDto(
+                workflowNodeRunId, payload.Contract, _encryptor.Decrypt(payload.PayloadJson), payload.ItemCount);
     }
 
     public async Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(

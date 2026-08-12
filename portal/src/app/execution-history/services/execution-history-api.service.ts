@@ -1,12 +1,13 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { Observable, catchError, of, throwError } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
 import {
   FieldLineageChain,
   FieldLineageFilter,
   LineageSummary,
   NodeRunHistoryEntry,
+  NodeRunPayloadDetail,
   PagedResult,
   ResourceHistoryEntry,
   ResourceTypeSummary,
@@ -48,6 +49,16 @@ export class ExecutionHistoryApiService {
   nodeRuns(id: string, page = 1, pageSize = 25): Observable<PagedResult<NodeRunHistoryEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<NodeRunHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.nodeRuns(id), { params });
+  }
+
+  /** One node run's decrypted output — fetched lazily when its row is expanded, so the list above never pays
+   *  the decryption cost for a node the user hasn't looked at. A 404 (node run never recorded a payload —
+   *  still running, failed before producing output, or a None-contract node) resolves to null rather than
+   *  erroring, since that's an expected, normal outcome here. */
+  nodeRunPayload(id: string, nodeRunId: string): Observable<NodeRunPayloadDetail | null> {
+    return this.http.get<NodeRunPayloadDetail>(EXECUTION_HISTORY_ENDPOINTS.nodeRunPayload(id, nodeRunId)).pipe(
+      catchError((error: HttpErrorResponse) => error.status === 404 ? of(null) : throwError(() => error)),
+    );
   }
 
   /** One row per (resource, destination field) touched by this run's transform-rule chain, each carrying its

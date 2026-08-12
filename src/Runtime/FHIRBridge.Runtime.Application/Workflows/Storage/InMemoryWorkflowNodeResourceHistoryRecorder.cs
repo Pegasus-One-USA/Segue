@@ -88,6 +88,25 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
         }
     }
 
+    /// <summary>Not durable/encrypted here (this recorder never encrypts), so this is just a lookup of the same
+    /// in-memory payload the SQL-backed store would otherwise decrypt on demand.</summary>
+    public Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
+        Guid workflowRunId, Guid workflowNodeRunId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var match = _payloads
+                .Where(entry => entry.WorkflowRunId == workflowRunId && entry.Dto.WorkflowNodeRunId == workflowNodeRunId)
+                .Select(entry => entry.Dto)
+                .OrderBy(dto => dto.RecordedAtUtc)
+                .FirstOrDefault();
+
+            return Task.FromResult(match is null
+                ? null
+                : new WorkflowNodeRunPayloadDetailDto(match.WorkflowNodeRunId, match.Contract, match.PayloadJson, match.ItemCount));
+        }
+    }
+
     /// <summary>This non-durable recorder never sees <c>FieldLineageEntry</c> rows either (those are written by
     /// the Worker's lineage-capture consumer straight to SQL, not through this recorder) — always empty here.
     /// Callers that need real field lineage should use the SQL-backed recorder (<c>AddWorkflowSqlPersistence</c>).</summary>

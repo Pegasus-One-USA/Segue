@@ -136,7 +136,20 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // No profile exists for this resource type — nothing tells us how to map it, so skip it rather
                 // than guess; guessing (reusing a different resource type's fields) is exactly the
                 // silent-corruption bug this method guards against.
-                skippedResourceTypes.Add(resourceType);
+                //
+                // Only surface it as a "skipped" omission when this workflow was actually configured to map
+                // that type (it's this node's own default resourceType, or it has an entry in mappingProfileIds
+                // whose profile turned out missing/deleted) — a real misconfiguration worth a "why is my
+                // Encounter data missing" answer. A resource type with NO entry here was never part of this
+                // workflow at all; it only showed up because an upstream fetch (e.g. an Epic Group export's
+                // _type-omission workaround for a lone-Patient job) handed back more types than requested.
+                // Flagging that as "skipped" would misread routine over-fetch as a broken mapping.
+                if (ReadProfileIds(node).ContainsKey(resourceType) ||
+                    string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase))
+                {
+                    skippedResourceTypes.Add(resourceType);
+                }
+
                 continue;
             }
 

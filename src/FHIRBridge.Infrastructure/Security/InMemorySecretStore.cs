@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Infrastructure.Security;
@@ -36,8 +37,11 @@ public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider, IAppSe
         var configured = _configuration[$"Secrets:{secretReference.KeyVaultName}:{secretReference.SecretName}"];
         if (string.IsNullOrEmpty(configured))
         {
-            throw new InvalidOperationException(
-                $"No secret configured for '{secretReference.KeyVaultName}/{secretReference.SecretName}'.");
+            // Must match what AppSecretProvisioner.EnsureSecretAsync catches to auto-generate a first-boot value —
+            // this store's whole reason for existing (see the class remarks) is standing in for DbSecretStore on
+            // the InMemory path, so a "not found" here has to look like the same "not found" DbSecretStore's
+            // CompositeSecretProvider path reports, not a distinct exception type the provisioner never catches.
+            throw new SecretNotConfiguredException(secretReference.SecretName, secretReference.KeyVaultName);
         }
 
         return Task.FromResult(configured);

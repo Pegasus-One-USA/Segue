@@ -33,6 +33,15 @@ public interface IWorkflowNodeResourceHistoryRecorder
         int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>The single node run's decrypted output payload — split out of <see cref="GetNodeRunHistoryPagedAsync"/>
+    /// (which never decrypts) so the Execution History screen only pays the decryption cost for a node the user
+    /// actually expands, rather than every node in the page up front. Null when the node run has no recorded
+    /// payload (still running, failed before producing output, or a None-contract node).</summary>
+    Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
+        Guid workflowRunId,
+        Guid workflowNodeRunId,
+        CancellationToken cancellationToken);
+
     /// <summary>One chain per (resource, destination field) touched by this run's transform-rule execution —
     /// see <see cref="FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry"/> for the underlying per-hop rows. Grouped
     /// server-side so a field's hop chain is never split across a page boundary. <paramref name="filter"/> backs
@@ -81,7 +90,11 @@ public sealed record WorkflowNodeRunPayloadDto(
 
 /// <summary>One node's full outcome for a run — status/error always present (sourced from the
 /// <c>WorkflowNodeRun</c> row itself, which is written on every path: success, failure, cancellation), output
-/// payload present only when the node actually produced one (success path, non-<c>None</c> contract).</summary>
+/// payload present only when the node actually produced one (success path, non-<c>None</c> contract).
+/// <see cref="PayloadJson"/> is deliberately always null here — decrypting every node's full output on every list
+/// fetch punished a run with a large source payload (thousands of resources) even when the user never expands
+/// that row. Fetch the real value on demand via <see cref="IWorkflowNodeResourceHistoryRecorder.GetNodeRunPayloadAsync"/>
+/// once a row is actually expanded.</summary>
 public sealed record WorkflowNodeRunHistoryDto(
     Guid WorkflowNodeRunId,
     string NodeType,
@@ -91,6 +104,14 @@ public sealed record WorkflowNodeRunHistoryDto(
     string? ErrorMessage,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
+    string? Contract,
+    string? PayloadJson,
+    int? ItemCount);
+
+/// <summary>One node run's decrypted output, fetched on demand when its row is expanded — see
+/// <see cref="IWorkflowNodeResourceHistoryRecorder.GetNodeRunPayloadAsync"/>.</summary>
+public sealed record WorkflowNodeRunPayloadDetailDto(
+    Guid WorkflowNodeRunId,
     string? Contract,
     string? PayloadJson,
     int? ItemCount);

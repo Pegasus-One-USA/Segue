@@ -302,6 +302,76 @@ public sealed class MappingNodeExecutorTests
     }
 
     [Fact]
+    public async Task An_unrequested_resource_type_is_dropped_silently_not_reported_as_skipped()
+    {
+        // Reproduces a real production symptom: a Group $export scoped to a lone "Patient" resource type omits
+        // the _type parameter entirely to dodge an Epic bug, so Epic hands back every resource type it supports —
+        // dozens the workflow never configured a mapping for. Only "Patient" appears in mappingProfileIds here,
+        // so Observation must be dropped (nothing tells this node how to map it) WITHOUT being reported in
+        // skippedResourceTypes — it was never part of this workflow, so flagging it reads as a false "partial
+        // success" even though nothing is actually broken.
+        var sourceConnectionId = Guid.NewGuid();
+        var destinationId = Guid.NewGuid();
+        var patientProfileId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
+            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfileAsync(patientProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(patientProfile);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["sourceConnectionId"] = sourceConnectionId.ToString(),
+            ["destinationId"] = destinationId.ToString(),
+            ["mappingProfileIds"] = new Dictionary<string, string> { ["Patient"] = patientProfileId.ToString() },
+        });
+        var upstream = UpstreamWith(
+            new ResourceEnvelope("Patient", "p1", """{"id":"p1"}"""),
+            new ResourceEnvelope("Observation", "o1", """{"id":"o1","status":"final"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        output.Metadata.Should().NotBeNull();
+        output.Metadata!["skippedResourceTypes"].Should().BeNull(
+            "Observation was never configured on this node — it's incidental over-fetch, not a missing mapping");
+    }
+
+    [Fact]
+    public async Task A_configured_but_deleted_profile_is_still_reported_as_skipped()
+    {
+        // The opposite of the case above: this resource type DOES have a mappingProfileIds entry, but the
+        // profile it points at no longer resolves (deleted). That's a real misconfiguration the workflow owner
+        // should hear about, so it must still land in skippedResourceTypes.
+        var observationProfileId = Guid.NewGuid();
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfileAsync(observationProfileId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MappingProfile?)null);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        // Node's own default resourceType is "Patient" — Observation is a DIFFERENT, explicitly configured
+        // entry (not the node's default), isolating the "has a mappingProfileIds entry but it's unresolvable"
+        // branch from the "matches the node's own configuredResourceType" branch.
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["mappingProfileIds"] = new Dictionary<string, string> { ["Observation"] = observationProfileId.ToString() },
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Observation", "o1", """{"id":"o1"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        output.Metadata!["skippedResourceTypes"].Should().BeAssignableTo<string[]>()
+            .Which.Should().Contain("Observation");
+    }
+
+    [Fact]
     public async Task Maps_each_resource_type_using_only_its_own_configured_mappingProfileIds_entry()
     {
         var patientProfileId = Guid.NewGuid();

@@ -17,4 +17,14 @@ public sealed class SampleFhirSourceClient : IFhirSourceClient
 
         return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([envelope]);
     }
+
+    public Task<ResourceEnvelope?> ReadByIdAsync(
+        string resourceType,
+        string id,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var json = SampleResources.GetResourceJson(resourceType);
+        return Task.FromResult<ResourceEnvelope?>(FhirResourceParser.ParseResource(json));
+    }
 }
