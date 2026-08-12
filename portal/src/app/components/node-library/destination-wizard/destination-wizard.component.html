@@ -229,6 +229,153 @@
 
           </div><!-- /dw-grid-2 -->
         </form>
+      } @else if (isBlob()) {
+        <form [formGroup]="blobForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="blobForm.get('name')!.invalid && blobForm.get('name')!.touched">
+              <label class="dw-label" for="dw-blob-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-blob-name" class="dw-input" formControlName="name" placeholder="e.g. Azure Blob Export" />
+              @if (blobForm.get('name')!.invalid && blobForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="blobForm.get('container')!.invalid && blobForm.get('container')!.touched">
+              <label class="dw-label" for="dw-blob-container">Container name <span class="dw-req">*</span></label>
+              <input id="dw-blob-container" class="dw-input" formControlName="container" placeholder="e.g. fhirbridge-exports" />
+              @if (blobForm.get('container')!.invalid && blobForm.get('container')!.touched) {
+                <span class="dw-error">Container name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full">
+              <label class="dw-label" for="dw-blob-authMode">Authentication</label>
+              <div class="dw-select-wrap">
+                <select id="dw-blob-authMode" class="dw-select" formControlName="authMode">
+                  <option value="connectionString">Connection string</option>
+                  <option value="accountKey">Account name + key</option>
+                  <option value="sasUrl">SAS URL or token</option>
+                  <option value="managedIdentity">Managed identity</option>
+                  <option value="servicePrincipal">Service principal (Azure AD)</option>
+                </select>
+              </div>
+            </div>
+
+            @if (blobForm.get('authMode')!.value === 'connectionString') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+                <label class="dw-label" for="dw-blob-secret">Connection string <span class="dw-req">*</span></label>
+                <input id="dw-blob-secret" type="password" class="dw-input" formControlName="secretValue"
+                  placeholder="DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net"
+                  autocomplete="new-password" />
+                @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+                  <span class="dw-error">Connection string is required.</span>
+                }
+              </div>
+            }
+
+            @if (blobForm.get('authMode')!.value === 'accountKey') {
+              <div class="dw-field" [class.dw-field--error]="blobForm.get('accountName')!.invalid && blobForm.get('accountName')!.touched">
+                <label class="dw-label" for="dw-blob-accountName">Account name <span class="dw-req">*</span></label>
+                <input id="dw-blob-accountName" class="dw-input" formControlName="accountName" placeholder="e.g. mystorageaccount" />
+                @if (blobForm.get('accountName')!.invalid && blobForm.get('accountName')!.touched) {
+                  <span class="dw-error">Account name is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+                <label class="dw-label" for="dw-blob-secret-key">Account key <span class="dw-req">*</span></label>
+                <input id="dw-blob-secret-key" type="password" class="dw-input" formControlName="secretValue" autocomplete="new-password" />
+                @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+                  <span class="dw-error">Account key is required.</span>
+                }
+              </div>
+              <div class="dw-field dw-field--full">
+                <label class="dw-label" for="dw-blob-endpointSuffix">Endpoint suffix</label>
+                <input id="dw-blob-endpointSuffix" class="dw-input" formControlName="endpointSuffix" placeholder="core.windows.net" />
+              </div>
+            }
+
+            @if (blobForm.get('authMode')!.value === 'sasUrl') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+                <label class="dw-label" for="dw-blob-secret-sas">SAS URL or token <span class="dw-req">*</span></label>
+                <input id="dw-blob-secret-sas" type="password" class="dw-input" formControlName="secretValue"
+                  placeholder="https://acct.blob.core.windows.net/container?sv=...&sig=... (or a bare sv=...&sig=... token)"
+                  autocomplete="new-password" />
+                @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+                  <span class="dw-error">A SAS URL or token is required.</span>
+                }
+              </div>
+              <div class="dw-field dw-field--full">
+                <label class="dw-label" for="dw-blob-accountUrl-sas">Account URL</label>
+                <input id="dw-blob-accountUrl-sas" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+                <span class="dw-hint">Only needed if the value above is a bare token rather than a full URL.</span>
+              </div>
+            }
+
+            @if (blobForm.get('authMode')!.value === 'managedIdentity') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched">
+                <label class="dw-label" for="dw-blob-accountUrl-mi">Account URL <span class="dw-req">*</span></label>
+                <input id="dw-blob-accountUrl-mi" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+                @if (blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched) {
+                  <span class="dw-error">Account URL is required.</span>
+                }
+              </div>
+              <div class="dw-field">
+                <label class="dw-label" for="dw-blob-miClientId">User-assigned identity client ID</label>
+                <input id="dw-blob-miClientId" class="dw-input" formControlName="managedIdentityClientId" placeholder="Optional — leave blank for a system-assigned identity" />
+              </div>
+              <div class="dw-field dw-field--full">
+                <div class="dw-callout dw-callout--info">
+                  The host running FHIRBridge needs a managed identity granted the <strong>Storage Blob Data Contributor</strong> role on this storage account.
+                </div>
+              </div>
+            }
+
+            @if (blobForm.get('authMode')!.value === 'servicePrincipal') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched">
+                <label class="dw-label" for="dw-blob-accountUrl-sp">Account URL <span class="dw-req">*</span></label>
+                <input id="dw-blob-accountUrl-sp" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+                @if (blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched) {
+                  <span class="dw-error">Account URL is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="blobForm.get('tenantId')!.invalid && blobForm.get('tenantId')!.touched">
+                <label class="dw-label" for="dw-blob-tenantId">Tenant ID <span class="dw-req">*</span></label>
+                <input id="dw-blob-tenantId" class="dw-input" formControlName="tenantId" />
+                @if (blobForm.get('tenantId')!.invalid && blobForm.get('tenantId')!.touched) {
+                  <span class="dw-error">Tenant ID is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="blobForm.get('clientId')!.invalid && blobForm.get('clientId')!.touched">
+                <label class="dw-label" for="dw-blob-clientId">Client ID <span class="dw-req">*</span></label>
+                <input id="dw-blob-clientId" class="dw-input" formControlName="clientId" />
+                @if (blobForm.get('clientId')!.invalid && blobForm.get('clientId')!.touched) {
+                  <span class="dw-error">Client ID is required.</span>
+                }
+              </div>
+              <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+                <label class="dw-label" for="dw-blob-secret-sp">Client secret <span class="dw-req">*</span></label>
+                <input id="dw-blob-secret-sp" type="password" class="dw-input" formControlName="secretValue" autocomplete="new-password" />
+                @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+                  <span class="dw-error">Client secret is required.</span>
+                }
+              </div>
+            }
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-blob-pathPrefix">Path prefix</label>
+              <input id="dw-blob-pathPrefix" class="dw-input" formControlName="pathPrefix" placeholder="Optional — e.g. fhirbridge/patient" />
+            </div>
+
+            <div class="dw-field dw-field--checkbox">
+              <label class="dw-label">
+                <input type="checkbox" formControlName="createContainerIfNotExists" />
+                Create container if it doesn't exist
+              </label>
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
       } @else {
         <form [formGroup]="csvForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-2">
@@ -423,7 +570,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -586,6 +733,25 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ mongoForm.value.writeMode }}</span>
           </div>
+        } @else if (isBlob()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ blobForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Container</span>
+            <span class="dw-review-val dw-mono">{{ blobForm.value.container || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ blobForm.value.authMode }}</span>
+          </div>
+          @if (blobForm.value.pathPrefix) {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Path prefix</span>
+              <span class="dw-review-val dw-mono">{{ blobForm.value.pathPrefix }}</span>
+            </div>
+          }
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>

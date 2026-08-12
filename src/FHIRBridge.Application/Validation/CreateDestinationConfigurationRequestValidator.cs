@@ -60,6 +60,34 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateCsvMetadata(context, metadata);
         }
+        else if (request.DestinationType == DestinationType.BlobStorage)
+        {
+            ValidateBlobMetadata(context, metadata);
+        }
+    }
+
+    private static void ValidateBlobMetadata(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        RequireField(context, metadata, "dest_blobAuthMode", "Authentication mode is required.");
+        RequireField(context, metadata, "dest_blobContainer", "Container name is required.");
+
+        var authMode = metadata.GetValueOrDefault("dest_blobAuthMode", "connectionString");
+        switch (authMode)
+        {
+            case "accountKey":
+                RequireField(context, metadata, "dest_blobAccountName", "Account name is required.");
+                break;
+            case "managedIdentity":
+                RequireField(context, metadata, "dest_blobAccountUrl", "Account URL is required.");
+                break;
+            case "servicePrincipal":
+                RequireField(context, metadata, "dest_blobAccountUrl", "Account URL is required.");
+                RequireField(context, metadata, "dest_blobTenantId", "Tenant ID is required.");
+                RequireField(context, metadata, "dest_blobClientId", "Client ID is required.");
+                break;
+        }
     }
 
     private static void ValidateCsvMetadata(

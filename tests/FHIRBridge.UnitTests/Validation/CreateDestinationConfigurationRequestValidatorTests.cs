@@ -183,4 +183,88 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
 
         _sut.Validate(Request(DestinationType.Csv, metadata)).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public void Blob_metadata_missing_auth_mode_or_container_fails()
+    {
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, new { }));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobAuthMode");
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobContainer");
+    }
+
+    [Fact]
+    public void Blob_connectionString_mode_with_just_container_passes()
+    {
+        var metadata = new { dest_blobAuthMode = "connectionString", dest_blobContainer = "fhir" };
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Blob_accountKey_mode_missing_account_name_fails()
+    {
+        var metadata = new { dest_blobAuthMode = "accountKey", dest_blobContainer = "fhir" };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobAccountName");
+    }
+
+    [Fact]
+    public void Blob_accountKey_mode_with_account_name_passes()
+    {
+        var metadata = new
+        {
+            dest_blobAuthMode = "accountKey",
+            dest_blobContainer = "fhir",
+            dest_blobAccountName = "acct",
+        };
+
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Blob_managedIdentity_mode_missing_account_url_fails()
+    {
+        var metadata = new { dest_blobAuthMode = "managedIdentity", dest_blobContainer = "fhir" };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobAccountUrl");
+    }
+
+    [Fact]
+    public void Blob_servicePrincipal_mode_missing_tenant_and_client_id_fails()
+    {
+        var metadata = new
+        {
+            dest_blobAuthMode = "servicePrincipal",
+            dest_blobContainer = "fhir",
+            dest_blobAccountUrl = "https://acct.blob.core.windows.net",
+        };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobTenantId");
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobClientId");
+    }
+
+    [Fact]
+    public void Blob_servicePrincipal_mode_with_all_required_fields_passes()
+    {
+        var metadata = new
+        {
+            dest_blobAuthMode = "servicePrincipal",
+            dest_blobContainer = "fhir",
+            dest_blobAccountUrl = "https://acct.blob.core.windows.net",
+            dest_blobTenantId = "tenant",
+            dest_blobClientId = "client",
+        };
+
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
 }

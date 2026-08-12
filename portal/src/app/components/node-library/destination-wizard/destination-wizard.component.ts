@@ -275,6 +275,25 @@ export class DestinationWizardComponent implements OnInit {
     writeMode:        ['upsert', []],
   });
 
+  readonly blobForm = this.fb.group({
+    name:           ['Azure Blob Export', [Validators.required]],
+    container:      ['', [Validators.required]],
+    authMode:       ['connectionString', [Validators.required]],
+    // The one secret control for every auth mode (connection string / account key / SAS / client secret) —
+    // its label swaps per authMode in the template. Never repopulated by selectExisting()/_populateFromNode()
+    // (secrets never come back from the API) and excluded from hasExistingChanged(), same as
+    // mongoForm.connectionString.
+    secretValue:    ['', []],
+    accountUrl:     ['', []],
+    accountName:    ['', []],
+    endpointSuffix: ['core.windows.net', []],
+    tenantId:       ['', []],
+    clientId:       ['', []],
+    managedIdentityClientId:    ['', []],
+    pathPrefix:                 ['', []],
+    createContainerIfNotExists: [true, []],
+  });
+
   readonly csvForm = this.fb.group({
     name:         ['CSV Export', [Validators.required]],
     deliveryMode: ['download', [Validators.required]],
@@ -693,15 +712,17 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
-  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
+  // families: no live introspection, so each gets its own form/branches rather than reusing SQL's or CSV's.
   readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  readonly isBlob       = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
@@ -709,6 +730,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'blob' ? 'Azure Blob Storage'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -718,7 +740,10 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value
+      : this.isMongo() ? this.mongoForm.value
+      : this.isBlob() ? this.blobForm.value
+      : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -735,6 +760,10 @@ export class DestinationWizardComponent implements OnInit {
     // SFTP/email/download-link fields are required only while their mode is selected.
     this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
     this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+
+    // Blob: which fields are required depends on the selected auth mode (see _syncBlobAuthModeValidators).
+    this._syncBlobAuthModeValidators(this.blobForm.controls.authMode.value);
+    this.blobForm.controls.authMode.valueChanges.subscribe(v => this._syncBlobAuthModeValidators(v));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -840,6 +869,36 @@ export class DestinationWizardComponent implements OnInit {
     expiry.updateValueAndValidity({ emitEvent: false });
   }
 
+  /** Which blobForm fields are required depends on the selected auth mode — mirrors the backend's
+   *  BlobDestinationSettings.Parse validation (accountKey needs accountName; managedIdentity/servicePrincipal
+   *  need accountUrl; servicePrincipal also needs tenantId/clientId). secretValue is required for every mode
+   *  except managedIdentity (which never resolves a Key Vault secret) — same "only require it for a genuinely
+   *  new connection" guard _syncDeliveryModeValidators uses for sftpPassword, since selectExisting() never
+   *  repopulates it. */
+  private _syncBlobAuthModeValidators(authMode: string | null): void {
+    const requiresSecret = authMode !== 'managedIdentity' && this.connectionMode() === 'new';
+    const secretCtrl = this.blobForm.get('secretValue')!;
+    secretCtrl.setValidators(requiresSecret ? [Validators.required] : []);
+    secretCtrl.updateValueAndValidity({ emitEvent: false });
+
+    const accountNameCtrl = this.blobForm.get('accountName')!;
+    accountNameCtrl.setValidators(authMode === 'accountKey' ? [Validators.required] : []);
+    accountNameCtrl.updateValueAndValidity({ emitEvent: false });
+
+    const requiresAccountUrl = authMode === 'managedIdentity' || authMode === 'servicePrincipal';
+    const accountUrlCtrl = this.blobForm.get('accountUrl')!;
+    accountUrlCtrl.setValidators(requiresAccountUrl ? [Validators.required] : []);
+    accountUrlCtrl.updateValueAndValidity({ emitEvent: false });
+
+    const requiresServicePrincipal = authMode === 'servicePrincipal';
+    const tenantCtrl = this.blobForm.get('tenantId')!;
+    tenantCtrl.setValidators(requiresServicePrincipal ? [Validators.required] : []);
+    tenantCtrl.updateValueAndValidity({ emitEvent: false });
+    const clientCtrl = this.blobForm.get('clientId')!;
+    clientCtrl.setValidators(requiresServicePrincipal ? [Validators.required] : []);
+    clientCtrl.updateValueAndValidity({ emitEvent: false });
+  }
+
   ngOnInit(): void {
     this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
@@ -865,7 +924,10 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid
+        : this.isMongo() ? this.mongoForm.invalid
+        : this.isBlob() ? this.blobForm.invalid
+        : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
@@ -956,6 +1018,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
   }
@@ -1235,7 +1298,8 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql() && !this.isMongo()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+    if (!this.isSql() && !this.isMongo() && !this.isBlob()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+    if (this.isBlob()) this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
   }
 
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
@@ -1250,6 +1314,9 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables.set([]);
     } else if (this.isMongo()) {
       this.mongoForm.reset();
+    } else if (this.isBlob()) {
+      this.blobForm.reset();
+      this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
     } else {
       this.csvForm.reset();
       this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
@@ -1266,7 +1333,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isBlob()
+                ? DestinationWizardComponent.BLOB_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1326,6 +1395,23 @@ export class DestinationWizardComponent implements OnInit {
         writeMode:        metadata['dest_writeMode']    || 'upsert',
       });
       this._existingBaseline = this.mongoForm.getRawValue();
+    } else if (this.isBlob()) {
+      this.blobForm.patchValue({
+        name:                    metadata['dest_name']                    || selected.name,
+        container:               metadata['dest_blobContainer']           || selected.target || '',
+        authMode:                metadata['dest_blobAuthMode']            || 'connectionString',
+        secretValue:             '',
+        accountUrl:              metadata['dest_blobAccountUrl']          || '',
+        accountName:             metadata['dest_blobAccountName']         || '',
+        endpointSuffix:          metadata['dest_blobEndpointSuffix']      || 'core.windows.net',
+        tenantId:                metadata['dest_blobTenantId']            || '',
+        clientId:                metadata['dest_blobClientId']            || '',
+        managedIdentityClientId: metadata['dest_blobManagedIdentityClientId'] || '',
+        pathPrefix:              metadata['dest_blobPathPrefix']           || '',
+        createContainerIfNotExists: metadata['dest_blobCreateContainerIfNotExists'] !== 'false',
+      });
+      this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
+      this._existingBaseline = this.blobForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -1370,10 +1456,13 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'secretValue']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue()
+      : this.isMongo() ? this.mongoForm.getRawValue()
+      : this.isBlob() ? this.blobForm.getRawValue()
+      : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -1581,7 +1670,10 @@ export class DestinationWizardComponent implements OnInit {
       const def = this.defFor(r);
       // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
       // collection name of its own, so it reuses the same table name as a sensible default collection.
-      targets[r] = type === 'csv' ? def.csvFile : def.sqlTable;
+      // Blob's per-resource target becomes the blob name stem (MappingProfile.DestinationObject), not a
+      // container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses.
+      targets[r] = type === 'csv' || type === 'blob' ? def.csvFile : def.sqlTable;
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -1620,6 +1712,22 @@ export class DestinationWizardComponent implements OnInit {
         collection:       f['dest_collection']  || '',
         writeMode:        f['dest_writeMode']    || 'upsert',
       });
+    } else if (this.isBlob()) {
+      this.blobForm.patchValue({
+        name:                    f['dest_name']                    || 'Azure Blob Export',
+        container:               f['dest_blobContainer']           || '',
+        authMode:                f['dest_blobAuthMode']            || 'connectionString',
+        secretValue:             '',
+        accountUrl:              f['dest_blobAccountUrl']          || '',
+        accountName:             f['dest_blobAccountName']         || '',
+        endpointSuffix:          f['dest_blobEndpointSuffix']      || 'core.windows.net',
+        tenantId:                f['dest_blobTenantId']            || '',
+        clientId:                f['dest_blobClientId']            || '',
+        managedIdentityClientId: f['dest_blobManagedIdentityClientId'] || '',
+        pathPrefix:              f['dest_blobPathPrefix']           || '',
+        createContainerIfNotExists: f['dest_blobCreateContainerIfNotExists'] !== 'false',
+      });
+      this._syncBlobAuthModeValidators(this.blobForm.value.authMode ?? null);
     } else {
       this.csvForm.patchValue({
         name:         f['dest_name']         || 'CSV Export',
@@ -1766,6 +1874,20 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_connectionString'] = v.connectionString ?? '';
       config['dest_collection']       = v.collection       ?? '';
       config['dest_writeMode']        = v.writeMode        ?? 'upsert';
+    } else if (this.isBlob()) {
+      const v = this.blobForm.value;
+      config['dest_name']                          = v.name           ?? '';
+      config['dest_blobContainer']                 = v.container      ?? '';
+      config['dest_blobAuthMode']                  = v.authMode       ?? 'connectionString';
+      config['dest_blobSecret']                     = v.secretValue    ?? '';
+      config['dest_blobAccountUrl']                = v.accountUrl     ?? '';
+      config['dest_blobAccountName']               = v.accountName    ?? '';
+      config['dest_blobEndpointSuffix']            = v.endpointSuffix ?? 'core.windows.net';
+      config['dest_blobTenantId']                  = v.tenantId       ?? '';
+      config['dest_blobClientId']                  = v.clientId       ?? '';
+      config['dest_blobManagedIdentityClientId']   = v.managedIdentityClientId ?? '';
+      config['dest_blobPathPrefix']                = v.pathPrefix     ?? '';
+      config['dest_blobCreateContainerIfNotExists'] = String(v.createContainerIfNotExists ?? true);
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1806,7 +1928,8 @@ export class DestinationWizardComponent implements OnInit {
     const config = this._buildConnectionConfig();
     const isSql = this.isSql();
     const isMongo = this.isMongo();
-    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const isBlob = this.isBlob();
+    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1816,7 +1939,7 @@ export class DestinationWizardComponent implements OnInit {
           secretName,
           target: null,
           inlineSecret: buildSqlConnectionString(config),
-          connectionMetadataJson: buildConnectionMetadata(config, true),
+          connectionMetadataJson: buildConnectionMetadata(config, 'sql'),
         }
       : isMongo
       ? {
@@ -1826,7 +1949,19 @@ export class DestinationWizardComponent implements OnInit {
           secretName,
           target: config['dest_collection'] || null,
           inlineSecret: config['dest_connectionString'] || '',
-          connectionMetadataJson: buildConnectionMetadata(config, false),
+          connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
+        }
+      : isBlob
+      ? {
+          name,
+          destinationType: 'BlobStorage',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: config['dest_blobContainer'] || null,
+          // Managed Identity never resolves a Key Vault secret (see BlobDestinationSettings.RequiresSecret
+          // server-side) — no secret to send for that mode.
+          inlineSecret: config['dest_blobAuthMode'] === 'managedIdentity' ? '' : (config['dest_blobSecret'] || ''),
+          connectionMetadataJson: buildConnectionMetadata(config, 'blob'),
         }
       : {
           name,
@@ -1835,7 +1970,7 @@ export class DestinationWizardComponent implements OnInit {
           secretName,
           target: config['dest_filePattern'] || null,
           inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : (config['dest_folder'] || ''),
-          connectionMetadataJson: buildConnectionMetadata(config, false),
+          connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
         };
 
     const existingId = this.resolvedDestinationId();
@@ -1951,6 +2086,7 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'mysql' ? 'dest-mysql'
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
+          : type === 'blob' ? 'dest-blob'
           : 'dest-csv',
         status:      'enabled',
         config,

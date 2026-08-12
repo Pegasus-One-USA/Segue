@@ -137,7 +137,7 @@ export class DestinationConnectionDialogComponent {
             secretName: newSecretName(name),
             target: null,
             inlineSecret: buildSqlConnectionString(config),
-            connectionMetadataJson: buildConnectionMetadata(config, true),
+            connectionMetadataJson: buildConnectionMetadata(config, 'sql'),
           }
         : {
             name,
@@ -150,7 +150,7 @@ export class DestinationConnectionDialogComponent {
             // Only SFTP delivery actually reads this secret; the other three modes never resolve it, so any
             // placeholder value is fine there.
             inlineSecret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
-            connectionMetadataJson: buildConnectionMetadata(config, false),
+            connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
           };
 
     this._submit(() => this.svc.create(request));
@@ -184,7 +184,7 @@ export class DestinationConnectionDialogComponent {
         : config['dest_deliveryMode'] === 'sftp'
           ? buildSftpUri(config)
           : '';
-      request.connectionMetadataJson = buildConnectionMetadata(config, isSql);
+      request.connectionMetadataJson = buildConnectionMetadata(config, isSql ? 'sql' : 'csv');
     }
 
     this._submit(() => this.svc.update(destination.id, request));
