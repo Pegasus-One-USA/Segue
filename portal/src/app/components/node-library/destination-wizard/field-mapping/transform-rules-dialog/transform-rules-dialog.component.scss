@@ -503,7 +503,6 @@ mat-dialog-content {
   // maximized dialog widths, so flex-grow: 1 (unchanged) spreads all three evenly across one row —
   // exactly the .step-card__advanced row's already-working "fields spread out to fill the space, all
   // equally" look, just applied at a basis this specific row can actually satisfy without wrapping.
-  //
   // NOT a flex rule on app-rule-config-form itself — that element is display: contents (see
   // RuleConfigFormComponent's own styles), so it has no box of its own to apply flex properties to; its
   // .config-control children are the real flex items here, direct siblings of .node-select in this

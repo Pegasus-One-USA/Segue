@@ -296,7 +296,6 @@
     // field wrapped onto its own line and stretched full-width alone instead of matching its siblings.
     // This page renders the same step-card at a wider column, but sizing it identically to the dialog
     // keeps the two entry points visually consistent rather than drifting apart at different bases.
-    //
     // NOT a flex rule on app-rule-config-form itself — that element is display: contents (see
     // RuleConfigFormComponent's own styles), so it has no box of its own to apply flex properties to;
     // its .config-control children are the real flex items here, direct siblings of .node-select in
