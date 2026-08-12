@@ -6,6 +6,16 @@ import { TokenService } from './token.service';
 
 const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 
+// Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
+// rests near the mouse, far too noisy a signal for "the user is actively working" even throttled. These
+// five already cover every real interaction (clicking a button, typing a field, a canvas drag starting
+// with mousedown, scrolling a list/canvas) without needing to throttle a firehose event.
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'] as const;
+// Re-touch at most once a minute — plenty to keep the idle timer perpetually reset during any real
+// activity (a 60s cadence against a 30-minute timeout has enormous margin) without spamming an AuthStore
+// write (and the resulting resetIdleTimer() churn) on every single click/keystroke.
+const ACTIVITY_THROTTLE_MS = 60 * 1000;
+
 @Injectable({ providedIn: 'root' })
 export class SessionService {
   private readonly store  = inject(AuthStore);
@@ -14,6 +24,8 @@ export class SessionService {
   private readonly zone   = inject(NgZone);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
+  private activityListenersActive = false;
+  private lastTouchAt = 0;
 
   // ─── Start session after login ─────────────────────────────────────────────
   start(userId: string, token: string, refreshToken: string, rememberMe = false): void {
@@ -25,6 +37,7 @@ export class SessionService {
     this.store.setSession(session);
     this.tokens.setTokens(token, refreshToken, rememberMe);
     this.resetIdleTimer();
+    this.startActivityListeners();
   }
 
   // ─── End session on logout ─────────────────────────────────────────────────
@@ -32,6 +45,7 @@ export class SessionService {
     this.store.clear();
     this.tokens.clearTokens();
     clearTimeout(this.idleTimer);
+    this.stopActivityListeners();
   }
 
   // ─── Touch activity on user interaction ───────────────────────────────────
@@ -40,6 +54,40 @@ export class SessionService {
     if (s) {
       this.store.setSession({ ...s, lastActivity: new Date() });
       this.resetIdleTimer();
+    }
+  }
+
+  // ─── Global activity listeners ─────────────────────────────────────────────
+  // touch() above always existed, but had zero callers anywhere in the app — no activity listener, no
+  // HTTP hook, nothing — so resetIdleTimer() only ever ran once, at login. In practice that turned the
+  // "30-minute idle timeout" into a flat 30-minute session cap regardless of activity, logging active
+  // users out mid-task well before either the JWT (60/480 min) or the refresh token (30 days) would ever
+  // expire. Wiring real DOM activity to touch() here is what makes it genuinely inactivity-based.
+  private readonly onActivityEvent = (): void => {
+    const now = Date.now();
+    if (now - this.lastTouchAt < ACTIVITY_THROTTLE_MS) return;
+    this.lastTouchAt = now;
+    this.zone.run(() => this.touch());
+  };
+
+  private startActivityListeners(): void {
+    if (this.activityListenersActive || typeof document === 'undefined') return;
+    this.activityListenersActive = true;
+    // Attached outside the Angular zone — these fire on every click/keystroke/scroll, and the throttle
+    // check above (which decides whether to actually touch()) shouldn't itself trigger change detection
+    // on the 59 out of 60 seconds it's a no-op.
+    this.zone.runOutsideAngular(() => {
+      for (const evt of ACTIVITY_EVENTS) {
+        document.addEventListener(evt, this.onActivityEvent, { passive: true });
+      }
+    });
+  }
+
+  private stopActivityListeners(): void {
+    if (!this.activityListenersActive || typeof document === 'undefined') return;
+    this.activityListenersActive = false;
+    for (const evt of ACTIVITY_EVENTS) {
+      document.removeEventListener(evt, this.onActivityEvent);
     }
   }
 
@@ -66,6 +114,12 @@ export class SessionService {
       this.tokens.clearTokens();
       return false;
     }
+    // A page reload creates a brand-new SessionService instance (providedIn: 'root' still means one per
+    // app bootstrap, not one for the browser tab's whole lifetime) — without re-arming these here, the
+    // idle timer and its activity listeners would just never start again after any refresh, silently
+    // disabling the whole inactivity timeout for the rest of that tab's life.
+    this.resetIdleTimer();
+    this.startActivityListeners();
     return true;
   }
 }

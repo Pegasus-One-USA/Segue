@@ -84,7 +84,7 @@
 <div class="builder-canvas-area">
   <app-canvas
     [workflowSaved]="!!currentWorkflowId()"
-    (openWizard)="onOpenWizard($event ?? undefined)"
+    (openWizard)="onOpenWizard($event)"
     (openTransformPicker)="onOpenTransformPicker($event)"
     (openSourcePicker)="onOpenSourcePicker()"
     (copyCheckpointUrl)="onCopyCheckpointUrl($event)"
@@ -92,7 +92,6 @@
 </div>
 
 <!-- ── Overlays / Dialogs ──────────────────────────────────────────────────── -->
-<app-epic-source-wizard />
 
 <app-node-library-dialog
   [open]="libraryOpen()"

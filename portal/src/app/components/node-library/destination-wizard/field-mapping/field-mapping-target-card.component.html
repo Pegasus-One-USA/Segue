@@ -35,7 +35,11 @@
 
 
   <div class="fm-target-rows">
-    @if (destType() === 'sql') {
+    @if (destType() === 'sql' && hasSqlTables() && !schemaAuthoringEnabled()) {
+      <!-- No live credentials to back a real ALTER TABLE here (see FieldMappingCanvasComponent.
+           schemaAuthoringEnabled) — this table's real, already-probed columns are the only ones
+           mappable; nothing to add. -->
+    } @else if (destType() === 'sql') {
       <div class="fm-target-row fm-target-row--add">
         <button
           type="button"

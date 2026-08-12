@@ -1,6 +1,6 @@
 .detail-page {
   padding: 32px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -30,13 +30,26 @@
 }
 
 .header-card {
+  position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  padding: 20px 24px;
+  padding: 22px 24px 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: hidden;
+
+  // Slim brand-gradient rule along the top edge — same gradient the dashboard's phase badges already use,
+  // just as a hairline accent here instead of a filled chip, so the "hero" card reads as premium without
+  // adding another loud color block.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  }
 }
 
 .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -45,15 +58,20 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
 
-  h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-ink); }
+  h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-ink); letter-spacing: -0.1px; }
 }
 
 .pipe-avatar {
-  width: 40px; height: 40px; border-radius: 8px;
-  background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: var(--radius-base);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 6px 16px rgba(0, 168, 157, 0.24);
 
-  mat-icon { font-size: 20px; height: 20px; width: 20px; color: var(--color-success-strong); }
+  // White-on-gradient is icon-only here (never body text at this size), which is the large-element
+  // exception the design spec's contrast table calls out — see ui-ux-expert skill §21.1.
+  mat-icon { font-size: 22px; height: 22px; width: 22px; color: var(--color-on-primary, #fff); }
 }
 
 .cell-muted   { font-size: 13px; color: var(--color-muted); }
@@ -61,13 +79,23 @@
 
 .header-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  padding-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px 20px;
+  padding-top: 14px;
   border-top: 1px solid var(--color-border);
 }
 
-.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+
+.stat-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--radius-base); flex-shrink: 0;
+  background: var(--color-primary-soft); color: var(--color-primary);
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; }
+}
+
+.stat-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-muted); }
 .stat-value { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 
@@ -99,22 +127,33 @@
 }
 
 .status-badge {
-  display: inline-flex; align-items: center;
-  padding: 4px 12px; border-radius: var(--radius-pill);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px 5px 10px; border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
 
-  &.status-pending    { background: var(--color-warning-soft); color: var(--color-warning-strong); }
-  &.status-running    { background: var(--color-info-soft); color: var(--color-info-strong); }
-  &.status-succeeded  { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); }
-  &.status-cancelled  { background: var(--color-side); color: var(--color-muted); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  &.status-pending    { background: var(--color-warning-soft); color: var(--color-warning-strong); .status-dot { background: var(--color-warning-strong); } }
+  &.status-running    { background: var(--color-info-soft); color: var(--color-info-strong); .status-dot { background: var(--color-info-strong); animation: statusPulse 2s ease-in-out infinite; } }
+  &.status-succeeded  { background: var(--color-success-soft); color: var(--color-success-strong); .status-dot { background: var(--color-success-strong); } }
+  &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); .status-dot { background: var(--color-error-strong); } }
+  &.status-cancelled  { background: var(--color-side); color: var(--color-muted); .status-dot { background: var(--color-muted); } }
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(1.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-badge.status-running .status-dot { animation: none; }
 }
 
 .error-banner {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 10px 14px; border-radius: var(--radius-base);
-  background: var(--color-surface-2, var(--color-surface)); color: var(--color-muted);
-  border: 1px solid var(--color-border); font-size: 13.5px;
+  background: var(--color-error-soft); color: var(--color-error-strong);
+  border: 1px solid var(--color-error-strong); font-size: 13.5px;
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; }
 
@@ -127,21 +166,35 @@
   border-bottom: 1px solid var(--color-border);
 
   button {
-    padding: 10px 4px;
-    margin-right: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
     border: none;
     background: none;
+    border-radius: var(--radius-base) var(--radius-base) 0 0;
     font-size: 13.5px;
     font-weight: 600;
     color: var(--color-muted);
     border-bottom: 2px solid transparent;
     cursor: pointer;
+    transition: background var(--transition-base), color var(--transition-base);
 
-    &:hover { color: var(--color-ink); }
+    mat-icon { font-size: 17px; height: 17px; width: 17px; }
 
-    &.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    &:hover { color: var(--color-ink); background: var(--color-side); }
+
+    &.active { color: var(--color-primary); border-bottom-color: var(--color-primary); background: var(--color-primary-soft); }
   }
 }
+
+.tab-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--color-side); color: var(--color-muted); font-size: 11px; font-weight: 700;
+}
+
+.lineage-tabs button.active .tab-count { background: var(--color-surface); color: var(--color-primary); }
 
 .table-card {
   background: var(--color-surface);
@@ -159,7 +212,12 @@
   background: var(--color-side);
 }
 
-.entries-info { font-size: 13px; color: var(--color-muted); }
+.entries-info {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--color-muted);
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; }
+}
 
 .btn-link {
   display: inline-flex;
@@ -175,9 +233,28 @@
   mat-icon { font-size: 18px; width: 18px; height: 18px; }
 }
 
-.resource-list { display: flex; flex-direction: column; }
+.resource-list {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  // The connecting "pipeline" thread behind each node-marker — broken visually at every marker by that
+  // marker's own halo ring (see .node-marker's box-shadow below), so it reads as one continuous run of
+  // steps rather than an unrelated accordion list.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 34px;
+    bottom: 34px;
+    left: 38px;
+    width: 2px;
+    background: var(--color-border);
+    z-index: 0;
+  }
+}
 
 .resource-row {
+  position: relative;
   border-bottom: 1px solid var(--color-border);
   border-left: 3px solid transparent;
 
@@ -190,14 +267,56 @@
 .resource-summary {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   padding: 14px 20px;
   cursor: pointer;
+  transition: background var(--transition-base);
 
   &:hover { background: var(--color-side); }
 
-  .cell-muted { flex: 1; }
-  .chevron { margin-left: auto; color: var(--color-muted); }
+  .chevron { margin-left: 4px; color: var(--color-muted); flex-shrink: 0; }
+}
+
+.node-marker {
+  position: relative;
+  z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: var(--radius-base); flex-shrink: 0;
+  // The halo is the same color as the row background — it's what makes the connector line above appear to
+  // pass "through" open track and stop at each marker, the standard timeline illusion.
+  box-shadow: 0 0 0 4px var(--color-surface);
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &.contract-resourcebatch           { background: var(--color-info-soft); color: var(--color-info-strong); }
+  &.contract-normalizedresourcebatch { background: var(--color-primary-soft); color: var(--color-primary); }
+  &.contract-mappedrecordbatch       { background: var(--color-primary-soft); color: var(--color-primary-dark); }
+  &.contract-deidentifiedbatch       { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &.contract-destinationwriteresult  { background: var(--color-success-soft); color: var(--color-success-strong); }
+  &.contract-auditresult             { background: var(--color-side); color: var(--color-muted); }
+  &.contract-none                    { background: var(--color-side); color: var(--color-muted); }
+}
+
+.node-summary-main { flex: 1 1 auto; min-width: 0; }
+
+.node-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.node-index {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted-2, var(--color-muted));
+  min-width: 16px;
+}
+
+.node-summary-meta {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-left: 12px;
 }
 
 .contract-badge {
@@ -226,9 +345,17 @@
 
     .btn-copy {
       width: auto;
-      padding: 4px 10px;
-      gap: 4px;
-      font-size: 12px;
+      height: 30px;
+      padding: 0 12px;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-base);
+      background: var(--color-surface);
+      color: var(--color-ink-2);
+
+      &:hover { background: var(--color-side); border-color: var(--color-muted-2, var(--color-muted)); color: var(--color-ink); }
     }
   }
 

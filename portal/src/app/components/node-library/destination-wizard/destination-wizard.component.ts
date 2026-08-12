@@ -1,10 +1,9 @@
 import {
-  Component, ElementRef, Injector, input, output, signal, computed, effect,
+  Component, ElementRef, Injector, input, output, signal, computed, effect, Type,
   untracked, inject, viewChild, afterNextRender, OnInit,
 } from '@angular/core';
-import {
-  FormBuilder, Validators, ReactiveFormsModule,
-} from '@angular/forms';
+import { NgComponentOutlet } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
 import { forkJoin, of, from, Observable } from 'rxjs';
 import { catchError, map, switchMap, concatMap, toArray, finalize } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
@@ -13,7 +12,10 @@ import { DestinationSchemaService, DestinationTable, DestinationColumn, Destinat
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
-import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
+import { newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
+import { DestinationConfigFormComponent } from '../../shared/config-form/config-form.contract';
+import { DESTINATION_FORM_REGISTRY } from './destination-forms/destination-form.registry';
+import { WizardDestinationFormApi, SqlFamilyFormApi, isSqlFamilyForm } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
 import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow, PendingSchemaOp, MappingDestType } from './field-mapping/field-mapping-model';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -136,12 +138,11 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent, MatDialogModule],
+  imports: [ReactiveFormsModule, NgComponentOutlet, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent, MatDialogModule],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
 export class DestinationWizardComponent implements OnInit {
-  private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
@@ -254,54 +255,71 @@ export class DestinationWizardComponent implements OnInit {
   // stays true even after going back to step 1, so switching still warns.
   private readonly _hasProgressed = signal(false);
 
-  // ── forms ─────────────────────────────────────────────────────────────────
-  readonly sqlForm = this.fb.group({
-    name:      ['SQL Production', [Validators.required]],
-    server:    ['', [Validators.required]],
-    database:  ['', [Validators.required]],
-    auth:      ['sql-auth', [Validators.required]],
-    username:  [''],
-    password:  [''],
-    schema:    ['dbo', []],
-    writeMode: ['upsert', []],
-    // MySQL/PostgreSQL only (see DestinationConnectionProbeRequest.RequireSsl backend-side): off by default so
-    // a local/docker instance with SSL disabled still connects; check for managed providers that enforce SSL
-    // (e.g. AWS RDS's rds.force_ssl).
-    requireSsl: [false, []],
+  // ── connection form (Step 1) ─────────────────────────────────────────────
+  // The old inline sqlForm/csvForm/mongoForm reactive forms are gone — Step 1 now hosts whichever
+  // DESTINATION_FORM_REGISTRY component matches this wizard's destType() via NgComponentOutlet, and every
+  // downstream read (validity, review display, provisioning, save, existing-connection diffing, the mapping
+  // canvas's connectionInfo/csvDelimiterKey) goes through activeForm()/activeFormConfig() instead of a class
+  // field FormGroup. The outlet stays mounted for the wizard's whole lifetime (see the template's dw-hidden
+  // toggle) so those reads keep working after Step 1 is behind — exactly like the old FormGroup fields did
+  // just by existing on this class the whole time.
+  private readonly formOutlet = viewChild(NgComponentOutlet);
+
+  /** 'sql' is this wizard's existing shorthand specifically for SQL Server (see isSql()/isMySql()/isPostgres()
+   *  below) — mapped to the registry's 'SqlServer' key. Mongo/csv/mysql/postgres map 1:1 onto their
+   *  DestinationType names. */
+  private readonly registryKey = computed<DestinationType>(() => {
+    switch (this.destType()) {
+      case 'mysql': return 'MySql';
+      case 'postgres': return 'PostgreSql';
+      case 'mongo': return 'Mongo';
+      case 'csv': return 'Csv';
+      default: return 'SqlServer';
+    }
   });
 
-  readonly mongoForm = this.fb.group({
-    name:             ['MongoDB Production', [Validators.required]],
-    // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
-    // what MappedMongoDestinationWriter expects. Treated as a whole as a secret (see SECRET_FIELD_KEYS): there's
-    // no live probe to validate a split server/database/credentials form against, so one opaque field is
-    // simplest and avoids a redundant connection-string-assembly step this wizard would otherwise need.
-    connectionString: ['', [Validators.required]],
-    collection:       ['', [Validators.required]],
-    writeMode:        ['upsert', []],
-  });
+  readonly activeFormType = computed<Type<DestinationConfigFormComponent> | null>(() => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null);
 
-  readonly csvForm = this.fb.group({
-    name:         ['CSV Export', [Validators.required]],
-    deliveryMode: ['download', [Validators.required]],
-    filePattern:  ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
-    delimiter:    ['comma', []],
-    encoding:     ['utf-8', []],
-    // ── SFTP-only connection details ─────────────────────────────────────────
-    sftpHost:         ['', []],
-    sftpPort:         [22, []],
-    sftpUsername:     ['', []],
-    sftpAuthType:     ['password', []],
-    sftpPassword:     ['', []],
-    sftpRemoteFolder: ['', []],
-    // ── Email-only fields ─────────────────────────────────────────────────────
-    emailTo:              ['', []],
-    emailCc:               ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
-    emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
-    // ── Download-link-only field ─────────────────────────────────────────────
-    downloadLinkExpiryMinutes: [60, []],
-  });
+  /** Only Csv's own component declares `reusingExisting` (gates its sftpPassword's required validator) — see
+   *  CsvDestinationFormComponent. Passing an input key a loaded component doesn't declare would throw
+   *  (NgComponentOutlet uses ComponentRef.setInput under the hood), so this is scoped to the CSV branch only.
+   *  Deliberately a plain method, not computed() — hasExistingChanged() reads the live FormGroup underneath
+   *  activeForm(), which isn't itself a tracked signal, so a computed() here would never invalidate as the
+   *  user types; template bindings re-evaluate this fresh on every change-detection pass instead. */
+  activeFormInputs(): Record<string, unknown> {
+    if (this.isSql() || this.isMongo()) return {};
+    return { reusingExisting: this.connectionMode() === 'existing' && !this.hasExistingChanged() };
+  }
+
+  /** Live instance of whatever DESTINATION_FORM_REGISTRY component is currently loaded, or null before the
+   *  view has finished initializing. Read fresh on every call (never memoized) — NgComponentOutlet's own
+   *  `componentInstance` getter isn't itself a signal, so caching this in a computed() risks freezing on a
+   *  stale (pre-creation) null the first time it's read. */
+  activeForm(): WizardDestinationFormApi | null {
+    return (this.formOutlet()?.componentInstance as WizardDestinationFormApi | null) ?? null;
+  }
+
+  /** Full dest_*-keyed config bag of whatever's currently loaded — used by the mapping canvas's
+   *  connectionInfo/csvDelimiterKey bindings and Step 4's review cards, all of which used to read
+   *  sqlForm.value/csvForm.value/mongoForm.value directly. */
+  activeFormConfig(): Record<string, string> {
+    return this.activeForm()?.getFullConfig() ?? {};
+  }
+
+  // A saved node's fields (editing) or a picked existing connection's metadata can arrive before the Step 1
+  // form component has actually been created (both can fire during ngOnInit, before the view — and this
+  // outlet's child — exists). Queued here and flushed by the effect in the constructor the moment the form
+  // instance becomes available, instead of relying on it already being there like the old FormGroup fields.
+  private readonly _pendingFormPatch = signal<{ fields: Record<string, string>; target: string | null; isExistingSelection?: boolean } | null>(null);
+
+  // Snapshot of Step 1's raw form value taken once, right after the outlet's child first exists — either
+  // its blank defaults (brand-new destination) or right after _populateFromNode()'s/selectExisting()'s
+  // queued patch has flushed onto it (editing/reusing), same ordering the _pendingFormPatch effect below
+  // relies on. Compared against the live value by isStep1Dirty() to tell "closed without ever really
+  // touching Step 1" (safe to discard silently) apart from "typed something but never clicked Next/Save"
+  // (needs the same confirm-before-discard treatment as switching type or closing the whole dialog already
+  // get via _hasProgressed — see cancel()/node-library-dialog's onDestWizardCancelled()).
+  private _step1Baseline: Record<string, unknown> | null = null;
 
   // ── data groups ───────────────────────────────────────────────────────────
   // Always the full curated FHIR resource list — not derived from the upstream source's own
@@ -516,20 +534,11 @@ export class DestinationWizardComponent implements OnInit {
   };
 
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
-  readonly connectionInfo = computed<DestinationProbeRequest | null>(() => {
-    if (!this.isSql()) return null;
-    const v = this.sqlForm.value;
-    return {
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server: v.server ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-    };
-  });
+  connectionInfo(): DestinationProbeRequest | null {
+    const form = this.activeForm();
+    if (!this.isSql() || !isSqlFamilyForm(form)) return null;
+    return form.getProbeRequest();
+  }
 
   /** A column was added via the canvas's Add Column modal — upserted (not blindly appended) into the
    *  known schema, since this fires TWICE for the same column: once immediately with a locally-synthesized
@@ -723,13 +732,6 @@ export class DestinationWizardComponent implements OnInit {
     return DEST_RESOURCE_DEFS[r] ?? genericResourceDef(r);
   }
 
-  readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.csvForm.value;
-    const rows = this.mappingRows();
-    const resources = this.selectedResources();
-    return { fv, rows, resources };
-  });
-
   constructor() {
     // Rebuild mapping rows whenever selected resources or destType change
     effect(() => {
@@ -738,9 +740,32 @@ export class DestinationWizardComponent implements OnInit {
       untracked(() => this._rebuildRows(resources, type));
     });
 
-    // SFTP/email/download-link fields are required only while their mode is selected.
-    this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
-    this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+    // Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component
+    // the moment it actually exists — both editing a saved node and picking an existing connection can fire
+    // before the outlet's child is created (ngOnInit runs before the view/its children do), unlike the old
+    // FormGroup fields, which existed synchronously as class fields from the constructor onward.
+    effect(() => {
+      const outlet = this.formOutlet();
+      const pending = this._pendingFormPatch();
+      if (!outlet || !pending) return;
+      // Deferred via afterNextRender() even on this first attempt, not just the retries inside
+      // _flushPendingFormPatch — applying the patch synchronously here (mid-render, since this effect fires
+      // as part of the newly-created component's own initial change-detection pass) flips the Step 1 form
+      // from invalid to valid *during* that same pass, which trips NG0100
+      // (ExpressionChangedAfterItHasBeenCheckedError) on isNextDisabled()'s "Test connection & Next" binding.
+      // Running after the render is done avoids fighting Angular's own dev-mode consistency check.
+      untracked(() => afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector }));
+    });
+
+    // Captures Step 1's pristine baseline exactly once per wizard instance — runs right after the effect
+    // above on the same flush (registration order), so a queued edit/existing-connection patch has already
+    // landed on the form by the time this reads it. Same retry rationale as that effect (see
+    // _flushPendingFormPatch's doc comment) — getRawValue() can hit the exact same not-ready-yet outlet.
+    effect(() => {
+      const outlet = this.formOutlet();
+      if (!outlet || this._step1Baseline !== null) return;
+      untracked(() => afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector }));
+    });
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -792,6 +817,46 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
+   *  Re-reads formOutlet() fresh on every attempt rather than closing over a single snapshot, because the
+   *  failure mode here isn't just "the SQL-family wrapper's nested viewChild throws" (see the try/catch
+   *  below) — NgComponentOutlet's own directive instance can already exist (formOutlet() truthy) *before*
+   *  it has actually instantiated its dynamic child, so `outlet.componentInstance` alone can be `null` with
+   *  nothing thrown at all. That's a silent, permanent drop: neither `formOutlet()` nor `_pendingFormPatch()`
+   *  change again afterward, so the effect that got us here never re-fires on its own. Retrying via
+   *  afterNextRender() on *both* the "still null" and "threw" cases is what actually closes the gap. */
+  private _flushPendingFormPatch(pending: { fields: Record<string, string>; target: string | null; isExistingSelection?: boolean }): void {
+    const form = this.formOutlet()?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector });
+      return;
+    }
+    try {
+      form.patchFrom(pending.fields, pending.target);
+      if (pending.isExistingSelection) this._existingBaseline = form.getRawValue();
+      this._pendingFormPatch.set(null);
+    } catch (err) {
+      console.error('Step 1 form was not ready to restore its saved values — retrying after next render.', err);
+      afterNextRender(() => this._flushPendingFormPatch(pending), { injector: this.injector });
+    }
+  }
+
+  /** Captures Step 1's pristine baseline the moment the form actually exists — see isStep1Dirty(). Same
+   *  "outlet exists but componentInstance is still null" race as _flushPendingFormPatch above, so it
+   *  retries the same way rather than reading formOutlet() once and giving up. */
+  private _captureStep1Baseline(): void {
+    const form = this.formOutlet()?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector });
+      return;
+    }
+    try {
+      this._step1Baseline = form.getRawValue();
+    } catch {
+      afterNextRender(() => this._captureStep1Baseline(), { injector: this.injector });
+    }
+  }
+
   private readonly _requested = new Set<string>();
 
   private _ensureCatalog(resource: string, sourceConnectionId: string | null, sourceVendor: string): void {
@@ -820,37 +885,6 @@ export class DestinationWizardComponent implements OnInit {
     };
   }
 
-  private _syncDeliveryModeValidators(deliveryMode: string | null): void {
-    const isSftp = deliveryMode === 'sftp';
-    // sftpPassword is a secret — selectExisting() deliberately never repopulates it (secrets never come back from
-    // the API), so requiring it here would permanently block reusing an existing SFTP connection unless the user
-    // types something just to satisfy validation. Reusing-as-is never sends a password anywhere (see _save()'s
-    // "unchanged" branch), so it doesn't need one; only a genuinely NEW connection (mode 'new', or an edited
-    // 'existing' one that forks) does.
-    const requirePassword = isSftp && this.connectionMode() === 'new';
-    (['sftpHost', 'sftpUsername', 'sftpRemoteFolder'] as const).forEach(name => {
-      const ctrl = this.csvForm.get(name)!;
-      ctrl.setValidators(isSftp ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
-    const passwordCtrl = this.csvForm.get('sftpPassword')!;
-    passwordCtrl.setValidators(requirePassword ? [Validators.required] : []);
-    passwordCtrl.updateValueAndValidity({ emitEvent: false });
-    const port = this.csvForm.get('sftpPort')!;
-    port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
-    port.updateValueAndValidity({ emitEvent: false });
-
-    const isEmail = deliveryMode === 'email';
-    const emailTo = this.csvForm.get('emailTo')!;
-    emailTo.setValidators(isEmail ? [Validators.required] : []);
-    emailTo.updateValueAndValidity({ emitEvent: false });
-
-    const isDownloadUrl = deliveryMode === 'downloadUrl';
-    const expiry = this.csvForm.get('downloadLinkExpiryMinutes')!;
-    expiry.setValidators(isDownloadUrl ? [Validators.required, Validators.min(1), Validators.max(10080)] : []);
-    expiry.updateValueAndValidity({ emitEvent: false });
-  }
-
   ngOnInit(): void {
     this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
@@ -876,7 +910,8 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
+      const form = this.activeForm();
+      return !form || !form.isValid();
     }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
@@ -884,16 +919,26 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
-    // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
-    // real DestinationConfiguration happens inside testConnection()'s success handler, right before it advances.
-    if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
-      this.testConnection();
-      return;
-    }
-    // CSV: no connection probe gate — provision (create/update) the real DestinationConfiguration here,
-    // immediately on leaving Configure, then advance once it succeeds.
-    if (this.step() === 1 && !this.isSql()) {
-      this.provisionDestinationConnection(() => this._advancePastStep1());
+    if (this.step() === 1) {
+      const form = this.activeForm();
+      if (!form) return;
+      // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
+      // real DestinationConfiguration happens once the probe succeeds, right before advancing.
+      if (isSqlFamilyForm(form) && form.probeState() !== 'ok') {
+        form.testConnection(result => {
+          if (!result.connected) return;
+          this.sqlTables.set(result.tables);
+          this.probeState.set('ok');
+          const metadata = form.getMetadata();
+          if (metadata) this.provisionDestinationConnection(metadata, () => this._advancePastStep1());
+        });
+        return;
+      }
+      // CSV/Mongo (and SQL once already probed 'ok'): provision (create/update) the real
+      // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
+      const metadata = form.getMetadata();
+      if (!metadata) return;
+      this.provisionDestinationConnection(metadata, () => this._advancePastStep1());
       return;
     }
     if (this.step() < this.TOTAL_STEPS) {
@@ -992,7 +1037,11 @@ export class DestinationWizardComponent implements OnInit {
 
     this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(TransformRulesDialogComponent, {
       width: '680px',
-      maxWidth: '95vw',
+      // NOT a tighter cap like '95vw' — MatDialogConfig's maxWidth/maxHeight apply once at open and
+      // aren't revisited by dialogRef.updateSize() later, so a smaller static cap here would silently
+      // clamp TransformRulesDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
+      maxWidth: '100vw',
+      maxHeight: '100vh',
       restoreFocus: false,
       data: {
         resourceType: resource,
@@ -1230,52 +1279,16 @@ export class DestinationWizardComponent implements OnInit {
     if (this.step() > 1) {
       this.step.update(x => x - 1);
       // Returning to Configure invalidates a prior probe — force a re-test on the next advance.
-      if (this.step() === 1 && this.isSql()) { this.probeState.set('idle'); this.sqlTables.set([]); }
+      if (this.step() === 1 && this.isSql()) {
+        this.probeState.set('idle');
+        this.sqlTables.set([]);
+        const form = this.activeForm();
+        if (isSqlFamilyForm(form)) form.resetProbe();
+      }
     }
   }
 
   cancel(): void { this.cancelled.emit(); }
-
-  // ── SQL connection test + table/column loading ──────────────────────────────
-  testConnection(): void {
-    const v = this.sqlForm.value;
-    this.probeState.set('testing');
-    this.probeError.set(null);
-    this.schemaSvc.probe({
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server:   v.server   ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-      requireSsl: v.requireSsl ?? false,
-    }).subscribe({
-      next: res => {
-        if (res.connected) {
-          // Tagged 'probed' so a MappingSnapshot can tell these apart from anything the user creates
-          // afterwards via "+ Add a table"/"+ Add column" (onTableCreated/onColumnAdded, both 'userCreated').
-          this.sqlTables.set(res.tables.map(t => ({
-            ...t,
-            origin: 'probed',
-            columns: t.columns.map(c => ({ ...c, origin: 'probed' })),
-          })));
-          this.probeState.set('ok');
-          if (this.step() < this.TOTAL_STEPS) {
-            this.provisionDestinationConnection(() => this._advancePastStep1());
-          }
-        } else {
-          this.probeState.set('error');
-          this.probeError.set(res.error ?? 'Connection failed.');
-        }
-      },
-      error: err => {
-        this.probeState.set('error');
-        this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
-      },
-    });
-  }
 
   // ── select existing connection ───────────────────────────────────────────
   setConnectionMode(mode: 'new' | 'existing'): void {
@@ -1283,7 +1296,6 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql() && !this.isMongo()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
@@ -1292,15 +1304,12 @@ export class DestinationWizardComponent implements OnInit {
     this.connectionMode.set('new');
     this.selectedExistingId.set(null);
     this._existingBaseline = null;
+    const form = this.activeForm();
+    form?.reset();
     if (this.isSql()) {
-      this.sqlForm.reset();
       this.probeState.set('idle');
       this.sqlTables.set([]);
-    } else if (this.isMongo()) {
-      this.mongoForm.reset();
-    } else {
-      this.csvForm.reset();
-      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+      if (isSqlFamilyForm(form)) form.resetProbe();
     }
   }
 
@@ -1352,52 +1361,18 @@ export class DestinationWizardComponent implements OnInit {
     if (!selected) return;
 
     const metadata = this._parseConnectionMetadata(selected.connectionMetadataJson);
+    // dest_name always falls back to the saved record's own name (metadata's dest_name is only ever absent
+    // for a record saved before this key existed) — folded into the bag handed to patchFrom so every type's
+    // patchFrom sees the same fallback without each needing to special-case it.
+    if (!metadata['dest_name']) metadata['dest_name'] = selected.name;
 
-    if (this.isSql()) {
-      this.sqlForm.patchValue({
-        name:      metadata['dest_name']      || selected.name,
-        server:    metadata['dest_server']    || '',
-        database:  metadata['dest_database']  || '',
-        auth:      metadata['dest_auth']      || 'sql-auth',
-        username:  metadata['dest_username']  || '',
-        password:  '',
-        schema:    metadata['dest_schema']    || 'dbo',
-        writeMode: metadata['dest_writeMode'] || 'upsert',
-        requireSsl: metadata['dest_requireSsl'] === 'true',
-      });
-      this._existingBaseline = this.sqlForm.getRawValue();
-    } else if (this.isMongo()) {
-      this.mongoForm.patchValue({
-        name:             metadata['dest_name']       || selected.name,
-        connectionString: '',
-        collection:       metadata['dest_collection']  || selected.target || '',
-        writeMode:        metadata['dest_writeMode']    || 'upsert',
-      });
-      this._existingBaseline = this.mongoForm.getRawValue();
-    } else {
-      this.csvForm.patchValue({
-        name:             metadata['dest_name']             || selected.name,
-        deliveryMode:     metadata['dest_deliveryMode']     || 'download',
-        filePattern:      metadata['dest_filePattern']       || selected.target || this.csvForm.value.filePattern,
-        delimiter:        metadata['dest_delimiter']         || 'comma',
-        encoding:         metadata['dest_encoding']          || 'utf-8',
-        sftpHost:         metadata['dest_sftpHost']          || '',
-        sftpPort:         metadata['dest_sftpPort'] ? Number(metadata['dest_sftpPort']) : 22,
-        sftpUsername:     metadata['dest_sftpUsername']      || '',
-        sftpAuthType:     metadata['dest_sftpAuthType']      || 'password',
-        sftpPassword:     '',
-        sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
-        emailTo:              metadata['dest_emailTo']              || '',
-        emailCc:               metadata['dest_emailCc']               || '',
-        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
-        emailBodyTemplate:
-          metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
-        downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
-          ? Number(metadata['dest_downloadLinkExpiryMinutes'])
-          : 60,
-      });
-      this._existingBaseline = this.csvForm.getRawValue();
+    const form = this.activeForm();
+    if (!form) {
+      this._pendingFormPatch.set({ fields: metadata, target: selected.target ?? null, isExistingSelection: true });
+      return;
     }
+    form.patchFrom(metadata, selected.target ?? null);
+    this._existingBaseline = form.getRawValue();
   }
 
   private _parseConnectionMetadata(json: string | null | undefined): Record<string, string> {
@@ -1421,8 +1396,23 @@ export class DestinationWizardComponent implements OnInit {
     const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.activeForm()?.getRawValue() ?? {};
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
+  }
+
+  /** True once Step 1's form has been edited away from its pristine baseline (see _step1Baseline) — the
+   *  "there's something here worth confirming before discarding" check for leaving Step 1 *without* ever
+   *  advancing past it (_hasProgressed alone misses this: it only flips true once the user clicks Next/Save
+   *  — see _advancePastStep1()/_save()). Used alongside _hasProgressed, never instead of it, by both
+   *  cancel() here and node-library-dialog's switch-type guard. Secret fields excluded, same rationale and
+   *  key list as hasExistingChanged(). */
+  isStep1Dirty(): boolean {
+    if (!this._step1Baseline) return false;
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
+    const current = this.activeForm()?.getRawValue() ?? {};
+    return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._step1Baseline));
   }
 
   /**
@@ -1668,46 +1658,14 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
-    if (this.isSql()) {
-      this.sqlForm.patchValue({
-        name:      f['dest_name']      || 'SQL Production',
-        server:    f['dest_server']    || '',
-        database:  f['dest_database']  || '',
-        auth:      f['dest_auth']      || 'managed-identity',
-        username:  f['dest_username']  || '',
-        password:  f['dest_password']  || '',
-        schema:    f['dest_schema']    || 'dbo',
-        writeMode: f['dest_writeMode'] || 'upsert',
-        requireSsl: f['dest_requireSsl'] === 'true',
-      });
-    } else if (this.isMongo()) {
-      this.mongoForm.patchValue({
-        name:             f['dest_name']       || 'MongoDB Production',
-        connectionString: '',
-        collection:       f['dest_collection']  || '',
-        writeMode:        f['dest_writeMode']    || 'upsert',
-      });
-    } else {
-      this.csvForm.patchValue({
-        name:         f['dest_name']         || 'CSV Export',
-        deliveryMode: f['dest_deliveryMode'] || 'download',
-        filePattern:  f['dest_filePattern']  || '{resource}_{yyyyMMdd_HHmmss}.csv',
-        delimiter:    f['dest_delimiter']    || 'comma',
-        encoding:     f['dest_encoding']     || 'utf-8',
-        sftpHost:         f['dest_sftpHost']         || '',
-        sftpPort:         f['dest_sftpPort'] ? Number(f['dest_sftpPort']) : 22,
-        sftpUsername:     f['dest_sftpUsername']     || '',
-        sftpAuthType:     f['dest_sftpAuthType']     || 'password',
-        sftpPassword:     f['dest_sftpPassword']     || '',
-        sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
-        emailTo:              f['dest_emailTo']              || '',
-        emailCc:               f['dest_emailCc']               || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
-        emailBodyTemplate:
-          f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
-        downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
-      });
-    }
+    // Queued rather than applied directly — this runs from ngOnInit, before the Step 1 form component (the
+    // outlet's child) has necessarily been created; the effect in the constructor flushes it onto the form
+    // the moment it exists. dest_auth's 'managed-identity' fallback (vs. patchFrom's own 'sql-auth' fallback,
+    // used for a brand-new form/an existing-connection pick) only matters for a node saved before dest_auth
+    // was always written, so it's folded into the queued bag here rather than needing a patchFrom parameter.
+    const fields = { ...f };
+    if (this.isSql() && !fields['dest_auth']) fields['dest_auth'] = 'managed-identity';
+    this._pendingFormPatch.set({ fields, target: null });
     // The mapping-restore branches below (loadMappingSummary included, each of which returns early) only
     // ever populate sqlTables() with tables this mapping already uses — a saved Mapping JSON was never
     // meant to carry the destination's FULL schema. That left "+ Add a table from your database" offering
@@ -1789,19 +1747,17 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    const v = this.sqlForm.value;
-    if (!v.server || !v.database || !v.password) return;
+    // Ad-hoc probe path for a not-yet-provisioned SQL node — needs the live form's raw values (including its
+    // plaintext password), which may not exist yet this early (see _populateFromNode's queued patch above).
+    // Not worth deferring further: this is a narrow edge case (editing a brand-new, never-saved SQL node),
+    // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
+    // every other failure path here.
+    const form = this.activeForm();
+    if (!isSqlFamilyForm(form)) return;
+    const request = form.getProbeRequest();
+    if (!request.server || !request.database || !request.password) return;
 
-    this.schemaSvc.probe({
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server: v.server ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-    }).subscribe({
+    this.schemaSvc.probe(request).subscribe({
       next: res => { if (res.connected) applyTables(res.tables); },
       error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */ },
     });
@@ -1809,71 +1765,29 @@ export class DestinationWizardComponent implements OnInit {
 
   // Connection-only fields (server/database/auth for SQL; folder/sftp for CSV), keyed the same way both
   // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
-  private _buildConnectionConfig(): Record<string, string> {
-    const config: Record<string, string> = {};
-    if (this.isSql()) {
-      const v = this.sqlForm.value;
-      config['dest_name']      = v.name      ?? '';
-      config['dest_engine']    = this.isMySql() ? 'mysql' : this.isPostgres() ? 'postgres' : 'sqlserver';
-      config['dest_server']    = v.server    ?? '';
-      config['dest_database']  = v.database  ?? '';
-      config['dest_auth']      = v.auth      ?? '';
-      config['dest_schema']    = v.schema    ?? 'dbo';
-      config['dest_writeMode'] = v.writeMode ?? 'upsert';
-      config['dest_requireSsl'] = String(v.requireSsl ?? false);
-      // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
-      // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
-      if ((v.auth ?? 'sql-auth') === 'sql-auth') {
-        config['dest_username'] = v.username ?? '';
-        config['dest_password'] = v.password ?? '';
-      }
-    } else if (this.isMongo()) {
-      const v = this.mongoForm.value;
-      config['dest_name']             = v.name             ?? '';
-      config['dest_connectionString'] = v.connectionString ?? '';
-      config['dest_collection']       = v.collection       ?? '';
-      config['dest_writeMode']        = v.writeMode        ?? 'upsert';
-    } else {
-      const v = this.csvForm.value;
-      config['dest_name']         = v.name         ?? '';
-      config['dest_deliveryMode'] = v.deliveryMode ?? 'download';
-      config['dest_filePattern']  = v.filePattern  ?? '';
-      config['dest_delimiter']    = v.delimiter    ?? 'comma';
-      config['dest_encoding']     = v.encoding     ?? 'utf-8';
-      if (v.deliveryMode === 'sftp') {
-        config['dest_sftpHost']         = v.sftpHost         ?? '';
-        config['dest_sftpPort']         = String(v.sftpPort  ?? 22);
-        config['dest_sftpUsername']     = v.sftpUsername     ?? '';
-        config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
-        config['dest_sftpPassword']     = v.sftpPassword     ?? '';
-        config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
-      } else if (v.deliveryMode === 'email') {
-        config['dest_emailTo']              = v.emailTo              ?? '';
-        config['dest_emailCc']               = v.emailCc               ?? '';
-        config['dest_emailSubjectTemplate'] = v.emailSubjectTemplate ?? '';
-        config['dest_emailBodyTemplate']    = v.emailBodyTemplate    ?? '';
-      } else if (v.deliveryMode === 'downloadUrl') {
-        config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
-      }
-    }
-    return config;
-  }
-
   // Creates (or updates, if Step 1 was already provisioned earlier this session) the real DestinationConfiguration
   // as soon as Step 1's connection details are complete — so a real destinationId exists immediately, the same way
   // sourceConnectionId now does for the Epic source wizard (see wizard.service.ts's save()), rather than only after
   // the whole workflow gets built. Skipped when reusing an existing connection (selectedExistingId already has a
   // real id) or when editing a destination whose connection came from an "existing" pick (same reason).
-  private provisionDestinationConnection(onDone: () => void): void {
+  //
+  // `metadata` is whatever the Step 1 form's own getMetadata() just returned — its `fields` are the non-secret
+  // dest_* bag (used as connectionMetadataJson) and `secret` is the already-assembled connection string/URI
+  // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
+  // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
+  // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
+  private provisionDestinationConnection(
+    metadata: { fields: Record<string, string>; secret?: string | null },
+    onDone: () => void,
+  ): void {
     if (this.connectionMode() === 'existing') {
       onDone();
       return;
     }
 
-    const config = this._buildConnectionConfig();
     const isSql = this.isSql();
     const isMongo = this.isMongo();
-    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1882,8 +1796,8 @@ export class DestinationWizardComponent implements OnInit {
           keyVaultName: 'workflow-secrets',
           secretName,
           target: null,
-          inlineSecret: buildSqlConnectionString(config),
-          connectionMetadataJson: buildConnectionMetadata(config, true),
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
         }
       : isMongo
       ? {
@@ -1891,18 +1805,18 @@ export class DestinationWizardComponent implements OnInit {
           destinationType: 'Mongo',
           keyVaultName: 'workflow-secrets',
           secretName,
-          target: config['dest_collection'] || null,
-          inlineSecret: config['dest_connectionString'] || '',
-          connectionMetadataJson: buildConnectionMetadata(config, false),
+          target: metadata.fields['dest_collection'] || null,
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
         }
       : {
           name,
-          destinationType: config['dest_storageType'] === 'sftp' ? 'Sftp' : 'Csv',
+          destinationType: 'Csv',
           keyVaultName: 'workflow-secrets',
           secretName,
-          target: config['dest_filePattern'] || null,
-          inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : (config['dest_folder'] || ''),
-          connectionMetadataJson: buildConnectionMetadata(config, false),
+          target: metadata.fields['dest_filePattern'] || null,
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
         };
 
     const existingId = this.resolvedDestinationId();
@@ -1939,7 +1853,7 @@ export class DestinationWizardComponent implements OnInit {
     const type = this.destType();
     const config: Record<string, string> = {
       dest_resources: this.selectedResources().join(','),
-      ...this._buildConnectionConfig(),
+      ...this.activeFormConfig(),
     };
 
     // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form

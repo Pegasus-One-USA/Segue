@@ -5,7 +5,8 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
-import { MappingProfileFormComponent, MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
 import {
@@ -17,7 +18,7 @@ import {
 } from '../../models/mapping-profile.model';
 import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
 import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
-import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 
 export interface MappingProfileDialogData {
   mode: 'create' | 'edit' | 'view';
@@ -112,7 +113,7 @@ function toMappingFieldDto(row: MappingRow): MappingFieldDto {
 @Component({
   selector: 'app-mapping-profile-dialog',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileFormComponent],
+  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileCanvasComponent],
   templateUrl: './mapping-profile-dialog.component.html',
   styleUrl: './mapping-profile-dialog.component.scss',
 })
@@ -124,13 +125,31 @@ export class MappingProfileDialogComponent {
   private readonly dialogRef = inject(MatDialogRef<MappingProfileDialogComponent>);
   readonly data = inject<MappingProfileDialogData>(MAT_DIALOG_DATA);
 
-  readonly mappingForm = viewChild(MappingProfileFormComponent);
+  readonly mappingForm = viewChild(MappingProfileCanvasComponent);
+
+  /** Toggles the dialog between its normal size and true edge-to-edge fullscreen — same maximize
+   *  affordance NodeLibraryDialogComponent's own header offers, adapted to a MatDialogRef. updateSize()
+   *  alone would still leave Material's own dialog-surface padding/border-radius/box-shadow visible
+   *  (not truly fullscreen, just a bigger centered card) — the 'mpd-fullscreen' panel class (see this
+   *  component's .scss) strips those too. */
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void {
+    const next = !this.isMaximized();
+    this.isMaximized.set(next);
+    this.dialogRef.updateSize(next ? '100vw' : 'min(92vw, 1100px)', next ? '100vh' : 'min(88vh, 740px)');
+    if (next) this.dialogRef.addPanelClass('mpd-fullscreen');
+    else this.dialogRef.removePanelClass('mpd-fullscreen');
+  }
 
   readonly mode = this.data.mode;
   readonly isCreate = this.mode === 'create';
   readonly isView = this.mode === 'view';
 
-  readonly resourceTypeOptions = FHIR_RESOURCES;
+  // The dropdown used to be scoped to FHIR_RESOURCES (the MVP1 11-resource subset the source-connection
+  // scope picker still uses) — Mapping Profiles has no such scoping reason to hide the rest of what the
+  // backend actually catalogs a template for, so this offers every resource in SUPPORTED_RESOURCE_TYPES
+  // (kept in sync with SupportedFhirResourceTypes.All) instead.
+  readonly resourceTypeOptions = SUPPORTED_RESOURCE_TYPES;
   readonly sourceOptions = signal<NamedEntity[]>([]);
   readonly destinationOptions = signal<NamedEntity[]>([]);
 
@@ -155,6 +174,24 @@ export class MappingProfileDialogComponent {
     this.destinationOptions().find(d => d.id === this.destinationIdValue())?.destinationType,
   );
   readonly destType = computed(() => toDestKind(this.selectedDestinationType()));
+
+  /** Human-readable label for the header's destination-type badge — a handful of common types get a real
+   *  display name (matching how the destination wizard itself labels them); anything else (Snowflake,
+   *  BlobStorage, ...) falls back to space-separating the PascalCase DestinationType value itself rather
+   *  than needing an entry for all 22. */
+  private static readonly DEST_TYPE_LABELS: Partial<Record<DestinationType, string>> = {
+    SqlServer: 'SQL Server', AzureSql: 'Azure SQL', MySql: 'MySQL', PostgreSql: 'PostgreSQL',
+    Mongo: 'MongoDB', Csv: 'CSV', Sftp: 'SFTP', RestApi: 'REST API', FhirRepository: 'FHIR Repository',
+  };
+  readonly destTypeLabel = computed<string | null>(() => {
+    const t = this.selectedDestinationType();
+    if (!t) return null;
+    return MappingProfileDialogComponent.DEST_TYPE_LABELS[t] ?? t.replace(/([a-z])([A-Z])/g, '$1 $2');
+  });
+
+  /** Live field-mapping count for the header badge — reads straight off the embedded canvas's own row
+   *  state (already public, see MappingProfileCanvasComponent.rowsRich) rather than duplicating it here. */
+  readonly mappingCount = computed(() => this.mappingForm()?.rowsRich().length ?? 0);
 
   /** Live tables/columns of the selected destination, introspected server-side from its stored secret — empty
    *  for a non-relational destination type or before one is selected. Feeds MappingProfileFormComponent's

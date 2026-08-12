@@ -1,4 +1,5 @@
 import { Component, input, output, inject, computed, signal, effect, untracked, viewChild } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
 import { ModalOverlayComponent } from '../shared/modal-overlay/modal-overlay.component';
 import { PipelineStore } from '../../services/pipeline.store';
 import { ApplicabilityService } from '../../services/applicability.service';
@@ -10,10 +11,26 @@ import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
 import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
-import { EpicAudienceFormComponent } from '../epic-source-wizard/epic-audience-form/epic-audience-form.component';
+import { SourceConfigFormComponent } from '../shared/config-form/config-form.contract';
+import { SOURCE_FORM_REGISTRY, EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from './source-form.registry';
+import { EpicSourceFormComponent } from './epic-source-form/epic-source-form.component';
+import { CernerSourceFormComponent } from './cerner-source-form/cerner-source-form.component';
+import { AthenahealthSourceFormComponent } from './athenahealth-source-form/athenahealth-source-form.component';
+import { AllscriptsSourceFormComponent } from './allscripts-source-form/allscripts-source-form.component';
+import { HealowSourceFormComponent } from './healow-source-form/healow-source-form.component';
+import { MeditechSourceFormComponent } from './meditech-source-form/meditech-source-form.component';
+import { SampleSourceFormComponent } from './sample-source-form/sample-source-form.component';
 import { DestinationWizardComponent } from './destination-wizard/destination-wizard.component';
-import { GenericFhirSourceFormComponent } from './generic-fhir-source-form/generic-fhir-source-form.component';
 import { ZoomDockComponent } from '../canvas/zoom-dock/zoom-dock.component';
+
+// SELF_CONTAINED_SOURCE_FORM_KEYS (imported above) distinguishes the WizardService-backed vendor forms (Epic,
+// Cerner, ...) — each with its own full save/cancel flow and topbar/footer chrome, exactly like the old
+// (Epic-only) EpicAudienceFormComponent — from "headless" forms (generic-fhir, hl7v2) that only implement
+// SourceConfigFormComponent.getFields() and rely on this dialog's own title/Cancel/Save chrome, the same shape
+// GenericFhirSourceFormComponent always used. This split exists because Angular's NgComponentOutlet has no way to
+// bind a dynamically-resolved component's *outputs* in a template (only inputs, since v17) — the self-contained
+// vendor forms are rendered through a `@switch` below instead so their saved/cancelled/closeAll/
+// toggleMaximizeRequest outputs can stay ordinary, statically-checked Angular bindings.
 
 export type LibraryMode = 'source' | 'transform';
 
@@ -110,9 +127,15 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
   standalone: true,
   imports: [
     ModalOverlayComponent,
-    EpicAudienceFormComponent,
+    NgComponentOutlet,
+    EpicSourceFormComponent,
+    CernerSourceFormComponent,
+    AthenahealthSourceFormComponent,
+    AllscriptsSourceFormComponent,
+    HealowSourceFormComponent,
+    MeditechSourceFormComponent,
+    SampleSourceFormComponent,
     DestinationWizardComponent,
-    GenericFhirSourceFormComponent,
     ZoomDockComponent,
   ],
   templateUrl: './node-library-dialog.component.html',
@@ -140,19 +163,38 @@ export class NodeLibraryDialogComponent {
   readonly selectedId    = signal<string | null>(null);
   readonly showHidden    = signal(false);
 
-  // ── inline Epic form state ────────────────────────────────────────────────
-  readonly showEpicForm = signal(false);
-
-  // ── inline Generic FHIR form state ────────────────────────────────────────
-  readonly showGenericFhirForm = signal(false);
-  readonly genericFhirEditNode = signal<CanvasNode | null>(null);
-  readonly genericFhirForm = viewChild(GenericFhirSourceFormComponent);
-  readonly genericFhirError = signal<string | null>(null);
+  // ── inline source-config form state ───────────────────────────────────────
+  /** SOURCES catalog id (see ../../data/sources.data.ts) of the currently-open inline source form, or null when
+   *  none is open — the single piece of state SOURCE_FORM_REGISTRY is keyed off of. Replaces the old
+   *  showEpicForm/showGenericFhirForm boolean pair; adding a new source type never means a new boolean here. */
+  readonly openSourceFormType = signal<string | null>(null);
+  readonly currentSourceFormComponent = computed(() => {
+    const type = this.openSourceFormType();
+    return type ? SOURCE_FORM_REGISTRY[type] ?? null : null;
+  });
+  /** Display name for the "headless" form title (see the template) — selectedItem()/selectedId() are never set
+   *  for a registered source (selectItem() opens its form immediately instead), so this reads sources.data.ts
+   *  directly off openSourceFormType() rather than relying on that unrelated signal. */
+  readonly sourceFormTitle = computed(() =>
+    SOURCES.find(s => s.id === this.openSourceFormType())?.name ?? 'Source');
+  /** True for the WizardService-backed vendor forms (Epic/Cerner/.../Sample) — see SELF_CONTAINED_SOURCE_FORM_KEYS. */
+  readonly isSelfContainedSourceForm = computed(() => {
+    const type = this.openSourceFormType();
+    return !!type && SELF_CONTAINED_SOURCE_FORM_KEYS.has(type);
+  });
+  /** Only meaningful for a "headless" form (generic-fhir, hl7v2) — the canvas node being edited, whose `fields`
+   *  seed that form's own `initialFields` input. Self-contained vendor forms restore instead through
+   *  WizardService.open()/editingFields(), same as EpicAudienceFormComponent always did. */
+  readonly sourceFormEditNode = signal<CanvasNode | null>(null);
+  /** Read back out via getFields() by this dialog's own Save button for a headless form (see
+   *  onHeadlessSourceFormSave) — generalizes the old genericFhirForm() viewChild. */
+  readonly sourceFormOutlet = viewChild(NgComponentOutlet);
+  readonly sourceFormError = signal<string | null>(null);
 
   // ── sidebar collapsed state (auto when a form opens, user-toggleable) ─────
   readonly sidebarPinned = signal(false);
   readonly isSidebarMini = computed(() =>
-    (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) && !this.sidebarPinned()
+    (this.openSourceFormType() !== null || this.showDestWizard()) && !this.sidebarPinned()
   );
 
   toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
@@ -162,6 +204,10 @@ export class NodeLibraryDialogComponent {
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
+  // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
+  // selectItem()'s switch-type guard can check isStep1Dirty() procedurally at click time — see
+  // DestinationWizardComponent.isStep1Dirty() for why destWizardHasProgressed alone isn't enough.
+  private readonly destWizardRef = viewChild(DestinationWizardComponent);
 
   // FHIR resource types the pipeline's source(s) pull — union of every source node's saved "Resources" field plus the
   // active wizard selection. Passed to the destination wizard so its data groups mirror the source's Resource Type.
@@ -246,6 +292,12 @@ export class NodeLibraryDialogComponent {
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
 
+  // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
+  // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
+  // (cancel() on the wizard itself has no notion of "has this progressed" — that lives here, driven by
+  // destWizardHasProgressed — so it always emits `cancelled` unconditionally and lets this gate decide.)
+  readonly pendingDestCancel = signal(false);
+
   // Guards the overlay's own close (Escape key, or a backdrop click on the rare occasions it's still
   // enabled) while a form/wizard is open — same "don't silently discard progress" intent as
   // pendingDestSwitch above, just for exiting the whole dialog instead of switching destination type.
@@ -268,11 +320,10 @@ export class NodeLibraryDialogComponent {
           }
           return;
         }
-        if (node && this._isGenericFhirNode(node)) {
-          untracked(() => this.openGenericFhirForm(node));
-          return;
-        }
-        untracked(() => this.openEpicForm(id));
+        // Resolve which registered source form owns this node (defaulting to 'epic' for a node with no
+        // recognizable vendor marker — e.g. every canvas node created before per-vendor forms existed).
+        const key = node && isSourceNode(node) ? this._sourceFormKeyForNode(node) : 'epic';
+        untracked(() => this.openSourceForm(key, node ?? id));
       }
     });
   }
@@ -424,23 +475,31 @@ export class NodeLibraryDialogComponent {
   selectItem(item: LibraryItem): void {
     if (item.status === 'disabled' || item.status === 'hide') return;
 
-    // Epic and the destination connectors jump straight into their config form.
-    if (item.id === 'epic') {
-      this.openEpicForm();
-      return;
-    }
-    if (item.id === 'generic-fhir') {
-      this.openGenericFhirForm(null);
+    // Any registered source type (Epic, the other EHR vendors, Generic FHIR, HL7v2, Sample, ...) jumps straight
+    // into its own config form — a single registry lookup instead of one `if (item.id === '...')` per source.
+    if (item.isSource && SOURCE_FORM_REGISTRY[item.id]) {
+      // Re-clicking the vendor that's already open would otherwise call openSourceForm() again — for the
+      // WizardService-backed vendors (see SELF_CONTAINED_SOURCE_FORM_KEYS) that re-runs wiz.open(), which
+      // repopulates every field signal from the underlying node/defaults and wipes whatever the user has
+      // typed but not yet saved. Already showing this exact vendor's form — no-op.
+      if (this.openSourceFormType() === item.id) return;
+      this.openSourceForm(item.id);
       return;
     }
     if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres') {
       const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' =
         item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : 'csv';
-      // Switching type after the user has already filled in later steps would
-      // silently discard that progress — confirm first.
-      if (this.showDestWizard() && this.destWizardType() !== type && this.destWizardHasProgressed()) {
-        this.pendingDestSwitch.set(type);
-        return;
+      if (this.showDestWizard()) {
+        // Already showing this exact destination type — _openDestWizard() unconditionally resets step,
+        // attach node and mapping state, which would wipe the form for no reason. No-op instead.
+        if (this.destWizardType() === type) return;
+        // Switching to a *different* type after the user has already filled in later steps — or just typed
+        // into Step 1 without ever clicking Next/Save (destWizardHasProgressed alone misses that; see
+        // DestinationWizardComponent.isStep1Dirty()) — would silently discard that progress. Confirm first.
+        if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
+          this.pendingDestSwitch.set(type);
+          return;
+        }
       }
       this._openDestWizard(type);
       return;
@@ -467,59 +526,85 @@ export class NodeLibraryDialogComponent {
     if (e.target === e.currentTarget) this.cancelDestSwitch();
   }
 
-  // ── inline Epic form ──────────────────────────────────────────────────────
-  openEpicForm(nodeId?: string | null): void {
-    this.wiz.open(nodeId ?? undefined);
-    this.wiz.openedInline.set(true);
-    this.showEpicForm.set(true);
-  }
-
-  onEpicFormSaved(): void {
-    this._close();
-  }
-
-  onEpicFormCancelled(): void {
-    this.wiz.close();
-    this.showEpicForm.set(false);
-  }
-
-  // ── inline Generic FHIR form ──────────────────────────────────────────────
+  // ── inline source-config form (registry-driven — Epic, other EHR vendors, Generic FHIR, HL7v2, Sample) ────────
+  /** Best-effort vendor/source-type detection for an existing canvas node, used when re-opening its form for
+   *  editing (see the constructor's effect above). Reads the same 'Connector' field value every source form's
+   *  own getFields() now writes (see EhrVendorSourceFormComponent.buildFieldsToSave); a node saved before that
+   *  field existed (any pre-refactor Epic node) falls back to 'epic', preserving prior behavior exactly. */
   private _isGenericFhirNode(node: CanvasNode): boolean {
     return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
   }
 
-  openGenericFhirForm(editNode: CanvasNode | null): void {
-    this.genericFhirEditNode.set(editNode);
-    this.genericFhirError.set(null);
-    this.showGenericFhirForm.set(true);
+  private _isHl7v2Node(node: CanvasNode): boolean {
+    return isSourceNode(node) && /hl7\s*v?\s*2|mllp/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
   }
 
-  onGenericFhirFormCancelled(): void {
-    this.showGenericFhirForm.set(false);
-    this.genericFhirEditNode.set(null);
-    this.genericFhirError.set(null);
+  private _sourceFormKeyForNode(node: CanvasNode): string {
+    if (this._isGenericFhirNode(node)) return 'generic-fhir';
+    if (this._isHl7v2Node(node)) return 'hl7v2';
+    // 'Connector' on a self-contained vendor node is the raw EhrVendor value (e.g. 'Cerner') — map it back to the
+    // matching sources.data.ts id via the same table SourceConnectionListComponent uses for entity-mode rows.
+    // Falls back to 'epic' both for a node with no 'Connector' at all (any canvas node saved before this refactor
+    // introduced that field) and for an unrecognized value — matching the pre-refactor "anything that isn't
+    // Generic FHIR must be Epic" assumption exactly.
+    const connector = node.fields['Connector'];
+    const mapped = connector ? EHR_VENDOR_TO_SOURCE_FORM_KEY[connector] : undefined;
+    return mapped ?? 'epic';
   }
 
-  onGenericFhirFormSave(): void {
-    const fields = this.genericFhirForm()?.getFields();
+  /** Opens the registered form for `key` (a sources.data.ts id) — self-contained vendor forms restore through
+   *  WizardService.open()/editingFields() exactly as EpicAudienceFormComponent always did; headless forms
+   *  (generic-fhir, hl7v2) restore through their own `initialFields` input, seeded from `editNodeOrId`'s fields. */
+  openSourceForm(key: string, editNodeOrId?: CanvasNode | string | null): void {
+    this.sourceFormError.set(null);
+    if (SELF_CONTAINED_SOURCE_FORM_KEYS.has(key)) {
+      const nodeId = typeof editNodeOrId === 'string' ? editNodeOrId : editNodeOrId?.id;
+      this.wiz.open(nodeId ?? undefined);
+      this.wiz.openedInline.set(true);
+      this.sourceFormEditNode.set(null);
+    } else {
+      const node = typeof editNodeOrId === 'string' ? (this.store.byId(editNodeOrId) ?? null) : (editNodeOrId ?? null);
+      this.sourceFormEditNode.set(node);
+    }
+    this.openSourceFormType.set(key);
+  }
+
+  onSourceFormSaved(): void {
+    this._close();
+  }
+
+  onSourceFormCancelled(): void {
+    this.wiz.close();
+    this.openSourceFormType.set(null);
+    this.sourceFormEditNode.set(null);
+    this.sourceFormError.set(null);
+  }
+
+  /** Save button for a headless form (generic-fhir, hl7v2 — anything not in SELF_CONTAINED_SOURCE_FORM_KEYS) —
+   *  generalizes the old onGenericFhirFormSave(), reading sources.data.ts for the new node's abbr/color/label
+   *  instead of hardcoding Generic FHIR's. */
+  onHeadlessSourceFormSave(): void {
+    const instance = this.sourceFormOutlet()?.componentInstance as SourceConfigFormComponent | null | undefined;
+    const fields = instance?.getFields();
     if (!fields) {
-      this.genericFhirError.set('Fix the highlighted fields before saving.');
+      this.sourceFormError.set('Fix the highlighted fields before saving.');
       return;
     }
 
-    const editNode = this.genericFhirEditNode();
+    const editNode = this.sourceFormEditNode();
     if (editNode) {
       this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
     } else {
+      const meta = SOURCES.find(s => s.id === this.openSourceFormType());
       const node: SourceNode = {
         id: this.store.nextNodeId(),
         kind: undefined,
         x: 360,
         y: 300,
         connected: true,
-        abbr: 'R4',
-        color: '#5b6573',
-        connectorLabel: 'Generic FHIR R4',
+        abbr: meta?.abbr ?? 'SRC',
+        color: meta?.color ?? '#5b6573',
+        connectorLabel: meta?.name,
         fields,
       };
       this.store.addNode(node);
@@ -567,6 +652,32 @@ export class NodeLibraryDialogComponent {
   }
 
   onDestWizardCancelled(): void {
+    // The dest wizard's own "← Back to library" button emits this unconditionally (it has no notion of
+    // "has this progressed") — unlike switching destination type or closing the whole dialog, this used to
+    // discard silently, including the common case of typing into Step 1 and backing out without ever
+    // clicking Next/Save (destWizardHasProgressed alone misses that — see isStep1Dirty()). Same "don't lose
+    // unsaved work" guard as pendingDestSwitch/pendingCloseConfirm.
+    if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
+      this.pendingDestCancel.set(true);
+      return;
+    }
+    this._resetDestWizard();
+  }
+
+  confirmDestCancel(): void {
+    this.pendingDestCancel.set(false);
+    this._resetDestWizard();
+  }
+
+  cancelDestCancel(): void {
+    this.pendingDestCancel.set(false);
+  }
+
+  onConfirmCancelBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelDestCancel();
+  }
+
+  private _resetDestWizard(): void {
     this.showDestWizard.set(false);
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);
@@ -586,8 +697,11 @@ export class NodeLibraryDialogComponent {
     if (!item) return;
 
     if (item.isSource) {
-      if (item.id === 'epic') {
-        this.openEpicForm();
+      // Every SOURCES entry is registered today (see selectItem()) — this is a defensive fallback for a source
+      // id that somehow isn't, matching the pre-refactor "epic jumps to its form, everything else falls through
+      // to sourceSelected" split.
+      if (SOURCE_FORM_REGISTRY[item.id]) {
+        this.openSourceForm(item.id);
         return;
       }
       this._close();
@@ -614,7 +728,7 @@ export class NodeLibraryDialogComponent {
   // ModalOverlayComponent.onEscape), so a form/wizard being open is checked here instead: closing outright
   // would otherwise silently discard whatever the user has entered.
   onOverlayClosed(): void {
-    if (this.showEpicForm() || this.showDestWizard() || this.showGenericFhirForm()) {
+    if (this.openSourceFormType() !== null || this.showDestWizard()) {
       this.pendingCloseConfirm.set(true);
       return;
     }
@@ -639,10 +753,9 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(null);
     this.searchQuery.set('');
     this.sidebarPinned.set(false);
-    this.showEpicForm.set(false);
-    this.showGenericFhirForm.set(false);
-    this.genericFhirEditNode.set(null);
-    this.genericFhirError.set(null);
+    this.openSourceFormType.set(null);
+    this.sourceFormEditNode.set(null);
+    this.sourceFormError.set(null);
     this.showDestWizard.set(false);
     this.destWizardType.set(null);
     this.destWizardAttach.set(null);

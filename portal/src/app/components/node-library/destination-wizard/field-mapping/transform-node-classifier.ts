@@ -27,6 +27,50 @@ export const ALL_NODE_TYPE_OPTIONS: { value: TransformNodeType; label: string }[
 
 const LABEL_BY_TYPE = new Map(ALL_NODE_TYPE_OPTIONS.map(o => [o.value, o.label]));
 
+/**
+ * Short badge glyph + design-spec §14.2 rank-color for each of the 20 nodes — the exact same rank
+ * palette the field-mapping canvas already cycles through its resource groups with (see
+ * field-mapping-source-tree.component.ts's groupColorVar()), reused here via the same `var(--fm-rank-N)`
+ * indirection rather than a new hardcoded hex, so a step's badge/accent ties back to the same taxonomy
+ * a user already sees elsewhere in the app: rank 3 (indigo) = validation-flavored, 4 (violet) = value
+ * normalization, 5 (pink) = terminology/coding, 6 (orange) = de-identification, 7 (teal) = structure
+ * mapping/reshaping — assigned per node by what it actually does, not arbitrarily.
+ */
+const NODE_ACCENT: Record<TransformNodeType, { abbr: string; rankVar: string }> = {
+  DateTimeFormat:          { abbr: 'DT',   rankVar: 'var(--fm-rank-4)' },
+  NumberCast:              { abbr: 'NUM',  rankVar: 'var(--fm-rank-4)' },
+  BooleanConversion:       { abbr: 'BOOL', rankVar: 'var(--fm-rank-4)' },
+  UnitConversion:          { abbr: 'UNIT', rankVar: 'var(--fm-rank-4)' },
+  QuantityRangeAssembly:   { abbr: 'QTY',  rankVar: 'var(--fm-rank-4)' },
+  RoundingScaling:         { abbr: 'RND',  rankVar: 'var(--fm-rank-4)' },
+  ValueCodeMapping:        { abbr: 'VCM',  rankVar: 'var(--fm-rank-5)' },
+  CodeableConceptBuilder:  { abbr: 'CCB',  rankVar: 'var(--fm-rank-5)' },
+  StatusEnumCoercion:      { abbr: 'STA',  rankVar: 'var(--fm-rank-5)' },
+  ReferenceConstruction:   { abbr: 'REF',  rankVar: 'var(--fm-rank-7)' },
+  IdentifierFormatting:    { abbr: 'IDF',  rankVar: 'var(--fm-rank-7)' },
+  HumanNameParsing:        { abbr: 'NAME', rankVar: 'var(--fm-rank-7)' },
+  AddressParsing:          { abbr: 'ADDR', rankVar: 'var(--fm-rank-7)' },
+  TelecomNormalization:    { abbr: 'TEL',  rankVar: 'var(--fm-rank-4)' },
+  StringNormalization:     { abbr: 'STR',  rankVar: 'var(--fm-rank-4)' },
+  ConcatenationTemplating: { abbr: 'CAT',  rankVar: 'var(--fm-rank-7)' },
+  ArrayListOperations:     { abbr: 'ARR',  rankVar: 'var(--fm-rank-7)' },
+  DefaultNullHandling:     { abbr: 'NULL', rankVar: 'var(--fm-rank-3)' },
+  DateMathAge:             { abbr: 'AGE',  rankVar: 'var(--fm-rank-6)' },
+  HashingMasking:          { abbr: 'HASH', rankVar: 'var(--fm-rank-6)' },
+};
+
+/** 2-4 letter badge glyph for a node type — used on the compact chain-of-steps chips. */
+export function nodeAbbr(nodeType: TransformNodeType): string {
+  return NODE_ACCENT[nodeType]?.abbr ?? nodeType.slice(0, 3).toUpperCase();
+}
+
+/** The `var(--fm-rank-N)` this node type's accent resolves to — pass straight into a `[style.--x]`
+ *  binding, never a raw hex, so theme/tenant re-tinting of the rank palette (if that ever happens)
+ *  reaches this dialog for free. */
+export function nodeAccentVar(nodeType: TransformNodeType): string {
+  return NODE_ACCENT[nodeType]?.rankVar ?? 'var(--color-primary)';
+}
+
 // Nodes genuinely useful on almost any field, regardless of what kind of data it holds.
 const UNIVERSAL: TransformNodeType[] = ['DefaultNullHandling', 'StringNormalization'];
 
