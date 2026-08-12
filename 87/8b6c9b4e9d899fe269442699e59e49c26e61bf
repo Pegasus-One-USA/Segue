@@ -1,0 +1,34 @@
+containerization/azure-deploy/README.md
+  s_6d2ed7df8f8732::t_82d074cd1409cc 138-141,145-147
+containerization/azure-deploy/createUiDefinition.json
+  s_6d2ed7df8f8732::t_022554f41e738e 276
+  s_6d2ed7df8f8732::t_fa343dbac7045c 207,213,215,225,229-235
+containerization/azure-deploy/main.parameters.example.json
+  s_6d2ed7df8f8732::t_3a4563748dbc03 14-17
+containerization/scripts/manage-custom-domain.sh
+  s_6d2ed7df8f8732::t_9af9f68cfba1b9 1-127
+containerization/scripts/manage-custom-domain.ps1
+  s_6d2ed7df8f8732::t_cc13365be2f546 1-160
+containerization/azure-deploy/main.bicep
+  s_6d2ed7df8f8732::t_974002b1bd54a8 58,64-66,303
+  s_6d2ed7df8f8732::t_3b75febf08d6a1 299-302,304-308,310,312,322,350-351,353-360,376,407-414,427-428
+  s_6d2ed7df8f8732::t_9fd2dd91cf32d2 480-481,487-488
+containerization/azure-deploy/main.json
+  s_6d2ed7df8f8732::t_01d39aaf9e7d2e 7-8,86-106,436-463,478-479,488,499,518-519,539,552,621-644
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "878b6c9b4e9d899fe269442699e59e49c26e61bf",
+  "prompts": {},
+  "sessions": {
+    "s_6d2ed7df8f8732": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "34f2306f-48da-40d5-bca7-b4a62d39affd",
+        "model": "grok-4.5"
+      },
+      "human_author": "Yashkumar <yashkumars@teknobloomconsulting.com>"
+    }
+  }
+}
