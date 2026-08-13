@@ -1,0 +1,26 @@
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_b39b77aeb9beb3::t_127876fa799b8b 110-127,138
+  s_b39b77aeb9beb3::t_78e6963f46464e 231-244,246-249
+  s_b39b77aeb9beb3::t_2b2e806ae53253 189
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_b39b77aeb9beb3::t_d50c568bfd80de 1439-1448
+  s_b39b77aeb9beb3::t_fbfebc2bc467df 2306-2311
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_b39b77aeb9beb3::t_ed9ff07db49787 684-688
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "77abe858f8052f5799f3128d8d45fe21cde9af9d",
+  "prompts": {},
+  "sessions": {
+    "s_b39b77aeb9beb3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de4e1fb1-2dd2-4464-8f4f-28e0e507486b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

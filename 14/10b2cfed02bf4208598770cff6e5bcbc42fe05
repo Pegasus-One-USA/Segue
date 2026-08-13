@@ -1,0 +1,42 @@
+containerization/azure-deploy/createUiDefinition.json
+  s_6d2ed7df8f8732::t_cc2a7ee1356c4f 249
+containerization/README.md
+  s_6d2ed7df8f8732::t_c3f7b7dba81a20 30,36,40
+containerization/terraform/environments/azure/main.tf
+  s_6d2ed7df8f8732::t_5840009b6a0544 549,552,571-574,576,579,588-594,598,607-613
+  s_6d2ed7df8f8732::t_a6967cd2c62d73 479-489
+  s_6d2ed7df8f8732::t_75afdb619f3aff 188-202
+  s_6d2ed7df8f8732::t_e02fac2b4e17bd 713,716
+containerization/azure-deploy/main.bicep
+  s_6d2ed7df8f8732::t_b73a91ad51b692 529,532
+  s_6d2ed7df8f8732::t_9304f53e115c1d 190-194,223-236,409
+  s_6d2ed7df8f8732::t_86601a563b96b4 402-404,407-408
+containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md
+  s_6d2ed7df8f8732::t_42393b4939b98c 1-89
+containerization/terraform/environments/azure/outputs.tf
+  s_6d2ed7df8f8732::t_efae4a8b4236ca 25,35,40,43-50
+containerization/terraform/environments/azure/terraform.tfvars.example
+  s_6d2ed7df8f8732::t_e02563f2a604c8 26-32
+containerization/terraform/environments/azure/variables.tf
+  s_6d2ed7df8f8732::t_54e0b322d59631 62,68,73-78
+containerization/azure-deploy/publish-deploy-artifacts.ps1
+  s_6d2ed7df8f8732::t_10fa7630ebbf43 1-43
+containerization/azure-deploy/main.json
+  s_6d2ed7df8f8732::t_03f4ccf365297e 8,275-285,322-339,517-530,542,698,701
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1410b2cfed02bf4208598770cff6e5bcbc42fe05",
+  "prompts": {},
+  "sessions": {
+    "s_6d2ed7df8f8732": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "34f2306f-48da-40d5-bca7-b4a62d39affd",
+        "model": "grok-4.5"
+      },
+      "human_author": "Yashkumar <yashkumars@teknobloomconsulting.com>"
+    }
+  }
+}
