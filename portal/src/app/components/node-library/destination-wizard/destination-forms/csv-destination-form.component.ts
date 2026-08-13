@@ -31,7 +31,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
 
   readonly csvForm = this.fb.group({
     name: ['CSV Export', [Validators.required]],
-    deliveryMode: ['download', [Validators.required]],
+    deliveryMode: ['downloadUrl', [Validators.required]],
     filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
     delimiter: ['comma', []],
     encoding: ['utf-8', []],
@@ -158,7 +158,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
 
   reset(): void {
     this.csvForm.reset({
-      name: 'CSV Export', deliveryMode: 'download', filePattern: '{resource}_{yyyyMMdd_HHmmss}.csv',
+      name: 'CSV Export', deliveryMode: 'downloadUrl', filePattern: '{resource}_{yyyyMMdd_HHmmss}.csv',
       delimiter: 'comma', encoding: 'utf-8', sftpHost: '', sftpPort: 22, sftpUsername: '', sftpAuthType: 'password',
       sftpPassword: '', sftpRemoteFolder: '', emailTo: '', emailCc: '',
       emailSubjectTemplate: 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',

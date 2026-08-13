@@ -13,17 +13,10 @@
       <label class="dw-label" for="cf-deliveryMode">Delivery mode <span class="dw-req">*</span></label>
       <div class="dw-select-wrap">
         <select id="cf-deliveryMode" class="dw-select" formControlName="deliveryMode">
-          <option value="download">Download (returned directly from the run)</option>
           <option value="email">Email</option>
-          <option value="sftp">SFTP</option>
           <option value="downloadUrl">Download link</option>
         </select>
       </div>
-      @if (csvForm.get('deliveryMode')!.value === 'download') {
-        <span class="dw-hint">
-          Only works when this destination's route is triggered manually — not on a schedule or webhook.
-        </span>
-      }
     </div>
 
     <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('filePattern')!.invalid && csvForm.get('filePattern')!.touched">
@@ -54,45 +47,6 @@
         </select>
       </div>
     </div>
-
-    @if (csvForm.get('deliveryMode')!.value === 'sftp') {
-      <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched">
-        <label class="dw-label" for="cf-sftpHost">SFTP host <span class="dw-req">*</span></label>
-        <input id="cf-sftpHost" class="dw-input" formControlName="sftpHost" placeholder="sftp.company.com" />
-        @if (csvForm.get('sftpHost')!.invalid && csvForm.get('sftpHost')!.touched) {
-          <span class="dw-error">SFTP host is required.</span>
-        }
-      </div>
-
-      <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPort')!.invalid && csvForm.get('sftpPort')!.touched">
-        <label class="dw-label" for="cf-sftpPort">Port</label>
-        <input id="cf-sftpPort" type="number" class="dw-input" formControlName="sftpPort" />
-      </div>
-
-      <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched">
-        <label class="dw-label" for="cf-sftpUsername">Username <span class="dw-req">*</span></label>
-        <input id="cf-sftpUsername" class="dw-input" formControlName="sftpUsername" autocomplete="off" />
-        @if (csvForm.get('sftpUsername')!.invalid && csvForm.get('sftpUsername')!.touched) {
-          <span class="dw-error">SFTP username is required.</span>
-        }
-      </div>
-
-      <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
-        <label class="dw-label" for="cf-sftpPassword">Password @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
-        <input id="cf-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
-        @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
-          <span class="dw-error">SFTP password is required.</span>
-        }
-      </div>
-
-      <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched">
-        <label class="dw-label" for="cf-sftpRemoteFolder">Remote folder <span class="dw-req">*</span></label>
-        <input id="cf-sftpRemoteFolder" class="dw-input" formControlName="sftpRemoteFolder" placeholder="/incoming/fhirbridge" />
-        @if (csvForm.get('sftpRemoteFolder')!.invalid && csvForm.get('sftpRemoteFolder')!.touched) {
-          <span class="dw-error">Remote folder is required.</span>
-        }
-      </div>
-    }
 
     @if (csvForm.get('deliveryMode')!.value === 'email') {
       <div class="dw-field dw-field--full" [class.dw-field--error]="csvForm.get('emailTo')!.invalid && csvForm.get('emailTo')!.touched">
