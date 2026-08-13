@@ -22,7 +22,7 @@ output "demo_app_url" {
 }
 
 output "fhirbridge_app_domain_verification" {
-  description = "Always available, regardless of whether fhirbridge_app_custom_domain is set. Add a CNAME (your domain -> fhirbridge_app_url's hostname) and a TXT record named asuid.<your domain> with this value at your DNS provider, wait for propagation, THEN set fhirbridge_app_custom_domain and re-apply."
+  description = "Always available. After Phase 1 (domain set, bind_custom_domain_certificates=false), add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value, wait for DNS, then set bind_custom_domain_certificates=true and re-apply."
   value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id
 }
 
@@ -32,11 +32,19 @@ output "demo_app_domain_verification" {
 }
 
 output "fhirbridge_app_custom_domain_url" {
-  description = "Populated once fhirbridge_app_custom_domain is set and that apply has completed; null otherwise."
+  description = "Populated once fhirbridge_app_custom_domain is set; null otherwise."
   value       = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null
 }
 
 output "demo_app_custom_domain_url" {
-  description = "Populated once demo_app_custom_domain is set and that apply has completed; null otherwise."
+  description = "Populated once demo_app_custom_domain is set; null otherwise."
   value       = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null
+}
+
+output "bind_custom_domain_certificates" {
+  value = var.bind_custom_domain_certificates
+}
+
+output "custom_domain_phase" {
+  value = var.fhirbridge_app_custom_domain == "" && var.demo_app_custom_domain == "" ? "none" : (var.bind_custom_domain_certificates ? "ssl-bound-or-binding" : "hostname-only-set-dns-then-reapply-with-bind-true")
 }

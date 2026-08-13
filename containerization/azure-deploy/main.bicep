@@ -55,11 +55,14 @@ param redisPort int = 6379
 @secure()
 param redisPassword string
 
-@description('Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default) to keep using the auto-generated *.azurecontainerapps.io URL. Requires a two-phase deploy: (1) deploy with this left blank, read the fhirbridgeAppDomainVerificationId output, add a CNAME (this domain -> fhirbridgeAppUrl\'s hostname) and a TXT record named asuid.<this domain> (value = that output) at your DNS provider, wait for propagation; (2) set this parameter and redeploy — this provisions a free Azure-managed certificate (fails if DNS isn\'t ready yet) and binds the domain.')
+@description('Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED two-phase flow to avoid RequireCustomHostnameInEnvironment: (1) set this domain with bindCustomDomainCertificates=false — registers the hostname on the app with bindingType Disabled (no cert yet); read fhirbridgeAppDomainVerificationId, create CNAME (domain -> fhirbridgeAppUrl hostname) + TXT asuid.<domain>, wait for DNS; (2) redeploy with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL.')
 param fhirbridgeAppCustomDomain string = ''
 
 @description('Custom domain for the Demo app. Same two-phase flow as fhirbridgeAppCustomDomain — see the demoAppDomainVerificationId output.')
 param demoAppCustomDomain string = ''
+
+@description('Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment.')
+param bindCustomDomainCertificates bool = false
 
 // fhirbridge-app / demo-app have no equivalent parameter: Azure Container Apps external HTTP
 // ingress has no client-configurable port — it's always https://<app>.<domain> with no port
@@ -184,6 +187,11 @@ resource redisDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2
   properties: { shareQuota: 10 }
 }
 
+resource keysDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+  name: '${storageAccount.name}/default/keys-data'
+  properties: { shareQuota: 1 }
+}
+
 resource sqlDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   parent: containerAppEnv
   name: 'sql-data'
@@ -210,6 +218,20 @@ resource redisDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01
     }
   }
   dependsOn: [redisDataShare]
+}
+
+resource keysDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  parent: containerAppEnv
+  name: 'keys-data'
+  properties: {
+    azureFile: {
+      accountName: storageAccount.name
+      accountKey: storageAccount.listKeys().keys[0].value
+      shareName: 'keys-data'
+      accessMode: 'ReadWrite'
+    }
+  }
+  dependsOn: [keysDataShare]
 }
 
 // --- SQL Server Express (internal only, single replica — Azure Files isn't safe for concurrent
@@ -293,20 +315,20 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 // --- Custom domains (optional, per app) ---
 //
-// Two-phase by necessity, not by choice: Azure can't issue/verify a certificate for a domain until
-// DNS proves you control it, and that proof (the TXT record) can only be generated once the
-// Container App itself already exists. See fhirbridgeAppCustomDomain's description above for the
-// full deploy-twice flow. Left at their default (''), neither of these resources gets created —
-// the `if` conditions below make them no-ops — and both apps behave exactly as before this
-// feature existed.
+// Azure managed certificates require the hostname to ALREADY exist on a Container App in the
+// environment (error RequireCustomHostnameInEnvironment if not). Referencing certificateId from
+// the Container App also makes ARM create the cert BEFORE the app update — so a single-shot
+// "domain + cert + SniEnabled" deploy fails on a new hostname.
 //
-// NOTE: Microsoft.App/managedEnvironments/managedCertificates is Azure's free managed-certificate
-// mechanism for Container Apps custom domains (mirrors azurerm_container_app_environment_managed_
-// certificate in the Terraform environment). Validate with `az bicep build` + a real
-// `az deployment group validate`/apply before relying on this — this resource type/apiVersion
-// combination hasn't been exercised against a live subscription yet in this repo.
+// Correct sequence (bindCustomDomainCertificates flag):
+//   Phase 1 (bind=false): customDomains with bindingType Disabled, no cert resources.
+//   Client creates DNS (CNAME + asuid TXT) using verification outputs.
+//   Phase 2 (bind=true): create managedCertificates (hostname already on live app), then update
+//   customDomains to SniEnabled with certificateId.
+//
+// NOTE: managedCertificates apiVersion must succeed on a real subscription after Phase 1+DNS.
 
-resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(fhirbridgeAppCustomDomain)) {
+resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(fhirbridgeAppCustomDomain) && bindCustomDomainCertificates) {
   parent: containerAppEnv
   name: '${fhirbridgeAppName}-cert'
   location: location
@@ -316,7 +338,7 @@ resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCert
   }
 }
 
-resource demoAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(demoAppCustomDomain)) {
+resource demoAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(demoAppCustomDomain) && bindCustomDomainCertificates) {
   parent: containerAppEnv
   name: '${demoAppName}-cert'
   location: location
@@ -344,8 +366,17 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 80
         transport: 'auto'
+        // Phase 1: Disabled registers the hostname without a cert (required before managed cert).
+        // Phase 2: SniEnabled + certificateId after bindCustomDomainCertificates=true.
         customDomains: !empty(fhirbridgeAppCustomDomain) ? [
-          { name: fhirbridgeAppCustomDomain, certificateId: fhirbridgeAppManagedCert.id, bindingType: 'SniEnabled' }
+          bindCustomDomainCertificates ? {
+            name: fhirbridgeAppCustomDomain
+            certificateId: fhirbridgeAppManagedCert.id
+            bindingType: 'SniEnabled'
+          } : {
+            name: fhirbridgeAppCustomDomain
+            bindingType: 'Disabled'
+          }
         ] : []
       }
     }
@@ -361,20 +392,20 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
-            // The demo app is a separate origin whose frontend calls this API cross-origin — its
-            // FQDN is predictable from its own name + the environment's default domain, so this
-            // needs no second deployment.
+            // Always allow the platform demo FQDN; add custom demo origin when configured.
             { name: 'Portal__AllowedOrigins__0', value: 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
           ], !empty(demoAppCustomDomain) ? [
-            // Only present once demoAppCustomDomain is set — otherwise the demo app only ever
-            // calls from its default origin, already covered by __0 above. Without this, binding a
-            // custom domain to the demo app would silently break its own calls into this API with
-            // a CORS rejection, since its new origin wouldn't be on the allowlist.
             { name: 'Portal__AllowedOrigins__1', value: 'https://${demoAppCustomDomain}' }
           ] : [])
+          volumeMounts: [
+            { volumeName: 'keys-data', mountPath: '/app/keys' }
+          ]
         }
+      ]
+      volumes: [
+        { name: 'keys-data', storageType: 'AzureFile', storageName: keysDataStorage.name }
       ]
       scale: { minReplicas: 1, maxReplicas: 3 }
     }
@@ -398,7 +429,14 @@ resource demoApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 5500
         transport: 'auto'
         customDomains: !empty(demoAppCustomDomain) ? [
-          { name: demoAppCustomDomain, certificateId: demoAppManagedCert.id, bindingType: 'SniEnabled' }
+          bindCustomDomainCertificates ? {
+            name: demoAppCustomDomain
+            certificateId: demoAppManagedCert.id
+            bindingType: 'SniEnabled'
+          } : {
+            name: demoAppCustomDomain
+            bindingType: 'Disabled'
+          }
         ] : []
       }
     }
@@ -411,7 +449,8 @@ resource demoApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__Default', value: 'Server=${sqlServerName},${sqlPort};Database=HealthAppDb;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            { name: 'AllowedFrontendOrigin', value: 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
+            // Prefer custom demo domain when set so browser origin matches CORS on the API.
+            { name: 'AllowedFrontendOrigin', value: !empty(demoAppCustomDomain) ? 'https://${demoAppCustomDomain}' : 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
           ]
         }
       ]
@@ -463,13 +502,15 @@ output demoAppUrl string = 'https://${demoAppName}.${containerAppEnv.properties.
 
 // Always populated regardless of whether *CustomDomain is set — add a CNAME (your domain -> the
 // matching *Url output's hostname) and a TXT record named asuid.<your domain> with this value at
-// your DNS provider, wait for propagation, THEN set fhirbridgeAppCustomDomain/demoAppCustomDomain
-// and redeploy.
+// your DNS provider. Flow: Phase 1 deploy with domain + bindCustomDomainCertificates=false
+// (hostname registered), create DNS, wait; Phase 2 redeploy with bindCustomDomainCertificates=true.
 output fhirbridgeAppDomainVerificationId string = fhirbridgeApp.properties.customDomainVerificationId
 output demoAppDomainVerificationId string = demoApp.properties.customDomainVerificationId
 
 output fhirbridgeAppCustomDomainUrl string = !empty(fhirbridgeAppCustomDomain) ? 'https://${fhirbridgeAppCustomDomain}' : ''
 output demoAppCustomDomainUrl string = !empty(demoAppCustomDomain) ? 'https://${demoAppCustomDomain}' : ''
+output bindCustomDomainCertificates bool = bindCustomDomainCertificates
+output customDomainPhase string = empty(fhirbridgeAppCustomDomain) && empty(demoAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
 
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
 // their parents — e.g. the 5 Container Apps before the environment they run in). Azure keeps this
@@ -485,8 +526,10 @@ output resourceManifest array = [
   workerApp.id
   sqlDataStorage.id
   redisDataStorage.id
+  keysDataStorage.id
   sqlDataShare.id
   redisDataShare.id
+  keysDataShare.id
   containerAppEnv.id
   storageAccount.id
   logAnalytics.id

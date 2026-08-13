@@ -135,9 +135,13 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   automatically, turning a lost race into a self-healing retry. See the containerization guide
   (`Documents/Containerization-Multi-Cloud-Guide.html`) for the full writeup.
 - **Messaging is `InMemory`** — no queue container in this topology.
-- **Plain HTTPS via Container Apps' built-in ingress**, no custom domain/cert wiring here.
+- **Custom domains + managed SSL** — supported via a required two-phase flow (`bindCustomDomainCertificates`):
+  Phase 1 registers hostnames (`bindingType: Disabled`); after DNS CNAME + asuid TXT, Phase 2 binds
+  free managed certificates (`SniEnabled`). Checking Bind SSL before the hostname exists causes
+  `RequireCustomHostnameInEnvironment`. Operator fallback: `../scripts/manage-custom-domain.ps1|.sh`.
 - **Secrets are plain Bicep `@secure()` parameters**, not Key Vault references — fine for a
   customer-run one-click deploy, but consider Key Vault integration if you want secret rotation
   without a redeploy.
-- This template hasn't been run against a real subscription yet — `az deployment group validate`
-  (or a real `create`) is worth doing before handing it to a client.
+- Validate Phase 1 then Phase 2 against a real subscription before Marketplace certification.
+  Live test evidence: an earlier single-shot domain+cert deploy failed with
+  `RequireCustomHostnameInEnvironment` — this two-phase flag is the fix.

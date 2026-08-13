@@ -27,14 +27,17 @@ on startup (`Database.Migrate()` / `EnsureCreated()`), so `sqlserver` needs no i
 docker/            Dockerfiles + fhirbridge-app's entrypoint.sh
 compose/            docker-compose.yml + .env.example — fast local path
 scripts/            build-images.sh / .ps1 — builds & (optionally) pushes the 3 custom images
+                    manage-custom-domain.sh / .ps1 — Info/Wait/Add/Bind custom domain + managed SSL
                     cleanup-*.sh / .ps1 — tear down each environment below
 terraform/
   environments/
     local/          kreuzwerker/docker — same 5-container topology via `terraform apply`
     azure/          azurerm — Container Apps Environment, ACR, Storage, 5 Container Apps
+                    (custom domains: bind_custom_domain_certificates two-phase flag)
     aws/             aws — VPC, ECR, ECS Fargate cluster, Cloud Map, EFS, ALB, 5 services
   vendor-registry/  a SEPARATE, persistent ACR for publishing/versioning release images — not a
                     deployment target, see section 4 below
+azure-deploy/       Bicep one-click / Marketplace path — see azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md
 ```
 
 ## 1. Build the images

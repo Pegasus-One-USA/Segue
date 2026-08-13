@@ -185,6 +185,21 @@ resource "azurerm_container_app_environment_storage" "redis_data" {
   access_mode                  = "ReadWrite"
 }
 
+resource "azurerm_storage_share" "keys_data" {
+  name                 = "keys-data"
+  storage_account_name = azurerm_storage_account.main.name
+  quota                = 1
+}
+
+resource "azurerm_container_app_environment_storage" "keys_data" {
+  name                         = "keys-data"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  account_name                 = azurerm_storage_account.main.name
+  access_key                   = azurerm_storage_account.main.primary_access_key
+  share_name                   = azurerm_storage_share.keys_data.name
+  access_mode                  = "ReadWrite"
+}
+
 # --- Secrets (Key Vault is the source of truth; Terraform variables only seed it) ---
 #
 # The sql_sa_password/jwt_signing_key/redis_password Terraform variables still exist as the
@@ -461,6 +476,17 @@ resource "azurerm_container_app" "fhirbridge_app" {
         name  = "AllowedHosts"
         value = "*"
       }
+
+      volume_mounts {
+        name = "keys-data"
+        path = "/app/keys"
+      }
+    }
+
+    volume {
+      name         = "keys-data"
+      storage_type = "AzureFile"
+      storage_name = azurerm_container_app_environment_storage.keys_data.name
     }
   }
 
@@ -520,11 +546,10 @@ resource "azurerm_container_app" "demo_app" {
         name  = "ConnectionStrings__Default"
         value = "Server=${local.sqlserver_name},${var.sql_port};Database=HealthAppDb;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
       }
-      # This app's own public FQDN — computed from its own plain-string name + the environment's
-      # default domain, not a self-reference to this resource's computed attributes.
+      # Prefer custom demo domain when set so browser origin matches API CORS allowlist.
       env {
         name  = "AllowedFrontendOrigin"
-        value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
+        value = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
       }
     }
   }
@@ -543,20 +568,15 @@ resource "azurerm_container_app" "demo_app" {
 
 # --- Custom domains (optional, per app) ---
 #
-# Two-phase by necessity, not by choice: Azure can't issue or verify a certificate for a domain
-# until DNS proves you control it, and that proof (the TXT record below) can only be generated
-# once the Container App itself already exists. See fhirbridge_app_custom_domain's description in
-# variables.tf for the full apply-twice flow. Left at their default ("") these four resources
-# don't get created at all (count = 0) and both apps behave exactly as before this feature existed.
+# Azure managed certificates require the hostname to already exist on a Container App
+# (RequireCustomHostnameInEnvironment otherwise). azurerm_container_app_custom_domain with
+# certificate_binding_type=Disabled registers the hostname without a cert (Phase 1).
+# Phase 2 (bind_custom_domain_certificates=true) creates managed certificates then binds SniEnabled.
 #
-# azurerm_container_app_environment_managed_certificate is the resource that actually performs the
-# DNS validation at apply time (it calls Azure's ACME-backed managed-certificate issuance, which
-# checks the TXT record) — this step fails outright if DNS isn't propagated yet, which is expected.
-# azurerm_container_app_custom_domain then binds that verified, issued certificate to the specific
-# app's ingress.
+# Do NOT set bind_custom_domain_certificates=true on the first apply for a new domain.
 
 resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app" {
-  count                        = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  count                        = var.fhirbridge_app_custom_domain != "" && var.bind_custom_domain_certificates ? 1 : 0
   name                         = "${local.fhirbridge_app_name}-cert"
   container_app_environment_id = azurerm_container_app_environment.main.id
   subject_name                 = var.fhirbridge_app_custom_domain
@@ -565,15 +585,17 @@ resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app
 }
 
 resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
-  count                                    = var.fhirbridge_app_custom_domain != "" ? 1 : 0
-  name                                     = var.fhirbridge_app_custom_domain
-  container_app_id                        = azurerm_container_app.fhirbridge_app.id
-  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id
-  certificate_binding_type                 = "SniEnabled"
+  count             = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name              = var.fhirbridge_app_custom_domain
+  container_app_id = azurerm_container_app.fhirbridge_app.id
+
+  certificate_binding_type = var.bind_custom_domain_certificates ? "SniEnabled" : "Disabled"
+
+  container_app_environment_certificate_id = var.bind_custom_domain_certificates ? azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id : null
 }
 
 resource "azurerm_container_app_environment_managed_certificate" "demo_app" {
-  count                        = var.demo_app_custom_domain != "" ? 1 : 0
+  count                        = var.demo_app_custom_domain != "" && var.bind_custom_domain_certificates ? 1 : 0
   name                         = "${local.demo_app_name}-cert"
   container_app_environment_id = azurerm_container_app_environment.main.id
   subject_name                 = var.demo_app_custom_domain
@@ -582,11 +604,13 @@ resource "azurerm_container_app_environment_managed_certificate" "demo_app" {
 }
 
 resource "azurerm_container_app_custom_domain" "demo_app" {
-  count                                    = var.demo_app_custom_domain != "" ? 1 : 0
-  name                                     = var.demo_app_custom_domain
-  container_app_id                        = azurerm_container_app.demo_app.id
-  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.demo_app[0].id
-  certificate_binding_type                 = "SniEnabled"
+  count             = var.demo_app_custom_domain != "" ? 1 : 0
+  name              = var.demo_app_custom_domain
+  container_app_id = azurerm_container_app.demo_app.id
+
+  certificate_binding_type = var.bind_custom_domain_certificates ? "SniEnabled" : "Disabled"
+
+  container_app_environment_certificate_id = var.bind_custom_domain_certificates ? azurerm_container_app_environment_managed_certificate.demo_app[0].id : null
 }
 
 # --- Worker (no ingress) ---
@@ -686,8 +710,10 @@ locals {
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
     "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
     "azurerm_storage_share.redis_data                      = ${azurerm_storage_share.redis_data.id}",
+    "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
     "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
     "azurerm_container_app_environment_storage.redis_data  = ${azurerm_container_app_environment_storage.redis_data.id}",
+    "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",

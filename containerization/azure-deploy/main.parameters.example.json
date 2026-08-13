@@ -11,6 +11,9 @@
     "imageRegistryPassword": { "value": "" },
     "sqlPort": { "value": 1433 },
     "redisPort": { "value": 6379 },
-    "redisPassword": { "value": "replace-with-a-strong-redis-password" }
+    "redisPassword": { "value": "replace-with-a-strong-redis-password" },
+    "fhirbridgeAppCustomDomain": { "value": "" },
+    "demoAppCustomDomain": { "value": "" },
+    "bindCustomDomainCertificates": { "value": false }
   }
 }

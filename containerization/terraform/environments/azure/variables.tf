@@ -59,15 +59,21 @@ variable "redis_password" {
 }
 
 variable "fhirbridge_app_custom_domain" {
-  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default) to keep using the auto-generated *.azurecontainerapps.io URL. Setting this requires a two-phase apply: (1) apply with this left blank, read the fhirbridge_app_domain_verification output, add a CNAME (pointing this domain at fhirbridge_app_url's hostname) and a TXT record named asuid.<this domain> (value = that output) at your DNS provider, wait for DNS to propagate; (2) set this variable to the domain and re-apply — this provisions a free Azure-managed certificate (which validates the TXT record at apply time, so it fails if DNS isn't ready) and binds the domain."
+  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank for *.azurecontainerapps.io. REQUIRED two-phase apply to avoid RequireCustomHostnameInEnvironment: (1) set domain with bind_custom_domain_certificates=false — registers hostname (Disabled binding); create DNS CNAME + asuid TXT using fhirbridge_app_domain_verification; (2) set bind_custom_domain_certificates=true and re-apply — creates managed cert and SniEnabled bind."
   type        = string
   default     = ""
 }
 
 variable "demo_app_custom_domain" {
-  description = "Custom domain for the Demo app. Same two-phase flow as fhirbridge_app_custom_domain — see the demo_app_domain_verification output."
+  description = "Custom domain for the Demo app. Same two-phase flow as fhirbridge_app_custom_domain."
   type        = string
   default     = ""
+}
+
+variable "bind_custom_domain_certificates" {
+  description = "Phase-2 flag. false (default) = register hostnames only (certificate_binding_type Disabled), no managed certificates. true = create managed certificates and SniEnabled bind. Only true AFTER Phase 1 hostname registration AND DNS has propagated."
+  type        = bool
+  default     = false
 }
 
 variable "sql_external_access" {
