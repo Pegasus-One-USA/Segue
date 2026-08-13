@@ -126,16 +126,6 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                     scopeVersionDetected: false,
                     supportedScopes: null).Scopes;
 
-        // TEMPORARY HARDCODE (per explicit request, to unblock testing while the canvas "Existing Source" skip-
-        // on-save issue is still being fixed on the frontend): force athenahealth Backend System connections to
-        // request only the Patient scope, regardless of what Retrieval.ResourceTypes/Authentication.Scopes resolved
-        // to above. Remove this block once the frontend "New Source vs Existing Source" fix lands and the
-        // Retrieval-driven regeneration above is verified to produce the correct scope set on its own.
-        if (sourceConnection.SourceSystemType == SourceSystemType.Athenahealth)
-        {
-            scopes = ["system/Patient.read"];
-        }
-
         _logger.LogInformation(
             "SourceConnectionRuntimeResolver: resolved connection {SourceConnectionId} ({SourceSystemType}) — " +
             "baseUrl={BaseUrl} tokenEndpoint={TokenEndpoint} practiceId={PracticeId} authPlacement={AuthPlacement} " +
