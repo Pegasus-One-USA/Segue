@@ -124,6 +124,9 @@ export interface SourceAuthenticationRequest {
   privateKeyKeyVaultName?: string | null;
   privateKeySecretName?: string | null;
   keyId?: string | null;
+  /** Scopes Epic (or another EHR) actually granted on the last successful Discover token exchange — distinct
+   *  from `scopes` (what was requested). Null until Discover has run once. */
+  discoveredScopes?: string[] | null;
 }
 
 export interface SourceInteractiveConfigurationRequest {

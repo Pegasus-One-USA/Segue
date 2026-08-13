@@ -28,6 +28,7 @@ using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
 using Serilog;
 
@@ -460,6 +461,18 @@ app.UseStaticFiles();
 app.MapHealthChecks("/health");
 
 app.UseCors("Portal");
+
+// Static legal content (e.g. Terms and Conditions), served from disk under Content/legal at
+// "/legal/<file>" — anonymous, deploy-mutable (replace the file without a rebuild), independent of the
+// portal's wwwroot. Placed after UseCors so the portal can fetch it cross-origin in local dev (portal on
+// :4200, API on :5000); in production both are served from the same origin via wwwroot. Read by the
+// first-run setup screen's "Read Terms & Conditions" modal.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.Combine(app.Environment.ContentRootPath, "Content", "legal")),
+    RequestPath = "/legal",
+});
+
 app.UseAuthentication();
 
 // Each entry blocks every /api/v1 route except its own allowlist while its claim is "true" — e.g.

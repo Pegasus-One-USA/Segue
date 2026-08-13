@@ -1122,6 +1122,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     // hosted-URL guess.
     this.jwksUrlRestoredFromBackend.set(!!fields['JWKS URL']);
 
+    // Same reasoning as jwksUrl above: whatever Epic granted on this node's last successful Discover was written
+    // to 'Discovered scopes' by save() — restore it so reopening the node shows the same badge instead of looking
+    // like Discover was never run.
+    if (fields['Discovered scopes']) {
+      this.grantedScopes.set(fields['Discovered scopes'].split(/\s+/).filter(Boolean));
+      this.grantedScopesStatus.set('done');
+    }
+
     setIfPresent('cdsDiscoveryUrl', 'CDS discovery URL');
     setIfPresent('cdsServiceEndpoint', 'CDS service endpoint');
     setIfPresent('cdsTriggerHook', 'CDS trigger hook');
@@ -1208,6 +1216,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     if (auth?.privateKeyKeyVaultName) fields['Key vault reference'] = auth.privateKeyKeyVaultName;
     if (auth?.privateKeySecretName) fields['Secret Name'] = auth.privateKeySecretName;
     if (auth?.jwksUrl) fields['JWKS URL'] = auth.jwksUrl;
+    if (auth?.discoveredScopes?.length) fields['Discovered scopes'] = auth.discoveredScopes.join(' ');
     if (dto.interactive?.launchDisplayMode) fields['Launch display mode'] = dto.interactive.launchDisplayMode;
 
     if (retrieval) {
@@ -1803,6 +1812,16 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     this.wiz.trustedIssuers.set(dto.interactive?.trustedIssuers?.join(', ') ?? '');
     this.discoveredResourceTypes.set(retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : []);
 
+    // Restore whatever Epic granted on this connection's last successful Discover, so reopening it shows the
+    // same badge instead of looking like Discover was never run — re-running Discover overwrites this as usual.
+    if (dto.authentication?.discoveredScopes?.length) {
+      this.grantedScopes.set([...dto.authentication.discoveredScopes]);
+      this.grantedScopesStatus.set('done');
+    } else {
+      this.grantedScopes.set([]);
+      this.grantedScopesStatus.set('idle');
+    }
+
     this.prevAudience = audience;
     this.prevAuthMethod = authMethod;
     this.prevRetrievalMethod = resolvedRetrievalMethod;
@@ -2045,6 +2064,10 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       // WizardService.save()'s own ScopeBuilderService-derived default (which knows nothing about the selected
       // resources, scope version, or audience-specific scopes this form computed).
       'Scopes':                this.scopeString().split(/\s+/).filter(Boolean).join(' '),
+      // Backend System only: whatever Epic's token response actually granted on the last successful Discover
+      // (see runBackendAuthScopeProbe) — distinct from 'Scopes' above, which is what we requested. Empty when
+      // Discover hasn't run or the probe hasn't succeeded yet.
+      'Discovered scopes':     this.grantedScopesStatus() === 'done' ? this.grantedScopes().join(' ') : '',
       // Only meaningful for EHR launch — cleared to '' otherwise so it's never wired into the build request
       // (see WorkflowBuildAssemblerService.buildSource, which only reads this key for the EhrLaunch application type).
       'Launch display mode':   cfg.showLaunchDisplayMode ? (v.launchDisplayMode ?? 'Embedded') : '',
