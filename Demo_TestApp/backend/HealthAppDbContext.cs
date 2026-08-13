@@ -123,6 +123,21 @@ public sealed class WorkflowSettingsEntity
     public string PatientCsvExportWorkflowId { get; set; } = string.Empty;
     public string PatientCsvEmailExportWorkflowId { get; set; } = string.Empty;
 
+    // athenahealth variant of the Patient_Standalone list/connect flow (see launch-standalone-patient.ts's vendor
+    // toggle) — a separate workflow id/base URL pair, never the same values as PatientWorkflowId/PatientBaseUrl
+    // above, since athenahealth requires its own SourceConnection (different vendor, ah-practice/PracticeId, scope
+    // shape). Deliberately does NOT get its own detail/CSV-export/CSV-email-export ids: this demo only exercises
+    // athenahealth through the core connect-and-fetch step, not the secondary per-patient detail/export actions,
+    // which stay Epic-only via PatientDetailWorkflowId/PatientCsvExportWorkflowId/PatientCsvEmailExportWorkflowId.
+    // AthenaEhrEndpointId is required because FHIRBridge's public-patient-standalone-url endpoint always requires a
+    // known EhrEndpoint row (type MyChart) to mint against — athenahealth's sandbox has one fixed FHIR base URL
+    // (no per-hospital directory the way Epic/MyChart has), so there is no in-app picker for it; an admin instead
+    // seeds a single MyChart-type EhrEndpoint row pointing at the athenahealth sandbox base URL and pastes its id
+    // here once.
+    public string AthenaPatientWorkflowId { get; set; } = string.Empty;
+    public string AthenaPatientBaseUrl { get; set; } = string.Empty;
+    public string AthenaEhrEndpointId { get; set; } = string.Empty;
+
     // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
     // Patient List" and "Patient Detail" are deliberately separate workflows (see
     // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
@@ -474,6 +489,9 @@ public sealed class HealthAppDbContext : DbContext
             // admin overrides them via the Workflow Settings panel.
             PatientCsvExportWorkflowId = "a0de009e-9a60-494f-9ff8-d83cefdd1a3b",
             PatientCsvEmailExportWorkflowId = "c5e813f5-04fe-4223-8465-fba1a1e83b75",
+            AthenaPatientWorkflowId = string.Empty,
+            AthenaPatientBaseUrl = string.Empty,
+            AthenaEhrEndpointId = string.Empty,
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty,
             // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).

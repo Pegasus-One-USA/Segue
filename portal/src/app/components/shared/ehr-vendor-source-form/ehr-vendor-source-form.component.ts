@@ -36,6 +36,13 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
   try { new URL(ctrl.value); return null; } catch { return { url: true }; }
 }
 
+// athenahealth Preview (sandbox) endpoints — used as the new-source App Name/FHIR Base URL defaults (ngOnInit)
+// and the Token/Authorization Endpoint watermarks (see tokenEndpointPlaceholder/authzEndpointPlaceholder) below.
+// Every other vendor keeps its existing Epic-shaped defaults untouched.
+const ATHENA_SANDBOX_BASE_URL      = 'https://api.preview.platform.athenahealth.com/fhir/r4';
+const ATHENA_SANDBOX_TOKEN_URL     = 'https://api.preview.platform.athenahealth.com/oauth2/v1/token';
+const ATHENA_SANDBOX_AUTHORIZE_URL = 'https://api.preview.platform.athenahealth.com/oauth2/v1/authorize';
+
 /**
  * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
  * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
@@ -582,6 +589,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   private readonly retrievalMethodValue = toSignal(this.form.controls.retrievalMethod.valueChanges, { initialValue: this.form.controls.retrievalMethod.value });
   private readonly exportScopeValue     = toSignal(this.form.controls.exportScope.valueChanges,     { initialValue: this.form.controls.exportScope.value });
   private readonly runModeValue         = toSignal(this.form.controls.runMode.valueChanges,          { initialValue: this.form.controls.runMode.value });
+  private readonly searchCriteriaValue  = toSignal(this.form.controls.searchCriteria.valueChanges,   { initialValue: this.form.controls.searchCriteria.value });
   private readonly scopeVersionValue    = toSignal(this.form.controls.scopeVersion.valueChanges,    { initialValue: this.form.controls.scopeVersion.value });
   private readonly fullRefreshRecurrenceValue = toSignal(this.form.controls.fullRefreshRecurrence.valueChanges, { initialValue: this.form.controls.fullRefreshRecurrence.value });
   private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
@@ -629,6 +637,16 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   protected readonly showSecret     = computed(() => this.authMethod() === 'secret');
   protected readonly showJwt        = computed(() => this.authMethod() === 'jwt');
   protected readonly showPracticeId = computed(() => this.vendor() === 'Athenahealth');
+
+  /** Token/Authorization Endpoint watermarks — both fields are normally auto-populated by Discover, so the
+   *  placeholder is only ever seen while they're still blank. Athenahealth doesn't publish a discoverable
+   *  `/.well-known/smart-configuration` the way Epic does, so its admins are more likely to type these in by
+   *  hand; showing athenahealth's real Preview sandbox URLs here (rather than Epic's) points them at the right
+   *  shape of URL. Every other vendor keeps the existing Epic placeholder unchanged. */
+  protected readonly tokenEndpointPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_TOKEN_URL : 'https://fhir.epic.com/…/oauth2/token');
+  protected readonly authzEndpointPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_AUTHORIZE_URL : 'https://fhir.epic.com/…/oauth2/authorize');
 
   /** True when this vendor doesn't support the given audience yet (see VENDOR_DISABLED_AUDIENCES) — used to
    *  grey out the option in the audience `<select>`. The strategy is fully implemented server-side; only the
@@ -803,6 +821,28 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   /** Full Refresh has no incremental filter, so it can pull the entire selected data set — worth a visible warning. */
   protected readonly showFullRefreshWarning = computed(() =>
     this.retrievalMethod() === 'search-rest' && this.runModeValue() === 'full',
+  );
+
+  /**
+   * athenahealth rejects an unscoped `Patient` search outright ("open enumeration forbidden") — it requires at
+   * least one identifying criterion (identifier, name, or family + birthdate/gender/given) on every Patient
+   * search. Search REST's own Resource Type picker is hidden and silently defaults to the full MVP1 resource set
+   * (see ensureRetrievalResourceTypeDefault), which always includes Patient — so Search Criteria is the only
+   * lever an admin has here to avoid a run that always fails on the Patient resource type. Independent of whether
+   * the field currently has a value — drives the Search Criteria control's required validator (see
+   * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
+   * against the live value on every keystroke regardless.
+   */
+  protected readonly athenaPatientSearchNeedsCriteria = computed(() =>
+    this.vendor() === 'Athenahealth' &&
+    this.retrievalMethod() === 'search-rest' &&
+    this.activeRetrievalResourceTypes().includes('Patient'),
+  );
+
+  /** Display-only variant of the above — hides the warning callout once the admin has actually filled the field
+   *  in, even though the control stays required (an empty search-then-filled field is no longer the problem). */
+  protected readonly showAthenaPatientSearchCriteriaWarning = computed(() =>
+    this.athenaPatientSearchNeedsCriteria() && !this.searchCriteriaValue(),
   );
 
   /** Generic reader for whichever method's Resource Type control the template is currently rendering. */
@@ -1037,6 +1077,19 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     }
     if (this.wiz.stepName()) {
       this.form.controls.appName.setValue(this.wiz.stepName());
+    }
+
+    // New-source defaults for athenahealth: App Name + FHIR Base URL. wiz.stepName()/wiz.discovered() above
+    // default to Epic's own values (see WizardService.open()/openEntity()) regardless of which vendor form is
+    // actually being configured, so a brand-new Athena connection needs its own override here — applied last so
+    // it wins over the Epic-shaped defaults just set above. Skipped entirely once editing an existing connection
+    // (isEditing()) so a name/URL the admin already saved (or is actively customizing) is never touched. Every
+    // other vendor is unaffected.
+    if (!this.wiz.isEditing() && this.vendor() === 'Athenahealth') {
+      this.form.controls.appName.setValue('Athena');
+      if (this.form.controls.environment.value === 'sandbox') {
+        this.form.controls.epicBaseUrl.setValue(ATHENA_SANDBOX_BASE_URL);
+      }
     }
 
     this.prevAudience = this.audience();
@@ -1549,6 +1602,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
         required = false;
       }
       apply(key, required);
+    }
+
+    // Overrides the generic per-field loop above (which leaves Search Criteria optional for every vendor, per its
+    // static RETRIEVAL_METHOD_CONFIG entry) only for athenahealth + Search REST + a Patient-inclusive resource
+    // selection — see athenaPatientSearchNeedsCriteria's own remarks for why this is the one lever that keeps the
+    // run from always failing on an unscoped Patient search.
+    if (this.athenaPatientSearchNeedsCriteria()) {
+      apply('searchCriteria', true);
     }
   }
 

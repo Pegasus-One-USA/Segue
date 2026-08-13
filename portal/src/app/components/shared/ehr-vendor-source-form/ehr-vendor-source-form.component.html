@@ -222,7 +222,7 @@
               <span class="eaf-req">*</span>
             </label>
             <input id="eaf-tokenEndpoint" class="eaf-input" type="url" formControlName="tokenEndpoint"
-                   placeholder="https://fhir.epic.com/…/oauth2/token"
+                   [placeholder]="tokenEndpointPlaceholder()"
                    [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.tokenEndpoint.value" />
             @if (form.controls.tokenEndpoint.touched && form.controls.tokenEndpoint.invalid) {
               <p class="eaf-error-msg">Token Endpoint is required.</p>
@@ -238,7 +238,7 @@
               <span class="eaf-req">*</span>
             </label>
             <input id="eaf-authzEndpoint" class="eaf-input" type="url" formControlName="authzEndpoint"
-                   placeholder="https://fhir.epic.com/…/oauth2/authorize"
+                   [placeholder]="authzEndpointPlaceholder()"
                    [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.authzEndpoint.value" />
             @if (form.controls.authzEndpoint.touched && form.controls.authzEndpoint.invalid) {
               <p class="eaf-error-msg">Authorization Endpoint is required.</p>
@@ -777,6 +777,14 @@
                 }
                 @if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
+                }
+                @if (field.key === 'searchCriteria' && showAthenaPatientSearchCriteriaWarning()) {
+                  <p class="eaf-error-msg">
+                    ⚠ athenahealth rejects an unscoped Patient search ("open enumeration forbidden"). Supply at
+                    least one identifying criterion here — e.g. <code>identifier=MRN12345</code>,
+                    <code>name=Smith</code>, or <code>family=Smith&amp;birthdate=1990-01-01</code> — or every run
+                    will fail on the Patient resource type.
+                  </p>
                 }
               </div>
             }
