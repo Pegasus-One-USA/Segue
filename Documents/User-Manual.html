@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segue User Manual — A Friendly Guide</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F7FAF9;
+    --surface: #FFFFFF;
+    --note-bg: #EFF8FF;
+    --note-border: #BFDBFE;
+    --note-ink: #1E4E8C;
+    --warn-bg: #FFF7ED;
+    --warn-border: #FED7AA;
+    --warn-ink: #9A3412;
+    --badge: #F97316;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px 100px; }
+
+  header.hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 56px 24px 64px;
+  }
+  header.hero .wrap { padding: 0; }
+  header.hero .eyebrow {
+    display: inline-block;
+    background: rgba(255,255,255,0.16);
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  header.hero h1 { margin: 0 0 14px; font-size: 38px; font-weight: 800; letter-spacing: -0.5px; max-width: 720px; }
+  header.hero p.lead { margin: 0; font-size: 17px; opacity: 0.95; max-width: 640px; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 26px 30px;
+    margin-top: -34px;
+    box-shadow: 0 8px 24px rgba(15, 30, 30, 0.08);
+    position: relative;
+    z-index: 2;
+  }
+  nav.toc h2 { margin: 0 0 14px; border: none; padding: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 40px; }
+  nav.toc li { margin-bottom: 8px; font-size: 14.5px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 600; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  section.chapter { margin-top: 64px; scroll-margin-top: 20px; }
+  section.chapter > h2 {
+    font-size: 25px;
+    font-weight: 800;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section.chapter > h2 .chnum {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--primary); color: #fff; font-size: 15px; flex-shrink: 0;
+  }
+  section.chapter > p.intro { color: #334155; font-size: 15.5px; max-width: 780px; margin: 10px 0 28px; }
+
+  h3.substep {
+    font-size: 18px; font-weight: 750; margin: 40px 0 10px;
+    padding-top: 8px;
+  }
+  p.substep-sub { color: var(--muted); font-size: 14.5px; margin: 0 0 16px; max-width: 720px; }
+
+  /* Screenshot card + numbered overlay */
+  .shot-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 18px 0 20px;
+    box-shadow: 0 2px 10px rgba(15,30,30,0.04);
+  }
+  .shot-wrap { position: relative; line-height: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .shot-wrap img { display: block; width: 100%; height: auto; }
+  .shot-caption { font-size: 13px; color: var(--muted); margin: 10px 4px 0; }
+  .badge {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--badge);
+    color: #fff;
+    font-weight: 800;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,0.35);
+  }
+
+  /* Field legend table */
+  table.legend {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0 8px;
+    font-size: 14px;
+    background: var(--surface);
+  }
+  table.legend th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--border);
+  }
+  table.legend td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.legend td.num {
+    width: 30px;
+  }
+  table.legend .num-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--badge); color: #fff;
+    font-size: 12px; font-weight: 800;
+  }
+  table.legend td.field-name { font-weight: 700; white-space: nowrap; }
+  table.legend td.field-desc { color: #334155; }
+  table.legend code { background: #F1F5F9; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+
+  /* Simple caption list for non-form screens */
+  ul.plain-legend { margin: 4px 0 8px; padding-left: 20px; }
+  ul.plain-legend li { margin-bottom: 8px; }
+  ul.plain-legend strong { color: var(--ink); }
+
+  .note, .warn {
+    border-radius: 10px; padding: 14px 18px; font-size: 14.5px; margin: 16px 0;
+  }
+  .note { background: var(--note-bg); border: 1px solid var(--note-border); color: var(--note-ink); }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-ink); }
+  .note strong, .warn strong { color: inherit; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) {
+    .two-col { grid-template-columns: 1fr; }
+    nav.toc ol { columns: 1; }
+    header.hero h1 { font-size: 28px; }
+  }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 20px; }
+  .pill {
+    font-size: 12.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+    background: #E6FBF8; color: var(--primary-dark); border: 1px solid #B7EFEA;
+  }
+
+  footer.end {
+    margin-top: 80px; padding-top: 28px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13.5px; text-align: center;
+  }
+
+  a.back-to-top { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 600; }
+  a.back-to-top:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">🧭 User Manual</span>
+    <h1>Getting Around Segue</h1>
+    <p class="lead">
+      A plain-language, screenshot-by-screenshot walkthrough of the Segue Healthcare Integration
+      Platform — what every screen does, what each field means, and where to find the values
+      it's asking for.
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc">
+  <h2>What's inside</h2>
+  <ol>
+    <li><a href="#what-is-segue">What is Segue?</a></li>
+    <li><a href="#first-setup">First-time setup</a></li>
+    <li><a href="#signing-in">Signing in &amp; out</a></li>
+    <li><a href="#dashboard">The Dashboard</a></li>
+    <li><a href="#building-pipeline">Building your first pipeline</a></li>
+    <li><a href="#sql-destination">Sending data to SQL Server</a></li>
+    <li><a href="#field-mapping">Mapping fields (the details)</a></li>
+    <li><a href="#csv-destination">Sending data to a CSV file</a></li>
+    <li><a href="#connections-admin">Managing saved connections</a></li>
+    <li><a href="#ehr-directory">The EHR endpoint directory</a></li>
+    <li><a href="#branding-settings">Branding &amp; system settings</a></li>
+    <li><a href="#users-roles">Users &amp; roles</a></li>
+    <li><a href="#history-logs">Execution history &amp; audit logs</a></li>
+  </ol>
+</nav>
+
+<section class="chapter" id="what-is-segue">
+  <h2><span class="chnum">1</span>What is Segue?</h2>
+  <p class="intro">
+    Segue moves healthcare data from one place to another. On one side is a <strong>source</strong> —
+    typically an EHR system like Epic, speaking the FHIR standard. On the other side is a
+    <strong>destination</strong> — a database table or a CSV file. In between, you draw a
+    <strong>pipeline</strong> (Segue calls it a <em>Workflow</em>) that says "pull these kinds of
+    records from here, and write them there, mapped to these columns."
+  </p>
+  <div class="pill-row">
+    <span class="pill">Sources: Epic, Generic FHIR</span>
+    <span class="pill">Destinations: SQL Server, CSV</span>
+    <span class="pill">Everything is role-protected</span>
+    <span class="pill">Every change is logged forever</span>
+  </div>
+  <div class="note">
+    <strong>Note on scope.</strong> This deployment is currently configured to only offer two
+    destination types — <strong>SQL Server</strong> and <strong>CSV</strong> — even though the product
+    supports many more under the hood. If you don't see Snowflake, S3, MongoDB, etc. in your Node
+    Library, that's expected — it's a deliberate configuration choice, not a bug.
+  </div>
+</section>
+
+<section class="chapter" id="first-setup">
+  <h2><span class="chnum">2</span>First-time setup</h2>
+  <p class="intro">
+    The very first time anyone opens Segue on a brand-new installation (nobody has an account yet),
+    it shows a one-time setup screen instead of a login page. This is where you create the very
+    first administrator account and tell Segue how to send email.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/03-setup-full.png" alt="First-run setup screen">
+    </div>
+    <p class="shot-caption">The one-time setup screen — only ever shown once, on a fresh installation.</p>
+  </div>
+
+  <table class="legend">
+    <tr><th></th><th>Field</th><th>What to enter</th></tr>
+    <tr><td class="num"></td><td class="field-name">First name / Last name</td><td class="field-desc">Your own name — shown in the top-right corner once you're signed in.</td></tr>
+    <tr><td class="num"></td><td class="field-name">Email address</td><td class="field-desc">Becomes your username. Use a real address you can receive mail at — password resets go here.</td></tr>
+    <tr><td class="num"></td><td class="field-name">Password / Confirm password</td><td class="field-desc">Minimum 12 characters, must include an uppercase letter, a lowercase letter, a number, and a special character. The strength meter and checklist update live as you type.</td></tr>
+    <tr><td class="num"></td><td class="field-name">SMTP host / Port</td><td class="field-desc">The outgoing mail server Segue uses to send invitations and password resets — ask whoever manages your organization's email (e.g. <code>smtp.office365.com</code>, port <code>587</code>).</td></tr>
+    <tr><td class="num"></td><td class="field-name">Use SSL/TLS</td><td class="field-desc">Leave checked unless your mail provider specifically tells you not to encrypt the connection.</td></tr>
+    <tr><td class="num"></td><td class="field-name">Username / Password (SMTP)</td><td class="field-desc">The mailbox credentials for that outgoing mail server — not your Segue password.</td></tr>
+    <tr><td class="num"></td><td class="field-name">From address / From name</td><td class="field-desc">What recipients see as the sender — e.g. <code>no-reply@yourorg.com</code> / "Your Company Platform".</td></tr>
+    <tr><td class="num"></td><td class="field-name">I accept the Terms and Conditions</td><td class="field-desc">Required — you can't finish setup without it.</td></tr>
+  </table>
+  <p class="shot-caption">Once you click <strong>Create SuperAdmin &amp; Continue</strong>, you're signed in automatically — no separate login step.</p>
+</section>
+
+<section class="chapter" id="signing-in">
+  <h2><span class="chnum">3</span>Signing in &amp; out</h2>
+  <p class="intro">
+    After the first admin exists, everyone else sees the ordinary sign-in screen below.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/02-login.png" alt="Login screen with numbered fields">
+      <div class="badge" style="left:40.9%; top:32.7%;">1</div>
+      <div class="badge" style="left:40.9%; top:42.8%;">2</div>
+      <div class="badge" style="left:37.7%; top:52.2%;">3</div>
+      <div class="badge" style="left:54.6%; top:52.2%;">4</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it does</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Email address</td><td class="field-desc">The address your account was created or invited with.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Password</td><td class="field-desc">Click the eye icon to reveal what you've typed before submitting.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Remember me</td><td class="field-desc">Keeps you signed in longer on this specific browser/device.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Forgot password?</td><td class="field-desc">Sends a reset link to your email — only works if the SMTP settings above have been configured correctly.</td></tr>
+  </table>
+
+  <h3 class="substep">Signing out</h3>
+  <p class="substep-sub">Click your name in the top-right corner at any time to open the account menu.</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/01-user-menu.png" alt="Account menu showing profile, security, and sign out">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>My Profile</strong> — view and edit your own name/email.</li>
+    <li><strong>Security</strong> — change your password, set up two-factor authentication, and see active sessions.</li>
+    <li><strong>Sign out</strong> — asks you to confirm, then ends your session immediately.</li>
+  </ul>
+</section>
+
+<section class="chapter" id="dashboard">
+  <h2><span class="chnum">4</span>The Dashboard</h2>
+  <p class="intro">
+    The first thing you see after signing in. It's a health check for the whole platform — how many
+    pipeline runs succeeded, failed, or are still running, plus a quick list of recent activity.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/03-dashboard.png" alt="Dashboard overview screen">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>Succeeded / Failed / Running / Pending / Cancelled</strong> — live counts across every pipeline run, updated whenever you click <strong>Refresh</strong>.</li>
+    <li><strong>+ New Workflow</strong> — the starting point for building a new pipeline (covered next).</li>
+    <li><strong>Recent Workflows</strong> — the last few pipelines that ran, their source, status, and when they last ran. Click <strong>View all</strong> to see the full execution history.</li>
+    <li>The left-hand menu is your main navigation for the rest of the app: <strong>Role</strong>, <strong>User Management</strong>, <strong>Workflows</strong>, <strong>Execution History</strong>, <strong>Settings</strong>, and <strong>Logs &amp; Compliance</strong>.</li>
+  </ul>
+</section>
+
+<section class="chapter" id="building-pipeline">
+  <h2><span class="chnum">5</span>Building your first pipeline</h2>
+  <p class="intro">
+    A pipeline (Workflow) always starts the same way: give it a name, then add a <strong>source</strong>
+    node (where the data comes from), then attach a <strong>destination</strong> node downstream of it
+    (where the data goes). Click <strong>Workflows</strong> in the left menu, then <strong>+ New Workflow</strong>.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/04-workflows-list.png" alt="Workflows list screen">
+    </div>
+    <p class="shot-caption">The Workflows list — every pipeline you've built, with its status and last run. This is also where you'd click into an existing one to edit it.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/05-workflow-builder-empty.png" alt="Empty workflow builder canvas">
+    </div>
+    <p class="shot-caption">A brand-new, empty pipeline canvas. Type a name in the top-left field, then click <strong>+ Add module</strong> to place your first node.</p>
+  </div>
+
+  <h3 class="substep">Choosing a node</h3>
+  <p class="substep-sub">
+    Clicking <strong>+ Add module</strong> opens the Node Library — every source and destination type
+    this deployment currently allows.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/06-node-library.png" alt="Node Library picker showing Epic, Generic FHIR R4, SQL Server, and CSV">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>Epic</strong> — connects to an Epic EHR's FHIR API. The one you'll use for a real hospital/clinic system.</li>
+    <li><strong>Generic FHIR R4</strong> — connects to any other standards-compliant FHIR server (test servers, non-Epic EHRs).</li>
+    <li><strong>SQL Server</strong> — writes incoming records into tables in a SQL Server database.</li>
+    <li><strong>CSV</strong> — writes incoming records out as delimited text files (downloaded, emailed, or delivered over SFTP).</li>
+  </ul>
+  <div class="note">
+    A destination is greyed out until you've placed a source node first — Segue always connects a
+    destination to whatever's upstream of it, so it needs something to connect <em>to</em>.
+  </div>
+
+  <h3 class="substep">Configuring an Epic source</h3>
+  <p class="substep-sub">Click <strong>Epic</strong> to open its configuration form.</p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/07-epic-source-1.png" alt="Epic Configuration form, part 1">
+      <div class="badge" style="left:17.6%; top:27%;">1</div>
+      <div class="badge" style="left:52.8%; top:27%;">2</div>
+      <div class="badge" style="left:17.6%; top:38%;">3</div>
+      <div class="badge" style="left:52.8%; top:38%;">4</div>
+      <div class="badge" style="left:17.6%; top:56%;">5</div>
+      <div class="badge" style="left:79.7%; top:56%;">6</div>
+      <div class="badge" style="left:17.6%; top:74.1%;">7</div>
+      <div class="badge" style="left:52.8%; top:74.1%;">8</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it is / where to get it</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Existing Epic connection</td><td class="field-desc">Reuse a connection someone already set up, instead of typing everything again.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">App name</td><td class="field-desc">A label for your own reference — matches the name Epic has on file for your registered app.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Epic Audience</td><td class="field-desc">The kind of launch: <em>Provider EHR Launch</em> (from inside Epic), <em>Backend Services</em> (unattended, system-to-system), <em>Standalone</em>, or <em>Patient</em>. Your Epic administrator will tell you which one your app is registered as.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Environment</td><td class="field-desc"><em>Epic Sandbox</em> for testing, <em>Production</em> for real patient data — Epic issues a separate Client ID for each.</td></tr>
+    <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">FHIR base URL</td><td class="field-desc">The per-customer API address Epic gave you, e.g. <code>https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4</code>.</td></tr>
+    <tr><td class="num"><span class="num-badge">6</span></td><td class="field-name">Discover</td><td class="field-desc">Click this after filling in the base URL — it automatically fetches the token/authorize endpoints below for you, so you don't have to hunt them down.</td></tr>
+    <tr><td class="num"><span class="num-badge">7</span></td><td class="field-name">Token endpoint URL</td><td class="field-desc">Where Segue exchanges credentials for an access token. Auto-filled by Discover; only type it manually if Discover fails.</td></tr>
+    <tr><td class="num"><span class="num-badge">8</span></td><td class="field-name">Authorization endpoint URL</td><td class="field-desc">Used for the interactive (user-facing) login flows. Same auto-fill rule as above.</td></tr>
+  </table>
+
+  <p class="substep-sub">Scrolling down reveals the credentials section:</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/08-epic-source-2.png" alt="Epic Configuration form, credentials section">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>Client ID — Sandbox</strong> — from your organization's own Epic app registration (a different one exists for Production). This is not something you invent; Epic assigns it when your app is registered on their App Orchard.</li>
+    <li><strong>Client Auth Method</strong> — how Segue proves it's really your app: <em>Public Client + PKCE</em> (no secret — typical for a Provider EHR launch), <em>Client Secret</em>, or <em>Private Key JWT</em>. Match whatever your Epic app registration actually uses — Epic's discovery document lists every method it can technically accept, not the one your app is actually configured for.</li>
+  </ul>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/11-canvas-with-source.png" alt="Canvas showing a source node placed">
+    </div>
+    <p class="shot-caption">Once saved, the source appears as a node on the canvas, along with a banner explaining when this pipeline runs (here: manually, on demand).</p>
+  </div>
+
+  <div class="note">
+    <strong>About the other source, "Generic FHIR R4":</strong> it works the same way but with far fewer
+    fields — just a base URL, a polling method (Search via REST), and a run schedule — since it doesn't
+    need OAuth or vendor-specific setup. It's useful for connecting to a plain test FHIR server. This
+    manual focuses on Epic since that's the source most deployments actually use.
+  </div>
+</section>
+
+<section class="chapter" id="sql-destination">
+  <h2><span class="chnum">6</span>Sending data to SQL Server</h2>
+  <p class="intro">
+    With a source on the canvas, hover over it and click the small <strong>+</strong> that appears on
+    its right edge to attach a destination downstream. Every destination wizard follows the same four
+    steps: <strong>Configure → Data groups → Map fields → Review</strong>.
+  </p>
+
+  <h3 class="substep">Step 1 — Configure</h3>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/14-sql-destination-step1.png" alt="SQL Server configuration form">
+      <div class="badge" style="left:17.6%; top:43%;">1</div>
+      <div class="badge" style="left:40.9%; top:43%;">2</div>
+      <div class="badge" style="left:64.2%; top:43%;">3</div>
+      <div class="badge" style="left:17.6%; top:51.4%;">4</div>
+      <div class="badge" style="left:40.9%; top:51.4%;">5</div>
+      <div class="badge" style="left:64.2%; top:51.4%;">6</div>
+      <div class="badge" style="left:17.6%; top:59.7%;">7</div>
+      <div class="badge" style="left:40.9%; top:59.7%;">8</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it is / where to get it</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Destination name</td><td class="field-desc">A label for this connection, shown later in the Destination Connections list.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">SQL Server</td><td class="field-desc">Hostname (and port) of the database server — ask your DBA. Format: <code>tcp:servername,1433</code>.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Database</td><td class="field-desc">The specific database on that server to write into — it must already exist.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Authentication</td><td class="field-desc"><em>SQL Username/Password</em>, <em>Managed Identity</em>, or <em>Azure AD</em> — whichever your database is set up to accept.</td></tr>
+    <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">Username</td><td class="field-desc">A SQL login with write access to the target database (only needed for SQL auth).</td></tr>
+    <tr><td class="num"><span class="num-badge">6</span></td><td class="field-name">Password</td><td class="field-desc">The password for that login. Stored encrypted — never shown again once saved.</td></tr>
+    <tr><td class="num"><span class="num-badge">7</span></td><td class="field-name">Schema</td><td class="field-desc">The SQL schema tables live under — <code>dbo</code> is the SQL Server default unless your DBA uses something else.</td></tr>
+    <tr><td class="num"><span class="num-badge">8</span></td><td class="field-name">Write mode</td><td class="field-desc"><em>Upsert by source id</em> (update if it already exists, insert if not — the safe default), <em>Insert only</em>, or <em>Update only</em>.</td></tr>
+  </table>
+  <p class="substep-sub">Click <strong>Test connection &amp; Next</strong> — Segue actually opens the connection before letting you proceed. If it fails, you'll see exactly why:</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/15-sql-destination-error.png" alt="Connection test failure message">
+    </div>
+    <p class="shot-caption">A real connection failure — here, the target database name doesn't exist yet. Fix the field it complains about and try again.</p>
+  </div>
+
+  <h3 class="substep">Step 2 — Data groups</h3>
+  <p class="substep-sub">Pick which kinds of FHIR records this destination should receive — you don't have to map everything at once.</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/16-sql-destination-step2-datagroups.png" alt="Data groups selection screen">
+    </div>
+    <p class="shot-caption">Selected here: <strong>Patient</strong> and <strong>Observation</strong> — used as the running example for the rest of this guide.</p>
+  </div>
+
+  <h3 class="substep">Step 3 — Map fields</h3>
+  <p class="substep-sub">Each selected group gets its own <strong>Map</strong> button — click it to open that group's field-mapping canvas (the next chapter covers this screen in depth).</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/17-sql-destination-step3-mapfields-list.png" alt="Map fields step listing Patient and Observation">
+    </div>
+  </div>
+
+  <h3 class="substep">Step 4 — Review</h3>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/20-sql-destination-step4-review.png" alt="Review and add to workflow screen">
+    </div>
+    <p class="shot-caption">A last summary before it's added to the canvas — check the destination type, connection details, write mode, and which data groups are included, then click <strong>Add to Workflow</strong>.</p>
+  </div>
+  <div class="warn">
+    <strong>Real-world gotcha:</strong> if you mapped a brand-new column onto a table that doesn't exist
+    yet in the target database, Segue won't silently fail — it tells you exactly what's missing:
+  </div>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/34-schema-change-failed-error.png" alt="Schema change failed error message">
+    </div>
+    <p class="shot-caption">Use the canvas's "Create a new table…" option first if the table itself doesn't exist yet, then map columns onto it.</p>
+  </div>
+</section>
+
+<section class="chapter" id="field-mapping">
+  <h2><span class="chnum">7</span>Mapping fields (the details)</h2>
+  <p class="intro">
+    This is the heart of Segue: connecting a field from the incoming FHIR data (left) to a column in
+    your destination table (right). It looks visual and free-form, but every connection you draw
+    becomes one exact, reviewable rule.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/18-field-mapping-canvas.png" alt="Field mapping canvas overview">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>Left panel (Payload)</strong> — every field that can appear in this FHIR resource, organized as a tree you can expand. A field tagged <strong>array</strong> means the source can send more than one of it (e.g. a patient can have several addresses).</li>
+    <li><strong>Right panel (Table)</strong> — the destination table's columns. Use <strong>+ Add column</strong> to create a new one, or <strong>+ Add a table from your database…</strong> / <strong>+ Create a new table…</strong> to bring in a different target.</li>
+    <li><strong>Suggest mappings</strong> — auto-matches source fields to columns with obviously similar names, so you're not connecting everything by hand.</li>
+    <li><strong>Mark as Master</strong> — flags this group's mapping as the authoritative one used elsewhere in the product (e.g. lineage displays).</li>
+    <li><strong>Load JSON payload</strong> — paste a real example FHIR record so the source tree reflects fields your actual data really uses, not just the generic shape.</li>
+  </ul>
+
+  <h3 class="substep">Adding a new column</h3>
+  <p class="substep-sub">Click <strong>+ Add column</strong> on the table panel.</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/22-add-column-modal.png" alt="Add column modal">
+      <div class="badge" style="left:35%; top:48.1%;">1</div>
+      <div class="badge" style="left:35%; top:56.5%;">2</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What to enter</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Column name</td><td class="field-desc">The exact SQL column name to create, e.g. <code>MiddleName</code>.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Data type</td><td class="field-desc">Pick a SQL type that fits the data: short text (<code>nvarchar(50/120/255)</code>), long text/JSON blobs (<code>nvarchar(max)</code>), whole numbers (<code>int</code>/<code>bigint</code>), true/false (<code>bit</code>), dates (<code>date</code>/<code>datetime2</code>), money/decimals (<code>decimal(18,2)</code>), or a GUID (<code>uniqueidentifier</code>).</td></tr>
+  </table>
+  <div class="note">
+    This runs a real <code>ALTER TABLE</code> against your destination database the moment you finish the
+    wizard (via <strong>Add to Workflow</strong> / <strong>Save</strong>) — not immediately. Nothing touches
+    the real schema until then, so it's safe to experiment while mapping.
+  </div>
+
+  <h3 class="substep">Turning a repeating field into one column — three ways</h3>
+  <p class="substep-sub">
+    FHIR records are full of arrays (a list of "based on" references, several categories, multiple
+    components). A single SQL column can't hold a list directly, so Segue gives you three ways to
+    flatten one down. Which one you want depends on the answer to: <em>"do I need every item, or just
+    one?"</em>
+  </p>
+
+  <div class="two-col">
+    <div class="shot-card">
+      <div class="shot-wrap">
+        <img src="user-manual-screenshots/25-array-mapping-created.png" alt="Whole array mapped as JSON">
+      </div>
+      <p class="shot-caption"><strong>Array → JSON.</strong> Drag the whole array group (e.g. <code>BasedOn</code>) straight onto a column — Segue tags it <strong>JSON</strong> and stores the entire list as one JSON-text string. Best when you need every item and every sub-field, and don't mind reading it back with a JSON query later.</p>
+    </div>
+    <div class="shot-card">
+      <div class="shot-wrap">
+        <img src="user-manual-screenshots/32-mapping-list-two-rows.png" alt="Mapping list with two rows">
+      </div>
+      <p class="shot-caption">The <strong>Mapping list</strong> at the bottom of the canvas is the plain-English record of every rule you've created — source field(s), mode, destination column, and instance selection, all in one table.</p>
+    </div>
+  </div>
+
+  <p class="substep-sub">Click <strong>+ Add mapping</strong> to build a rule by hand instead of dragging:</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/30-add-mapping-instance-options.png" alt="Add mapping form with Instance dropdown open">
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th></th><th>Setting</th><th>What it means</th></tr>
+    <tr><td></td><td class="field-name">Source field(s)</td><td class="field-desc">Pick one specific leaf field from the tree (e.g. <code>Category › Text</code>), not a whole array group.</td></tr>
+    <tr><td></td><td class="field-name">Instance — All records</td><td class="field-desc"><strong>Array → comma-separated.</strong> Pulls every value from the array and joins them into one string in a single column. Pair this with the <strong>combine as one delimited row</strong> checkbox below (see next screenshot).</td></tr>
+    <tr><td></td><td class="field-name">Instance — First</td><td class="field-desc"><strong>Array → single record.</strong> Only the first item in the array is used — everything after it is ignored. Use this when you only ever care about one value (e.g. the primary category).</td></tr>
+    <tr><td></td><td class="field-name">Instance — Nth</td><td class="field-desc">Same idea as First, but lets you pick a specific position (2nd, 3rd, …) instead of always the first.</td></tr>
+    <tr><td></td><td class="field-name">Instance — Criteria</td><td class="field-desc">Picks whichever array item matches a condition you define (e.g. "the one where <code>use = official</code>"), rather than by position.</td></tr>
+  </table>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/33-combine-delimited-checked.png" alt="Combine as one delimited row checkbox checked">
+    </div>
+    <p class="shot-caption">
+      With <strong>Instance = All records</strong> and <strong>combine as one delimited row</strong> checked,
+      every value in the array is joined into a single comma-separated string in that one column —
+      Array → comma-separated, the third mode.
+    </p>
+  </div>
+  <div class="warn">
+    <strong>This manual-mapping panel is marked "preview"</strong> in the product itself (you'll see a
+    small ⚠ next to <em>Direct</em> mode) — meaning it's shown for review but not yet fully enforced by
+    the pipeline engine. The drag-and-drop <strong>Array → JSON</strong> mapping described above is the
+    fully working path today.
+  </div>
+
+  <h3 class="substep">Marking a primary / upsert key</h3>
+  <p class="substep-sub">
+    Every mapped column has a small 🔑 button. Click it to mark that column as the key Segue uses to
+    tell "this is the same record as before" from "this is a brand-new one" — which is what makes
+    <strong>Upsert by source id</strong> (from the Configure step) actually work. Typically you'd mark
+    the column holding the FHIR resource's own <code>id</code> as the key.
+  </p>
+
+  <div class="note">
+    <strong>Leaving a mapping screen without saving</strong> always asks first — nothing is silently
+    discarded:
+  </div>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/19-exit-mapping-confirm.png" alt="Exit mapping confirmation dialog">
+    </div>
+  </div>
+</section>
+
+<section class="chapter" id="csv-destination">
+  <h2><span class="chnum">8</span>Sending data to a CSV file</h2>
+  <p class="intro">
+    The CSV destination follows the exact same four-step wizard as SQL Server — only the Configure
+    step's fields differ, since there's no database to connect to.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/35-csv-destination-step1.png" alt="CSV configuration form">
+      <div class="badge" style="left:17.6%; top:31.8%;">1</div>
+      <div class="badge" style="left:17.6%; top:43%;">2</div>
+      <div class="badge" style="left:52.6%; top:43%;">3</div>
+      <div class="badge" style="left:17.6%; top:55.75%;">4</div>
+      <div class="badge" style="left:17.6%; top:64.1%;">5</div>
+      <div class="badge" style="left:52.6%; top:64.1%;">6</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it is</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Existing CSV connection</td><td class="field-desc">Reuse a previously configured CSV destination instead of starting over.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Destination name</td><td class="field-desc">A label for this connection.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Delivery mode</td><td class="field-desc">How the file reaches you: <em>Download</em> (only works when triggered manually — not on a schedule), <em>Email</em>, <em>SFTP</em>, or <em>Download link</em>.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">File name pattern</td><td class="field-desc">A template for the generated file's name — <code>{resource}</code> and date/time placeholders get filled in automatically, e.g. <code>Patient_20260813_113000.csv</code>.</td></tr>
+    <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">Delimiter</td><td class="field-desc">Comma is the CSV default — change it if whatever will read this file expects something else (tab, semicolon, pipe).</td></tr>
+    <tr><td class="num"><span class="num-badge">6</span></td><td class="field-name">Encoding</td><td class="field-desc">UTF-8 covers virtually every case, including non-English characters in names/addresses.</td></tr>
+  </table>
+
+  <p class="substep-sub">Choosing <strong>SFTP</strong> as the delivery mode reveals where to actually send the file:</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/36-csv-destination-sftp-fields.png" alt="CSV SFTP delivery fields">
+      <div class="badge" style="left:17.6%; top:68%;">1</div>
+      <div class="badge" style="left:52.6%; top:68%;">2</div>
+      <div class="badge" style="left:17.6%; top:76.4%;">3</div>
+      <div class="badge" style="left:52.6%; top:76.4%;">4</div>
+      <div class="badge" style="left:17.6%; top:84.7%;">5</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it is / where to get it</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">SFTP host</td><td class="field-desc">The address of the SFTP server you're delivering to — from whoever owns that server.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Port</td><td class="field-desc">Defaults to <code>22</code>, the standard SFTP port.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Username</td><td class="field-desc">The SFTP account name you were given.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Password</td><td class="field-desc">That account's password — stored encrypted.</td></tr>
+    <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">Remote folder</td><td class="field-desc">The folder path on that server to drop files into, e.g. <code>/incoming/segue</code>.</td></tr>
+  </table>
+  <p class="substep-sub">Steps 2–4 (Data groups, Map fields, Review) work identically to the SQL Server walkthrough above.</p>
+</section>
+
+<section class="chapter" id="connections-admin">
+  <h2><span class="chnum">9</span>Managing saved connections</h2>
+  <p class="intro">
+    Every source and destination you've ever configured — plus mapping profiles and transformation
+    rules — has its own dedicated admin screen, separate from the pipeline canvas. Find them under
+    <strong>Settings → Workflow Configurations</strong>.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/38-source-connections-list.png" alt="Source Connections admin list">
+    </div>
+    <p class="shot-caption"><strong>Source Connections</strong> — every EHR/FHIR connection, searchable by name, EHR vendor, audience, or status. <strong>+ New Source Connection</strong> creates one without needing to open the pipeline canvas at all.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/39-destination-connections-list.png" alt="Destination Connections admin list">
+    </div>
+    <p class="shot-caption"><strong>Destination Connections</strong> — every SQL Server/CSV target, its status, and who last touched it. The pencil icon edits; the trash icon deletes (blocked once a connection has real run history, to protect that history).</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/40-mapping-profiles-list.png" alt="Mapping Profiles admin list, empty state">
+    </div>
+    <p class="shot-caption"><strong>Mapping Profiles</strong> — a saved, reusable field-mapping (source → target object → field list) that can be applied to more than one pipeline, so you don't have to redraw the same mapping twice.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/42-transformation-rules-new-target.png" alt="Transformation Rules new rule target form">
+    </div>
+    <p class="shot-caption">
+      <strong>Transformation Rules</strong> — set a default once (globally, for a resource type, for a
+      destination type, or for one specific source field) instead of repeating the same per-column rule
+      in every pipeline. A per-column override is still available from the "Rules" button next to any
+      mapped field on the canvas.
+    </p>
+  </div>
+</section>
+
+<section class="chapter" id="ehr-directory">
+  <h2><span class="chnum">10</span>The EHR endpoint directory</h2>
+  <p class="intro">
+    Under <strong>Settings → EHR Endpoints</strong> is a pre-loaded directory of hundreds of real Epic
+    MyChart FHIR endpoints across the US — a lookup table, not something you need to fill in yourself.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/43-ehr-endpoints-directory.png" alt="EHR Endpoints directory list">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li>Search by hospital/health-system name, vendor, or base URL to quickly find the exact endpoint you need when configuring an Epic source — instead of hunting it down manually.</li>
+    <li><strong>+ Add Endpoint</strong> lets you register one that isn't already listed.</li>
+    <li>The pencil icon opens an entry for editing if a URL or name ever changes.</li>
+  </ul>
+</section>
+
+<section class="chapter" id="branding-settings">
+  <h2><span class="chnum">11</span>Branding &amp; system settings</h2>
+  <p class="intro">
+    Also under <strong>Settings</strong>: how the platform looks, security secrets, and the deeper
+    runtime configuration knobs. Most people will only ever touch <strong>Branding</strong>,
+    <strong>Email</strong>, and <strong>Terminology Codes</strong> — the rest is here for completeness.
+  </p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/37-settings-branding.png" alt="Branding settings screen">
+    </div>
+    <p class="shot-caption"><strong>Branding</strong> — company name, brand colors, and logos. Changes preview live before you save, so you can see the effect immediately.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/45-system-settings-email.png" alt="System Settings email tab">
+    </div>
+    <p class="shot-caption"><strong>System Settings → Email</strong> — the same SMTP fields from first-time setup, editable later. Use <strong>Send Test Email</strong> to confirm it actually works before relying on it.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/47-system-settings-security.png" alt="System Settings security tab">
+    </div>
+    <p class="shot-caption"><strong>Security</strong> — the app-wide signing secrets, generated automatically the first time the app started. Regenerating one immediately signs every user out — only do this if a secret may have leaked.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/48-terminology-loinc.png" alt="Terminology Codes LOINC tab">
+    </div>
+    <p class="shot-caption"><strong>Terminology Codes</strong> — keeps the local copy of medical code systems (LOINC, SNOMED CT, RxNorm, ICD-10) up to date by downloading official releases on a schedule, or on demand via <strong>Synchronize Now</strong>. Needed if pipelines validate or translate codes.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/44-allowed-origins.png" alt="Allowed Origins settings screen">
+    </div>
+    <p class="shot-caption"><strong>Allowed Origins</strong> — the web addresses permitted to call Segue's API from a browser. If you run your own portal on a different domain, add it here — changes apply immediately, no restart needed.</p>
+  </div>
+
+  <div class="warn">
+    <strong>System Settings → General</strong> exposes dozens of low-level runtime switches (rate
+    limits, retry counts, background-worker timers, feature toggles). These are meant for technical
+    administrators troubleshooting a specific issue, not day-to-day configuration — leave them at
+    their defaults unless you've been told to change a specific one.
+  </div>
+</section>
+
+<section class="chapter" id="users-roles">
+  <h2><span class="chnum">12</span>Users &amp; roles</h2>
+  <p class="intro">Manage who can sign in and what they're allowed to do from the left-hand <strong>User Management</strong> and <strong>Role</strong> menu items.</p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/49-user-management-list.png" alt="User Management list screen">
+    </div>
+  </div>
+
+  <p class="substep-sub">Click <strong>Invite User</strong> to bring a new person onto the platform:</p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/50-invite-user-dialog.png" alt="Invite User dialog">
+      <div class="badge" style="left:36%; top:38.4%;">1</div>
+      <div class="badge" style="left:33.3%; top:46.4%;">2</div>
+      <div class="badge" style="left:51.7%; top:46.4%;">3</div>
+      <div class="badge" style="left:36%; top:54.6%;">4</div>
+    </div>
+  </div>
+  <table class="legend">
+    <tr><th class="num">#</th><th>Field</th><th>What it is</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Email address</td><td class="field-desc">Required — the invitation link is sent here.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">First name</td><td class="field-desc">Optional — the person can fill this in themselves when accepting.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Last name</td><td class="field-desc">Optional, same as above.</td></tr>
+    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Assigned Role</td><td class="field-desc">What they'll be able to do — see the Role list below for what each one means.</td></tr>
+  </table>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/51-roles-list.png" alt="Roles list screen">
+    </div>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>SuperAdmin</strong> — full access to everything, including user management and security settings.</li>
+    <li><strong>Admin</strong> — administers configuration and users, but with a narrower permission set than SuperAdmin.</li>
+    <li><strong>Operations</strong> — builds and runs pipelines, and reviews their data/audit output — the day-to-day pipeline-builder role.</li>
+    <li><strong>Audit</strong> — read-only access to configuration and audit logs, for compliance review.</li>
+  </ul>
+  <p class="shot-caption">Click <strong>+ Add Role</strong> to define a custom role with its own hand-picked set of permissions if none of the built-in ones fit.</p>
+</section>
+
+<section class="chapter" id="history-logs">
+  <h2><span class="chnum">13</span>Execution history &amp; audit logs</h2>
+  <p class="intro">Two different views of "what happened": one for pipeline runs, one for everything anyone changed in the system.</p>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/52-execution-history-empty.png" alt="Execution History empty state">
+    </div>
+    <p class="shot-caption"><strong>Execution History</strong> — every time a pipeline ran, its status, how long it took, and what/who triggered it. Filter by status or trigger type to find a specific run quickly.</p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/53-audit-logs.png" alt="Audit Logs screen">
+    </div>
+    <p class="shot-caption">
+      <strong>Logs &amp; Compliance → Audit Logs</strong> — an immutable, hash-chained record of every
+      configuration and entity change: who did it, what module, what action, and when. Search by
+      Correlation ID to trace one specific event across the system.
+    </p>
+  </div>
+
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/54-compliance-reports.png" alt="Compliance Reports screen">
+    </div>
+    <p class="shot-caption">
+      <strong>Compliance Reports</strong> — generates a ready-to-share HIPAA §164.312(b) or SOC 2 evidence
+      PDF for a date range: audit-trail integrity, authentication activity, data-access summaries,
+      security events, and errors — pick your dates and click <strong>Generate &amp; Download PDF</strong>.
+    </p>
+  </div>
+</section>
+
+<footer class="end">
+  <p>Segue Healthcare Integration Platform — User Manual</p>
+  <a class="back-to-top" href="#top">↑ Back to top</a>
+</footer>
+
+</div>
+</body>
+</html>
