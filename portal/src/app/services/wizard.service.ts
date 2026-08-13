@@ -18,6 +18,17 @@ import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 
 export type WizardMode = 'canvas' | 'entity';
 
+/** Fresh (keyVaultName, secretName) pair for a wizard-typed client secret, provisioned via
+ *  ConfigurationService.WriteInlineClientSecretAsync (inlineClientSecret on save) — same fixed-vault +
+ *  slug-plus-random-suffix naming convention as destination-connection-secret.util.ts's newSecretName,
+ *  duplicated here (not imported) since that util's own naming ("dest-...") is destination-specific. */
+function newClientSecretName(connectionName: string): string {
+  const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `src-${slug}-${suffix}`;
+}
+const CLIENT_SECRET_KEY_VAULT_NAME = 'workflow-secrets';
+
 /** Backend ApplicationType enum member name ↔ the wizard's EpicAudience string. Null/undefined maps to
  *  'provider-ehr-launch' — ApplicationType is nullable server-side for legacy connections created before this
  *  field existed, where the grant is inferred from vendor/credentials rather than an explicit audience. */
@@ -148,7 +159,14 @@ export class WizardService {
 
   // ── audience-form extra fields ────────────────────────────────────────────
   readonly clientId     = signal('');
+  readonly practiceId   = signal('');
+  /** Existing (keyVaultName, secretName) reference for an already-saved connection's client secret — restored
+   *  in openEntity() so leaving the Client Secret field blank on an edit preserves whatever secret is already
+   *  stored there, instead of orphaning the reference. Null for a brand-new connection or one that has never
+   *  had a secret provisioned (e.g. still using JWT/public auth). */
+  readonly existingClientSecretRef = signal<{ keyVaultName: string; secretName: string } | null>(null);
   readonly authMethod   = signal<'public' | 'secret' | 'jwt'>('secret');
+  readonly authPlacement = signal<'post' | 'basic'>('post');
   readonly epicAudience = signal('provider-ehr-launch');
   readonly redirectUri  = signal(OAUTH_DEFAULT_URLS.redirectUri);
   readonly launchUrlWiz = signal(OAUTH_DEFAULT_URLS.launchUrl);
@@ -184,6 +202,9 @@ export class WizardService {
     this.readonlyMode.set(false);
     this.entityId.set(null);
     this.entityDto.set(null);
+    // Canvas mode has no backend SourceConnection to restore a secret reference from yet (it's created later, at
+    // workflow build time) — a stale reference from a previous openEntity() call must not leak in.
+    this.existingClientSecretRef.set(null);
 
     const node = existingNodeId ? this.store.byId(existingNodeId) : undefined;
     const f = (node?.fields ?? {}) as Record<string, string>;
@@ -206,6 +227,7 @@ export class WizardService {
     this.modeValues.set({});
 
     this.clientId.set(f['Client ID'] ?? '');
+    this.practiceId.set(f['Practice ID'] ?? '');
     this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'public' | 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
     this.redirectUri.set(f['Redirect URI'] ?? OAUTH_DEFAULT_URLS.redirectUri);
@@ -251,7 +273,14 @@ export class WizardService {
     this.modeValues.set({});
 
     this.clientId.set(dto?.authentication?.clientId ?? '');
+    this.practiceId.set(dto?.authentication?.practiceId ?? '');
+    this.existingClientSecretRef.set(
+      dto?.authentication?.clientSecretKeyVaultName && dto?.authentication?.clientSecretName
+        ? { keyVaultName: dto.authentication.clientSecretKeyVaultName, secretName: dto.authentication.clientSecretName }
+        : null
+    );
     this.authMethod.set(AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto?.authentication?.authenticationType ?? 'None'] ?? 'secret');
+    this.authPlacement.set((dto?.authentication?.authPlacement as 'post' | 'basic') || 'post');
     this.epicAudience.set(
       (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType]) || 'provider-ehr-launch'
     );
@@ -383,6 +412,13 @@ export class WizardService {
     const audCfg = AUDIENCE_FIELD_CONFIG[audienceKey];
     const liveAuthMethod = (fields['Auth method'] || 'secret') as 'public' | 'secret' | 'jwt';
     const liveClientId = fields['Client ID'] || null;
+    // A freshly typed secret (non-blank) gets a brand-new vault reference and is provisioned via
+    // inlineClientSecret; leaving it blank on an edit preserves whatever reference/secret is already stored
+    // (existingClientSecretRef, restored in openEntity()) instead of orphaning it with a null/empty reference.
+    const typedClientSecret = (fields['Client Secret'] ?? '').trim() || null;
+    const existingSecretRef = this.existingClientSecretRef();
+    const clientSecretKeyVaultName = typedClientSecret ? CLIENT_SECRET_KEY_VAULT_NAME : (existingSecretRef?.keyVaultName ?? null);
+    const clientSecretName = typedClientSecret ? newClientSecretName(fields['__name'] || 'source') : (existingSecretRef?.secretName ?? null);
     const retrievalResourceTypes = fields['Retrieval resource type']
       ? fields['Retrieval resource type'].split(',').map(s => s.trim()).filter(Boolean)
       : this.resources();
@@ -402,8 +438,9 @@ export class WizardService {
         // resource-derived scopes get filled in later by EpicSourceConnectionScopeSyncService once a
         // workflow wires this source to a destination — see ehr-vendor-source-form.component.ts).
         scopes:              this.scopeString().split(' ').filter(Boolean),
-        clientSecretKeyVaultName: null,
-        clientSecretName:         null,
+        clientSecretKeyVaultName: clientSecretKeyVaultName,
+        clientSecretName:         clientSecretName,
+        inlineClientSecret:       typedClientSecret,
         privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
         privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
         keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
@@ -412,6 +449,13 @@ export class WizardService {
         // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
         // FHIRBridge's own hosted URL guess.
         jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
+        // athenahealth only — the backend builds the ah-practice reference from this bare practice id. Null for
+        // every other vendor (EhrVendorSourceFormComponent only ever populates this field for Athenahealth).
+        practiceId:               fields['Practice ID'] || null,
+        // Where OAuth2ClientCredentialsTokenProvider places client id/secret — only meaningful for Client Secret
+        // auth (liveAuthMethod === 'secret'); null (→ "post") for every other auth method, unchanged from before
+        // this field existed.
+        authPlacement:            liveAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
       },
       interactive: audCfg.showRedirect
         ? {

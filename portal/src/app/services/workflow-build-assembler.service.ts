@@ -63,6 +63,14 @@ interface DestMappingRow {
   referencesResource?: string;
 }
 
+/** Fresh secret name for a wizard-typed client secret — same convention as WizardService's newClientSecretName
+ *  (duplicated, not imported: that one lives in a service built for entity-mode save, this one for canvas build). */
+function newInlineSecretName(connectionName: string): string {
+  const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `src-${slug}-${suffix}`;
+}
+
 /**
  * Translates the current builder canvas + wizard fields into a {@link WorkflowBuildRequest} for the Option B
  * create-on-save endpoint (`POST /workflows/build`). Reuses {@link WorkflowGraphMapperService.toRequest} for the graph
@@ -190,6 +198,57 @@ export class WorkflowBuildAssemblerService {
         applicationType: null,
         interactive: null,
         retrieval: this.buildRetrieval(fields),
+      };
+    }
+
+    // athenahealth — same shared-form field bag as Epic, but Backend audience authenticates via client_credentials
+    // + client secret (not private_key_jwt), and every request needs the Practice ID field's ah-practice scoping.
+    // A freshly typed secret (fields['Client Secret'], non-blank) is provisioned via inlineClientSecret under a
+    // brand-new vault reference — see WizardService.save()'s identical pattern for entity mode. Canvas mode has
+    // no prior connection to preserve an existing reference from here (this always builds a fresh
+    // CreateSourceConnectionRequest), so a blank secret simply omits it — matching a brand-new "New Source" node.
+    if (/athenahealth/i.test(connector)) {
+      const athenaAppType = this.applicationTypeFor(fields);
+      const athenaScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      const athenaTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
+      const athenaRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
+      console.log('%c[buildSource: Athenahealth] diagnosing retrieval/scope build', 'color:#7b2ff7;font-weight:700', {
+        athenaAppType,
+        appKeyField: fields['App key'],
+        retrievalMethodKeyField: fields['Retrieval method key'],
+        retrievalResourceTypeField: fields['Retrieval resource type'],
+        resourcesField: fields['Resources'],
+        scopesField: fields['Scopes'],
+        athenaScopes,
+        athenaRetrieval,
+      });
+      return {
+        name: fields['__name'] || 'Athenahealth',
+        sourceSystemType: 'Athenahealth',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: {
+          authenticationType: athenaAppType === 'Backend' ? 'OAuthClientCredentials' : 'None',
+          clientId: fields['Client ID'] || fields['Active client ID'] || null,
+          tokenEndpoint: fields['Token endpoint'] || null,
+          scopes: athenaScopes,
+          practiceId: fields['Practice ID'] || null,
+          clientSecretKeyVaultName: athenaTypedSecret ? 'workflow-secrets' : null,
+          clientSecretName: athenaTypedSecret ? newInlineSecretName(fields['__name'] || 'athena') : null,
+          inlineClientSecret: athenaTypedSecret,
+          authPlacement: (fields['Auth placement'] as 'post' | 'basic') || 'post',
+        },
+        applicationType: athenaAppType,
+        interactive:
+          athenaAppType === 'Backend'
+            ? null
+            : {
+                redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
+                launchUrl: fields['Launch URL'] || null,
+                trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
+                patientSelectionMethod: null,
+                launchDisplayMode: athenaAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
+              },
+        retrieval: athenaRetrieval,
       };
     }
 

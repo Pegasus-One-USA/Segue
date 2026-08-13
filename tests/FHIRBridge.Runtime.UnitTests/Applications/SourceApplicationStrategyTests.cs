@@ -15,12 +15,15 @@ public sealed class SourceApplicationStrategyTests
     private static EpicAccessTokenProvider Epic() =>
         new(new HttpClient(new NoopHandler()), new FakeJwtFactory());
 
+    private static OAuth2ClientCredentialsTokenProvider ClientSecret() =>
+        new(new HttpClient(new NoopHandler()));
+
     private static SmartAuthorizationCodeTokenProvider Interactive() =>
         new(new HttpClient(new NoopHandler()), new InMemoryFhirAuthorizationCodeTokenStore());
 
     private static ISourceApplicationStrategy[] AllStrategies() =>
     [
-        new BackendServicesApplicationStrategy(Epic()),
+        new BackendServicesApplicationStrategy(Epic(), ClientSecret()),
         new EhrLaunchApplicationStrategy(Interactive()),
         new StandaloneApplicationStrategy(Interactive()),
         new PatientApplicationStrategy(Interactive())
@@ -50,7 +53,7 @@ public sealed class SourceApplicationStrategyTests
     public void Registry_rejects_two_strategies_for_the_same_type()
     {
         var act = () => new SourceApplicationStrategyRegistry(
-            [new BackendServicesApplicationStrategy(Epic()), new BackendServicesApplicationStrategy(Epic())]);
+            [new BackendServicesApplicationStrategy(Epic(), ClientSecret()), new BackendServicesApplicationStrategy(Epic(), ClientSecret())]);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -58,7 +61,7 @@ public sealed class SourceApplicationStrategyTests
     [Fact]
     public void Backend_describes_a_non_interactive_client_credentials_flow()
     {
-        var descriptor = new BackendServicesApplicationStrategy(Epic()).Describe();
+        var descriptor = new BackendServicesApplicationStrategy(Epic(), ClientSecret()).Describe();
 
         descriptor.OAuthFlow.Should().Be(SmartOAuthFlows.ClientCredentials);
         descriptor.ScopePrefix.Should().Be(SmartScopePrefixes.System);
@@ -92,23 +95,34 @@ public sealed class SourceApplicationStrategyTests
 
         new StandaloneApplicationStrategy(Interactive()).Describe().RequiresLaunchToken.Should().BeFalse();
         new PatientApplicationStrategy(Interactive()).Describe().RequiresTrustedIssuerAllowList.Should().BeFalse();
-        new BackendServicesApplicationStrategy(Epic()).Describe().RequiresLaunchToken.Should().BeFalse();
+        new BackendServicesApplicationStrategy(Epic(), ClientSecret()).Describe().RequiresLaunchToken.Should().BeFalse();
     }
 
     [Fact]
     public void Backend_validation_passes_with_a_key_client_id_token_endpoint_and_base_url()
     {
-        new BackendServicesApplicationStrategy(Epic()).Validate(BackendConfig()).IsValid.Should().BeTrue();
+        new BackendServicesApplicationStrategy(Epic(), ClientSecret()).Validate(BackendConfig()).IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public void Backend_validation_fails_without_a_signing_key()
+    public void Backend_validation_fails_without_a_signing_key_or_client_secret()
     {
-        var result = new BackendServicesApplicationStrategy(Epic())
+        var result = new BackendServicesApplicationStrategy(Epic(), ClientSecret())
             .Validate(BackendConfig() with { PrivateKeyPem = null });
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.Contains("private key", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Backend_validation_passes_with_a_client_secret_and_no_signing_key()
+    {
+        // athenahealth (and other client-secret backend vendors) authenticate with client_credentials instead of
+        // private_key_jwt — either credential alone must satisfy Backend Services validation.
+        var result = new BackendServicesApplicationStrategy(Epic(), ClientSecret())
+            .Validate(BackendConfig() with { PrivateKeyPem = null, ClientSecret = "s3cret" });
+
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

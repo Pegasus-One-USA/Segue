@@ -68,6 +68,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
+        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
@@ -96,6 +97,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
+        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
         sourceConnection.Update(
             request.Name,
@@ -129,6 +131,30 @@ public sealed class ConfigurationService : IConfigurationService
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
 
         return ConfigurationMapper.ToDto(sourceConnection);
+    }
+
+    /// <summary>
+    /// Provisions a wizard-typed client secret into the secret store, mirroring how
+    /// <see cref="AddDestinationConfigurationAsync"/>/<see cref="UpdateDestinationConfigurationAsync"/> handle
+    /// <c>InlineSecret</c>. No-op when the request carries no raw secret (an unedited "Existing Source" reuse, or
+    /// a non-secret auth method) — the KeyVaultName/SecretName reference then just points at whatever was already
+    /// provisioned, or nothing has ever authenticated with a secret for that connection.
+    /// </summary>
+    private async Task WriteInlineClientSecretAsync(SourceAuthenticationDto authentication, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(authentication.InlineClientSecret))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(authentication.ClientSecretKeyVaultName) ||
+            string.IsNullOrWhiteSpace(authentication.ClientSecretName))
+        {
+            throw new InvalidOperationException("A client secret Key Vault name and secret name are required to store the client secret.");
+        }
+
+        var secretReference = new SecretReference(authentication.ClientSecretKeyVaultName, authentication.ClientSecretName);
+        await _secretWriter.WriteSecretAsync(secretReference, authentication.InlineClientSecret, cancellationToken);
     }
 
     public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
