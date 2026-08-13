@@ -1,0 +1,218 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_cea2a60d527510::t_5343ac6cd4421a 65-80
+  s_cea2a60d527510::t_014d65f8398a36 164
+  s_cea2a60d527510::t_48de17f530876a 142,157
+  s_cea2a60d527510::t_dfbeb518b154b6 1
+  s_cea2a60d527510::t_815950e5b2d909 172-173,175-176,178-186
+  s_cea2a60d527510::t_8a51d93fe821e3 174,177
+  s_cea2a60d527510::t_0b11dee244ed0e 10-18
+  s_cea2a60d527510::t_c487208890a71f 20-39
+  s_cea2a60d527510::t_fec9680976a02f 153
+  s_cea2a60d527510::t_03a70e35eb0951 166-167,187-190,193-200,202-205,207-222,226
+  s_cea2a60d527510::t_e3479cb34bbb99 168-171
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_cea2a60d527510::t_020f9f08572177 87-89
+  s_cea2a60d527510::t_de9a85729d0f7f 123-127
+  s_cea2a60d527510::t_111f0e50900f22 46
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_cea2a60d527510::t_240ff3883dc249 719
+  s_95cc6aed975c5c::t_e9c23f8cfa6ccf 61
+  s_95cc6aed975c5c::t_b73c30171486b6 350-357
+  s_cea2a60d527510::t_92d4e8bc029b07 414-422,429
+  s_cea2a60d527510::t_3ea31c0327ba51 943
+  s_95cc6aed975c5c::t_2ebcb1b2e5a0a2 136-140
+  s_95cc6aed975c5c::t_feff4c926a7871 2
+  s_cea2a60d527510::t_9dc24793a90472 105-110
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_cea2a60d527510::t_373797d10f8798 38-42
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_cea2a60d527510::t_f0c3bed3a480e4 118-125
+  s_cea2a60d527510::t_c45435591f85d4 117
+  s_95cc6aed975c5c::t_9631202eec145f 60,62-63,65-68,70-78,80-99,101-102,104-113
+  s_cea2a60d527510::t_af335616ec8c6f 59,103,114
+  s_95cc6aed975c5c::t_eb6770c7989b56 2-17
+  s_95cc6aed975c5c::t_0457ee95ea24c9 100
+  s_cea2a60d527510::t_29da0645e3dc2c 1,55,57
+  s_95cc6aed975c5c::t_e50f682b2b1fbd 41,43-53
+  s_95cc6aed975c5c::t_049e81036306a1 19-39,54
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.ts
+  s_cea2a60d527510::t_bb77d019959f6b 119-122
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form-api.ts
+  s_cea2a60d527510::t_4daf603e1422b3 51-59,61
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_cea2a60d527510::t_c49c029a4f4642 92-93
+  s_cea2a60d527510::t_103aff700145bf 225-240,244
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cea2a60d527510::t_c4e3ee55d1a746 75-84,86-87
+  s_cea2a60d527510::t_9aa373b8eaefa0 28,34-36,38,40-41,44-51,54-55,57,62,71-74,88-94,108-115,118-125,144-164
+  s_cea2a60d527510::t_3cbe020e2fc59c 116-117,126-143
+  s_cea2a60d527510::t_3d095db588d8bc 95-107
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_cea2a60d527510::t_8ab2cb3d6362a2 291
+  s_cea2a60d527510::t_4eeb085c078a46 1,8-9,12-29,32-38,40-44,46-57,59-60,65,69,82-87,94-106,122-128,130-141,147-148,150,158,160-161,185-189,192-193,195-196,208-215,218-221,223-248,252,257-270,278-281,288,301-302,324-325,333,350-351,353,358-377
+  s_cea2a60d527510::t_83f4d375308478 2-3,30-31,39,45,58,61-64,66-68,70-81,88-93,107-121,129,142-146,149,151-157,159,162-184,190-191,194,197-207,216-217,222,249-251,253-256,271-275,277,282-287,289-290,300,303-323,326-332,334-349,352,354-357,379
+  s_cea2a60d527510::t_5c4cafd0ff4d4c 299
+  s_cea2a60d527510::t_058e4e75b11a74 276
+  s_95cc6aed975c5c::t_b1ce29a826cc78 378
+  s_cea2a60d527510::t_a1185a7dbf57bb 4-7,10-11
+  s_95cc6aed975c5c::t_b21c902a8a078d 292-298
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_95cc6aed975c5c::t_8cd870e293c3ab 60
+  s_95cc6aed975c5c::t_5dc394750114eb 51-58,64-65,71-76,80-82,84-87
+  s_95cc6aed975c5c::t_cdf5d9b9ac8891 90-98
+  s_95cc6aed975c5c::t_0259069f43bdd0 22-28
+  s_95cc6aed975c5c::t_8ded5423b22915 101-102,105-106,110
+  s_cea2a60d527510::t_53959f06ccdf72 122-123,125
+  s_95cc6aed975c5c::t_72fc819426e8e6 128-134
+  s_cea2a60d527510::t_919f9f5db07ead 20-21,30-31
+  s_95cc6aed975c5c::t_0c61f00e6359bd 159-163,167
+  s_cea2a60d527510::t_d7f51bbb3718d6 1-16
+  s_95cc6aed975c5c::t_f102df214be93a 45
+  s_cea2a60d527510::t_456ef6383e1c84 32-35,37-43,49-50,59,61-63,83,88-89,99-100,103-104,107-109,111-121,124,135,140-142
+  s_95cc6aed975c5c::t_734f0b8a76cb37 46-47,67,78-79
+  s_95cc6aed975c5c::t_c6145d98bdc15b 66,68-70
+  h_09a923a1991c96 77
+  s_95cc6aed975c5c::t_012c3b55afdf72 177-179,182
+  s_95cc6aed975c5c::t_aadbc2a4f1ec47 44,48
+  s_cea2a60d527510::t_6da3bad85aae5d 136-139
+  s_95cc6aed975c5c::t_e5def06220f0bc 166
+  s_95cc6aed975c5c::t_ba70e652630503 19
+  s_95cc6aed975c5c::t_93ccd7dafba9b9 126
+  s_95cc6aed975c5c::t_4ac6a15549a632 127
+  s_95cc6aed975c5c::t_097b744921672e 29,36
+  s_cea2a60d527510::t_1017f79903cfc2 157-158,164-165,168-172,174
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_cea2a60d527510::t_55243b351f6d67 77-80
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_cea2a60d527510::t_5bdf1b01c027de 1-2,5-21,25-27,33,39-41,80-81
+  s_95cc6aed975c5c::t_59c9021b12e564 42-45
+  s_95cc6aed975c5c::t_2e3ca115ebd7dc 3-4
+  s_cea2a60d527510::t_42467967883344 22-24,28-32,34-38,46-64,66-79
+  s_95cc6aed975c5c::t_2fcd5040967718 65
+portal/src/app/components/canvas/canvas.component.ts
+  s_cea2a60d527510::t_cfa38cdf4a1246 261-269
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_cea2a60d527510::t_a40e3d8a6dad1e 156,176,182-189,191-194,196-211,215
+  s_cea2a60d527510::t_e1027bd387db7d 163,166
+  s_cea2a60d527510::t_14747ef4a4e38c 157-160
+  s_cea2a60d527510::t_3d83864a9e27eb 155,178-179
+  s_cea2a60d527510::t_cfcb28235716e6 13,15-19,21-24
+  s_cea2a60d527510::t_b5d5965b44bbb3 88-98,100,102-104
+  s_cea2a60d527510::t_06ca62b2086271 161-162,164-165,167-175
+  s_cea2a60d527510::t_7f09dfc46f6cba 32-34,36,38-39,41-43,45,47-48,51-53,55,57-58,61-63,65,68,70-71,73-76
+  s_cea2a60d527510::t_dea187dda66e69 86-87,99,101,105-106,109-111,113-130,177
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_cea2a60d527510::t_576b279ea2dad2 3-7
+  s_cea2a60d527510::t_eda382d7886f12 304-311
+  s_cea2a60d527510::t_e558ea51cf061c 259-261
+  s_cea2a60d527510::t_22e9d334d4d139 356,358-359,363-365,367-384,409-410
+  s_cea2a60d527510::t_b95e38a23ac338 121-124,128,132-133,136-145,150-153,156-181,184-194
+  s_cea2a60d527510::t_f3d56c1c5bfa33 354-355,357,361-362,366
+  s_cea2a60d527510::t_c011701e29144e 39,52-61,75-82,85-92,111
+  s_cea2a60d527510::t_39b00c161455d6 265-267
+  s_cea2a60d527510::t_e6f52d473ce77c 62-74
+  s_cea2a60d527510::t_548b7da32c93dc 212
+  s_cea2a60d527510::t_f29bd8f9d1ed6f 83-84,93-110
+  s_cea2a60d527510::t_2cc4d286cf9d7f 300-303
+  s_cea2a60d527510::t_7108f26ef734ee 330,332-341
+  s_cea2a60d527510::t_5b226baa175e8e 269-271
+  s_cea2a60d527510::t_7e65a09ab8a02a 385-408
+  s_cea2a60d527510::t_e24362851ba96d 331
+  s_cea2a60d527510::t_89453d4e50a1a3 127,129-131,134,147-149,182-183
+  s_cea2a60d527510::t_47e921324f2f02 411-425
+  s_cea2a60d527510::t_6f3c831792e9b5 344-353,360
+  s_cea2a60d527510::t_c02999723375e5 293-298
+  s_cea2a60d527510::t_4cf51421115eb2 18-26,28,31,33
+  s_cea2a60d527510::t_e94cba9937ab21 14-17
+  s_cea2a60d527510::t_d0fa1de64d5cfa 299
+  s_cea2a60d527510::t_79833a787b416d 11-13,112-113,135,197-202,312-313,342-343
+  s_cea2a60d527510::t_febf36213e0a02 282-292
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.scss
+  s_95cc6aed975c5c::t_1e644bc44cc98f 127-129
+  s_cea2a60d527510::t_803b91ffc671f3 131-134
+  s_cea2a60d527510::t_7f266cb0fedcb4 40,56-60,64,122-123,126,135-137
+  s_95cc6aed975c5c::t_49992de8326515 116-121
+  s_cea2a60d527510::t_0599d35d710a8d 1-22,25-26,36-39,41-55,61-63,65-115,124-125,130,138
+  s_95cc6aed975c5c::t_8dbbae55324b39 23-24
+  s_95cc6aed975c5c::t_ad193c6c812c8d 27-35
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_cea2a60d527510::t_e7bc59a9033416 36
+  s_cea2a60d527510::t_68f7c36d5b820a 634-636
+  s_cea2a60d527510::t_253d175e999320 95-116,120-123
+  s_cea2a60d527510::t_4fccada553905e 29-32,37-38,44-46,61-62,64-84,86-87
+  s_cea2a60d527510::t_74d5b517302d89 506
+  s_cea2a60d527510::t_57f7c2ec97e87b 561-563
+  s_cea2a60d527510::t_93437e90b2516f 377,382-385,394-406
+  s_cea2a60d527510::t_d8172b0c28b018 489-497
+  s_cea2a60d527510::t_38bcb63675c215 11-13,15-18
+  s_cea2a60d527510::t_e226bccbdf4398 178-182,186-192,194-202,206-215,218-220,222-223,226-229,231-236,241-242
+  s_cea2a60d527510::t_ddfb3ee798a2d6 409-419,429
+  s_cea2a60d527510::t_8e24368ed425fe 313-354
+  s_cea2a60d527510::t_923d12a6b7c2d8 373-375,407,425,427-428,432,436-437,439-445,447,449,451-452
+  s_cea2a60d527510::t_5e8db09d3e5e03 193,221,254-257,259-260,274-280,283-289,311,355-372,376,378-381,408,438,446,448,450,453,479-480,522-523
+  s_cea2a60d527510::t_977de0d3abce83 420-421,426,430-431,435
+  s_cea2a60d527510::t_82a0ae124d3931 507-510
+  s_cea2a60d527510::t_5069d1b422d955 139,143-145,147-152,154
+  s_cea2a60d527510::t_a4ea5a70dee977 498-505,521
+  s_cea2a60d527510::t_d6cade5eef4474 422-424,433-434
+  s_cea2a60d527510::t_040a6c5debd85d 511-520
+  s_cea2a60d527510::t_cd6e16ec1c0443 584
+  s_cea2a60d527510::t_3b5a545140aa5c 454-478
+  s_cea2a60d527510::t_2577b95c341c2f 10,14,19
+  s_cea2a60d527510::t_dfeb7fc6364cb0 262-272
+  s_cea2a60d527510::t_65ef69c0cc9355 281-282,291,293-309
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_95cc6aed975c5c::t_b84df4b63f111f 207
+  s_95cc6aed975c5c::t_c110156ef91c56 204-206
+  s_cea2a60d527510::t_4f4c07fbc55e95 208-209
+  s_95cc6aed975c5c::t_d9e6183a95c367 196-203
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-node-classifier.ts
+  s_cea2a60d527510::t_517d38b762ae02 30-73
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_95cc6aed975c5c::t_64ae8545417d4b 178-195
+  s_cea2a60d527510::t_4b7bfc135dfa3c 21
+  s_cea2a60d527510::t_d45c21f7a1f096 8-9
+  s_cea2a60d527510::t_8a3cb899bde2e1 116,128-129,135-138,142
+  s_cea2a60d527510::t_9a15f6a9d2807e 130-134,140-141
+  s_95cc6aed975c5c::t_52b7f8908908d7 139
+  s_cea2a60d527510::t_492684377dd6ea 148-152
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_cea2a60d527510::t_c6470ad25eb971 1029-1033
+portal/src/app/components/canvas/canvas.component.html
+  s_cea2a60d527510::t_8465be1434f246 91-97
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_cea2a60d527510::t_c4c811e31d8e69 88-91,96
+  s_cea2a60d527510::t_80aca87d73256f 18
+  s_cea2a60d527510::t_a1b43df35e56b4 73
+  s_cea2a60d527510::t_559bde171b5aaa 92-95,97-98
+  s_cea2a60d527510::t_c56d76c7c043ae 107-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "20b6cb64f84ac3a206615764108c15574512f9e7",
+  "prompts": {},
+  "humans": {
+    "h_09a923a1991c96": {
+      "author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  },
+  "sessions": {
+    "s_95cc6aed975c5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ad20581-3289-4c5a-bbed-0cf542124ef0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_cea2a60d527510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52fe0133-ee54-4c61-bb43-726708bd3511",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
