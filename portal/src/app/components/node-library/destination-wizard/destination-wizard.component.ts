@@ -38,6 +38,8 @@ import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.c
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
+import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
+import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -155,6 +157,8 @@ export class DestinationWizardComponent implements OnInit {
   private readonly injector = inject(Injector);
   private readonly dialog = inject(MatDialog);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
+  private readonly discoverySvc = inject(EpicDiscoveryService);
+  private readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
   // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
   // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
@@ -183,6 +187,12 @@ export class DestinationWizardComponent implements OnInit {
   /** The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
    *  "sourceConnectionId" field. Null if no source is wired up yet. */
   readonly sourceConnectionId = input<string | null>(null);
+  /** FHIR resource types the source's live Discover (/metadata) probe actually returned THIS canvas
+   *  session (see EhrVendorSourceFormComponent's 'Discovered resource types' field) — the preferred source
+   *  for availableGroups' intersection filter below, since it needs no extra network round trip and is
+   *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
+   *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
+  readonly sourceDiscoveredResourceTypes = input<string[]>([]);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
@@ -322,11 +332,24 @@ export class DestinationWizardComponent implements OnInit {
   private _step1Baseline: Record<string, unknown> | null = null;
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // Always the full curated FHIR resource list — not derived from the upstream source's own
-  // selection, since the destination's resource picks are independent of whatever the source
-  // happened to have selected (and a destination added before any source is configured still
-  // needs the full list to choose from).
-  readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
+  // The full curated FHIR resource list, intersected with whatever the upstream source's live
+  // Discover/metadata probe returns (see the sourceConnectionId effect below) once that's known — so a
+  // source whose CapabilityStatement only supports e.g. 20 of our 37 catalog resources only ever offers
+  // those 20 here, dynamically, without a separately hand-maintained list. Falls back to the full catalog
+  // unfiltered whenever discovery hasn't run yet, has no source to run against, or came back inconclusive
+  // (no network access to re-probe, endpoint unreachable, etc.) — same as this wizard's behavior before
+  // this filter existed, so a destination added before any source is configured still gets the full list.
+  readonly discoveredResourceTypes = signal<string[] | null>(null);
+  readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>('idle');
+  /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
+   *  const itself isn't reachable from the template. */
+  readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
+  readonly availableGroups = computed(() => {
+    const discovered = this.discoveredResourceTypes();
+    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
+    const discoveredSet = new Set(discovered);
+    return SUPPORTED_RESOURCE_TYPES.filter(r => discoveredSet.has(r));
+  });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
   readonly filteredGroups = computed(() => {
@@ -815,6 +838,54 @@ export class DestinationWizardComponent implements OnInit {
       const sourceVendor = this.sourceVendor();
       for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId, sourceVendor);
     });
+
+    // Populates discoveredResourceTypes (see availableGroups above) from whichever source is available,
+    // in priority order:
+    //  1. sourceDiscoveredResourceTypes input — this canvas session's own Discover result, already fetched
+    //     by EhrVendorSourceFormComponent, no extra network call needed. Available the moment the source
+    //     form is saved, even before a real sourceConnectionId exists.
+    //  2. A live re-probe via sourceConnectionId — fallback for editing a destination on an already-saved
+    //     workflow whose source form hasn't been reopened this session, so carries no node-level
+    //     'Discovered resource types' field yet.
+    // A null/empty result from both resolves to discoveredResourceTypes=null, which availableGroups treats
+    // as "show everything" — this filter can only ever narrow the list, never leave the user with nothing
+    // to pick from.
+    effect(() => {
+      const fromNode = this.sourceDiscoveredResourceTypes();
+      const id = this.sourceConnectionId();
+
+      if (fromNode.length > 0) {
+        this._probedConnectionId = id; // mark handled so a later id-only change doesn't also fire a live probe
+        this.discoveredResourceTypes.set(fromNode);
+        this.discoverProbeStatus.set('done');
+        return;
+      }
+
+      if (id === this._probedConnectionId) return;
+      this._probedConnectionId = id;
+      if (!id) {
+        this.discoveredResourceTypes.set(null);
+        this.discoverProbeStatus.set('idle');
+        return;
+      }
+      this.discoverProbeStatus.set('probing');
+      this.sourceConnectionSvc.getById(id).pipe(
+        switchMap(conn => this.discoverySvc.discover(conn.baseUrl)),
+        catchError(() => of(null)),
+      ).subscribe(result => {
+        // The session's own Discover result (fromNode, above) may have arrived while this slower live
+        // probe was in flight — that's the more authoritative, already-in-session source, so don't let a
+        // late network response clobber it.
+        if (this.sourceDiscoveredResourceTypes().length > 0) return;
+        if (result && result.resourceTypes.length > 0) {
+          this.discoveredResourceTypes.set(result.resourceTypes);
+          this.discoverProbeStatus.set('done');
+        } else {
+          this.discoveredResourceTypes.set(null);
+          this.discoverProbeStatus.set('error');
+        }
+      });
+    });
   }
 
   /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
@@ -858,6 +929,10 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private readonly _requested = new Set<string>();
+  // undefined = the probe effect hasn't run yet; null/string thereafter = the last sourceConnectionId it
+  // actually probed for, so a redundant re-fire with the same id (e.g. an unrelated signal read in the same
+  // effect) doesn't re-probe.
+  private _probedConnectionId: string | null | undefined = undefined;
 
   private _ensureCatalog(resource: string, sourceConnectionId: string | null, sourceVendor: string): void {
     const key = `${resource}::${sourceConnectionId ?? ''}::${sourceVendor}`;

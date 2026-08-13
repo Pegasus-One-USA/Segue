@@ -2068,6 +2068,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       // (see runBackendAuthScopeProbe) — distinct from 'Scopes' above, which is what we requested. Empty when
       // Discover hasn't run or the probe hasn't succeeded yet.
       'Discovered scopes':     this.grantedScopesStatus() === 'done' ? this.grantedScopes().join(' ') : '',
+      // The FHIR resource types this source's live Discover (/metadata) probe actually returned (see
+      // runDiscover) — read by NodeLibraryDialogComponent/DestinationWizardComponent to filter the "Select
+      // data groups" step down to resources this specific source supports, intersected with our own
+      // supported-resource catalog. Written here (not just kept in the discoveredResourceTypes signal) so
+      // it survives onto the canvas node the moment this form is saved — no round trip to a persisted
+      // SourceConnection required, since a brand-new source may not have one yet in this same builder
+      // session. Empty when Discover hasn't run.
+      'Discovered resource types': this.discoveredResourceTypes().join(', '),
       // Only meaningful for EHR launch — cleared to '' otherwise so it's never wired into the build request
       // (see WorkflowBuildAssemblerService.buildSource, which only reads this key for the EhrLaunch application type).
       'Launch display mode':   cfg.showLaunchDisplayMode ? (v.launchDisplayMode ?? 'Embedded') : '',
