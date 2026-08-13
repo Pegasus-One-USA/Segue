@@ -21,8 +21,10 @@ import {
   RuleConfigFormComponent, applyNodeDefaults,
 } from '../../../components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component';
 
+// Phase 1: only SQL Server + CSV destinations are enabled (see phase-config.service.ts) — kept in sync here
+// so a rule can't be scoped to a destination type the user has no way to actually create.
 const DESTINATION_TYPE_OPTIONS: DestinationType[] = [
-  'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'Csv', 'Sftp', 'FhirRepository',
+  'SqlServer', 'Csv',
 ];
 
 // Global/ResourceType/DestinationType have no natural home inside any one mapping wizard, so they're always
