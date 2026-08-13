@@ -1,0 +1,85 @@
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_61b57d66030a26::t_86f95eba051826 181-273
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813031730_AddSourceConnectionDiscoveredScopes.Designer.cs
+  s_a159f34ce14325::t_bbfa020717306f 1-4768
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.scss
+  s_61b57d66030a26::t_9145200e8f1f48 356-409
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813031730_AddSourceConnectionDiscoveredScopes.cs
+  s_a159f34ce14325::t_bbfa020717306f 1-28
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_61b57d66030a26::t_41765b08b5ebdc 1,13-15,23,29-30,36
+  s_61b57d66030a26::t_19d3fff87a3e39 55-73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_a159f34ce14325::t_c131126c95593b 121-130
+  s_a159f34ce14325::t_64da60cd8b5482 17-22
+src/FHIRBridge.Application/DTOs/SourceAuthenticationDto.cs
+  s_a159f34ce14325::t_e25fcb3743f6f3 15-16
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_61b57d66030a26::t_d7c3ef15867625 29-34
+portal/src/app/onboarding/services/app-init.service.ts
+  s_61b57d66030a26::t_dc838182deee77 22-32,37-38
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_a159f34ce14325::t_01da4d1874200a 1219
+  s_a159f34ce14325::t_8c43644fdbc309 1125-1132
+  s_a159f34ce14325::t_b310c6da1a45d0 1815-1824
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  s_61b57d66030a26::t_42daba8bbb79ab 79-87
+  s_61b57d66030a26::t_bd9d6b9c4c34cc 1,18-21,24,52-55
+  s_61b57d66030a26::t_b0de6c6c94679d 50-51,56-65,70-78,88-99
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_a159f34ce14325::t_a68c4fe402e49a 198
+  s_a159f34ce14325::t_b93fc52c4e69c0 235
+portal/src/app/services/workflow-api.service.ts
+  s_a159f34ce14325::t_d1432d6e852436 127-129
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_a159f34ce14325::t_bbfa020717306f 4511-4514
+src/FHIRBridge.Application/DTOs/CreateFirstSuperAdminRequest.cs
+  s_61b57d66030a26::t_c1fbb4ddf0703a 3-7,12-13,17-29
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_a159f34ce14325::t_5acdc4477d8efc 31-32
+  s_a159f34ce14325::t_f138fc6c6107a4 266-267
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_a159f34ce14325::t_5b481569399a4c 22-25
+src/Api/FHIRBridge.Api/Content/legal/terms-and-conditions.html
+  s_61b57d66030a26::t_b387bbadcf8c5d 1-29
+src/FHIRBridge.Domain/ValueObjects/SourceAuthenticationConfiguration.cs
+  s_a159f34ce14325::t_db3bac19c01797 19-20,30,45-48,52-56
+portal/src/app/onboarding/components/terms-and-conditions-dialog/terms-and-conditions-dialog.component.ts
+  s_61b57d66030a26::t_0111f47073abc2 1-75
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_61b57d66030a26::t_5513abc5025f3d 77-86
+  s_61b57d66030a26::t_8ab394f113aac8 43,56
+  s_61b57d66030a26::t_cc017ad4b1da13 13-14,17,123
+  s_61b57d66030a26::t_6454d3e14ffc1b 112-117,120-122
+  s_61b57d66030a26::t_ba31046265af69 136-139,144-155
+src/Api/FHIRBridge.Api/Program.cs
+  s_61b57d66030a26::t_e405483c097009 465-466,470-474
+  s_61b57d66030a26::t_a755c80d3cac1f 31,475
+  s_61b57d66030a26::t_612a6f1dc3b897 464,467-469
+portal/src/app/core/api-endpoints.ts
+  s_61b57d66030a26::t_3e1851a490d0f6 97-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ada108feaba2883c886359f944fa35901a2628b1",
+  "prompts": {},
+  "sessions": {
+    "s_61b57d66030a26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9647cbe4-23ae-47c4-bc3b-6af71933c3a8",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a159f34ce14325": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3d6efebf-424b-4c98-8ab5-ee205299c28e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
