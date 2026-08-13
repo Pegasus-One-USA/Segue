@@ -512,6 +512,42 @@
     <li><strong>Load JSON payload</strong> — paste a real example FHIR record so the source tree reflects fields your actual data really uses, not just the generic shape.</li>
   </ul>
 
+  <h3 class="substep">Adding another table to map into</h3>
+  <p class="substep-sub">
+    The primary table for a data group is attached automatically (e.g. <code>dbo.Patient</code> for the
+    Patient group). If you need a <em>second</em> table — say, a child table for a repeating field — you
+    have two options, both under <strong>+ Add a table from your database…</strong> in the top-right of
+    the canvas.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/57-add-existing-table-picker.png" alt="Add a table from your database picker, listing an existing table">
+    </div>
+    <p class="shot-caption">
+      <strong>Pick an existing table.</strong> Click <strong>+ Add a table from your database…</strong> to
+      open a searchable list of every other table Segue already found in your connected database (here,
+      <code>dbo.PatientObservation</code>) — pick one to bring it onto the canvas alongside the primary table.
+    </p>
+  </div>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/58-existing-table-added.png" alt="Existing table added to the canvas as a second card">
+    </div>
+    <p class="shot-caption">The picked table appears as its own card, with its real columns already known — ready to map into immediately.</p>
+  </div>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/59-create-new-table-modal.png" alt="Create a new destination table modal">
+    </div>
+    <p class="shot-caption">
+      <strong>Or create a brand-new table.</strong> From the same menu, choose <strong>Create a new
+      table…</strong>. Give it a name, say whether it's a standalone table or a <em>child of another
+      table already on the canvas</em> (Segue then adds the foreign-key column for you), and define its
+      starting columns. Like adding a column, nothing is created in the real database until you finish the
+      wizard.
+    </p>
+  </div>
+
   <h3 class="substep">Adding a new column</h3>
   <p class="substep-sub">Click <strong>+ Add column</strong> on the table panel.</p>
   <div class="shot-card">
@@ -532,30 +568,54 @@
     the real schema until then, so it's safe to experiment while mapping.
   </div>
 
+  <h3 class="substep">Two ways to build a mapping</h3>
+  <p class="substep-sub">
+    Every connection you draw between a source field and a destination column is called a
+    <strong>mapping</strong>. Segue gives you two ways to create one — use whichever feels more natural,
+    they end up creating the exact same kind of rule.
+  </p>
+  <div class="two-col">
+    <div class="shot-card">
+      <div class="shot-wrap">
+        <img src="user-manual-screenshots/25-array-mapping-created.png" alt="A field dragged from the payload tree onto a column">
+      </div>
+      <p class="shot-caption">
+        <strong>Option 1 — drag and drop.</strong> Drag a field (or a whole array group) straight from
+        the Payload tree on the left onto a column in the Table panel on the right. A dashed line
+        confirms the connection. Fastest for simple, one-to-one mappings and for the whole-array-to-JSON
+        mode described below.
+      </p>
+    </div>
+    <div class="shot-card">
+      <div class="shot-wrap">
+        <img src="user-manual-screenshots/32-mapping-list-two-rows.png" alt="Mapping list accordion showing mapped fields in a table">
+      </div>
+      <p class="shot-caption">
+        <strong>Option 2 — the Mapping list.</strong> Click the <strong>Mapping list</strong> bar at the
+        bottom of the canvas to expand a plain table of every rule created so far — source field(s), mode,
+        destination column, and instance selection, all in one place. No dragging required, and it's the
+        easiest way to review everything you've mapped at a glance.
+      </p>
+    </div>
+  </div>
+  <p class="substep-sub">
+    Click <strong>+ Add mapping</strong> inside that same accordion to build a rule from dropdowns instead
+    of dragging — the better choice when you want precise control over which array item to use, or want to
+    combine several array values into one field (see below):
+  </p>
+
   <h3 class="substep">Turning a repeating field into one column — three ways</h3>
   <p class="substep-sub">
     FHIR records are full of arrays (a list of "based on" references, several categories, multiple
     components). A single SQL column can't hold a list directly, so Segue gives you three ways to
-    flatten one down. Which one you want depends on the answer to: <em>"do I need every item, or just
-    one?"</em>
+    flatten one down, available from either method above. Which one you want depends on the answer to:
+    <em>"do I need every item, or just one?"</em>
   </p>
-
-  <div class="two-col">
-    <div class="shot-card">
-      <div class="shot-wrap">
-        <img src="user-manual-screenshots/25-array-mapping-created.png" alt="Whole array mapped as JSON">
-      </div>
-      <p class="shot-caption"><strong>Array → JSON.</strong> Drag the whole array group (e.g. <code>BasedOn</code>) straight onto a column — Segue tags it <strong>JSON</strong> and stores the entire list as one JSON-text string. Best when you need every item and every sub-field, and don't mind reading it back with a JSON query later.</p>
-    </div>
-    <div class="shot-card">
-      <div class="shot-wrap">
-        <img src="user-manual-screenshots/32-mapping-list-two-rows.png" alt="Mapping list with two rows">
-      </div>
-      <p class="shot-caption">The <strong>Mapping list</strong> at the bottom of the canvas is the plain-English record of every rule you've created — source field(s), mode, destination column, and instance selection, all in one table.</p>
-    </div>
-  </div>
-
-  <p class="substep-sub">Click <strong>+ Add mapping</strong> to build a rule by hand instead of dragging:</p>
+  <ul class="plain-legend">
+    <li><strong>Array → JSON</strong> — drag the whole array group onto a column (see Option 1 above); Segue tags it <strong>JSON</strong> and stores the entire list as one JSON-text string. Best when you need every item and every sub-field, and don't mind reading it back with a JSON query later.</li>
+    <li><strong>Array → single record</strong> — map one specific leaf field with Instance set to <em>First</em>, <em>Nth</em>, or <em>Criteria</em> (see the Instance Selection table below). Only that one item is used.</li>
+    <li><strong>Array → comma-separated</strong> — map a leaf field with Instance set to <em>All records</em> and check <strong>combine as one delimited row</strong>. Every value is joined into one string in a single column.</li>
+  </ul>
   <div class="shot-card">
     <div class="shot-wrap">
       <img src="user-manual-screenshots/30-add-mapping-instance-options.png" alt="Add mapping form with Instance dropdown open">
@@ -614,43 +674,59 @@
   </p>
   <div class="shot-card">
     <div class="shot-wrap">
-      <img src="user-manual-screenshots/35-csv-destination-step1.png" alt="CSV configuration form">
+      <img src="user-manual-screenshots/35-csv-destination-step1.png" alt="CSV configuration form, Download link mode">
       <div class="badge" style="left:17.6%; top:31.8%;">1</div>
       <div class="badge" style="left:17.6%; top:43%;">2</div>
       <div class="badge" style="left:52.6%; top:43%;">3</div>
-      <div class="badge" style="left:17.6%; top:55.75%;">4</div>
-      <div class="badge" style="left:17.6%; top:64.1%;">5</div>
-      <div class="badge" style="left:52.6%; top:64.1%;">6</div>
+      <div class="badge" style="left:17.6%; top:51.4%;">4</div>
+      <div class="badge" style="left:17.6%; top:59.7%;">5</div>
+      <div class="badge" style="left:52.6%; top:59.7%;">6</div>
+      <div class="badge" style="left:17.6%; top:68%;">7</div>
     </div>
   </div>
   <table class="legend">
     <tr><th class="num">#</th><th>Field</th><th>What it is</th></tr>
     <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Existing CSV connection</td><td class="field-desc">Reuse a previously configured CSV destination instead of starting over.</td></tr>
     <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Destination name</td><td class="field-desc">A label for this connection.</td></tr>
-    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Delivery mode</td><td class="field-desc">How the file reaches you: <em>Download</em> (only works when triggered manually — not on a schedule), <em>Email</em>, <em>SFTP</em>, or <em>Download link</em>.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Delivery mode</td><td class="field-desc">How the file reaches you — only two choices are enabled in this deployment: <strong>Email</strong> or <strong>Download link</strong> (see below for what each means).</td></tr>
     <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">File name pattern</td><td class="field-desc">A template for the generated file's name — <code>{resource}</code> and date/time placeholders get filled in automatically, e.g. <code>Patient_20260813_113000.csv</code>.</td></tr>
     <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">Delimiter</td><td class="field-desc">Comma is the CSV default — change it if whatever will read this file expects something else (tab, semicolon, pipe).</td></tr>
     <tr><td class="num"><span class="num-badge">6</span></td><td class="field-name">Encoding</td><td class="field-desc">UTF-8 covers virtually every case, including non-English characters in names/addresses.</td></tr>
+    <tr><td class="num"><span class="num-badge">7</span></td><td class="field-name">Link expiry (minutes)</td><td class="field-desc">Only shown for <strong>Download link</strong> mode (see below) — how long the generated link stays valid before it stops working.</td></tr>
   </table>
 
-  <p class="substep-sub">Choosing <strong>SFTP</strong> as the delivery mode reveals where to actually send the file:</p>
+  <div class="two-col">
+    <div class="shot-card">
+      <p class="shot-caption" style="margin-top:0;">
+        <strong>Download link.</strong> After the run finishes, Segue generates a secure, time-limited
+        link to download the file — good when someone just needs to grab the file manually, without
+        managing a mailbox or an SFTP account. Set how long the link should stay valid in
+        <strong>Link expiry (minutes)</strong>.
+      </p>
+    </div>
+    <div class="shot-card">
+      <p class="shot-caption" style="margin-top:0;">
+        <strong>Email.</strong> The file is attached to (or linked from) an email sent automatically when
+        the run finishes — good for recurring, scheduled exports where someone just needs it to land in
+        their inbox. See the recipient/subject/body fields below.
+      </p>
+    </div>
+  </div>
+
+  <p class="substep-sub">Choosing <strong>Email</strong> as the delivery mode reveals who receives it and what it says:</p>
   <div class="shot-card">
     <div class="shot-wrap">
-      <img src="user-manual-screenshots/36-csv-destination-sftp-fields.png" alt="CSV SFTP delivery fields">
+      <img src="user-manual-screenshots/60-csv-email-fields.png" alt="CSV email delivery fields">
       <div class="badge" style="left:17.6%; top:68%;">1</div>
-      <div class="badge" style="left:52.6%; top:68%;">2</div>
-      <div class="badge" style="left:17.6%; top:76.4%;">3</div>
-      <div class="badge" style="left:52.6%; top:76.4%;">4</div>
-      <div class="badge" style="left:17.6%; top:84.7%;">5</div>
+      <div class="badge" style="left:17.6%; top:76.4%;">2</div>
+      <div class="badge" style="left:17.6%; top:84.7%;">3</div>
     </div>
   </div>
   <table class="legend">
-    <tr><th class="num">#</th><th>Field</th><th>What it is / where to get it</th></tr>
-    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">SFTP host</td><td class="field-desc">The address of the SFTP server you're delivering to — from whoever owns that server.</td></tr>
-    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Port</td><td class="field-desc">Defaults to <code>22</code>, the standard SFTP port.</td></tr>
-    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Username</td><td class="field-desc">The SFTP account name you were given.</td></tr>
-    <tr><td class="num"><span class="num-badge">4</span></td><td class="field-name">Password</td><td class="field-desc">That account's password — stored encrypted.</td></tr>
-    <tr><td class="num"><span class="num-badge">5</span></td><td class="field-name">Remote folder</td><td class="field-desc">The folder path on that server to drop files into, e.g. <code>/incoming/segue</code>.</td></tr>
+    <tr><th class="num">#</th><th>Field</th><th>What it is</th></tr>
+    <tr><td class="num"><span class="num-badge">1</span></td><td class="field-name">Recipient(s)</td><td class="field-desc">Required — one or more email addresses, comma-separated, e.g. <code>alice@company.com, bob@company.com</code>.</td></tr>
+    <tr><td class="num"><span class="num-badge">2</span></td><td class="field-name">Cc</td><td class="field-desc">Optional — additional addresses copied on the same email.</td></tr>
+    <tr><td class="num"><span class="num-badge">3</span></td><td class="field-name">Subject template / Body template</td><td class="field-desc">The email's subject and message. Placeholders like <code>{{RouteName}}</code>, <code>{{RunDate}}</code>, and <code>{{RowCount}}</code> get filled in automatically for each run.</td></tr>
   </table>
   <p class="substep-sub">Steps 2–4 (Data groups, Map fields, Review) work identically to the SQL Server walkthrough above.</p>
 </section>
@@ -679,9 +755,9 @@
 
   <div class="shot-card">
     <div class="shot-wrap">
-      <img src="user-manual-screenshots/40-mapping-profiles-list.png" alt="Mapping Profiles admin list, empty state">
+      <img src="user-manual-screenshots/40-mapping-profiles-list.png" alt="Mapping Profiles admin list">
     </div>
-    <p class="shot-caption"><strong>Mapping Profiles</strong> — a saved, reusable field-mapping (source → target object → field list) that can be applied to more than one pipeline, so you don't have to redraw the same mapping twice.</p>
+    <p class="shot-caption"><strong>Mapping Profiles</strong> — a saved, reusable field-mapping (source → target object → field list) that can be applied to more than one pipeline, so you don't have to redraw the same mapping twice. Each row here shows its resource type, source, destination, target table, and field count.</p>
   </div>
 
   <div class="shot-card">
@@ -806,6 +882,29 @@
     <li><strong>Audit</strong> — read-only access to configuration and audit logs, for compliance review.</li>
   </ul>
   <p class="shot-caption">Click <strong>+ Add Role</strong> to define a custom role with its own hand-picked set of permissions if none of the built-in ones fit.</p>
+
+  <h3 class="substep">Setting exactly what a role can do</h3>
+  <p class="substep-sub">
+    Click the 🔑 key icon in a role's row to open its permission grid — every individual permission this
+    deployment knows about, grouped by area, with a checkbox per action.
+  </p>
+  <div class="shot-card">
+    <div class="shot-wrap">
+      <img src="user-manual-screenshots/56-permissions-grid-full.png" alt="Role permissions grid grouped by Access Control, Workflows, and Platform">
+    </div>
+    <p class="shot-caption">The permissions screen for the built-in <strong>Admin</strong> role — 32 of 40 total permissions selected.</p>
+  </div>
+  <ul class="plain-legend">
+    <li><strong>Groups (left column)</strong> — permissions are organized by area: <strong>Access Control</strong> (managing Roles/Users themselves), <strong>Workflows</strong> (broken down further by EHR vendor — Epic, Cerner, Athenahealth, etc. — so a role can be scoped to just one vendor's connections), and <strong>Platform</strong> (Configuration, Governance, Payload, Pipeline, Report, Source Connections, Workflow).</li>
+    <li><strong>Columns</strong> — the specific action within that group: Create, Edit, Delete, Assign, Invite, Deactivate, View, Read, Write, Run, Test, Execute, or <strong>All</strong> as a shortcut for every action in that row.</li>
+    <li><strong>System roles cannot be modified</strong> — the four built-in roles (SuperAdmin, Admin, Operations, Audit) are locked; to get a different mix of permissions, create a new custom role via <strong>+ Add Role</strong> and it opens here fully editable.</li>
+    <li><strong>Switch Role</strong> (top right) — jump straight to another role's permission grid without going back to the list first.</li>
+  </ul>
+  <div class="note">
+    <strong>This grid grows over time.</strong> The 40 permissions shown here are what's defined today —
+    as more of the platform gets wired up to fine-grained access control, new rows will appear in the
+    relevant group automatically. Nothing about how you use this screen changes.
+  </div>
 </section>
 
 <section class="chapter" id="history-logs">
@@ -814,9 +913,9 @@
 
   <div class="shot-card">
     <div class="shot-wrap">
-      <img src="user-manual-screenshots/52-execution-history-empty.png" alt="Execution History empty state">
+      <img src="user-manual-screenshots/52-execution-history-empty.png" alt="Execution History list showing past pipeline runs">
     </div>
-    <p class="shot-caption"><strong>Execution History</strong> — every time a pipeline ran, its status, how long it took, and what/who triggered it. Filter by status or trigger type to find a specific run quickly.</p>
+    <p class="shot-caption"><strong>Execution History</strong> — every time a pipeline ran, its status, how long it took, and what/who triggered it. Filter by status or trigger type to find a specific run quickly, or search by workflow/source name.</p>
   </div>
 
   <div class="shot-card">
