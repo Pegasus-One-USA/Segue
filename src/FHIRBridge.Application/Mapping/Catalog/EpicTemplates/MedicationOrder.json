@@ -1,0 +1,203 @@
+{
+  "resourceType": "MedicationOrder",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "dateWritten": "<DateTime · 0..1>",
+  "status": "<Code · 0..1>",
+  "dateEnded": "<DateTime · 0..1>",
+  "reasonEnded": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "patient": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "prescriber": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "encounter": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "reasonCodeableConcept": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "reasonReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "note": "<String · 0..1>",
+  "medicationCodeableConcept": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "medicationReference": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "dosageInstruction": [
+    {
+      "text": "<String · 0..1>",
+      "additionalInstructions": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "timing": {
+        "repeat": {
+          "frequency": "<positiveInt · 0..1>",
+          "period": "<Decimal · 0..1>",
+          "periodUnits": "<Code · 0..1>"
+        }
+      },
+      "asNeededBoolean": "<boolean · 0..1>",
+      "siteCodeableConcept": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "route": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "method": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "doseQuantity": {
+        "value": "<Decimal · 0..1>",
+        "unit": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>"
+      },
+      "rateRatio": {
+        "numerator": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>"
+        },
+        "denominator": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>"
+        }
+      }
+    }
+  ],
+  "dispenseRequest": {
+    "medicationCodeableConcept": {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    },
+    "validityPeriod": {
+      "start": "<DateTime · 0..1>",
+      "end": "<DateTime · 0..1>"
+    },
+    "numberOfRepeatsAllowed": "<positiveInt · 0..1>",
+    "quantity": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>",
+      "system": "<Uri · 0..1>",
+      "code": "<Code · 0..1>"
+    },
+    "expectedSupplyDuration": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>",
+      "system": "<Uri · 0..1>",
+      "code": "<Code · 0..1>"
+    }
+  },
+  "substitution": {
+    "type": {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    },
+    "reason": {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  },
+  "priorPrescription": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  }
+}
