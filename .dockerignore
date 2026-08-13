@@ -1,0 +1,28 @@
+# Keep Docker build contexts (repo root) small and fast — mirrors .gitignore's build-output
+# exclusions plus frontend artifacts that would otherwise bloat every image build.
+
+# .NET build output
+**/bin/
+**/obj/
+**/artifacts/
+**/TestResults/
+
+# Node / Angular
+**/node_modules/
+**/.angular/
+**/dist/
+
+# VCS / editor / misc
+.git/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Terraform (never needed inside an image build context)
+containerization/terraform/**/.terraform/
+containerization/terraform/**/*.tfstate*
+
+# Tests and docs aren't needed inside any image
+tests/
+docs/

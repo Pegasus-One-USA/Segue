@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) before `terraform apply`.
+# Using rg-tusharpuri for now, since it's the only resource group this account currently has
+# access to (../environments/azure also deploys into it). Ideally this registry would live in a
+# dedicated resource group SEPARATE from per-client test deployments, so it's never accidentally
+# affected by those being torn down/recreated during testing — switch resource_group_name once a
+# dedicated group is available.
+
+name_prefix         = "fhirbridge"
+resource_group_name = "rg-tusharpuri"
