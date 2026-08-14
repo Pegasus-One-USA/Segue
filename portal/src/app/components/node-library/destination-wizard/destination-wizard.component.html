@@ -129,7 +129,15 @@
             <button type="button" class="dw-group-search-clear" (click)="clearGroupSearch()" aria-label="Clear search">✕</button>
           }
         </div>
-        <span class="dw-section-hint">Choose which FHIR resources to include in this destination.</span>
+        <span class="dw-section-hint">
+          @if (discoverProbeStatus() === 'probing') {
+            Choose which FHIR resources to include in this destination. Checking which ones this source supports…
+          } @else if (discoverProbeStatus() === 'done' && availableGroups().length < SUPPORTED_RESOURCE_TYPES.length) {
+            Showing {{ availableGroups().length }} of {{ SUPPORTED_RESOURCE_TYPES.length }} resources — filtered to what this source supports.
+          } @else {
+            Choose which FHIR resources to include in this destination.
+          }
+        </span>
       </div>
       @if (filteredGroups().length === 0) {
         <div class="dw-callout">No resources match "{{ groupSearchQuery() }}".</div>

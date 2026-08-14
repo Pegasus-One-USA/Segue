@@ -222,6 +222,21 @@ export class NodeLibraryDialogComponent {
   // "sourceConnectionId" field. Reactive to store.nodes() via findLaunchSourceId()'s own read of it.
   readonly sourceConnectionId = computed(() => this.graphMapper.findLaunchSourceId());
 
+  // FHIR resource types the source's live Discover (/metadata) probe actually returned this session — see
+  // EhrVendorSourceFormComponent's 'Discovered resource types' field. Distinct from sourceResources above
+  // (the admin's manually-selected retrieval resources): this is what the source can ACTUALLY provide,
+  // used by the destination wizard to intersect against our own supported-resource catalog for Step 2.
+  // Available as soon as the source form is saved in THIS canvas session, even before the source has ever
+  // been persisted as a real SourceConnection (so before sourceConnectionId exists) — DestinationWizardComponent
+  // falls back to a live re-probe via sourceConnectionId when this is empty (e.g. editing a destination on an
+  // already-saved workflow whose source form hasn't been reopened this session).
+  readonly sourceDiscoveredResourceTypes = computed(() => {
+    const fromNodes = this.store.nodes()
+      .filter(isSourceNode)
+      .flatMap(n => (n.fields?.['Discovered resource types'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
+    return Array.from(new Set(fromNodes));
+  });
+
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);
