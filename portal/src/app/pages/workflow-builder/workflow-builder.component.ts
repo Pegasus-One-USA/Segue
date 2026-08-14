@@ -267,7 +267,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
       const msg = err instanceof Error ? err.message : 'Workflow configuration is invalid.';
       this.workflowStatus.set(msg);
-      this.toast.show('Cannot save workflow', msg);
+      this.toast.error('Cannot save workflow', msg);
       return;
     }
     // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
@@ -320,7 +320,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
           ? Object.values(fieldErrors).flat().join(' ')
           : msg;
         this.workflowStatus.set(detail);
-        this.toast.show('Create-on-save failed', detail);
+        this.toast.error('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });
@@ -640,7 +640,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   onCopyCheckpointUrl(nodeId: string): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) {
-      this.toast.show('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
+      this.toast.warning('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
       return;
     }
 
@@ -648,12 +648,12 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       next: ({ checkpointUrl }) => {
         navigator.clipboard?.writeText(checkpointUrl).then(
           () => this.toast.success('Copied', 'Checkpoint URL copied to clipboard.'),
-          () => this.toast.show('Copy failed', checkpointUrl),
+          () => this.toast.error('Copy failed', checkpointUrl),
         );
       },
       error: err => {
         const msg = err?.error?.error_description ?? err?.error?.error ?? 'Could not generate a checkpoint URL.';
-        this.toast.show('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
+        this.toast.error('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
       },
     });
   }

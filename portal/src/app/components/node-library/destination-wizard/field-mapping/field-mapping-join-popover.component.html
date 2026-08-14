@@ -90,8 +90,8 @@
               </div>
             }
             @if (d.instance?.type === 'all') {
-              <label class="fm-popover-inline-label">
-                <input type="checkbox" [checked]="d.instance?.aggregate === 'csv'" (change)="onInstanceField({ aggregate: $any($event.target).checked ? 'csv' : 'rows' })" />
+              <label class="fm-popover-inline-label" title="Always on for &quot;All records&quot; — the alternative would duplicate this entire destination row once per array item.">
+                <input type="checkbox" [checked]="d.instance?.aggregate === 'csv'" disabled />
                 Combine all values into one delimited string on a single row
               </label>
             }

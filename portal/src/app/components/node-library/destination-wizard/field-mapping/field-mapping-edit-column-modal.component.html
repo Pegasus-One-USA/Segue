@@ -31,7 +31,7 @@
         (change)="onDataTypeChange($any($event.target).value)"
         [disabled]="submitting()"
       >
-        @for (t of dataTypes(); track t) { <option [value]="t">{{ t }}</option> }
+        @for (t of dataTypes(); track t) { <option [value]="t" [selected]="t === dataType()">{{ t }}</option> }
       </select>
     </label>
 
