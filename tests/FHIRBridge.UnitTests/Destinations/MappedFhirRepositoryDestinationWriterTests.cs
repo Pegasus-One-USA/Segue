@@ -211,6 +211,42 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     }
 
     [Fact]
+    public async Task Version_is_preserved_on_allergyintolerance_verification_which_gained_a_code_in_R5()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """
+            {"resourceType":"AllergyIntolerance","id":"a1","verificationStatus":{"coding":[
+                {"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-verification","version":"4.0.1","code":"confirmed"}
+            ]}}
+            """,
+            resourceType: "AllergyIntolerance");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"version\":\"4.0.1\"");
+    }
+
+    [Fact]
+    public async Task Version_is_preserved_on_composition_status_which_R5_restructured_into_an_eleven_code_hierarchy()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """
+            {"resourceType":"DocumentReference","id":"d1","docStatus":"final","category":[{"coding":[
+                {"system":"http://hl7.org/fhir/composition-status","version":"4.0.1","code":"final"}
+            ]}]}
+            """,
+            resourceType: "DocumentReference");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"version\":\"4.0.1\"");
+    }
+
+    [Fact]
     public async Task Version_is_preserved_on_a_non_catalog_CodeSystem_such_as_SNOMED_CT()
     {
         var (writer, handler, _) = CreateWriter();

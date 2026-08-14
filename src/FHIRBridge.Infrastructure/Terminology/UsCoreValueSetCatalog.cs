@@ -93,11 +93,17 @@ public static class UsCoreValueSetCatalog
 /// CodeSystems whose defined codes are stable across FHIR R4/R4B/R5 — safe to omit <c>Coding.version</c> on when
 /// writing to a destination FHIR server, so it matches by <c>system</c> alone instead of rejecting on a
 /// version-label mismatch (e.g. Epic tagging <c>4.0.0</c> against a destination's <c>3.0.0</c>-pinned CodeSystem).
-/// Deliberately excludes <c>encounter-status</c> and <c>group-type</c>: both had real codes added/removed/redefined
-/// between FHIR versions (not just a version-label bump — e.g. <c>encounter-status</c> dropped <c>onleave</c>/
-/// <c>finished</c> and added <c>on-hold</c>/<c>discharged</c>/<c>completed</c>/<c>discontinued</c> in R5;
-/// <c>group-type</c> dropped <c>medication</c>/<c>substance</c> in R5), so a version mismatch there is a genuine
-/// signal worth surfacing rather than stripping away.
+/// Deliberately excludes CodeSystems verified to have real code content drift between FHIR versions (not just a
+/// version-label bump) — a version mismatch on these is a genuine signal worth surfacing rather than stripping away:
+/// <list type="bullet">
+/// <item><c>encounter-status</c> — dropped <c>onleave</c>/<c>finished</c>, added <c>on-hold</c>/<c>discharged</c>/
+/// <c>completed</c>/<c>discontinued</c> in R5.</item>
+/// <item><c>group-type</c> — dropped <c>medication</c>/<c>substance</c> in R5.</item>
+/// <item><c>allergyintolerance-verification</c> — R5 added a 5th code, <c>presumed</c>, not present in R4/R4B.</item>
+/// <item><c>composition-status</c> — R4/R4B's flat 4-code set (preliminary/final/amended/entered-in-error) was
+/// restructured in R5 into an 11-code hierarchy (registered, partial, preliminary, final, amended, corrected,
+/// appended, cancelled, entered-in-error, deprecated, unknown).</item>
+/// </list>
 /// </summary>
 public static class StableCodeSystemVersions
 {
@@ -124,11 +130,9 @@ public static class StableCodeSystemVersions
         // Confirmed by an Epic repro sample to also carry version tags (same bug, different fields):
         "http://terminology.hl7.org/CodeSystem/condition-ver-status",
         "http://terminology.hl7.org/CodeSystem/condition-category",
-        // Plausible same-shape systems (simple closed code sets, long-stable):
+        // Verified stable across R4/R4B/R5 (simple closed code sets):
         "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
-        "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
         "http://hl7.org/fhir/request-priority",
-        "http://hl7.org/fhir/composition-status",
         "http://hl7.org/fhir/claim-use",
         "http://hl7.org/fhir/claim-type",
         "http://hl7.org/fhir/name-use",
