@@ -476,6 +476,13 @@ resource "azurerm_container_app" "fhirbridge_app" {
         name  = "AllowedHosts"
         value = "*"
       }
+      # Api and Gateway run as sibling processes inside this one container (see entrypoint.sh),
+      # with Api bound to loopback-only port 5000 - Program.cs throws on boot if this isn't set
+      # explicitly (no shared fallback across environments), matching local dev's own fallback.
+      env {
+        name  = "ApiBaseUrl"
+        value = "http://127.0.0.1:5000/"
+      }
 
       volume_mounts {
         name = "keys-data"
