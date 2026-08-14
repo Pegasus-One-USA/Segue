@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
@@ -53,15 +54,36 @@ public static class AppSecretProvisioner
         }
         catch (SecretNotConfiguredException)
         {
-            // No value in the DB-provisioned store, Key Vault, or config fallback — first boot on this install.
-            var generated = AppSecretValueGenerator.Generate();
-            await secretWriter.WriteSecretAsync(reference, generated, cancellationToken);
-            logger.LogWarning(
-                "Generated a new app secret '{SecretName}' in vault '{KeyVaultName}' — none was found (first boot, " +
-                "or a prior value was deleted). Any tokens/links signed with a previous value are now invalid.",
-                reference.SecretName,
-                reference.KeyVaultName);
-            return generated;
+            return await RegenerateAsync(
+                secretWriter, reference, logger, cancellationToken,
+                "none was found (first boot, or a prior value was deleted)");
         }
+        catch (CryptographicException)
+        {
+            // The Data Protection key ring (e.g. a volume/environment reset) is out of sync with a value already
+            // persisted in the database — decrypting it will never succeed again on this key ring. Regenerating
+            // (same remediation as "not configured") keeps this self-healing instead of crash-looping forever.
+            return await RegenerateAsync(
+                secretWriter, reference, logger, cancellationToken,
+                "the stored value could not be decrypted — its Data Protection key is no longer in the key ring");
+        }
+    }
+
+    private static async Task<string> RegenerateAsync(
+        ISecretWriter secretWriter,
+        SecretReference reference,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        string reason)
+    {
+        var generated = AppSecretValueGenerator.Generate();
+        await secretWriter.WriteSecretAsync(reference, generated, cancellationToken);
+        logger.LogWarning(
+            "Generated a new app secret '{SecretName}' in vault '{KeyVaultName}' — {Reason}. Any tokens/links " +
+            "signed with a previous value are now invalid.",
+            reference.SecretName,
+            reference.KeyVaultName,
+            reason);
+        return generated;
     }
 }
