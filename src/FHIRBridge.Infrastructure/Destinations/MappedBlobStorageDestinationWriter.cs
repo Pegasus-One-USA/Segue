@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Azure;
 using Azure.Storage.Blobs.Models;
 using FHIRBridge.Application.Abstractions.Destinations;
@@ -131,45 +132,34 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
     {
         var keyField = ResolveUpsertKeyField(mappingProfile);
         var folder = BuildIndividualFolder(mappingProfile, settings);
+        var name = CleanStem(mappingProfile);
         var written = 0;
 
         foreach (var record in records)
         {
             var keyValue = ResolveKeyValue(record, keyField);
 
-            if (settings.RecordMode == BlobRecordMode.Insert)
+            if (settings.RecordMode == BlobRecordMode.Update && keyValue is null)
             {
-                // Never overwrites: the name is always uniquified, even when a stable key resolved, so a
-                // repeated "insert" of the same logical record just accumulates another blob rather than
-                // replacing the last one.
-                var stem = keyValue is not null ? SanitizePathSegment(keyValue) : "record";
-                var blobName = $"{folder}/{stem}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.json";
-                await UploadRecordAsync(target, blobName, mappingProfile, record, context, settings, cancellationToken);
-                written++;
+                // Nothing to check existence against without a key at all, so it skips rather than guessing.
                 continue;
             }
 
-            if (keyValue is null)
+            if (settings.RecordMode == BlobRecordMode.Upsert && keyValue is null)
             {
-                // Upsert with no resolvable identity still writes (under a one-off unique name — it can't be
-                // reliably updated next run without a stable key). Update has nothing to check existence
-                // against without a key at all, so it skips rather than guessing.
-                if (settings.RecordMode == BlobRecordMode.Update)
-                {
-                    continue;
-                }
-
+                // Still writes, under a one-off unique name — it can't be reliably found again next run
+                // without a stable key, so the configured (necessarily key-based) FileNamePattern doesn't apply.
                 var blobName = $"{folder}/{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.json";
                 await UploadRecordAsync(target, blobName, mappingProfile, record, context, settings, cancellationToken);
                 written++;
                 continue;
             }
 
-            var keyedBlobName = $"{folder}/{SanitizePathSegment(keyValue)}.json";
+            var patternedBlobName = $"{folder}/{ResolvePattern(settings.FileNamePattern, name, keyValue, DateTime.UtcNow, Guid.NewGuid())}";
 
             if (settings.RecordMode == BlobRecordMode.Update)
             {
-                var blobClient = target.Container.GetBlobClient(keyedBlobName);
+                var blobClient = target.Container.GetBlobClient(patternedBlobName);
                 var exists = await blobClient.ExistsAsync(cancellationToken);
                 if (!exists.Value)
                 {
@@ -177,12 +167,64 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
                 }
             }
 
-            await UploadRecordAsync(target, keyedBlobName, mappingProfile, record, context, settings, cancellationToken);
+            await UploadRecordAsync(target, patternedBlobName, mappingProfile, record, context, settings, cancellationToken);
             written++;
         }
 
         return new DestinationWriteResult(written);
     }
+
+    private static readonly Regex PatternTokenRegex = new(@"\{(name|id|guid|date:[^}]+)\}", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Resolves a user-configured folder/file-name pattern (see <see cref="BlobDestinationSettings.FolderPattern"/>/
+    /// <see cref="BlobDestinationSettings.FileNamePattern"/>) — literal text passes through untouched, and
+    /// <c>{name}</c>/<c>{id}</c>/<c>{guid}</c>/<c>{date:&lt;.NET custom format&gt;}</c> tokens are substituted.
+    /// <c>{id}</c> falls back to the literal "record" when no key resolved (Insert has no stable identity to
+    /// begin with; the null-key Upsert/Update cases never reach this method — see <see cref="WriteIndividualAsync"/>).
+    /// An unparseable date format degrades to a fixed sortable format rather than throwing and failing the whole write.
+    /// </summary>
+    private static string ResolvePattern(string pattern, string name, string? id, DateTime timestampUtc, Guid guid)
+    {
+        var resolved = PatternTokenRegex.Replace(pattern, match =>
+        {
+            var token = match.Groups[1].Value;
+            if (token == "name")
+            {
+                return name;
+            }
+
+            if (token == "id")
+            {
+                return id ?? "record";
+            }
+
+            if (token == "guid")
+            {
+                return guid.ToString("N");
+            }
+
+            var format = token["date:".Length..];
+            try
+            {
+                return timestampUtc.ToString(format, CultureInfo.InvariantCulture);
+            }
+            catch (FormatException)
+            {
+                return timestampUtc.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+            }
+        });
+
+        return SanitizeBlobPath(resolved);
+    }
+
+    // Splits on '/' before per-segment sanitizing (Path.GetInvalidFileNameChars() includes '/') so an
+    // intentional folder-nesting date format like "{date:yyyy/MM/dd}" survives instead of being flattened.
+    private static string SanitizeBlobPath(string path) => string.Join(
+        "/",
+        path.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(SanitizePathSegment)
+            .Where(segment => segment.Length > 0));
 
     private static async Task UploadRecordAsync(
         BlobDestinationTarget target,
@@ -280,7 +322,8 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
 
     private static string BuildIndividualFolder(MappingProfile mappingProfile, BlobDestinationSettings settings)
     {
-        var folder = CleanStem(mappingProfile);
+        var name = CleanStem(mappingProfile);
+        var folder = ResolvePattern(settings.FolderPattern, name, id: null, DateTime.UtcNow, Guid.NewGuid());
 
         return string.IsNullOrWhiteSpace(settings.PathPrefix) ? folder : $"{settings.PathPrefix}/{folder}";
     }

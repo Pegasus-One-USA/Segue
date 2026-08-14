@@ -50,6 +50,31 @@
           <span class="dw-hint">Only overwrites a record's blob if one already exists under its key — a record with no existing blob is skipped, never created.</span>
         }
       </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-blob-folderPattern">Folder pattern</label>
+        <input id="dw-blob-folderPattern" class="dw-input" formControlName="folderPattern"
+          placeholder="Default: {{ '{name}' }}" />
+        <span class="dw-hint">Placeholders: {{ '{name}' }} (resource/table name), {{ '{date:yyyy/MM/dd}' }} (any .NET date format — "/" nests real subfolders), {{ '{guid}' }}.</span>
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-blob-fileNamePattern">File name pattern</label>
+        <input id="dw-blob-fileNamePattern" class="dw-input" formControlName="fileNamePattern"
+          placeholder="Default: {{ blobForm.get('recordMode')!.value === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json' }}" />
+        @if (blobForm.get('recordMode')!.value === 'insert') {
+          <span class="dw-hint">Placeholders: {{ '{id}' }} (the 🔑 key field, or the record's source id), {{ '{date:...}' }}, {{ '{guid}' }}. Insert always adds a new blob, so include {{ '{date:...}' }} or {{ '{guid}' }} to keep names unique.</span>
+        } @else {
+          <span class="dw-hint">Placeholders: {{ '{id}' }} (the 🔑 key field, or the record's source id), {{ '{date:...}' }}, {{ '{guid}' }}.</span>
+          @if (blobForm.get('fileNamePattern')!.value?.includes('{date:') || blobForm.get('fileNamePattern')!.value?.includes('{guid}')) {
+            <div class="dw-callout dw-callout--warn">
+              {{ blobForm.get('recordMode')!.value === 'update' ? 'Update' : 'Upsert' }} needs to re-derive the exact same
+              name on a later run to find this record again — a {{ '{date:...}' }} or {{ '{guid}' }} token here will produce
+              a different name every time, so the record can never be found. Keep this pattern static (e.g. just {{ '{id}' }}).
+            </div>
+          }
+        }
+      </div>
     }
 
     <div class="dw-field dw-field--full">

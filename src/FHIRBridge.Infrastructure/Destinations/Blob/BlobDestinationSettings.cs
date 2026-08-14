@@ -24,7 +24,9 @@ public sealed record BlobDestinationSettings(
     bool CreateContainerIfNotExists,
     string? AccessTier,
     BlobDeliveryGranularity Granularity,
-    BlobRecordMode RecordMode)
+    BlobRecordMode RecordMode,
+    string FolderPattern,
+    string FileNamePattern)
 {
     /// <summary>Every mode except Managed Identity needs the resolved Key Vault secret as credential material.</summary>
     public bool RequiresSecret => AuthMode != BlobDestinationAuthMode.ManagedIdentity;
@@ -98,7 +100,34 @@ public sealed record BlobDestinationSettings(
             CreateContainerIfNotExists: ParseBool(ConnectionMetadataReader.GetString(json, "dest_blobCreateContainerIfNotExists"), true),
             AccessTier: ConnectionMetadataReader.GetString(json, "dest_blobAccessTier"),
             Granularity: ParseGranularity(json),
-            RecordMode: ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode")));
+            RecordMode: ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode")),
+            FolderPattern: ParseFolderPattern(json),
+            FileNamePattern: ParseFileNamePattern(json, ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode"))));
+    }
+
+    /// <summary>Defaults to <c>{name}</c> — the pre-pattern behavior of one folder per mapped resource/object.</summary>
+    private static string ParseFolderPattern(string? json)
+    {
+        var raw = ConnectionMetadataReader.GetString(json, "dest_blobFolderPattern");
+        return string.IsNullOrWhiteSpace(raw) ? "{name}" : raw.Trim();
+    }
+
+    /// <summary>
+    /// Insert defaults to a always-unique, timestamped name (its records are never looked up again). Upsert/Update
+    /// default to a static, id-only name — deliberately excluding any <c>{date:...}</c>/<c>{guid}</c> token, since
+    /// those modes must re-derive the same blob name on a later run to find the record to update.
+    /// </summary>
+    private static string ParseFileNamePattern(string? json, BlobRecordMode recordMode)
+    {
+        var raw = ConnectionMetadataReader.GetString(json, "dest_blobFileNamePattern");
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            return raw.Trim();
+        }
+
+        return recordMode == BlobRecordMode.Insert
+            ? "{id}_{date:yyyyMMddHHmmssfff}_{guid}.json"
+            : "{id}.json";
     }
 
     /// <summary>

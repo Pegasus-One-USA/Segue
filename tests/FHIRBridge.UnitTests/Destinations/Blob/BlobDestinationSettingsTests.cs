@@ -237,4 +237,51 @@ public sealed class BlobDestinationSettingsTests
 
         settings.RecordMode.Should().Be(expected);
     }
+
+    [Fact]
+    public void FolderPattern_defaults_to_name_when_missing()
+    {
+        var settings = BlobDestinationSettings.Parse(Destination("fhir", "{}"));
+
+        settings.FolderPattern.Should().Be("{name}");
+    }
+
+    [Fact]
+    public void FolderPattern_reads_the_configured_value()
+    {
+        var settings = BlobDestinationSettings.Parse(
+            Destination("fhir", """{"dest_blobFolderPattern":"{name}/{date:yyyy/MM/dd}"}"""));
+
+        settings.FolderPattern.Should().Be("{name}/{date:yyyy/MM/dd}");
+    }
+
+    [Fact]
+    public void FileNamePattern_defaults_to_a_timestamped_unique_name_for_Insert()
+    {
+        var settings = BlobDestinationSettings.Parse(
+            Destination("fhir", """{"dest_blobRecordMode":"insert"}"""));
+
+        settings.FileNamePattern.Should().Be("{id}_{date:yyyyMMddHHmmssfff}_{guid}.json");
+    }
+
+    [Theory]
+    [InlineData("upsert")]
+    [InlineData("update")]
+    public void FileNamePattern_defaults_to_a_static_id_only_name_for_Upsert_and_Update(string recordMode)
+    {
+        var settings = BlobDestinationSettings.Parse(
+            Destination("fhir", $$"""{"dest_blobRecordMode":"{{recordMode}}"}"""));
+
+        settings.FileNamePattern.Should().Be("{id}.json");
+    }
+
+    [Fact]
+    public void FileNamePattern_reads_the_configured_value_regardless_of_RecordMode()
+    {
+        var settings = BlobDestinationSettings.Parse(Destination(
+            "fhir",
+            """{"dest_blobRecordMode":"insert","dest_blobFileNamePattern":"{id}_{date:yyyyMMdd}.json"}"""));
+
+        settings.FileNamePattern.Should().Be("{id}_{date:yyyyMMdd}.json");
+    }
 }

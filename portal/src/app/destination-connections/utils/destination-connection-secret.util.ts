@@ -68,7 +68,10 @@ export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' |
            'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
            // Two independent settings: how many records share one blob (bulk vs individual), and — only
            // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
-           'dest_blobGranularity', 'dest_blobRecordMode']
+           'dest_blobGranularity', 'dest_blobRecordMode',
+           // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
+           // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
+           'dest_blobFolderPattern', 'dest_blobFileNamePattern']
         : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
            'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
            'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',

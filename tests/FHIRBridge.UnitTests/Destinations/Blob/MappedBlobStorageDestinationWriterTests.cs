@@ -528,6 +528,109 @@ public sealed class MappedBlobStorageDestinationWriterTests
     }
 
     [Fact]
+    public async Task Custom_FolderPattern_and_FileNamePattern_are_honored_for_Insert()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        await CreateWriter().WriteAsync(
+            Destination("""
+                {"dest_blobGranularity":"individual","dest_blobRecordMode":"insert",
+                 "dest_blobFolderPattern":"exports/{name}","dest_blobFileNamePattern":"{id}-{date:yyyyMMdd}.json"}
+                """),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })],
+            Context(), CancellationToken.None);
+
+        capturedName.Should().NotBeNull();
+        Regex.IsMatch(capturedName!, @"^exports/Patient/abc-123-\d{8}\.json$").Should().BeTrue(capturedName);
+    }
+
+    [Fact]
+    public async Task A_nested_date_folder_pattern_produces_real_subfolders()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"upsert","dest_blobFolderPattern":"{name}/{date:yyyy/MM/dd}"}"""),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })],
+            Context(), CancellationToken.None);
+
+        capturedName.Should().NotBeNull();
+        Regex.IsMatch(capturedName!, @"^Patient/\d{4}/\d{2}/\d{2}/abc-123\.json$").Should().BeTrue(capturedName);
+    }
+
+    [Fact]
+    public async Task A_malformed_date_token_falls_back_to_a_sortable_timestamp_instead_of_throwing()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        await CreateWriter().WriteAsync(
+            // An unterminated literal (unmatched single quote) is a genuinely malformed .NET custom format string —
+            // ToString throws FormatException for it, unlike a merely-unrecognized letter sequence.
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"upsert","dest_blobFileNamePattern":"{id}_{date:'unterminated}.json"}"""),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" })],
+            Context(), CancellationToken.None);
+
+        capturedName.Should().NotBeNull();
+        Regex.IsMatch(capturedName!, @"^Patient/abc-123_\d{17}\.json$").Should().BeTrue(capturedName);
+    }
+
+    [Fact]
+    public async Task Upsert_default_pattern_keeps_the_name_static_across_two_runs_for_the_same_key()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        var capturedNames = new List<string>();
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedNames.Add(name))
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        var record = Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc-123" });
+        var writer = CreateWriter();
+        var destination = Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"upsert"}""");
+
+        await writer.WriteAsync(destination, mapping, [record], Context(), CancellationToken.None);
+        await writer.WriteAsync(destination, mapping, [record], Context(), CancellationToken.None);
+
+        capturedNames.Should().HaveCount(2);
+        capturedNames[0].Should().Be(capturedNames[1]);
+    }
+
+    [Fact]
     public async Task Bulk_granularity_is_the_default_when_nothing_is_configured()
     {
         SetupTarget();

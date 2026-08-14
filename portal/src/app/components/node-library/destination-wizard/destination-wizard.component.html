@@ -360,6 +360,14 @@
               <span class="dw-review-key">Record mode</span>
               <span class="dw-review-val">{{ activeFormConfig()['dest_blobRecordMode'] === 'insert' ? 'Insert — always add new' : activeFormConfig()['dest_blobRecordMode'] === 'update' ? 'Update — only if exists' : 'Upsert — update if exists, else insert' }}</span>
             </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">Folder pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFolderPattern'] || '{name}' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">File name pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFileNamePattern'] || (activeFormConfig()['dest_blobRecordMode'] === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json') }}</span>
+            </div>
           }
           @if (activeFormConfig()['dest_blobPathPrefix']) {
             <div class="dw-review-card">

@@ -498,6 +498,8 @@ export class WorkflowBuildAssemblerService {
                 'dest_blobCreateContainerIfNotExists',
                 'dest_blobGranularity',
                 'dest_blobRecordMode',
+                'dest_blobFolderPattern',
+                'dest_blobFileNamePattern',
               ]
             : [
               'dest_name',

@@ -544,6 +544,8 @@
     <tr><td class="key">dest_blobAccessTier</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">null (account default)</td><td><code>Hot</code>, <code>Cool</code>, or <code>Cold</code> — applied to every blob written.</td></tr>
     <tr><td class="key">dest_blobGranularity</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">bulk</td><td><code>bulk</code> or <code>individual</code> (§7). Falls back to the legacy <code>dest_writeMode</code> key (<code>append</code>&rarr;bulk, <code>upsert</code>&rarr;individual) if absent.</td></tr>
     <tr><td class="key">dest_blobRecordMode</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">upsert</td><td><code>insert</code>, <code>upsert</code>, or <code>update</code> (§7). No effect at Bulk delivery.</td></tr>
+    <tr><td class="key">dest_blobFolderPattern</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">{name}</td><td>Placeholder pattern for the folder a record's blob lands in (§8). Blank/missing uses the default.</td></tr>
+    <tr><td class="key">dest_blobFileNamePattern</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">Insert: {id}_{date:yyyyMMddHHmmssfff}_{guid}.json &mdash; Upsert/Update: {id}.json</td><td>Placeholder pattern for a record's blob name (§8). Blank/missing uses the Record mode's own default.</td></tr>
   </table>
   <div class="callout">
     <strong>Every metadata key is read defensively</strong>
@@ -610,7 +612,8 @@ container/prefix/Patient_20260812140212871.ndjson   &lt;- a new file every run, 
     on the mapping canvas (the same 🔑 toggle SQL/Mongo already use) — falling back to the record's own source
     resource id if no key field is designated. Selecting this reveals the <strong>Record mode</strong> setting
     below, which decides exactly what "one blob per record" means when that blob already exists from a
-    previous run.</p>
+    previous run, plus two more fields — <strong>Folder pattern</strong> and <strong>File name pattern</strong>
+    — that control exactly where and how each record's blob is named (see §8).</p>
     <pre><code>container/prefix/Patient/abc-123.json
 container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one folder per resource type</code></pre>
     <p>Content type <code>application/json</code>; one JSON object per blob.</p>
@@ -652,24 +655,68 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
   </div>
 
   <h2 id="naming-metadata"><span class="num">8.</span>Blob naming patterns &amp; metadata reference</h2>
-  <p class="section-intro">Exact naming logic, for every combination, straight from the writer's code.</p>
+  <p class="section-intro">
+    Bulk delivery's naming is fixed (unchanged since the feature first shipped). Individual delivery's
+    <strong>Folder pattern</strong> and <strong>File name pattern</strong> are user-configurable placeholder
+    templates — a small resolver in <code>MappedBlobStorageDestinationWriter</code> substitutes recognized
+    tokens and leaves everything else (literal text, including <code>/</code> for nested folders) untouched.
+  </p>
   <table class="config-table">
     <tr><th>Scenario</th><th>Pattern</th></tr>
     <tr><td>Bulk, no path prefix</td><td class="key">{stem}_{yyyyMMddHHmmssfff}.ndjson</td></tr>
     <tr><td>Bulk, with path prefix</td><td class="key">{prefix}/{stem}_{yyyyMMddHHmmssfff}.ndjson</td></tr>
-    <tr><td>Individual / Upsert or Update, key resolved</td><td class="key">{prefix?}/{stem}/{sanitized key}.json</td></tr>
-    <tr><td>Individual / Insert, key resolved</td><td class="key">{prefix?}/{stem}/{sanitized key}_{yyyyMMddHHmmssfff}_{guid:N}.json</td></tr>
-    <tr><td>Individual, no key resolved (Insert/Upsert)</td><td class="key">{prefix?}/{stem}/record_{yyyyMMddHHmmssfff}_{guid:N}.json <em>(Insert)</em> or {prefix?}/{stem}/{yyyyMMddHHmmssfff}_{guid:N}.json <em>(Upsert)</em></td></tr>
+    <tr><td>Individual, any mode</td><td class="key">{prefix?}/{resolved FolderPattern}/{resolved FileNamePattern}</td></tr>
   </table>
   <p>
-    <strong>{stem}</strong> is <code>MappingProfile.DestinationObject</code> after three cleanup passes, in
-    order: (1) strip a trailing <code>;mode=...</code> suffix (the SQL-only write-mode suffix, defended
-    against even though it's skipped for Blob upstream), (2) strip a trailing <code>.ndjson</code>/
+    <strong>{stem}</strong> (Bulk only) is <code>MappingProfile.DestinationObject</code> after three cleanup
+    passes, in order: (1) strip a trailing <code>;mode=...</code> suffix (the SQL-only write-mode suffix,
+    defended against even though it's skipped for Blob upstream), (2) strip a trailing <code>.ndjson</code>/
     <code>.json</code>/<code>.csv</code>/<code>.tsv</code>/<code>.txt</code> extension (guards against a
     row whose target still carries the CSV-shaped default from before this feature existed), (3) replace any
-    character in <code>Path.GetInvalidFileNameChars()</code> with <code>_</code>. The same cleanup applies to
-    the resolved key value before it becomes a path segment.
+    character in <code>Path.GetInvalidFileNameChars()</code> with <code>_</code>. The same cleaned value feeds
+    the <code>{name}</code> token below.
   </p>
+
+  <h3>Placeholder tokens (Folder pattern &amp; File name pattern)</h3>
+  <table class="config-table">
+    <tr><th>Token</th><th>Resolves to</th></tr>
+    <tr><td class="key">{name}</td><td>The cleaned mapping-profile stem (same value as Bulk's <code>{stem}</code>) — the resource/destination-object name, e.g. <code>Patient</code>.</td></tr>
+    <tr><td class="key">{id}</td><td>The record's resolved upsert key (🔑-flagged mapped field, falling back to <code>SourceResourceId</code> — same resolution order as before). Falls back to the literal <code>record</code> if neither resolves (Folder pattern never uses <code>{id}</code> — no single record exists yet when the folder is built).</td></tr>
+    <tr><td class="key">{guid}</td><td>A fresh <code>Guid.NewGuid()</code>, hex-formatted (<code>N</code>), generated per record for File name pattern or once per batch for Folder pattern.</td></tr>
+    <tr><td class="key">{date:&lt;.NET custom format&gt;}</td><td>The current UTC time formatted with the given <a href="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings" target="_blank" rel="noopener">.NET custom date/time format string</a>, e.g. <code>{date:yyyyMMddHHmmssfff}</code> or <code>{date:yyyy/MM/dd}</code>. A genuinely malformed format string (e.g. an unterminated quoted literal) falls back to <code>yyyyMMddHHmmssfff</code> rather than failing the write.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>A <code>/</code> inside <code>{date:...}</code> nests real subfolders</strong>
+    The resolved pattern is split on <code>/</code> <em>before</em> each segment is sanitized (not after) —
+    so a pattern like <code>{name}/{date:yyyy/MM/dd}</code> produces real nested folders
+    (<code>Patient/2026/08/14/...</code>) instead of a single segment with slashes replaced. Every other
+    character outside <code>Path.GetInvalidFileNameChars()</code> passes through literally, so static text
+    mixed with tokens (e.g. <code>patients-{date:yyyyMMdd}</code>) works as expected.
+  </div>
+
+  <h3>Defaults, by Record mode</h3>
+  <table class="config-table">
+    <tr><th>Record mode</th><th>Default Folder pattern</th><th>Default File name pattern</th><th>Why</th></tr>
+    <tr><td class="key">Insert</td><td class="key">{name}</td><td class="key">{id}_{date:yyyyMMddHHmmssfff}_{guid}.json</td><td>Insert never looks a blob up again, so its default is deliberately always-unique — <code>{date:...}</code> + <code>{guid}</code> guarantee no two writes ever collide, even for a repeated key.</td></tr>
+    <tr><td class="key">Upsert</td><td class="key">{name}</td><td class="key">{id}.json</td><td>Upsert/Update must re-derive the <em>exact same</em> name on a later run to find the record again, so the default is deliberately static — no <code>{date:...}</code>/<code>{guid}</code> at all.</td></tr>
+    <tr><td class="key">Update</td><td class="key">{name}</td><td class="key">{id}.json</td><td>Same as Upsert.</td></tr>
+  </table>
+  <p>
+    Both fields are fully overridable — set <code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>
+    (or the wizard's Folder pattern/File name pattern inputs) to anything using the tokens above. A blank value
+    means "use this Record mode's default," so switching Record mode later doesn't leave a stale pattern from a
+    different mode behind. The wizard shows a non-blocking warning if an Upsert/Update File name pattern
+    contains <code>{date:...}</code> or <code>{guid}</code> — those modes' key resolution depends on writing to
+    the same path every run, and either token breaks that.
+  </p>
+  <pre><code>// Insert, defaults, key resolved to "abc-123":
+container/prefix/Patient/abc-123_20260814101500123_3f9a1c7b8e5d4a2f9c1b6e7d4a3f8c92.json
+
+// Upsert/Update, defaults, key resolved to "abc-123":
+container/prefix/Patient/abc-123.json
+
+// Custom Folder pattern "{name}/{date:yyyy/MM/dd}" + File name pattern "{id}-{date:yyyyMMdd}.json" (Insert):
+container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
 
   <h4>Blob metadata (every blob gets one of these two sets)</h4>
   <table class="config-table">
@@ -804,7 +851,7 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
     <tr>
       <td class="file-path">Blob/BlobDestinationSettings.cs</td>
       <td class="status"><span class="pill pill-new">New</span></td>
-      <td class="why">Parses/validates the <code>dest_blob*</code> config bag; contains the container-name regex and every <code>InvalidOperationException</code> message in §16.</td>
+      <td class="why">Parses/validates the <code>dest_blob*</code> config bag; contains the container-name regex, every <code>InvalidOperationException</code> message in §16, and the Record-mode-aware Folder pattern/File name pattern defaults (§8).</td>
     </tr>
     <tr>
       <td class="file-path">Blob/IBlobContainerClientFactory.cs</td>
@@ -844,7 +891,7 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
     <tr>
       <td class="file-path">Destinations/MappedBlobStorageDestinationWriter.cs</td>
       <td class="status"><span class="pill pill-modified">Modified</span></td>
-      <td class="why">Rewritten to use the SDK factory instead of a raw <code>HttpClient.PutAsync</code>; dispatches to <code>WriteBulkAsync</code>/<code>WriteIndividualAsync</code> per <code>BlobDestinationSettings.Granularity</code>, and strips a stray extension/write-mode suffix from the destination-object stem before naming a blob.</td>
+      <td class="why">Rewritten to use the SDK factory instead of a raw <code>HttpClient.PutAsync</code>; dispatches to <code>WriteBulkAsync</code>/<code>WriteIndividualAsync</code> per <code>BlobDestinationSettings.Granularity</code>, strips a stray extension/write-mode suffix from the destination-object stem before naming a blob, and resolves the Folder pattern/File name pattern placeholder tokens (§8) via <code>ResolvePattern</code>/<code>SanitizeBlobPath</code>.</td>
     </tr>
     <tr>
       <td class="file-path">Destinations/TargetReachabilityDestinationHealthCheckProvider.cs</td>
@@ -876,9 +923,9 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
   <h2 id="backend-tests"><span class="num">11.</span>Backend — tests</h2>
   <table class="file-table">
     <tr><th>File</th><th>Coverage</th></tr>
-    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation (incl. custom endpoint suffix, explicit override), per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback).</td></tr>
+    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation (incl. custom endpoint suffix, explicit override), per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback), Folder pattern/File name pattern defaults and overrides (Record-mode-aware).</td></tr>
     <tr><td class="file-path">BlobContainerClientFactoryTests.cs</td><td class="why">Client construction for all five auth modes (URI, account name, shared-key credential presence), the legacy-SAS coercion, container-scoped vs account-scoped vs bare-token SAS detection, cache hit/rotation-busts-cache behavior — all network-free since client construction alone never calls Azure.</td></tr>
-    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), a 403 during container-create not aborting the upload, an upload failure propagating, extension/write-mode-suffix stripping from the destination-object stem, Bulk-delivery default, and every Individual-delivery case across all three Record modes (Insert never collides even for a repeated key, Upsert's key resolution order and JSON content type, Update's overwrite-if-exists/skip-if-not/skip-with-no-key behavior) — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
+    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), a 403 during container-create not aborting the upload, an upload failure propagating, extension/write-mode-suffix stripping from the destination-object stem, Bulk-delivery default, every Individual-delivery case across all three Record modes (Insert never collides even for a repeated key, Upsert's key resolution order and JSON content type, Update's overwrite-if-exists/skip-if-not/skip-with-no-key behavior), custom Folder/File name patterns, a <code>{date:...}</code> token nesting real subfolders, a malformed date format degrading to a fixed timestamp instead of throwing, and Upsert producing the same name across two runs for the same key — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
     <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases and container-name-format cases.</td></tr>
   </table>
   <div class="callout">
@@ -894,15 +941,16 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
   <h2 id="frontend-files"><span class="num">12.</span>Frontend — files</h2>
   <table class="file-table">
     <tr><th>File</th><th>What changed</th></tr>
-    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">New <code>blobForm</code> group (auth fields, the <strong>Delivery</strong> select, and its conditionally-shown <strong>Record mode</strong> select), auth-mode-conditional fields, per-mode validators, every extension point the SQL/Mongo/CSV forms already had (review summary, select-existing, edit-existing, save/provision), and a fixed default per-resource target seed (no more double <code>.csv</code> extension).</td></tr>
+    <tr><td class="file-path">destination-forms/blob-storage-destination-form.component.ts / .html</td><td class="why">The <code>blobForm</code> group (auth fields, the <strong>Delivery</strong> select, and its conditionally-shown <strong>Record mode</strong> select plus <strong>Folder pattern</strong>/<strong>File name pattern</strong> inputs — §8), auth-mode-conditional fields, per-mode validators, and every <code>WizardDestinationFormApi</code> method (<code>getFullConfig</code>/<code>patchFrom</code>/<code>reset</code>) the SQL/Mongo/CSV forms already implement. The Folder/File name pattern inputs render only at Individual delivery, with a placeholder showing the active Record mode's default and a non-blocking warning if an Upsert/Update file-name pattern contains <code>{date:...}</code>/<code>{guid}</code>.</td></tr>
+    <tr><td class="file-path">destination-wizard.component.html</td><td class="why">Step 4 review cards for Blob add Folder pattern/File name pattern rows (falling back to the active Record mode's default display text when blank), alongside the existing Delivery/Record mode rows.</td></tr>
     <tr><td class="file-path">field-mapping-target-card.component.html</td><td class="why">The canvas card's kind label now says "blob" for a Blob destination instead of the generic "file" it shared with CSV/Mongo.</td></tr>
     <tr><td class="file-path">field-mapping-model.ts</td><td class="why"><code>MappingDestType</code> widened to include <code>'blob'</code>.</td></tr>
     <tr><td class="file-path">phase-config.service.ts</td><td class="why"><code>dest-blob</code> unblocked from the Phase-1 palette gate.</td></tr>
     <tr><td class="file-path">node-library-dialog.component.ts</td><td class="why">Every destination-type dispatch list (open wizard, lock while editing, type-to-form mapping, label) extended with <code>dest-blob</code>.</td></tr>
     <tr><td class="file-path">workflow-builder.component.ts</td><td class="why">Its own separate copy of the destination-type allowlist (missed in the first pass) extended with <code>dest-blob</code> — this is what gated the node's edit icon.</td></tr>
     <tr><td class="file-path">workflow-graph-mapper.service.ts</td><td class="why"><code>FALLBACK_NODE_TYPES['dest-blob'] = 'BlobDestinationNode'</code>; <code>dest_blobSecret</code> added to the redacted-secret key set.</td></tr>
-    <tr><td class="file-path">workflow-build-assembler.service.ts</td><td class="why">Blob branch in the destination-request builder, mirroring the SQL/Mongo/CSV branches (secret handling, target, metadata key list including <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>).</td></tr>
-    <tr><td class="file-path">destination-connection-secret.util.ts</td><td class="why"><code>buildConnectionMetadata</code>'s boolean <code>isSql</code> parameter widened to a <code>'sql' | 'csv' | 'blob'</code> string; blob metadata key list includes <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>.</td></tr>
+    <tr><td class="file-path">workflow-build-assembler.service.ts</td><td class="why">Blob branch in the destination-request builder, mirroring the SQL/Mongo/CSV branches (secret handling, target, metadata key list including <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>/<code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>).</td></tr>
+    <tr><td class="file-path">destination-connection-secret.util.ts</td><td class="why"><code>buildConnectionMetadata</code>'s boolean <code>isSql</code> parameter widened to a <code>'sql' | 'csv' | 'blob'</code> string; blob metadata key list includes <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>/<code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>.</td></tr>
     <tr><td class="file-path">destination-connection-dialog.component.ts</td><td class="why">Updated call sites for the widened <code>buildConnectionMetadata</code> signature (the standalone admin screen doesn't yet support creating/editing Blob directly — see §14).</td></tr>
   </table>
 
@@ -931,6 +979,7 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
     <li><strong>No "Test Connection" probe for Blob.</strong> Unlike SQL's live connection test, there's no equivalent live check in the wizard yet — you find out about auth/permission problems on the first real workflow run. A dedicated probe endpoint is a natural follow-up.</li>
     <li><strong>No automated Azurite integration test.</strong> An <code>azurite</code> service was added to <code>docker-compose.yml</code> for manual local testing, but there's no automated integration test exercising a real (emulated) container yet.</li>
     <li><strong>Update mode's existence check is one extra round trip per record.</strong> For a very large individual-delivery batch in Update mode, this roughly doubles the number of Azure calls compared to Insert/Upsert. No batching/parallelization has been added for this yet.</li>
+    <li><strong>The Upsert/Update "unique-token in a static pattern" warning is advisory, not enforced.</strong> The wizard shows a callout (§8) if a <code>{date:...}</code>/<code>{guid}</code> token appears in an Upsert/Update File name pattern, but nothing blocks saving it — a self-defeating pattern (one that can never be found again) is only ever surfaced as a UI hint, never rejected server-side.</li>
   </ul>
 
   <h2 id="troubleshooting"><span class="num">15.</span>Troubleshooting — every error seen and its fix</h2>
@@ -980,9 +1029,17 @@ container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one fo
   <p><strong>Cause:</strong> the resolved auth is a container-scoped SAS — <code>SupportsContainerCreate</code> is <code>false</code> for that shape regardless of the toggle, since a container SAS has no permission over the account itself to create anything.</p>
   <p><strong>Fix:</strong> either pre-create the container yourself, or switch to an account-scoped SAS/another auth mode if you need auto-create.</p>
 
+  <h4>Update mode never finds a record to update — it just keeps skipping</h4>
+  <p><strong>Cause:</strong> the File name pattern includes a <code>{date:...}</code> or <code>{guid}</code> token — every run resolves to a <em>different</em> name, so <code>BlobClient.ExistsAsync</code> on this run's freshly-resolved name never finds last run's blob. The wizard warns about this (§8) but doesn't block saving it.</p>
+  <p><strong>Fix:</strong> remove the <code>{date:...}</code>/<code>{guid}</code> token from the File name pattern (or clear the field to use the Update default, <code>{id}.json</code>) so the same key always resolves to the same name.</p>
+
+  <h4>A custom date format in a pattern doesn't error, but the resulting name looks wrong</h4>
+  <p><strong>Cause:</strong> the format string was syntactically valid .NET but not what was intended — <code>ResolvePattern</code> only falls back to the fixed <code>yyyyMMddHHmmssfff</code> format on a genuine <code>FormatException</code> (e.g. an unterminated quoted literal); most typos in a .NET custom format string still parse, just not the way you expected.</p>
+  <p><strong>Fix:</strong> check the token against the <a href="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings" target="_blank" rel="noopener">.NET custom date/time format string</a> reference (§8).</p>
+
   <h2 id="verification"><span class="num">16.</span>Verification</h2>
   <ul class="feature-list">
-    <li><strong>Backend:</strong> full solution build succeeds; 91+ Blob-specific unit tests pass (569/570 across the whole <code>FHIRBridge.UnitTests</code> suite — the one failure, <code>DestinationExecutionHistoryGateTests</code>, is pre-existing and confirmed present on the baseline branch too), plus all 6 <code>FHIRBridge.ArchitectureTests</code> and all <code>FHIRBridge.Runtime.UnitTests</code> (same one pre-existing, unrelated failure there as well).</li>
+    <li><strong>Backend:</strong> full solution build succeeds; 89 Blob-specific unit tests pass (605/607 across the whole <code>FHIRBridge.UnitTests</code> suite — the two failures, a locale-dependent DateTime-parsing repro test and <code>DestinationExecutionHistoryGateTests</code>, are pre-existing and untouched by this feature).</li>
     <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
     <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account; confirmed the feature works end to end after all fixes.</li>
   </ul>

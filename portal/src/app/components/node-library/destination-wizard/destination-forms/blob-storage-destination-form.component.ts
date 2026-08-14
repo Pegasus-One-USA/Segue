@@ -47,6 +47,11 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
     // (matches SQL/Mongo's own upsert mode). Update: only overwrite a blob that already exists; skip the record
     // entirely if it doesn't.
     recordMode: ['upsert', []],
+    // Only meaningful when granularity is 'individual'. Blank means "use the record mode's own default" (see
+    // BlobDestinationSettings.Parse's ParseFolderPattern/ParseFileNamePattern) — left blank rather than
+    // pre-filled with a mode-specific literal so switching recordMode later doesn't leave a stale pattern behind.
+    folderPattern: ['', []],
+    fileNamePattern: ['', []],
   });
 
   /** True while the host is reusing a previously-saved connection unchanged — secretValue is a secret that is
@@ -118,6 +123,8 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       dest_blobCreateContainerIfNotExists: String(v.createContainerIfNotExists ?? true),
       dest_blobGranularity: v.granularity ?? 'bulk',
       dest_blobRecordMode: v.recordMode ?? 'upsert',
+      dest_blobFolderPattern: v.folderPattern ?? '',
+      dest_blobFileNamePattern: v.fileNamePattern ?? '',
     };
   }
 
@@ -148,6 +155,8 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       createContainerIfNotExists: fields['dest_blobCreateContainerIfNotExists'] !== 'false',
       granularity: fields['dest_blobGranularity'] || 'bulk',
       recordMode: fields['dest_blobRecordMode'] || 'upsert',
+      folderPattern: fields['dest_blobFolderPattern'] || '',
+      fileNamePattern: fields['dest_blobFileNamePattern'] || '',
     });
     this._syncAuthModeValidators(this.blobForm.value.authMode ?? null, this.reusingExisting());
   }
@@ -157,7 +166,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       name: 'Azure Blob Export', container: '', authMode: 'connectionString', secretValue: '',
       accountUrl: '', accountName: '', endpointSuffix: 'core.windows.net', tenantId: '', clientId: '',
       managedIdentityClientId: '', pathPrefix: '', createContainerIfNotExists: true,
-      granularity: 'bulk', recordMode: 'upsert',
+      granularity: 'bulk', recordMode: 'upsert', folderPattern: '', fileNamePattern: '',
     });
     this._syncAuthModeValidators(this.blobForm.value.authMode ?? null, this.reusingExisting());
   }
