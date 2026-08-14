@@ -93,17 +93,18 @@ public static class UsCoreValueSetCatalog
 /// CodeSystems whose defined codes are stable across FHIR R4/R4B/R5 — safe to omit <c>Coding.version</c> on when
 /// writing to a destination FHIR server, so it matches by <c>system</c> alone instead of rejecting on a
 /// version-label mismatch (e.g. Epic tagging <c>4.0.0</c> against a destination's <c>3.0.0</c>-pinned CodeSystem).
-/// Deliberately excludes CodeSystems verified to have real code content drift between FHIR versions (not just a
-/// version-label bump) — a version mismatch on these is a genuine signal worth surfacing rather than stripping away:
+/// Deliberately excludes CodeSystems verified to have codes actually removed or renamed between FHIR versions (not
+/// just added) — a version mismatch on these is a genuine signal worth surfacing rather than stripping away:
 /// <list type="bullet">
 /// <item><c>encounter-status</c> — dropped <c>onleave</c>/<c>finished</c>, added <c>on-hold</c>/<c>discharged</c>/
 /// <c>completed</c>/<c>discontinued</c> in R5.</item>
 /// <item><c>group-type</c> — dropped <c>medication</c>/<c>substance</c> in R5.</item>
-/// <item><c>allergyintolerance-verification</c> — R5 added a 5th code, <c>presumed</c>, not present in R4/R4B.</item>
-/// <item><c>composition-status</c> — R4/R4B's flat 4-code set (preliminary/final/amended/entered-in-error) was
-/// restructured in R5 into an 11-code hierarchy (registered, partial, preliminary, final, amended, corrected,
-/// appended, cancelled, entered-in-error, deprecated, unknown).</item>
 /// </list>
+/// By contrast, <c>allergyintolerance-verification</c> (R5 adds a 5th code, <c>presumed</c>) and
+/// <c>composition-status</c> (R5 adds new parent/sibling codes around the original 4, none removed) are additive-only
+/// changes — same category as the <c>medicationrequest-status</c>/<c>diagnostic-report-status</c>/
+/// <c>subscription-status</c> entries below — and are included, since a source that only emits R4-era codes can never
+/// produce a code invalidated by an additive R5 change.
 /// </summary>
 public static class StableCodeSystemVersions
 {
@@ -127,6 +128,8 @@ public static class StableCodeSystemVersions
         "http://hl7.org/fhir/CodeSystem/medicationrequest-status",
         "http://hl7.org/fhir/diagnostic-report-status",
         "http://hl7.org/fhir/subscription-status",
+        "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "http://hl7.org/fhir/composition-status",
         // Confirmed by an Epic repro sample to also carry version tags (same bug, different fields):
         "http://terminology.hl7.org/CodeSystem/condition-ver-status",
         "http://terminology.hl7.org/CodeSystem/condition-category",

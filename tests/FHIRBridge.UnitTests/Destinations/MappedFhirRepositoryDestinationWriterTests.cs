@@ -211,25 +211,29 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     }
 
     [Fact]
-    public async Task Version_is_preserved_on_allergyintolerance_verification_which_gained_a_code_in_R5()
+    public async Task Version_is_stripped_from_allergyintolerance_verification_an_additive_only_R5_change()
     {
+        // R5 adds a 5th code ("presumed") but removes nothing, so a source that only emits R4-era codes (Epic) can
+        // never be invalidated by this change — this is the real-world shape that failed: Epic tagged "4.0.0" while
+        // the destination had "4.0.1" loaded, a benign within-R4 version bump on an identical code set.
         var (writer, handler, _) = CreateWriter();
         var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
         var record = Record(
             """
             {"resourceType":"AllergyIntolerance","id":"a1","verificationStatus":{"coding":[
-                {"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-verification","version":"4.0.1","code":"confirmed"}
+                {"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-verification","version":"4.0.0","code":"confirmed"}
             ]}}
             """,
             resourceType: "AllergyIntolerance");
 
         await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
 
-        handler.LastRequestBody.Should().Contain("\"version\":\"4.0.1\"");
+        handler.LastRequestBody.Should().Contain("\"code\":\"confirmed\"");
+        handler.LastRequestBody.Should().NotContain("\"version\"");
     }
 
     [Fact]
-    public async Task Version_is_preserved_on_composition_status_which_R5_restructured_into_an_eleven_code_hierarchy()
+    public async Task Version_is_stripped_from_composition_status_whose_R5_hierarchy_kept_all_original_codes()
     {
         var (writer, handler, _) = CreateWriter();
         var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
@@ -243,7 +247,8 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
 
         await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
 
-        handler.LastRequestBody.Should().Contain("\"version\":\"4.0.1\"");
+        handler.LastRequestBody.Should().Contain("\"code\":\"final\"");
+        handler.LastRequestBody.Should().NotContain("\"version\"");
     }
 
     [Fact]
