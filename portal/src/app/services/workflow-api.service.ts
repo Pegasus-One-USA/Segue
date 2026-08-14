@@ -127,6 +127,16 @@ export interface SourceAuthenticationRequest {
   /** Scopes Epic (or another EHR) actually granted on the last successful Discover token exchange — distinct
    *  from `scopes` (what was requested). Null until Discover has run once. */
   discoveredScopes?: string[] | null;
+  /** athenahealth only — the bare numeric practice id (e.g. "195900") the backend builds the
+   *  ah-practice=Organization/a-1.Practice-{id} reference from. Null for every other vendor. */
+  practiceId?: string | null;
+  /** A wizard-typed raw client secret to provision at (clientSecretKeyVaultName, clientSecretName) — mirrors
+   *  CreateDestinationConfigurationRequest.inlineSecret. Null when the user didn't (re)type one (an unedited
+   *  existing connection keeps whatever secret is already stored at that reference). */
+  inlineClientSecret?: string | null;
+  /** Where OAuth2ClientCredentialsTokenProvider places client id/secret — "post" (default) or "basic". Only
+   *  meaningful for Client Secret auth. */
+  authPlacement?: 'post' | 'basic' | null;
 }
 
 export interface SourceInteractiveConfigurationRequest {

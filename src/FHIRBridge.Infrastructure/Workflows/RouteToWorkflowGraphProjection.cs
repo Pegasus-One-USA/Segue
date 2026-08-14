@@ -219,6 +219,7 @@ public sealed class RouteToWorkflowGraphProjection : ILaunchWorkflowProjection
         SourceSystemType.Allscripts => RuntimeSourceType.Allscripts,
         SourceSystemType.Healow => RuntimeSourceType.Healow,
         SourceSystemType.MeditechGreenfield => RuntimeSourceType.MeditechGreenfield,
+        SourceSystemType.Athenahealth => RuntimeSourceType.Athenahealth,
         _ => RuntimeSourceType.GenericFhir
     };
 

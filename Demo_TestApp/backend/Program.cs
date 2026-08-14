@@ -217,6 +217,9 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         patientBaseUrl = settings.PatientBaseUrl,
         patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
         patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
+        athenaPatientWorkflowId = settings.AthenaPatientWorkflowId,
+        athenaPatientBaseUrl = settings.AthenaPatientBaseUrl,
+        athenaEhrEndpointId = settings.AthenaEhrEndpointId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
@@ -231,6 +234,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
 // list fetch, one for the per-patient detail fetch — each is its own independent FHIRBridge public-launch opt-in.
 // csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
 // buttons — see launch-standalone-patient.ts's downloadPatientInformation/emailPatientInformation.
+// athena* fields back the screen's Epic/athenahealth vendor toggle — see launch-standalone-patient.ts's vendor
+// signal — and are used only for the connect/list step, never detail/CSV export (those stay Epic-only).
 app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -245,7 +250,10 @@ app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionS
         detailWorkflowId = settings.PatientDetailWorkflowId,
         baseUrl = settings.PatientBaseUrl,
         csvExportWorkflowId = settings.PatientCsvExportWorkflowId,
-        csvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId
+        csvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
+        athenaWorkflowId = settings.AthenaPatientWorkflowId,
+        athenaBaseUrl = settings.AthenaPatientBaseUrl,
+        athenaEhrEndpointId = settings.AthenaEhrEndpointId
     });
 });
 
@@ -277,6 +285,9 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.PatientBaseUrl = request.PatientBaseUrl?.Trim() ?? string.Empty;
     settings.PatientCsvExportWorkflowId = request.PatientCsvExportWorkflowId?.Trim() ?? string.Empty;
     settings.PatientCsvEmailExportWorkflowId = request.PatientCsvEmailExportWorkflowId?.Trim() ?? string.Empty;
+    settings.AthenaPatientWorkflowId = request.AthenaPatientWorkflowId?.Trim() ?? string.Empty;
+    settings.AthenaPatientBaseUrl = request.AthenaPatientBaseUrl?.Trim() ?? string.Empty;
+    settings.AthenaEhrEndpointId = request.AthenaEhrEndpointId?.Trim() ?? string.Empty;
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
@@ -292,6 +303,9 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         patientBaseUrl = settings.PatientBaseUrl,
         patientCsvExportWorkflowId = settings.PatientCsvExportWorkflowId,
         patientCsvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
+        athenaPatientWorkflowId = settings.AthenaPatientWorkflowId,
+        athenaPatientBaseUrl = settings.AthenaPatientBaseUrl,
+        athenaEhrEndpointId = settings.AthenaEhrEndpointId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
@@ -748,6 +762,9 @@ record SaveSettingsRequest(
     string PatientBaseUrl,
     string PatientCsvExportWorkflowId,
     string PatientCsvEmailExportWorkflowId,
+    string AthenaPatientWorkflowId,
+    string AthenaPatientBaseUrl,
+    string AthenaEhrEndpointId,
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string StandaloneBaseUrl,

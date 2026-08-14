@@ -56,5 +56,6 @@ public sealed class StandaloneApplicationStrategy : SourceApplicationStrategyBas
         RequireClientId(source, errors);
         RequireAuthorizationEndpoint(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
     }
 }
