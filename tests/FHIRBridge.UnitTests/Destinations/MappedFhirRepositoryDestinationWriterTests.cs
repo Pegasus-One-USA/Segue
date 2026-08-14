@@ -151,6 +151,91 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         handler.LastRequestBody.Should().Contain("\"id\":\"123\"");
     }
 
+    // ── Coding.version stripping for stable HL7-core CodeSystems (avoids a destination FHIR server rejecting a
+    // ── code purely because its version label doesn't match whatever CodeSystem version it has loaded) ──────
+
+    [Fact]
+    public async Task Version_is_stripped_from_a_coding_on_a_stable_catalog_CodeSystem()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """
+            {"resourceType":"Condition","id":"c1","clinicalStatus":{"coding":[
+                {"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","version":"4.0.0","code":"active"}
+            ]}}
+            """,
+            resourceType: "Condition");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"code\":\"active\"");
+        handler.LastRequestBody.Should().NotContain("\"version\"");
+    }
+
+    [Fact]
+    public async Task Version_is_stripped_from_condition_verificationStatus_and_category_confirmed_by_the_Epic_repro_sample()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """
+            {"resourceType":"Condition","id":"c1",
+             "verificationStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","version":"4.0.0","code":"confirmed"}]},
+             "category":[{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-category","version":"4.0.0","code":"encounter-diagnosis"}]}]}
+            """,
+            resourceType: "Condition");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().NotContain("\"version\"");
+        handler.LastRequestBody.Should().Contain("\"code\":\"confirmed\"");
+        handler.LastRequestBody.Should().Contain("\"code\":\"encounter-diagnosis\"");
+    }
+
+    [Fact]
+    public async Task Version_is_preserved_on_encounter_status_a_CodeSystem_with_real_cross_version_code_drift()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """
+            {"resourceType":"Encounter","id":"e1","status":"finished",
+             "statusHistory":[{"status":"onleave","coding":[{"system":"http://hl7.org/fhir/encounter-status","version":"4.0.0","code":"onleave"}]}]}
+            """,
+            resourceType: "Encounter");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"version\":\"4.0.0\"");
+    }
+
+    [Fact]
+    public async Task Version_is_preserved_on_a_non_catalog_CodeSystem_such_as_SNOMED_CT()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record(
+            """{"resourceType":"Condition","id":"c1","code":{"coding":[{"system":"http://snomed.info/sct","version":"http://snomed.info/sct/731000124108","code":"38341003"}]}}""",
+            resourceType: "Condition");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"version\":\"http://snomed.info/sct/731000124108\"");
+    }
+
+    [Fact]
+    public async Task Resource_with_no_coding_anywhere_is_unaffected_by_version_stripping()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var record = Record("""{"resourceType":"Patient","id":"p1","name":[{"family":"Doe"}]}""");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequestBody.Should().Contain("\"family\":\"Doe\"");
+    }
+
     // ── dest_fhirWriteMode: "bundle" ─────────────────────────────────────────
 
     [Fact]

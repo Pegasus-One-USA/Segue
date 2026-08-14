@@ -88,3 +88,52 @@ public static class UsCoreValueSetCatalog
     private static ValueSetDefinition Vs(string system, params string[] codes)
         => new(system, new HashSet<string>(codes, StringComparer.OrdinalIgnoreCase));
 }
+
+/// <summary>
+/// CodeSystems whose defined codes are stable across FHIR R4/R4B/R5 — safe to omit <c>Coding.version</c> on when
+/// writing to a destination FHIR server, so it matches by <c>system</c> alone instead of rejecting on a
+/// version-label mismatch (e.g. Epic tagging <c>4.0.0</c> against a destination's <c>3.0.0</c>-pinned CodeSystem).
+/// Deliberately excludes <c>encounter-status</c> and <c>group-type</c>: both had real codes added/removed/redefined
+/// between FHIR versions (not just a version-label bump — e.g. <c>encounter-status</c> dropped <c>onleave</c>/
+/// <c>finished</c> and added <c>on-hold</c>/<c>discharged</c>/<c>completed</c>/<c>discontinued</c> in R5;
+/// <c>group-type</c> dropped <c>medication</c>/<c>substance</c> in R5), so a version mismatch there is a genuine
+/// signal worth surfacing rather than stripping away.
+/// </summary>
+public static class StableCodeSystemVersions
+{
+    public static readonly IReadOnlySet<string> StableCodeSystemUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        // Verified stable across R4/R4B/R5 (from UsCoreValueSetCatalog, minus encounter-status/group-type):
+        "http://hl7.org/fhir/administrative-gender",
+        "http://hl7.org/fhir/observation-status",
+        "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "http://hl7.org/fhir/CodeSystem/medicationrequest-intent",
+        "http://hl7.org/fhir/event-status",
+        "http://hl7.org/fhir/fm-status",
+        "http://hl7.org/fhir/explanationofbenefit-status",
+        "http://hl7.org/fhir/request-status",
+        "http://hl7.org/fhir/goal-status",
+        "http://hl7.org/fhir/document-reference-status",
+        "http://hl7.org/fhir/measure-report-status",
+        "http://hl7.org/fhir/location-status",
+        "http://hl7.org/fhir/CodeSystem/medication-admin-status",
+        // Additive-only R4->R5 changes (source only emits R4-era codes, so safe in this direction):
+        "http://hl7.org/fhir/CodeSystem/medicationrequest-status",
+        "http://hl7.org/fhir/diagnostic-report-status",
+        "http://hl7.org/fhir/subscription-status",
+        // Confirmed by an Epic repro sample to also carry version tags (same bug, different fields):
+        "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "http://terminology.hl7.org/CodeSystem/condition-category",
+        // Plausible same-shape systems (simple closed code sets, long-stable):
+        "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+        "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "http://hl7.org/fhir/request-priority",
+        "http://hl7.org/fhir/composition-status",
+        "http://hl7.org/fhir/claim-use",
+        "http://hl7.org/fhir/claim-type",
+        "http://hl7.org/fhir/name-use",
+        "http://hl7.org/fhir/contact-point-use",
+        "http://hl7.org/fhir/address-use",
+        "http://hl7.org/fhir/identifier-use",
+    };
+}
