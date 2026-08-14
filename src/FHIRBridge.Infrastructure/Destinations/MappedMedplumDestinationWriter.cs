@@ -65,14 +65,18 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
-        var baseUrl = destination.Target?.TrimEnd('/');
+        var metadata = MedplumConnectionMetadata.Parse(destination.ConnectionMetadataJson);
+
+        // The FHIR base URL comes from Target on the synchronous write path; on the workflow-graph / bulk-export-resume
+        // path the destination is reconstructed from node config and Target can be empty, so fall back to the base URL
+        // carried in connection metadata.
+        var baseUrl = (string.IsNullOrWhiteSpace(destination.Target) ? metadata.BaseUrl : destination.Target)?.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
             throw new InvalidOperationException(
-                "Medplum destination requires a FHIR base URL in Target (e.g. https://api.medplum.com/fhir/R4).");
+                "Medplum destination requires a FHIR base URL (in Target or connection metadata, e.g. https://api.medplum.com/fhir/R4).");
         }
 
-        var metadata = MedplumConnectionMetadata.Parse(destination.ConnectionMetadataJson);
         if (string.IsNullOrWhiteSpace(metadata.ClientId))
         {
             throw new InvalidOperationException(
@@ -89,9 +93,28 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         var tokenUrl = metadata.ResolveTokenUrl(baseUrl!);
         var httpClient = _httpClientFactory.CreateClient(nameof(MappedMedplumDestinationWriter));
 
-        return metadata.UsesAsyncBatch
-            ? await WriteAsyncBatchAsync(httpClient, baseUrl!, tokenUrl, credential, metadata, records, cancellationToken)
-            : await WritePerRecordAsync(httpClient, baseUrl!, tokenUrl, credential, metadata, records, cancellationToken);
+        if (metadata.UsesAsyncBatch)
+        {
+            try
+            {
+                return await WriteAsyncBatchAsync(httpClient, baseUrl!, tokenUrl, credential, metadata, records, cancellationToken);
+            }
+            catch (MedplumAsyncBatchUnavailableException ex)
+            {
+                // Medplum gates the respond-async batch feature per project (hosted api.medplum.com returns 400
+                // "Async Batch feature not available"). Rather than fail the whole run, degrade gracefully to the
+                // per-record conditional-PUT path — which is always available — so the async_batch preference never
+                // silently exports nothing. Idempotent: no records were written by the aborted batch attempt (the
+                // feature gate rejects the very first chunk's submit), and per-record upserts by identifier are safe
+                // to (re)apply regardless.
+                _logger.LogWarning(ex,
+                    "Medplum async batch unavailable on this project; falling back to per-record writes for {Count} record(s).",
+                    records.Count);
+                return await WritePerRecordAsync(httpClient, baseUrl!, tokenUrl, credential, metadata, records, cancellationToken);
+            }
+        }
+
+        return await WritePerRecordAsync(httpClient, baseUrl!, tokenUrl, credential, metadata, records, cancellationToken);
     }
 
     private async Task<DestinationWriteResult> WritePerRecordAsync(
@@ -202,6 +225,12 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
                 var responseBundle = await SubmitAsyncBatchAsync(httpClient, accessToken, baseUrl, bundle, cancellationToken);
                 TallyBatchResponse(responseBundle, entryRecords, ref written, recordErrors, writtenIds);
             }
+            catch (MedplumAsyncBatchUnavailableException)
+            {
+                // A project-wide feature gate, not a per-chunk failure: don't isolate it into recordErrors (which
+                // would just fail every chunk the same way). Propagate so WriteAsync falls back to per-record.
+                throw;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // A whole-chunk failure (submit/poll error) isolates every record in the chunk rather than aborting.
@@ -264,8 +293,25 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             }
 
             // Server responded synchronously (respond-async is only a preference): the body is the batch response.
-            response.EnsureSuccessStatusCode();
+            // Surface Medplum's OperationOutcome on a non-2xx submit (e.g. a 400 rejecting the batch/async request)
+            // instead of a bare "400 (Bad Request)" — mirrors the per-record path's error reporting.
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                // Medplum gates respond-async batch per project; hosted api.medplum.com returns 400 with
+                // details.text "Async Batch feature not available". Signal that distinctly so WriteAsync can fall
+                // back to per-record instead of failing — any other non-2xx stays a hard error with its body.
+                if (response.StatusCode == HttpStatusCode.BadRequest
+                    && body.Contains("Async Batch feature not available", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new MedplumAsyncBatchUnavailableException(
+                        $"Medplum async batch not available on this project: {Truncate(body)}");
+                }
+
+                throw new HttpRequestException(
+                    $"Medplum batch submit to '{baseUrl}' returned {(int)response.StatusCode}: {Truncate(body)}");
+            }
+
             return await ResolveResponseBundleAsync(httpClient, accessToken, body, cancellationToken);
         }
     }
@@ -423,17 +469,30 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             return (resourceType, $"{resourceType}?identifier={query}", resource.ToJsonString(JsonOptions));
         }
 
-        // Fallback: logical-id update-or-create. Reconcile the body id to the URL so a validating server accepts it.
-        var id = resource["id"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(id))
+        // Fallback: the resource carries no business identifier. A logical-id PUT ({type}/{sourceId}) does NOT work
+        // for Medplum — it owns logical-id assignment (UUIDs) and rejects a client-chosen id with 400 "Invalid id"
+        // (see Medplum migration guidance: preserve source keys as IDENTIFIERS, never as logical ids). So stamp a
+        // synthetic identifier from the source id and conditional-upsert by it — idempotent (re-runs match the same
+        // resource) and Medplum assigns its own logical id. Uses the configured identifier system when set, else a
+        // stable urn marker so the value can't collide with a real coding system.
+        var syntheticSystem = string.IsNullOrWhiteSpace(preferredSystem)
+            ? "urn:fhirbridge:source-id"
+            : preferredSystem!;
+        var syntheticValue = string.IsNullOrWhiteSpace(record.SourceResourceId)
+            ? resource["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N")
+            : record.SourceResourceId!;
+
+        resource.Remove("id");
+        if (resource["identifier"] is not JsonArray identifiers)
         {
-            id = string.IsNullOrWhiteSpace(record.SourceResourceId)
-                ? Guid.NewGuid().ToString("N")
-                : record.SourceResourceId;
-            resource["id"] = id;
+            identifiers = [];
+            resource["identifier"] = identifiers;
         }
 
-        return (resourceType, $"{resourceType}/{Uri.EscapeDataString(id!)}", resource.ToJsonString(JsonOptions));
+        identifiers.Add(new JsonObject { ["system"] = syntheticSystem, ["value"] = syntheticValue });
+
+        var syntheticQuery = $"{Uri.EscapeDataString(syntheticSystem)}%7C{Uri.EscapeDataString(syntheticValue)}"; // %7C = '|'
+        return (resourceType, $"{resourceType}?identifier={syntheticQuery}", resource.ToJsonString(JsonOptions));
     }
 
     /// <summary>
@@ -492,7 +551,15 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (response.StatusCode != HttpStatusCode.TooManyRequests)
             {
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    // Surface Medplum's OperationOutcome so a rejected write says WHY (validation, bad reference,
+                    // etc.), not just the status code. Body is server diagnostics, not PHI.
+                    var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    throw new HttpRequestException(
+                        $"Medplum PUT '{url}' returned {(int)response.StatusCode}: {Truncate(errorBody)}");
+                }
+
                 return;
             }
 
@@ -535,5 +602,22 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         }
 
         return DefaultRetryAfter;
+    }
+
+    // Caps a server error body so one rejected write's diagnostics can't flood the log.
+    private static string Truncate(string value) =>
+        string.IsNullOrEmpty(value) ? value : value.Length <= 600 ? value : value[..600] + "…";
+}
+
+/// <summary>
+/// Signals that the Medplum project does not have the respond-async batch feature enabled (hosted api.medplum.com
+/// returns HTTP 400 with details.text "Async Batch feature not available"). Distinct from a genuine request error so
+/// <see cref="MappedMedplumDestinationWriter"/> can fall back from <c>async_batch</c> to the always-available
+/// per-record write path instead of failing the whole run.
+/// </summary>
+internal sealed class MedplumAsyncBatchUnavailableException : Exception
+{
+    public MedplumAsyncBatchUnavailableException(string message) : base(message)
+    {
     }
 }

@@ -160,7 +160,7 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | null>(null);
+  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
 
@@ -241,7 +241,7 @@ export class NodeLibraryDialogComponent {
   readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
   readonly destMappingCount = signal(0);
 
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | null>(null);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | null>(null);
 
   // Guards the overlay's own close (Escape key, or a backdrop click on the rare occasions it's still
   // enabled) while a form/wizard is open — same "don't silently discard progress" intent as
@@ -260,7 +260,7 @@ export class NodeLibraryDialogComponent {
         const node = untracked(() => this.store.byId(id));
         if (node?.kind === 'transform') {
           const tId = (node as TransformNode).transformId;
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-medplum') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-medplum' || tId === 'dest-fhir') {
             untracked(() => this._openDestWizardEdit(node));
           }
           return;
@@ -337,7 +337,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-medplum') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-medplum' || t.id === 'dest-fhir') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -430,9 +430,9 @@ export class NodeLibraryDialogComponent {
       this.openGenericFhirForm(null);
       return;
     }
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-medplum') {
-      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : 'csv';
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-medplum' || item.id === 'dest-fhir') {
+      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' =
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : 'csv';
       // Switching type after the user has already filled in later steps would
       // silently discard that progress — confirm first.
       if (this.showDestWizard() && this.destWizardType() !== type && this.destWizardHasProgressed()) {
@@ -446,8 +446,8 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | null): string {
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : 'CSV';
+  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | null): string {
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository' : 'CSV';
   }
 
   confirmDestSwitch(): void {
@@ -526,7 +526,7 @@ export class NodeLibraryDialogComponent {
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
-  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum'): void {
+  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir'): void {
     const pm = this.pickerModel();
     if (!pm) return;
     this.destWizardType.set(type);
@@ -544,8 +544,8 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : 'csv';
+    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' =
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : 'csv';
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

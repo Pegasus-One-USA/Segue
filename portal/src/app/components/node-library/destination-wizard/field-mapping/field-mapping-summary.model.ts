@@ -16,9 +16,9 @@ import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
 /** SQL Server/MySQL/PostgreSQL all use the relational (sqlTables/columns, dbo-qualified) path here — only
- *  CSV, Mongo, and Medplum (columnless/schemaless FHIR) fall back to the flat/generic defaults. */
+ *  CSV, Mongo, Medplum, and FHIR Repository (columnless/schemaless FHIR) fall back to the flat/generic defaults. */
 function isRelational(destType: MappingDestType): boolean {
-  return destType !== 'csv' && destType !== 'mongo' && destType !== 'medplum';
+  return destType !== 'csv' && destType !== 'mongo' && destType !== 'medplum' && destType !== 'fhir';
 }
 
 /** A table created as a child of another table — the only place this relationship is known client-side

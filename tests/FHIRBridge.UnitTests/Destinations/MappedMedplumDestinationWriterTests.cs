@@ -98,15 +98,24 @@ public sealed class MappedMedplumDestinationWriterTests
     }
 
     [Fact]
-    public async Task Falls_back_to_logical_id_put_when_no_identifier()
+    public async Task Stamps_a_synthetic_identifier_and_upserts_when_resource_has_no_identifier()
     {
+        // Medplum rejects a client-chosen logical id (PUT /Type/{id} -> 400 "Invalid id"), so a resource with no
+        // business identifier is upserted by a synthetic identifier derived from the source id instead.
         var (writer, handler) = CreateWriter();
         var resource = """{"resourceType":"Observation","id":"obs-7","status":"final"}""";
 
         await writer.WriteAsync(
-            Destination(ClientMetadata), Mapping(), [Record(resource)], Context(), CancellationToken.None);
+            Destination(ClientMetadata), Mapping(), [Record(resource, sourceId: "src-1")], Context(), CancellationToken.None);
 
-        handler.FhirRequests.Single().Url.Should().Be($"{BaseUrl}/Observation/obs-7");
+        var put = handler.FhirRequests.Single();
+        put.Method.Should().Be(HttpMethod.Put);
+        // Conditional upsert by the synthetic identifier (default urn system + the source id), NOT a logical-id PUT.
+        put.Url.Should().StartWith($"{BaseUrl}/Observation?identifier=");
+        Uri.UnescapeDataString(put.Url).Should().Contain("urn:fhirbridge:source-id|src-1");
+        // Body carries the synthetic identifier and has the client-chosen logical id removed.
+        put.Body.Should().Contain("urn:fhirbridge:source-id");
+        put.Body.Should().NotContain("\"id\"");
     }
 
     [Fact]

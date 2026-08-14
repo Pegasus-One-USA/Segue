@@ -285,17 +285,47 @@
                   <option value="async_batch">Async batch</option>
                 </select>
               </div>
+              @if (medplumWriteMode() !== 'async_batch') {
+                <span class="dw-hint">Batch size applies only to Async batch mode.</span>
+              }
             </div>
 
-            <div class="dw-field">
-              <label class="dw-label" for="dw-medplum-batchSize">Batch size</label>
-              <input id="dw-medplum-batchSize" class="dw-input" formControlName="batchSize" placeholder="100" />
-            </div>
+            <!-- Batch size is meaningful only for async_batch (records chunked into respond-async batch Bundles);
+                 per_record ignores it (one conditional PUT per record), so the field is hidden then. -->
+            @if (medplumWriteMode() === 'async_batch') {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-medplum-batchSize">Batch size</label>
+                <input id="dw-medplum-batchSize" class="dw-input" formControlName="batchSize" placeholder="100" />
+              </div>
+            }
 
             <div class="dw-field">
               <label class="dw-label" for="dw-medplum-identifierSystem">Identifier system</label>
               <input id="dw-medplum-identifierSystem" class="dw-input" formControlName="identifierSystem"
                 placeholder="e.g. https://fhirbridge.example/mrn" />
+            </div>
+
+          </div><!-- /dw-grid-2 -->
+        </form>
+      } @else if (isFhir()) {
+        <form [formGroup]="fhirForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-2">
+
+            <div class="dw-field" [class.dw-field--error]="fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched">
+              <label class="dw-label" for="dw-fhir-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-fhir-name" class="dw-input" formControlName="name" placeholder="e.g. HAPI FHIR" />
+              @if (fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched">
+              <label class="dw-label" for="dw-fhir-baseUrl">FHIR base URL <span class="dw-req">*</span></label>
+              <input id="dw-fhir-baseUrl" class="dw-input" formControlName="baseUrl"
+                placeholder="https://segue.pegasusone.com:7011/fhir" />
+              @if (fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched) {
+                <span class="dw-error">FHIR base URL is required.</span>
+              }
             </div>
 
           </div><!-- /dw-grid-2 -->
@@ -478,7 +508,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -657,6 +687,15 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ medplumForm.value.writeMode }}</span>
+          </div>
+        } @else if (isFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ fhirForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ fhirForm.value.baseUrl || '—' }}</span>
           </div>
         } @else {
           <div class="dw-review-card">

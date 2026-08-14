@@ -364,8 +364,11 @@ export class WorkflowBuildAssemblerService {
     const isMedplum =
       node.nodeType.includes('Medplum') ||
       (fields['__transformId'] ?? '') === 'dest-medplum';
+    const isFhir =
+      node.nodeType.includes('FhirRepository') ||
+      (fields['__transformId'] ?? '') === 'dest-fhir';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -437,6 +440,20 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    if (isFhir) {
+      return {
+        name,
+        destinationType: 'FhirRepository',
+        keyVaultName,
+        secretName,
+        // A plain, unauthenticated FHIR R4 server — the FHIR base URL is the whole destination target, and
+        // there is no secret at all (inlineSecret null). Base URL also carried in metadata for the run path.
+        target: fields['dest_fhirBaseUrl'] || null,
+        inlineSecret: null,
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -463,7 +480,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir',
   ): string {
     const keys =
       kind === 'sql'
@@ -482,11 +499,22 @@ export class WorkflowBuildAssemblerService {
           : kind === 'medplum'
           ? [
               'dest_name',
+              // Carried in metadata as a fallback for Target: the workflow-graph / bulk-export-resume run path
+              // reconstructs the destination from node config and can leave Target empty, so the FHIR base URL must
+              // also live here for the Medplum writer to resolve it. See MedplumConnectionMetadata.BaseUrl.
+              'dest_medplumBaseUrl',
               'dest_medplumClientId',
               'dest_medplumAuthMethod',
               'dest_medplumWriteMode',
               'dest_medplumBatchSize',
               'dest_medplumIdentifierSystem',
+            ]
+          : kind === 'fhir'
+          ? [
+              'dest_name',
+              // A plain FHIR R4 server has no auth — the base URL is all there is. Carried in metadata (not
+              // only Target) so the workflow-graph run path can reconstruct the destination with an empty Target.
+              'dest_fhirBaseUrl',
             ]
           : [
               'dest_name',

@@ -289,6 +289,21 @@ export class DestinationWizardComponent implements OnInit {
     identifierSystem: ['', []],
   });
 
+  // Mirrors medplumForm.writeMode as a signal so the template can reactively reveal the Batch size field only for
+  // 'async_batch' — batch size is meaningful ONLY in that mode (records chunked into Prefer: respond-async batch
+  // Bundles); in 'per_record' the writer ignores it entirely (one conditional PUT per record). Kept in sync via a
+  // valueChanges subscription in the constructor, so patchValue/reset on the form (existing-connection load,
+  // node repopulate, clear) update it too.
+  readonly medplumWriteMode = signal<string>('per_record');
+
+  // A plain FHIR R4 server destination (e.g. HAPI FHIR) — unauthenticated: the FHIR base URL is the only
+  // thing to collect (becomes the DestinationConfiguration.target), with NO secret, client id, auth method,
+  // write mode, or batch size. Its own form/branches, like Mongo/Medplum, just far simpler.
+  readonly fhirForm = this.fb.group({
+    name:    ['FHIR Repository', [Validators.required]],
+    baseUrl: ['', [Validators.required]],
+  });
+
   readonly csvForm = this.fb.group({
     name:         ['CSV Export', [Validators.required]],
     deliveryMode: ['download', [Validators.required]],
@@ -694,6 +709,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
   private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
+  private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -706,6 +722,9 @@ export class DestinationWizardComponent implements OnInit {
   // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
   // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
   readonly isMedplum    = computed(() => this.destType() === 'medplum');
+  // A plain FHIR R4 server destination: columnless (writes whole resources), no live schema probe, a single
+  // target (the FHIR base URL) and NO secret/auth at all. Its own form/branches, like Mongo/Medplum.
+  readonly isFhir       = computed(() => this.destType() === 'fhir');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
@@ -714,6 +733,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
       : this.destType() === 'medplum' ? 'Medplum'
+      : this.destType() === 'fhir' ? 'FHIR Repository'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -723,7 +743,7 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.isMedplum() ? this.medplumForm.value : this.csvForm.value;
+    const fv = this.isSql() ? this.sqlForm.value : this.isMongo() ? this.mongoForm.value : this.isMedplum() ? this.medplumForm.value : this.isFhir() ? this.fhirForm.value : this.csvForm.value;
     const rows = this.mappingRows();
     const resources = this.selectedResources();
     return { fv, rows, resources };
@@ -740,6 +760,10 @@ export class DestinationWizardComponent implements OnInit {
     // SFTP/email/download-link fields are required only while their mode is selected.
     this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
     this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+
+    // Keep the Medplum write-mode signal in sync so the Batch size field shows only for 'async_batch'.
+    this.medplumWriteMode.set(this.medplumForm.controls.writeMode.value ?? 'per_record');
+    this.medplumForm.controls.writeMode.valueChanges.subscribe(v => this.medplumWriteMode.set(v ?? 'per_record'));
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -870,7 +894,7 @@ export class DestinationWizardComponent implements OnInit {
     const s = this.step();
     if (s === 1) {
       if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.isMedplum() ? this.medplumForm.invalid : this.csvForm.invalid;
+      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.isMedplum() ? this.medplumForm.invalid : this.isFhir() ? this.fhirForm.invalid : this.csvForm.invalid;
     }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
@@ -962,6 +986,7 @@ export class DestinationWizardComponent implements OnInit {
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
     if (this.isMedplum()) return 'Medplum';
+    if (this.isFhir()) return 'FhirRepository';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
   }
@@ -1241,7 +1266,7 @@ export class DestinationWizardComponent implements OnInit {
     if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
       this._loadExistingOptions();
     }
-    if (!this.isSql() && !this.isMongo() && !this.isMedplum()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
+    if (!this.isSql() && !this.isMongo() && !this.isMedplum() && !this.isFhir()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
@@ -1258,6 +1283,8 @@ export class DestinationWizardComponent implements OnInit {
       this.mongoForm.reset();
     } else if (this.isMedplum()) {
       this.medplumForm.reset();
+    } else if (this.isFhir()) {
+      this.fhirForm.reset();
     } else {
       this.csvForm.reset();
       this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
@@ -1276,7 +1303,9 @@ export class DestinationWizardComponent implements OnInit {
               ? DestinationWizardComponent.MONGO_TYPES
               : this.isMedplum()
                 ? DestinationWizardComponent.MEDPLUM_TYPES
-                : DestinationWizardComponent.CSV_TYPES;
+                : this.isFhir()
+                  ? DestinationWizardComponent.FHIR_TYPES
+                  : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1348,6 +1377,12 @@ export class DestinationWizardComponent implements OnInit {
         identifierSystem: metadata['dest_medplumIdentifierSystem'] || '',
       });
       this._existingBaseline = this.medplumForm.getRawValue();
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:    metadata['dest_name']         || selected.name,
+        baseUrl: metadata['dest_fhirBaseUrl']  || selected.target || '',
+      });
+      this._existingBaseline = this.fhirForm.getRawValue();
     } else {
       this.csvForm.patchValue({
         name:             metadata['dest_name']             || selected.name,
@@ -1395,7 +1430,7 @@ export class DestinationWizardComponent implements OnInit {
     const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'secret']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.isMedplum() ? this.medplumForm.getRawValue() : this.csvForm.getRawValue();
+    const current = this.isSql() ? this.sqlForm.getRawValue() : this.isMongo() ? this.mongoForm.getRawValue() : this.isMedplum() ? this.medplumForm.getRawValue() : this.isFhir() ? this.fhirForm.getRawValue() : this.csvForm.getRawValue();
     return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
   }
 
@@ -1653,6 +1688,11 @@ export class DestinationWizardComponent implements OnInit {
         batchSize:        f['dest_medplumBatchSize']        || '100',
         identifierSystem: f['dest_medplumIdentifierSystem'] || '',
       });
+    } else if (this.isFhir()) {
+      this.fhirForm.patchValue({
+        name:    f['dest_name']        || 'FHIR Repository',
+        baseUrl: f['dest_fhirBaseUrl'] || '',
+      });
     } else {
       this.csvForm.patchValue({
         name:         f['dest_name']         || 'CSV Export',
@@ -1801,6 +1841,10 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_medplumWriteMode']       = v.writeMode        ?? 'per_record';
       config['dest_medplumBatchSize']       = v.batchSize        ?? '100';
       config['dest_medplumIdentifierSystem'] = v.identifierSystem ?? '';
+    } else if (this.isFhir()) {
+      const v = this.fhirForm.value;
+      config['dest_name']        = v.name    ?? '';
+      config['dest_fhirBaseUrl'] = v.baseUrl ?? '';
     } else {
       const v = this.csvForm.value;
       config['dest_name']         = v.name         ?? '';
@@ -1842,7 +1886,8 @@ export class DestinationWizardComponent implements OnInit {
     const isSql = this.isSql();
     const isMongo = this.isMongo();
     const isMedplum = this.isMedplum();
-    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : 'File Destination');
+    const isFhir = this.isFhir();
+    const name = config['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1873,6 +1918,18 @@ export class DestinationWizardComponent implements OnInit {
           // FHIR base URL is the target; the client secret / PEM key is the whole opaque inlineSecret.
           target: config['dest_medplumBaseUrl'] || null,
           inlineSecret: config['dest_medplumSecret'] || '',
+          connectionMetadataJson: buildConnectionMetadata(config, false),
+        }
+      : isFhir
+      ? {
+          name,
+          destinationType: 'FhirRepository',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          // The FHIR base URL is the whole destination — a plain unauthenticated FHIR R4 server, so there is
+          // no secret at all (inlineSecret null). Base URL still also carried in metadata for the run path.
+          target: config['dest_fhirBaseUrl'] || null,
+          inlineSecret: null,
           connectionMetadataJson: buildConnectionMetadata(config, false),
         }
       : {
@@ -1999,6 +2056,7 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
           : type === 'medplum' ? 'dest-medplum'
+          : type === 'fhir' ? 'dest-fhir'
           : 'dest-csv',
         status:      'enabled',
         config,

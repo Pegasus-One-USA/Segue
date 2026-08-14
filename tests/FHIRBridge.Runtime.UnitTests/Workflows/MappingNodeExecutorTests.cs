@@ -291,6 +291,42 @@ public sealed class MappingNodeExecutorTests
         ((MappedDestinationRecord)batch.Records.Single()).ResourceType.Should().Be("Patient");
     }
 
+    /// <summary>
+    /// Regression test for the Medplum end-to-end bug: a whole-resource FHIR destination (Medplum / FHIR repository)
+    /// persists the source resource itself (SourceJson), so it legitimately has NO field mappings. The executor's
+    /// "emit only when at least one Value mapped" gate previously dropped every resource, landing zero records
+    /// (ExportHistory NoData). For these destinations it must emit one carrier record per resource carrying SourceJson.
+    /// </summary>
+    [Fact]
+    public async Task Whole_resource_fhir_destination_emits_a_record_per_resource_carrying_SourceJson_with_no_field_mappings()
+    {
+        var destinationId = Guid.NewGuid();
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DestinationConfiguration(
+                "Medplum Production", DestinationType.Medplum, new SecretReference("kv", "secret"),
+                "https://api.medplum.com/fhir/R4", null));
+
+        // Engine returns no mapped Values — mirrors a destination with zero column mappings.
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?>(), Errors: [], Rows: null, ChildTables: null));
+        var executor = new MappingNodeExecutor(engine, mappingMaterializer: null, configurationRepository: repository.Object);
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        const string patientJson = """{"resourceType":"Patient","id":"p1","identifier":[{"system":"http://hapi","value":"p1"}]}""";
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", patientJson));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        batch.Records.Should().HaveCount(1, "a whole-resource FHIR destination must still emit a carrier record even with no field mappings");
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.ResourceType.Should().Be("Patient");
+        record.SourceJson.Should().Be(patientJson, "the Medplum writer persists SourceJson, so it must be carried through");
+    }
+
     [Fact]
     public async Task Maps_each_resource_type_using_only_its_own_configured_mappingProfileIds_entry()
     {

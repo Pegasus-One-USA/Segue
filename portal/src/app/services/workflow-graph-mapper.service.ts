@@ -35,6 +35,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-postgres': 'PostgreSqlDestinationNode',
   'dest-mongo': 'MongoDestinationNode',
   'dest-medplum': 'MedplumDestinationNode',
+  'dest-fhir': 'FhirRepositoryDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',
@@ -100,6 +101,29 @@ export class WorkflowGraphMapperService {
       }
 
       addEdge(from.id, to.id);
+    }
+
+    // Stamp each mapping node with the destinationId of the destination it feeds. The runtime MappingNode
+    // resolves the destination's type from this id; whole-resource FHIR destinations (Medplum, FHIR Repository)
+    // need it to emit one SourceJson carrier record per resource — without it the mapping silently drops every
+    // record and the run "succeeds" having written nothing. The value is read from the destination node's own
+    // fields (set by the wizard as soon as the connection is configured — for new and existing connections
+    // alike), following the graph edge mapping->destination. It is never a literal id: an explicit mapping node
+    // the user placed on the canvas is serialized by nodeToRequest, which only keeps that node's own fields, so
+    // the linkage the graph already expresses has to be re-applied here. (The syntheticMappingRequest path, used
+    // when a source connects straight to a destination, already copies the whole destination field bag.)
+    for (const edge of emittedEdges) {
+      const destinationNode = byId.get(edge.toNodeId);
+      const mappingRequest = requests.find(request => request.id === edge.fromNodeId);
+      if (!destinationNode || !this.isDestination(destinationNode) || !mappingRequest) continue;
+      if (mappingRequest.nodeType !== FALLBACK_NODE_TYPES['field-mapping']) continue;
+
+      const destinationId = destinationNode.fields['destinationId'];
+      if (!destinationId) continue;
+
+      const config = this.parseConfig(mappingRequest.configurationJson);
+      if (config['destinationId']) continue;
+      mappingRequest.configurationJson = JSON.stringify({ ...config, destinationId });
     }
 
     return {

@@ -16,6 +16,15 @@ public sealed record MedplumConnectionMetadata
     public string? ClientId { get; init; }
 
     /// <summary>
+    /// The FHIR R4 base URL, carried here as a fallback for the destination's <c>Target</c>. The synchronous write
+    /// path gets the base URL from <see cref="Domain.Entities.DestinationConfiguration.Target"/>, but the
+    /// workflow-graph / bulk-export-resume path reconstructs the destination from node config, where the base URL is
+    /// only reliably present in this metadata bag — so the writer resolves <c>Target</c> first, then this.
+    /// </summary>
+    [JsonPropertyName("medplumBaseUrl")]
+    public string? BaseUrl { get; init; }
+
+    /// <summary>
     /// OAuth2 token endpoint. When omitted it is derived from the FHIR base URL by replacing the trailing
     /// <c>/fhir/R4</c> segment with <c>/oauth2/token</c> (e.g. <c>https://api.medplum.com/fhir/R4</c> →
     /// <c>https://api.medplum.com/oauth2/token</c>).
@@ -107,6 +116,7 @@ public sealed record MedplumConnectionMetadata
         return new MedplumConnectionMetadata
         {
             ClientId = ReadString(map, "medplumClientId"),
+            BaseUrl = ReadString(map, "medplumBaseUrl"),
             TokenUrl = ReadString(map, "medplumTokenUrl"),
             IdentifierSystem = ReadString(map, "medplumIdentifierSystem"),
             AuthMethod = ReadString(map, "medplumAuthMethod"),
