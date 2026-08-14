@@ -32,7 +32,7 @@ import { ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData
 import { PromoteMappingProfileDialogComponent, PromoteMappingProfileDialogData } from './field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component';
 import { MappingProfileService } from '../../../mapping-profiles/services/mapping-profile.service';
 import { MappingProfileDto, MappingFieldDto } from '../../../mapping-profiles/models/mapping-profile.model';
-import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.config';
+import { sortByDependencyRank, dependencyRankFor, recommendedFor } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
@@ -377,6 +377,13 @@ export class DestinationWizardComponent implements OnInit {
     password:      ['', []],
     // ── Bearer token field (conditional) ─────────────────────────────────────
     bearerToken:   ['', []],
+    // ── Auto-fetch missing references (opt-in) ────────────────────────────────
+    // Only ever fetches a reference the write-time existence check already confirmed missing from both this
+    // batch and the destination (see MappedFhirRepositoryDestinationWriter.ResolveMissingReferencesAsync) — never
+    // a first resort. Requires the source's own app registration to have read access to whatever resource type
+    // turns up missing, since it fetches from the same EHR source feeding this destination.
+    autoFetchMissingReferences: [false, []],
+    autoFetchMaxCount:         [25, []],
   });
 
   // ── FHIR field-handling (step 3: passthrough vs. customize) ──────────────
@@ -1178,11 +1185,17 @@ export class DestinationWizardComponent implements OnInit {
     return value === 'basic' || value === 'bearer' ? value : 'oauth2';
   }
 
-  // Reverse of _buildConnectionConfig()'s writeMode split: dest_fhirWriteMode: 'bundle' always means the
-  // dropdown's 'upsertBundle' option, regardless of whatever dest_writeMode says — a destination saved before
-  // bundling existed simply won't have dest_fhirWriteMode at all, and falls through to dest_writeMode as before.
+  // Reverse of _buildConnectionConfig()'s writeMode split: dest_fhirWriteMode: 'bundle'/'transaction' always means
+  // the dropdown's matching 'upsertBundle'/'upsertTransaction' option, regardless of whatever dest_writeMode says —
+  // a destination saved before bundling existed simply won't have dest_fhirWriteMode at all, and falls through to
+  // dest_writeMode as before. 'conditional' is a stale value from the now-removed "Conditional update by
+  // identifier" option (never implemented server-side — it behaved identically to plain upsert) — remap it to
+  // 'upsert' so an old destination saved with it still shows a valid, matching dropdown selection.
   private _fhirWriteModeFromBackend(destWriteMode: string | undefined, destFhirWriteMode: string | undefined): string {
-    return destFhirWriteMode === 'bundle' ? 'upsertBundle' : destWriteMode || 'upsert';
+    if (destFhirWriteMode === 'bundle') return 'upsertBundle';
+    if (destFhirWriteMode === 'transaction') return 'upsertTransaction';
+    if (destWriteMode === 'conditional') return 'upsert';
+    return destWriteMode || 'upsert';
   }
 
   private _syncFhirAuthValidators(authType: string | null): void {
@@ -1803,6 +1816,8 @@ export class DestinationWizardComponent implements OnInit {
         username:      metadata['dest_username']      || '',
         password:      '',
         bearerToken:   '',
+        autoFetchMissingReferences: metadata['dest_autoFetchMissingReferences'] === 'true',
+        autoFetchMaxCount: metadata['dest_autoFetchMaxCount'] ? Number(metadata['dest_autoFetchMaxCount']) : 25,
       });
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       this._existingBaseline = this.fhirForm.getRawValue();
@@ -1929,8 +1944,55 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // Each resource is selected independently — no required/recommended auto-selection or locking.
+  // Each resource is selected independently — no required/recommended auto-selection or locking. A "recommended"
+  // resource (see resource-dependency.config.ts) is surfaced as a dismissible hint below the grid instead — most
+  // cross-references are optional at the FHIR level (not every Observation has an Encounter), so nagging via a
+  // hard lock would be wrong. Manual selection is the only thing that controls what the backend fetches
+  // (SourceNodeExecutors.GetDestinationResourceTypesAsync) — an unselected type referenced by a selected one
+  // (Organization, Location, Practitioner, ...) is genuinely left out and can 422 at the destination, so this
+  // hint is real guidance worth acting on, not just a nice-to-have.
   isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
+
+  private readonly dismissedRecommendations = signal<ReadonlySet<string>>(new Set());
+
+  /** Recommended-but-not-yet-selected resources across everything currently selected, minus whatever the user
+   *  already dismissed this session. Recomputed from scratch on every selection change (not just filtered) so a
+   *  dismissed recommendation reappears if it becomes relevant again via a different selected resource. */
+  readonly recommendedResources = computed(() => {
+    const selected = new Set(this.selectedResources());
+    const dismissed = this.dismissedRecommendations();
+    const recommended = new Set<string>();
+    for (const r of selected) {
+      for (const rec of recommendedFor(r)) {
+        if (!selected.has(rec) && !dismissed.has(rec)) {
+          recommended.add(rec);
+        }
+      }
+    }
+    return [...recommended];
+  });
+
+  addRecommendedResource(r: string): void {
+    this.toggleResource(r);
+  }
+
+  /** Applies every current recommendation in one action instead of one chip at a time. Snapshots the list
+   *  first — toggleResource mutates selectedResources, which recommendedResources() reads, so iterating the
+   *  live computed signal while it's changing would skip/duplicate entries. */
+  addAllRecommendedResources(): void {
+    const toAdd = this.recommendedResources();
+    for (const r of toAdd) {
+      this.toggleResource(r);
+    }
+  }
+
+  dismissRecommendation(r: string): void {
+    this.dismissedRecommendations.update(set => new Set(set).add(r));
+  }
+
+  dismissAllRecommendations(): void {
+    this.dismissedRecommendations.update(set => new Set([...set, ...this.recommendedResources()]));
+  }
 
   toggleResource(r: string): void {
     if (this.isResourceSelected(r)) {
@@ -2135,6 +2197,8 @@ export class DestinationWizardComponent implements OnInit {
         username:      f['dest_username']      || '',
         password:      '',
         bearerToken:   '',
+        autoFetchMissingReferences: f['dest_autoFetchMissingReferences'] === 'true',
+        autoFetchMaxCount: f['dest_autoFetchMaxCount'] ? Number(f['dest_autoFetchMaxCount']) : 25,
       });
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       if (f['dest_fhirMapMode']) {
@@ -2307,14 +2371,15 @@ export class DestinationWizardComponent implements OnInit {
       config['target']        = v.baseUrl   ?? '';
       config['dest_project']   = v.project   ?? '';
       config['dest_authType']  = v.authType  ?? 'oauth2';
-      // "Upsert by resource id (Bundle)" is a third Write-mode option that's really a combination of two
-      // orthogonal things: it's still upsert-by-id semantics (dest_writeMode), just delivered as one bundled
-      // request instead of N individual ones (dest_fhirWriteMode — see MappedFhirRepositoryDestinationWriter's
-      // own doc comment). Folded into one dropdown rather than two separate fields since "conditional update by
-      // identifier" isn't actually implemented server-side yet, so there's no real second dimension to conflict with.
+      // "Upsert by resource id (Bundle)"/"(Transaction)" are Write-mode options that are really a combination of
+      // two orthogonal things: it's still upsert-by-id semantics (dest_writeMode), just delivered as one bundled/
+      // transactional request instead of N individual ones (dest_fhirWriteMode — see
+      // MappedFhirRepositoryDestinationWriter's own doc comment). Folded into one dropdown rather than two separate
+      // fields since there's no other real second dimension to conflict with — a prior "conditional update by
+      // identifier" option was removed since it was never implemented server-side.
       const writeMode = v.writeMode ?? 'upsert';
-      config['dest_writeMode']     = writeMode === 'upsertBundle' ? 'upsert' : writeMode;
-      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : 'individual';
+      config['dest_writeMode']     = writeMode === 'upsertBundle' || writeMode === 'upsertTransaction' ? 'upsert' : writeMode;
+      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : writeMode === 'upsertTransaction' ? 'transaction' : 'individual';
       if (v.authType === 'oauth2') {
         config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
         config['dest_clientId']      = v.clientId      ?? '';
@@ -2328,6 +2393,13 @@ export class DestinationWizardComponent implements OnInit {
       config['dest_fhirMapMode'] = this.fhirMapMode();
       if (this.fhirMapMode() === 'customize') {
         config['dest_fhirCustomRules'] = JSON.stringify(this.fhirCustomRules());
+      }
+      // Only ever fetches a reference the write-time existence check already confirmed missing from both the
+      // batch and the destination — never a first resort. Omitted (not just "false") when off, so an existing
+      // destination saved before this capability existed reads back as off, same as every other opt-in dest_* flag.
+      if (v.autoFetchMissingReferences) {
+        config['dest_autoFetchMissingReferences'] = 'true';
+        config['dest_autoFetchMaxCount'] = String(v.autoFetchMaxCount ?? 25);
       }
     } else {
       const v = this.csvForm.value;

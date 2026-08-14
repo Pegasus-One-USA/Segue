@@ -146,8 +146,10 @@ public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecu
     public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, sourceClientFactory, sourceConnectionResolver)
     {
     }
 }
@@ -554,11 +556,29 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.Mongo,
     ];
 
+    // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs
+    // constructors) — duplicated here rather than shared, since this is the one place outside those constructors
+    // that needs to go the other direction (given a source NODE found by graph walk, which client type to build).
+    private static readonly Dictionary<string, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType> SourceNodeTypeByNodeType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [WorkflowNodeTypes.EpicSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic,
+            [WorkflowNodeTypes.CernerSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Cerner,
+            [WorkflowNodeTypes.EClinicalWorksSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Healow,
+            [WorkflowNodeTypes.AthenahealthSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,
+            [WorkflowNodeTypes.AllscriptsSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Allscripts,
+            [WorkflowNodeTypes.MeditechSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.MeditechGreenfield,
+            [WorkflowNodeTypes.GenericFhirSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,
+            [WorkflowNodeTypes.SampleSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Sample,
+        };
+
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IGovernanceLogger? _governanceLogger;
     private readonly IConfigurationRepository? _configurationRepository;
+    private readonly FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? _sourceClientFactory;
+    private readonly FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? _sourceConnectionResolver;
 
     protected DestinationNodeExecutor(
         string nodeType,
@@ -566,7 +586,9 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         IConfiguredDestinationWriterFactory? writerFactory,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
+        IConfigurationRepository? configurationRepository = null,
+        FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
@@ -574,6 +596,80 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         _workflowDefinitionStore = workflowDefinitionStore;
         _governanceLogger = governanceLogger;
         _configurationRepository = configurationRepository;
+        _sourceClientFactory = sourceClientFactory;
+        _sourceConnectionResolver = sourceConnectionResolver;
+    }
+
+    /// <summary>
+    /// Builds <see cref="PipelineWriteContext.FetchMissingReferenceAsync"/> for <c>MappedFhirRepositoryDestinationWriter</c>'s
+    /// opt-in <c>dest_autoFetchMissingReferences</c> — closes over the exact one source node feeding this destination
+    /// in the workflow graph. Deliberately returns null (the writer falls back to today's blocking behavior,
+    /// unchanged) when: no source-side dependencies were injected for this destination type (every destination type
+    /// other than FhirRepository never passes them — see the constructor); the graph has zero or more than one
+    /// upstream source node (never guess which one to use); that source node's own type isn't one this executor
+    /// knows how to build a client for; or its <c>sourceConnectionId</c> doesn't parse. Ambiguity anywhere in this
+    /// resolution intentionally falls back to null rather than picking arbitrarily.
+    /// </summary>
+    private async Task<Func<string, string, CancellationToken, Task<string?>>?> ResolveFetchMissingReferenceDelegateAsync(
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (_sourceClientFactory is null || _sourceConnectionResolver is null || _workflowDefinitionStore is null)
+        {
+            return null;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        if (definition is null)
+        {
+            return null;
+        }
+
+        // Walk edges backward from this destination node to find every upstream node reachable from it.
+        var upstream = new HashSet<Guid>();
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(node.Id);
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in definition.Edges.Where(e => e.ToNodeId == current))
+            {
+                if (upstream.Add(edge.FromNodeId))
+                {
+                    frontier.Enqueue(edge.FromNodeId);
+                }
+            }
+        }
+
+        var sourceNodes = definition.Nodes
+            .Where(candidate => upstream.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Source)
+            .ToList();
+
+        if (sourceNodes.Count != 1 || !SourceNodeTypeByNodeType.TryGetValue(sourceNodes[0].NodeType, out var sourceType))
+        {
+            return null;
+        }
+
+        var sourceConnectionIdRaw = ReadStringConfiguration(sourceNodes[0], "sourceConnectionId");
+        if (!Guid.TryParse(sourceConnectionIdRaw, out var sourceConnectionId))
+        {
+            return null;
+        }
+
+        var client = _sourceClientFactory.Create(sourceType);
+        var resolver = _sourceConnectionResolver;
+
+        return async (resourceType, id, ct) =>
+        {
+            var source = await resolver.ResolveAsync(sourceConnectionId, null, null, ct);
+            if (source is null)
+            {
+                return null;
+            }
+
+            var envelope = await client.ReadByIdAsync(resourceType, id, source, ct);
+            return envelope?.RawJson;
+        };
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -616,11 +712,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // RouteName drives both the email {{RouteName}} template placeholder and (for CSV) the multi-resource ZIP
         // filename — the workflow's own name is far more useful here than the generic node type string.
         var workflowName = await ResolveWorkflowNameAsync(node, cancellationToken) ?? node.NodeType;
+        var fetchMissingReferenceAsync = await ResolveFetchMissingReferenceDelegateAsync(node, cancellationToken);
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
             workflowName,
             DateTimeOffset.UtcNow,
-            CorrelationId: context.CorrelationId);
+            CorrelationId: context.CorrelationId,
+            FetchMissingReferenceAsync: fetchMissingReferenceAsync);
 
         int written;
         string? downloadUrl;

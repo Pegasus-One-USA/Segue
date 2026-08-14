@@ -315,10 +315,33 @@
                 <select id="dw-fhir-writeMode" class="dw-select" formControlName="writeMode">
                   <option value="upsert">Upsert by resource id (PUT)</option>
                   <option value="upsertBundle">Upsert by resource id (Bundle)</option>
-                  <option value="conditional">Conditional update by identifier</option>
+                  <option value="upsertTransaction">Upsert by resource id (Transaction)</option>
                 </select>
               </div>
             </div>
+
+            <div class="dw-field dw-field--checkbox dw-field--full">
+              <label class="dw-label">
+                <input type="checkbox" formControlName="autoFetchMissingReferences" />
+                Automatically fetch a missing reference from the source
+              </label>
+              <span class="dw-hint">
+                If a reference (e.g. a Location or Organization) is confirmed missing from both this batch and the
+                destination, fetch it directly from the source EHR instead of blocking the record that references
+                it. Requires the source's app registration to have read access to whatever resource type turns up
+                missing. Off by default.
+              </span>
+            </div>
+
+            @if (fhirForm.get('autoFetchMissingReferences')!.value) {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-fhir-autoFetchMaxCount">Max references to auto-fetch per run</label>
+                <input id="dw-fhir-autoFetchMaxCount" class="dw-input" type="number" min="1"
+                       formControlName="autoFetchMaxCount" />
+                <span class="dw-hint">Beyond this many distinct missing references in one run, the excess is
+                  blocked instead of fetched — each is a separate request to the source.</span>
+              </div>
+            }
 
           </div><!-- /dw-grid-3 -->
         </form>
@@ -514,6 +537,16 @@
       @if (selectedResources().length === 0) {
         <div class="dw-callout dw-callout--warn">
           Select at least one data group to continue.
+        </div>
+      }
+      @if (recommendedResources().length > 0) {
+        <div class="dw-callout dw-callout--info dw-recommend-callout">
+          <span class="dw-recommend-label">Commonly used together:</span>
+          @for (r of recommendedResources(); track r) {
+            <button type="button" class="dw-recommend-chip" (click)="addRecommendedResource(r)">+ {{ r }}</button>
+          }
+          <button type="button" class="dw-recommend-add-all" (click)="addAllRecommendedResources()">+ Add all</button>
+          <button type="button" class="dw-recommend-dismiss" title="Dismiss" (click)="dismissAllRecommendations()">✕</button>
         </div>
       }
     }
@@ -1017,7 +1050,11 @@
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
-            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'conditional' ? 'Conditional update by identifier' : fhirForm.value.writeMode === 'upsertBundle' ? 'Upsert by resource id (Bundle)' : 'Upsert by resource id (PUT)' }}</span>
+            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'upsertBundle' ? 'Upsert by resource id (Bundle)' : fhirForm.value.writeMode === 'upsertTransaction' ? 'Upsert by resource id (Transaction)' : 'Upsert by resource id (PUT)' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auto-fetch missing references</span>
+            <span class="dw-review-val">{{ fhirForm.value.autoFetchMissingReferences ? ('On — up to ' + (fhirForm.value.autoFetchMaxCount ?? 25) + ' per run') : 'Off' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Field handling</span>

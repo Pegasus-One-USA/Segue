@@ -1,4 +1,5 @@
 ﻿using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -343,8 +344,19 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // Extract "Patient" first (regardless of where it falls in the wizard-authored order) so its resulting ids
         // become a cohort every sibling resource type is scoped to below — without this, a multi-resource selection
         // (e.g. Patient + Observation) would fetch Observation completely unscoped against the whole tenant.
+        //
+        // A type outside the Patient compartment (Practitioner, Organization, Location, ... — see
+        // PatientCompartmentResourceTypes) is never patient-scoped: no patient=/identifier= search is valid for it.
+        // Manually selecting one of these still fetches it (see the per-type branch below), just via a single clean
+        // unscoped request instead of the cohort-scoped path every compartment sibling uses.
+        //
+        // ReferenceScopedResourceTypes (Practitioner/Organization/Medication) run LAST, after every other selected
+        // type, because their fetch (see FetchByCollectedReferencesAsync) is built from reference ids collected out
+        // of this node's already-fetched resources — those resources have to exist first.
         var executionOrder = resourceTypes
-            .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase)
+                ? 0
+                : ReferenceScopedResourceTypes.Contains(type) ? 2 : 1)
             .ToList();
 
         // An explicitly configured System/Group export always resolves to the SAME request shape (GroupId, Since,
@@ -519,6 +531,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                         $"no granted SMART scope authorizes '{type}' for this session (granted: {(effectiveGrantedScopes is { Count: > 0 } ? string.Join(", ", effectiveGrantedScopes) : "none")})");
                 }
 
+                var isCompartmentType = PatientCompartmentResourceTypes.IsSupported(type);
+
                 page = useBulkExport
                     ? batchedBulkResourcesByType is not null
                         ? batchedBulkResourcesByType.TryGetValue(type, out var batchedPage) ? batchedPage : []
@@ -527,9 +541,27 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                                 source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
                             source,
                             cancellationToken)
-                    : isPatientType || cohortPatientIds is not { Count: > 0 }
-                        ? await SearchWithPolicyAsync(client, type, source, context.WorkflowRunId, cancellationToken)
-                        : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
+                    : ReferenceScopedResourceTypes.Contains(type)
+                        // Epic rejects both an unscoped and a patient-scoped search for these types (confirmed live:
+                        // "Only an _ID search is allowed" for Organization/Medication, "Either name, family, or
+                        // identifier is a required parameter" for Practitioner) — the only reliable fetch is a
+                        // direct-by-id read per id this node's already-fetched resources actually reference.
+                        ? await FetchByCollectedReferencesAsync(client, type, source, resources, context, node, cancellationToken)
+                        : isPatientType || cohortPatientIds is not { Count: > 0 } || !isCompartmentType
+                            // A type outside the Patient compartment gets one single, clean request — no leftover
+                            // Patient SearchParameters/PatientSearchCriteria/PatientIds carried over (that reuse was the
+                            // actual cause of Epic's historical "a required parameter is missing" 400s for these types,
+                            // not the fact of fetching them directly), and no per-cohort-patient looping (which would
+                            // otherwise fire the identical unscoped request once per patient via SearchCohortScopedAsync).
+                            ? await SearchWithPolicyAsync(
+                                client,
+                                type,
+                                isPatientType || isCompartmentType
+                                    ? source
+                                    : source with { SearchParameters = null, PatientIds = null, TargetPatientId = null, PatientSearchCriteria = null },
+                                context.WorkflowRunId,
+                                cancellationToken)
+                            : await SearchCohortScopedAsync(client, type, source, cohortPatientIds, context.WorkflowRunId, cancellationToken);
             }
             catch (Exception extractionFailure) when (extractionFailure is FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure failure)
             {
@@ -695,6 +727,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     /// when the source itself has no configured/connection-level/scope-derived resource types of its own — e.g. a
     /// Generic FHIR source, which has no OAuth scopes to derive anything from). Returns an empty set (never throws)
     /// when there's no workflow store, no workflow definition, or no reachable destination at all.
+    /// <para>
+    /// Purely what the wizard's "dest_resources" field lists — no types are added beyond that. A type outside the
+    /// Patient compartment (Practitioner, Organization, Location, ...) that isn't checked here is genuinely excluded
+    /// from fetching, even if another selected type references it — a deliberate tradeoff in favor of predictable,
+    /// manual control over what gets fetched, over automatically resolving dangling references. See
+    /// <c>MappedFhirRepositoryDestinationWriter.DetectMissingReferencedTypes</c> for the write-time warning that
+    /// surfaces this kind of gap before it reaches Aidbox as a raw 422.
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyCollection<string>> GetDestinationResourceTypesAsync(
         WorkflowNode node,
@@ -1000,6 +1040,140 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             Since: source.Since,
             PatientIds: effectiveScope == BulkExportScope.Patient ? (cohortPatientIds ?? source.PatientIds) : null,
             OutputFormat: source.OutputFormat);
+    }
+
+    /// <summary>
+    /// Resource types Epic accepts neither an unscoped nor a <c>patient=</c>-scoped search for — confirmed live:
+    /// Organization/Medication/Specimen reject anything but <c>_id=</c> ("Only an _ID search is allowed"),
+    /// Practitioner requires <c>name</c>/<c>family</c>/<c>identifier</c> ("A required element is missing"), and
+    /// Location requires "at least one parameter besides status" (an unscoped/status-only request isn't enough).
+    /// None of those are values this node has on hand for an arbitrary tenant-wide fetch, so these are instead
+    /// resolved by id — see <see cref="FetchByCollectedReferencesAsync"/>.
+    /// </summary>
+    private static readonly HashSet<string> ReferenceScopedResourceTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "Practitioner", "Organization", "Medication", "Location", "Specimen" };
+
+    /// <summary>
+    /// Fetches <paramref name="resourceType"/> by reading each id this node's own already-fetched resources
+    /// reference (e.g. <c>Patient.generalPractitioner</c>, <c>Encounter.serviceProvider</c>,
+    /// <c>MedicationRequest.medicationReference</c>) — a direct <c>GET {type}/{id}</c> per id, sidestepping Epic's
+    /// per-type search restrictions entirely (see <see cref="ReferenceScopedResourceTypes"/>). Falls back to the
+    /// pre-existing single unscoped search when nothing in the batch references this type at all (e.g. it was
+    /// selected on its own, with no compartment sibling to source ids from) — with the same leftover Patient-scoped
+    /// SearchParameters/PatientIds/TargetPatientId/PatientSearchCriteria cleared before that fallback search that
+    /// the sibling non-compartment-type branch above already clears (reusing stale Patient search criteria was the
+    /// actual historical cause of Epic's "a required parameter is missing" 400s for these types, not the fact of
+    /// fetching them directly) — Epic may still reject the fallback search depending on the type's own requirements,
+    /// same as before this change. One id's read failing (unauthorized, deleted, transient) only drops that one
+    /// referenced resource, not the whole type.
+    /// </summary>
+    private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> FetchByCollectedReferencesAsync(
+        IFhirSourceClient client,
+        string resourceType,
+        FhirSourceConfiguration source,
+        IReadOnlyList<ResourceEnvelope> alreadyFetched,
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        var referencedIds = ExtractReferencedIds(alreadyFetched, resourceType);
+        if (referencedIds.Count == 0)
+        {
+            var cleanSource = source with
+            {
+                SearchParameters = null,
+                PatientIds = null,
+                TargetPatientId = null,
+                PatientSearchCriteria = null,
+            };
+            return await SearchWithPolicyAsync(client, resourceType, cleanSource, context.WorkflowRunId, cancellationToken);
+        }
+
+        var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
+        foreach (var id in referencedIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var resource = await client.ReadByIdAsync(resourceType, id, source, cancellationToken);
+                if (resource is not null)
+                {
+                    results.Add(resource);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                if (_exceptionManager is not null)
+                {
+                    await _exceptionManager.CaptureExpectedAsync(
+                        new ExpectedFailure(
+                            "ReferencedResourceReadFailed",
+                            $"Could not read {resourceType}/{id} ({exception.Message}); skipping this referenced id."),
+                        new ExceptionContext(
+                            Module: "Workflow",
+                            Severity: "Informational",
+                            CorrelationId: context.CorrelationId,
+                            WorkflowId: node.WorkflowDefinitionId.ToString(),
+                            ExecutionId: context.WorkflowRunId.ToString()),
+                        cancellationToken);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Every distinct id referenced as <c>{targetResourceType}/{id}</c> anywhere within <paramref name="resources"/>'
+    /// raw JSON — walks the full document tree since the reference can sit at any depth/shape depending on the
+    /// referencing resource type (a flat property, or nested inside an array of backbone elements).
+    /// </summary>
+    private static HashSet<string> ExtractReferencedIds(IReadOnlyList<ResourceEnvelope> resources, string targetResourceType)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var prefix = $"{targetResourceType}/";
+
+        foreach (var resource in resources)
+        {
+            if (resource.Payload is not string rawJson || string.IsNullOrWhiteSpace(rawJson))
+            {
+                continue;
+            }
+
+            using var document = System.Text.Json.JsonDocument.Parse(rawJson);
+            CollectReferencedIds(document.RootElement, prefix, ids);
+        }
+
+        return ids;
+    }
+
+    private static void CollectReferencedIds(System.Text.Json.JsonElement element, string referencePrefix, HashSet<string> ids)
+    {
+        switch (element.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (string.Equals(property.Name, "reference", StringComparison.Ordinal) &&
+                        property.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                        property.Value.GetString() is { Length: > 0 } reference &&
+                        reference.StartsWith(referencePrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ids.Add(reference[referencePrefix.Length..]);
+                    }
+                    else
+                    {
+                        CollectReferencedIds(property.Value, referencePrefix, ids);
+                    }
+                }
+                break;
+            case System.Text.Json.JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    CollectReferencedIds(item, referencePrefix, ids);
+                }
+                break;
+        }
     }
 
     protected override object CreatePayload(

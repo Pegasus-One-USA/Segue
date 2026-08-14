@@ -174,11 +174,11 @@ export class DestinationConnectionFormComponent {
       config['dest_baseUrl'] = v.baseUrl ?? '';
       config['dest_project'] = v.project ?? '';
       config['dest_authType'] = v.authType ?? 'oauth2';
-      // Mirrors DestinationWizardComponent._save()'s fhir branch exactly: "Bundle" write mode is really two
-      // orthogonal backend fields folded into one dropdown (see that component's own doc comment).
+      // Mirrors DestinationWizardComponent._save()'s fhir branch exactly: "Bundle"/"Transaction" write modes are
+      // really two orthogonal backend fields folded into one dropdown (see that component's own doc comment).
       const writeMode = v.writeMode ?? 'upsert';
-      config['dest_writeMode'] = writeMode === 'upsertBundle' ? 'upsert' : writeMode;
-      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : 'individual';
+      config['dest_writeMode'] = writeMode === 'upsertBundle' || writeMode === 'upsertTransaction' ? 'upsert' : writeMode;
+      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : writeMode === 'upsertTransaction' ? 'transaction' : 'individual';
       if (v.authType === 'oauth2') {
         config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
         config['dest_clientId'] = v.clientId ?? '';
@@ -324,7 +324,15 @@ export class DestinationConnectionFormComponent {
         requireSsl: f['dest_requireSsl'] === 'true',
       });
     } else if (this.isFhir()) {
-      const writeMode = f['dest_fhirWriteMode'] === 'bundle' ? 'upsertBundle' : f['dest_writeMode'] || 'upsert';
+      // 'conditional' is a stale value from the now-removed "Conditional update by identifier" option (never
+      // implemented server-side) — remap it to 'upsert' so an old destination still shows a valid selection.
+      const writeMode = f['dest_fhirWriteMode'] === 'bundle'
+        ? 'upsertBundle'
+        : f['dest_fhirWriteMode'] === 'transaction'
+          ? 'upsertTransaction'
+          : f['dest_writeMode'] === 'conditional'
+            ? 'upsert'
+            : f['dest_writeMode'] || 'upsert';
       this.fhirForm.patchValue({
         name: f['dest_name'] || '',
         baseUrl: f['dest_baseUrl'] || '',

@@ -1091,6 +1091,59 @@
   }
 }
 
+.dw-recommend-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dw-recommend-label {
+  flex-shrink: 0;
+}
+
+.dw-recommend-chip {
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-info) 45%, white);
+  background: var(--color-surface);
+  color: var(--color-info-strong);
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--color-info-soft); }
+}
+
+.dw-recommend-add-all {
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-info);
+  background: var(--color-info-soft);
+  color: var(--color-info-strong);
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: color-mix(in srgb, var(--color-info-soft) 60%, var(--color-info)); }
+}
+
+.dw-recommend-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 13px;
+  line-height: 1;
+
+  &:hover { opacity: 1; }
+}
+
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .dw-footer {
   display: flex;

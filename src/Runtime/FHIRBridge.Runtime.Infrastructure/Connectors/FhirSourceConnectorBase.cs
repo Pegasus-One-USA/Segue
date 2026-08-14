@@ -170,7 +170,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
                         resourceType, (int)response.StatusCode, message);
                 }
 
-                throw new InvalidOperationException(message);
+                // Any other non-success response (e.g. a 400 because this resource type's search parameters
+                // don't satisfy what the server requires) is isolated to this one resource type's request the
+                // same way the two cases above are — skip just this type (or cancel the run, if it's the
+                // cohort-seeding type) rather than failing the whole run over one resource type's bad request.
+                throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException(
+                    resourceType, (int)response.StatusCode, message);
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -352,14 +357,13 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// as Epic rejects an unscoped <c>Patient</c> search but every other resource type is left unscoped (pre-existing
     /// behavior — see <c>No_patient_context_leaves_the_query_unscoped</c>). The known patient(s) target their own
     /// resource(s) by <c>_id</c>; every other patient-compartment resource type is filtered by <c>patient</c>.
-    /// Resource types outside the patient compartment (e.g. <c>Practitioner</c> — see
-    /// <see cref="PatientCompartmentResourceTypes"/>) are never patient-scoped: a <c>patient=</c> search parameter
-    /// is not meaningful for them, so connection-level <see cref="FhirSourceConfiguration.SearchParameters"/> pass
-    /// through untouched instead. As a narrow exception, <c>Practitioner</c> additionally honors a request-time
-    /// <see cref="FhirSourceConfiguration.PatientSearchCriteria"/> (appended to any static SearchParameters) so a
-    /// caller can scope a Practitioner fetch by id/name (e.g. <c>Practitioner?_id=...</c>); every other
-    /// non-compartment type still uses its static SearchParameters only. Caller-supplied parameters that already
-    /// pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
+    /// Resource types outside the patient compartment entirely (see <see cref="PatientCompartmentResourceTypes"/> —
+    /// Practitioner, Organization, Location, ...) reach this method with a clean, already-scrubbed source
+    /// (<c>SourceNodeExecutors</c> clears SearchParameters/PatientIds/PatientSearchCriteria before calling in for
+    /// these), since a <c>patient=</c> search parameter is never meaningful for them — the branch below passes
+    /// their (already-null) SearchParameters through untouched, producing a single bare, unscoped request.
+    /// Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left
+    /// untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
@@ -372,20 +376,9 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         if (!isCompartmentResource)
         {
-            // Non-patient-compartment types can't be patient-scoped, and historically their request-time
-            // PatientSearchCriteria was dropped here entirely. Honor it for Practitioner ONLY (deliberately narrow —
-            // every other non-compartment type keeps the original "static SearchParameters only" behavior) so a
-            // caller can scope a Practitioner fetch by id/name (e.g. Practitioner?_id=...). Appended to any static
-            // SearchParameters, mirroring the Patient branch below.
-            if (string.Equals(resourceType, "Practitioner", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria))
-            {
-                var practitionerCriteria = source.PatientSearchCriteria.Trim().TrimStart('?').TrimStart('&');
-                return string.IsNullOrWhiteSpace(query)
-                    ? practitionerCriteria
-                    : $"{query}&{practitionerCriteria}";
-            }
-
+            // Non-patient-compartment types can't be patient-scoped — connection-level
+            // FhirSourceConfiguration.SearchParameters pass through untouched (SourceNodeExecutors already scrubs
+            // any leftover Patient-search criteria before calling in for one of these, so this is typically null).
             return source.SearchParameters;
         }
 

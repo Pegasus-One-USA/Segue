@@ -27,7 +27,9 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     private static MappedDestinationRecord Record(string? sourceJson = null, string sourceResourceId = "123", string resourceType = "Patient") =>
         new(Guid.NewGuid(), resourceType, resourceType, sourceResourceId, new Dictionary<string, object?>(), sourceJson);
 
-    private static PipelineWriteContext Context() => new(true, "Workflow", DateTimeOffset.UtcNow);
+    private static PipelineWriteContext Context(
+        Func<string, string, CancellationToken, Task<string?>>? fetchMissingReferenceAsync = null) =>
+        new(true, "Workflow", DateTimeOffset.UtcNow, FetchMissingReferenceAsync: fetchMissingReferenceAsync);
 
     private static (MappedFhirRepositoryDestinationWriter Writer, CapturingHandler Handler, Mock<ISecretProvider> SecretProvider)
         CreateWriter(string secretValue = "https://fhir.example.com", IFhirDestinationTokenProvider? tokenProvider = null)
@@ -317,23 +319,119 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     }
 
     [Fact]
-    public async Task Order_is_unchanged_when_the_referenced_type_is_absent_from_the_batch()
+    public async Task Bundle_mode_orders_same_type_reference_before_the_record_referencing_it()
     {
+        // Reproduces Epic's multi-component vital-sign panel shape: two granular Observations both reference a
+        // third, parent Observation via derivedFrom — a same-resource-type dependency the old group-level sort
+        // (which only ordered across DIFFERENT resource types) couldn't see, so the parent (fetched last here,
+        // matching the real-world batch order that caused this) needs to move before both children.
         var (writer, handler, _) = CreateWriter();
-        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
-        // References Organization, but no Organization record is present in this batch at all — nothing to
-        // reorder against; Patient must still be written, unaffected.
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
         var records = new[]
         {
             Record(
-                """{"resourceType":"Patient","id":"p1","managingOrganization":{"reference":"Organization/missing"}}""",
-                sourceResourceId: "p1", resourceType: "Patient"),
+                """{"resourceType":"Observation","id":"child1","derivedFrom":[{"reference":"Observation/parent1"}]}""",
+                sourceResourceId: "child1", resourceType: "Observation"),
+            Record(
+                """{"resourceType":"Observation","id":"child2","derivedFrom":[{"reference":"Observation/parent1"}]}""",
+                sourceResourceId: "child2", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"parent1"}""", sourceResourceId: "parent1", resourceType: "Observation"),
         };
 
         await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
 
         handler.Requests.Should().HaveCount(1);
-        handler.Requests[0].Request.RequestUri!.ToString().Should().Be("https://aidbox.example.com/fhir/Patient/p1");
+        var entryUrls = System.Text.Json.Nodes.JsonNode.Parse(handler.Requests[0].Body!)!["entry"]!.AsArray()
+            .Select(e => e!["request"]!["url"]!.GetValue<string>())
+            .ToList();
+        entryUrls.Should().Equal("Observation/parent1", "Observation/child1", "Observation/child2");
+    }
+
+    // ── transaction mode (atomic; resolves mutual/cyclic references batch mode can't) ──────────────────────
+
+    [Fact]
+    public async Task Transaction_mode_sends_type_transaction_and_marks_all_entries_written_on_success()
+    {
+        // The actual failing shape this mode exists for: two Observations that MUTUALLY reference each other
+        // (hasMember <-> derivedFrom) — no write order could ever satisfy both in "bundle" mode, but a transaction
+        // Bundle resolves references against the full set being written, not just what's committed so far.
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirWriteMode":"transaction"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Observation","id":"parent1","hasMember":[{"reference":"Observation/child1"}]}""",
+                sourceResourceId: "parent1", resourceType: "Observation"),
+            Record(
+                """{"resourceType":"Observation","id":"child1","derivedFrom":[{"reference":"Observation/parent1"}]}""",
+                sourceResourceId: "child1", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().HaveCount(1);
+        var requestBody = System.Text.Json.Nodes.JsonNode.Parse(handler.Requests[0].Body!)!;
+        requestBody["type"]!.GetValue<string>().Should().Be("transaction");
+        result.Count.Should().Be(2);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Transaction_mode_fails_the_whole_write_when_the_outer_response_is_non_success()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+        {
+            Content = new StringContent(
+                """
+                {"resourceType":"OperationOutcome","issue":[{"severity":"fatal","code":"invalid",
+                "diagnostics":"Referenced resource Observation/child1 does not exist"}]}
+                """)
+        };
+        var destination = Destination("""{"dest_fhirWriteMode":"transaction"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Observation","id":"parent1","hasMember":[{"reference":"Observation/child1"}]}""",
+                sourceResourceId: "parent1", resourceType: "Observation"),
+            Record(
+                """{"resourceType":"Observation","id":"child1","derivedFrom":[{"reference":"Observation/parent1"}]}""",
+                sourceResourceId: "child1", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("Observation/parent1") && e.Contains("Observation/child1")
+            && e.Contains("Referenced resource Observation/child1 does not exist"));
+    }
+
+    [Fact]
+    public async Task Order_is_unchanged_when_the_referenced_resource_is_confirmed_present_at_the_destination()
+    {
+        var (writer, handler, _) = CreateWriter();
+        // References Organization, but no Organization record is present in this batch at all — the destination's
+        // own existence check confirms it's already there, so Patient must still be written, unaffected.
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Get
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"Organization","id":"org-elsewhere"}}]}""")
+            }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Patient","id":"p1","managingOrganization":{"reference":"Organization/org-elsewhere"}}""",
+                sourceResourceId: "p1", resourceType: "Patient"),
+        };
+
+        await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put
+            && r.Request.RequestUri!.ToString() == "https://aidbox.example.com/fhir/Patient/p1");
     }
 
     [Fact]
@@ -355,6 +453,516 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         handler.Requests[0].Request.RequestUri!.ToString().Should().Be("https://aidbox.example.com/fhir/Organization/org1");
         handler.Requests[1].Request.RequestUri!.ToString().Should().Be("https://aidbox.example.com/fhir/Patient/p1");
         handler.Requests[2].Request.RequestUri!.ToString().Should().Contain("Custom/fallback1");
+    }
+
+    // ── referenced-but-absent-type warning (defense-in-depth for a deliberate destination-resource exclusion) ──
+
+    [Fact]
+    public async Task Individual_mode_blocks_a_record_whose_reference_is_confirmed_missing_everywhere()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        // Encounter is deliberately excluded from this batch entirely, and the (default, empty) existence-check
+        // response confirms it doesn't already exist at the destination either — same shape as a destination whose
+        // own resource selection dropped it while keeping Observation.
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"o1","encounter":{"reference":"Encounter/e1"}}""",
+                sourceResourceId: "o1", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("Observation/o1") && e.Contains("Encounter/e1") && e.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task No_warning_when_every_referenced_type_is_present_in_the_batch()
+    {
+        var (writer, _, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"o1","encounter":{"reference":"Encounter/e1"}}""",
+                sourceResourceId: "o1", resourceType: "Observation"),
+            Record("""{"resourceType":"Encounter","id":"e1"}""", sourceResourceId: "e1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Bundle_mode_blocks_a_record_whose_reference_is_confirmed_missing_everywhere()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirWriteMode":"bundle"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"o1","encounter":{"reference":"Encounter/e1"}}""",
+                sourceResourceId: "o1", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Post);
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Observation/o1") && e.Contains("Encounter/e1"));
+    }
+
+    // ── reference resolution: present in batch / present at destination / missing everywhere ──────────────
+
+    [Fact]
+    public async Task Referenced_resource_present_in_the_current_batch_needs_no_destination_lookup()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+            Record("""{"resourceType":"Organization","id":"org1"}""", sourceResourceId: "org1", resourceType: "Organization"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Get);
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put).Should().Be(2);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Referenced_resource_absent_from_batch_but_found_at_destination_is_satisfied()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Get
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"Organization","id":"org1"}}]}""")
+            }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Get);
+        handler.Requests.Single(r => r.Request.Method == HttpMethod.Get).Request.RequestUri!.ToString()
+            .Should().Contain("Organization?_id=org1");
+        handler.Requests.Should().ContainSingle(r =>
+            r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Encounter/enc1"));
+        handler.Requests.Should().NotContain(r =>
+            r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Organization"));
+    }
+
+    [Fact]
+    public async Task Referenced_resource_missing_everywhere_blocks_only_the_referencing_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("Encounter/enc1") && e.Contains("Organization/org1") && e.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task Only_the_record_with_a_genuinely_missing_reference_is_blocked_the_other_still_writes()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) =>
+        {
+            if (request.Method != HttpMethod.Get)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            // Only org-found is ever returned — org-missing genuinely doesn't exist at the destination.
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"Organization","id":"org-found"}}]}""")
+            };
+        };
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org-missing"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+            Record("""{"resourceType":"Encounter","id":"enc2","serviceProvider":{"reference":"Organization/org-found"}}""",
+                sourceResourceId: "enc2", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r =>
+            r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("enc1"));
+        handler.Requests.Should().ContainSingle(r =>
+            r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("enc2"));
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Encounter/enc1") && e.Contains("org-missing"));
+    }
+
+    [Fact]
+    public async Task Existence_check_failure_falls_back_to_a_non_blocking_warning_and_still_writes_the_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Get
+            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("could not verify") && e.Contains("Organization/org1"));
+    }
+
+    [Fact]
+    public async Task Duplicate_references_to_the_same_missing_resource_are_looked_up_once_and_block_every_referencing_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org-abc"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+            Record("""{"resourceType":"Encounter","id":"enc2","serviceProvider":{"reference":"Organization/org-abc"}}""",
+                sourceResourceId: "enc2", resourceType: "Encounter"),
+            Record("""{"resourceType":"Encounter","id":"enc3","serviceProvider":{"reference":"Organization/org-xyz"}}""",
+                sourceResourceId: "enc3", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Get).Should().Be(1);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().HaveCount(3);
+        result.RecordErrors.Should().Contain(e => e.Contains("Encounter/enc1") && e.Contains("org-abc"));
+        result.RecordErrors.Should().Contain(e => e.Contains("Encounter/enc2") && e.Contains("org-abc"));
+        result.RecordErrors.Should().Contain(e => e.Contains("Encounter/enc3") && e.Contains("org-xyz"));
+    }
+
+    [Fact]
+    public async Task Contained_resource_fragment_references_are_never_existence_checked()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """
+                {"resourceType":"Encounter","id":"enc1","contained":[{"resourceType":"Practitioner","id":"comp1"}],
+                 "participant":[{"individual":{"reference":"#comp1"}}]}
+                """,
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Get);
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Versioned_reference_matches_a_present_unversioned_record_by_type_and_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1/_history/3"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+            Record("""{"resourceType":"Organization","id":"org1"}""", sourceResourceId: "org1", resourceType: "Organization"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Get);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Absolute_url_reference_is_ignored_by_the_existence_check()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"https://external.example.com/fhir/Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Get);
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Identifier_based_reference_with_no_reference_field_is_not_resolved_by_this_mechanism()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record(
+                """{"resourceType":"Patient","id":"p1","generalPractitioner":[{"identifier":{"system":"urn:npi","value":"123"}}]}""",
+                sourceResourceId: "p1", resourceType: "Patient"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Get);
+        result.RecordErrors.Should().BeNull();
+    }
+
+    // ── dest_autoFetchMissingReferences (opt-in) ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Auto_fetch_disabled_by_default_leaves_a_confirmed_missing_reference_blocked()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+        var fetchCalled = false;
+        var context = Context((_, _, _) => { fetchCalled = true; return Task.FromResult<string?>("""{"resourceType":"Organization","id":"org1"}"""); });
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        fetchCalled.Should().BeFalse("the fetch hook must never be invoked unless dest_autoFetchMissingReferences is explicitly enabled");
+        result.Count.Should().Be(0);
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task Auto_fetch_enabled_includes_a_successfully_fetched_reference_in_the_same_write()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+        var context = Context((type, id, _) =>
+            Task.FromResult<string?>(type == "Organization" && id == "org1"
+                ? """{"resourceType":"Organization","id":"org1","name":"Fetched Org"}"""
+                : null));
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put
+            && r.Request.RequestUri!.ToString().Contains("Organization/org1"));
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put
+            && r.Request.RequestUri!.ToString().Contains("Encounter/enc1"));
+        // Organization must be written before Encounter — same reference-dependency ordering as an in-batch reference.
+        var organizationIndex = handler.Requests.FindIndex(r => r.Request.RequestUri!.ToString().Contains("Organization/org1"));
+        var encounterIndex = handler.Requests.FindIndex(r => r.Request.RequestUri!.ToString().Contains("Encounter/enc1"));
+        organizationIndex.Should().BeLessThan(encounterIndex);
+    }
+
+    [Fact]
+    public async Task Auto_fetch_failure_falls_back_to_blocking_the_record_exactly_as_if_auto_fetch_were_off()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+        var context = Context((_, _, _) => Task.FromResult<string?>(null));
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Encounter/enc1") && e.Contains("Organization/org1") && e.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task Auto_fetch_with_no_delegate_wired_up_falls_back_to_blocking()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org1"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+        };
+
+        // No fetchMissingReferenceAsync supplied — e.g. more than one source node feeds this destination.
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("not found"));
+    }
+
+    [Fact]
+    public async Task Auto_fetch_cap_blocks_the_excess_and_reports_a_single_summary_line()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(
+            """{"dest_autoFetchMissingReferences":"true","dest_autoFetchMaxCount":"1"}""",
+            target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Encounter","id":"enc1","serviceProvider":{"reference":"Organization/org-a"}}""",
+                sourceResourceId: "enc1", resourceType: "Encounter"),
+            Record("""{"resourceType":"Encounter","id":"enc2","serviceProvider":{"reference":"Organization/org-b"}}""",
+                sourceResourceId: "enc2", resourceType: "Encounter"),
+        };
+        var fetchedIds = new List<string>();
+        var context = Context((type, id, _) =>
+        {
+            fetchedIds.Add(id);
+            return Task.FromResult<string?>($$"""{"resourceType":"{{type}}","id":"{{id}}"}""");
+        });
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        fetchedIds.Should().HaveCount(1, "the cap of 1 must stop further auto-fetch attempts");
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Auto-fetch limit") && e.Contains("1"));
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put).Should().Be(2); // one Encounter + its fetched Organization
+    }
+
+    [Fact]
+    public async Task Auto_fetch_recursively_resolves_a_reference_inside_an_auto_fetched_record()
+    {
+        // Reproduces the real gap: an Observation references a missing Encounter; the fetched Encounter itself
+        // references a missing Practitioner. Auto-fetch must resolve BOTH levels, not just the first.
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs1","encounter":{"reference":"Encounter/enc1"}}""",
+                sourceResourceId: "obs1", resourceType: "Observation"),
+        };
+        var fetchedIds = new List<string>();
+        var context = Context((type, id, _) =>
+        {
+            fetchedIds.Add(id);
+            if (type == "Encounter" && id == "enc1")
+            {
+                return Task.FromResult<string?>(
+                    """{"resourceType":"Encounter","id":"enc1","participant":[{"individual":{"reference":"Practitioner/pr1"}}]}""");
+            }
+            if (type == "Practitioner" && id == "pr1")
+            {
+                return Task.FromResult<string?>("""{"resourceType":"Practitioner","id":"pr1"}""");
+            }
+            return Task.FromResult<string?>(null);
+        });
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        fetchedIds.Should().Equal("enc1", "pr1"); // Encounter discovered from the Observation first, Practitioner discovered from the fetched Encounter second
+        result.RecordErrors.Should().BeNull();
+        result.Count.Should().Be(3);
+        handler.Requests.Should().Contain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Observation/obs1"));
+        handler.Requests.Should().Contain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Encounter/enc1"));
+        handler.Requests.Should().Contain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Practitioner/pr1"));
+    }
+
+    [Fact]
+    public async Task Auto_fetch_recursion_finds_the_nested_reference_already_at_the_destination()
+    {
+        // Same shape as above, but the nested Practitioner already exists at the destination — the existence check
+        // must satisfy it without a second fetch call.
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Get
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"Practitioner","id":"pr1"}}]}""")
+            }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs1","encounter":{"reference":"Encounter/enc1"}}""",
+                sourceResourceId: "obs1", resourceType: "Observation"),
+        };
+        var fetchedIds = new List<string>();
+        var context = Context((type, id, _) =>
+        {
+            fetchedIds.Add(id);
+            return Task.FromResult<string?>(
+                """{"resourceType":"Encounter","id":"enc1","participant":[{"individual":{"reference":"Practitioner/pr1"}}]}""");
+        });
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        fetchedIds.Should().Equal("enc1"); // Practitioner satisfied by the existence check — never fetched
+        result.RecordErrors.Should().BeNull();
+        handler.Requests.Should().Contain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Observation/obs1"));
+        handler.Requests.Should().Contain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Encounter/enc1"));
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.ToString().Contains("Practitioner"));
+    }
+
+    [Fact]
+    public async Task Unresolvable_nested_reference_cascades_and_excludes_the_referencing_record_too()
+    {
+        // The actual failure this was built for: Observation -> fetched Encounter -> Practitioner that can't be
+        // resolved at all. Both the Encounter AND the Observation that pulled it in must be excluded — writing the
+        // Encounter alone would just reproduce the dangling-reference bug one level removed.
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_autoFetchMissingReferences":"true"}""", target: "https://aidbox.example.com/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs1","encounter":{"reference":"Encounter/enc1"}}""",
+                sourceResourceId: "obs1", resourceType: "Observation"),
+        };
+        var context = Context((type, id, _) =>
+        {
+            if (type == "Encounter" && id == "enc1")
+            {
+                return Task.FromResult<string?>(
+                    """{"resourceType":"Encounter","id":"enc1","participant":[{"individual":{"reference":"Practitioner/pr1"}}]}""");
+            }
+            return Task.FromResult<string?>(null); // Practitioner/pr1 fetch fails, and the default handler finds nothing at the destination either
+        });
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, context, CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        handler.Requests.Should().NotContain(r => r.Request.Method == HttpMethod.Put);
+        result.RecordErrors.Should().HaveCount(2);
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Encounter/enc1") && e.Contains("Practitioner/pr1"));
+        result.RecordErrors.Should().ContainSingle(e => e.Contains("Observation/obs1") && e.Contains("Encounter/enc1"));
     }
 
     /// <summary>
