@@ -1,0 +1,720 @@
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDestinationSettings.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-220
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811121425_AddFieldLineageSystemMetadata.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4761
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-5
+portal/src/app/components/node-library/destination-wizard/destination-forms/power-bi-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-30
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813045528_AddAthenaPracticeContext.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-40
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/InMemoryFhirAccessTokenCache.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 17,35-54,56-57
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-383
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-17,19-39,41,43-55,57,59-60,62-63,65-68,70-78,80-114,117-125,131-142
+src/FHIRBridge.Application/Abstractions/Messaging/ILineageCaptureCommandHandler.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-13
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813031730_AddSourceConnectionDiscoveredScopes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-28
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,18-21,24,50-65,70-99
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811072221_AddWorkflowFieldLineageEntries.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4742
+portal/src/app/operations/pages/errors/errors.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 27-42
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_f497a23d1bc09f::t_51e30fd65b3dc9 27
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 71,100,102,107,137-188,565-587
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgre-sql-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 93-94
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Provenance.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-110
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f497a23d1bc09f::t_5319989f05aa00 345,349,353,357,362,366
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 103-113,119-140,142-144,146,256,282,311,315,319,323,327,332,336,340,367-383,385-404,408,412,416
+  s_f497a23d1bc09f::t_139aada5c835be 178
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 182,184,186,194
+Demo_TestApp/backend/Program.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 220-222,237-238,253-256,288-290,306-308,765-767
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 8,38-42
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-81
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+src/FHIRBridge.Infrastructure/Messaging/InMemoryLineageCaptureDispatcher.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-19
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 21-22,41-42
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 95,141-219
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 4,28,31,34-36,38,40-41,44-55,58-59,61,66,75,81-90
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-6,11-19,24,29,31-32,36,38-40,45,47-49,51-60,64-75,77-82,86-87,90-91,94-99
+src/FHIRBridge.Infrastructure/Terminology/SnomedTerminologyLookupService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-34
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-187
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-151
+src/FHIRBridge.Infrastructure/Messaging/MessagingServiceCollectionExtensions.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 31,88,116,128
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-73
+portal/src/app/components/canvas/canvas.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 35,261-269
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirGrantedScopeProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-21
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 10-19,29-32,36-38,44-46,61-62,64-94,96-97,105-126,130-133,149,153-155,157-162,164,188-192,196-212,216-225,228-233,236-239,241-246,251-252,264-267,269-270,272-282,284-299,301,303-319,321-363,365-395,404-496,500,505-541,545-546,579-581,583-640,652-654
+portal/src/app/onboarding/services/app-init.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 22-32,37-38
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Communication.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-150
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 13-14,17,43,56,77-86,112-117,120-123,136-139,144-155
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/WorkflowNodeExecutorBase.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 132-170
+portal/src/app/components/canvas/canvas.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 91-97
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3-9
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 86-98,352-394,504-513,629-643
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+tests/FHIRBridge.Runtime.UnitTests/Applications/SourceApplicationStrategyTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 18-20,26,56,64,98,104,108,110,117-127
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-16,18-48,50-58
+  s_f497a23d1bc09f::t_c11437bb956164 17
+  s_f497a23d1bc09f::t_85867eea5921f2 49
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 66-76
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-241
+portal/src/app/components/node-library/destination-wizard/field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-62
+src/FHIRBridge.Application/Services/Transforms/Nodes/DataQualityGovernanceNodes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 93
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/CareTeam.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-112
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/QuestionnaireResponse.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-71
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 356-409
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2,61,105-110,136-140,174-180,278-281,317-319,322,362-369,426-434,441,731,827-830,892-895,962,999-1000,1181-1201,1203-1211,1278-1290,1292,1295
+src/FHIRBridge.Application/DTOs/CreateFirstSuperAdminRequest.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3-7,12-13,17-29
+portal/src/app/services/phase-config.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 28,33-34,46
+  s_f497a23d1bc09f::t_97fb64a9ddff0d 51
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-node-classifier.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 30-73
+src/Runtime/FHIRBridge.Runtime.Domain/Enums/RuntimeSourceType.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 13-14
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811152059_AddBulkExportJobRequestedResourceTypes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-28
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 10-11,29,35-36,42,66,95-114,116-117,119-139,179-181
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 32-33,50,91-101,113-114,122
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineConditionCodeReproTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-58
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 58-60
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 86-90
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 46,87-89,123-127
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 107-109,116-118,132,168,290-294,303,310-311,313,328,331,345,351-352,361,365-366,369
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineDateFieldReproTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-37
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2,4,26-35,38,59-60,67-80,234-241,419-485
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/CommunicationRequest.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-143
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-508
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 22-38
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 47,81
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/FamilyMemberHistory.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-178
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/MedicationDispense.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-201
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 29-42
+src/FHIRBridge.Infrastructure/Aggregation/PatientAggregationService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 153,188-190
+portal/src/app/components/node-library/destination-wizard/destination-forms/tableau-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowNodeResourceHistoryRecorder.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 24-63,66-75,90-162
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form-api.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-62
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+portal/src/app/services/workflow-api.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 127-139
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.epic.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 40061-57441
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/ServiceRequest.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-221
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,36-40,81-97
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/FhirSourceJsonPatcher.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-203
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/components/node-library/destination-wizard/destination-forms/pdf-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-178
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 34-47,126
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 158,162
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 118-122,211,216-217
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Immunization.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-147
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqOptions.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 15
+portal/src/app/components/node-library/destination-wizard/destination-forms/medplum-destination-form.component.ts
+  s_f497a23d1bc09f::t_7e707ea51b4c35 1-168
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 62,102-138,199-236,493,505-515,542
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobRecordMode.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-20
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobContainerClientCache.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-29
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_f497a23d1bc09f::t_e74f5c72d4196e 82-94
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 61-81
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 29-34
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 20,22-24,27,72-96
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Device.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-107
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-16,19-142,157-196,198,201-203,206
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2-3,6-10,13,47-90
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 25
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 270,323,451-452,607-621,623,625-629,643,651,656
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 55-61,269,272-276,280-288
+src/Api/FHIRBridge.Api/Program.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 19,31,155-160,464-475
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Location.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-149
+tests/FHIRBridge.UnitTests/Transforms/DateTimeFormatBirthDateReproTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-30
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/components/node-library/destination-wizard/destination-forms/sftp-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-124
+src/FHIRBridge.Application/Abstractions/Sources/IBackendAuthScopeProbeService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-14
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAccessTokenCache.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 43-69
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 72
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f497a23d1bc09f::t_d01e3e3330c6e0 2046-2050,2060,2062
+  s_f497a23d1bc09f::t_a15e4c3beec88d 304-306
+  s_f497a23d1bc09f::t_631d78d53d83fd 1528-1530
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2,5-6,15-18,34,41-42,143,160-161,190-195,225-229,268-287,290-291,294-303,307-338,340-357,359-364,367-369,371-373,553-557,570-574,661-672,758,762-763,774,784,801-816,818-826,835-841,862-866,882-969,973-976,1029-1030,1038-1057,1133,1159-1163,1200-1236,1324-1327,1350-1367,1369-1390,1406-1442,1480-1485,1505-1506,1510,1568-1576,1578-1579,1600,1603,1607-1621,1640-1658,1667-1668,1846-1854,1874-1881,1906-1913,1963-1973,1986-1995,2005,2015-2016,2024-2038,2066,2069-2071,2108,2162-2168,2184,2197,2220-2228,2231-2235,2237-2241
+  s_f497a23d1bc09f::t_f055aad32729af 288-289
+  s_f497a23d1bc09f::t_3d7745a7069c34 2006
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobStorageDestinationHealthCheckProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-46
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 30-33,40-41
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813031730_AddSourceConnectionDiscoveredScopes.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4768
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 142-147,150,153,156,158-159,161,164-165,181-182,193-195,198-200,218-222
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/MedicationOrder.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-203
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Questionnaire.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-73
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/RelatedPerson.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-103
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1
+portal/src/app/components/node-library/destination-wizard/destination-forms/rest-api-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Appointment.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-140
+portal/src/styles.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 291-296,1375-1391
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceClientFactory.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 46
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/AthenahealthFhirSourceClient.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-56
+portal/src/app/components/node-library/destination-wizard/destination-forms/simple-stub-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-30
+portal/src/app/components/node-library/destination-wizard/destination-forms/snowflake-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-27
+.claude/settings.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 44-45
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-294
+portal/src/app/execution-history/components/field-lineage-panel/mock-lineage-data.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-302
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,33,37,41-52,61,63,67-74,82-84,88-98,130-132,134-149,155-156,163-198,207-209,215-220,222-254,257,259,262-264,270,273,277-319,338-360,377-406
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 110-129
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260810103000_AddTransformationRuleFhirWriteBackJsonPath.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4669
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 181-273
+portal/src/app/components/node-library/destination-wizard/destination-forms/my-sql-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 114-119,403-407,413,456
+src/FHIRBridge.Infrastructure/Pipeline/FhirSubscriptionManagementService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 71
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Task.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-135
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 66-67,73-75,122,126,151-164,183-184
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 14,21-33,40-45,75-83,128,132-133,138-147,167,169-170,174-175
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 98-130
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 181-214
+portal/src/app/components/node-library/destination-wizard/destination-forms/s3-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-5
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 57-59,65
+tests/FHIRBridge.UnitTests/Destinations/Blob/BlobContainerClientFactoryTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-178
+src/Api/FHIRBridge.Api/Content/legal/terms-and-conditions.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811072221_AddWorkflowFieldLineageEntries.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-63
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/OAuth2ClientCredentialsTokenProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,7-8,17,21,23-26,30,46-47,51-53,57-60,63-79,81-88,94-97,109-112,114-116,120-134,142-144
+tests/FHIRBridge.UnitTests/Infrastructure/Icd10TerminologyLookupServiceTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-65
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 38-70
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 34
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,25,30-31,36,171-180,360,392,396-408
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-882
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-883
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 6-16,111-116
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3-8,30-38
+src/FHIRBridge.Application/DTOs/MappingImportDtos.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 31-40
+src/FHIRBridge.Infrastructure/Destinations/Blob/IBlobContainerClientFactory.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-25
+src/FHIRBridge.Application/Messaging/LineageCaptureCommand.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-45
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813045528_AddAthenaPracticeContext.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4778
+src/FHIRBridge.Infrastructure/Messaging/AzureServiceBus/AzureServiceBusDispatchers.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 40-56
+src/FHIRBridge.Application/DTOs/SourceAuthenticationDto.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 15-23
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Slot.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-71
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 16,18,46,61-66,74,89-99,108-116,152,167-169,184-187,193-267,281,306-310,399
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDeliveryGranularity.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-16
+src/FHIRBridge.Infrastructure/Terminology/Icd10TerminologyLookupService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-37
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-156
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_f497a23d1bc09f::t_abc1794b8a04e6 460
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 66-73,110-127,131,138,189,223-279,282,319,456-458,546-565,628-646
+  s_f497a23d1bc09f::t_b9c54bb2e4c9e7 592
+src/FHIRBridge.Infrastructure/Sources/BackendAuthScopeProbeService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-142
+portal/src/app/components/node-library/destination-wizard/destination-forms/fhir-repository-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-13,18,20-30
+  s_f497a23d1bc09f::t_a201c2de3b054c 14-17,19
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,77-83,86-90,102-132
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 9-14,18-19,21-23,25-26,46-56,62-63,65
+src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 22-47
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 17-22,105-112,129-138
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 39
+  s_f497a23d1bc09f::t_90cdce92adc33c 50
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/PractitionerRole.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-103
+src/FHIRBridge.Application/Services/Transforms/ReservedTransformConfigKeys.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-29
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 13
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+src/FHIRBridge.Infrastructure/Messaging/LineageCaptureProcessor.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-71
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 28-33,38,51,93-94,150-153,168,222-241,246,255,274,305-309,337
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 31-34,268-271
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 4,27,116-127,295,385,405-420
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-2461
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-sql-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-36
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 126-140,492-494
+portal/src/app/components/node-library/destination-wizard/destination-forms/ndjson-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+src/FHIRBridge.Infrastructure/Workflows/RouteToWorkflowGraphProjection.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 222
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-94
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-3
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqDispatchers.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 40-56
+docker-compose.yml
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 115-132,249
+portal/src/app/mapping-profiles/services/mapping-profile.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 62-68
+portal/src/app/components/shared/config-form/config-form.contract.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-29
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 52-56,69-73
+src/FHIRBridge.Infrastructure/Messaging/AzureServiceBus/AzureServiceBusOptions.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 14
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 8-9,21,116,128-142,148-152,178-195,216-219,258,271-276,307-399
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 51-53,59
+tests/FHIRBridge.UnitTests/Destinations/Blob/MappedBlobStorageDestinationWriterTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-677
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Goal.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-136
+src/FHIRBridge.Application/DTOs/CreateMappingProfileRequest.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 14-17
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 310-315,334-449
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/SampleFhirSourceClient.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 20-29
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 553-560,569,618-619,658-664,823-832,840,842-843,845
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Binary.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-15
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 88-112
+Documents/Azure-Blob-Destination-Implementation.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-1092
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/FieldLineageEntry.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-93
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Specimen.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-124
+src/FHIRBridge.Domain/Entities/BulkExportJob.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 31-32,46,98-105
+src/FHIRBridge.Infrastructure/Destinations/TargetReachabilityDestinationHealthCheckProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 10-13
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 34
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-199
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_f497a23d1bc09f::t_40dbdb9c597c81 410
+  s_f497a23d1bc09f::t_722741f7ec5a75 205
+  s_f497a23d1bc09f::t_6c4016bad1d1e6 505-507
+  s_f497a23d1bc09f::t_c376531b587e4d 309
+  s_f497a23d1bc09f::t_1ef4ddc82f97ce 633
+  s_f497a23d1bc09f::t_8108c3bd0e4e6c 651-652
+  s_f497a23d1bc09f::t_c80da2a752eb42 334
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2,14-22,26-34,131-138,167-193,198,208-211,226-240,282-285,310-315,339-342,494-502,508-518,545-551,554-555,558-568,571-585,588-589,592-596,599-604,606,610,614,621-623,671-696,716-720,747,772-774
+  s_f497a23d1bc09f::t_51dfb1c82fe83f 527-528
+portal/src/app/data/scope-constants.data.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 10-13,17-20
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/operations/pages/errors/errors.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 30-33
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirAccessTokenCache.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 16-28
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 128-134,136,140,146,156,166,168,212-213,228-229,239-243,273,279,285-286,291,340-409,570-623
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-68
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 60-64,100-109
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3,75-81
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 5-6,45,47-64,71-73,81-116,122-126,130-133,143
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDestinationAuthMode.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-15
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorScopeAuthorizationTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,120-172
+portal/src/app/core/api-endpoints.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 97-102,128,172,231,241-245
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/CarePlan.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-179
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2,64-161,207-221
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 396-397,401-403
+portal/src/app/components/node-library/destination-wizard/destination-forms/sftp-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-62
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,13-15,23,29-30,36,55-73
+portal/src/app/components/node-library/destination-wizard/destination-forms/simple-stub-form.helper.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-73
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 20-21,68-89,133-206
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-2,116,121-122,166-200
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirSourceClient.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 15-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811121425_AddFieldLineageSystemMetadata.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-74
+portal/src/app/components/node-library/destination-wizard/destination-forms/parquet-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 8,42-58
+src/FHIRBridge.Infrastructure/Destinations/Blob/BlobContainerClientFactory.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-152
+src/FHIRBridge.Infrastructure/Destinations/MappedBlobStorageDestinationWriter.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-5,9-10,14-27,30-31,33-34,36-37,52-110,115-378
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 24,179-200
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-40
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,48-50,54,94,120,207,211-269,271,273-276,278-286,289-291,308,316,524,549-568
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,17-24,42-48,106-127,260-265,267
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 83-296
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Organization.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-173
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 13,15-19,21-24,32-34,36,38-39,41-43,45,47-48,51-53,55,57-58,61-66,68,70-71,73-76,86-106,109-111,113-130,155-186,189-196,198-201,203-225,229
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 10,13,101-107,173,202-217,222,344-350,352,698-705,710-713,728-777,779-843,861-864,1359-1443,1710-1922
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 77-80
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-44
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811152059_AddBulkExportJobRequestedResourceTypes.Designer.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-4764
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_f497a23d1bc09f::t_c4e32b0a03f336 49
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 48,205,225,245
+tests/FHIRBridge.UnitTests/Transforms/CodesTerminologyNodesTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-2,10-18,75-177
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,10-18,20-39,65-95,108-140,142,153,157,164,166-189,191-198,201-208,210-213,215-237,241
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 27
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/components/node-library/destination-wizard/destination-forms/in-memory-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260810103000_AddTransformationRuleFhirWriteBackJsonPath.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-29
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 109-160,225-231,252-255,292-294,302-306,320-322,350-351,404,406,443-456,460-461,465,484-485,495,717,719,728-730,736,739-748,754-758,764-765,797-802,817-818,825,849-851,853
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 5,17,55,59
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 256-294,298-302
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-138
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/DocumentReference.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-159
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Medication.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-98
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 144-146,3225-3228,3595-3686,4500-4504,4516-4519,4530-4534
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1232,1275-1277
+src/FHIRBridge.Infrastructure/Security/InMemorySecretStore.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 4,40-44
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowNodeResourceHistoryRecorder.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 64-127
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 2-3,19-27,290-341
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 18-20,25-29,32-36,39-43,46-50,53-57,60-73,86-108,111-115,119-120,125-128,130-144,147,149-171,178,183,185,195-199
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 63-78,80-82,84-90,92-131
+src/FHIRBridge.Domain/ValueObjects/SourceAuthenticationConfiguration.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 19-22,32-34,49-60,64-68
+portal/src/app/components/node-library/destination-wizard/destination-forms/protobuf-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/node-library/source-form.registry.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-51
+src/FHIRBridge.Infrastructure/Messaging/LineageCaptureCommandHandler.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-80
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_f497a23d1bc09f::t_96507abdfc231f 99-103
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,5,11,63,72-73,83,139,160-173,227,229-264,268,296-299,303-308,318,320-321,323,337,341,345,348,352,356,369,378,383,391,395-403,423-424,427-432,463,467,470,473-500,519-524,537-562
+tools/EpicTemplateCatalogGenerator/Program.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 30-55
+portal/src/app/operations/pages/errors/errors.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 38,45-47,50,58,76
+tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-135
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 196-209
+src/FHIRBridge.Application/DTOs/BackendAuthScopesDtos.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-23
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 186-397
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 52-54,60
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 68-74
+src/FHIRBridge.Infrastructure/Terminology/RxNormTerminologyLookupService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-31
+portal/src/app/auth/services/session.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 9-18,27-28,40,48,60-93,117-122
+portal/src/app/onboarding/components/terms-and-conditions-dialog/terms-and-conditions-dialog.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-75
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Schedule.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-65
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 23-24,30-31,184-229
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-2,25-27,41-43,57-59,73-75,89-91,105-107,121-123,137-139,168,179-180,191,238-247,288-289,372-403,407,430-431,455-486,489-490,508,521,529,787-799,900-971
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 199-211
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 87
+portal/src/app/services/epic-discovery.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 37-51,78-86
+portal/src/app/components/node-library/destination-wizard/destination-forms/databricks-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-27
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1070
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 7,10-11,16,27,29-35,39-42,51-55,58,60,62,64-68,77,81-132,166-183,195-208
+portal/src/app/components/node-library/destination-wizard/destination-forms/excel-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-8
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 46-54,74,144-158
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 8,33,41,98-100,127-144,180-181
+src/FHIRBridge.Infrastructure/Terminology/CompositeTerminologyLookupService.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1,9-10,13-15,17,22-26,30-32,34,42,44-53
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 19,93,96,107-110,279,376-378,508
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 3-7,11-26,28,31,33,39,52-113,121-124,127-134,136-153,156-194,197-202,212,259-261,265-267,269-271,274,277-280,282-291,293-298,300-308,311-317,329-330,335-418,420-421
+portal/src/app/components/node-library/destination-wizard/destination-forms/avro-destination-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-26
+src/FHIRBridge.Application/Abstractions/Messaging/ILineageCaptureDispatcher.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-9
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 19-21,68-72,193-195,223-225,241-243
+src/Runtime/FHIRBridge.Runtime.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 22-47
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 119-122
+portal/src/app/services/wizard.service.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 21-31,162-167,169,205-207,230,259,276-281,283,410,415-421,439,441-443,448,452-458,470,477
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 67-154
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/ImagingStudy.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-187
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 299-317
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 52-61
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 75-96
+tests/FHIRBridge.Runtime.UnitTests/Workflows/FhirSourceJsonPatcherTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-94
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.ts
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-232
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.scss
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 5-12
+tests/FHIRBridge.UnitTests/Destinations/Blob/BlobDestinationSettingsTests.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-355
+src/FHIRBridge.Application/Services/Transforms/ITransformNode.cs
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 25-31
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/MedicationStatement.json
+  s_f497a23d1bc09f::t_05f4a3f38a63bd 1-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1046916b4bfcb2050b2cfb45c7e11c2d4bc5362e",
+  "prompts": {},
+  "sessions": {
+    "s_f497a23d1bc09f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "342c5994-a1f8-40eb-af9e-42c0d9a53c33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
