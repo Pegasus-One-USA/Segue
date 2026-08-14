@@ -172,6 +172,43 @@
 
   a.back-to-top { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--primary); text-decoration: none; font-weight: 600; }
   a.back-to-top:hover { text-decoration: underline; }
+
+  /* ── Print / PDF ──────────────────────────────────────────────────────────
+     Chapters start clean on their own page; screenshots, tables, notes, and
+     side-by-side comparisons never get sliced across a page boundary. */
+  @page { margin: 14mm 12mm; }
+
+  @media print {
+    html {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
+    }
+    body { background: #fff; font-size: 12.5px; line-height: 1.5; }
+    .wrap { max-width: 100%; padding: 0 2mm 20px; }
+
+    /* Cover page: hero + table of contents occupy page 1 on their own. */
+    header.hero { padding: 26px 4mm 34px; }
+    nav.toc { box-shadow: none; margin-top: -30px; break-after: page; page-break-after: always; }
+
+    /* One chapter per page. */
+    section.chapter { margin-top: 0; break-before: page; page-break-before: always; }
+    section.chapter:first-of-type { break-before: avoid; page-break-before: avoid; }
+
+    /* Never split a screenshot, table, callout, or side-by-side pair across pages. */
+    .shot-card, table.legend, table.legend tr, .two-col > *, .note, .warn,
+    ul.plain-legend, .pill-row {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    /* Keep a heading glued to the content that follows it. */
+    h2, h3.substep { break-after: avoid; page-break-after: avoid; }
+
+    a[href]::after { content: ""; }
+    a.back-to-top { display: none; }
+    footer.end { break-before: avoid; page-break-before: avoid; }
+  }
 </style>
 </head>
 <body>
