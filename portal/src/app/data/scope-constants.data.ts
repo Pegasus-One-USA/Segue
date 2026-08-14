@@ -14,8 +14,8 @@ export const FHIR_RESOURCES: string[] = [
 export const SUPPORTED_RESOURCE_TYPES: string[] = [
   'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
   'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
-  'Appointment', 'CarePlan', 'CareTeam', 'Communication', 'CommunicationRequest', 'Device',
-  'DocumentReference', 'FamilyMemberHistory', 'ImagingStudy', 'Immunization', 'Location', 'Medication',
+  'Appointment', 'Binary', 'CarePlan', 'CareTeam', 'Communication', 'CommunicationRequest', 'Device',
+  'DocumentReference', 'FamilyMemberHistory', 'Goal', 'ImagingStudy', 'Immunization', 'Location', 'Medication',
   'MedicationDispense', 'MedicationStatement', 'Organization', 'PractitionerRole', 'Provenance',
   'Questionnaire', 'QuestionnaireResponse', 'RelatedPerson', 'Schedule', 'Slot', 'Specimen', 'Task',
 ];

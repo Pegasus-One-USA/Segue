@@ -40738,6 +40738,96 @@
         "sourceExtension": null
       }
     ],
+    "Binary": [
+      {
+        "label": "Id",
+        "jsonPath": "$.id",
+        "fhirPath": "id",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Version Id",
+        "jsonPath": "$.meta.versionId",
+        "fhirPath": "meta.versionId",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Last Updated",
+        "jsonPath": "$.meta.lastUpdated",
+        "fhirPath": "meta.lastUpdated",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Source",
+        "jsonPath": "$.meta.source",
+        "fhirPath": "meta.source",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Content Type",
+        "jsonPath": "$.contentType",
+        "fhirPath": "contentType",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Security Context \u203A Reference",
+        "jsonPath": "$.securityContext.reference",
+        "fhirPath": "securityContext.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Security Context \u203A Display",
+        "jsonPath": "$.securityContext.display",
+        "fhirPath": "securityContext.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Data",
+        "jsonPath": "$.data",
+        "fhirPath": "data",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      }
+    ],
     "CarePlan": [
       {
         "label": "Id",
@@ -46023,6 +46113,722 @@
         "arrays": [
           "condition",
           "condition.note"
+        ],
+        "sourceExtension": null
+      }
+    ],
+    "Goal": [
+      {
+        "label": "Id",
+        "jsonPath": "$.id",
+        "fhirPath": "id",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Version Id",
+        "jsonPath": "$.meta.versionId",
+        "fhirPath": "meta.versionId",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Last Updated",
+        "jsonPath": "$.meta.lastUpdated",
+        "fhirPath": "meta.lastUpdated",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Meta \u203A Source",
+        "jsonPath": "$.meta.source",
+        "fhirPath": "meta.source",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Text \u203A Status",
+        "jsonPath": "$.text.status",
+        "fhirPath": "text.status",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Text \u203A Div",
+        "jsonPath": "$.text.div",
+        "fhirPath": "text.div",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Use",
+        "jsonPath": "$.identifier[*].use",
+        "fhirPath": "identifier.use",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A System",
+        "jsonPath": "$.identifier[*].system",
+        "fhirPath": "identifier.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Identifier \u203A Value",
+        "jsonPath": "$.identifier[*].value",
+        "fhirPath": "identifier.value",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "identifier"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Lifecycle Status",
+        "jsonPath": "$.lifecycleStatus",
+        "fhirPath": "lifecycleStatus",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Achievement Status \u203A Coding \u203A System",
+        "jsonPath": "$.achievementStatus.coding[*].system",
+        "fhirPath": "achievementStatus.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "achievementStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Achievement Status \u203A Coding \u203A Code",
+        "jsonPath": "$.achievementStatus.coding[*].code",
+        "fhirPath": "achievementStatus.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "achievementStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Achievement Status \u203A Coding \u203A Display",
+        "jsonPath": "$.achievementStatus.coding[*].display",
+        "fhirPath": "achievementStatus.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "achievementStatus.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Achievement Status \u203A Text",
+        "jsonPath": "$.achievementStatus.text",
+        "fhirPath": "achievementStatus.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Category \u203A Coding \u203A System",
+        "jsonPath": "$.category[*].coding[*].system",
+        "fhirPath": "category.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "category",
+          "category.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Category \u203A Coding \u203A Code",
+        "jsonPath": "$.category[*].coding[*].code",
+        "fhirPath": "category.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "category",
+          "category.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Category \u203A Coding \u203A Display",
+        "jsonPath": "$.category[*].coding[*].display",
+        "fhirPath": "category.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "category",
+          "category.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Category \u203A Text",
+        "jsonPath": "$.category[*].text",
+        "fhirPath": "category.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "category"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Priority \u203A Coding \u203A System",
+        "jsonPath": "$.priority.coding[*].system",
+        "fhirPath": "priority.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "priority.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Priority \u203A Coding \u203A Code",
+        "jsonPath": "$.priority.coding[*].code",
+        "fhirPath": "priority.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "priority.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Priority \u203A Coding \u203A Display",
+        "jsonPath": "$.priority.coding[*].display",
+        "fhirPath": "priority.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "priority.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Priority \u203A Text",
+        "jsonPath": "$.priority.text",
+        "fhirPath": "priority.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Description \u203A Coding \u203A System",
+        "jsonPath": "$.description.coding[*].system",
+        "fhirPath": "description.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "description.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Description \u203A Coding \u203A Code",
+        "jsonPath": "$.description.coding[*].code",
+        "fhirPath": "description.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "description.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Description \u203A Coding \u203A Display",
+        "jsonPath": "$.description.coding[*].display",
+        "fhirPath": "description.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "description.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Description \u203A Text",
+        "jsonPath": "$.description.text",
+        "fhirPath": "description.text",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Subject \u203A Reference",
+        "jsonPath": "$.subject.reference",
+        "fhirPath": "subject.reference",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Subject \u203A Display",
+        "jsonPath": "$.subject.display",
+        "fhirPath": "subject.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Start Date",
+        "jsonPath": "$.startDate",
+        "fhirPath": "startDate",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Date",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Start Codeable Concept \u203A Coding \u203A System",
+        "jsonPath": "$.startCodeableConcept.coding[*].system",
+        "fhirPath": "startCodeableConcept.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "startCodeableConcept.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Start Codeable Concept \u203A Coding \u203A Code",
+        "jsonPath": "$.startCodeableConcept.coding[*].code",
+        "fhirPath": "startCodeableConcept.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "startCodeableConcept.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Start Codeable Concept \u203A Coding \u203A Display",
+        "jsonPath": "$.startCodeableConcept.coding[*].display",
+        "fhirPath": "startCodeableConcept.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "startCodeableConcept.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Start Codeable Concept \u203A Text",
+        "jsonPath": "$.startCodeableConcept.text",
+        "fhirPath": "startCodeableConcept.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Measure \u203A Coding \u203A System",
+        "jsonPath": "$.target[*].measure.coding[*].system",
+        "fhirPath": "target.measure.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target",
+          "target.measure.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Measure \u203A Coding \u203A Code",
+        "jsonPath": "$.target[*].measure.coding[*].code",
+        "fhirPath": "target.measure.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target",
+          "target.measure.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Measure \u203A Coding \u203A Display",
+        "jsonPath": "$.target[*].measure.coding[*].display",
+        "fhirPath": "target.measure.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target",
+          "target.measure.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Measure \u203A Text",
+        "jsonPath": "$.target[*].measure.text",
+        "fhirPath": "target.measure.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Detail Quantity \u203A Value",
+        "jsonPath": "$.target[*].detailQuantity.value",
+        "fhirPath": "target.detailQuantity.value",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Decimal",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Detail Quantity \u203A Unit",
+        "jsonPath": "$.target[*].detailQuantity.unit",
+        "fhirPath": "target.detailQuantity.unit",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Detail Quantity \u203A System",
+        "jsonPath": "$.target[*].detailQuantity.system",
+        "fhirPath": "target.detailQuantity.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Detail Quantity \u203A Code",
+        "jsonPath": "$.target[*].detailQuantity.code",
+        "fhirPath": "target.detailQuantity.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Target \u203A Due Date",
+        "jsonPath": "$.target[*].dueDate",
+        "fhirPath": "target.dueDate",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Date",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Status Date",
+        "jsonPath": "$.statusDate",
+        "fhirPath": "statusDate",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "Date",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Status Reason",
+        "jsonPath": "$.statusReason",
+        "fhirPath": "statusReason",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Expressed By \u203A Reference",
+        "jsonPath": "$.expressedBy.reference",
+        "fhirPath": "expressedBy.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Expressed By \u203A Display",
+        "jsonPath": "$.expressedBy.display",
+        "fhirPath": "expressedBy.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "sourceExtension": null
+      },
+      {
+        "label": "Addresses \u203A Reference",
+        "jsonPath": "$.addresses[*].reference",
+        "fhirPath": "addresses.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "addresses"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Addresses \u203A Display",
+        "jsonPath": "$.addresses[*].display",
+        "fhirPath": "addresses.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "addresses"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Note \u203A Author String",
+        "jsonPath": "$.note[*].authorString",
+        "fhirPath": "note.authorString",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "note"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Note \u203A Time",
+        "jsonPath": "$.note[*].time",
+        "fhirPath": "note.time",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "note"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Note \u203A Text",
+        "jsonPath": "$.note[*].text",
+        "fhirPath": "note.text",
+        "cardinality": "1..1",
+        "isRequired": true,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "note"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Code \u203A Coding \u203A System",
+        "jsonPath": "$.outcomeCode[*].coding[*].system",
+        "fhirPath": "outcomeCode.coding.system",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeCode",
+          "outcomeCode.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Code \u203A Coding \u203A Code",
+        "jsonPath": "$.outcomeCode[*].coding[*].code",
+        "fhirPath": "outcomeCode.coding.code",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeCode",
+          "outcomeCode.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Code \u203A Coding \u203A Display",
+        "jsonPath": "$.outcomeCode[*].coding[*].display",
+        "fhirPath": "outcomeCode.coding.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeCode",
+          "outcomeCode.coding"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Code \u203A Text",
+        "jsonPath": "$.outcomeCode[*].text",
+        "fhirPath": "outcomeCode.text",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeCode"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Reference \u203A Reference",
+        "jsonPath": "$.outcomeReference[*].reference",
+        "fhirPath": "outcomeReference.reference",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeReference"
+        ],
+        "sourceExtension": null
+      },
+      {
+        "label": "Outcome Reference \u203A Display",
+        "jsonPath": "$.outcomeReference[*].display",
+        "fhirPath": "outcomeReference.display",
+        "cardinality": "0..1",
+        "isRequired": false,
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "outcomeReference"
         ],
         "sourceExtension": null
       }
