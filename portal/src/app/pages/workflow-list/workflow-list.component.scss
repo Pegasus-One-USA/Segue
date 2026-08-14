@@ -393,13 +393,14 @@
   padding: 0 4px;
 }
 
-.col-index { width: 52px; text-align: center; color: var(--color-muted); font-size: 13px; }
+// Holds only the "more actions" (⋮) kebab trigger — was the row-number column before the menu moved here.
+.col-menu  { width: 44px; text-align: center; }
 .col-num   { width: 80px; text-align: center; }
 td.col-num { text-align: center; color: var(--color-ink-2); }
 // Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
-// side — now that those 5 live inside the "more actions" (⋮) menu, the column only needs to fit the
-// Run button + divider + kebab trigger, so the old width just left a large empty gutter on the right.
-.col-actions { width: 170px; }
+// side — now that those 5 live inside the "more actions" (⋮) menu (moved to the first column, .col-menu),
+// this only needs to fit the Run button, so the old width just left a large empty gutter on the right.
+.col-actions { width: 90px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
@@ -446,8 +447,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 // already scrolls horizontally (see above) if a viewport is ever too narrow to
 // fit it, so wrapping here only ever produced an inconsistent, fragile layout.
 .row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
-
-.action-divider { width: 1px; height: 24px; background: var(--color-border); margin: 0 1px; flex-shrink: 0; }
 
 // ── Row "more actions" menu ───────────────────────────────────────────────────
 // Same look as .filter-dropdown-panel above, but position: fixed with top/right set inline from

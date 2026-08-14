@@ -23,6 +23,19 @@ export interface SourceAuthenticationModel {
    *  exchange (backend-auth-scopes probe). Null until Discover has run once; purely informational — distinct
    *  from `scopes`, which is what FHIRBridge requests. */
   discoveredScopes?: string[] | null;
+  /** athenahealth only — the bare numeric practice id (e.g. "195900") the backend builds the
+   *  ah-practice=Organization/a-1.Practice-{id} reference from. Null for every other vendor. */
+  practiceId?: string | null;
+  /** Write-only: a wizard-typed raw client secret to provision at (clientSecretKeyVaultName, clientSecretName)
+   *  when saving — mirrors CreateDestinationConfigurationRequest.inlineSecret. Never populated on a GET
+   *  response (the backend never returns raw secret values); null on save leaves the existing stored secret
+   *  (if any) untouched. */
+  inlineClientSecret?: string | null;
+  /** Where OAuth2ClientCredentialsTokenProvider places client id/secret on the token request — "post" (form
+   *  body, the default) or "basic" (Authorization header). Some client-credentials authorization servers (e.g.
+   *  Okta-fronted ones) reject client_secret_post with invalid_client and require Basic instead. Null behaves
+   *  as "post". Only meaningful for Client Secret auth. */
+  authPlacement?: 'post' | 'basic' | null;
 }
 
 /** Matches SourceInteractiveConfigurationDto.cs exactly. */

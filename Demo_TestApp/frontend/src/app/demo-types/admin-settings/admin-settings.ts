@@ -16,6 +16,9 @@ interface AdminSettings {
   patientBaseUrl: string;
   patientCsvExportWorkflowId: string;
   patientCsvEmailExportWorkflowId: string;
+  athenaPatientWorkflowId: string;
+  athenaPatientBaseUrl: string;
+  athenaEhrEndpointId: string;
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
@@ -62,6 +65,11 @@ export class AdminSettingsComponent implements OnInit {
   readonly patientBaseUrl = signal('');
   readonly patientCsvExportWorkflowId = signal('');
   readonly patientCsvEmailExportWorkflowId = signal('');
+  // athenahealth variant of the Patient_Standalone connect/list flow (see launch-standalone-patient.ts's vendor
+  // toggle) — deliberately has no detail/CSV-export counterparts; those stay Epic-only.
+  readonly athenaPatientWorkflowId = signal('');
+  readonly athenaPatientBaseUrl = signal('');
+  readonly athenaEhrEndpointId = signal('');
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
@@ -182,6 +190,9 @@ export class AdminSettingsComponent implements OnInit {
       this.patientBaseUrl.set(current.patientBaseUrl);
       this.patientCsvExportWorkflowId.set(current.patientCsvExportWorkflowId);
       this.patientCsvEmailExportWorkflowId.set(current.patientCsvEmailExportWorkflowId);
+      this.athenaPatientWorkflowId.set(current.athenaPatientWorkflowId);
+      this.athenaPatientBaseUrl.set(current.athenaPatientBaseUrl);
+      this.athenaEhrEndpointId.set(current.athenaEhrEndpointId);
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
@@ -209,6 +220,9 @@ export class AdminSettingsComponent implements OnInit {
             patientBaseUrl: this.patientBaseUrl(),
             patientCsvExportWorkflowId: this.patientCsvExportWorkflowId(),
             patientCsvEmailExportWorkflowId: this.patientCsvEmailExportWorkflowId(),
+            athenaPatientWorkflowId: this.athenaPatientWorkflowId(),
+            athenaPatientBaseUrl: this.athenaPatientBaseUrl(),
+            athenaEhrEndpointId: this.athenaEhrEndpointId(),
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
@@ -224,6 +238,9 @@ export class AdminSettingsComponent implements OnInit {
       this.patientBaseUrl.set(result.patientBaseUrl);
       this.patientCsvExportWorkflowId.set(result.patientCsvExportWorkflowId);
       this.patientCsvEmailExportWorkflowId.set(result.patientCsvEmailExportWorkflowId);
+      this.athenaPatientWorkflowId.set(result.athenaPatientWorkflowId);
+      this.athenaPatientBaseUrl.set(result.athenaPatientBaseUrl);
+      this.athenaEhrEndpointId.set(result.athenaEhrEndpointId);
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);

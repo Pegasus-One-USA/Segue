@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
@@ -289,10 +290,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         CancellationToken cancellationToken,
         string? fallbackRefreshToken = null)
     {
-        ApplyClientAuthentication(source, form);
-
         using var request = new HttpRequestMessage(HttpMethod.Post, source.TokenEndpoint);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        ApplyClientAuthentication(source, form, request);
         request.Content = new FormUrlEncodedContent(form);
 
         HttpResponseMessage response;
@@ -382,7 +382,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     // Adds client authentication to the token request for confidential clients. Public clients authenticate with PKCE
     // alone (no secret). Asymmetric (private_key_jwt) takes precedence over a symmetric client secret.
-    private void ApplyClientAuthentication(FhirSourceConfiguration source, Dictionary<string, string> form)
+    private void ApplyClientAuthentication(FhirSourceConfiguration source, Dictionary<string, string> form, HttpRequestMessage request)
     {
         if (!string.IsNullOrWhiteSpace(source.PrivateKeyPem))
         {
@@ -402,7 +402,22 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         }
         else if (!string.IsNullOrWhiteSpace(source.ClientSecret))
         {
-            form["client_secret"] = source.ClientSecret!;
+            // A confidential interactive client (secret present alongside PKCE — e.g. an athenahealth Patient/
+            // Standalone app registered as confidential) can place that secret either in the form body ("post", the
+            // default most SMART/FHIR token endpoints accept) or the Authorization header ("basic"). Some
+            // authorization servers reject client_secret_post with invalid_client and require Basic instead —
+            // mirrors OAuth2ClientCredentialsTokenProvider's identical AuthPlacement toggle for the Backend Services
+            // grant, which this interactive flow previously ignored (always sent client_secret_post regardless of
+            // the configured placement).
+            if (string.Equals(source.AuthPlacement, "basic", StringComparison.OrdinalIgnoreCase))
+            {
+                var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.ClientId}:{source.ClientSecret}"));
+                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+            }
+            else
+            {
+                form["client_secret"] = source.ClientSecret!;
+            }
         }
     }
 

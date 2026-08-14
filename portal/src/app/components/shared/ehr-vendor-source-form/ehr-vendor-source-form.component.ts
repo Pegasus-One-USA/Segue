@@ -11,7 +11,7 @@ import { EPIC_ENV } from '../../../data/epic-environments.data';
 import { EnvKey } from '../../../models/epic-env.model';
 import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../../epic-source-wizard/models/epic-config.model';
-import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG } from '../../epic-source-wizard/models/audience-field-config.data';
+import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG, isAudienceDisabledForVendor } from '../../epic-source-wizard/models/audience-field-config.data';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
@@ -36,6 +36,13 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
   try { new URL(ctrl.value); return null; } catch { return { url: true }; }
 }
 
+// athenahealth Preview (sandbox) endpoints — used as the new-source App Name/FHIR Base URL defaults (ngOnInit)
+// and the Token/Authorization Endpoint watermarks (see tokenEndpointPlaceholder/authzEndpointPlaceholder) below.
+// Every other vendor keeps its existing Epic-shaped defaults untouched.
+const ATHENA_SANDBOX_BASE_URL      = 'https://api.preview.platform.athenahealth.com/fhir/r4';
+const ATHENA_SANDBOX_TOKEN_URL     = 'https://api.preview.platform.athenahealth.com/oauth2/v1/token';
+const ATHENA_SANDBOX_AUTHORIZE_URL = 'https://api.preview.platform.athenahealth.com/oauth2/v1/authorize';
+
 /**
  * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
  * tokens; when absent (Epic frequently omits them) it infers from scopes_supported — a granular v2 suffix like
@@ -46,26 +53,28 @@ function urlValidator(ctrl: AbstractControl): ValidationErrors | null {
  * client), not a statement about how *this* app is registered — Epic's discovery document lists
  * client_secret_basic/post and private_key_jwt for essentially every environment regardless of whether a given app
  * is public or confidential. So it can only drive an auto-selection where the SMART flow itself mandates one method:
- * Backend Services (system/backend-system) is JWT-only per spec, so that's the one case we can safely auto-select.
- * Interactive audiences (EHR launch / standalone / patient) are ordinarily public + PKCE and the actual choice
- * depends on how the customer registered their app in Epic — something no discovery document can reveal — so we
- * leave the user's selection alone there rather than force it toward whatever the server merely *can* accept.
+ * Epic's Backend Services (system/backend-system) profile is JWT-only per spec, so that's the one case we can
+ * safely auto-select for Epic specifically. athenahealth's Backend audience is plain OAuth2 client_credentials with
+ * a client secret (BackendServicesApplicationStrategy dispatches by which credential the connection actually
+ * carries — see the backend) — its discovery document listing private_key_jwt as a server-wide *capability* does
+ * NOT mean this app is registered that way, so the same inference would silently stomp a real Client Secret
+ * connection with JWT (exactly the bug this vendor check fixes). Interactive audiences (EHR launch / standalone /
+ * patient), and every non-Epic vendor's Backend audience, keep whatever the user/connection actually has.
  */
-function detectAuthMethod(audience: EpicAudience, authMethodsSupported: string[]): 'public' | 'secret' | 'jwt' | null {
-  if (audience !== 'backend-system') return null;
+function detectAuthMethod(vendor: EhrVendor, audience: EpicAudience, authMethodsSupported: string[]): 'public' | 'secret' | 'jwt' | null {
+  if (audience !== 'backend-system' || vendor !== 'Epic') return null;
   const methods = authMethodsSupported.map(m => m.toLowerCase());
   return methods.includes('private_key_jwt') ? 'jwt' : null;
 }
 
 /** Client Auth Method default per audience, applied on every audience switch (see the `audience.valueChanges`
- *  subscription): Backend System is JWT-only per SMART Backend Services (private_key_jwt); every interactive
- *  audience (EHR launch / standalone / patient) is Public Client + PKCE. */
-const AUDIENCE_DEFAULT_AUTH_METHOD: Record<EpicAudience, 'public' | 'jwt'> = {
-  'provider-ehr-launch': 'public',
-  'provider-standalone': 'public',
-  patient:               'public',
-  'backend-system':      'jwt',
-};
+ *  subscription): every interactive audience (EHR launch / standalone / patient) is Public Client + PKCE for every
+ *  vendor. Backend System defaults to JWT for Epic (SMART Backend Services, private_key_jwt) but Client Secret for
+ *  athenahealth (plain OAuth2 client_credentials) — see detectAuthMethod's remarks for why vendor matters here. */
+function defaultAuthMethodFor(vendor: EhrVendor, audience: EpicAudience): 'public' | 'secret' | 'jwt' {
+  if (audience !== 'backend-system') return 'public';
+  return vendor === 'Athenahealth' ? 'secret' : 'jwt';
+}
 
 function detectScopeVersion(capabilities: string[], scopesSupported: string[]): 'v1' | 'v2' | null {
   const hasV1 = capabilities.includes('permission-v1');
@@ -494,9 +503,18 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     tokenEndpoint:     ['', urlValidator],
     authzEndpoint:     ['', urlValidator],
     clientId:          ['', Validators.required],
+    // athenahealth only — the practice id required on every FHIR request (ah-practice). Bare number (e.g.
+    // "195900"); the backend builds the Organization/a-1.Practice-{id} reference. Conditionally required —
+    // see the vendor-keyed effect below, which toggles the validator when `vendor()` is Athenahealth.
+    practiceId:        [''],
     // Public + PKCE is the default for interactive apps (EHR launch / standalone / patient) → no client secret needed.
     authMethod:        ['public'],
     clientSecret:      [''],
+    // Where the client-credentials grant places client id/secret: 'post' (form body — the default most SMART/
+    // FHIR token endpoints accept) or 'basic' (Authorization header). Some client-credentials authorization
+    // servers — e.g. Okta-fronted ones, identifiable by a client id like "0oa..." — reject client_secret_post
+    // with invalid_client and require Basic instead. Only meaningful for Client Secret auth.
+    authPlacement:     ['post' as 'post' | 'basic'],
     jwksUrl:           ['', urlValidator],
     jwtKid:              [''],
     privateKeyRef:       [''],
@@ -571,6 +589,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   private readonly retrievalMethodValue = toSignal(this.form.controls.retrievalMethod.valueChanges, { initialValue: this.form.controls.retrievalMethod.value });
   private readonly exportScopeValue     = toSignal(this.form.controls.exportScope.valueChanges,     { initialValue: this.form.controls.exportScope.value });
   private readonly runModeValue         = toSignal(this.form.controls.runMode.valueChanges,          { initialValue: this.form.controls.runMode.value });
+  private readonly searchCriteriaValue  = toSignal(this.form.controls.searchCriteria.valueChanges,   { initialValue: this.form.controls.searchCriteria.value });
   private readonly scopeVersionValue    = toSignal(this.form.controls.scopeVersion.valueChanges,    { initialValue: this.form.controls.scopeVersion.value });
   private readonly fullRefreshRecurrenceValue = toSignal(this.form.controls.fullRefreshRecurrence.valueChanges, { initialValue: this.form.controls.fullRefreshRecurrence.value });
   private readonly fullRefreshDaysOfWeekValue = toSignal(this.form.controls.fullRefreshDaysOfWeek.valueChanges, { initialValue: this.form.controls.fullRefreshDaysOfWeek.value });
@@ -617,6 +636,24 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   protected readonly audienceConfig = computed(() => AUDIENCE_FIELD_CONFIG[this.audience()]);
   protected readonly showSecret     = computed(() => this.authMethod() === 'secret');
   protected readonly showJwt        = computed(() => this.authMethod() === 'jwt');
+  protected readonly showPracticeId = computed(() => this.vendor() === 'Athenahealth');
+
+  /** Token/Authorization Endpoint watermarks — both fields are normally auto-populated by Discover, so the
+   *  placeholder is only ever seen while they're still blank. Athenahealth doesn't publish a discoverable
+   *  `/.well-known/smart-configuration` the way Epic does, so its admins are more likely to type these in by
+   *  hand; showing athenahealth's real Preview sandbox URLs here (rather than Epic's) points them at the right
+   *  shape of URL. Every other vendor keeps the existing Epic placeholder unchanged. */
+  protected readonly tokenEndpointPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_TOKEN_URL : 'https://fhir.epic.com/…/oauth2/token');
+  protected readonly authzEndpointPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_AUTHORIZE_URL : 'https://fhir.epic.com/…/oauth2/authorize');
+
+  /** True when this vendor doesn't support the given audience yet (see VENDOR_DISABLED_AUDIENCES) — used to
+   *  grey out the option in the audience `<select>`. The strategy is fully implemented server-side; only the
+   *  UI hides it until sandbox credentials exist for that audience. */
+  protected isAudienceDisabled(audience: EpicAudience): boolean {
+    return isAudienceDisabledForVendor(this.vendor(), audience);
+  }
 
   // ── Backend Services signing key: generate / import (see generateKeyPair()/importPrivateKey() below) ──────────
   private readonly keySourceValue = toSignal(this.form.controls.keySource.valueChanges, { initialValue: this.form.controls.keySource.value });
@@ -786,6 +823,28 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     this.retrievalMethod() === 'search-rest' && this.runModeValue() === 'full',
   );
 
+  /**
+   * athenahealth rejects an unscoped `Patient` search outright ("open enumeration forbidden") — it requires at
+   * least one identifying criterion (identifier, name, or family + birthdate/gender/given) on every Patient
+   * search. Search REST's own Resource Type picker is hidden and silently defaults to the full MVP1 resource set
+   * (see ensureRetrievalResourceTypeDefault), which always includes Patient — so Search Criteria is the only
+   * lever an admin has here to avoid a run that always fails on the Patient resource type. Independent of whether
+   * the field currently has a value — drives the Search Criteria control's required validator (see
+   * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
+   * against the live value on every keystroke regardless.
+   */
+  protected readonly athenaPatientSearchNeedsCriteria = computed(() =>
+    this.vendor() === 'Athenahealth' &&
+    this.retrievalMethod() === 'search-rest' &&
+    this.activeRetrievalResourceTypes().includes('Patient'),
+  );
+
+  /** Display-only variant of the above — hides the warning callout once the admin has actually filled the field
+   *  in, even though the control stays required (an empty search-then-filled field is no longer the problem). */
+  protected readonly showAthenaPatientSearchCriteriaWarning = computed(() =>
+    this.athenaPatientSearchNeedsCriteria() && !this.searchCriteriaValue(),
+  );
+
   /** Generic reader for whichever method's Resource Type control the template is currently rendering. */
   protected selectedRetrievalResourceTypes(key: RetrievalFieldKey): string[] {
     switch (key) {
@@ -891,6 +950,39 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       }
     });
 
+    // A saved connection's audience can predate a vendor's disabled-audience list (e.g. was created before
+    // Provider Standalone/EHR Launch were hidden for Athenahealth), or this instance's `vendor` could change
+    // after the form already restored one. Fall back to Backend System — always enabled for every vendor —
+    // rather than leaving the form silently on an audience its own <select> now shows as disabled.
+    effect(() => {
+      const vendor = this.vendor();
+      const current = this.audience();
+      if (isAudienceDisabledForVendor(vendor, current)) {
+        this.form.controls.audience.setValue('backend-system');
+      }
+    });
+
+    // Practice ID is required for athenahealth (every FHIR request needs ah-practice) and inapplicable to every
+    // other vendor — toggle the validator here rather than in the template so Save's own validity check
+    // (missingRequiredFields/form.valid) agrees with what showPracticeId() renders.
+    effect(() => {
+      const control = this.form.controls.practiceId;
+      control.setValidators(this.showPracticeId() ? [Validators.required] : []);
+      control.updateValueAndValidity({ emitEvent: false });
+    });
+
+    // SMART Scope Version has no UI (hidden — see the template's remarks) and defaults to 'v2' (granular
+    // system/{Type}.rs), which is correct for Epic. athenahealth's Backend System app registrations verified
+    // against the live preview sandbox are provisioned with v1 coarse scopes only (system/{Type}.read) — sending
+    // v2 scopes gets rejected by the token endpoint with "Invalid Scope: One or more scopes are not configured
+    // for the authorization server resource." detectScopeVersion (real evidence from a successful Discover call)
+    // still wins if it ever fires — this is only a default for when it hasn't.
+    effect(() => {
+      if (this.vendor() === 'Athenahealth' && !this.scopeVersionAuto()) {
+        this.form.controls.scopeVersion.setValue('v1');
+      }
+    });
+
     // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
     // showing the real URL in a toast — once resolvedSourceConnectionId() is known (after the first save, or
     // immediately when editing an already-saved connection), this is the one real, always-correct value; nothing
@@ -945,7 +1037,9 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       this.form.controls.audience.setValue(this.wiz.epicAudience() as EpicAudience);
       this.form.controls.environment.setValue(this.wiz.env());
       this.form.controls.clientId.setValue(this.wiz.clientId());
+      this.form.controls.practiceId.setValue(this.wiz.practiceId());
       this.form.controls.authMethod.setValue(this.wiz.authMethod());
+      this.form.controls.authPlacement.setValue(this.wiz.authPlacement());
       this.form.controls.callbackUrl.setValue(this.wiz.redirectUri());
       this.form.controls.launchUrl.setValue(this.wiz.launchUrlWiz());
       this.restoreExtendedFieldsFromEditingNode();
@@ -985,6 +1079,19 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       this.form.controls.appName.setValue(this.wiz.stepName());
     }
 
+    // New-source defaults for athenahealth: App Name + FHIR Base URL. wiz.stepName()/wiz.discovered() above
+    // default to Epic's own values (see WizardService.open()/openEntity()) regardless of which vendor form is
+    // actually being configured, so a brand-new Athena connection needs its own override here — applied last so
+    // it wins over the Epic-shaped defaults just set above. Skipped entirely once editing an existing connection
+    // (isEditing()) so a name/URL the admin already saved (or is actively customizing) is never touched. Every
+    // other vendor is unaffected.
+    if (!this.wiz.isEditing() && this.vendor() === 'Athenahealth') {
+      this.form.controls.appName.setValue('Athena');
+      if (this.form.controls.environment.value === 'sandbox') {
+        this.form.controls.epicBaseUrl.setValue(ATHENA_SANDBOX_BASE_URL);
+      }
+    }
+
     this.prevAudience = this.audience();
     this.prevAuthMethod = this.form.controls.authMethod.value as 'public' | 'secret' | 'jwt';
     this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
@@ -1010,7 +1117,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
         // every interactive audience is Public Client + PKCE. setValue (not patchValue) so this always goes
         // through the authMethod.valueChanges subscription below and clears whatever the previous method's
         // fields were, exactly as if the user had picked the new method themselves.
-        this.form.controls.authMethod.setValue(AUDIENCE_DEFAULT_AUTH_METHOD[nextAudience]);
+        this.form.controls.authMethod.setValue(defaultAuthMethodFor(this.vendor(), nextAudience));
         this.syncValidators();
       });
 
@@ -1382,6 +1489,16 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
    *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
    *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
   private ensureRetrievalResourceTypeDefault(): void {
+    // athenahealth is excluded from this default: its OAuth server rejects the ENTIRE token request if even one
+    // requested scope isn't provisioned on the app registration (verified against the live preview sandbox), so
+    // silently seeding every MVP1 resource type here — appropriate for Epic, which just ignores an unsupported
+    // scope rather than rejecting the whole grant — reliably produces an unusable connection. Leaving this null/
+    // empty means a fresh athenahealth connection created in Source Connection Master requests no resource scopes
+    // at all until something explicit sets them (the workflow builder's destination-derived resourceTypes in
+    // workflow-build-assembler.service.ts, or a deliberate edit here) — never a broad guess that has to be
+    // manually pared back down every time, which was the actual repeated cause of "Invalid Scope" failures.
+    if (this.vendor() === 'Athenahealth') return;
+
     const key = ({
       subscription: 'subscriptionResourceType',
       webhook: 'webhookResourceType',
@@ -1495,6 +1612,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
         required = false;
       }
       apply(key, required);
+    }
+
+    // Overrides the generic per-field loop above (which leaves Search Criteria optional for every vendor, per its
+    // static RETRIEVAL_METHOD_CONFIG entry) only for athenahealth + Search REST + a Patient-inclusive resource
+    // selection — see athenaPatientSearchNeedsCriteria's own remarks for why this is the one lever that keeps the
+    // run from always failing on an unscoped Patient search.
+    if (this.athenaPatientSearchNeedsCriteria()) {
+      apply('searchCriteria', true);
     }
   }
 
@@ -1739,7 +1864,9 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
       clientId: dto.authentication?.clientId ?? '',
+      practiceId: dto.authentication?.practiceId ?? '',
       authMethod,
+      authPlacement: (dto.authentication?.authPlacement as 'post' | 'basic') || 'post',
       jwtKid: dto.authentication?.keyId ?? '',
       privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
       privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
@@ -1913,7 +2040,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
         }
         // Client Auth Method: Auto only for Backend System, where SMART Backend Services mandates JWT
         // (private_key_jwt) — interactive audiences keep whatever the user picked (see detectAuthMethod for why).
-        const detectedAuthMethod = detectAuthMethod(this.audience(), result.tokenEndpointAuthMethods);
+        const detectedAuthMethod = detectAuthMethod(this.vendor(), this.audience(), result.tokenEndpointAuthMethods);
         if (detectedAuthMethod) {
           this.form.controls.authMethod.setValue(detectedAuthMethod);
           this.authMethodAuto.set(true);
@@ -2051,12 +2178,21 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       // is tracked as follow-up work, not part of this UI-layer split).
       'Connector':             this.vendor(),
       'Client ID':             v.clientId ?? '',
+      // Only meaningful when the audience is on Client Secret auth (showSecret()) — WizardService.save() treats
+      // a blank value here as "leave whatever secret is already stored untouched" (existingClientSecretRef),
+      // not "clear the secret", so this is safe to always include even when the field is hidden/cleared.
+      'Client Secret':         v.clientSecret ?? '',
+      // athenahealth only — bare numeric practice id; the backend builds the ah-practice reference from it.
+      // Empty for every other vendor (showPracticeId() gates both visibility and requiredness).
+      'Practice ID':           v.practiceId ?? '',
       'Auth method':           v.authMethod ?? 'secret',
       // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
       // WorkflowBuilderComponent auto-filling the real JWKS URL after build assigns a sourceConnectionId) tell a
       // generated/imported key apart from one pointing at an externally-hosted JWKS, without re-deriving it from
       // the Key Vault Name/Secret Name values alone (which look identical either way).
       'Signing key source':    v.keySource ?? 'manual',
+      // Only meaningful for Client Secret auth — see the authPlacement control's own remarks.
+      'Auth placement':        v.authPlacement ?? 'post',
       'Epic audience':         aud,
       'SMART version':         'SMART App Launch 2.0 (R4)',
       'Scope version':         v.scopeVersion === 'v1' ? 'v1 (coarse)' : 'v2 (granular)',
@@ -2236,9 +2372,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       // Reused-as-is "Existing Source" pick (see resolvedSourceConnectionId above): tells
       // WorkflowBuildAssemblerService.assemble() to skip this node's Sources spec entirely and let the backend
       // resolve sourceConnectionId straight off this node's own config, same as destinationResolved for destinations.
+      // Always set explicitly (never conditionally omitted) — canvas mode merges this save's fields onto the
+      // node's previously-stored fields ({...previousFields, ...fields}), so a key that's only ever ADDED and
+      // never CLEARED stays stuck at 'true' forever once any earlier save set it, even after switching this node
+      // back to "New Source" — exactly the bug that silently skipped rebuilding this node's SourceConnection
+      // (Retrieval/scopes never updated) on every subsequent Save, regardless of what the dialog showed.
+      sourceConnectionResolved: resolvedSourceConnectionId ? 'true' : '',
       ...(resolvedSourceConnectionId ? {
         sourceConnectionId: resolvedSourceConnectionId,
-        sourceConnectionResolved: 'true',
       } : {}),
     };
 

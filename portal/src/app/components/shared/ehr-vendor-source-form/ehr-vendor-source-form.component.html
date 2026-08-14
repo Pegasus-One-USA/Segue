@@ -106,8 +106,8 @@
           <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
             <select id="eaf-audience" class="eaf-select" formControlName="audience">
-              <option value="provider-ehr-launch">Provider EHR Launch</option>
-              <option value="provider-standalone">Provider Standalone</option>
+              <option value="provider-ehr-launch" [disabled]="isAudienceDisabled('provider-ehr-launch')">Provider EHR Launch</option>
+              <option value="provider-standalone" [disabled]="isAudienceDisabled('provider-standalone')">Provider Standalone</option>
               <option value="backend-system">Backend System</option>
               <option value="patient">Patient</option>
             </select>
@@ -120,6 +120,9 @@
             <p class="eaf-hint">Server-to-server via JWT client credentials. No user context.</p>
           } @else {
             <p class="eaf-hint">Patient-facing app with patient-context scopes.</p>
+          }
+          @if (isAudienceDisabled('provider-standalone') || isAudienceDisabled('provider-ehr-launch')) {
+            <p class="eaf-hint">Provider Standalone and Provider EHR Launch are pending athenahealth provider sandbox credentials.</p>
           }
         </div>
 
@@ -219,7 +222,7 @@
               <span class="eaf-req">*</span>
             </label>
             <input id="eaf-tokenEndpoint" class="eaf-input" type="url" formControlName="tokenEndpoint"
-                   placeholder="https://fhir.epic.com/…/oauth2/token"
+                   [placeholder]="tokenEndpointPlaceholder()"
                    [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.tokenEndpoint.value" />
             @if (form.controls.tokenEndpoint.touched && form.controls.tokenEndpoint.invalid) {
               <p class="eaf-error-msg">Token Endpoint is required.</p>
@@ -235,7 +238,7 @@
               <span class="eaf-req">*</span>
             </label>
             <input id="eaf-authzEndpoint" class="eaf-input" type="url" formControlName="authzEndpoint"
-                   placeholder="https://fhir.epic.com/…/oauth2/authorize"
+                   [placeholder]="authzEndpointPlaceholder()"
                    [class.eaf-input--autofilled]="discStatus() === 'done' && form.controls.authzEndpoint.value" />
             @if (form.controls.authzEndpoint.touched && form.controls.authzEndpoint.invalid) {
               <p class="eaf-error-msg">Authorization Endpoint is required.</p>
@@ -269,6 +272,18 @@
             <p class="eaf-hint">From the customer's own Epic app registration (Production/Non-Production based on Environment).</p>
           </div>
 
+          @if (showPracticeId()) {
+            <div class="eaf-field" [class.eaf-field--error]="form.controls.practiceId.touched && form.controls.practiceId.invalid">
+              <label class="eaf-label" for="eaf-practiceId">Practice ID <span class="eaf-req">*</span></label>
+              <input id="eaf-practiceId" class="eaf-input" type="text" formControlName="practiceId"
+                     placeholder="195900" />
+              @if (form.controls.practiceId.touched && form.controls.practiceId.invalid) {
+                <p class="eaf-error-msg">Practice ID is required.</p>
+              }
+              <p class="eaf-hint">athenahealth practice id — the bare number (e.g. 195900). Sent as ah-practice on every request.</p>
+            </div>
+          }
+
           <div class="eaf-field">
             <label class="eaf-label" for="eaf-authMethod">
               Client Auth Method
@@ -299,6 +314,19 @@
                 <p class="eaf-error-msg">Client Secret is required.</p>
               }
               <p class="eaf-hint">Store in a Key Vault in production. Encrypted at rest.</p>
+            </div>
+
+            <div class="eaf-field">
+              <label class="eaf-label" for="eaf-authPlacement">Client Auth Placement</label>
+              <div class="eaf-select-wrap">
+                <select id="eaf-authPlacement" class="eaf-select" formControlName="authPlacement">
+                  <option value="post">Form body (client_secret_post)</option>
+                  <option value="basic">Authorization header (Basic)</option>
+                </select>
+              </div>
+              <p class="eaf-hint">Most servers accept the form-body default. Switch to Basic if the token endpoint
+                returns <code>invalid_client</code> — common for Okta-fronted authorization servers (client ids
+                starting with "0oa").</p>
             </div>
           }
 
@@ -653,6 +681,11 @@
             <span class="eaf-badge-neutral">{{ method.label }}</span>
           </div>
 
+          @if (vendor() === 'Athenahealth') {
+            <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
+              from whatever is mapped on the destination — configure them there, not here.</p>
+          }
+
           <div class="eaf-grid">
             @for (field of visibleRetrievalFields(); track field.key) {
               <div class="eaf-field"
@@ -749,6 +782,14 @@
                 }
                 @if (field.hint) {
                   <p class="eaf-hint">{{ field.hint }}</p>
+                }
+                @if (field.key === 'searchCriteria' && showAthenaPatientSearchCriteriaWarning()) {
+                  <p class="eaf-error-msg">
+                    ⚠ athenahealth rejects an unscoped Patient search ("open enumeration forbidden"). Supply at
+                    least one identifying criterion here — e.g. <code>identifier=MRN12345</code>,
+                    <code>name=Smith</code>, or <code>family=Smith&amp;birthdate=1990-01-01</code> — or every run
+                    will fail on the Patient resource type.
+                  </p>
                 }
               </div>
             }

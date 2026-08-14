@@ -68,7 +68,7 @@ public sealed class FhirSubscriptionManagementService : IFhirSubscriptionManagem
             SourceSystemType.Cerner => RuntimeSourceType.Cerner,
             SourceSystemType.Allscripts => RuntimeSourceType.Allscripts,
             SourceSystemType.GenericFhir => RuntimeSourceType.GenericFhir,
-            SourceSystemType.Athenahealth => RuntimeSourceType.GenericFhir,
+            SourceSystemType.Athenahealth => RuntimeSourceType.Athenahealth,
             SourceSystemType.Healow => RuntimeSourceType.Healow,
             SourceSystemType.MeditechGreenfield => RuntimeSourceType.MeditechGreenfield,
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported.")
