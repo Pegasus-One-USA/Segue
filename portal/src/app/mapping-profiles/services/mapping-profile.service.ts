@@ -59,6 +59,13 @@ export class MappingProfileService {
     return this.http.delete<void>(MAPPING_PROFILE_ENDPOINTS.byId(id));
   }
 
+  /** "Mark as Master" — clones a workflow's own mapping profile into a brand-new, independently-named master
+   *  template other workflows can later find via "Select Existing". Always creates a new profile; never
+   *  overwrites an existing one, even one that already matches the same resource type/source/destination. */
+  promoteToMaster(id: string, name: string): Observable<MappingProfileDto> {
+    return this.http.post<MappingProfileDto>(MAPPING_PROFILE_ENDPOINTS.promoteToMaster(id), { name });
+  }
+
   /** Every mapping profile id currently referenced by at least one workflow (node config or persisted route) —
    *  see MAPPING_PROFILE_ENDPOINTS.usage. Used to gate Delete independently of the server's own route-usage
    *  check (which is the actual guard — this only lets the UI show *why* before the user even tries). */

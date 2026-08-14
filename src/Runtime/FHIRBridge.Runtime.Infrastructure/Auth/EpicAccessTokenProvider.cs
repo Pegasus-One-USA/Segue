@@ -5,7 +5,7 @@ using FHIRBridge.Runtime.Application.DTOs;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
-public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
+public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGrantedScopeProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IBackendServicesJwtFactory _jwtFactory;
@@ -30,8 +30,7 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
     {
         ValidateSource(source);
 
-        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
-        var cacheKey = $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+        var cacheKey = BuildCacheKey(source);
 
         var cachedToken = await _tokenCache.GetAsync(cacheKey, cancellationToken);
         if (cachedToken is not null)
@@ -39,6 +38,7 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
             return cachedToken;
         }
 
+        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
         var clientAssertion = _jwtFactory.CreateClientAssertion(new BackendServicesJwtRequest(
             source.ClientId!,
             source.TokenEndpoint!,
@@ -95,11 +95,9 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
                 }
 
                 var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
-                await _tokenCache.SetAsync(
-                    cacheKey,
-                    tokenResponse.AccessToken,
-                    DateTimeOffset.UtcNow.AddSeconds(expiresIn),
-                    cancellationToken);
+                var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+                await _tokenCache.SetAsync(cacheKey, tokenResponse.AccessToken, expiresOnUtc, cancellationToken);
+                await _tokenCache.SetScopeAsync(cacheKey, tokenResponse.Scope, expiresOnUtc, cancellationToken);
 
                 await _auditSink.RecordAsync(
                     source,
@@ -124,6 +122,24 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
         }
 
 
+    }
+
+    /// <summary>
+    /// Returns Epic's actual granted <c>scope</c> response for this connection's client-credentials session, minting
+    /// a token first if none is cached yet (cheap and non-interactive — unlike the interactive flows, there is no
+    /// user to wait on). Null if Epic's token endpoint didn't echo a <c>scope</c> at all (some backend-services
+    /// registrations don't), in which case a caller should fall back to <see cref="FhirSourceConfiguration.Scopes"/>.
+    /// </summary>
+    public async Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        await GetAccessTokenAsync(source, cancellationToken);
+        return await _tokenCache.GetScopeAsync(BuildCacheKey(source), cancellationToken);
+    }
+
+    private static string BuildCacheKey(FhirSourceConfiguration source)
+    {
+        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
+        return $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
     }
 
     private static void ValidateSource(FhirSourceConfiguration source)
@@ -161,5 +177,6 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider
     private sealed record TokenResponse(
         [property: JsonPropertyName("access_token")] string AccessToken,
         [property: JsonPropertyName("expires_in")] int ExpiresIn,
-        [property: JsonPropertyName("token_type")] string TokenType);
+        [property: JsonPropertyName("token_type")] string TokenType,
+        [property: JsonPropertyName("scope")] string? Scope = null);
 }

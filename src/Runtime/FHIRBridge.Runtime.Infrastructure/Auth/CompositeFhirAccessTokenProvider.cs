@@ -21,7 +21,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// (RS384 JWT) and a client secret implies OAuth 2.0 client-credentials. Sources with neither are unauthenticated.
 /// </para>
 /// </summary>
-public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
+public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider, IFhirGrantedScopeProvider
 {
     private readonly ISourceApplicationStrategyRegistry _applicationStrategies;
     private readonly EpicAccessTokenProvider _smartBackendServices;
@@ -175,5 +175,27 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Resolves the actually-granted SMART scope via the same registry dispatch as token acquisition: application-
+    /// type strategies each read it back from their own token provider. Legacy vendor-pinned/credential-based
+    /// inference (no application type set) dispatches to whichever underlying provider supports it; a source with
+    /// neither (e.g. unauthenticated) has nothing to report.
+    /// </summary>
+    public Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return _applicationStrategies.Resolve(applicationType).GetGrantedScopeAsync(source, cancellationToken);
+        }
+
+        var grantType = DetermineGrantType(source);
+        return grantType switch
+        {
+            "BackendServices" => _smartBackendServices.GetGrantedScopeAsync(source, cancellationToken),
+            "ClientCredentials" => _clientCredentials.GetGrantedScopeAsync(source, cancellationToken),
+            _ => Task.FromResult<string?>(null)
+        };
     }
 }

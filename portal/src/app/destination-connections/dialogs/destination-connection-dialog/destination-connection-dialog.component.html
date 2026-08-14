@@ -44,7 +44,7 @@
         </button>
       </div>
     } @else {
-      <app-destination-connection-form [destType]="chosenType()!" mode="create" />
+      <app-destination-connection-form [destType]="formDestinationType()!" mode="create" />
     }
 
   } @else {
@@ -78,7 +78,7 @@
           Enter the full connection details below — they'll replace the existing secret. Leaving this
           collapsed keeps the current connection secret unchanged.
         </p>
-        <app-destination-connection-form [destType]="chosenType()!" mode="edit" [initialConfig]="editInitialConfig()" />
+        <app-destination-connection-form [destType]="formDestinationType()!" mode="edit" />
       }
     }
   }

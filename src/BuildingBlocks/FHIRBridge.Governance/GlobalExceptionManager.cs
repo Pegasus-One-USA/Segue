@@ -12,12 +12,6 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
     private readonly IExceptionClassifier _classifier;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
 
-    // Scoped per pipeline/workflow run (see DI registration), so every capture for the same execution shares one
-    // reference id — that lets a support engineer pull up every error from a run (e.g. the per-record SqlException
-    // captures alongside the PartialSuccess summary) by pasting a single reference id into Operations -> Errors,
-    // instead of each individually-caught exception minting its own id.
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _referenceIdsByExecution = new();
-
     public GlobalExceptionManager(
         IGovernanceLogger governanceLogger,
         IExceptionClassifier classifier,
@@ -42,10 +36,7 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             ? DefaultMessageFor(category, diagnosis)
             : context.UserFriendlyMessageOverride!;
 
-        var executionKey = context.CorrelationId ?? context.ExecutionId;
-        var referenceId = executionKey is null
-            ? ErrorReference.New()
-            : _referenceIdsByExecution.GetOrAdd(executionKey, static _ => ErrorReference.New());
+        var referenceId = ErrorReference.New();
 
         // Capturing an error must never itself throw — a failure here (e.g. DB unreachable) must not mask the
         // original exception or crash the host. Worst case the caller still gets a reference id to quote, even if
@@ -88,10 +79,6 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
                 }
 
                 referenceId = ErrorReference.New();
-                if (executionKey is not null)
-                {
-                    _referenceIdsByExecution[executionKey] = referenceId;
-                }
             }
         }
 
@@ -101,10 +88,7 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
     public async Task<string> CaptureExpectedAsync(
         ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
     {
-        var executionKey = context.CorrelationId ?? context.ExecutionId;
-        var referenceId = executionKey is null
-            ? ErrorReference.New()
-            : _referenceIdsByExecution.GetOrAdd(executionKey, static _ => ErrorReference.New());
+        var referenceId = ErrorReference.New();
 
         // Same never-throw guarantee as CaptureAsync: capturing must not itself fail the request.
         try

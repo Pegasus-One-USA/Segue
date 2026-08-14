@@ -28,7 +28,8 @@ public sealed class BulkExportJob : AuditableEntity<Guid>
         Guid? workflowRunId = null,
         Guid? workflowNodeId = null,
         string? priorNodeOutputsJson = null,
-        string? contextJson = null)
+        string? contextJson = null,
+        string? requestedResourceTypesJson = null)
     {
         Id = id;
         SourcePath = sourcePath;
@@ -42,6 +43,7 @@ public sealed class BulkExportJob : AuditableEntity<Guid>
         WorkflowNodeId = workflowNodeId;
         PriorNodeOutputsJson = priorNodeOutputsJson;
         ContextJson = contextJson;
+        RequestedResourceTypesJson = requestedResourceTypesJson;
         Status = BulkExportJobStatus.Pending;
     }
 
@@ -92,6 +94,14 @@ public sealed class BulkExportJob : AuditableEntity<Guid>
     /// <summary>Serialized <c>WorkflowExecutionContext</c> so the resumed run can rebuild it (trigger info, target
     /// patient, caller id, etc.) — none of this survives as ambient/in-memory state across a Worker tick boundary.</summary>
     public string? ContextJson { get; private set; }
+
+    /// <summary>JSON array of the resource types the deferring node actually asked for (e.g. <c>["Patient"]</c>) —
+    /// distinct from <see cref="ExportRequestJson"/>'s <c>ResourceTypes</c>, which a Group export scoped to a lone
+    /// "Patient" type deliberately nulls out to dodge an Epic Interconnect bug (see
+    /// <c>BulkExportScopes.ResolveTypeParameter</c>), causing the server to attempt every resource type it supports.
+    /// Lets the poller filter the completed job's manifest <c>error</c> array down to types this node actually
+    /// requested, instead of surfacing every unrequested type the server also tried and rejected.</summary>
+    public string? RequestedResourceTypesJson { get; private set; }
 
     public void RecordPriorNodeOutputs(string priorNodeOutputsJson)
     {

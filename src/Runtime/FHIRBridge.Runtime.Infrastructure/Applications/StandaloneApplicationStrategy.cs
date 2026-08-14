@@ -48,6 +48,9 @@ public sealed class StandaloneApplicationStrategy : SourceApplicationStrategyBas
     public override Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.DiscardTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.GetGrantedScopeAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);

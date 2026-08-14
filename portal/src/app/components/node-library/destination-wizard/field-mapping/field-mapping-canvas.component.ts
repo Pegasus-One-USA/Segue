@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy,
+  Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy, OnInit,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
@@ -58,7 +58,7 @@ export interface FmTargetCardSpec {
   templateUrl: './field-mapping-canvas.component.html',
   styleUrl: './field-mapping-canvas.component.scss',
 })
-export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
+export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly anchors = inject(FieldMappingAnchorService);
   private readonly toast = inject(ToastService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
@@ -102,6 +102,12 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   // Ad-hoc connection details (from the wizard's Step 1 SQL form) — powers the real ALTER TABLE /
   // CREATE TABLE calls below. Only meaningful for destType 'sql'.
   readonly connectionInfo = input<DestinationProbeRequest | null>(null);
+  /** False for a host with no decrypted destination credentials to run real DDL with (e.g. the Mapping
+   *  Profiles dialog, which only ever has a destinationId + a read-only schema probe) — hides every
+   *  "Create a new table…" entry point and the target card's "+ Add column" trigger for a real (probed)
+   *  SQL table, so nothing offers an action that would silently no-op against a null connectionInfo.
+   *  Defaults true so the Destination Wizard (which always has real connectionInfo) is unaffected. */
+  readonly schemaAuthoringEnabled = input(true);
 
   // Incrementing counters from the dialog header's "Load JSON payload"/"Preview output" buttons (moved
   // there so this canvas's own toolbar row can be dropped, giving the viewport back that height) — same
@@ -127,6 +133,11 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly zoomOutRequest = input<number>(0);
   readonly zoomResetRequest = input<number>(0);
   readonly zoomFitRequest = input<number>(0);
+  /** Zoom level this canvas instance starts at (1 = 100%) — defaults to the anchor service's own 100%
+   *  default, so every consumer except one that explicitly opts in (the New Mapping Profile screen wants
+   *  80%) is unaffected. Applied once in the constructor below, not tied to resetView()'s own 100% — the
+   *  ⟲ reset button still resets to 100% everywhere, this only changes what the canvas opens at. */
+  readonly initialZoom = input<number>(1);
 
   /** Mirrors suggestions().length / zoomPercent() up to the dialog header, which now renders the
    *  "Clear N suggestions" label and the zoom-percent readout in its own toolbar (see the requests
@@ -336,6 +347,14 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  ngOnInit(): void {
+    // NOT in the constructor — signal inputs only reflect their bound value (vs. their declared default)
+    // once Angular has actually applied bindings, which happens after construction but before ngOnInit.
+    // Reading initialZoom() in the constructor silently returned the default (1) every time, regardless
+    // of what the host template bound it to.
+    this.anchors.setZoom(this.initialZoom());
+  }
+
   ngAfterViewInit(): void {
     const origin = this.canvasInner().nativeElement;
     this.anchors.setOrigin(origin);
@@ -392,18 +411,22 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
 
   /** Plain wheel/trackpad scrolls the canvas vertically (bounded, like a real scrollbar); Ctrl/Cmd+wheel
    *  zooms, anchored at the cursor — matches the vertical scrollbar's own bounded range exactly, since
-   *  both go through clampPanY/setScrollY. Zoom still works no matter what's under the cursor, but plain
-   *  wheel defers entirely to a card's own field/column list when hovering one — preventDefault() here
-   *  would otherwise cancel the browser's native scroll on .fm-source-rows/.fm-target-rows too (it
-   *  cancels the whole wheel event's default action, not just "canvas pan"), leaving no way to actually
-   *  scroll a long list without first moving the cursor off the card entirely. */
+   *  both go through clampPanY/setScrollY. Zoom still works no matter what's under the cursor.
+   *
+   *  Plain wheel used to defer to the browser's native scroll instead whenever hovering a card's own
+   *  field/column list (.fm-source-rows/.fm-target-rows) — but neither ever actually grows a real
+   *  scrollbar of its own (both cards are deliberately auto-height/uncapped, see
+   *  field-mapping-source-tree.component.scss's own "this never actually clips/scrolls" note), so that
+   *  exemption just silently ate the wheel event over a long list (e.g. a 70+-field resource) with
+   *  nothing picking it up — the one place in the canvas a user would most naturally try to scroll. Still
+   *  deferred for .fm-add-table-options, which is a real, genuinely-scrollable dropdown panel. */
   onViewportWheel(ev: WheelEvent): void {
     if (ev.ctrlKey || ev.metaKey) {
       ev.preventDefault();
       this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
       return;
     }
-    if ((ev.target as HTMLElement).closest('.fm-source-rows, .fm-target-rows, .fm-add-table-options')) {
+    if ((ev.target as HTMLElement).closest('.fm-add-table-options')) {
       return;
     }
     ev.preventDefault();
@@ -693,6 +716,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
    *  "+ Add a table…" control. asPrimary auto-detects "whatever this resource actually needs right now":
    *  becomes this resource's primary table if it doesn't have a valid one yet, otherwise an extra table. */
   openCreateTableModal(resource: string, asPrimary?: boolean): void {
+    if (!this.schemaAuthoringEnabled()) return; // defensive — the triggering UI is hidden below when disabled
     this.creatingTableResource = resource;
     this.creatingTableAsPrimary = asPrimary ?? !this.isPrimaryTargetValid(resource);
     this.creatingTableError.set(null);
@@ -916,6 +940,7 @@ export class FieldMappingCanvasComponent implements AfterViewInit, OnDestroy {
   readonly addColumnError = signal<string | null>(null);
 
   openAddColumnModal(resource: string, tableName: string): void {
+    if (!this.schemaAuthoringEnabled()) return; // defensive — the triggering UI is hidden below when disabled
     this.addColumnTarget.set({ resource, tableName });
     this.addColumnError.set(null);
   }

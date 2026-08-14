@@ -28,7 +28,16 @@ public sealed record ResourceMappingDto(
     SchemaChangesDto SchemaChanges,
     IReadOnlyList<ProcessingOrderStepDto> ProcessingOrder,
     JsonElement? Destination,
-    IReadOnlyList<TargetTableDto> Tables);
+    IReadOnlyList<TargetTableDto> Tables,
+    /// <summary>The MappingProfile this resource's own node last saved, when known — round-tripped by the
+    /// caller from whatever it was handed back on a prior import (see MappingProfileImportResourceResult).
+    /// When present, the import always updates THIS exact profile rather than searching for "the" profile
+    /// matching (ResourceType, SourceConnectionId, DestinationId): that triple is not a safe identity — two
+    /// unrelated workflows sharing the same source connection, destination, and resource type would
+    /// otherwise resolve to and silently overwrite the SAME profile row (see the "Invalid column name"
+    /// incident this replaces). Null only for a genuinely first-ever save, which always creates a new
+    /// profile rather than adopting one that happens to match the triple.</summary>
+    Guid? ExistingMappingProfileId = null);
 
 public sealed record SchemaChangesDto(
     IReadOnlyList<TableDefinitionDto> TablesToCreate,

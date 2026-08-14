@@ -102,7 +102,7 @@ export class WorkflowBuildAssemblerService {
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      // Existing-source pick left untouched (see EpicAudienceFormComponent.save()'s resolvedSourceConnectionId) —
+      // Existing-source pick left untouched (see EhrVendorSourceFormComponent.save()'s resolvedSourceConnectionId) —
       // skip entirely, no create/update. Mirrors destinationResolved below: a connection another workflow also
       // points at can't be mutated by this save, and the backend resolves sourceConnectionId straight off this
       // node's own config for the Mappings step regardless.
@@ -195,6 +195,7 @@ export class WorkflowBuildAssemblerService {
 
     // Epic (best-effort from the Epic source wizard fields).
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+    const discoveredScopes = (fields['Discovered scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
     const interactive =
       appType === 'Backend'
@@ -231,6 +232,7 @@ export class WorkflowBuildAssemblerService {
         // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
         privateKeyKeyVaultName: fields['Key vault reference'] || null,
         privateKeySecretName: fields['Secret Name'] || null,
+        discoveredScopes: discoveredScopes.length ? discoveredScopes : null,
       },
       applicationType: appType,
       interactive,

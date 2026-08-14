@@ -11,33 +11,38 @@ import {
   DestinationConfigurationDto,
   DestinationType,
 } from '../../models/destination-configuration.model';
-import { buildConnectionMetadata, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../utils/destination-connection-secret.util';
+import { newSecretName } from '../../utils/destination-connection-secret.util';
 
 export interface DestinationConnectionDialogData {
   mode: 'create' | 'edit' | 'view';
   destination?: DestinationConfigurationDto;
 }
 
-/** Maps the entity's full 21-value enum down to the two form shapes this screen (and the workflow wizard) support. */
+/** Still only offers Sql/Csv from this screen's create-flow type picker (two cards) — unchanged UX. 'sql'
+ *  now resolves to the real SqlServer DestinationType (the registry's default SQL-family entry point), since
+ *  DESTINATION_FORM_REGISTRY components no longer have an in-form "Database engine" dropdown to pick
+ *  MySQL/PostgreSQL/AzureSql from (see SqlFamilyDestinationFormComponent) — creating those specific engines
+ *  isn't reachable from this admin dialog yet, only from a future full registry-driven type picker. */
+function chosenTypeToDestinationType(t: 'sql' | 'csv'): DestinationType {
+  return t === 'sql' ? 'SqlServer' : 'Csv';
+}
+
+/** Maps the entity's full 22-value enum down to the two form shapes this screen's create-flow choice cards
+ *  offer, for `unsupportedType()`'s edit-mode gating only — unrelated to which exact registry component
+ *  DestinationConnectionFormComponent loads for editing (see toEditableDestinationType below), which now
+ *  uses the destination's real, un-collapsed DestinationType instead. */
 function toFormType(t: DestinationType): 'sql' | 'csv' | null {
   if (t === 'SqlServer' || t === 'AzureSql' || t === 'PostgreSql' || t === 'MySql') return 'sql';
   if (t === 'Csv' || t === 'Sftp') return 'csv';
   return null;
 }
 
-/** The connection form's engine dropdown value for a saved destination's real DestinationType — used to
- *  pre-select the right engine when editing/replacing the secret on an existing SQL-family destination. */
-function toEngine(t: DestinationType): 'sqlserver' | 'mysql' | 'postgres' {
-  if (t === 'PostgreSql') return 'postgres';
-  if (t === 'MySql') return 'mysql';
-  return 'sqlserver';
-}
-
-/** Reverse of toEngine — resolves the connection form's chosen engine back to the DestinationType to save. */
-function sqlEngineToDestinationType(engine: string | undefined): DestinationType {
-  if (engine === 'postgres') return 'PostgreSql';
-  if (engine === 'mysql') return 'MySql';
-  return 'SqlServer';
+/** The real DestinationType to load into DestinationConnectionFormComponent for "Replace connection secret"
+ *  on an existing SQL-family/CSV-family destination — the un-collapsed type (so e.g. editing a MySql
+ *  destination loads MySqlDestinationFormComponent, not SqlServerDestinationFormComponent), gated by the same
+ *  family membership toFormType() already checks (unsupportedType() covers everything else). */
+function toEditableDestinationType(t: DestinationType): DestinationType | null {
+  return toFormType(t) ? t : null;
 }
 
 @Component({
@@ -67,12 +72,15 @@ export class DestinationConnectionDialogComponent {
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
 
-  // Edit/view only: pre-selects the connection form's engine dropdown (SQL Server/MySQL/PostgreSQL) to match
-  // the destination being edited, so "Replace connection secret" doesn't silently default back to SQL Server.
-  readonly editInitialConfig = computed<Record<string, string> | null>(() =>
-    !this.isCreate && this.data.destination
-      ? { dest_engine: toEngine(this.data.destination.destinationType) }
-      : null,
+  /** The real DestinationType handed to DestinationConnectionFormComponent's (now-widened) destType input —
+   *  distinct from chosenType() above, which stays the UI-facing 'sql'/'csv' shorthand the two create-flow
+   *  cards and unsupportedType()'s edit-mode gating use. Create always resolves 'sql' to SqlServer (see
+   *  chosenTypeToDestinationType); edit/view use the destination's own real, un-collapsed type so "Replace
+   *  connection secret" loads the matching engine's component (e.g. MySql, not SqlServer). */
+  readonly formDestinationType = computed<DestinationType | null>(() =>
+    this.isCreate
+      ? (this.chosenType() ? chosenTypeToDestinationType(this.chosenType()!) : null)
+      : toEditableDestinationType(this.data.destination!.destinationType),
   );
 
   // Edit/view: Name + Target map straight to DestinationConfiguration's own persisted fields. The rich
@@ -117,41 +125,26 @@ export class DestinationConnectionDialogComponent {
   }
 
   private _saveCreate(): void {
-    const type = this.chosenType();
+    const type = this.formDestinationType();
     const form = this.connectionForm();
     if (!type || !form) return;
 
-    const config = form.getConfig();
-    if (!config) {
+    const metadata = form.getMetadata();
+    if (!metadata) {
       this.errorMessage.set('Fix the highlighted fields before saving.');
       return;
     }
 
-    const name = config['dest_name'] || 'New Destination';
-    const request: CreateDestinationConfigurationRequest =
-      type === 'sql'
-        ? {
-            name,
-            destinationType: sqlEngineToDestinationType(config['dest_engine']),
-            keyVaultName: 'workflow-secrets',
-            secretName: newSecretName(name),
-            target: null,
-            inlineSecret: buildSqlConnectionString(config),
-            connectionMetadataJson: buildConnectionMetadata(config, 'sql'),
-          }
-        : {
-            name,
-            // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson
-            // field (dest_deliveryMode), not the DestinationType — a single writer dispatches on it internally.
-            destinationType: 'Csv',
-            keyVaultName: 'workflow-secrets',
-            secretName: newSecretName(name),
-            target: config['dest_filePattern'] || null,
-            // Only SFTP delivery actually reads this secret; the other three modes never resolve it, so any
-            // placeholder value is fine there.
-            inlineSecret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
-            connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
-          };
+    const name = metadata.fields['dest_name'] || 'New Destination';
+    const request: CreateDestinationConfigurationRequest = {
+      name,
+      destinationType: type,
+      keyVaultName: 'workflow-secrets',
+      secretName: newSecretName(name),
+      target: metadata.fields['dest_filePattern'] || null,
+      inlineSecret: metadata.secret ?? '',
+      connectionMetadataJson: JSON.stringify(metadata.fields),
+    };
 
     this._submit(() => this.svc.create(request));
   }
@@ -171,20 +164,15 @@ export class DestinationConnectionDialogComponent {
       target: this.metaForm.value.target || null,
     };
 
-    if (this.replaceSecret() && this.chosenType()) {
+    if (this.replaceSecret() && this.formDestinationType()) {
       const form = this.connectionForm();
-      const config = form?.getConfig();
-      if (!config) {
+      const metadata = form?.getMetadata();
+      if (!metadata) {
         this.errorMessage.set('Fix the highlighted connection fields before saving.');
         return;
       }
-      const isSql = this.chosenType() === 'sql';
-      request.inlineSecret = isSql
-        ? buildSqlConnectionString(config)
-        : config['dest_deliveryMode'] === 'sftp'
-          ? buildSftpUri(config)
-          : '';
-      request.connectionMetadataJson = buildConnectionMetadata(config, isSql ? 'sql' : 'csv');
+      request.inlineSecret = metadata.secret ?? '';
+      request.connectionMetadataJson = JSON.stringify(metadata.fields);
     }
 
     this._submit(() => this.svc.update(destination.id, request));

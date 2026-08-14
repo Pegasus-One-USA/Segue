@@ -29,7 +29,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         NullPolicy onNull = NullPolicy.Skip,
         TransformErrorPolicy errorPolicy = TransformErrorPolicy.NullOut,
         string? onNullDefaultValue = null,
-        TransformArrayMode arrayMode = TransformArrayMode.Whole)
+        TransformArrayMode arrayMode = TransformArrayMode.Whole,
+        string? fhirWriteBackJsonPath = null)
     {
         Id = Guid.NewGuid();
         Scope = scope;
@@ -46,6 +47,7 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         ErrorPolicy = errorPolicy;
         OnNullDefaultValue = onNullDefaultValue;
         ArrayMode = arrayMode;
+        FhirWriteBackJsonPath = fhirWriteBackJsonPath;
         IsEnabled = true;
     }
 
@@ -86,6 +88,17 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
     /// mapped value is a real collection — see <see cref="TransformArrayMode"/>.</summary>
     public TransformArrayMode ArrayMode { get; private set; }
 
+    /// <summary>Where in the source resource's own JSON this rule's OUTPUT should be written back, for a
+    /// FHIR-native destination (Aidbox/Medplum/any other <see cref="Enums.DestinationType.FhirRepository"/>
+    /// config) to receive the transformed value instead of the untouched original. Null (the default) means
+    /// "don't patch" — a scalar-in/scalar-out node (DateTimeFormat, NumberCast, ...) never needs this since its
+    /// output already matches the source shape at the same path; a structure-building node (CodeableConceptBuilder,
+    /// UnitConversion in FHIR-Quantity mode, ReferenceConstruction, ValueCodeMapping with emitCoding on) usually
+    /// needs the PARENT of the field's own read path — e.g. a rule reading "code.coding.code" but building a
+    /// whole CodeableConcept belongs at "code", not back into the bare code string leaf. Dot-separated segments,
+    /// optional "[n]" array index per segment (no leading "$."), e.g. "code" or "component[0].valueQuantity".</summary>
+    public string? FhirWriteBackJsonPath { get; private set; }
+
     public bool IsEnabled { get; private set; } = true;
 
     string? IHasAuditDisplayName.AuditDisplayName =>
@@ -97,7 +110,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         NullPolicy onNull,
         TransformErrorPolicy errorPolicy,
         string? onNullDefaultValue = null,
-        TransformArrayMode arrayMode = TransformArrayMode.Whole)
+        TransformArrayMode arrayMode = TransformArrayMode.Whole,
+        string? fhirWriteBackJsonPath = null)
     {
         ConfigJson = configJson;
         Order = order;
@@ -105,6 +119,7 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         ErrorPolicy = errorPolicy;
         OnNullDefaultValue = onNullDefaultValue;
         ArrayMode = arrayMode;
+        FhirWriteBackJsonPath = fhirWriteBackJsonPath;
     }
 
     public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;

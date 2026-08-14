@@ -23,7 +23,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// back, silently refreshing it with the refresh token when it nears expiry. Vendor subclasses (Epic, Healow, …)
 /// need only override <see cref="ProviderName"/>.
 /// </summary>
-public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow, IFhirPatientContextProvider
+public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IInteractiveAuthorizationFlow, IFhirPatientContextProvider, IFhirGrantedScopeProvider
 {
     private const int DefaultExpiresInSeconds = 300;
 
@@ -110,6 +110,18 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     {
         var (_, stored) = await GetStoredTokenAsync(source, cancellationToken);
         return stored?.ResolvedBaseUrl;
+    }
+
+    /// <summary>
+    /// Returns the actual <c>scope</c> the authorization server granted at this session's sign-in/last refresh
+    /// (<see cref="StoredOAuthToken.Scope"/>), or null when no session is stored yet or the token endpoint never
+    /// echoed one back. Purely a cache read — an interactive flow cannot mint a fresh token on demand (no user is
+    /// present), so unlike the Backend Services provider this never triggers a network call.
+    /// </summary>
+    public async Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        var (_, stored) = await GetStoredTokenAsync(source, cancellationToken);
+        return stored?.Scope;
     }
 
     /// <summary>

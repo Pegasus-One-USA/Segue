@@ -100,9 +100,13 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
             .ToListAsync(cancellationToken);
 
         var nodeRunIds = nodeRuns.Select(x => x.Id).ToList();
+        // Projected, not the full entity — PayloadJson can hold megabytes of encrypted ciphertext per row (a
+        // source node's fetched batch), and this list never decrypts it (see WorkflowNodeRunHistoryDto.PayloadJson's
+        // remarks), so selecting it here would still pay SQL Server's transfer cost for nothing.
         var payloadsByNodeRunId = await _dbContext.WorkflowNodeRunPayloads
             .AsNoTracking()
             .Where(p => nodeRunIds.Contains(p.WorkflowNodeRunId))
+            .Select(p => new { p.WorkflowNodeRunId, p.Contract, p.ItemCount, p.RecordedAtUtc })
             .ToListAsync(cancellationToken);
 
         // A node run can, in principle, have recorded more than one payload — take the earliest, matching what
@@ -124,10 +128,170 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
                 nodeRun.StartedAt,
                 nodeRun.CompletedAt,
                 payload?.Contract,
-                payload is null ? null : _encryptor.Decrypt(payload.PayloadJson),
+                // Deliberately not decrypted here — see WorkflowNodeRunHistoryDto.PayloadJson's remarks.
+                // Contract/ItemCount are plaintext columns, so the row can still render fully collapsed.
+                null,
                 payload?.ItemCount);
         }).ToList();
 
         return new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, totalCount, page, take);
+    }
+
+    public async Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
+        Guid workflowRunId, Guid workflowNodeRunId, CancellationToken cancellationToken)
+    {
+        var payload = await _dbContext.WorkflowNodeRunPayloads
+            .AsNoTracking()
+            .Where(p => p.WorkflowRunId == workflowRunId && p.WorkflowNodeRunId == workflowNodeRunId)
+            .OrderBy(p => p.RecordedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return payload is null
+            ? null
+            : new WorkflowNodeRunPayloadDetailDto(
+                workflowNodeRunId, payload.Contract, _encryptor.Decrypt(payload.PayloadJson), payload.ItemCount);
+    }
+
+    public async Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
+        Guid workflowRunId, int page, int pageSize, FieldLineageFilter? filter, CancellationToken cancellationToken)
+    {
+        var entries = await LoadEntriesAsync(workflowRunId, filter, cancellationToken);
+
+        // Grouped in-memory (not via EF GroupBy translation) so a field's hop chain — usually a handful of
+        // rows — is assembled once per chain rather than split across whatever page boundary the raw rows
+        // happened to land on.
+        var chains = entries
+            .GroupBy(x => (x.ResourceId, x.ResourceType, x.DestinationField, x.SourceField))
+            .OrderBy(g => g.Key.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Key.DestinationField, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new FieldLineageChainDto(
+                    g.Key.ResourceType,
+                    g.Key.ResourceId,
+                    g.Key.DestinationField,
+                    g.Key.SourceField,
+                    g.OrderBy(x => x.NodeOrder)
+                        .Select(x => new FieldLineageHopDto(
+                            x.NodeOrder,
+                            x.NodeType,
+                            x.ConfigJson,
+                            DecryptOrNull(x.SourceValueJson),
+                            DecryptOrNull(x.DestinationValueJson),
+                            x.Success,
+                            x.ErrorMessage,
+                            x.DurationMs,
+                            x.ExecutedAtUtc))
+                        .ToArray(),
+                    first.SourceSystemType,
+                    first.SourceConnectionName,
+                    first.DestinationTypeName,
+                    first.DestinationName);
+            })
+            .ToList();
+
+        var totalCount = chains.Count;
+        var take = Math.Clamp(pageSize, 1, 200);
+        var skip = Math.Max(0, (page - 1) * take);
+        var items = chains.Skip(skip).Take(take).ToList();
+
+        return new WorkflowPagedResult<FieldLineageChainDto>(items, totalCount, page, take);
+    }
+
+    public async Task<LineageSummaryDto> GetLineageSummaryAsync(Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        var entries = await _dbContext.FieldLineageEntries
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId)
+            .Select(x => new { x.ResourceId, x.DestinationField, x.NodeType, x.Success })
+            .ToListAsync(cancellationToken);
+
+        if (entries.Count == 0)
+        {
+            return new LineageSummaryDto(0, 0, 0, 0);
+        }
+
+        var resourcesProcessed = entries.Select(x => x.ResourceId).Distinct().Count();
+        var fieldsTransformed = entries.Select(x => x.DestinationField).Distinct().Count();
+        var nodesExecuted = entries.Select(x => x.NodeType).Distinct().Count();
+        var successRate = entries.Count(x => x.Success) / (double)entries.Count;
+
+        return new LineageSummaryDto(resourcesProcessed, fieldsTransformed, nodesExecuted, successRate);
+    }
+
+    public async Task<IReadOnlyList<ResourceTypeSummaryDto>> GetLineageResourceTreeAsync(
+        Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        var entries = await _dbContext.FieldLineageEntries
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId)
+            .Select(x => new { x.ResourceType, x.ResourceId, x.DestinationField })
+            .ToListAsync(cancellationToken);
+
+        return entries
+            .GroupBy(x => x.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(resourceGroup => new ResourceTypeSummaryDto(
+                resourceGroup.Key,
+                resourceGroup.Select(x => x.ResourceId).Distinct().Count(),
+                resourceGroup
+                    .GroupBy(x => x.DestinationField, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(fieldGroup => fieldGroup.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(fieldGroup => new FieldSummaryDto(
+                        fieldGroup.Key,
+                        fieldGroup.Select(x => x.ResourceId).Distinct().Count()))
+                    .ToArray()))
+            .ToArray();
+    }
+
+    private async Task<List<FieldLineageEntry>> LoadEntriesAsync(
+        Guid workflowRunId, FieldLineageFilter? filter, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.FieldLineageEntries
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId);
+
+        if (filter is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(filter.ResourceType))
+            {
+                query = query.Where(x => x.ResourceType == filter.ResourceType);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.DestinationField))
+            {
+                query = query.Where(x => x.DestinationField == filter.DestinationField);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.ResourceId))
+            {
+                query = query.Where(x => x.ResourceId == filter.ResourceId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.NodeType))
+            {
+                query = query.Where(x => x.NodeType == filter.NodeType);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                // Values are encrypted at rest and can't be searched in SQL — search only spans the plaintext
+                // identifying columns (field/node names, resource id), not SourceValueJson/DestinationValueJson.
+                var search = filter.Search;
+                query = query.Where(x =>
+                    x.DestinationField.Contains(search) ||
+                    (x.SourceField != null && x.SourceField.Contains(search)) ||
+                    x.NodeType.Contains(search) ||
+                    x.ResourceId.Contains(search));
+            }
+        }
+
+        return await query.ToListAsync(cancellationToken);
+    }
+
+    private string? DecryptOrNull(string? ciphertext)
+    {
+        return ciphertext is null ? null : _encryptor.Decrypt(ciphertext);
     }
 }

@@ -295,6 +295,11 @@
 /* ── Form ─────────────────────────────────────────────────────────────────── */
 .dw-form { width: 100%; }
 
+/* Keeps the dynamically-loaded connection form component (see destination-forms/) alive across all four
+   steps — visually hidden outside Step 1 — instead of destroying/recreating it, so Steps 2-4 can keep
+   reading live values off it (mapping canvas connectionInfo/csvDelimiterKey, Step 4 review). */
+.dw-hidden { display: none; }
+
 .dw-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -297,6 +297,25 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     /// <summary>
+    /// Promotes a workflow's own mapping profile into a new, independently-named master template that other
+    /// workflows can find via "Select Existing" and clone from. Always creates a brand-new mapping profile —
+    /// never overwrites an existing one, even one that already matches the same resource type/source/destination.
+    /// </summary>
+    [HttpPost("mapping-profiles/{mappingProfileId:guid}/promote-to-master")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> PromoteMappingProfileToMaster(
+        Guid mappingProfileId,
+        [FromBody] PromoteMappingProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        var masterProfile = await _configurationService.PromoteMappingProfileToMasterAsync(
+            mappingProfileId, request.Name, cancellationToken);
+
+        return Created($"/api/v1/mapping-profiles/{masterProfile.Id}", masterProfile);
+    }
+
+    /// <summary>
     /// Imports the field-mapping configuration produced by the Workflow Builder's "Update" button: persists
     /// one mapping profile per resourceType and applies the destination schema changes (new tables/columns)
     /// it implies. Safely re-runnable — re-posting the same payload reports everything as already-existing

@@ -19,6 +19,10 @@ export interface SourceAuthenticationModel {
    *  elsewhere. Purely informational (FHIRBridge never fetches it itself); persisted so reopening this
    *  connection shows back whatever was actually registered instead of only ever guessing. */
   jwksUrl?: string | null;
+  /** The scopes Epic (or another EHR) actually granted the app, from the last successful "Discover" token
+   *  exchange (backend-auth-scopes probe). Null until Discover has run once; purely informational — distinct
+   *  from `scopes`, which is what FHIRBridge requests. */
+  discoveredScopes?: string[] | null;
 }
 
 /** Matches SourceInteractiveConfigurationDto.cs exactly. */

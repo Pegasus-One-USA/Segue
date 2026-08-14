@@ -18,7 +18,8 @@ public sealed record TransformationRuleDto(
     TransformErrorPolicy ErrorPolicy,
     bool IsEnabled,
     string? OnNullDefaultValue = null,
-    TransformArrayMode ArrayMode = TransformArrayMode.Whole);
+    TransformArrayMode ArrayMode = TransformArrayMode.Whole,
+    string? FhirWriteBackJsonPath = null);
 
 /// <summary><see cref="Id"/> null creates a new rule; supplying an existing id updates it in place.</summary>
 public sealed record SaveTransformationRuleRequest(
@@ -37,7 +38,8 @@ public sealed record SaveTransformationRuleRequest(
     TransformErrorPolicy ErrorPolicy = TransformErrorPolicy.NullOut,
     bool IsEnabled = true,
     string? OnNullDefaultValue = null,
-    TransformArrayMode ArrayMode = TransformArrayMode.Whole);
+    TransformArrayMode ArrayMode = TransformArrayMode.Whole,
+    string? FhirWriteBackJsonPath = null);
 
 /// <summary>Resolve-and-apply a sample value through whatever rule chain is currently in effect for one field —
 /// backs both the wizard's "auto-applied on add" behavior and the Rules modal's live preview.

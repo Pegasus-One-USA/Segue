@@ -1,0 +1,15 @@
+{
+  "resourceType": "Binary",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "contentType": "<Code · 1..1 · required>",
+  "securityContext": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "data": "<Base64Binary · 0..1>"
+}

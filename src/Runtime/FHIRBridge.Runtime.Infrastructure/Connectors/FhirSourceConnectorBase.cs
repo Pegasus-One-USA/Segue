@@ -98,6 +98,38 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         return mergedResources;
     }
 
+    public async Task<ResourceEnvelope?> ReadByIdAsync(
+        string resourceType,
+        string id,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(source.BaseUrl))
+        {
+            throw new InvalidOperationException($"{SourceDisplayName} base URL is required.");
+        }
+
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        var requestUrl = $"{source.BaseUrl.TrimEnd('/')}/{resourceType}/{Uri.EscapeDataString(id)}";
+
+        _logger.LogInformation("{Source} read request: {RequestUrl}", SourceDisplayName, requestUrl);
+
+        using var response = await SendWithRetryAsync(requestUrl, accessToken, source, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(BuildFailureMessage(requestUrl, response, body));
+        }
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        return FhirResourceParser.ParseResource(json);
+    }
+
     private async Task<IReadOnlyList<ResourceEnvelope>> SearchPagesAsync(
         string resourceType,
         FhirSourceConfiguration source,

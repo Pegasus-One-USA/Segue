@@ -1,0 +1,183 @@
+<form [formGroup]="blobForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="blobForm.get('name')!.invalid && blobForm.get('name')!.touched">
+      <label class="dw-label" for="dw-blob-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-blob-name" class="dw-input" formControlName="name" placeholder="e.g. Azure Blob Export" />
+      @if (blobForm.get('name')!.invalid && blobForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="blobForm.get('container')!.invalid && blobForm.get('container')!.touched">
+      <label class="dw-label" for="dw-blob-container">Container name <span class="dw-req">*</span></label>
+      <input id="dw-blob-container" class="dw-input" formControlName="container" placeholder="e.g. fhirbridge-exports" />
+      @if (blobForm.get('container')!.hasError('required') && blobForm.get('container')!.touched) {
+        <span class="dw-error">Container name is required.</span>
+      } @else if (blobForm.get('container')!.hasError('pattern') && blobForm.get('container')!.touched) {
+        <span class="dw-error">3-63 characters: lowercase letters, numbers, and single hyphens only (no leading, trailing, or double hyphens).</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-blob-granularity">Delivery</label>
+      <div class="dw-select-wrap">
+        <select id="dw-blob-granularity" class="dw-select" formControlName="granularity">
+          <option value="bulk">Bulk upload (all records in one blob)</option>
+          <option value="individual">Individual records (one blob per record)</option>
+        </select>
+      </div>
+      @if (blobForm.get('granularity')!.value === 'bulk') {
+        <span class="dw-hint">Every run writes one new blob containing the whole batch — no existing blob is ever updated.</span>
+      }
+    </div>
+
+    @if (blobForm.get('granularity')!.value === 'individual') {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-blob-recordMode">Record mode</label>
+        <div class="dw-select-wrap">
+          <select id="dw-blob-recordMode" class="dw-select" formControlName="recordMode">
+            <option value="insert">Insert — always add new</option>
+            <option value="upsert">Upsert — update if exists, else insert</option>
+            <option value="update">Update — only if exists</option>
+          </select>
+        </div>
+        @if (blobForm.get('recordMode')!.value === 'insert') {
+          <span class="dw-hint">Every record gets a brand-new blob, even one already written before — nothing is ever overwritten.</span>
+        } @else if (blobForm.get('recordMode')!.value === 'upsert') {
+          <span class="dw-hint">Creates the record's blob if it doesn't exist yet, or overwrites it if it does — keyed by the field flagged 🔑 in Map fields (falls back to the record's own source id).</span>
+        } @else {
+          <span class="dw-hint">Only overwrites a record's blob if one already exists under its key — a record with no existing blob is skipped, never created.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field dw-field--full">
+      <label class="dw-label" for="dw-blob-authMode">Authentication</label>
+      <div class="dw-select-wrap">
+        <select id="dw-blob-authMode" class="dw-select" formControlName="authMode">
+          <option value="connectionString">Connection string</option>
+          <option value="accountKey">Account name + key</option>
+          <option value="sasUrl">SAS URL or token</option>
+          <!-- Hidden for now — re-enable when ready. Form support is untouched.
+          <option value="managedIdentity">Managed identity</option>
+          <option value="servicePrincipal">Service principal (Azure AD)</option>
+          -->
+        </select>
+      </div>
+    </div>
+
+    @if (blobForm.get('authMode')!.value === 'connectionString') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-blob-secret">Connection string <span class="dw-req">*</span></label>
+        <input id="dw-blob-secret" type="password" class="dw-input" formControlName="secretValue"
+          placeholder="DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net"
+          autocomplete="new-password" />
+        @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+          <span class="dw-error">Connection string is required.</span>
+        }
+      </div>
+    }
+
+    @if (blobForm.get('authMode')!.value === 'accountKey') {
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('accountName')!.invalid && blobForm.get('accountName')!.touched">
+        <label class="dw-label" for="dw-blob-accountName">Account name <span class="dw-req">*</span></label>
+        <input id="dw-blob-accountName" class="dw-input" formControlName="accountName" placeholder="e.g. mystorageaccount" />
+        @if (blobForm.get('accountName')!.invalid && blobForm.get('accountName')!.touched) {
+          <span class="dw-error">Account name is required.</span>
+        }
+      </div>
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-blob-secret-key">Account key <span class="dw-req">*</span></label>
+        <input id="dw-blob-secret-key" type="password" class="dw-input" formControlName="secretValue" autocomplete="new-password" />
+        @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+          <span class="dw-error">Account key is required.</span>
+        }
+      </div>
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-blob-endpointSuffix">Endpoint suffix</label>
+        <input id="dw-blob-endpointSuffix" class="dw-input" formControlName="endpointSuffix" placeholder="core.windows.net" />
+      </div>
+    }
+
+    @if (blobForm.get('authMode')!.value === 'sasUrl') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-blob-secret-sas">SAS URL or token <span class="dw-req">*</span></label>
+        <input id="dw-blob-secret-sas" type="password" class="dw-input" formControlName="secretValue"
+          placeholder="https://acct.blob.core.windows.net/container?sv=...&sig=... (or a bare sv=...&sig=... token)"
+          autocomplete="new-password" />
+        @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+          <span class="dw-error">A SAS URL or token is required.</span>
+        }
+      </div>
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-blob-accountUrl-sas">Account URL</label>
+        <input id="dw-blob-accountUrl-sas" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+        <span class="dw-hint">Only needed if the value above is a bare token rather than a full URL.</span>
+      </div>
+    }
+
+    @if (blobForm.get('authMode')!.value === 'managedIdentity') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched">
+        <label class="dw-label" for="dw-blob-accountUrl-mi">Account URL <span class="dw-req">*</span></label>
+        <input id="dw-blob-accountUrl-mi" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+        @if (blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched) {
+          <span class="dw-error">Account URL is required.</span>
+        }
+      </div>
+      <div class="dw-field">
+        <label class="dw-label" for="dw-blob-miClientId">User-assigned identity client ID</label>
+        <input id="dw-blob-miClientId" class="dw-input" formControlName="managedIdentityClientId" placeholder="Optional — leave blank for a system-assigned identity" />
+      </div>
+      <div class="dw-field dw-field--full">
+        <div class="dw-callout dw-callout--info">
+          The host running FHIRBridge needs a managed identity granted the <strong>Storage Blob Data Contributor</strong> role on this storage account.
+        </div>
+      </div>
+    }
+
+    @if (blobForm.get('authMode')!.value === 'servicePrincipal') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched">
+        <label class="dw-label" for="dw-blob-accountUrl-sp">Account URL <span class="dw-req">*</span></label>
+        <input id="dw-blob-accountUrl-sp" class="dw-input" formControlName="accountUrl" placeholder="https://acct.blob.core.windows.net" />
+        @if (blobForm.get('accountUrl')!.invalid && blobForm.get('accountUrl')!.touched) {
+          <span class="dw-error">Account URL is required.</span>
+        }
+      </div>
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('tenantId')!.invalid && blobForm.get('tenantId')!.touched">
+        <label class="dw-label" for="dw-blob-tenantId">Tenant ID <span class="dw-req">*</span></label>
+        <input id="dw-blob-tenantId" class="dw-input" formControlName="tenantId" />
+        @if (blobForm.get('tenantId')!.invalid && blobForm.get('tenantId')!.touched) {
+          <span class="dw-error">Tenant ID is required.</span>
+        }
+      </div>
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('clientId')!.invalid && blobForm.get('clientId')!.touched">
+        <label class="dw-label" for="dw-blob-clientId">Client ID <span class="dw-req">*</span></label>
+        <input id="dw-blob-clientId" class="dw-input" formControlName="clientId" />
+        @if (blobForm.get('clientId')!.invalid && blobForm.get('clientId')!.touched) {
+          <span class="dw-error">Client ID is required.</span>
+        }
+      </div>
+      <div class="dw-field dw-field--full" [class.dw-field--error]="blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-blob-secret-sp">Client secret <span class="dw-req">*</span></label>
+        <input id="dw-blob-secret-sp" type="password" class="dw-input" formControlName="secretValue" autocomplete="new-password" />
+        @if (blobForm.get('secretValue')!.invalid && blobForm.get('secretValue')!.touched) {
+          <span class="dw-error">Client secret is required.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-blob-pathPrefix">Path prefix</label>
+      <input id="dw-blob-pathPrefix" class="dw-input" formControlName="pathPrefix" placeholder="Optional — e.g. fhirbridge/patient" />
+    </div>
+
+    <div class="dw-field dw-field--checkbox">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="createContainerIfNotExists" />
+        Create container if it doesn't exist
+      </label>
+    </div>
+
+  </div><!-- /dw-grid-2 -->
+</form>

@@ -1,0 +1,156 @@
+// Vertical label-above-input, per the app's own form spec (§8.3) — matches mapping-profile-dialog's
+// .mpd-meta-field convention rather than Material's floating-label outline, which this dynamic,
+// schema-driven form (rendered inline inside both the per-column Rules dialog and the Transformation
+// Rules page's step editor) previously used.
+// This used to be an inline `styles: []` array on the component instead of this real .scss file — that
+// template-literal array is NOT run through Angular's Sass pipeline the way every *.scss FILE in this app
+// is (styleUrls IS Sass-processed), and repeatedly, unpredictably dropped rules wholesale (BEM `&`-nesting
+// silently produced invalid CSS; even flat, non-nested selectors on the checkbox row stopped applying for
+// reasons that never reproduced anywhere else). Moving to a real .scss file puts this component on the
+// exact same, already-proven pipeline every other component's checkbox/flex-row layout in this app already
+// works reliably on — see transform-rules-dialog.component.scss's own .form-field, which has never had this
+// class of bug.
+:host { display: block; width: 100%; }
+
+.rule-config-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.config-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  label {
+    display: block;
+    min-height: 34px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-ink-2);
+  }
+
+  select, input {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    font-size: 13.5px;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    box-sizing: border-box;
+    transition: border-color var(--transition-base, 150ms ease);
+
+    &:hover { border-color: var(--color-muted); }
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+  }
+
+  // Matches "Node type"'s own select exactly (see transform-rules-dialog/transformation-rule-list's
+  // .form-field select) — same custom chevron, same reset of the browser's own native arrow, so this
+  // field and its sibling "Node type" render the identical dropdown glyph in the identical spot instead
+  // of each browser drawing its own.
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    padding-right: 32px;
+    // A data: URI SVG can't reference a CSS custom property, so this one hex is unavoidable — it's
+    // --color-muted's own value (#64748B), not a stand-in for a token that could be used instead.
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748B' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 10px 7px;
+  }
+}
+
+// A callout row, not a bare checkbox+text floating inline — a lone toggle amid a grid of labeled
+// text/select fields read as visually "lost" at plain-text size. Spanning every grid column (1 / -1)
+// guarantees its own full-width row regardless of how many other fields are in play, and orderedFields()
+// (not CSS order:, which would desync visual order from DOM/tab order) is what keeps it last among its
+// siblings. A plain flex row with align-items: center puts the checkbox and its label text on one line,
+// vertically centered against each other — the simplest layout that does what's actually being asked for,
+// now that it's on a pipeline that reliably applies it.
+.config-control--checkbox {
+  grid-column: 1 / -1;
+  display: flex;
+  // This label also carries the base .config-control class, whose flex-direction: column would otherwise
+  // win (it's the only rule that sets that property, since align-items/gap alone don't contest it) —
+  // explicit row here is what actually keeps the checkbox and its text side by side instead of stacked.
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+  cursor: pointer;
+}
+
+// Neither width/height nor transform: scale() shrank the browser's own native accent-color'd checkbox in
+// this environment — rather than keep fighting how the browser paints that native widget, the real box is
+// a plain custom element (.checkbox-visual__box) sized in ordinary pixels; the actual <input> stays for
+// semantics/keyboard/form state but is visually hidden (opacity: 0, NOT display: none, so it's still
+// focusable and in the tab order) underneath it, stretched over the same footprint as its full click target.
+.checkbox-visual {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.checkbox-visual__input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkbox-visual__box {
+  display: block;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--color-border-input);
+  border-radius: 3px;
+  background: var(--color-surface);
+  transition: background 120ms ease, border-color 120ms ease;
+
+  // The checkmark itself: two short borders rotated 45°, not an SVG — sized with plain width/height/margin
+  // instead of a viewBox, so there's no scaling math that can go wrong.
+  &::after {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 6px;
+    margin: 1px auto 0 4px;
+    border: solid var(--color-on-primary);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+  }
+}
+
+.checkbox-visual__input:checked ~ .checkbox-visual__box {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+
+  &::after { opacity: 1; }
+}
+
+.checkbox-visual__input:focus-visible ~ .checkbox-visual__box {
+  box-shadow: 0 0 0 2px var(--color-primary-mid);
+}
+
+.no-config { grid-column: 1 / -1; font-size: 12.5px; color: var(--color-muted); margin: 0; }

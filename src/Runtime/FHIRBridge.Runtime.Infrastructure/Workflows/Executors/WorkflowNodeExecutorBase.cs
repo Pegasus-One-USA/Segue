@@ -129,6 +129,45 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
                 : null;
     }
 
+    /// <summary>
+    /// Reads this exact node's own <c>mappingProfileIds</c> (a JSON object of <c>{resourceType: mappingProfileId}</c>
+    /// the build endpoint stamps — see WorkflowEndpoints.cs's Mappings step) falling back to the legacy single
+    /// <c>mappingProfileId</c> field for a node saved before per-resource ids existed (attributed to
+    /// <c>resourceType</c>, defaulting to "Patient" for the oldest graphs that predate that field too). Resolving
+    /// a resource type's mapping this way — by an id THIS node itself saved — can never pick up a different
+    /// workflow's profile, unlike a search keyed on (ResourceType, SourceConnectionId, DestinationId), which is
+    /// shared by any workflow built on the same source connection + destination + resource type.
+    /// </summary>
+    protected static Dictionary<string, Guid> ReadProfileIds(WorkflowNode node)
+    {
+        var mappingProfileIds = ReadConfiguration<Dictionary<string, string>>(node, "mappingProfileIds");
+        var result = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        if (mappingProfileIds is { Count: > 0 })
+        {
+            foreach (var (resourceType, id) in mappingProfileIds)
+            {
+                if (Guid.TryParse(id, out var parsed))
+                {
+                    result[resourceType] = parsed;
+                }
+            }
+
+            if (result.Count > 0)
+            {
+                return result;
+            }
+        }
+
+        var single = ReadStringConfiguration(node, "mappingProfileId");
+        var legacyResourceType = ReadStringConfiguration(node, "resourceType") ?? "Patient";
+        if (Guid.TryParse(single, out var singleId))
+        {
+            result[legacyResourceType] = singleId;
+        }
+
+        return result;
+    }
+
     protected static bool? ReadBoolConfiguration(WorkflowNode node, string propertyName)
     {
         if (string.IsNullOrWhiteSpace(node.ConfigurationJson))

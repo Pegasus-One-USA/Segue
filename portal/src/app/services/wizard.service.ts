@@ -234,7 +234,7 @@ export class WizardService {
     this.baseUrl.set(dto?.baseUrl ?? EPIC_ENV['sandbox'].base);
     this.token.set(dto?.authentication?.tokenEndpoint ?? '');
     this.authorize.set('');
-    // Entity mode has no Resource Type & Scopes picker UI at all (removed — see epic-audience-form.component.ts's
+    // Entity mode has no Resource Type & Scopes picker UI at all (removed — see ehr-vendor-source-form.component.ts's
     // showResourcePickerSection remarks), so a brand-new connection needs a real, non-empty default here
     // regardless of audience: ScopeBuilderService.buildScopes returns scopes derived ONLY from this list for a
     // non-interactive app (Backend System has no "free" base scopes the way EHR-launch/Standalone/Patient do —
@@ -378,7 +378,7 @@ export class WizardService {
     // step3ModeValues), not from `this.clientId()` / `this.authMethod()` — those WizardService signals are only
     // ever synced at open() /openEntity() time and go stale the moment the user edits the reactive form, since
     // neither field routes back through a signal write the way ehrType/resources/trustedIssuers do (see their
-    // own `this.wiz.xxx.set(...)` calls in EpicAudienceFormComponent.save() just before this method is invoked).
+    // own `this.wiz.xxx.set(...)` calls in EhrVendorSourceFormComponent.save() just before this method is invoked).
     const audienceKey = (fields['Epic audience'] || 'provider-ehr-launch') as EpicAudience;
     const audCfg = AUDIENCE_FIELD_CONFIG[audienceKey];
     const liveAuthMethod = (fields['Auth method'] || 'secret') as 'public' | 'secret' | 'jwt';
@@ -400,7 +400,7 @@ export class WizardService {
         // launch/offline_access) for an interactive app regardless of how many resources are passed — so
         // this stays correct even with zero resources (the common case for a brand-new source; real
         // resource-derived scopes get filled in later by EpicSourceConnectionScopeSyncService once a
-        // workflow wires this source to a destination — see epic-audience-form.component.ts).
+        // workflow wires this source to a destination — see ehr-vendor-source-form.component.ts).
         scopes:              this.scopeString().split(' ').filter(Boolean),
         clientSecretKeyVaultName: null,
         clientSecretName:         null,
@@ -408,7 +408,7 @@ export class WizardService {
         privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
         keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
         // Persisted so reopening this connection (Settings → Source Connections, which has no workflow node to
-        // recover it from otherwise — see EpicAudienceFormComponent's liveJwksUrl remarks) shows back whatever URL
+        // recover it from otherwise — see EhrVendorSourceFormComponent's liveJwksUrl remarks) shows back whatever URL
         // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
         // FHIRBridge's own hosted URL guess.
         jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
@@ -423,14 +423,14 @@ export class WizardService {
       // Retrieval (search criteria, resource types, scopes, pagination, bulk-export settings) is workflow-specific,
       // not connection-level — entity mode (Settings → Source Connections) manages only the reusable connection,
       // so it never persists a retrieval payload here regardless of what the audience would otherwise show in
-      // canvas mode. See EpicAudienceFormComponent.showRetrievalSection, which hides the corresponding UI section.
+      // canvas mode. See EhrVendorSourceFormComponent.showRetrievalSection, which hides the corresponding UI section.
       retrieval: (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
         ? {
             retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
             resourceTypes:          retrievalResourceTypes,
             searchCriteria:         fields['Search criteria'] || null,
             incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
-            // Bulk Export fields — EpicAudienceFormComponent.save() has always written these into `fields`
+            // Bulk Export fields — EhrVendorSourceFormComponent.save() has always written these into `fields`
             // ('Export scope' / 'Group ID' / 'Patient ID / list' / 'FHIR output format'), but this builder never
             // read them back out, so every Bulk Export connection silently saved with a null scope/group/patient
             // list/output format regardless of what the form showed. Patient ID / list is comma-separated in the

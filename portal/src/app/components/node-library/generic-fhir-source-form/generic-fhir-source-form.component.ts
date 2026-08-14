@@ -2,6 +2,7 @@ import { Component, input, signal, computed, effect, untracked, inject } from '@
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+import { SourceConfigFormComponent } from '../../shared/config-form/config-form.contract';
 import {
   detectBrowserTimeZone,
   TIME_ZONE_OPTIONS,
@@ -13,7 +14,7 @@ import {
   RECONCILIATION_OPTIONS,
   ENDPOINT_TYPE_OPTIONS,
   EVENT_TYPE_OPTIONS,
-} from '../../epic-source-wizard/epic-audience-form/epic-audience-form.component';
+} from '../../shared/ehr-vendor-source-form/ehr-vendor-source-form.component';
 
 export type GenericFhirRetrievalMethod = 'subscription' | 'webhook' | 'search-rest' | 'bulk-export';
 export type GenericFhirRunMode = 'incremental' | 'full' | 'manual';
@@ -51,11 +52,11 @@ const RETRIEVAL_METHOD_OPTIONS: readonly { value: GenericFhirRetrievalMethod; la
   imports: [ReactiveFormsModule],
   templateUrl: './generic-fhir-source-form.component.html',
   styleUrls: [
-    '../../epic-source-wizard/epic-audience-form/epic-audience-form.component.scss',
+    '../../shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss',
     './generic-fhir-source-form.component.scss',
   ],
 })
-export class GenericFhirSourceFormComponent {
+export class GenericFhirSourceFormComponent implements SourceConfigFormComponent {
   private readonly fb = inject(FormBuilder);
 
   /** dest_*-style field bag from an existing node's config, when editing one already on the canvas. */

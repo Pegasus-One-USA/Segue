@@ -4,9 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -51,6 +48,7 @@ interface RuleStep {
   onNullDefaultValue: string | null;
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
+  fhirWriteBackJsonPath: string | null;
 }
 
 /** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
@@ -92,8 +90,8 @@ function emptyTargetForm(): NewTargetForm {
   selector: 'app-transformation-rule-list',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatButtonModule, MatIconModule, MatSelectModule, MatInputModule,
-    MatFormFieldModule, MatTooltipModule, MatProgressSpinnerModule, RuleConfigFormComponent,
+    CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatProgressSpinnerModule,
+    RuleConfigFormComponent,
   ],
   templateUrl: './transformation-rule-list.component.html',
   styleUrls: ['./transformation-rule-list.component.scss'],
@@ -167,6 +165,7 @@ export class TransformationRuleListComponent implements OnInit {
           group.steps.push({
             id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false,
             onNull: r.onNull, onNullDefaultValue: r.onNullDefaultValue ?? null, errorPolicy: r.errorPolicy, arrayMode: r.arrayMode,
+            fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
           });
         }
         byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
@@ -225,10 +224,26 @@ export class TransformationRuleListComponent implements OnInit {
       return;
     }
 
+    const key = groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField });
+
+    // A target with this exact (scope, resourceType, destinationType, destinationField, sourceField)
+    // combination already exists — load() groups rows by this same key, so creating another one here
+    // wouldn't add a genuinely separate rule, just a second card that looks identical to this one until
+    // the next reload folds them back into a single group's step list. Open the real one instead of
+    // silently duplicating it.
+    const existing = this.groups().find(g => g.key === key);
+    if (existing) {
+      existing.editing = true;
+      this.groups.set([...this.groups()]);
+      this.creatingNew.set(false);
+      this.toast.info('Target already exists', 'A rule target for this exact scope already exists — use "Add another step" on it instead of creating a duplicate.');
+      return;
+    }
+
     const applicable = t.sourceField ? getApplicableNodeTypes(t.sourceField, null) : ALL_NODE_TYPE_OPTIONS;
     const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
     const group: RuleTargetGroup = {
-      key: groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField }),
+      key,
       scope: t.scope,
       resourceType: t.scope === 'ResourceType' ? t.resourceType.trim() : null,
       destinationType: t.scope === 'DestinationType' ? (t.destinationType || null) : null,
@@ -237,6 +252,7 @@ export class TransformationRuleListComponent implements OnInit {
       steps: [{
         id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false,
         onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+        fhirWriteBackJsonPath: null,
       }],
       editing: true,
     };
@@ -255,6 +271,7 @@ export class TransformationRuleListComponent implements OnInit {
     group.steps.push({
       id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false,
       onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+      fhirWriteBackJsonPath: null,
     });
     this.groups.set([...this.groups()]);
   }
@@ -285,6 +302,11 @@ export class TransformationRuleListComponent implements OnInit {
     this.groups.set([...this.groups()]);
   }
 
+  setFhirWriteBackJsonPath(step: RuleStep, value: string): void {
+    step.fhirWriteBackJsonPath = value.trim() || null;
+    this.groups.set([...this.groups()]);
+  }
+
   moveStep(group: RuleTargetGroup, step: RuleStep, direction: -1 | 1): void {
     const index = group.steps.indexOf(step);
     const swapWith = index + direction;
@@ -312,6 +334,7 @@ export class TransformationRuleListComponent implements OnInit {
       onNullDefaultValue: step.onNullDefaultValue,
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
+      fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

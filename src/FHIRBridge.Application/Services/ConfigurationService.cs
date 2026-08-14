@@ -507,6 +507,29 @@ public sealed class ConfigurationService : IConfigurationService
         return ConfigurationMapper.ToDto(mappingProfile);
     }
 
+    public async Task<MappingProfileDto> PromoteMappingProfileToMasterAsync(
+        Guid sourceMappingProfileId, string masterName, CancellationToken cancellationToken)
+    {
+        var source = await GetMappingProfileRequiredAsync(sourceMappingProfileId, cancellationToken);
+
+        // Always a brand-new row, never a find-and-overwrite of an existing profile — the same discipline that
+        // fixed the reverse direction (a workflow save no longer searches for and adopts another workflow's
+        // profile). Promoting silently reusing/overwriting an existing master by some derived key would
+        // reintroduce that exact bug one hop further along: a second workflow promoting its own mapping could
+        // clobber a master the first workflow's clones already depend on.
+        var masterProfile = new MappingProfile(
+            masterName,
+            source.ResourceType,
+            source.SourceConnectionId,
+            source.DestinationId,
+            source.DestinationObject,
+            source.Fields);
+
+        await _repository.AddMappingProfileAsync(masterProfile, cancellationToken);
+
+        return ConfigurationMapper.ToDto(masterProfile);
+    }
+
     public async Task<PagedResult<MappingProfileDto>> GetMappingProfilesPagedAsync(
         MappingProfileFilter filter,
         int page,

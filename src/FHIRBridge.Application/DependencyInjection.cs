@@ -49,7 +49,11 @@ public static class DependencyInjection
         services.AddSingleton<ITransformNode, QuantityRangeAssemblyNode>();
         services.AddSingleton<ITransformNode, RoundingScalingNode>();
         services.AddSingleton<ITransformNode, ValueCodeMappingNode>();
-        services.AddSingleton<ITransformNode, CodeableConceptBuilderNode>();
+        // Scoped, not Singleton, like the other 19 — it optionally consumes the Scoped ITerminologyLookupService
+        // (real DB access per Icd10/Snomed/RxNorm/Loinc terminology tables) to resolve a real display for a bare
+        // code. ITransformNodeRegistry below must stay Scoped too, or it would capture this as a captive
+        // dependency the first time it's constructed and hold a stale scope for the app's lifetime.
+        services.AddScoped<ITransformNode, CodeableConceptBuilderNode>();
         services.AddSingleton<ITransformNode, StatusEnumCoercionNode>();
         services.AddSingleton<ITransformNode, ReferenceConstructionNode>();
         services.AddSingleton<ITransformNode, IdentifierFormattingNode>();
@@ -62,7 +66,11 @@ public static class DependencyInjection
         services.AddSingleton<ITransformNode, DefaultNullHandlingNode>();
         services.AddSingleton<ITransformNode, DateMathAgeNode>();
         services.AddSingleton<ITransformNode, HashingMaskingNode>();
-        services.AddSingleton<ITransformNodeRegistry, TransformNodeRegistry>();
+        // Scoped (not Singleton) because it now composes one Scoped node (CodeableConceptBuilderNode) alongside
+        // the 19 Singleton ones — see the comment above. A Scoped registry resolving a mix of Scoped/Singleton
+        // dependencies is fine; a Singleton registry capturing a Scoped one is the captive-dependency bug this
+        // avoids. Both of its current callers (TransformationRuleService, MappingNodeExecutor) are Scoped already.
+        services.AddScoped<ITransformNodeRegistry, TransformNodeRegistry>();
         services.AddScoped<IEffectiveRuleResolver, EffectiveRuleResolver>();
         services.AddScoped<ITransformationRuleService, TransformationRuleService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();

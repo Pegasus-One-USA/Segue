@@ -1,11 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { TransformNodeSchema } from '../transformation-rules.service';
+import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformation-rules.service';
 
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
  *  already have gets the schema's default; keys the config already sets (e.g. loaded from a saved rule)
@@ -29,38 +25,45 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
 @Component({
   selector: 'app-rule-config-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatSelectModule, MatInputModule, MatFormFieldModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="rule-config-form">
-      @for (field of schema?.fields ?? []; track field.key) {
+      @for (field of orderedFields(); track field.key) {
         @switch (field.inputKind) {
           @case ('select') {
-            <mat-form-field appearance="outline" class="config-control">
-              <mat-label>{{ field.label }}</mat-label>
-              <mat-select [ngModel]="config[field.key] ?? field.defaultValue" (ngModelChange)="setValue(field.key, $event)">
+            <div class="config-control">
+              <label [for]="'rcf-' + field.key">{{ field.label }}</label>
+              <select [id]="'rcf-' + field.key" [ngModel]="config[field.key] ?? field.defaultValue" (ngModelChange)="setValue(field.key, $event)">
                 @for (opt of field.options ?? []; track opt) {
-                  <mat-option [value]="opt">{{ opt }}</mat-option>
+                  <option [value]="opt">{{ opt }}</option>
                 }
-              </mat-select>
-            </mat-form-field>
+              </select>
+            </div>
           }
           @case ('checkbox') {
-            <mat-checkbox
-              class="config-control config-control--checkbox"
-              [ngModel]="(config[field.key] ?? field.defaultValue) === 'true'"
-              (ngModelChange)="setValue(field.key, $event ? 'true' : 'false')"
-            >{{ field.label }}</mat-checkbox>
+            <label class="config-control config-control--checkbox">
+              <span class="checkbox-visual">
+                <input
+                  type="checkbox"
+                  class="checkbox-visual__input"
+                  [ngModel]="(config[field.key] ?? field.defaultValue) === 'true'"
+                  (ngModelChange)="setValue(field.key, $event ? 'true' : 'false')"
+                />
+                <span class="checkbox-visual__box"></span>
+              </span>
+              <span class="config-control--checkbox__label">{{ field.label }}</span>
+            </label>
           }
           @default {
-            <mat-form-field appearance="outline" class="config-control">
-              <mat-label>{{ field.label }}</mat-label>
+            <div class="config-control">
+              <label [for]="'rcf-' + field.key">{{ field.label }}</label>
               <input
-                matInput
+                [id]="'rcf-' + field.key"
                 [ngModel]="config[field.key] ?? field.defaultValue ?? ''"
                 (ngModelChange)="setValue(field.key, $event)"
                 [placeholder]="field.placeholder ?? ''"
               />
-            </mat-form-field>
+            </div>
           }
         }
       }
@@ -69,16 +72,21 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
       }
     </div>
   `,
-  styles: [`
-    .rule-config-form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; width: 100%; }
-    .config-control { flex: 1 1 200px; }
-    .config-control--checkbox { flex-basis: 100%; font-size: 13px; }
-    .no-config { font-size: 12.5px; color: var(--color-muted); margin: 0; }
-  `],
+  styleUrls: ['./rule-config-form.component.scss'],
 })
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+
+  /** Checkbox fields always render last, after every text/select field — a lone toggle reads better as a
+   *  trailing "also do this" option than sitting wherever the schema happened to declare it. Reordering
+   *  the actual array (not a CSS order: override) keeps DOM/tab order in sync with visual order. */
+  orderedFields(): TransformConfigFieldSchema[] {
+    const fields = this.schema?.fields ?? [];
+    const rest = fields.filter(f => f.inputKind !== 'checkbox');
+    const checkboxes = fields.filter(f => f.inputKind === 'checkbox');
+    return [...rest, ...checkboxes];
+  }
 
   setValue(key: string, value: string): void {
     this.config[key] = value;
