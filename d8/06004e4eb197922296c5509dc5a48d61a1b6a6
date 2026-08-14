@@ -1,0 +1,83 @@
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_f44f517758dab5::t_6a2f8086fda42c 826-830,835,837-838,846-847
+  s_f44f517758dab5::t_8d60efa61fcba3 1082-1094
+  s_f44f517758dab5::t_eb49b15f689228 831-834,836,839-845
+  s_f44f517758dab5::t_a7c3790a81121f 39-45
+  s_f44f517758dab5::t_cd4aac3a1db321 1606-1613
+  s_f44f517758dab5::t_36a8c29be9a7bf 641-650
+  s_f44f517758dab5::t_9c0b7e22e8d4d5 592
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_f44f517758dab5::t_223049cfc2c82e 19-21
+  s_f44f517758dab5::t_8ea6e72c69ab82 68-72
+  s_f44f517758dab5::t_a842fabbb8987b 193-195
+  s_f44f517758dab5::t_649832e5b4f34a 241-243
+  s_f44f517758dab5::t_4195b8105d715e 223-225
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_f44f517758dab5::t_721e95d333ddfc 59
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_f44f517758dab5::t_ea11b70b7c4d46 65
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.html
+  s_f44f517758dab5::t_1d33661f9d9a01 63-78,80-82,84-90,92-131
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_f44f517758dab5::t_529d5ad05fe1ec 168
+  s_f44f517758dab5::t_6ab535cb6f6584 132
+  s_f44f517758dab5::t_f054895b75eb3b 290-294,303,310-311,313
+  s_f44f517758dab5::t_53f00f4e21e0a0 328,331,345,351-352,361,365-366,369
+  s_f44f517758dab5::t_8f116c9dcf35b4 107-109,116-118
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.scss
+  s_f44f517758dab5::t_6f2b1d3c9b3399 98-130
+Demo_TestApp/backend/Program.cs
+  s_f44f517758dab5::t_bd326ad4b8f30b 288-290
+  s_f44f517758dab5::t_c120a4e12ce033 306-308
+  s_f44f517758dab5::t_f4765eca062b1e 765-767
+  s_f44f517758dab5::t_488948a80a9126 220-222,237-238,253-256
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_f44f517758dab5::t_097fe5ec42e8f1 62
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_f44f517758dab5::t_168353054bee63 225
+  s_f44f517758dab5::t_e924eab1a698ee 241
+  s_f44f517758dab5::t_8a06154f8e00be 781-788
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_f44f517758dab5::t_12a34d926c16fd 3
+  s_f44f517758dab5::t_5adab2cd4cca6a 81-97
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_f44f517758dab5::t_930b3f9f40ede3 225-231
+  s_f44f517758dab5::t_566fc88ca2f6f1 252-255
+  s_f44f517758dab5::t_bc93403001ce2e 717,719
+  s_f44f517758dab5::t_cfe1bfb8399028 728-730,736,739-748,754-758,764-765
+  s_f44f517758dab5::t_26660929080cad 797-802,817-818,825
+  s_f44f517758dab5::t_fdd977bf279804 320-322
+  s_f44f517758dab5::t_b08b260fb241ac 404,406
+  s_f44f517758dab5::t_0bf30fcfb41275 443-456,460-461,465,484-485,495
+  s_f44f517758dab5::t_534aa40e95f06a 849-851,853
+  s_f44f517758dab5::t_1b8020ecf8a4e0 292-294,302-306
+  s_f44f517758dab5::t_c16c3db6484b16 350-351
+  s_f44f517758dab5::t_928a32c2485d9a 109-160
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_f44f517758dab5::t_e5e5531d20b8c7 60
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_f44f517758dab5::t_b617c1568c56c1 126-140
+  s_f44f517758dab5::t_014fa40b5b252e 492-494
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_f44f517758dab5::t_0124d086a8bc06 75-96
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_f44f517758dab5::t_3e4725c5b1984b 295
+  s_f44f517758dab5::t_2e13aa8c6b19ff 4
+  s_f44f517758dab5::t_ea438d73624ed4 385,405-420
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d806004e4eb197922296c5509dc5a48d61a1b6a6",
+  "prompts": {},
+  "sessions": {
+    "s_f44f517758dab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ef2d883-8e68-4643-a1dd-dd1f10e08bcd",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

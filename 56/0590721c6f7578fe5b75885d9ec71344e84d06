@@ -1,0 +1,113 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_3b1a7f58768f24::t_9b7e45077bb5fe 40-55,70-102
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_a47907d89a8626::t_136d5ccb550b59 7-11,13-17
+  s_a47907d89a8626::t_807afaeacc3cfd 112-114,116-117
+  s_a47907d89a8626::t_14c2b71d0d49ae 6,12
+  s_a47907d89a8626::t_d00b99b1d4d482 115
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_3b1a7f58768f24::t_33e544977ae26f 67-85
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_a47907d89a8626::t_e46ab6b71208ac 69-72,82,94,97
+  s_3b1a7f58768f24::t_499e3464de310f 76-77,83-85,88-91,93,99-114,121,126,128
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_3b1a7f58768f24::t_335b5779daeb11 132-134,142-155,160,163-165,197-211,228-248
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_3b1a7f58768f24::t_72c4361f6e3012 42-48
+  s_3b1a7f58768f24::t_f401a51b137801 6
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  s_3b1a7f58768f24::t_9377efe1f99344 29-42
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_3b1a7f58768f24::t_accc28a7019f9f 1191-1210
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_3b1a7f58768f24::t_250ba0006335c4 171
+  s_3b1a7f58768f24::t_cac951bda3e4f0 133-138,140-146,148-162,164-170,172-175
+  s_3b1a7f58768f24::t_36c4f7d1651c0f 67-88,132
+  s_3b1a7f58768f24::t_e8757d252c29ad 147
+  s_3b1a7f58768f24::t_1e81f135d3b651 163
+  s_3b1a7f58768f24::t_5de3fcd24b8930 139
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_3b1a7f58768f24::t_2cafb3e08a1b39 30-33,40-41
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_3b1a7f58768f24::t_9aaf2a40931026 83-132
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_3b1a7f58768f24::t_8df5b25f69257e 63-68
+  s_3b1a7f58768f24::t_b082021c6618c1 165-168,178,180-244
+  s_3b1a7f58768f24::t_00f18edaf573b8 174-177,179
+  s_3b1a7f58768f24::t_f0effb7c273e45 19,245-247
+  s_3b1a7f58768f24::t_0c7d0473f37587 148-150
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_3b1a7f58768f24::t_74d365026115eb 62,64-66
+  s_3b1a7f58768f24::t_9858cec8dcbb18 16-18
+tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderTests.cs
+  s_3b1a7f58768f24::t_d8c035e3536642 1-96
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_3b1a7f58768f24::t_8e392199620c84 100-109
+  s_3b1a7f58768f24::t_669c4188f2d96c 60-64
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_3b1a7f58768f24::t_4bca3ec66f7a30 147-160
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_3b1a7f58768f24::t_87abb4eb69c8fd 294-298,300,302,305,309,313-321,330,334-337,339-340
+  s_3b1a7f58768f24::t_04c01262dd0a7a 290-293,299,301,303-304,306-308,310-312,322-329,331-333,338,341
+  s_3b1a7f58768f24::t_7b23c87d1f420c 2-3
+  s_3b1a7f58768f24::t_566f26a375b4a1 19-27
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_3b1a7f58768f24::t_ab9ed360e89757 134-148
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_3b1a7f58768f24::t_e085480239894d 31-36,41
+  s_3b1a7f58768f24::t_bf05dede9e9038 152-155
+  s_3b1a7f58768f24::t_f59b19428a62b5 223-226
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_a47907d89a8626::t_f2cf92da1da882 65-81
+  s_3b1a7f58768f24::t_e900efd3abae36 115-116,128-137
+  s_a47907d89a8626::t_d01e550b00f76d 50-52
+  s_3b1a7f58768f24::t_bdba30fed82c8d 25,41,44,46,48,61
+  s_3b1a7f58768f24::t_d9622c4e094f48 9,138-140
+  s_a47907d89a8626::t_532ff0c63a5ec6 27-28
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowNodeResourceHistoryRecorder.cs
+  s_3b1a7f58768f24::t_0280643eb03a50 24-34
+  s_3b1a7f58768f24::t_dac2bfefebd7bb 51-66
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_3b1a7f58768f24::t_514a952fe45948 111
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_a47907d89a8626::t_6e5c4e5e09d241 182,184,186
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_a47907d89a8626::t_9265488f216bfd 45,104
+  s_a47907d89a8626::t_e8ab21b7bc8384 91-94
+  s_a47907d89a8626::t_e7188ad87534f9 105-107
+  s_a47907d89a8626::t_837c1b6a6b4cf8 46-48
+  s_a47907d89a8626::t_42d82309afef36 15-20
+portal/src/app/core/api-endpoints.ts
+  s_3b1a7f58768f24::t_ad9f4a94490d37 233
+  s_3b1a7f58768f24::t_dc56246c6e42f2 165
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowNodeResourceHistoryRecorder.cs
+  s_3b1a7f58768f24::t_14642ea0a119c5 64-89
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_3b1a7f58768f24::t_4b854c04c6e632 110-129
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_3b1a7f58768f24::t_872465eeb02465 243-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "560590721c6f7578fe5b75885d9ec71344e84d06",
+  "prompts": {},
+  "sessions": {
+    "s_3b1a7f58768f24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e9e22fe-60af-44d2-8208-640c51f501c1",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_a47907d89a8626": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ea5c225-29fb-475b-a075-ef8e9eaadf90",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

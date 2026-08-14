@@ -1,0 +1,42 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_39163135bbc470::t_2f47f0ca8ff435 256-294
+portal/src/app/data/scope-constants.data.ts
+  s_39163135bbc470::t_a9ab7757ab92ab 10-13,17,19-20
+  s_39163135bbc470::t_6f95cd8de3b332 18
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_39163135bbc470::t_4e99c8a8c0f102 376-387,390-392,394
+  s_39163135bbc470::t_db90ac6bcdd1c0 375
+src/Runtime/FHIRBridge.Runtime.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_39163135bbc470::t_24c39e53d4daf9 31
+  s_39163135bbc470::t_f69849131c425c 22-30,32-45
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_39163135bbc470::t_a4048055c98938 307-320
+  s_39163135bbc470::t_98d72ed2e2cda3 1668-1675
+src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_39163135bbc470::t_b453f6eef5c339 22-30,32-45
+  s_39163135bbc470::t_8ee05e008f94b8 31
+tools/EpicTemplateCatalogGenerator/Program.cs
+  s_39163135bbc470::t_3b5f98289890a0 30-37,39-53
+  s_39163135bbc470::t_5f44a5555447f9 38
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.epic.json
+  s_39163135bbc470::t_a97583e2ca0195 40061-46029,46988-56635
+  s_39163135bbc470::t_2de4ce4f6fd3a6 46030-46987
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/ImagingStudy.json
+  s_39163135bbc470::t_8f7f4ebd8045ca 1-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b0e3b8c1bfc589624959344978a446aec486f00c",
+  "prompts": {},
+  "sessions": {
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}

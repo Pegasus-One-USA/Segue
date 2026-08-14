@@ -1,0 +1,272 @@
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_50c987f1d763d9::t_ac3bd7d4d40a68 105
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.html
+  s_50c987f1d763d9::t_593ae767abb051 1-94
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.ts
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.ts
+  s_50c987f1d763d9::t_3c0019e8911bf7 1-68
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/components/node-library/destination-wizard/destination-forms/databricks-destination-form.component.ts
+  s_50c987f1d763d9::t_7613e2db61a73c 1-27
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.html
+  s_50c987f1d763d9::t_0286e049c6eec2 1-151
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/services/wizard.service.ts
+  s_50c987f1d763d9::t_ac3bd7d4d40a68 237,381,403,411,426,433
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_50c987f1d763d9::t_a9b1b41fa16d9e 2,14,16-22,34
+  s_50c987f1d763d9::t_c88da750377f8f 26-33
+  s_50c987f1d763d9::t_b2fa1832d90444 649-653
+  s_50c987f1d763d9::t_3cd694255d2bc7 166-174,180-192,197
+  s_50c987f1d763d9::t_16db2d44248317 309-312
+  s_50c987f1d763d9::t_e7127f69fa2c3f 464-467
+  s_50c987f1d763d9::t_991968f62028f3 175-179
+  s_50c987f1d763d9::t_cb94c4afeacf39 522-525,527
+  s_50c987f1d763d9::t_4d6abfcbacb4ff 705-707
+  s_50c987f1d763d9::t_107fc79f89fa6e 680
+  s_50c987f1d763d9::t_eb69c35ee9c8e4 130-137
+  s_50c987f1d763d9::t_8760217f977d18 504-510,513-514,517-521,526,530-544,547-548,551-555,558-563,565,569,573,580-582
+  s_50c987f1d763d9::t_e8a6e8ce3f6d83 15
+portal/src/app/components/node-library/source-form.registry.ts
+  s_50c987f1d763d9::t_3228e5b7689a8b 44-51
+  s_50c987f1d763d9::t_85d9f518dc2ff2 1-43
+portal/src/app/components/node-library/destination-wizard/destination-forms/sftp-destination-form.component.html
+  s_50c987f1d763d9::t_d19d5d9cc54530 1-62
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.html
+  s_50c987f1d763d9::t_27a3708dcad77c 1-31
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_50c987f1d763d9::t_47abf74cde2943 1502-1509
+  s_50c987f1d763d9::t_ec138b2d0fd66f 726
+  s_50c987f1d763d9::t_3271ae59408d4e 1157-1162
+  s_50c987f1d763d9::t_28ac6c447adbf9 6
+  s_50c987f1d763d9::t_652001849fd2a6 1182-1183,1187
+  s_50c987f1d763d9::t_d704cb46739736 1583-1591,1593
+  s_50c987f1d763d9::t_39ff801c62b77f 1245-1247
+  s_50c987f1d763d9::t_58c537c3a50219 2,5,15-18,261,1243,1592
+  s_50c987f1d763d9::t_2d16191c00feb2 829-830
+  s_50c987f1d763d9::t_762e145be312b6 140
+  s_50c987f1d763d9::t_a522fcbfb464a1 279-283,286
+  s_50c987f1d763d9::t_111213e79795c7 714-725,727-729
+  s_50c987f1d763d9::t_eddd51d4221ff2 1606-1615,1623,1632-1633,1641-1643,1647,1650-1652
+  s_50c987f1d763d9::t_1923c485d10ecb 1689
+  s_50c987f1d763d9::t_40615274528c75 252-260,262-272,275,277-278,284-285,287-306
+  s_50c987f1d763d9::t_17efc73fd1f9f3 838-857
+  s_50c987f1d763d9::t_d3329a18d19fba 1239-1242,1244,1249-1250
+  s_50c987f1d763d9::t_00c817ee11d308 1274
+  s_50c987f1d763d9::t_5d35bc2e2dac35 307
+  s_50c987f1d763d9::t_abf65e2838879e 508-512
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.scss
+  s_50c987f1d763d9::t_28714ed2f5c931 5-12
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/components/node-library/destination-wizard/destination-forms/s3-destination-form.component.ts
+  s_50c987f1d763d9::t_2021085d745c36 1-26
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.ts
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_50c987f1d763d9::t_752b4485f49814 259-263
+portal/src/app/components/node-library/destination-wizard/destination-forms/avro-destination-form.component.ts
+  s_50c987f1d763d9::t_4c93eee8435871 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.ts
+  s_50c987f1d763d9::t_348cccb83fcbb0 1-26
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_50c987f1d763d9::t_09cc06bc0b98a6 206
+  s_50c987f1d763d9::t_8ad6492e2ebaf3 278
+  s_50c987f1d763d9::t_370e4dd6752aa9 521
+  s_50c987f1d763d9::t_04b929ad23c15b 119
+  s_50c987f1d763d9::t_846fe1a6079b14 1
+  s_50c987f1d763d9::t_7f6afca38596cc 210-268,270,272-275,277,279-285,288-290
+  s_50c987f1d763d9::t_82fde9deff0a89 48-50,54
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.ts
+  s_50c987f1d763d9::t_f2598db188961c 1-178
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/components/node-library/destination-wizard/destination-forms/rest-api-destination-form.component.ts
+  s_50c987f1d763d9::t_55861171b1b61a 1-26
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_50c987f1d763d9::t_024e536cb42fd5 232
+  s_50c987f1d763d9::t_86e509673f9abe 103-113
+  s_50c987f1d763d9::t_5a59417c15edb0 286,290,294,298,302,307,311,315,320,324,328
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_50c987f1d763d9::t_db5976c08d794f 1
+  s_50c987f1d763d9::t_246d5f595654ee 60-63
+  s_50c987f1d763d9::t_0e4155dfcee9c7 181,183
+  s_50c987f1d763d9::t_9ebb3eef81c6b7 2-17,19-23,32-59,64-180,182,184-199
+  s_50c987f1d763d9::t_b6096d368bbcf3 18
+  s_50c987f1d763d9::t_7706fa95a832b7 24-31
+portal/src/app/components/node-library/destination-wizard/destination-forms/in-memory-destination-form.component.ts
+  s_50c987f1d763d9::t_8127cba7ab2d5c 1-25
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgre-sql-destination-form.component.ts
+  s_50c987f1d763d9::t_f16fb41cdfcb64 1-31
+portal/src/app/components/node-library/destination-wizard/destination-forms/my-sql-destination-form.component.ts
+  s_50c987f1d763d9::t_ff8a3b225ac5d3 1-31
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_50c987f1d763d9::t_511f6228c66cd2 87
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_50c987f1d763d9::t_052f8304320be6 1-56
+portal/src/app/components/node-library/destination-wizard/destination-forms/simple-stub-form.helper.ts
+  s_50c987f1d763d9::t_c3f6e77862f8da 1-73
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form-api.ts
+  s_50c987f1d763d9::t_aa8a9a80f6fd59 1-53
+portal/src/app/components/node-library/destination-wizard/destination-forms/snowflake-destination-form.component.ts
+  s_50c987f1d763d9::t_c666a001d51ef6 1-27
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.ts
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_50c987f1d763d9::t_e613c4f796f570 607-621,623,625-629
+  s_50c987f1d763d9::t_47e2740f81a699 451-452
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_50c987f1d763d9::t_70935c38b228a7 2-6,11-19,24,29,31-32,36,38-39,44,46-48,50-54,56-57,62-63,66-67,70-75
+  s_50c987f1d763d9::t_93bf729b705f65 1
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_50c987f1d763d9::t_83a30e38077f0e 128,132-133,138-147,167,169-170,174-175
+  s_50c987f1d763d9::t_85e4b146a4baf7 14
+  s_50c987f1d763d9::t_e2dc9f835fbc75 21-33,40-45
+  s_50c987f1d763d9::t_45408682ccb5de 75-83
+portal/src/app/components/node-library/destination-wizard/destination-forms/simple-stub-destination-form.component.html
+  s_50c987f1d763d9::t_703b54e3b61512 1-30
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_50c987f1d763d9::t_b2cae3f20799a6 1974-1975,1981
+  s_50c987f1d763d9::t_c89c9c7daae9cd 1976-1980
+  s_50c987f1d763d9::t_26f09dbe60cc61 2151-2152
+  s_50c987f1d763d9::t_539ca2f9440375 1-870,886-1959,2066-2150,2153-2237
+  s_50c987f1d763d9::t_56faf8d5d4c75f 871-885
+  s_50c987f1d763d9::t_1ff64019dad94f 1960-1973,1982-2065
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_50c987f1d763d9::t_837a60e370717b 1-73
+portal/src/app/components/node-library/hl7v2-source-form/hl7v2-source-form.component.scss
+  s_50c987f1d763d9::t_27dc85defac6e5 1-44
+portal/src/app/components/node-library/destination-wizard/destination-forms/tableau-destination-form.component.ts
+  s_50c987f1d763d9::t_74c73e5986044e 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/parquet-destination-form.component.ts
+  s_50c987f1d763d9::t_775e2a30f89dba 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-sql-destination-form.component.ts
+  s_50c987f1d763d9::t_c863282afa4e18 1-36
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/components/node-library/destination-wizard/destination-forms/fhir-repository-destination-form.component.ts
+  s_50c987f1d763d9::t_72c23d84b853d0 1-26
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.scss
+  s_50c987f1d763d9::t_e539c99280dce5 1
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_50c987f1d763d9::t_550f60605dbdfa 1-11,13-50,53-66,68-87,89-227,229-821
+  s_50c987f1d763d9::t_a42352ab672e32 67
+  s_50c987f1d763d9::t_b35488575e5da0 228
+  s_50c987f1d763d9::t_77a02e8e2f26e7 88
+  s_50c987f1d763d9::t_1fffe82a8e6962 51-52
+  s_50c987f1d763d9::t_1f02d4929466de 12
+portal/src/app/components/node-library/destination-wizard/destination-forms/sftp-destination-form.component.ts
+  s_50c987f1d763d9::t_d03aff53aa9b0a 2-33,38-40,52-124
+  s_50c987f1d763d9::t_20f6957932d58a 1
+  s_50c987f1d763d9::t_35b8c450c50622 34-37
+  s_50c987f1d763d9::t_440ddbfb9f340c 41-51
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_50c987f1d763d9::t_8c45731b6c31fd 5,17
+  s_50c987f1d763d9::t_da6455571f5272 55,59
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.scss
+  s_50c987f1d763d9::t_c14d2d526f54f6 1-9
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  s_50c987f1d763d9::t_550f60605dbdfa 1-858
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.html
+  s_50c987f1d763d9::t_17999c6c220448 1-8
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.ts
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.scss
+  s_50c987f1d763d9::t_2c71d7e9cb7269 1-5
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.ts
+  s_50c987f1d763d9::t_7c4bfc861146ef 1-15,17-31
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_50c987f1d763d9::t_cceba35cacddba 3-6
+  s_50c987f1d763d9::t_fed3c13fa04705 30-38
+  s_50c987f1d763d9::t_ccaab9eaf2ef4f 7-8
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_50c987f1d763d9::t_462079896a1511 81
+  s_50c987f1d763d9::t_ea64c8848fb30a 47
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_50c987f1d763d9::t_ac3bd7d4d40a68 8
+portal/src/app/components/node-library/destination-wizard/destination-forms/protobuf-destination-form.component.ts
+  s_50c987f1d763d9::t_f517b7d35ca03e 1-26
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_50c987f1d763d9::t_f6c7646c72ab91 106-122,127
+  s_50c987f1d763d9::t_4cd1c8fa96f18f 1,18-24,42-48
+  s_50c987f1d763d9::t_3f8dc051ab58c3 123-126
+  s_50c987f1d763d9::t_14263de6e44014 17
+  s_50c987f1d763d9::t_5dfe3d0c009d21 260-265,267
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.ts
+  s_50c987f1d763d9::t_16fc30760de8a6 1-30
+portal/src/app/components/node-library/destination-wizard/destination-forms/power-bi-destination-form.component.ts
+  s_50c987f1d763d9::t_0b3988bef6cb99 1-26
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_50c987f1d763d9::t_d5e062dbf35179 269,272-276,280-288
+  s_50c987f1d763d9::t_ba14c7f2d1b472 55-61
+portal/src/app/components/node-library/destination-wizard/destination-forms/pdf-destination-form.component.ts
+  s_50c987f1d763d9::t_fa2d312e5f6ace 1-26
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_50c987f1d763d9::t_2a33dfc1116b80 1-40
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.html
+  s_50c987f1d763d9::t_a739668aafb09b 1-3
+portal/src/app/components/node-library/destination-wizard/destination-forms/excel-destination-form.component.ts
+  s_50c987f1d763d9::t_e90f690ac7abc7 1-26
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.ts
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+portal/src/app/components/node-library/destination-wizard/destination-forms/ndjson-destination-form.component.ts
+  s_50c987f1d763d9::t_54bfe7967f8fd4 1-26
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.html
+  s_50c987f1d763d9::t_4597c4f624136f 1-8
+portal/src/app/components/shared/config-form/config-form.contract.ts
+  s_50c987f1d763d9::t_c5e6d274c1793d 1-29
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.scss
+  s_50c987f1d763d9::t_b4c5ffbba4d67e 1-5
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.ts
+  s_50c987f1d763d9::t_81eb84b6c23f55 6
+  s_50c987f1d763d9::t_4597c4f624136f 1-5,7-8,10-15,17-31
+  s_50c987f1d763d9::t_a7f90b0e2b2b21 9
+  s_50c987f1d763d9::t_fa46df5b94dae8 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "c63111a22d2212ce4a45e8cf5180ba89ba8d64ef",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Mach1999 <hasnainmachiwala.work@gmail.com>"
+    }
+  }
+}

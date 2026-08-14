@@ -1,0 +1,68 @@
+portal/src/app/core/api-endpoints.ts
+  s_a36a2848859f04::t_9a0a3b5a3c78b3 237-238
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.scss
+  s_a36a2848859f04::t_ffedd2915e250e 1-360
+src/FHIRBridge.Application/Messaging/LineageCaptureCommand.cs
+  s_a36a2848859f04::t_6b93cde2a58f07 33-45
+  s_a36a2848859f04::t_04c0c7b6f475fa 18-19
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/FieldLineageEntry.cs
+  s_a36a2848859f04::t_82af7c62d1dc30 30-35,52,54-57,70-73,79-82,84-92
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowNodeResourceHistoryRecorder.cs
+  s_a36a2848859f04::t_c5b409b239b3e7 95,99-108
+src/FHIRBridge.Infrastructure/Messaging/LineageCaptureCommandHandler.cs
+  s_a36a2848859f04::t_b698c08eb6f30c 60-61,65-70,75-78
+  s_a36a2848859f04::t_d4bcfd8e392427 2,16-19,25,31,36,79
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_a36a2848859f04::t_fba4d9e86a327d 216-222
+  s_a36a2848859f04::t_2296940e8061f1 303,307,311,314,318,322
+  s_a36a2848859f04::t_e81da8447deb35 99-103
+  s_a36a2848859f04::t_8df13a10bf8296 449,464-465
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_a36a2848859f04::t_ed04714d2c3048 9-10,15,35-36
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_a36a2848859f04::t_57db3565a49174 87-88,98,109-143
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_a36a2848859f04::t_109ec8bc994f53 3607-3614,3625-3627,3649-3652,3657-3660
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_a36a2848859f04::t_fa41c137cb75d1 54-65,69-77
+  s_a36a2848859f04::t_e965dd95d69e58 7-8,12,78-79
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_a36a2848859f04::t_b9fc4f9cf5f143 155
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_a36a2848859f04::t_43b2271be28151 205,207-210
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_a36a2848859f04::t_c4e63a9463a9ef 135,137,146-170,180-262,264-275
+  s_a36a2848859f04::t_eae7d0fc3bfd3f 263
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_a36a2848859f04::t_9be06889293224 1218-1220,1225-1229,1233,1238,1245-1268
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.html
+  s_a36a2848859f04::t_7cfece0acb93ff 102
+  s_a36a2848859f04::t_429cefb812ee36 1-59,69-76,79-80,83-101,103-260
+  s_a36a2848859f04::t_dc522471c2d74d 60-68,77-78,81-82
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.ts
+  s_a36a2848859f04::t_976ae5e1876237 1-97,105-174
+  s_a36a2848859f04::t_aedb96191af250 98-104
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowNodeResourceHistoryRecorder.cs
+  s_a36a2848859f04::t_a2685469f16d69 99-100,109-110,119-141
+  s_a36a2848859f04::t_54c5e0608a7a67 38-40,45,47-54,57-66
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811121425_AddFieldLineageSystemMetadata.cs
+  s_a36a2848859f04::t_109ec8bc994f53 1-74
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811121425_AddFieldLineageSystemMetadata.Designer.cs
+  s_a36a2848859f04::t_109ec8bc994f53 1-4761
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "84335e48262de3108819b733dc25ca59e7b98bce",
+  "prompts": {},
+  "sessions": {
+    "s_a36a2848859f04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe124111-d473-40ff-8a61-203db8e739ee",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

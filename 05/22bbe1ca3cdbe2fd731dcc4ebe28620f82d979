@@ -1,0 +1,118 @@
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_95cc6aed975c5c::t_7c183d5c82b030 3-9
+portal/src/app/execution-history/components/field-lineage-panel/mock-lineage-data.ts
+  s_95cc6aed975c5c::t_ce75174b9240a1 1-302
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_95cc6aed975c5c::t_6090e2aaff1ec9 312-317
+  s_95cc6aed975c5c::t_7a3feb983ad884 282-286,288-289,291-293,298-301,305-306,308-311
+  s_95cc6aed975c5c::t_9fe735a5fd1d95 277,290,297
+  s_95cc6aed975c5c::t_075231ef71b354 350
+  s_95cc6aed975c5c::t_d92090523f7b9a 329-330
+  s_95cc6aed975c5c::t_715dae94926742 354-356,358,361,363
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cea2a60d527510::t_2507b25cdf9c00 45,54,75
+  s_95cc6aed975c5c::t_88c33475ea76f3 4,31,81-89
+  s_95cc6aed975c5c::t_840aa7a8e8f1d2 46-53
+  s_95cc6aed975c5c::t_b130744cd01264 90
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_95cc6aed975c5c::t_8ae8a797dec9d8 111,119,130-143
+  s_95cc6aed975c5c::t_a93fead7adada5 18-20,25-29,32-36,39-43,46-50,53-57,60-73,91-97,102-105
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_95cc6aed975c5c::t_b91cb6ae7609b7 61,63
+  s_95cc6aed975c5c::t_193fe6623bb8ec 169-172,175,181,183,185-187,191-194,196-197
+  s_95cc6aed975c5c::t_2272840edb6988 348-358
+  s_95cc6aed975c5c::t_6be420c7c0a460 130-146,148,155-156
+  s_95cc6aed975c5c::t_5e5800af33cae7 149
+  s_95cc6aed975c5c::t_538dd81f1e5f76 3,71,195,198,315
+  s_95cc6aed975c5c::t_e77bf30ddf34ab 82-84,88-98
+  s_95cc6aed975c5c::t_357d8515e0c66c 33,37,41-52
+  s_95cc6aed975c5c::t_13d6625cb999f7 215-220
+  s_95cc6aed975c5c::t_8250026c02464b 236-254,257,270,273,277-314,316-319
+  s_95cc6aed975c5c::t_42ab27e6721786 67-70,72-74
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_cea2a60d527510::t_33195a584f3385 86-89
+  s_cea2a60d527510::t_71e58cbd8fb93a 1-85,90-156
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_95cc6aed975c5c::t_b15b68bbe53f17 167-171,173,179-186,191-197
+  s_cea2a60d527510::t_6f6a90cfdecd5f 172,231-237
+  s_95cc6aed975c5c::t_753bd2c8cbf8d7 174-178
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_cea2a60d527510::t_fa0f6e2040a6ed 71-73,77-83,85,91
+  s_95cc6aed975c5c::t_910c23a6d99e46 545-546
+  s_95cc6aed975c5c::t_f35cb1267051be 534-539
+  s_95cc6aed975c5c::t_3390729df22eb5 436
+  s_95cc6aed975c5c::t_8da37e4170d5c9 500,513,520
+  s_95cc6aed975c5c::t_6f201720507a15 444-449
+  s_95cc6aed975c5c::t_b2327f504c5ba3 440-442,450,452
+  s_95cc6aed975c5c::t_d05a296ae036b1 505-509,511-512,514-516,521-525,528-533
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_95cc6aed975c5c::t_4b04bbd151c8ab 163-167
+  s_95cc6aed975c5c::t_4e5dcc66ba9ee0 156-160,162,168-175,180-185
+  s_cea2a60d527510::t_8b2af86946d089 161,219-225
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.html
+  s_95cc6aed975c5c::t_337044e8c5a77e 120-126
+  s_95cc6aed975c5c::t_499cd8d0c4d59f 144-149,157
+  s_95cc6aed975c5c::t_2bf9b51de93c66 5-6,12-13,19-20,26-27,109-113,115
+  s_95cc6aed975c5c::t_7a71ca04158b98 221-226
+  s_95cc6aed975c5c::t_11d7a2f6832418 270,273-276
+  s_95cc6aed975c5c::t_ac4a46cbf0087d 37-95,97,117
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.ts
+  s_95cc6aed975c5c::t_2a04c62a2f0794 5
+  s_95cc6aed975c5c::t_bde017ed25c03e 46-51
+  s_95cc6aed975c5c::t_8e60585f13d7ac 32
+  s_95cc6aed975c5c::t_3a6d72c5618876 70-81
+  s_95cc6aed975c5c::t_e21d3ae3e5c350 122
+  s_95cc6aed975c5c::t_791105c2b5ebff 20-24
+  s_95cc6aed975c5c::t_d746d0911f2c0f 14-19,147-148
+  s_95cc6aed975c5c::t_a48fad55235eaa 144-146,149-150
+  s_95cc6aed975c5c::t_342e86f9bd5c93 6
+  s_95cc6aed975c5c::t_5acdaf758f851a 41-45
+  s_95cc6aed975c5c::t_4fb21c26c72a20 225-231
+  s_95cc6aed975c5c::t_e4d99e017cfeb2 1
+  s_95cc6aed975c5c::t_687931e8edf527 206-224
+portal/src/styles.scss
+  s_95cc6aed975c5c::t_48e32c5e133719 1375-1391
+  s_95cc6aed975c5c::t_318b81e65edab8 291-296
+portal/src/app/auth/services/session.service.ts
+  s_95cc6aed975c5c::t_588e86f7e7ad52 14-17
+  s_95cc6aed975c5c::t_8186166c86ab51 9-13,18,27-28,40,48,60-93
+  s_95cc6aed975c5c::t_e05e94e2996ae6 117-122
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.scss
+  s_95cc6aed975c5c::t_8fd2b42094579f 230,243-247
+  s_95cc6aed975c5c::t_9b5f7e06fbc3fa 23-24,27-37
+  s_95cc6aed975c5c::t_9ee8dd062f58f8 106-145
+  s_95cc6aed975c5c::t_d983a41b916c79 282,286-293,296-301,303-312
+  s_95cc6aed975c5c::t_64883b9118bb91 428-454
+  s_95cc6aed975c5c::t_a974b992abdd83 488,495-496,500
+  s_95cc6aed975c5c::t_bea47681519f9a 198-200,207-209,214
+  s_95cc6aed975c5c::t_a96ac0b336516f 7-13
+  s_95cc6aed975c5c::t_a42e2eef94b96e 408-415
+  s_95cc6aed975c5c::t_edd136eed7cf9e 41-42,45-48,51-52,55-56,60-62,65-66,70-71,73,77,79-90,100-105,146-149,248-249,279-281,501
+  s_95cc6aed975c5c::t_7d29a948e59b57 317-319
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_95cc6aed975c5c::t_8ab3593d623135 170-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0522bbe1ca3cdbe2fd731dcc4ebe28620f82d979",
+  "prompts": {},
+  "sessions": {
+    "s_95cc6aed975c5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ad20581-3289-4c5a-bbed-0cf542124ef0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_cea2a60d527510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52fe0133-ee54-4c61-bb43-726708bd3511",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

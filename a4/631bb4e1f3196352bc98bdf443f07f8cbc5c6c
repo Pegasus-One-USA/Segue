@@ -1,0 +1,158 @@
+src/Runtime/FHIRBridge.Runtime.Domain/Enums/RuntimeSourceType.cs
+  s_b39b77aeb9beb3::t_994348375f34fc 13-14
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_b39b77aeb9beb3::t_ae20d597d96bd6 269-271
+  s_b39b77aeb9beb3::t_2f88ab28ec212c 32-34
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_b39b77aeb9beb3::t_73a9dcb0ae3c6f 105-112
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_b39b77aeb9beb3::t_6b6a7d167f574c 396-397,401-403
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_b39b77aeb9beb3::t_ccd72d1a6c391f 29-33
+  s_b39b77aeb9beb3::t_92788816e26dd5 26-28
+  s_b39b77aeb9beb3::t_c4eec77f5b51b7 34-38
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceClientFactory.cs
+  s_b39b77aeb9beb3::t_82368f87110826 46
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_b39b77aeb9beb3::t_5c859b33adbabf 68-74
+src/FHIRBridge.Application/DTOs/SourceAuthenticationDto.cs
+  s_b39b77aeb9beb3::t_ed08aafbf71561 18-23
+  s_b39b77aeb9beb3::t_433839b5fb2640 16-17
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_b39b77aeb9beb3::t_5ed4782916a511 206-209,213,235-237
+  s_b39b77aeb9beb3::t_aba42314f85e55 66-73
+  s_b39b77aeb9beb3::t_84058f57efc9e6 238
+  s_b39b77aeb9beb3::t_5a66bd8adaabeb 251
+  s_b39b77aeb9beb3::t_6459f2fff480fe 214-224
+  s_b39b77aeb9beb3::t_c7ded4d25651bb 204-205,210-212,225-234,239-250,252-254
+portal/src/app/services/phase-config.service.ts
+  s_b39b77aeb9beb3::t_c70af0c0a33ccd 33-34
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_b39b77aeb9beb3::t_11e84738cf78b3 58-60
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813045528_AddAthenaPracticeContext.Designer.cs
+  s_b39b77aeb9beb3::t_67be4030d15be4 1-4778
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/OAuth2ClientCredentialsTokenProvider.cs
+  s_b39b77aeb9beb3::t_8d76979c86a027 7-8,21,23-26
+  s_b39b77aeb9beb3::t_cf96d44068eb0d 94-97,109-111
+  s_b39b77aeb9beb3::t_b6adeee6144bc2 30
+  s_b39b77aeb9beb3::t_1a9fd035a86e69 60,63-79,81-88,112
+  s_b39b77aeb9beb3::t_092a72285a9241 3
+  s_b39b77aeb9beb3::t_554d4b981e0282 46,51-53,57-59
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260813045528_AddAthenaPracticeContext.cs
+  s_b39b77aeb9beb3::t_67be4030d15be4 1-40
+src/FHIRBridge.Infrastructure/Workflows/RouteToWorkflowGraphProjection.cs
+  s_b39b77aeb9beb3::t_2fc21aca5dff86 222
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_b39b77aeb9beb3::t_b45ea1caf124fe 126,275-286
+  s_b39b77aeb9beb3::t_8aceecebb5bfa4 318-330
+  s_b39b77aeb9beb3::t_5562b4c30e338b 109-110,124-125
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_b39b77aeb9beb3::t_12045241d73fac 141-219
+  s_b39b77aeb9beb3::t_a04a8742e31a53 95
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_b39b77aeb9beb3::t_2e8b3f6d60fb2e 115-119
+  s_b39b77aeb9beb3::t_c2c1842d9f8253 62
+  s_b39b77aeb9beb3::t_966c43cf97f6d6 199-236
+  s_b39b77aeb9beb3::t_34a0fbb446e6d4 493,505-515
+  s_b39b77aeb9beb3::t_60c1906c720c78 542
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_b39b77aeb9beb3::t_5b5a28df505849 71
+  s_b39b77aeb9beb3::t_d06bdfd30907fb 100
+  s_b39b77aeb9beb3::t_0d4854a863f746 136-159
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_b39b77aeb9beb3::t_e9ae5f5bf555e8 9-14,18-19,21-23,25-26,54,62,64
+  s_b39b77aeb9beb3::t_dae820a9a27ecf 46-48,51-53,55-56
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_b39b77aeb9beb3::t_d07f291cf7f273 1798
+  s_b39b77aeb9beb3::t_275b53761adf8d 2123-2124
+  s_b39b77aeb9beb3::t_2f8fd8cd8bf739 925-933
+  s_b39b77aeb9beb3::t_5a5e09e13d5290 1000
+  s_b39b77aeb9beb3::t_fd4f229f4aac74 506-510
+  s_b39b77aeb9beb3::t_46329741784bb0 913-924
+  s_b39b77aeb9beb3::t_a56f1b5287f353 1067
+  s_b39b77aeb9beb3::t_3887f99a716ead 2114-2116
+  s_b39b77aeb9beb3::t_bb4b29bfa86a9b 633-638
+  s_b39b77aeb9beb3::t_1fd6d769ba62ce 14
+  s_b39b77aeb9beb3::t_a1535bb8e356c6 631
+  s_b39b77aeb9beb3::t_63a125ad403d6d 2110-2113
+  s_b39b77aeb9beb3::t_1e74fbbf7f2afe 1002
+  s_b39b77aeb9beb3::t_d4edbc9297fa47 1972
+  s_b39b77aeb9beb3::t_9d101677d51787 934-945
+  s_b39b77aeb9beb3::t_4f6f5ae803bd0e 1796
+  s_b39b77aeb9beb3::t_5e90c53a07768f 499-502,632
+  s_b39b77aeb9beb3::t_392a3beabb1c20 49-55,57-58,64-70
+portal/src/app/services/wizard.service.ts
+  s_b39b77aeb9beb3::t_1c2356e635809d 441-443
+  s_b39b77aeb9beb3::t_07292613ad7826 163-167
+  s_b39b77aeb9beb3::t_fc9d6439ed76f9 276
+  s_b39b77aeb9beb3::t_03d5bd645f2f5b 277-281
+  s_b39b77aeb9beb3::t_25b094022ea4d8 283
+  s_b39b77aeb9beb3::t_13cfcac3007373 415-421
+  s_b39b77aeb9beb3::t_13a8a8dae9b86a 452-454
+  s_b39b77aeb9beb3::t_b6c0f08cbcf7b0 458
+  s_b39b77aeb9beb3::t_863d2eb2b02566 162
+  s_b39b77aeb9beb3::t_3388bfde3dce7c 21-31
+  s_b39b77aeb9beb3::t_fb8a12f04c9292 169
+  s_b39b77aeb9beb3::t_f718387e8ec1d0 230
+  s_b39b77aeb9beb3::t_7a3d6ca476b476 455-457
+  s_b39b77aeb9beb3::t_e505fe1ab34c18 205-207
+portal/src/app/services/workflow-api.service.ts
+  s_b39b77aeb9beb3::t_24c30bc41084ae 137-139
+  s_b39b77aeb9beb3::t_56cef37a114cfb 133-136
+  s_b39b77aeb9beb3::t_878bfbcaf3b96f 130-132
+src/FHIRBridge.Infrastructure/Pipeline/FhirSubscriptionManagementService.cs
+  s_b39b77aeb9beb3::t_5b2ab73f9da163 71
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_b39b77aeb9beb3::t_67be4030d15be4 4500-4504,4530-4534
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_b39b77aeb9beb3::t_70c4635874f31a 211,216-217
+  s_b39b77aeb9beb3::t_0e6ea2e3e5724c 118-122
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_b39b77aeb9beb3::t_d5182b54f19374 1070
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_b39b77aeb9beb3::t_78c8f39340cd01 42-58
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_b39b77aeb9beb3::t_47457b8637e7d6 99-114,116-117,119-127
+  s_b39b77aeb9beb3::t_937666c6d80285 42
+  s_b39b77aeb9beb3::t_a09697e456c174 146-148
+  s_b39b77aeb9beb3::t_03bbf94abf0f42 29,35-36
+  s_b39b77aeb9beb3::t_878d3d07c84427 189-191
+  s_b39b77aeb9beb3::t_18e7f9a822ce7a 95-98
+  s_b39b77aeb9beb3::t_50d0cf8ebd4d7d 139-145,149
+  s_b39b77aeb9beb3::t_408396b7d7149a 66,128
+  s_b39b77aeb9beb3::t_c4a9fdcc0002b0 129-138
+  s_b39b77aeb9beb3::t_0587819c0b0125 10-11
+src/FHIRBridge.Infrastructure/Aggregation/PatientAggregationService.cs
+  s_b39b77aeb9beb3::t_0e1e19ce28e2e5 188-190
+  s_b39b77aeb9beb3::t_ca357e662b8c03 153
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/AthenahealthFhirSourceClient.cs
+  s_b39b77aeb9beb3::t_23df7cf7d9f925 1-56
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_b39b77aeb9beb3::t_8260cf9ff3930f 1275-1277
+  s_b39b77aeb9beb3::t_c25b0afb32a3d1 1232
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_b39b77aeb9beb3::t_264791844c2bba 288-289
+  s_b39b77aeb9beb3::t_bd65d5f2a73061 75
+  s_b39b77aeb9beb3::t_827e031c3fb408 238-247
+tests/FHIRBridge.Runtime.UnitTests/Applications/SourceApplicationStrategyTests.cs
+  s_b39b77aeb9beb3::t_23df7cf7d9f925 18-20,26,56,64,98,104,108,110,117-127
+src/FHIRBridge.Domain/ValueObjects/SourceAuthenticationConfiguration.cs
+  s_b39b77aeb9beb3::t_0b96121bc5c3d0 20-22,33-34
+  s_b39b77aeb9beb3::t_1402381476abd1 53-60,64,68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a4631bb4e1f3196352bc98bdf443f07f8cbc5c6c",
+  "prompts": {},
+  "sessions": {
+    "s_b39b77aeb9beb3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de4e1fb1-2dd2-4464-8f4f-28e0e507486b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

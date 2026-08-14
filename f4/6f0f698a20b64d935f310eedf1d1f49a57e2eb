@@ -1,0 +1,159 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811152059_AddBulkExportJobRequestedResourceTypes.Designer.cs
+  s_90c354204a79cc::t_ac40a148296b70 1-4764
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_389f5e37f80893::t_26f04b2430e8cf 116-126
+  s_389f5e37f80893::t_b4475e48c4594f 26,115
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/SourceApplicationStrategyBase.cs
+  s_389f5e37f80893::t_2a94f969cb0b64 35-39
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_90c354204a79cc::t_d566bc5562832c 271-279
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/StandaloneApplicationStrategy.cs
+  s_389f5e37f80893::t_84c34e362fbe3a 51-53
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_90c354204a79cc::t_953cb47114c7f9 2
+  s_90c354204a79cc::t_b5ed041498ed50 10
+  s_90c354204a79cc::t_5b02048a58dc57 54,62-63
+  s_90c354204a79cc::t_2a696d46d06960 55-59,61
+  s_90c354204a79cc::t_1da41ddfe79cd9 60
+  s_90c354204a79cc::t_4aac648839b5ee 3
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_90c354204a79cc::t_fcad930e866aa3 1217-1229
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_90c354204a79cc::t_2a85e2c7c19a2a 101-132
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/OAuth2ClientCredentialsTokenProvider.cs
+  s_389f5e37f80893::t_de5c2bbb6e5fdc 71-73,77-91,99-101
+  s_389f5e37f80893::t_406dd631471417 38
+  s_389f5e37f80893::t_fd52506ea8bf55 14
+src/FHIRBridge.Domain/Entities/BulkExportJob.cs
+  s_90c354204a79cc::t_1e2013f7d53e1b 98-105
+  s_90c354204a79cc::t_f8b201456e1790 31-32,46
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_90c354204a79cc::t_e6e56585e32f95 131-133,140-154
+  s_90c354204a79cc::t_b807603f0377bf 103-105,109
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  s_90c354204a79cc::t_0798d1b0a9e62a 25
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowNodeResourceHistoryRecorder.cs
+  s_90c354204a79cc::t_16cd7b62352b5d 91-109
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_90c354204a79cc::t_47a893cfd63032 371-372,382-383
+  s_90c354204a79cc::t_4e99bac411fc87 310-312
+  s_90c354204a79cc::t_8fd6db9ec5140e 313-315
+  s_90c354204a79cc::t_64cf072823a130 334-370,373-381,384-397
+  s_90c354204a79cc::t_a119b90286f79b 398-449
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_90c354204a79cc::t_c9f5dc9e29cb84 72-73,87-95
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_389f5e37f80893::t_c31a6d127e6d37 168,179-180,191
+  s_90c354204a79cc::t_8df1a2f7e53494 362-365,378-387,392-393
+  s_90c354204a79cc::t_8363092c0e0a15 420-421
+  s_389f5e37f80893::t_28514673f41d97 445-476,479-480,498
+  s_90c354204a79cc::t_6612c3d1185b1b 777-789
+  s_90c354204a79cc::t_2ac430ac9d8fc4 890-909,914-961
+  s_90c354204a79cc::t_65f1af55109bc0 910-913
+  s_389f5e37f80893::t_e856699d7094d5 511,519
+  s_90c354204a79cc::t_f2ab2683a54042 366-377,388-391,397
+  s_2fb3c5a91086ee::t_f8c0318dcd9365 1-2,25-27,41-43,57-59,73-75,89-91,105-107,121-123,137-139
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/BackendServicesApplicationStrategy.cs
+  s_389f5e37f80893::t_24df25aa4a45df 42-44
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_90c354204a79cc::t_ac40a148296b70 144-146
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/PatientApplicationStrategy.cs
+  s_389f5e37f80893::t_478ca0d15fc5dd 52-54
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorScopeAuthorizationTests.cs
+  s_389f5e37f80893::t_f79fd12a0e90db 1
+  s_389f5e37f80893::t_5f321c9998f055 120-172
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_90c354204a79cc::t_1cf5d70a4a5729 1-2
+  s_90c354204a79cc::t_60021edeb78591 166-200
+  s_90c354204a79cc::t_b9ba38635674e1 116,121-122
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/InMemoryFhirAccessTokenCache.cs
+  s_389f5e37f80893::t_927f00d13fb401 17,35-54,56-57
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Applications/ISourceApplicationStrategy.cs
+  s_389f5e37f80893::t_08efb1b42339f3 52-61
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/SampleFhirSourceClient.cs
+  s_90c354204a79cc::t_3da3df38a61d48 20-29
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_90c354204a79cc::t_8f0821d21147b6 23-24,30-31,184
+  s_90c354204a79cc::t_ea516ae54aa3d0 185-229
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAccessTokenCache.cs
+  s_389f5e37f80893::t_8d13b2d56a9f66 43-69
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_90c354204a79cc::t_36b8d1c02e7972 184-185
+  s_90c354204a79cc::t_b9bf8ed8988045 16
+  s_90c354204a79cc::t_573b79646e406c 7
+  s_90c354204a79cc::t_dc37a5bcf303ea 31-35
+  s_90c354204a79cc::t_17ea58c1c5bc02 10
+  s_90c354204a79cc::t_910dc312efea1e 65-67,86,98-132
+tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderTests.cs
+  s_90c354204a79cc::t_330b6f479f352d 71-110
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_90c354204a79cc::t_bd42d5530c5b90 139-152
+src/FHIRBridge.Infrastructure/Security/InMemorySecretStore.cs
+  s_90c354204a79cc::t_8b0a2670d642b6 4
+  s_90c354204a79cc::t_b295ab5d168a90 40-44
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirAccessTokenCache.cs
+  s_389f5e37f80893::t_81049b1ffee9b3 16-28
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/CompositeFhirAccessTokenProvider.cs
+  s_389f5e37f80893::t_89096ff076e757 24
+  s_389f5e37f80893::t_aed212476fff75 179-200
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirSourceClient.cs
+  s_90c354204a79cc::t_7aedb45fce7c65 15-25
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_389f5e37f80893::t_af3322287dcbfe 127-144
+  s_389f5e37f80893::t_4c7872d6b23767 8
+  s_389f5e37f80893::t_d4187829ec8b8b 33
+  s_389f5e37f80893::t_12e253c0df6e58 41
+  s_389f5e37f80893::t_e16abe6f08eb05 180-181
+  s_389f5e37f80893::t_4417ed5d954408 98-100
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IFhirGrantedScopeProvider.cs
+  s_389f5e37f80893::t_b8f03275b435e4 1-21
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_90c354204a79cc::t_41f261a31d7585 129-134
+  s_90c354204a79cc::t_7eef386759b729 126
+  s_90c354204a79cc::t_b501531856b15d 124-125,127-128
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
+  s_389f5e37f80893::t_3fdd2ad7f8fe65 57-59
+portal/src/app/core/api-endpoints.ts
+  s_90c354204a79cc::t_f529053ddea849 236
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260811152059_AddBulkExportJobRequestedResourceTypes.cs
+  s_90c354204a79cc::t_ac40a148296b70 1-28
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_90c354204a79cc::t_ad56ae931a186f 345-358,363-373
+  s_90c354204a79cc::t_9417ea383ee1b5 359-362
+  s_90c354204a79cc::t_d3556765252b56 304-344
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowNodeResourceHistoryRecorder.cs
+  s_90c354204a79cc::t_e5c1f593345d77 36-44,115-118
+  s_90c354204a79cc::t_4856267b719a93 93-97,111-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f46f0f698a20b64d935f310eedf1d1f49a57e2eb",
+  "prompts": {},
+  "sessions": {
+    "s_2fb3c5a91086ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf53b88c-5d72-4a14-9f5d-a8df0177f48f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_389f5e37f80893": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0abaa8d-7eba-428d-83a5-ac0cc77a6b3a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_90c354204a79cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "025a45c4-060f-47cc-af55-ad854c04d77e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
