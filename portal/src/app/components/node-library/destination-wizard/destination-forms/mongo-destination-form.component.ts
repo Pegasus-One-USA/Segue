@@ -51,7 +51,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
     return {
-      fields: JSON.parse(buildConnectionMetadata(config, false)) as Record<string, string>,
+      fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
       secret: config['dest_connectionString'] || '',
     };
   }

@@ -58,17 +58,28 @@ export function buildSftpUri(f: Record<string, string>): string {
  * buildSftpUri above), never here. Persisted on DestinationConfiguration.ConnectionMetadataJson so a later
  * "select existing" can repopulate a form's non-secret fields without ever reading the secret back.
  */
-export function buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
-  const keys = isSql
-    ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
-    : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
-       'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
-       'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
-       'dest_downloadLinkExpiryMinutes',
-       // MongoDB — the connection string itself lives only in the encrypted secret (see the mongo branch
-       // in destination-wizard.component.ts's provisionDestinationConnection); collection/writeMode aren't
-       // secret, so they round-trip here the same way SQL's non-secret fields do.
-       'dest_collection', 'dest_writeMode'];
+export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'blob'): string {
+  const keys =
+    kind === 'sql'
+      ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
+      : kind === 'blob'
+        ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
+           'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
+           'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
+           // Two independent settings: how many records share one blob (bulk vs individual), and — only
+           // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
+           'dest_blobGranularity', 'dest_blobRecordMode',
+           // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
+           // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
+           'dest_blobFolderPattern', 'dest_blobFileNamePattern']
+        : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
+           'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
+           'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
+           'dest_downloadLinkExpiryMinutes',
+           // MongoDB — the connection string itself lives only in the encrypted secret (see the mongo branch
+           // in destination-wizard.component.ts's provisionDestinationConnection); collection/writeMode aren't
+           // secret, so they round-trip here the same way SQL's non-secret fields do.
+           'dest_collection', 'dest_writeMode'];
   const metadata: Record<string, string> = {};
   for (const key of keys) {
     if (f[key] !== undefined) metadata[key] = f[key];

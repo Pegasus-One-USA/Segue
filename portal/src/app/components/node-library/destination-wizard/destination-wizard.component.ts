@@ -284,18 +284,20 @@ export class DestinationWizardComponent implements OnInit {
       case 'postgres': return 'PostgreSql';
       case 'mongo': return 'Mongo';
       case 'csv': return 'Csv';
+      case 'blob': return 'BlobStorage';
       default: return 'SqlServer';
     }
   });
 
   readonly activeFormType = computed<Type<DestinationConfigFormComponent> | null>(() => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null);
 
-  /** Only Csv's own component declares `reusingExisting` (gates its sftpPassword's required validator) — see
-   *  CsvDestinationFormComponent. Passing an input key a loaded component doesn't declare would throw
-   *  (NgComponentOutlet uses ComponentRef.setInput under the hood), so this is scoped to the CSV branch only.
-   *  Deliberately a plain method, not computed() — hasExistingChanged() reads the live FormGroup underneath
-   *  activeForm(), which isn't itself a tracked signal, so a computed() here would never invalidate as the
-   *  user types; template bindings re-evaluate this fresh on every change-detection pass instead. */
+  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
+   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
+   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
+   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
+   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
+   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
+   *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
     if (this.isSql() || this.isMongo()) return {};
     return { reusingExisting: this.connectionMode() === 'existing' && !this.hasExistingChanged() };
@@ -731,15 +733,17 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
-  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
+  // families: no live introspection, so each gets its own form/branches rather than reusing SQL's or CSV's.
   readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  readonly isBlob       = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
@@ -747,6 +751,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'blob' ? 'Azure Blob Storage'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -1087,6 +1092,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
   }
@@ -1398,7 +1404,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isBlob()
+                ? DestinationWizardComponent.BLOB_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1468,7 +1476,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'secretValue']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
     const current = this.activeForm()?.getRawValue() ?? {};
@@ -1713,7 +1721,15 @@ export class DestinationWizardComponent implements OnInit {
       const def = this.defFor(r);
       // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
       // collection name of its own, so it reuses the same table name as a sensible default collection.
-      targets[r] = type === 'csv' ? def.csvFile : def.sqlTable;
+      // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject), not
+      // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
+      // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      targets[r] = type === 'csv'
+        ? def.csvFile
+        : type === 'blob'
+          ? def.csvFile.replace(/\.csv$/i, '')
+          : def.sqlTable;
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -1862,7 +1878,8 @@ export class DestinationWizardComponent implements OnInit {
 
     const isSql = this.isSql();
     const isMongo = this.isMongo();
-    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const isBlob = this.isBlob();
+    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1881,6 +1898,18 @@ export class DestinationWizardComponent implements OnInit {
           keyVaultName: 'workflow-secrets',
           secretName,
           target: metadata.fields['dest_collection'] || null,
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
+        }
+      : isBlob
+      ? {
+          name,
+          destinationType: 'BlobStorage',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: metadata.fields['dest_blobContainer'] || null,
+          // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
+          // secret" rule into metadata.secret — no extra auth-mode check needed here.
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
         }
@@ -2015,6 +2044,7 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'mysql' ? 'dest-mysql'
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
+          : type === 'blob' ? 'dest-blob'
           : 'dest-csv',
         status:      'enabled',
         config,

@@ -98,7 +98,7 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
     return {
-      fields: JSON.parse(buildConnectionMetadata(config, true)) as Record<string, string>,
+      fields: JSON.parse(buildConnectionMetadata(config, 'sql')) as Record<string, string>,
       secret: buildSqlConnectionString(config),
     };
   }

@@ -447,8 +447,11 @@ export class WorkflowBuildAssemblerService {
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isBlob =
+      node.nodeType.includes('Blob') ||
+      (fields['__transformId'] ?? '') === 'dest-blob';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -502,6 +505,26 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    if (isBlob) {
+      return {
+        name,
+        destinationType: 'BlobStorage',
+        keyVaultName,
+        secretName,
+        target: fields['dest_blobContainer'] || null,
+        // Managed Identity never resolves a Key Vault secret (see BlobDestinationSettings.RequiresSecret
+        // server-side) — always sent as '' for that mode, same "don't touch an already-provisioned secret
+        // unless the user actually typed a new one" guard the SQL/SFTP branches use otherwise.
+        inlineSecret:
+          fields['dest_blobAuthMode'] === 'managedIdentity'
+            ? ''
+            : hasExistingSecret && !fields['dest_blobSecret']
+              ? null
+              : fields['dest_blobSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'blob'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -528,7 +551,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv',
+    kind: 'sql' | 'mongo' | 'blob' | 'csv',
   ): string {
     const keys =
       kind === 'sql'
@@ -544,7 +567,25 @@ export class WorkflowBuildAssemblerService {
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
-          : [
+          : kind === 'blob'
+            ? [
+                'dest_name',
+                'dest_blobAuthMode',
+                'dest_blobContainer',
+                'dest_blobAccountUrl',
+                'dest_blobAccountName',
+                'dest_blobEndpointSuffix',
+                'dest_blobTenantId',
+                'dest_blobClientId',
+                'dest_blobManagedIdentityClientId',
+                'dest_blobPathPrefix',
+                'dest_blobCreateContainerIfNotExists',
+                'dest_blobGranularity',
+                'dest_blobRecordMode',
+                'dest_blobFolderPattern',
+                'dest_blobFileNamePattern',
+              ]
+            : [
               'dest_name',
               'dest_deliveryMode',
               'dest_filePattern',
