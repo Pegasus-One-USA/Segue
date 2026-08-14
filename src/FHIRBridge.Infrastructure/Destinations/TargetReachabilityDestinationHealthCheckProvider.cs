@@ -7,8 +7,10 @@ namespace FHIRBridge.Infrastructure.Destinations;
 
 /// <summary>
 /// Covers every destination type whose writer delivers via <see cref="MappedDestinationSerialization"/>'s
-/// local-disk-or-presigned-URL convention (Blob Storage, CSV, Excel, PowerBI, Snowflake, S3, NDJSON, Parquet,
-/// Tableau, PDF, Avro, Protobuf) — one reusable implementation registered once per applicable
+/// local-disk-or-presigned-URL convention (CSV, Excel, PowerBI, Snowflake, S3, NDJSON, Parquet, Tableau, PDF,
+/// Avro, Protobuf) — one reusable implementation registered once per applicable. Blob Storage has its own
+/// dedicated <see cref="Blob.BlobStorageDestinationHealthCheckProvider"/> instead, since its secret is no
+/// longer always a URL.
 /// <see cref="DestinationType"/>, rather than 12 near-identical classes. Resolves the destination's secret (the
 /// same target string its writer PUTs to) and either HEAD-requests it (http/https target) or verifies the
 /// local/mounted directory is reachable.

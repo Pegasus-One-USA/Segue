@@ -62,6 +62,7 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
         RequireClientId(source, errors);
         RequireAuthorizationEndpoint(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
 
         // The trusted-iss allow-list is mandatory for EHR launch (incoming iss must be validated before redirect).
         // It is validated here once the launch-context configuration is added to the source model (build item 4).

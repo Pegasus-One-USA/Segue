@@ -129,7 +129,15 @@
             <button type="button" class="dw-group-search-clear" (click)="clearGroupSearch()" aria-label="Clear search">✕</button>
           }
         </div>
-        <span class="dw-section-hint">Choose which FHIR resources to include in this destination.</span>
+        <span class="dw-section-hint">
+          @if (discoverProbeStatus() === 'probing') {
+            Choose which FHIR resources to include in this destination. Checking which ones this source supports…
+          } @else if (discoverProbeStatus() === 'done' && availableGroups().length < SUPPORTED_RESOURCE_TYPES.length) {
+            Showing {{ availableGroups().length }} of {{ SUPPORTED_RESOURCE_TYPES.length }} resources — filtered to what this source supports.
+          } @else {
+            Choose which FHIR resources to include in this destination.
+          }
+        </span>
       </div>
       @if (filteredGroups().length === 0) {
         <div class="dw-callout">No resources match "{{ groupSearchQuery() }}".</div>
@@ -167,7 +175,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -331,6 +339,43 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
           </div>
+        } @else if (isBlob()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Container</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobContainer'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_blobAuthMode'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Delivery</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_blobGranularity'] === 'individual' ? 'Individual records (one blob per record)' : 'Bulk upload (all records in one blob)' }}</span>
+          </div>
+          @if (activeFormConfig()['dest_blobGranularity'] === 'individual') {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Record mode</span>
+              <span class="dw-review-val">{{ activeFormConfig()['dest_blobRecordMode'] === 'insert' ? 'Insert — always add new' : activeFormConfig()['dest_blobRecordMode'] === 'update' ? 'Update — only if exists' : 'Upsert — update if exists, else insert' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">Folder pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFolderPattern'] || '{name}' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">File name pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFileNamePattern'] || (activeFormConfig()['dest_blobRecordMode'] === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json') }}</span>
+            </div>
+          }
+          @if (activeFormConfig()['dest_blobPathPrefix']) {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Path prefix</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobPathPrefix'] }}</span>
+            </div>
+          }
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>

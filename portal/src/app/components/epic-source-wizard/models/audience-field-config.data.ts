@@ -39,6 +39,23 @@ export interface AudienceFieldConfig {
   includeInteractiveScopes: boolean;
 }
 
+import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
+
+/**
+ * Audiences hidden (not deleted — a re-enable is a one-line edit) for a given vendor, on top of the vendor-blind
+ * AUDIENCE_FIELD_CONFIG above. Currently only athenahealth: Provider standalone and EHR launch are fully
+ * implemented server-side (SmartAuthorizationCodeTokenProvider is vendor-neutral) but round-trip-unverified —
+ * sandbox provider credentials don't exist yet. Backend and Patient are both verified against the live preview
+ * sandbox and stay enabled.
+ */
+export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
+  Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
+};
+
+export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {
+  return VENDOR_DISABLED_AUDIENCES[vendor]?.includes(audience) ?? false;
+}
+
 export const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {
   // CDS Hooks removed from the UI (not required) — flag kept for future use but disabled everywhere.
   'provider-ehr-launch': { showLaunchUrl: true,  showRedirect: true,  showCdsHooks: false, showRetrieval: false, retrievalScope: 'none',     showResourcePicker: true,  redirectMode: 'editable', redirectLabel: 'Redirect URI', scopePrefix: 'user',    includeInteractiveScopes: true,  showLaunchDisplayMode: true },

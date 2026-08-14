@@ -201,7 +201,7 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
+  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
   // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
@@ -221,6 +221,21 @@ export class NodeLibraryDialogComponent {
   // The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
   // "sourceConnectionId" field. Reactive to store.nodes() via findLaunchSourceId()'s own read of it.
   readonly sourceConnectionId = computed(() => this.graphMapper.findLaunchSourceId());
+
+  // FHIR resource types the source's live Discover (/metadata) probe actually returned this session — see
+  // EhrVendorSourceFormComponent's 'Discovered resource types' field. Distinct from sourceResources above
+  // (the admin's manually-selected retrieval resources): this is what the source can ACTUALLY provide,
+  // used by the destination wizard to intersect against our own supported-resource catalog for Step 2.
+  // Available as soon as the source form is saved in THIS canvas session, even before the source has ever
+  // been persisted as a real SourceConnection (so before sourceConnectionId exists) — DestinationWizardComponent
+  // falls back to a live re-probe via sourceConnectionId when this is empty (e.g. editing a destination on an
+  // already-saved workflow whose source form hasn't been reopened this session).
+  readonly sourceDiscoveredResourceTypes = computed(() => {
+    const fromNodes = this.store.nodes()
+      .filter(isSourceNode)
+      .flatMap(n => (n.fields?.['Discovered resource types'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
+    return Array.from(new Set(fromNodes));
+  });
 
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
@@ -290,7 +305,7 @@ export class NodeLibraryDialogComponent {
   readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
   readonly destMappingCount = signal(0);
 
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null>(null);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob' | null>(null);
 
   // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
   // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
@@ -315,7 +330,7 @@ export class NodeLibraryDialogComponent {
         const node = untracked(() => this.store.byId(id));
         if (node?.kind === 'transform') {
           const tId = (node as TransformNode).transformId;
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-blob') {
             untracked(() => this._openDestWizardEdit(node));
           }
           return;
@@ -391,7 +406,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-blob') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -486,9 +501,9 @@ export class NodeLibraryDialogComponent {
       this.openSourceForm(item.id);
       return;
     }
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres') {
-      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : 'csv';
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-blob') {
+      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob' =
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-blob' ? 'blob' : 'csv';
       if (this.showDestWizard()) {
         // Already showing this exact destination type — _openDestWizard() unconditionally resets step,
         // attach node and mapping state, which would wipe the form for no reason. No-op instead.
@@ -508,8 +523,8 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | null): string {
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : 'CSV';
+  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob' | null): string {
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'blob' ? 'Azure Blob Storage' : 'CSV';
   }
 
   confirmDestSwitch(): void {
@@ -614,7 +629,7 @@ export class NodeLibraryDialogComponent {
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
-  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres'): void {
+  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob'): void {
     const pm = this.pickerModel();
     if (!pm) return;
     this.destWizardType.set(type);
@@ -632,8 +647,8 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : 'csv';
+    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'blob' =
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-blob' ? 'blob' : 'csv';
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

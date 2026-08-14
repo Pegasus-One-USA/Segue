@@ -38,6 +38,8 @@ import { sortByDependencyRank, dependencyRankFor } from './resource-dependency.c
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
+import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
+import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -155,6 +157,8 @@ export class DestinationWizardComponent implements OnInit {
   private readonly injector = inject(Injector);
   private readonly dialog = inject(MatDialog);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
+  private readonly discoverySvc = inject(EpicDiscoveryService);
+  private readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
   // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
   // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
@@ -183,6 +187,12 @@ export class DestinationWizardComponent implements OnInit {
   /** The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
    *  "sourceConnectionId" field. Null if no source is wired up yet. */
   readonly sourceConnectionId = input<string | null>(null);
+  /** FHIR resource types the source's live Discover (/metadata) probe actually returned THIS canvas
+   *  session (see EhrVendorSourceFormComponent's 'Discovered resource types' field) — the preferred source
+   *  for availableGroups' intersection filter below, since it needs no extra network round trip and is
+   *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
+   *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
+  readonly sourceDiscoveredResourceTypes = input<string[]>([]);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
@@ -274,18 +284,20 @@ export class DestinationWizardComponent implements OnInit {
       case 'postgres': return 'PostgreSql';
       case 'mongo': return 'Mongo';
       case 'csv': return 'Csv';
+      case 'blob': return 'BlobStorage';
       default: return 'SqlServer';
     }
   });
 
   readonly activeFormType = computed<Type<DestinationConfigFormComponent> | null>(() => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null);
 
-  /** Only Csv's own component declares `reusingExisting` (gates its sftpPassword's required validator) — see
-   *  CsvDestinationFormComponent. Passing an input key a loaded component doesn't declare would throw
-   *  (NgComponentOutlet uses ComponentRef.setInput under the hood), so this is scoped to the CSV branch only.
-   *  Deliberately a plain method, not computed() — hasExistingChanged() reads the live FormGroup underneath
-   *  activeForm(), which isn't itself a tracked signal, so a computed() here would never invalidate as the
-   *  user types; template bindings re-evaluate this fresh on every change-detection pass instead. */
+  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
+   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
+   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
+   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
+   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
+   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
+   *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
     if (this.isSql() || this.isMongo()) return {};
     return { reusingExisting: this.connectionMode() === 'existing' && !this.hasExistingChanged() };
@@ -322,11 +334,24 @@ export class DestinationWizardComponent implements OnInit {
   private _step1Baseline: Record<string, unknown> | null = null;
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // Always the full curated FHIR resource list — not derived from the upstream source's own
-  // selection, since the destination's resource picks are independent of whatever the source
-  // happened to have selected (and a destination added before any source is configured still
-  // needs the full list to choose from).
-  readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
+  // The full curated FHIR resource list, intersected with whatever the upstream source's live
+  // Discover/metadata probe returns (see the sourceConnectionId effect below) once that's known — so a
+  // source whose CapabilityStatement only supports e.g. 20 of our 37 catalog resources only ever offers
+  // those 20 here, dynamically, without a separately hand-maintained list. Falls back to the full catalog
+  // unfiltered whenever discovery hasn't run yet, has no source to run against, or came back inconclusive
+  // (no network access to re-probe, endpoint unreachable, etc.) — same as this wizard's behavior before
+  // this filter existed, so a destination added before any source is configured still gets the full list.
+  readonly discoveredResourceTypes = signal<string[] | null>(null);
+  readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>('idle');
+  /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
+   *  const itself isn't reachable from the template. */
+  readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
+  readonly availableGroups = computed(() => {
+    const discovered = this.discoveredResourceTypes();
+    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
+    const discoveredSet = new Set(discovered);
+    return SUPPORTED_RESOURCE_TYPES.filter(r => discoveredSet.has(r));
+  });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
   readonly filteredGroups = computed(() => {
@@ -724,15 +749,17 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
-  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
+  // families: no live introspection, so each gets its own form/branches rather than reusing SQL's or CSV's.
   readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  readonly isBlob       = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
   readonly destLabel    = computed(() =>
@@ -740,6 +767,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'blob' ? 'Azure Blob Storage'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -837,6 +865,54 @@ export class DestinationWizardComponent implements OnInit {
       const sourceVendor = this.sourceVendor();
       for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId, sourceVendor);
     });
+
+    // Populates discoveredResourceTypes (see availableGroups above) from whichever source is available,
+    // in priority order:
+    //  1. sourceDiscoveredResourceTypes input — this canvas session's own Discover result, already fetched
+    //     by EhrVendorSourceFormComponent, no extra network call needed. Available the moment the source
+    //     form is saved, even before a real sourceConnectionId exists.
+    //  2. A live re-probe via sourceConnectionId — fallback for editing a destination on an already-saved
+    //     workflow whose source form hasn't been reopened this session, so carries no node-level
+    //     'Discovered resource types' field yet.
+    // A null/empty result from both resolves to discoveredResourceTypes=null, which availableGroups treats
+    // as "show everything" — this filter can only ever narrow the list, never leave the user with nothing
+    // to pick from.
+    effect(() => {
+      const fromNode = this.sourceDiscoveredResourceTypes();
+      const id = this.sourceConnectionId();
+
+      if (fromNode.length > 0) {
+        this._probedConnectionId = id; // mark handled so a later id-only change doesn't also fire a live probe
+        this.discoveredResourceTypes.set(fromNode);
+        this.discoverProbeStatus.set('done');
+        return;
+      }
+
+      if (id === this._probedConnectionId) return;
+      this._probedConnectionId = id;
+      if (!id) {
+        this.discoveredResourceTypes.set(null);
+        this.discoverProbeStatus.set('idle');
+        return;
+      }
+      this.discoverProbeStatus.set('probing');
+      this.sourceConnectionSvc.getById(id).pipe(
+        switchMap(conn => this.discoverySvc.discover(conn.baseUrl)),
+        catchError(() => of(null)),
+      ).subscribe(result => {
+        // The session's own Discover result (fromNode, above) may have arrived while this slower live
+        // probe was in flight — that's the more authoritative, already-in-session source, so don't let a
+        // late network response clobber it.
+        if (this.sourceDiscoveredResourceTypes().length > 0) return;
+        if (result && result.resourceTypes.length > 0) {
+          this.discoveredResourceTypes.set(result.resourceTypes);
+          this.discoverProbeStatus.set('done');
+        } else {
+          this.discoveredResourceTypes.set(null);
+          this.discoverProbeStatus.set('error');
+        }
+      });
+    });
   }
 
   /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
@@ -880,6 +956,10 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private readonly _requested = new Set<string>();
+  // undefined = the probe effect hasn't run yet; null/string thereafter = the last sourceConnectionId it
+  // actually probed for, so a redundant re-fire with the same id (e.g. an unrelated signal read in the same
+  // effect) doesn't re-probe.
+  private _probedConnectionId: string | null | undefined = undefined;
 
   private _ensureCatalog(resource: string, sourceConnectionId: string | null, sourceVendor: string): void {
     const key = `${resource}::${sourceConnectionId ?? ''}::${sourceVendor}`;
@@ -1034,6 +1114,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
   }
@@ -1424,7 +1505,9 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : DestinationWizardComponent.CSV_TYPES;
+              : this.isBlob()
+                ? DestinationWizardComponent.BLOB_TYPES
+                : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1494,7 +1577,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString']);
+    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'secretValue']);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
     const current = this.activeForm()?.getRawValue() ?? {};
@@ -1740,7 +1823,15 @@ export class DestinationWizardComponent implements OnInit {
       const def = this.defFor(r);
       // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
       // collection name of its own, so it reuses the same table name as a sensible default collection.
-      targets[r] = type === 'csv' ? def.csvFile : def.sqlTable;
+      // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject), not
+      // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
+      // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      targets[r] = type === 'csv'
+        ? def.csvFile
+        : type === 'blob'
+          ? def.csvFile.replace(/\.csv$/i, '')
+          : def.sqlTable;
     }
     this.targetByResource.set(targets);
     this.mappingRows.update(rows =>
@@ -1889,7 +1980,8 @@ export class DestinationWizardComponent implements OnInit {
 
     const isSql = this.isSql();
     const isMongo = this.isMongo();
-    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : 'File Destination');
+    const isBlob = this.isBlob();
+    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1908,6 +2000,18 @@ export class DestinationWizardComponent implements OnInit {
           keyVaultName: 'workflow-secrets',
           secretName,
           target: metadata.fields['dest_collection'] || null,
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
+        }
+      : isBlob
+      ? {
+          name,
+          destinationType: 'BlobStorage',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: metadata.fields['dest_blobContainer'] || null,
+          // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
+          // secret" rule into metadata.secret — no extra auth-mode check needed here.
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
         }
@@ -2042,6 +2146,7 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'mysql' ? 'dest-mysql'
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
+          : type === 'blob' ? 'dest-blob'
           : 'dest-csv',
         status:      'enabled',
         config,

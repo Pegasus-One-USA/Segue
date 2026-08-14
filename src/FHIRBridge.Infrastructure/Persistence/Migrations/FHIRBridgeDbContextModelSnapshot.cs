@@ -4497,6 +4497,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("SourceConnectionId")
                                 .HasColumnType("uniqueidentifier");
 
+                            b1.Property<string>("AuthPlacement")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)")
+                                .HasColumnName("AuthPlacement");
+
                             b1.Property<string>("AuthenticationType")
                                 .IsRequired()
                                 .HasMaxLength(100)
@@ -4521,6 +4526,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(200)
                                 .HasColumnType("nvarchar(200)")
                                 .HasColumnName("KeyId");
+
+                            b1.Property<string>("PracticeId")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("PracticeId");
 
                             b1.Property<string>("Scopes")
                                 .IsRequired()

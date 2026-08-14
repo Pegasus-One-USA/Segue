@@ -72,6 +72,28 @@
           CSV Email Export Workflow Id ("Email Patient Information")
           <input type="text" [ngModel]="patientCsvEmailExportWorkflowId()" (ngModelChange)="patientCsvEmailExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
         </label>
+
+        <h3>athenahealth (vendor toggle on the Patient Standalone screen)</h3>
+        <p class="subtitle">
+          A separate workflow/base URL for testing the athenahealth Patient Standalone flow instead of Epic/MyChart —
+          used only for the connect/list step (no detail or CSV export). The workflow's source node must be an
+          athenahealth Patient-audience connection, opted into public launch. athenahealth's sandbox has one fixed
+          FHIR base URL (no per-hospital directory), so instead of a picker, paste the id of a pre-seeded
+          <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is the athenahealth sandbox — FHIRBridge's
+          public-patient-standalone-url endpoint requires one to mint against.
+        </p>
+        <label class="field">
+          Athena Patient Standalone Workflow Id
+          <input type="text" [ngModel]="athenaPatientWorkflowId()" (ngModelChange)="athenaPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          Athena Patient Standalone Base URL
+          <input type="text" [ngModel]="athenaPatientBaseUrl()" (ngModelChange)="athenaPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+        </label>
+        <label class="field">
+          Athena EhrEndpoint Id (MyChart-type row pointing at the athenahealth sandbox)
+          <input type="text" [ngModel]="athenaEhrEndpointId()" (ngModelChange)="athenaEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
       </section>
 
       <section class="settings-section">

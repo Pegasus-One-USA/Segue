@@ -13,4 +13,11 @@ public sealed record SourceAuthenticationDto(
     string? PrivateKeySecretName,
     string? KeyId,
     string? JwksUrl = null,
-    string[]? DiscoveredScopes = null);
+    string[]? DiscoveredScopes = null,
+    string? PracticeId = null,
+    string? AuthPlacement = null,
+    // When set, the raw client secret is provisioned encrypted at (ClientSecretKeyVaultName, ClientSecretName) —
+    // mirrors CreateDestinationConfigurationRequest.InlineSecret exactly (see AddDestinationConfigurationAsync).
+    // Null (create-on-save's default for an unedited existing connection) leaves whatever secret is already
+    // stored at that reference untouched.
+    string? InlineClientSecret = null);
