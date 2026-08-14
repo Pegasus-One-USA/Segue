@@ -59,6 +59,7 @@ public sealed class BackendServicesApplicationStrategy : SourceApplicationStrate
     {
         RequireClientId(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
         if (string.IsNullOrWhiteSpace(source.PrivateKeyPem) && string.IsNullOrWhiteSpace(source.ClientSecret))
         {
             errors.Add("Backend Services requires either a signing private key (private_key_jwt) or a client secret (client_credentials).");
