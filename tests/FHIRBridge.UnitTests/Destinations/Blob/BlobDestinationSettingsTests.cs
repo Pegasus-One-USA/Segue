@@ -331,4 +331,25 @@ public sealed class BlobDestinationSettingsTests
         settings.FolderPattern.Should().Be("{name}/{date:yyyy/MM/dd}");
         settings.FileNamePattern.Should().Be("{id}_{date:yyyyMMddHHmmssfff}_{guid}.json");
     }
+
+    [Theory]
+    [InlineData("{id}/{guid}.json")]
+    [InlineData("sub/{id}.json")]
+    public void FileNamePattern_containing_a_slash_throws(string pattern)
+    {
+        var act = () => BlobDestinationSettings.Parse(
+            Destination("fhir", $$"""{"dest_blobFileNamePattern":"{{pattern}}"}"""));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void FolderPattern_containing_a_slash_still_works()
+    {
+        // Folder pattern is the one place nesting belongs — unlike FileNamePattern, "/" here is expected.
+        var settings = BlobDestinationSettings.Parse(
+            Destination("fhir", """{"dest_blobFolderPattern":"{name}/{date:yyyy/MM/dd}"}"""));
+
+        settings.FolderPattern.Should().Be("{name}/{date:yyyy/MM/dd}");
+    }
 }

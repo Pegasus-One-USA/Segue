@@ -121,7 +121,7 @@ public sealed record BlobDestinationSettings(
         }
 
         var pattern = raw.Trim();
-        ValidatePattern(pattern, "Folder pattern", destinationName);
+        ValidatePattern(pattern, "Folder pattern", destinationName, allowNestedFolders: true);
         return pattern;
     }
 
@@ -141,14 +141,17 @@ public sealed record BlobDestinationSettings(
         }
 
         var pattern = raw.Trim();
-        ValidatePattern(pattern, "File name pattern", destinationName);
+        ValidatePattern(pattern, "File name pattern", destinationName, allowNestedFolders: false);
         return pattern;
     }
 
     // Azure rejects/mishandles a blob name violating these rules — same "last line of defense" role the
     // container-name regex above plays (see CreateDestinationConfigurationRequestValidator for the
     // request-level check that catches this before it ever reaches here for new/edited destinations).
-    private static void ValidatePattern(string pattern, string fieldLabel, string destinationName)
+    // File name pattern (allowNestedFolders: false) additionally forbids "/" anywhere — Folder pattern is
+    // the only place nesting belongs; a "/" inside File name pattern would silently split the record's blob
+    // into extra folders instead of naming a single file.
+    private static void ValidatePattern(string pattern, string fieldLabel, string destinationName, bool allowNestedFolders)
     {
         if (pattern.Length > MaxPatternLength)
         {
@@ -162,6 +165,13 @@ public sealed record BlobDestinationSettings(
             throw new InvalidOperationException(
                 $"{fieldLabel} for destination '{destinationName}' contains a character Azure blob names don't "
                     + "allow — no backslashes or control characters. Use \"/\" for nested folders instead of \"\\\".");
+        }
+
+        if (!allowNestedFolders && pattern.Contains('/'))
+        {
+            throw new InvalidOperationException(
+                $"{fieldLabel} for destination '{destinationName}' cannot contain \"/\" — that would split it into "
+                    + "extra folders instead of naming a single file. Use Folder pattern for nesting instead.");
         }
 
         if (pattern.EndsWith('.') || pattern.EndsWith('/'))

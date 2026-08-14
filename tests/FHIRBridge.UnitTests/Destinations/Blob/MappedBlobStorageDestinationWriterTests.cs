@@ -555,6 +555,32 @@ public sealed class MappedBlobStorageDestinationWriterTests
     }
 
     [Fact]
+    public async Task A_resolved_key_containing_a_slash_does_not_split_the_file_name_into_extra_folders()
+    {
+        SetupTarget();
+        var blob = new Mock<BlobClient>();
+        string? capturedName = null;
+        _container
+            .Setup(c => c.GetBlobClient(It.IsAny<string>()))
+            .Callback<string>(name => capturedName = name)
+            .Returns(blob.Object);
+        blob
+            .Setup(b => b.UploadAsync(It.IsAny<Stream>(), It.IsAny<BlobUploadOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadResponse());
+
+        // The configured FileNamePattern itself never contains "/" (BlobDestinationSettings rejects that) —
+        // this is the case where the DATA does: a resolved key value like "abc/123" (e.g. a raw FHIR reference)
+        // must not be allowed to smuggle in an extra folder the way a literal "/" in the pattern would.
+        var mapping = Mapping(fields: [UpsertKeyField()]);
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_blobGranularity":"individual","dest_blobRecordMode":"upsert"}"""),
+            mapping, [Record("p1", new Dictionary<string, object?> { ["PatientId"] = "abc/123" })],
+            Context(), CancellationToken.None);
+
+        capturedName.Should().Be("Patient/abc_123.json");
+    }
+
+    [Fact]
     public async Task A_nested_date_folder_pattern_produces_real_subfolders()
     {
         SetupTarget();

@@ -155,7 +155,9 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
                 continue;
             }
 
-            var patternedBlobName = $"{folder}/{ResolvePattern(settings.FileNamePattern, name, keyValue, DateTime.UtcNow, Guid.NewGuid())}";
+            var fileName = ResolvePattern(
+                settings.FileNamePattern, name, keyValue, DateTime.UtcNow, Guid.NewGuid(), allowNestedFolders: false);
+            var patternedBlobName = $"{folder}/{fileName}";
 
             if (settings.RecordMode == BlobRecordMode.Update)
             {
@@ -183,8 +185,13 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
     /// <c>{id}</c> falls back to the literal "record" when no key resolved (Insert has no stable identity to
     /// begin with; the null-key Upsert/Update cases never reach this method — see <see cref="WriteIndividualAsync"/>).
     /// An unparseable date format degrades to a fixed sortable format rather than throwing and failing the whole write.
+    /// <paramref name="allowNestedFolders"/> is false for a file name — even though
+    /// <see cref="BlobDestinationSettings.ValidatePattern"/> already rejects a literal "/" in the configured
+    /// pattern, a resolved <c>{id}</c> value can still contain one (e.g. a source resource id like
+    /// "Patient/123") — sanitizing the whole resolved string as ONE segment here, rather than splitting on
+    /// "/" the way Folder pattern does, keeps that from silently becoming an extra folder.
     /// </summary>
-    private static string ResolvePattern(string pattern, string name, string? id, DateTime timestampUtc, Guid guid)
+    private static string ResolvePattern(string pattern, string name, string? id, DateTime timestampUtc, Guid guid, bool allowNestedFolders)
     {
         var resolved = PatternTokenRegex.Replace(pattern, match =>
         {
@@ -215,7 +222,7 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
             }
         });
 
-        return SanitizeBlobPath(resolved);
+        return allowNestedFolders ? SanitizeBlobPath(resolved) : SanitizePathSegment(resolved);
     }
 
     // Splits on '/' before per-segment sanitizing (Path.GetInvalidFileNameChars() includes '/') so an
@@ -323,7 +330,7 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
     private static string BuildIndividualFolder(MappingProfile mappingProfile, BlobDestinationSettings settings)
     {
         var name = CleanStem(mappingProfile);
-        var folder = ResolvePattern(settings.FolderPattern, name, id: null, DateTime.UtcNow, Guid.NewGuid());
+        var folder = ResolvePattern(settings.FolderPattern, name, id: null, DateTime.UtcNow, Guid.NewGuid(), allowNestedFolders: true);
 
         return string.IsNullOrWhiteSpace(settings.PathPrefix) ? folder : $"{settings.PathPrefix}/{folder}";
     }

@@ -24,7 +24,14 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
   // BlobDestinationSettings.ValidatePattern/CreateDestinationConfigurationRequestValidator's server-side checks —
   // this is just the inline, before-you-even-save layer. Blank is valid (matches — "use the record mode's
   // default"); placeholder tokens like "{date:yyyy/MM/dd}" are unaffected, since "{" / "}" / ":" aren't restricted.
-  static readonly BLOB_NAMING_PATTERN = /^(?!.*[\\\x00-\x1F\x7F])(?!.*[./]$).*$/;
+  // Folder pattern is the one place nesting belongs, so "/" is allowed here.
+  static readonly BLOB_FOLDER_NAMING_PATTERN = /^(?!.*[\\\x00-\x1F\x7F])(?!.*[./]$).*$/;
+
+  // Same rule as above, but File name pattern additionally forbids "/" ANYWHERE — a "/" there would silently
+  // split the record's blob into extra folders instead of naming a single file (nesting belongs in Folder
+  // pattern). Subsumes the "doesn't end with '/'" check above, since no "/" is allowed at all; still checks
+  // "doesn't end with '.'" separately.
+  static readonly BLOB_FILE_NAME_PATTERN = /^(?!.*[\\/\x00-\x1F\x7F])(?!.*\.$).*$/;
 
   readonly blobForm = this.fb.group({
     name: ['Azure Blob Export', [Validators.required]],
@@ -57,8 +64,8 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
     // Only meaningful when granularity is 'individual'. Blank means "use the record mode's own default" (see
     // BlobDestinationSettings.Parse's ParseFolderPattern/ParseFileNamePattern) — left blank rather than
     // pre-filled with a mode-specific literal so switching recordMode later doesn't leave a stale pattern behind.
-    folderPattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_NAMING_PATTERN)]],
-    fileNamePattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_NAMING_PATTERN)]],
+    folderPattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_FOLDER_NAMING_PATTERN)]],
+    fileNamePattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_FILE_NAME_PATTERN)]],
   });
 
   /** True while the host is reusing a previously-saved connection unchanged — secretValue is a secret that is

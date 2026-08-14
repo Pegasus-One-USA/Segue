@@ -364,4 +364,35 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
 
         _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("{id}/{guid}.json")]
+    [InlineData("sub/{id}.json")]
+    public void File_name_pattern_containing_a_slash_fails(string pattern)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            ["dest_blobFileNamePattern"] = pattern,
+        };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobFileNamePattern");
+    }
+
+    [Fact]
+    public void Folder_pattern_containing_a_slash_still_passes()
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            ["dest_blobFolderPattern"] = "{name}/{date:yyyy/MM/dd}",
+        };
+
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
 }

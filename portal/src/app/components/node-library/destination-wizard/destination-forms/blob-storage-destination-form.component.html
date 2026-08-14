@@ -66,6 +66,13 @@
             <strong>Example:</strong> pattern <code>{{ '{name}/{date:yyyy/MM/dd}' }}</code> &rarr; folder
             <code>Patient/2026/08/14</code>
           </span>
+          @if (blobForm.get('recordMode')!.value !== 'insert' && (blobForm.get('folderPattern')!.value?.includes('{date:') || blobForm.get('folderPattern')!.value?.includes('{guid}'))) {
+            <div class="dw-callout dw-callout--warn">
+              {{ blobForm.get('recordMode')!.value === 'update' ? 'Update' : 'Upsert' }} needs to re-derive the exact same
+              name on a later run to find this record again — a {{ '{date:...}' }} or {{ '{guid}' }} token here will produce
+              a different name every time, so the record can never be found. Keep this pattern static (e.g. just {{ '{name}' }}).
+            </div>
+          }
         }
       </div>
 
@@ -74,7 +81,7 @@
         <input id="dw-blob-fileNamePattern" class="dw-input" formControlName="fileNamePattern"
           placeholder="Default: {{ blobForm.get('recordMode')!.value === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json' }}" />
         @if (blobForm.get('fileNamePattern')!.hasError('pattern') && blobForm.get('fileNamePattern')!.touched) {
-          <span class="dw-error">Only what Azure allows in a blob name: no backslashes or control characters, and it can't end with "." or "/".</span>
+          <span class="dw-error">Only what Azure allows in a blob name: no backslashes, control characters, or "/" (that would split it into extra folders — use Folder pattern for nesting), and it can't end with ".".</span>
         } @else if (blobForm.get('fileNamePattern')!.hasError('maxlength') && blobForm.get('fileNamePattern')!.touched) {
           <span class="dw-error">Too long — Azure blob names top out at 1024 characters total; keep this well under that.</span>
         } @else if (blobForm.get('recordMode')!.value === 'insert') {

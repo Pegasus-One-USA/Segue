@@ -112,18 +112,21 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
                 break;
         }
 
-        RequireValidBlobNamingPattern(context, metadata, "dest_blobFolderPattern", "Folder pattern");
-        RequireValidBlobNamingPattern(context, metadata, "dest_blobFileNamePattern", "File name pattern");
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFolderPattern", "Folder pattern", allowNestedFolders: true);
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFileNamePattern", "File name pattern", allowNestedFolders: false);
     }
 
     /// <summary>Blank is always valid here — it means "use the selected Record mode's own default" (see
     /// BlobDestinationSettings.ParseFolderPattern/ParseFileNamePattern) — only a non-blank override is checked
-    /// against what Azure itself allows in a blob name.</summary>
+    /// against what Azure itself allows in a blob name. File name pattern (allowNestedFolders: false) additionally
+    /// forbids "/" anywhere — nesting belongs in Folder pattern; a "/" here would split the record's blob into
+    /// extra folders instead of naming a single file.</summary>
     private static void RequireValidBlobNamingPattern(
         ValidationContext<CreateDestinationConfigurationRequest> context,
         IReadOnlyDictionary<string, string> metadata,
         string key,
-        string fieldLabel)
+        string fieldLabel,
+        bool allowNestedFolders)
     {
         if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
         {
@@ -141,6 +144,14 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
             context.AddFailure(
                 key,
                 $"{fieldLabel} cannot contain a backslash or control characters — use \"/\" for nested folders instead of \"\\\".");
+            return;
+        }
+
+        if (!allowNestedFolders && value.Contains('/'))
+        {
+            context.AddFailure(
+                key,
+                $"{fieldLabel} cannot contain \"/\" — that would split it into extra folders instead of naming a single file. Use Folder pattern for nesting instead.");
             return;
         }
 
