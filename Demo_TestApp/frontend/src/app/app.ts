@@ -13,6 +13,7 @@ import { ProviderInAppNew11Component } from './demo-types/new-11/provider-in-app
 import { BackendSystemNew11Component } from './demo-types/new-11/backend-system-new11';
 import { environment } from '../environments/environment';
 import { AUTH_EMAIL_STORAGE_KEY, PATIENT_STANDALONE_PATH } from './core/routes';
+import { APP_VERSION } from './version';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
 
@@ -95,6 +96,7 @@ interface LoginResponse {
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
+  protected readonly appVersion = APP_VERSION;
   protected readonly loggedIn = signal(false);
   protected readonly role = signal<string | null>(null);
   protected readonly loginEmail = signal('');

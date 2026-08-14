@@ -38,12 +38,19 @@ declare -A IMAGES=(
   [demo-app]="containerization/docker/demo-app/Dockerfile"
   [fhirbridge-worker]="containerization/docker/worker/Dockerfile"
 )
+# fhirbridge-app and demo-app bake $TAG into their Angular build (footer version display) -
+# fhirbridge-worker has no UI, so it doesn't take this build-arg.
+UI_IMAGES=("fhirbridge-app" "demo-app")
 
 for name in "${!IMAGES[@]}"; do
   dockerfile="${IMAGES[$name]}"
   full_tag="${PREFIX}${name}:${TAG}"
+  build_args=()
+  for ui in "${UI_IMAGES[@]}"; do
+    if [[ "$ui" == "$name" ]]; then build_args=(--build-arg "APP_VERSION=${TAG}"); fi
+  done
   echo "==> Building ${full_tag} (${dockerfile})"
-  docker build -f "${REPO_ROOT}/${dockerfile}" -t "${full_tag}" "${REPO_ROOT}"
+  docker build -f "${REPO_ROOT}/${dockerfile}" -t "${full_tag}" "${build_args[@]}" "${REPO_ROOT}"
 
   if [[ "$PUSH" == "true" ]]; then
     if [[ -z "$REGISTRY" ]]; then

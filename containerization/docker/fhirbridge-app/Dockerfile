@@ -7,10 +7,13 @@
 #
 # Optional build arg PORTAL_CONFIG selects the Angular build configuration (angular.json):
 # production (default) | staging | qa | dev | working.
+# Optional build arg APP_VERSION (set from the image tag by build-images.ps1/.sh) is baked into
+# src/app/version.ts so the footer shows which build is actually deployed.
 
 # ---- Stage 1: Angular portal build ----
 FROM node:20-alpine AS portal-build
 ARG PORTAL_CONFIG=production
+ARG APP_VERSION=local
 WORKDIR /src/portal
 # .npmrc (legacy-peer-deps=true) must be present before `npm ci` — without it npm's default
 # strict peer-dependency resolution flags several transitive version pairs (chokidar, ajv, keyv)
@@ -19,6 +22,7 @@ WORKDIR /src/portal
 COPY portal/package.json portal/package-lock.json portal/.npmrc ./
 RUN npm ci
 COPY portal/ ./
+RUN echo "export const APP_VERSION = '${APP_VERSION}';" > src/app/version.ts
 RUN npm run build -- --configuration=${PORTAL_CONFIG}
 
 # ---- Stage 2: .NET publish (Api + Gateway) ----

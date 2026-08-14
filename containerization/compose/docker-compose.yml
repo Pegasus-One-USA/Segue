@@ -62,6 +62,7 @@ services:
       dockerfile: containerization/docker/fhirbridge-app/Dockerfile
       args:
         PORTAL_CONFIG: "${PORTAL_BUILD_CONFIG:-production}"
+        APP_VERSION: "${IMAGE_TAG:-local}"
     image: fhirbridge-app:${IMAGE_TAG:-local}
     container_name: fhirbridge-ctr-app
     labels:
@@ -100,6 +101,7 @@ services:
       dockerfile: containerization/docker/demo-app/Dockerfile
       args:
         DEMO_CONFIG: "${DEMO_BUILD_CONFIG:-production}"
+        APP_VERSION: "${IMAGE_TAG:-local}"
     image: demo-app:${IMAGE_TAG:-local}
     container_name: fhirbridge-ctr-demo-app
     labels:

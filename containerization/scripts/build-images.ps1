@@ -27,13 +27,17 @@ $Images = @{
     "demo-app"          = "containerization/docker/demo-app/Dockerfile"
     "fhirbridge-worker" = "containerization/docker/worker/Dockerfile"
 }
+# fhirbridge-app and demo-app bake $Tag into their Angular build (footer version display) -
+# fhirbridge-worker has no UI, so it doesn't take this build-arg.
+$UiImages = @("fhirbridge-app", "demo-app")
 
 foreach ($name in $Images.Keys) {
     $dockerfile = Join-Path $RepoRoot $Images[$name]
     $fullTag = "$Prefix$name`:$Tag"
+    $buildArgs = if ($UiImages -contains $name) { @("--build-arg", "APP_VERSION=$Tag") } else { @() }
 
     Write-Host "==> Building $fullTag ($($Images[$name]))"
-    docker build -f $dockerfile -t $fullTag $RepoRoot
+    docker build -f $dockerfile -t $fullTag @buildArgs $RepoRoot
     if ($LASTEXITCODE -ne 0) { throw "docker build failed for $name" }
 
     if ($Push) {

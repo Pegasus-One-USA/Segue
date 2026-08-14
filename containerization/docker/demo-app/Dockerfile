@@ -6,14 +6,18 @@
 #
 # Optional build arg DEMO_CONFIG selects the Angular build configuration: production (default) |
 # staging | qa | dev | working.
+# Optional build arg APP_VERSION (set from the image tag by build-images.ps1/.sh) is baked into
+# src/app/version.ts so the footer shows which build is actually deployed.
 
 # ---- Stage 1: Angular frontend build ----
 FROM node:20-alpine AS frontend-build
 ARG DEMO_CONFIG=production
+ARG APP_VERSION=local
 WORKDIR /src/frontend
 COPY Demo_TestApp/frontend/package.json Demo_TestApp/frontend/package-lock.json ./
 RUN npm ci
 COPY Demo_TestApp/frontend/ ./
+RUN echo "export const APP_VERSION = '${APP_VERSION}';" > src/app/version.ts
 RUN npm run build -- --configuration=${DEMO_CONFIG}
 
 # ---- Stage 2: .NET publish ----
