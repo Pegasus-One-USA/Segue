@@ -449,6 +449,9 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             ["Condition"] = ("category", "problem-list-item,health-concern,encounter-diagnosis,genomics,infection,medical-history,reason-for-visit,dental"),
             ["MedicationRequest"] = ("status", "active,completed,stopped"),
             ["MedicationAdministration"] = ("status", "completed,in-progress,stopped"),
+            // Epic rejects CarePlan searches with no category at all (business-rule 59159); cover every
+            // category Epic documents so an uncategorized-in-code-but-valid-in-Epic plan is never dropped.
+            ["CarePlan"] = ("category", "38717003,734163000,736271009,736353004,738906000,736378000,719091000000102,inpatient-pathway,409073007,care-path"),
         };
 
     private static string? ApplyDefaultSearchParameters(string resourceType, string? searchParameters)
