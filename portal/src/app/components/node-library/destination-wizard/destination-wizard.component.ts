@@ -546,7 +546,11 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedGroupForMapping.set(s.activeGroup);
   }
 
-  /** Column names of any already-probed SQL table by its full name — used for extra target tables. */
+  /** Column names of any already-probed SQL table by its full name — used for extra target tables, and
+   *  for the target card's own [columns] rendering (via the canvas's columnsForCardFn). Deliberately
+   *  includes identity/computed and foreign-key columns — a table's real shape, PK/FK badges included,
+   *  should stay visible; FieldMappingCanvasComponent.isProtectedColumn is what actually stops one of
+   *  these from becoming a mapping target, checked at the point a mapping is completed instead of here. */
   readonly columnsForTableFn = (tableFullName: string): string[] => {
     const table = this.sqlTables().find(t => t.fullName === tableFullName);
     return table ? table.columns.map(c => c.name) : [];
@@ -648,6 +652,18 @@ export class DestinationWizardComponent implements OnInit {
 
   onSchemaOpQueued(op: PendingSchemaOp): void {
     this.pendingSchemaOps.update(ops => [...ops, op]);
+  }
+
+  /** A table was removed from the canvas (FieldMappingCanvasComponent.confirmRemoveTable) — drop any of
+   *  ITS OWN still-queued schema ops along with it (the "createTable" op that made it exist as a preview
+   *  in the first place, or an "addColumn"/"alterColumn"/"dropColumn" queued on it before removal).
+   *  Without this, a table the user created and then removed left its queue entries dangling: nothing in
+   *  the canvas still shows or maps to the table, but "Add to Workflow" would still create it for real,
+   *  and validateMappingForSave's own pendingSchemaOps check would keep naming a table no longer on
+   *  screen. Filtering by name is harmless even when nothing matches (a real, already-probed table
+   *  removed via its extra-table "✕" was never queued in the first place). */
+  onSchemaOpsCancelledForTable(tableName: string): void {
+    this.pendingSchemaOps.update(ops => ops.filter(op => op.request.tableName !== tableName));
   }
 
   /** Runs every queued schema op for real, strictly in the order they were queued (a later op — e.g. add
@@ -802,7 +818,13 @@ export class DestinationWizardComponent implements OnInit {
       const g = this.activeMappingGroup();
       this.mappingCanvasTitle.emit(g ? `Map fields — ${g}` : null);
     });
-    effect(() => this.mappingCountChange.emit(this.mappingRows().length));
+    // Scoped to the currently open group's own rows — mappingRows() itself holds every resource's mapping for
+    // this whole destination, not just the one open in the canvas (see saveGroupMapping/validateMappingForSave,
+    // which filter the same way for the same reason). Unfiltered, this badge showed the workflow-wide total
+    // (e.g. "437 field mappings") next to a "Map fields — Patient" title that only ever meant Patient's own.
+    effect(() => this.mappingCountChange.emit(
+      this.mappingRows().filter(r => r.resource === this.activeMappingGroup()).length,
+    ));
 
     // Header-level Close/Save trigger counters — react only on an actual increment while this wizard
     // instance is alive. The first run just learns the real baseline (whatever the ancestor's counter
@@ -1283,7 +1305,10 @@ export class DestinationWizardComponent implements OnInit {
   /** "Save" below the canvas — keeps whatever's mapped so far, returns to the group list, and shows the
    *  canonical Mapping JSON built from every resource mapped so far (not just this one). Blocked by
    *  validateMappingForSave: the canvas stays open (never closeGroupMapping()s) until every error for
-   *  this resource is fixed, so nothing wrong ever actually gets persisted. */
+   *  this resource is fixed, so nothing wrong ever actually gets persisted. This is the ONLY caller of
+   *  validateMappingForSave — the Review step's "Add to Workflow" (next()/buildWorkflow) intentionally
+   *  never re-runs it; by the time a resource's mapping reaches Review it has already been through this
+   *  gate, so Add to Workflow's job is just provisioning/saving the already-valid configuration. */
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
     if (!group) return;
@@ -1306,8 +1331,47 @@ export class DestinationWizardComponent implements OnInit {
    *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
   private validateMappingForSave(resource: string): string[] {
     const errors: string[] = [];
+
+    // A still-queued "add column" whose name collides with a column the live probe already found on
+    // that table (origin 'probed' — it predates anything queued via the canvas's own "+ Add column"
+    // this session) — the backend rejects this the moment "Add to Workflow" flushes the queue for real
+    // ("Column names in each table must be unique..."), several steps after the mapping canvas that
+    // queued it. Checked here instead, so it's caught on this canvas's own Save — regardless of whether
+    // this resource has any mapped rows yet, hence ahead of the early-return below.
+    for (const op of this.pendingSchemaOps()) {
+      if (op.kind !== 'addColumn') continue;
+      const table = this.sqlTables().find(t => t.fullName === op.request.tableName);
+      const collides = table?.columns.some(
+        c => c.origin === 'probed' && c.name.toLowerCase() === op.request.columnName.toLowerCase(),
+      );
+      if (collides) {
+        errors.push(`"${op.request.columnName}" already exists on ${op.request.tableName} — remove the queued "Add column" and map to the existing column instead.`);
+      }
+    }
+
     const rows = this.mappingRows().filter(r => r.resource === resource);
-    if (rows.length === 0) return errors; // nothing mapped yet isn't itself an error — Save just no-ops.
+    if (rows.length === 0) return errors; // nothing else mapped yet isn't itself an error — Save just no-ops.
+
+    // Mirrors WorkflowBuildAssemblerService.buildMappingForResource's own "Upsert/Update with no id
+    // column mapped" check — that one only ever ran once "Add to Workflow" assembled the full build
+    // request, several steps after the mapping canvas that's actually missing the id column. The
+    // destination's write mode was already committed in Step 1 (dest_writeMode) — read the same way the
+    // canvas's own connectionInfo/csvDelimiterKey bindings already read config from that step. Deliberately
+    // AFTER the rows.length===0 early-return above, not ahead of it — a resource with nothing mapped at all
+    // (including one that just had its only mapped table/field removed) isn't a broken mapping, it's an
+    // unstarted one, same as every other check below; this must not be the one exception that blocks Save
+    // on an empty canvas.
+    const writeMode = this.activeFormConfig()['dest_writeMode'];
+    if (writeMode === 'upsert' || writeMode === 'update') {
+      const hasIdMapping = rows.some(r => r.isUpsertKey || r.sources[0]?.fhirPath === `${resource}.id`);
+      if (!hasIdMapping) {
+        const modeLabel = writeMode === 'upsert' ? 'Upsert by source id' : 'Update only';
+        errors.push(
+          `"${resource}" destination is set to ${modeLabel}, but no destination column is mapped from ` +
+            `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+        );
+      }
+    }
 
     const knownTables = this.hasSqlTables() ? new Set(this.sqlTableOptions()) : null;
     const targetCounts = new Map<string, number>();
@@ -1321,6 +1385,43 @@ export class DestinationWizardComponent implements OnInit {
       if (knownTables && !knownTables.has(row.tableName)) {
         errors.push(`${row.tableName} no longer exists in the destination database — remove or retarget "${row.targetName}".`);
         continue;
+      }
+
+      // Belt-and-suspenders for a row wired before FieldMappingCanvasComponent.completeMapping started
+      // guarding against these (or restored from an older/legacy snapshot saved before that guard
+      // existed) — the column's value is filled in automatically regardless (by the database for an
+      // identity/computed column, by the mapping engine's own child-table relationship resolution for a
+      // foreign key), so a direct write to it is never valid; catch it here instead of leaving that as
+      // the user's first signal, several steps after the mapping canvas that let it happen.
+      if (knownTables) {
+        const table = this.sqlTables().find(t => t.fullName === row.tableName);
+        const column = table?.columns.find(c => c.name === row.targetName);
+        if (column?.isAutoGenerated) {
+          errors.push(`"${row.targetName}" is an identity or computed column in ${row.tableName} and cannot be a mapping write target — remove or retarget this field.`);
+          continue;
+        }
+        if (column?.isForeignKey) {
+          errors.push(`"${row.targetName}" is a foreign key on ${row.tableName}${column.references ? ` (→ ${column.references})` : ''} — it's populated automatically from that relationship and cannot be a mapping write target. Remove or retarget this field.`);
+          continue;
+        }
+
+        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
+        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
+        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
+        // mismatch is caught on this canvas's own Save instead of only surfacing once the whole workflow is
+        // saved. childJson rows are exempt — their value is always written as JSON text (see
+        // resolveArrayPolicy's StoreJson branch), a distinct concern from a scalar field's own type.
+        if (column?.mappingValueType && row.mode === 'value') {
+          const sourceValueType = row.sources[0]?.valueType;
+          if (sourceValueType && sourceValueType.toLowerCase() !== column.mappingValueType.toLowerCase()) {
+            errors.push(
+              `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
+                `but "${row.sources[0]?.label ?? row.targetName}" is mapped as ${sourceValueType} — pick a compatible ` +
+                `source field or retarget to a ${sourceValueType}-compatible column.`,
+            );
+            continue;
+          }
+        }
       }
 
       if (knownTables && !this.columnsForTableFn(row.tableName).includes(row.targetName)) {
@@ -1543,7 +1644,8 @@ export class DestinationWizardComponent implements OnInit {
     return this.sqlTables().map(t => t.fullName);
   }
 
-  // Columns of the table currently chosen for a resource (drives the per-row column dropdown).
+  // Columns of the table currently chosen for a resource (drives the target card's own rendering).
+  // Deliberately unfiltered — see columnsForTableFn's own doc comment for why.
   columnsForResourceTarget(r: string): string[] {
     const target = this.targetFor(r);
     const table = this.sqlTables().find(t => t.fullName === target || t.tableName === target);

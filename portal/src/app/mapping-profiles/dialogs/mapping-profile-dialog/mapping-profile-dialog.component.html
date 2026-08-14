@@ -128,7 +128,18 @@
     <p class="mpd-hint">Choose a resource type to start mapping fields.</p>
   }
 
-  @if (errorMessage()) {
+  @if (mappingErrors().length) {
+    <div class="mpd-error-banner" role="alert">
+      <p class="mpd-error-banner-title">
+        Fix {{ mappingErrors().length }} mapping issue{{ mappingErrors().length === 1 ? '' : 's' }} before saving:
+      </p>
+      <ul class="mpd-error-list">
+        @for (e of mappingErrors(); track e) {
+          <li>{{ e }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorMessage()) {
     <p class="mpd-error">{{ errorMessage() }}</p>
   }
 
