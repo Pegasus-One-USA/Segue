@@ -681,6 +681,11 @@
             <span class="eaf-badge-neutral">{{ method.label }}</span>
           </div>
 
+          @if (vendor() === 'Athenahealth') {
+            <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
+              from whatever is mapped on the destination — configure them there, not here.</p>
+          }
+
           <div class="eaf-grid">
             @for (field of visibleRetrievalFields(); track field.key) {
               <div class="eaf-field"

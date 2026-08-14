@@ -1489,6 +1489,16 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
    *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
    *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
   private ensureRetrievalResourceTypeDefault(): void {
+    // athenahealth is excluded from this default: its OAuth server rejects the ENTIRE token request if even one
+    // requested scope isn't provisioned on the app registration (verified against the live preview sandbox), so
+    // silently seeding every MVP1 resource type here — appropriate for Epic, which just ignores an unsupported
+    // scope rather than rejecting the whole grant — reliably produces an unusable connection. Leaving this null/
+    // empty means a fresh athenahealth connection created in Source Connection Master requests no resource scopes
+    // at all until something explicit sets them (the workflow builder's destination-derived resourceTypes in
+    // workflow-build-assembler.service.ts, or a deliberate edit here) — never a broad guess that has to be
+    // manually pared back down every time, which was the actual repeated cause of "Invalid Scope" failures.
+    if (this.vendor() === 'Athenahealth') return;
+
     const key = ({
       subscription: 'subscriptionResourceType',
       webhook: 'webhookResourceType',
@@ -2354,9 +2364,14 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       // Reused-as-is "Existing Source" pick (see resolvedSourceConnectionId above): tells
       // WorkflowBuildAssemblerService.assemble() to skip this node's Sources spec entirely and let the backend
       // resolve sourceConnectionId straight off this node's own config, same as destinationResolved for destinations.
+      // Always set explicitly (never conditionally omitted) — canvas mode merges this save's fields onto the
+      // node's previously-stored fields ({...previousFields, ...fields}), so a key that's only ever ADDED and
+      // never CLEARED stays stuck at 'true' forever once any earlier save set it, even after switching this node
+      // back to "New Source" — exactly the bug that silently skipped rebuilding this node's SourceConnection
+      // (Retrieval/scopes never updated) on every subsequent Save, regardless of what the dialog showed.
+      sourceConnectionResolved: resolvedSourceConnectionId ? 'true' : '',
       ...(resolvedSourceConnectionId ? {
         sourceConnectionId: resolvedSourceConnectionId,
-        sourceConnectionResolved: 'true',
       } : {}),
     };
 

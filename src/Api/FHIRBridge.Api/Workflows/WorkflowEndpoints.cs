@@ -97,6 +97,13 @@ public static class WorkflowEndpoints
             var sourceIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             var destinationIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             var mappingIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            // Every source connection this build actually references, including ones resolved via the "Existing
+            // Source" picker fallback in TryResolveEntityId below (never added to sourceIds itself — that dictionary
+            // only ever holds freshly created/updated connections from the request.Sources loop). Scope/retrieval
+            // sync below must run for BOTH, or a shared connection reused unchanged via "Existing Source" never
+            // gets its Retrieval.ResourceTypes kept in sync with what its destinations actually consume — the whole
+            // point of allowing "Existing Source" to be usable for athenahealth at all.
+            var allReferencedSourceConnectionIds = new HashSet<Guid>();
 
             // 1. Destinations first — self-contained, and they provision the inline secret whose reference the node needs.
             foreach (var spec in request.Destinations ?? [])
@@ -162,6 +169,7 @@ public static class WorkflowEndpoints
                     return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
                 }
+                allReferencedSourceConnectionIds.Add(sourceConnectionId);
 
                 if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
                 {
@@ -298,10 +306,15 @@ public static class WorkflowEndpoints
 
             // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
             // actually consumes downstream, now that this save may have changed a destination's resource selection
-            // (or introduced/removed a workflow referencing the connection). Distinct: the same connection can be
-            // wired to more than one source node spec in a single build request.
+            // (or introduced/removed a workflow referencing the connection). Union with sourceIds.Values (rather
+            // than iterating sourceIds alone): a node using "Existing Source" unchanged never appears in sourceIds
+            // (that dictionary is only ever populated by the request.Sources create/update loop above) — its
+            // connection id is only ever resolved via TryResolveEntityId's node-config fallback inside the mappings
+            // loop, captured into allReferencedSourceConnectionIds there. Without this union, a shared connection
+            // reused via "Existing Source" would never get synced at all, no matter how many times its workflow is
+            // rebuilt.
             var syncedScopes = new Dictionary<Guid, IReadOnlyList<string>>();
-            foreach (var sourceConnectionId in sourceIds.Values.Distinct())
+            foreach (var sourceConnectionId in allReferencedSourceConnectionIds.Union(sourceIds.Values).Distinct())
             {
                 var scopes = await scopeSyncService.SyncAsync(sourceConnectionId, cancellationToken);
                 if (scopes is not null)

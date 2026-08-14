@@ -107,6 +107,24 @@ export class WorkflowBuildAssemblerService {
         .map((node) => node.id),
     );
 
+    // Pre-computed, per source node, the union of resource types its destinations actually map — used to derive
+    // athenahealth's retrieval resource types (and therefore the OAuth scopes it requests) from what's genuinely
+    // consumed downstream, instead of a separately-configured source-side picker that could silently drift out of
+    // sync with it (the real cause of repeated "Invalid Scope" failures against the live sandbox). A cheap
+    // pre-pass over dest_mappings — far cheaper than the full buildMappings() schema-diff work done in the real
+    // destinations loop below, and this only needs the bare resource name per row.
+    const destinationResourceTypesBySourceNodeId = new Map<string, Set<string>>();
+    for (const destNode of graph.nodes.filter((node) => this.isDestinationNode(node))) {
+      const destFields = this.fieldsFor(destNode.id, nodesById);
+      const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
+      const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
+      if (!sourceNodeId) continue;
+      const resources = [...new Set(this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource))];
+      const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
+      resources.forEach((r) => set.add(r));
+      destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);
+    }
+
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
@@ -117,7 +135,7 @@ export class WorkflowBuildAssemblerService {
       if (fields['sourceConnectionResolved'] === 'true') continue;
       sources.push({
         nodeId: id,
-        source: this.buildSource(fields),
+        source: this.buildSource(fields, [...(destinationResourceTypesBySourceNodeId.get(id) ?? [])]),
         existingId: fields['sourceConnectionId'] || null,
       });
     }
@@ -168,6 +186,7 @@ export class WorkflowBuildAssemblerService {
   // ── source ────────────────────────────────────────────────────────────────
   private buildSource(
     fields: Record<string, string>,
+    destinationResourceTypes: string[] = [],
   ): CreateSourceConnectionRequest {
     const connector = fields['Connector'] ?? fields['__name'] ?? '';
     const isSample =
@@ -209,19 +228,25 @@ export class WorkflowBuildAssemblerService {
     // CreateSourceConnectionRequest), so a blank secret simply omits it — matching a brand-new "New Source" node.
     if (/athenahealth/i.test(connector)) {
       const athenaAppType = this.applicationTypeFor(fields);
-      const athenaScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
+      // destinationResourceTypesBySourceNodeId in assemble() — not the source's own Retrieval Configuration
+      // picker, which is now hidden for athenahealth in the form (ehr-vendor-source-form.component.ts's
+      // visibleRetrievalFields). Falls back to whatever fields['Scopes']/['Retrieval resource type'] already
+      // held when no destination is wired up yet (e.g. the very first save of a bare source node), so this
+      // never regresses to an empty/invalid request. The backend's own SourceConnectionRuntimeResolver
+      // regenerates the actual OAuth scope string fresh from Retrieval.ResourceTypes on every run regardless —
+      // this is just what gets initially persisted/validated at build time.
+      const athenaResourceTypes = destinationResourceTypes.length
+        ? destinationResourceTypes
+        : (fields['Retrieval resource type'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      const athenaScopes = athenaResourceTypes.length
+        ? athenaResourceTypes.map((rt) => `system/${rt}.read`)
+        : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
       const athenaTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
-      const athenaRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
-      console.log('%c[buildSource: Athenahealth] diagnosing retrieval/scope build', 'color:#7b2ff7;font-weight:700', {
-        athenaAppType,
-        appKeyField: fields['App key'],
-        retrievalMethodKeyField: fields['Retrieval method key'],
-        retrievalResourceTypeField: fields['Retrieval resource type'],
-        resourcesField: fields['Resources'],
-        scopesField: fields['Scopes'],
-        athenaScopes,
-        athenaRetrieval,
-      });
+      const athenaBaseRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
+      const athenaRetrieval = athenaBaseRetrieval
+        ? { ...athenaBaseRetrieval, resourceTypes: athenaResourceTypes.length ? athenaResourceTypes : athenaBaseRetrieval.resourceTypes }
+        : null;
       return {
         name: fields['__name'] || 'Athenahealth',
         sourceSystemType: 'Athenahealth',
