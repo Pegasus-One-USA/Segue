@@ -284,4 +284,51 @@ public sealed class BlobDestinationSettingsTests
 
         settings.FileNamePattern.Should().Be("{id}_{date:yyyyMMdd}.json");
     }
+
+    [Theory]
+    // The literal "\\" here is JSON's own escape for a single backslash — the parsed pattern is
+    // "{name}\{date:yyyyMMdd}", containing one real backslash character, which is what the validation
+    // rejects. Writing an *unescaped* backslash directly in the JSON would just make the whole
+    // ConnectionMetadataJson malformed, which GetString silently swallows to null (see
+    // Missing_or_unrecognized_auth_mode_defaults_to_ConnectionString above) — that would make this test
+    // pass for the wrong reason, never reaching BlobDestinationSettings' own validation at all.
+    [InlineData("""{"dest_blobFolderPattern":"{name}\\{date:yyyyMMdd}"}""")]
+    [InlineData("""{"dest_blobFileNamePattern":"{id}\\{guid}.json"}""")]
+    public void Naming_pattern_with_a_backslash_throws(string json)
+    {
+        var act = () => BlobDestinationSettings.Parse(Destination("fhir", json));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("dest_blobFolderPattern", "{name}/")]
+    [InlineData("dest_blobFileNamePattern", "{id}.")]
+    public void Naming_pattern_ending_with_dot_or_slash_throws(string key, string pattern)
+    {
+        var act = () => BlobDestinationSettings.Parse(Destination("fhir", $$"""{"{{key}}":"{{pattern}}"}"""));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Naming_pattern_exceeding_the_max_length_throws()
+    {
+        var longPattern = new string('a', 513) + ".json";
+        var act = () => BlobDestinationSettings.Parse(
+            Destination("fhir", $$"""{"dest_blobFileNamePattern":"{{longPattern}}"}"""));
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Naming_patterns_using_only_the_documented_tokens_pass()
+    {
+        var settings = BlobDestinationSettings.Parse(Destination(
+            "fhir",
+            """{"dest_blobFolderPattern":"{name}/{date:yyyy/MM/dd}","dest_blobFileNamePattern":"{id}_{date:yyyyMMddHHmmssfff}_{guid}.json"}"""));
+
+        settings.FolderPattern.Should().Be("{name}/{date:yyyy/MM/dd}");
+        settings.FileNamePattern.Should().Be("{id}_{date:yyyyMMddHHmmssfff}_{guid}.json");
+    }
 }

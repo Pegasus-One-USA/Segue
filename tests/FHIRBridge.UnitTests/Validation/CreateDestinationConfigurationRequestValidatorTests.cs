@@ -283,4 +283,85 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
 
         _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("dest_blobFolderPattern")]
+    [InlineData("dest_blobFileNamePattern")]
+    public void Blank_naming_pattern_is_valid(string key)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            [key] = "",
+        };
+
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("dest_blobFolderPattern", @"{name}\{date:yyyyMMdd}")]
+    [InlineData("dest_blobFileNamePattern", @"{id}\{guid}.json")]
+    public void Naming_pattern_with_a_backslash_fails(string key, string pattern)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            [key] = pattern,
+        };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == key);
+    }
+
+    [Theory]
+    [InlineData("dest_blobFolderPattern", "{name}/")]
+    [InlineData("dest_blobFileNamePattern", "{id}.")]
+    public void Naming_pattern_ending_with_dot_or_slash_fails(string key, string pattern)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            [key] = pattern,
+        };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == key);
+    }
+
+    [Fact]
+    public void Naming_pattern_exceeding_the_max_length_fails()
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            ["dest_blobFileNamePattern"] = new string('a', 513) + ".json",
+        };
+
+        var result = _sut.Validate(Request(DestinationType.BlobStorage, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_blobFileNamePattern");
+    }
+
+    [Fact]
+    public void Naming_patterns_using_only_the_documented_tokens_pass()
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_blobAuthMode"] = "connectionString",
+            ["dest_blobContainer"] = "fhir",
+            ["dest_blobFolderPattern"] = "{name}/{date:yyyy/MM/dd}",
+            ["dest_blobFileNamePattern"] = "{id}_{date:yyyyMMddHHmmssfff}_{guid}.json",
+        };
+
+        _sut.Validate(Request(DestinationType.BlobStorage, metadata)).IsValid.Should().BeTrue();
+    }
 }

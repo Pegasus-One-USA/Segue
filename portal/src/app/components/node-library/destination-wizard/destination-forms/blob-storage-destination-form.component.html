@@ -51,21 +51,47 @@
         }
       </div>
 
-      <div class="dw-field">
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('folderPattern')!.invalid && blobForm.get('folderPattern')!.touched">
         <label class="dw-label" for="dw-blob-folderPattern">Folder pattern</label>
         <input id="dw-blob-folderPattern" class="dw-input" formControlName="folderPattern"
           placeholder="Default: {{ '{name}' }}" />
-        <span class="dw-hint">Placeholders: {{ '{name}' }} (resource/table name), {{ '{date:yyyy/MM/dd}' }} (any .NET date format — "/" nests real subfolders), {{ '{guid}' }}.</span>
+        @if (blobForm.get('folderPattern')!.hasError('pattern') && blobForm.get('folderPattern')!.touched) {
+          <span class="dw-error">Only what Azure allows in a blob name: no backslashes or control characters, and it can't end with "." or "/".</span>
+        } @else if (blobForm.get('folderPattern')!.hasError('maxlength') && blobForm.get('folderPattern')!.touched) {
+          <span class="dw-error">Too long — Azure blob names top out at 1024 characters total; keep this well under that.</span>
+        } @else {
+          <span class="dw-hint">
+            Placeholders: {{ '{name}' }} = resource/table name (e.g. "Patient"); {{ '{date:yyyy/MM/dd}' }} = any .NET
+            date format, and "/" inside it nests real subfolders; {{ '{guid}' }} = a random id.<br />
+            <strong>Example:</strong> pattern <code>{{ '{name}/{date:yyyy/MM/dd}' }}</code> &rarr; folder
+            <code>Patient/2026/08/14</code>
+          </span>
+        }
       </div>
 
-      <div class="dw-field">
+      <div class="dw-field" [class.dw-field--error]="blobForm.get('fileNamePattern')!.invalid && blobForm.get('fileNamePattern')!.touched">
         <label class="dw-label" for="dw-blob-fileNamePattern">File name pattern</label>
         <input id="dw-blob-fileNamePattern" class="dw-input" formControlName="fileNamePattern"
           placeholder="Default: {{ blobForm.get('recordMode')!.value === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json' }}" />
-        @if (blobForm.get('recordMode')!.value === 'insert') {
-          <span class="dw-hint">Placeholders: {{ '{id}' }} (the 🔑 key field, or the record's source id), {{ '{date:...}' }}, {{ '{guid}' }}. Insert always adds a new blob, so include {{ '{date:...}' }} or {{ '{guid}' }} to keep names unique.</span>
+        @if (blobForm.get('fileNamePattern')!.hasError('pattern') && blobForm.get('fileNamePattern')!.touched) {
+          <span class="dw-error">Only what Azure allows in a blob name: no backslashes or control characters, and it can't end with "." or "/".</span>
+        } @else if (blobForm.get('fileNamePattern')!.hasError('maxlength') && blobForm.get('fileNamePattern')!.touched) {
+          <span class="dw-error">Too long — Azure blob names top out at 1024 characters total; keep this well under that.</span>
+        } @else if (blobForm.get('recordMode')!.value === 'insert') {
+          <span class="dw-hint">
+            Placeholders: {{ '{id}' }} = the 🔑 key field (or the record's source id); {{ '{date:...}' }} = any .NET
+            date format; {{ '{guid}' }} = a random id. Insert always adds a new blob, so include
+            {{ '{date:...}' }} or {{ '{guid}' }} to keep names unique.<br />
+            <strong>Example:</strong> pattern <code>{{ '{id}_{date:yyyyMMdd}_{guid}.json' }}</code> for a record
+            with id "abc-123" &rarr; file <code>abc-123_20260814_3f9a1c7b8e5d4a2f.json</code>
+          </span>
         } @else {
-          <span class="dw-hint">Placeholders: {{ '{id}' }} (the 🔑 key field, or the record's source id), {{ '{date:...}' }}, {{ '{guid}' }}.</span>
+          <span class="dw-hint">
+            Placeholders: {{ '{id}' }} = the 🔑 key field (or the record's source id); {{ '{date:...}' }} = any .NET
+            date format; {{ '{guid}' }} = a random id.<br />
+            <strong>Example:</strong> pattern <code>{{ '{id}.json' }}</code> for a record with id "abc-123" &rarr;
+            file <code>abc-123.json</code>
+          </span>
           @if (blobForm.get('fileNamePattern')!.value?.includes('{date:') || blobForm.get('fileNamePattern')!.value?.includes('{guid}')) {
             <div class="dw-callout dw-callout--warn">
               {{ blobForm.get('recordMode')!.value === 'update' ? 'Update' : 'Upsert' }} needs to re-derive the exact same

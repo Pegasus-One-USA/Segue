@@ -19,6 +19,13 @@ import { WizardDestinationFormApi } from './destination-form-api';
 export class BlobStorageDestinationFormComponent implements WizardDestinationFormApi {
   private readonly fb = inject(FormBuilder);
 
+  // What Azure actually allows in a blob name: no backslash (not a supported path delimiter — "/" is), no
+  // control characters, and (the second negative lookahead) not ending in "." or "/". Matches
+  // BlobDestinationSettings.ValidatePattern/CreateDestinationConfigurationRequestValidator's server-side checks —
+  // this is just the inline, before-you-even-save layer. Blank is valid (matches — "use the record mode's
+  // default"); placeholder tokens like "{date:yyyy/MM/dd}" are unaffected, since "{" / "}" / ":" aren't restricted.
+  static readonly BLOB_NAMING_PATTERN = /^(?!.*[\\\x00-\x1F\x7F])(?!.*[./]$).*$/;
+
   readonly blobForm = this.fb.group({
     name: ['Azure Blob Export', [Validators.required]],
     // Azure container naming rules: 3-63 chars, lowercase letters/digits/hyphens, no leading/trailing/double
@@ -50,8 +57,8 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
     // Only meaningful when granularity is 'individual'. Blank means "use the record mode's own default" (see
     // BlobDestinationSettings.Parse's ParseFolderPattern/ParseFileNamePattern) — left blank rather than
     // pre-filled with a mode-specific literal so switching recordMode later doesn't leave a stale pattern behind.
-    folderPattern: ['', []],
-    fileNamePattern: ['', []],
+    folderPattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_NAMING_PATTERN)]],
+    fileNamePattern: ['', [Validators.maxLength(512), Validators.pattern(BlobStorageDestinationFormComponent.BLOB_NAMING_PATTERN)]],
   });
 
   /** True while the host is reusing a previously-saved connection unchanged — secretValue is a secret that is

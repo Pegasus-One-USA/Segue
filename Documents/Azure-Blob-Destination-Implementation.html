@@ -718,6 +718,25 @@ container/prefix/Patient/abc-123.json
 // Custom Folder pattern "{name}/{date:yyyy/MM/dd}" + File name pattern "{id}-{date:yyyyMMdd}.json" (Insert):
 container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
 
+  <h3>Naming pattern validation — only what Azure allows in a blob name</h3>
+  <p>
+    Both pattern fields are checked, at the same three layers §6 already uses for the container name, against
+    what Azure itself permits in a blob name — placeholder tokens are exempt (their braces/colons are fine),
+    only the literal text you type around them is restricted:
+  </p>
+  <ul class="feature-list">
+    <li><strong>No backslash (<code>\</code>) or control characters.</strong> <code>/</code> is the only supported nesting delimiter — use it, not <code>\</code>, for a nested folder.</li>
+    <li><strong>Cannot end with <code>.</code> or <code>/</code>.</strong> Azure rejects a blob name ending that way.</li>
+    <li><strong>1024 characters or fewer</strong> — Azure's own blob-name length ceiling (checked here at 512 characters on the raw, unresolved pattern, leaving headroom for token expansion).</li>
+  </ul>
+  <table class="file-table">
+    <tr><th>Layer</th><th>What it does</th></tr>
+    <tr><td class="file-path">blob-storage-destination-form.component.ts / .html</td><td class="why">A <code>Validators.pattern</code>/<code>Validators.maxLength</code> on both pattern fields gives an inline error the moment you type an invalid pattern, before you can even save.</td></tr>
+    <tr><td class="file-path">CreateDestinationConfigurationRequestValidator.cs</td><td class="why">Defense in depth for any client calling the API directly (not just the wizard) — returns a field-level <code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code> validation error.</td></tr>
+    <tr><td class="file-path">BlobDestinationSettings.cs</td><td class="why">Last line of defense inside the writer itself, catching any legacy row saved before this check existed. Throws <code>InvalidOperationException</code>.</td></tr>
+  </table>
+  <p>A blank value is always valid at every layer — it means "use this Record mode's own default" (§8), and every built-in default already satisfies these rules.</p>
+
   <h4>Blob metadata (every blob gets one of these two sets)</h4>
   <table class="config-table">
     <tr><th>Bulk delivery</th><th>Individual delivery</th></tr>
@@ -851,7 +870,7 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
     <tr>
       <td class="file-path">Blob/BlobDestinationSettings.cs</td>
       <td class="status"><span class="pill pill-new">New</span></td>
-      <td class="why">Parses/validates the <code>dest_blob*</code> config bag; contains the container-name regex, every <code>InvalidOperationException</code> message in §16, and the Record-mode-aware Folder pattern/File name pattern defaults (§8).</td>
+      <td class="why">Parses/validates the <code>dest_blob*</code> config bag; contains the container-name regex, every <code>InvalidOperationException</code> message in §16, the Record-mode-aware Folder pattern/File name pattern defaults, and their own naming-pattern validation (§8).</td>
     </tr>
     <tr>
       <td class="file-path">Blob/IBlobContainerClientFactory.cs</td>
@@ -911,7 +930,7 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
     <tr>
       <td class="file-path">CreateDestinationConfigurationRequestValidator.cs</td>
       <td class="status"><span class="pill pill-modified">Modified</span></td>
-      <td class="why">Per-auth-mode required-field rules, plus the container-name pattern check.</td>
+      <td class="why">Per-auth-mode required-field rules, the container-name pattern check, and the Folder pattern/File name pattern naming-rule checks (§8).</td>
     </tr>
     <tr>
       <td class="file-path">Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs</td>
@@ -923,10 +942,10 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
   <h2 id="backend-tests"><span class="num">11.</span>Backend — tests</h2>
   <table class="file-table">
     <tr><th>File</th><th>Coverage</th></tr>
-    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation (incl. custom endpoint suffix, explicit override), per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback), Folder pattern/File name pattern defaults and overrides (Record-mode-aware).</td></tr>
+    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation (incl. custom endpoint suffix, explicit override), per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback), Folder pattern/File name pattern defaults and overrides (Record-mode-aware), and their naming-rule validation (backslash throws, trailing "."/"/" throws, over-length throws, tokens-only passes).</td></tr>
     <tr><td class="file-path">BlobContainerClientFactoryTests.cs</td><td class="why">Client construction for all five auth modes (URI, account name, shared-key credential presence), the legacy-SAS coercion, container-scoped vs account-scoped vs bare-token SAS detection, cache hit/rotation-busts-cache behavior — all network-free since client construction alone never calls Azure.</td></tr>
     <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), a 403 during container-create not aborting the upload, an upload failure propagating, extension/write-mode-suffix stripping from the destination-object stem, Bulk-delivery default, every Individual-delivery case across all three Record modes (Insert never collides even for a repeated key, Upsert's key resolution order and JSON content type, Update's overwrite-if-exists/skip-if-not/skip-with-no-key behavior), custom Folder/File name patterns, a <code>{date:...}</code> token nesting real subfolders, a malformed date format degrading to a fixed timestamp instead of throwing, and Upsert producing the same name across two runs for the same key — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
-    <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases and container-name-format cases.</td></tr>
+    <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases, container-name-format cases, and Folder pattern/File name pattern naming-rule cases (blank passes, backslash/control-char fails, trailing "."/"/" fails, over-length fails, tokens-only passes).</td></tr>
   </table>
   <div class="callout">
     <strong>Why client-construction tests don't need Azurite</strong>
@@ -941,7 +960,7 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
   <h2 id="frontend-files"><span class="num">12.</span>Frontend — files</h2>
   <table class="file-table">
     <tr><th>File</th><th>What changed</th></tr>
-    <tr><td class="file-path">destination-forms/blob-storage-destination-form.component.ts / .html</td><td class="why">The <code>blobForm</code> group (auth fields, the <strong>Delivery</strong> select, and its conditionally-shown <strong>Record mode</strong> select plus <strong>Folder pattern</strong>/<strong>File name pattern</strong> inputs — §8), auth-mode-conditional fields, per-mode validators, and every <code>WizardDestinationFormApi</code> method (<code>getFullConfig</code>/<code>patchFrom</code>/<code>reset</code>) the SQL/Mongo/CSV forms already implement. The Folder/File name pattern inputs render only at Individual delivery, with a placeholder showing the active Record mode's default and a non-blocking warning if an Upsert/Update file-name pattern contains <code>{date:...}</code>/<code>{guid}</code>.</td></tr>
+    <tr><td class="file-path">destination-forms/blob-storage-destination-form.component.ts / .html</td><td class="why">The <code>blobForm</code> group (auth fields, the <strong>Delivery</strong> select, and its conditionally-shown <strong>Record mode</strong> select plus <strong>Folder pattern</strong>/<strong>File name pattern</strong> inputs — §8), auth-mode-conditional fields, per-mode validators, and every <code>WizardDestinationFormApi</code> method (<code>getFullConfig</code>/<code>patchFrom</code>/<code>reset</code>) the SQL/Mongo/CSV forms already implement. The Folder/File name pattern inputs render only at Individual delivery, with a placeholder showing the active Record mode's default, an inline error against the same "what Azure allows in a blob name" rule §8 documents, a worked example in the hint text, and a non-blocking warning if an Upsert/Update file-name pattern contains <code>{date:...}</code>/<code>{guid}</code>.</td></tr>
     <tr><td class="file-path">destination-wizard.component.html</td><td class="why">Step 4 review cards for Blob add Folder pattern/File name pattern rows (falling back to the active Record mode's default display text when blank), alongside the existing Delivery/Record mode rows.</td></tr>
     <tr><td class="file-path">field-mapping-target-card.component.html</td><td class="why">The canvas card's kind label now says "blob" for a Blob destination instead of the generic "file" it shared with CSV/Mongo.</td></tr>
     <tr><td class="file-path">field-mapping-model.ts</td><td class="why"><code>MappingDestType</code> widened to include <code>'blob'</code>.</td></tr>
@@ -1033,13 +1052,17 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
   <p><strong>Cause:</strong> the File name pattern includes a <code>{date:...}</code> or <code>{guid}</code> token — every run resolves to a <em>different</em> name, so <code>BlobClient.ExistsAsync</code> on this run's freshly-resolved name never finds last run's blob. The wizard warns about this (§8) but doesn't block saving it.</p>
   <p><strong>Fix:</strong> remove the <code>{date:...}</code>/<code>{guid}</code> token from the File name pattern (or clear the field to use the Update default, <code>{id}.json</code>) so the same key always resolves to the same name.</p>
 
+  <h4>"...contains a character Azure blob names don't allow" / "...cannot end with '.' or '/'"</h4>
+  <p><strong>Cause:</strong> the Folder pattern or File name pattern contains a backslash/control character, or ends with a literal <code>.</code> or <code>/</code> — see §8's naming-pattern validation rules.</p>
+  <p><strong>Fix:</strong> use <code>/</code> instead of <code>\</code> for nested folders, and make sure the pattern's last literal character isn't <code>.</code> or <code>/</code> (a trailing placeholder token like <code>{guid}</code> or <code>.json</code> is fine).</p>
+
   <h4>A custom date format in a pattern doesn't error, but the resulting name looks wrong</h4>
   <p><strong>Cause:</strong> the format string was syntactically valid .NET but not what was intended — <code>ResolvePattern</code> only falls back to the fixed <code>yyyyMMddHHmmssfff</code> format on a genuine <code>FormatException</code> (e.g. an unterminated quoted literal); most typos in a .NET custom format string still parse, just not the way you expected.</p>
   <p><strong>Fix:</strong> check the token against the <a href="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings" target="_blank" rel="noopener">.NET custom date/time format string</a> reference (§8).</p>
 
   <h2 id="verification"><span class="num">16.</span>Verification</h2>
   <ul class="feature-list">
-    <li><strong>Backend:</strong> full solution build succeeds; 89 Blob-specific unit tests pass (605/607 across the whole <code>FHIRBridge.UnitTests</code> suite — the two failures, a locale-dependent DateTime-parsing repro test and <code>DestinationExecutionHistoryGateTests</code>, are pre-existing and untouched by this feature).</li>
+    <li><strong>Backend:</strong> full solution build succeeds; 95 Blob-specific unit tests pass (619/621 across the whole <code>FHIRBridge.UnitTests</code> suite — the two failures, a locale-dependent DateTime-parsing repro test and <code>DestinationExecutionHistoryGateTests</code>, are pre-existing and untouched by this feature).</li>
     <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
     <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account; confirmed the feature works end to end after all fixes.</li>
   </ul>

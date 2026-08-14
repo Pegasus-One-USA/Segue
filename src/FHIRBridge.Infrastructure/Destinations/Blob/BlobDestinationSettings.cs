@@ -34,6 +34,12 @@ public sealed record BlobDestinationSettings(
     private static readonly Regex ContainerNameRegex = new(
         @"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", RegexOptions.Compiled);
 
+    // Azure blob names: no backslash (not a supported path delimiter — "/" is), no control characters, and
+    // (checked separately below) must not end with "." or "/". Everything else — including the "{"/"}" our
+    // own placeholder tokens use — is fair game, since a real Azure blob name allows almost any character.
+    private static readonly Regex DisallowedPatternCharacters = new(@"[\\\x00-\x1F\x7F]", RegexOptions.Compiled);
+    private const int MaxPatternLength = 512;
+
     public static BlobDestinationSettings Parse(DestinationConfiguration destination)
     {
         var json = destination.ConnectionMetadataJson;
@@ -101,15 +107,22 @@ public sealed record BlobDestinationSettings(
             AccessTier: ConnectionMetadataReader.GetString(json, "dest_blobAccessTier"),
             Granularity: ParseGranularity(json),
             RecordMode: ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode")),
-            FolderPattern: ParseFolderPattern(json),
-            FileNamePattern: ParseFileNamePattern(json, ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode"))));
+            FolderPattern: ParseFolderPattern(json, destination.Name),
+            FileNamePattern: ParseFileNamePattern(json, ParseRecordMode(ConnectionMetadataReader.GetString(json, "dest_blobRecordMode")), destination.Name));
     }
 
     /// <summary>Defaults to <c>{name}</c> — the pre-pattern behavior of one folder per mapped resource/object.</summary>
-    private static string ParseFolderPattern(string? json)
+    private static string ParseFolderPattern(string? json, string destinationName)
     {
         var raw = ConnectionMetadataReader.GetString(json, "dest_blobFolderPattern");
-        return string.IsNullOrWhiteSpace(raw) ? "{name}" : raw.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "{name}";
+        }
+
+        var pattern = raw.Trim();
+        ValidatePattern(pattern, "Folder pattern", destinationName);
+        return pattern;
     }
 
     /// <summary>
@@ -117,17 +130,46 @@ public sealed record BlobDestinationSettings(
     /// default to a static, id-only name — deliberately excluding any <c>{date:...}</c>/<c>{guid}</c> token, since
     /// those modes must re-derive the same blob name on a later run to find the record to update.
     /// </summary>
-    private static string ParseFileNamePattern(string? json, BlobRecordMode recordMode)
+    private static string ParseFileNamePattern(string? json, BlobRecordMode recordMode, string destinationName)
     {
         var raw = ConnectionMetadataReader.GetString(json, "dest_blobFileNamePattern");
-        if (!string.IsNullOrWhiteSpace(raw))
+        if (string.IsNullOrWhiteSpace(raw))
         {
-            return raw.Trim();
+            return recordMode == BlobRecordMode.Insert
+                ? "{id}_{date:yyyyMMddHHmmssfff}_{guid}.json"
+                : "{id}.json";
         }
 
-        return recordMode == BlobRecordMode.Insert
-            ? "{id}_{date:yyyyMMddHHmmssfff}_{guid}.json"
-            : "{id}.json";
+        var pattern = raw.Trim();
+        ValidatePattern(pattern, "File name pattern", destinationName);
+        return pattern;
+    }
+
+    // Azure rejects/mishandles a blob name violating these rules — same "last line of defense" role the
+    // container-name regex above plays (see CreateDestinationConfigurationRequestValidator for the
+    // request-level check that catches this before it ever reaches here for new/edited destinations).
+    private static void ValidatePattern(string pattern, string fieldLabel, string destinationName)
+    {
+        if (pattern.Length > MaxPatternLength)
+        {
+            throw new InvalidOperationException(
+                $"{fieldLabel} for destination '{destinationName}' is too long ({pattern.Length} characters) — "
+                    + $"Azure blob names cannot exceed 1024 characters, so keep the template well under that.");
+        }
+
+        if (DisallowedPatternCharacters.IsMatch(pattern))
+        {
+            throw new InvalidOperationException(
+                $"{fieldLabel} for destination '{destinationName}' contains a character Azure blob names don't "
+                    + "allow — no backslashes or control characters. Use \"/\" for nested folders instead of \"\\\".");
+        }
+
+        if (pattern.EndsWith('.') || pattern.EndsWith('/'))
+        {
+            throw new InvalidOperationException(
+                $"{fieldLabel} for destination '{destinationName}' cannot end with \".\" or \"/\" — "
+                    + "Azure rejects blob names ending that way.");
+        }
     }
 
     /// <summary>

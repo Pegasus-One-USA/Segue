@@ -76,6 +76,12 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
     private static readonly Regex BlobContainerNameRegex = new(
         @"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", RegexOptions.Compiled);
 
+    // Azure blob names: no backslash (not a supported path delimiter — "/" is) and no control characters;
+    // checked separately below is that the pattern must not end with "." or "/". Mirrors
+    // BlobDestinationSettings.ValidatePattern, the writer-level last line of defense for the same rule.
+    private static readonly Regex BlobPatternDisallowedCharacters = new(@"[\\\x00-\x1F\x7F]", RegexOptions.Compiled);
+    private const int MaxBlobPatternLength = 512;
+
     private static void ValidateBlobMetadata(
         ValidationContext<CreateDestinationConfigurationRequest> context,
         IReadOnlyDictionary<string, string> metadata)
@@ -104,6 +110,43 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
                 RequireField(context, metadata, "dest_blobTenantId", "Tenant ID is required.");
                 RequireField(context, metadata, "dest_blobClientId", "Client ID is required.");
                 break;
+        }
+
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFolderPattern", "Folder pattern");
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFileNamePattern", "File name pattern");
+    }
+
+    /// <summary>Blank is always valid here — it means "use the selected Record mode's own default" (see
+    /// BlobDestinationSettings.ParseFolderPattern/ParseFileNamePattern) — only a non-blank override is checked
+    /// against what Azure itself allows in a blob name.</summary>
+    private static void RequireValidBlobNamingPattern(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        string fieldLabel)
+    {
+        if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (value.Length > MaxBlobPatternLength)
+        {
+            context.AddFailure(key, $"{fieldLabel} is too long — Azure blob names cannot exceed 1024 characters.");
+            return;
+        }
+
+        if (BlobPatternDisallowedCharacters.IsMatch(value))
+        {
+            context.AddFailure(
+                key,
+                $"{fieldLabel} cannot contain a backslash or control characters — use \"/\" for nested folders instead of \"\\\".");
+            return;
+        }
+
+        if (value.EndsWith('.') || value.EndsWith('/'))
+        {
+            context.AddFailure(key, $"{fieldLabel} cannot end with \".\" or \"/\" — Azure rejects blob names ending that way.");
         }
     }
 
