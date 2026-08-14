@@ -345,6 +345,7 @@
       <li><a href="#limitations">Known limitations &amp; follow-ups</a></li>
       <li><a href="#troubleshooting">Troubleshooting — every error seen and its fix</a></li>
       <li><a href="#verification">Verification</a></li>
+      <li><a href="#file-changelog">Complete file changelog</a></li>
     </ol>
   </nav>
 
@@ -364,9 +365,9 @@
     <div class="card"><div class="num">3</div><div class="label">currently enabled in the wizard</div></div>
     <div class="card"><div class="num">2</div><div class="label">independent settings — Delivery &amp; Record mode</div></div>
     <div class="card"><div class="num">8</div><div class="label">new backend files</div></div>
-    <div class="card"><div class="num">91+</div><div class="label">backend unit tests passing</div></div>
-    <div class="card"><div class="num">3</div><div class="label">layers of container-name validation</div></div>
-    <div class="card"><div class="num">14</div><div class="label"><code>dest_blob*</code> config keys</div></div>
+    <div class="card"><div class="num">99+</div><div class="label">backend unit tests passing</div></div>
+    <div class="card"><div class="num">3</div><div class="label">layers of container-name &amp; naming-pattern validation</div></div>
+    <div class="card"><div class="num">16</div><div class="label"><code>dest_blob*</code> config keys</div></div>
     <div class="card"><div class="num">1</div><div class="label">Azure SDK package added</div></div>
   </div>
 
@@ -1082,6 +1083,83 @@ container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
     <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
     <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account; confirmed the feature works end to end after all fixes.</li>
   </ul>
+
+  <h2 id="file-changelog"><span class="num">17.</span>Complete file changelog</h2>
+  <p class="section-intro">
+    Every file added or modified across this entire feature — the initial five-auth-mode implementation, the
+    Delivery/Record-mode write-behavior split, the configurable Folder pattern/File name pattern naming engine,
+    and the Azure-naming-rule validation added on top of it — in one place, with the reason for each change.
+    (§10–§12 cover the same backend/frontend files individually, with more implementation detail per file.)
+  </p>
+
+  <h3>Backend — new files (8)</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDestinationAuthMode.cs</td><td class="why">Closed enum of the five supported authentication modes (ConnectionString, AccountKey, SasUrl, ManagedIdentity, ServicePrincipal) — needed a typed switch target instead of a loose string.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDestinationSettings.cs</td><td class="why">Single source of truth for every <code>dest_blob*</code> setting: parses/validates the container name, per-auth-mode required fields, and (added later) the Record-mode-aware Folder pattern/File name pattern defaults plus their own Azure-naming-rule validation.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/IBlobContainerClientFactory.cs</td><td class="why">Interface (+ <code>BlobDestinationTarget</code> record) so the writer and health check can be unit-tested without a real Azure Storage account — the test seam.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobContainerClientFactory.cs</td><td class="why">Builds the correct <code>BlobServiceClient</code>/<code>BlobContainerClient</code> for whichever auth mode is configured, including legacy SAS-URL coercion and the credential-hash cache key — needed because five auth modes each construct the Azure SDK client differently.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobContainerClientCache.cs</td><td class="why">Singleton in-memory cache of already-built clients, keyed by destination + credential hash, so every write doesn't re-authenticate — and rotating a secret busts the cache automatically on the next write.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobStorageDestinationHealthCheckProvider.cs</td><td class="why">Dedicated reachability check for Blob — the generic "HEAD the secret as a URL" check every other file-based destination shared doesn't work once the secret can be a connection string, account key, or client secret instead of a URL.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobDeliveryGranularity.cs</td><td class="why">Enum (<code>Bulk</code>/<code>Individual</code>) for the "how many records share one blob" setting — split out as its own independent axis from Record mode per the user's explicit request for two separate settings.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/Blob/BlobRecordMode.cs</td><td class="why">Enum (<code>Insert</code>/<code>Upsert</code>/<code>Update</code>) for individual-delivery record behavior — the second independent axis, meaningful only when Delivery is Individual.</td></tr>
+  </table>
+
+  <h3>Backend — modified files</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/MappedBlobStorageDestinationWriter.cs</td><td class="why">Completely rewritten: replaced the old generic "PUT to a pre-signed URL" hack (shared with the S3 writer, no real SDK support) with a genuine Azure.Storage.Blobs-SDK writer; added the Bulk-vs-Individual dispatch, Insert/Upsert/Update behavior, and — later — the Folder pattern/File name pattern placeholder-token resolution engine (<code>{name}</code>/<code>{id}</code>/<code>{date:...}</code>/<code>{guid}</code>), including the single-segment sanitization that stops a resolved value containing "/" from creating an unintended extra folder.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/TargetReachabilityDestinationHealthCheckProvider.cs</td><td class="why">Removed <code>BlobStorage</code> from its generic URL-HEAD loop — it now has its own dedicated provider (above).</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/DependencyInjection.cs</td><td class="why">Registered the new cache/factory/health-check services in the DI container; removed the now-unused <code>HttpClient</code> registration the old PUT-based writer needed.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj</td><td class="why">Added the <code>Azure.Storage.Blobs</code> NuGet package reference the whole feature depends on.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs</td><td class="why">Added the request-level Blob validation branch: required fields per auth mode, the container-name format check, and — later — the Folder pattern/File name pattern Azure-naming-rule checks, so a bad value is rejected with a clear field-level error before it's ever saved.</td></tr>
+    <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td><td class="why">Added Blob to <code>MultiTableRelationalDestinationTypes</code> so a destination fed several resource types in one batch gets one write call (and blob/folder) per resource type instead of everything merging into one mislabeled blob — while explicitly skipping the SQL-only <code>;mode=...</code> target-suffix splice for Blob, since that would have corrupted its blob name.</td></tr>
+    <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs</td><td class="why">Registered <code>BlobDestinationNode</code> in the workflow graph-validation catalog — without this, saving/running any workflow with a Blob node failed with <code>"Node 'BlobDestinationNode' is not in the workflow node catalog"</code> (§13).</td></tr>
+  </table>
+
+  <h3>Backend — tests</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Destinations/Blob/BlobDestinationSettingsTests.cs</td><td class="why">New. Proves <code>BlobDestinationSettings.Parse</code> resolves every setting and default correctly, and rejects every invalid container name / naming pattern with the right error, before any of this ever reaches Azure.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Destinations/Blob/BlobContainerClientFactoryTests.cs</td><td class="why">New. Proves the factory builds the right SDK client shape for all five auth modes and that the credential-hash cache correctly hits/busts — without ever needing a real storage account or emulator.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Destinations/Blob/MappedBlobStorageDestinationWriterTests.cs</td><td class="why">New. Proves every write path (Bulk; Individual × Insert/Upsert/Update) produces the right blob name/content/metadata, and — later — that the naming-pattern engine handles custom patterns, nested date folders, malformed date formats, and a slash smuggled in through resolved data correctly.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with Blob's auth-mode/container-name/naming-pattern cases, so the request-level validator's behavior is proven independently of the writer's own (later, defense-in-depth) checks.</td></tr>
+  </table>
+
+  <h3>Frontend — new files</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-forms/blob-storage-destination-form.component.ts</td><td class="why">The self-contained wizard form for Blob: the <code>blobForm</code> reactive group, per-auth-mode validators, the Delivery/Record mode controls, and — later — the Folder pattern/File name pattern controls with their own Azure-naming validators, implementing the full <code>WizardDestinationFormApi</code> contract every other destination form implements.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-forms/blob-storage-destination-form.component.html</td><td class="why">The template for the above: auth-mode-conditional fields, the Delivery/Record mode selects, and — later — the Folder pattern/File name pattern inputs with inline validation errors, worked examples, and the non-blocking static-pattern warning.</td></tr>
+  </table>
+
+  <h3>Frontend — modified files</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-wizard.component.html</td><td class="why">Added Step 4 (Review) cards for Blob — container, auth mode, Delivery, Record mode, Folder pattern/File name pattern, path prefix — so a user can confirm every setting before saving.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-forms/destination-form.registry.ts</td><td class="why">Registered <code>BlobStorageDestinationFormComponent</code> under <code>DestinationType.BlobStorage</code> — the lookup the wizard's <code>NgComponentOutlet</code> uses to load Step 1's form.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../field-mapping/field-mapping-target-card.component.html</td><td class="why">The mapping canvas's target-card kind label now reads "blob" for a Blob destination instead of the generic "file" label it shared with CSV/Mongo — avoids implying blob output is a single flat file the way CSV is.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../field-mapping/field-mapping-model.ts</td><td class="why">Widened <code>MappingDestType</code> to include <code>'blob'</code> so the mapping canvas/model recognizes it as a real destination kind.</td></tr>
+    <tr><td class="file-path">portal/src/app/services/phase-config.service.ts</td><td class="why">Unblocked <code>dest-blob</code> from the Phase-1 node-library palette gate — without this, Blob simply never appeared as a pickable destination type.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../node-library-dialog.component.ts</td><td class="why">Extended every destination-type dispatch list (open wizard, lock-while-editing, type-to-form mapping, label) with <code>dest-blob</code> — each list independently gates a different part of the wizard flow.</td></tr>
+    <tr><td class="file-path">portal/src/app/pages/workflow-builder/workflow-builder.component.ts</td><td class="why">Extended its own separate copy of the destination-type allowlist with <code>dest-blob</code> — missed in the first pass, this was the exact root cause of a "Nothing to configure" error on an already-existing Blob node's edit icon (§16).</td></tr>
+    <tr><td class="file-path">portal/src/app/services/workflow-graph-mapper.service.ts</td><td class="why"><code>FALLBACK_NODE_TYPES['dest-blob'] = 'BlobDestinationNode'</code> plus adding <code>dest_blobSecret</code> to the redacted-secret key set, so a Blob node's secret is never accidentally logged/exported in a workflow snapshot.</td></tr>
+    <tr><td class="file-path">portal/src/app/services/workflow-build-assembler.service.ts</td><td class="why">Added the Blob branch to the destination-request builder (secret handling, target, full <code>dest_blob*</code> metadata key list), mirroring the SQL/Mongo/CSV branches already there — required for "Add to Pipeline"/workflow build to actually provision a Blob destination.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-connection-secret.util.ts</td><td class="why">Widened <code>buildConnectionMetadata</code>'s <code>isSql</code> boolean parameter to a <code>'sql' | 'csv' | 'blob'</code> string and added the full <code>dest_blob*</code> metadata key list — the non-secret config that round-trips when reopening an existing destination.</td></tr>
+    <tr><td class="file-path">portal/src/app/.../destination-connection-dialog.component.ts</td><td class="why">Updated call sites for the widened <code>buildConnectionMetadata</code> signature above (a compile-level follow-on, not a behavior change for this screen — it doesn't yet support creating/editing Blob directly, see §14).</td></tr>
+  </table>
+
+  <h3>Infrastructure / tooling</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">docker-compose.yml</td><td class="why">Added an <code>azurite</code> service (the official Azure Storage emulator) so Blob destinations can be tested locally end-to-end without a real Azure account.</td></tr>
+  </table>
+
+  <h3>Documentation</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Purpose / reason for the change</th></tr>
+    <tr><td class="file-path">Documents/Azure-Blob-Destination-Implementation.html</td><td class="why">This document — created alongside the initial implementation and iteratively expanded with every subsequent change (write-mode split, naming-pattern engine, naming validation, this changelog) so it stays the single up-to-date reference for the whole feature.</td></tr>
+  </table>
 
   <footer>
     FHIRBridge &middot; Azure Blob Storage destination implementation documentation &middot; branch <code>Azure_Blob_Destination_Implementation</code>
