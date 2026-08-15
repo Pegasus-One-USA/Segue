@@ -42,10 +42,11 @@ export const EHR_VENDOR_TO_SOURCE_FORM_KEY: Record<string, string> = {
   Sample: 'sample',
 };
 
-/** Registry keys backed by the shared EhrVendorSourceFormComponent engine — each owns its full save/cancel flow
- *  end-to-end via WizardService (audience config, discovery, JWT key management, existing-connection cloning, ...)
- *  and its own topbar/footer chrome, exactly like the old (Epic-only) EpicAudienceFormComponent did. Everything
- *  else in SOURCE_FORM_REGISTRY (currently generic-fhir, hl7v2) is "headless": it only implements
- *  SourceConfigFormComponent.getFields() and has no WizardService/entity-mode integration at all. Shared by
+/** Registry keys whose form is a full EHR-vendor connector — each is its own fully independent component (no
+ *  shared multi-vendor engine) that owns its full save/cancel flow end-to-end via WizardService (audience config,
+ *  discovery, JWT key management, existing-connection cloning, ...) and its own topbar/footer chrome, exactly like
+ *  the old (Epic-only) EpicAudienceFormComponent did. Everything else in SOURCE_FORM_REGISTRY (currently
+ *  generic-fhir, hl7v2) is "headless": it only implements SourceConfigFormComponent.getFields() and has no
+ *  WizardService/entity-mode integration at all. Shared by
  *  NodeLibraryDialogComponent (canvas mode) and SourceConnectionListComponent (entity mode). */
 export const SELF_CONTAINED_SOURCE_FORM_KEYS = new Set(['epic', 'cerner', 'athena', 'allscripts', 'healow', 'meditech', 'sample']);

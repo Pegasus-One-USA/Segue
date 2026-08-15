@@ -21,7 +21,8 @@ export interface DestinationConnectionDialogData {
 /** Still only offers Sql/Csv from this screen's create-flow type picker (two cards) — unchanged UX. 'sql'
  *  now resolves to the real SqlServer DestinationType (the registry's default SQL-family entry point), since
  *  DESTINATION_FORM_REGISTRY components no longer have an in-form "Database engine" dropdown to pick
- *  MySQL/PostgreSQL/AzureSql from (see SqlFamilyDestinationFormComponent) — creating those specific engines
+ *  MySQL/PostgreSQL/AzureSql from (each is its own independent DESTINATION_FORM_REGISTRY component now, not a
+ *  shared engine with an `engine` input) — creating those specific engines
  *  isn't reachable from this admin dialog yet, only from a future full registry-driven type picker. */
 function chosenTypeToDestinationType(t: 'sql' | 'csv'): DestinationType {
   return t === 'sql' ? 'SqlServer' : 'Csv';

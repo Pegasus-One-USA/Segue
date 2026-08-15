@@ -1968,7 +1968,8 @@ export class DestinationWizardComponent implements OnInit {
   // dest_* bag (used as connectionMetadataJson) and `secret` is the already-assembled connection string/URI
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
-  // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
+  // assembly itself (see e.g. SqlServerDestinationFormComponent.getMetadata() and its independent siblings
+  // PostgreSqlDestinationFormComponent/MySqlDestinationFormComponent/AzureSqlDestinationFormComponent).
   private provisionDestinationConnection(
     metadata: { fields: Record<string, string>; secret?: string | null },
     onDone: () => void,

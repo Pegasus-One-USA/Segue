@@ -14,7 +14,7 @@ import {
   RECONCILIATION_OPTIONS,
   ENDPOINT_TYPE_OPTIONS,
   EVENT_TYPE_OPTIONS,
-} from '../../shared/ehr-vendor-source-form/ehr-vendor-source-form.component';
+} from '../../shared/ehr-retrieval-field-options.data';
 
 export type GenericFhirRetrievalMethod = 'subscription' | 'webhook' | 'search-rest' | 'bulk-export';
 export type GenericFhirRunMode = 'incremental' | 'full' | 'manual';
@@ -52,7 +52,7 @@ const RETRIEVAL_METHOD_OPTIONS: readonly { value: GenericFhirRetrievalMethod; la
   imports: [ReactiveFormsModule],
   templateUrl: './generic-fhir-source-form.component.html',
   styleUrls: [
-    '../../shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss',
+    '../../shared/ehr-retrieval-field-options.scss',
     './generic-fhir-source-form.component.scss',
   ],
 })

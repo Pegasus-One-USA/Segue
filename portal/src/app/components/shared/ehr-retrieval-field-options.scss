@@ -1,3 +1,10 @@
+// Shared "eaf-*" stylesheet for the Data Retrieval Method / Retrieval Configuration section styling, originally
+// defined in the old shared EhrVendorSourceFormComponent engine (removed — each EHR vendor source form now has
+// this same stylesheet duplicated inline as its own independent .scss file). Kept here as a standalone shared
+// partial purely so GenericFhirSourceFormComponent — which deliberately mirrors this same section field-for-
+// field and class-for-class, but is not one of the EHR vendor forms — has a real home to reuse it from without
+// depending on any one vendor's own component file.
+//
 // Stretches the host to fill nld-detail's available height (rather than sizing to content) so
 // .eaf-body can grow into any leftover space and .eaf-footer sits flush at the true bottom on
 // short forms, instead of floating above blank space. .eaf-topbar/.eaf-footer are flex-shrink: 0

@@ -1,0 +1,94 @@
+<form [formGroup]="sqlForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-3">
+
+    <div class="dw-field" [class.dw-field--error]="sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched">
+      <label class="dw-label" for="sf-name">Destination name <span class="dw-req">*</span></label>
+      <input id="sf-name" class="dw-input" formControlName="name" placeholder="e.g. SQL Production" />
+      @if (sqlForm.get('name')!.invalid && sqlForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched">
+      <label class="dw-label" for="sf-server">{{ hostLabel() }} <span class="dw-req">*</span></label>
+      <input id="sf-server" class="dw-input" formControlName="server" placeholder="tcp:sql-prod.company.com,1433" />
+      @if (sqlForm.get('server')!.invalid && sqlForm.get('server')!.touched) {
+        <span class="dw-error">Server host is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched">
+      <label class="dw-label" for="sf-database">Database <span class="dw-req">*</span></label>
+      <input id="sf-database" class="dw-input" formControlName="database" placeholder="e.g. FHIRBridgeDW" />
+      @if (sqlForm.get('database')!.invalid && sqlForm.get('database')!.touched) {
+        <span class="dw-error">Database name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="sf-auth">Authentication <span class="dw-req">*</span></label>
+      <div class="dw-select-wrap">
+        <select id="sf-auth" class="dw-select" formControlName="auth">
+          <option value="sql-auth">SQL Username / Password</option>
+          @if (!showSslToggle()) {
+            <option value="managed-identity">Managed Identity</option>
+            <option value="azure-ad">Azure AD</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    @if (sqlForm.get('auth')!.value === 'sql-auth') {
+      <div class="dw-field">
+        <label class="dw-label" for="sf-username">Username</label>
+        <input id="sf-username" class="dw-input" formControlName="username" placeholder="e.g. sa" autocomplete="off" />
+      </div>
+      <div class="dw-field">
+        <label class="dw-label" for="sf-password">Password</label>
+        <input id="sf-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+      </div>
+    }
+
+    @if (showSslToggle()) {
+      <div class="dw-field dw-field--checkbox">
+        <label class="dw-label">
+          <input type="checkbox" formControlName="requireSsl" />
+          Require SSL
+        </label>
+        <span class="dw-hint">Enable for managed providers that enforce SSL (e.g. AWS RDS). Leave off for local/docker instances without SSL configured.</span>
+      </div>
+    }
+
+    <div class="dw-field">
+      <label class="dw-label" for="sf-schema">Schema</label>
+      <input id="sf-schema" class="dw-input" formControlName="schema" placeholder="dbo" />
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="sf-writeMode">Write mode</label>
+      <div class="dw-select-wrap">
+        <select id="sf-writeMode" class="dw-select" formControlName="writeMode">
+          <option value="upsert">Upsert by source id</option>
+          <option value="insert">Insert only</option>
+          <option value="update">Update only</option>
+        </select>
+      </div>
+    </div>
+
+  </div><!-- /dw-grid-3 -->
+</form>
+
+<div class="sf-actions">
+  <button type="button" class="dw-btn" [disabled]="probeState() === 'testing'" (click)="testConnection()">
+    {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+  </button>
+</div>
+@if (probeState() === 'testing') {
+  <div class="dw-callout dw-callout--info">Testing connection…</div>
+}
+@if (probeState() === 'error') {
+  <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+}
+@if (probeState() === 'ok') {
+  <div class="dw-callout dw-callout--info">Connected — {{ sqlTables().length }} table(s) found.</div>
+}

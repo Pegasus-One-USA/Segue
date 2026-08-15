@@ -16,7 +16,9 @@ export type DestinationConnectionFormMode = 'create' | 'edit' | 'view';
  * 'sql'/'csv' collapse) — see destination-connection-dialog.component.ts's toFormType() callers, which
  * resolve the concrete type (SqlServer/MySql/PostgreSql/AzureSql/Csv/Sftp/Mongo/...) before passing it down,
  * now that the in-form "Database engine" dropdown is gone (engine is fixed by which registry component loads,
- * not chosen inside the form — see SqlFamilyDestinationFormComponent).
+ * not chosen inside the form — each of SqlServerDestinationFormComponent/AzureSqlDestinationFormComponent/
+ * MySqlDestinationFormComponent/PostgreSqlDestinationFormComponent is a fully independent component with its
+ * engine permanently fixed, rather than one shared component with an `engine` input).
  */
 @Component({
   selector: 'app-destination-connection-form',
@@ -94,7 +96,7 @@ export class DestinationConnectionFormComponent {
   /** The non-secret fields + assembled secret for the current form, or null if invalid — replaces the old
    *  getConfig() + the dialog's own buildSqlConnectionString/buildSftpUri/buildConnectionMetadata calls,
    *  since every destination-forms/ component now assembles that itself (see e.g.
-   *  SqlFamilyDestinationFormComponent.getMetadata()). */
+   *  SqlServerDestinationFormComponent.getMetadata()). */
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     return this.activeForm()?.getMetadata() ?? null;
   }
