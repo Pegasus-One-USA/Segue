@@ -1,0 +1,124 @@
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_e4f33bc5f787da::t_e0c40fa3f7b5b5 17
+  s_e4f33bc5f787da::t_41e17277767256 55
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-sql-destination-form.component.ts
+  s_e4f33bc5f787da::t_6ae55981599c1f 1-4,8-14,19-21,24-145,147-173
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.scss
+  s_e4f33bc5f787da::t_a431ebc92e7ab8 1-4,11-882
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.ts
+  s_e4f33bc5f787da::t_a431ebc92e7ab8 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+  s_e4f33bc5f787da::t_ef78cd2234b9dd 2000
+  s_e4f33bc5f787da::t_bf105a202ab023 394-400
+  s_e4f33bc5f787da::t_37984237cbbb0a 2166
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.scss
+  s_e4f33bc5f787da::t_ab24a539887d1f 1-4,11-882
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgre-sql-destination-form.component.scss
+  s_e4f33bc5f787da::t_c6fd8ffefc465a 1-5
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_e4f33bc5f787da::t_412a78dcf97ba9 19-21
+  s_e4f33bc5f787da::t_ed4d50ec18eaab 99
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.html
+  s_e4f33bc5f787da::t_aabd511616bba7 1-94
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.scss
+  s_e4f33bc5f787da::t_f27ca0f99a5cb7 1-4,11-882
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.scss
+  s_e4f33bc5f787da::t_e8108d5bcbc608 1-4,11-882
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.ts
+  s_e4f33bc5f787da::t_4970aef007b32a 1-4,7-13,17-19,22-173
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.html
+  s_e4f33bc5f787da::t_94ee705bc27262 1-883
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.html
+  s_e4f33bc5f787da::t_a431ebc92e7ab8 1-883
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.scss
+  s_e4f33bc5f787da::t_4ba88b255f470f 1-4,11-882
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.scss
+  s_e4f33bc5f787da::t_94ee705bc27262 1-4,11-882
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.html
+  s_e4f33bc5f787da::t_f27ca0f99a5cb7 1-883
+portal/src/app/components/node-library/source-form.registry.ts
+  s_e4f33bc5f787da::t_d533999698f918 45-50
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgre-sql-destination-form.component.ts
+  s_e4f33bc5f787da::t_8dccc350d75925 1-4,7-13,17-19,22-145,147-173
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.html
+  s_e4f33bc5f787da::t_ab24a539887d1f 1-883
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-sql-destination-form.component.scss
+  s_e4f33bc5f787da::t_c5c32a2e779dd5 1-5
+portal/src/app/components/shared/ehr-retrieval-field-options.data.ts
+  s_e4f33bc5f787da::t_595bb3fbf22bab 1-86
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.ts
+  s_e4f33bc5f787da::t_ce89e059a591cd 400
+  s_e4f33bc5f787da::t_af72db25fc3774 2166
+  s_e4f33bc5f787da::t_53f48e0ad308ed 394-399
+  s_e4f33bc5f787da::t_de7ea958969af4 2000
+  s_e4f33bc5f787da::t_e8108d5bcbc608 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+portal/src/app/components/shared/ehr-retrieval-field-options.scss
+  s_e4f33bc5f787da::t_e65b5e2a633439 8-889
+  s_e4f33bc5f787da::t_741a441ceee32b 1-7
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.ts
+  s_e4f33bc5f787da::t_f8e87f2379ab11 394-400
+  s_e4f33bc5f787da::t_fbfbbd9ce89fae 2000
+  s_e4f33bc5f787da::t_4ba88b255f470f 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+  s_e4f33bc5f787da::t_8a96c3a014b494 2166
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_e4f33bc5f787da::t_4e9f1458de49e0 24-25
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.ts
+  s_e4f33bc5f787da::t_2777047387bbbb 394-400
+  s_e4f33bc5f787da::t_659288221c1e5b 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+  s_e4f33bc5f787da::t_f5aebf7b778985 2000
+  s_e4f33bc5f787da::t_765c2440582186 2166
+portal/src/app/components/node-library/destination-wizard/destination-forms/postgre-sql-destination-form.component.html
+  s_e4f33bc5f787da::t_0f9b55897ab631 1-94
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.html
+  s_e4f33bc5f787da::t_e8108d5bcbc608 1-883
+portal/src/app/components/node-library/destination-wizard/destination-forms/my-sql-destination-form.component.scss
+  s_e4f33bc5f787da::t_c185b4dfc5f61d 1-5
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.html
+  s_e4f33bc5f787da::t_659288221c1e5b 1-883
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-sql-destination-form.component.html
+  s_e4f33bc5f787da::t_aee464ce574955 1-94
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.ts
+  s_e4f33bc5f787da::t_11fc974811a0de 2000
+  s_e4f33bc5f787da::t_6aafba5e20db68 2166
+  s_e4f33bc5f787da::t_43561ff7b48067 394-400
+  s_e4f33bc5f787da::t_94ee705bc27262 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.ts
+  s_e4f33bc5f787da::t_7596bc52c7ac1a 2000
+  s_e4f33bc5f787da::t_ab24a539887d1f 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+  s_e4f33bc5f787da::t_f3a22cb31beb07 394-400
+  s_e4f33bc5f787da::t_f76d39628d1923 2166
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.html
+  s_e4f33bc5f787da::t_4ba88b255f470f 1-883
+portal/src/app/components/node-library/destination-wizard/destination-forms/my-sql-destination-form.component.ts
+  s_e4f33bc5f787da::t_48eadeb7f9bbc2 1-4,7-13,17-19,22-145,147-173
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-server-destination-form.component.scss
+  s_e4f33bc5f787da::t_90fdbcf199744a 1-5
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.scss
+  s_e4f33bc5f787da::t_659288221c1e5b 1-4,11-882
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.ts
+  s_e4f33bc5f787da::t_f27ca0f99a5cb7 1-22,25-43,45-47,49-386,390,404-406,408-411,414-1261,1263-1999,2001-2165,2167-2271,2273-2459
+  s_e4f33bc5f787da::t_25ac8b019a591c 394-400
+  s_e4f33bc5f787da::t_f8dcf944707fae 2166
+  s_e4f33bc5f787da::t_ae1716dfe65ee7 2000
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.scss
+  s_e4f33bc5f787da::t_96f5e49774e912 1-3
+portal/src/app/components/node-library/destination-wizard/destination-forms/my-sql-destination-form.component.html
+  s_e4f33bc5f787da::t_6ce1deede68398 1-94
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_e4f33bc5f787da::t_c180756549975f 1971-1972
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "29de961ae61c665b35456edd6bdbc2b94884d681",
+  "prompts": {},
+  "sessions": {
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
