@@ -2,29 +2,29 @@
 
   @if (summary(); as s) {
     <div class="stat-strip">
-      <div class="stat-card">
-        <mat-icon>view_in_ar</mat-icon>
+      <div class="stat-card stat-card--primary">
+        <span class="stat-icon"><mat-icon>view_in_ar</mat-icon></span>
         <div>
           <span class="stat-value">{{ s.resourcesProcessed }}</span>
           <span class="stat-label">Resources Processed</span>
         </div>
       </div>
-      <div class="stat-card">
-        <mat-icon>list_alt</mat-icon>
+      <div class="stat-card stat-card--info">
+        <span class="stat-icon"><mat-icon>list_alt</mat-icon></span>
         <div>
           <span class="stat-value">{{ s.fieldsTransformed }}</span>
           <span class="stat-label">Fields Transformed</span>
         </div>
       </div>
-      <div class="stat-card">
-        <mat-icon>hub</mat-icon>
+      <div class="stat-card stat-card--warning">
+        <span class="stat-icon"><mat-icon>hub</mat-icon></span>
         <div>
           <span class="stat-value">{{ s.transformationNodesExecuted }}</span>
           <span class="stat-label">Transformation Nodes</span>
         </div>
       </div>
-      <div class="stat-card">
-        <mat-icon>check_circle</mat-icon>
+      <div class="stat-card stat-card--success">
+        <span class="stat-icon"><mat-icon>check_circle</mat-icon></span>
         <div>
           <span class="stat-value">{{ (s.successRate * 100) | number:'1.0-0' }}%</span>
           <span class="stat-label">Success Rate</span>
@@ -34,11 +34,67 @@
   }
 
   <div class="lineage-toolbar">
-    <div class="group-by-toggle">
-      <button type="button" [class.active]="groupBy() === 'field'" (click)="setGroupBy('field')">Group by Field</button>
-      <button type="button" [class.active]="groupBy() === 'patient'" (click)="setGroupBy('patient')">Group by Patient</button>
-      <button type="button" [class.active]="groupBy() === 'node'" (click)="setGroupBy('node')">Group by Node</button>
+    <div class="lineage-toolbar-left">
+      <div class="group-by-toggle">
+        <button type="button" [class.active]="groupBy() === 'field'" (click)="setGroupBy('field')">Group by Field</button>
+        <button type="button" [class.active]="groupBy() === 'patient'" (click)="setGroupBy('patient')">Group by Patient</button>
+        <button type="button" [class.active]="groupBy() === 'node'" (click)="setGroupBy('node')">Group by Node</button>
+      </div>
+
+      @if (groupBy() === 'field') {
+        <!-- Was a permanent 240px sidebar tree; now a popover off this button so the table gets the full
+             width back — see the resource-picker-btn/resource-menu-panel styles for the rest of the story. -->
+        <button type="button" class="resource-picker-btn" #resourceMenuTriggerBtn="matMenuTrigger" [matMenuTriggerFor]="resourceMenu">
+          <mat-icon>account_tree</mat-icon>
+          Browse Resources
+          <mat-icon class="chevron-down">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #resourceMenu="matMenu" class="resource-menu-panel" xPosition="after">
+          <div class="resource-tree" (click)="$event.stopPropagation()">
+            <div class="resource-tree__header">Resources</div>
+            @for (resourceType of resourceTree(); track resourceType.resourceType; let i = $index) {
+              <div class="tree-node">
+                <div
+                  class="tree-node__type"
+                  [style.--type-accent]="resourceTypeAccent(i)"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-expanded]="isResourceTypeExpanded(resourceType.resourceType)"
+                  (click)="toggleResourceType(resourceType.resourceType)"
+                  (keydown.enter)="toggleResourceType(resourceType.resourceType)"
+                  (keydown.space)="toggleResourceType(resourceType.resourceType); $event.preventDefault()"
+                >
+                  <mat-icon class="chevron">{{ isResourceTypeExpanded(resourceType.resourceType) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                  <span class="tree-node__dot"></span>
+                  <span>{{ resourceType.resourceType }}</span>
+                  <span class="tree-node__count">({{ resourceType.resourceCount }})</span>
+                </div>
+                @if (isResourceTypeExpanded(resourceType.resourceType)) {
+                  @for (field of resourceType.fields; track field.destinationField) {
+                    <div
+                      class="tree-node__field"
+                      role="button"
+                      tabindex="0"
+                      [class.active]="selectedResourceType() === resourceType.resourceType && selectedField() === field.destinationField"
+                      (click)="selectField(resourceType.resourceType, field.destinationField)"
+                      (keydown.enter)="selectField(resourceType.resourceType, field.destinationField)"
+                      (keydown.space)="selectField(resourceType.resourceType, field.destinationField); $event.preventDefault()"
+                    >
+                      <span>{{ field.destinationField }}</span>
+                      <span class="tree-node__count">({{ field.resourceCount }})</span>
+                    </div>
+                  }
+                }
+              </div>
+            } @empty {
+              <p class="empty-note">No lineage recorded for this run.</p>
+            }
+          </div>
+        </mat-menu>
+      }
     </div>
+
     <div class="search-box">
       <mat-icon>search</mat-icon>
       <input
@@ -50,58 +106,24 @@
     </div>
   </div>
 
+  @if (loading()) {
+    <div class="lineage-loading">
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    </div>
+  }
+
   <div class="lineage-body">
 
-    @if (groupBy() === 'field') {
-      <div class="resource-tree">
-        <div class="resource-tree__header">Resources</div>
-        @for (resourceType of resourceTree(); track resourceType.resourceType) {
-          <div class="tree-node">
-            <div
-              class="tree-node__type"
-              role="button"
-              tabindex="0"
-              [attr.aria-expanded]="isResourceTypeExpanded(resourceType.resourceType)"
-              (click)="toggleResourceType(resourceType.resourceType)"
-              (keydown.enter)="toggleResourceType(resourceType.resourceType)"
-              (keydown.space)="toggleResourceType(resourceType.resourceType); $event.preventDefault()"
-            >
-              <mat-icon class="chevron">{{ isResourceTypeExpanded(resourceType.resourceType) ? 'expand_more' : 'chevron_right' }}</mat-icon>
-              <span>{{ resourceType.resourceType }}</span>
-              <span class="tree-node__count">({{ resourceType.resourceCount }})</span>
-            </div>
-            @if (isResourceTypeExpanded(resourceType.resourceType)) {
-              @for (field of resourceType.fields; track field.destinationField) {
-                <div
-                  class="tree-node__field"
-                  role="button"
-                  tabindex="0"
-                  [class.active]="selectedResourceType() === resourceType.resourceType && selectedField() === field.destinationField"
-                  (click)="selectField(resourceType.resourceType, field.destinationField)"
-                  (keydown.enter)="selectField(resourceType.resourceType, field.destinationField)"
-                  (keydown.space)="selectField(resourceType.resourceType, field.destinationField); $event.preventDefault()"
-                >
-                  <span>{{ field.destinationField }}</span>
-                  <span class="tree-node__count">({{ field.resourceCount }})</span>
-                </div>
-              }
-            }
-          </div>
-        } @empty {
-          <p class="empty-note">No lineage recorded for this run.</p>
-        }
-      </div>
-    }
-
-    <div class="lineage-table" [class.lineage-table--full]="groupBy() !== 'field'">
-      <p class="group-by-hint">{{ groupByLabel() }}</p>
-
+    <div class="lineage-table">
       @if (selectedField()) {
         <div class="active-filter">
-          <span class="mono">{{ selectedResourceType() }}.{{ selectedField() }}</span>
-          <button type="button" class="btn-clear" (click)="clearFieldSelection()">
-            <mat-icon>close</mat-icon>
-          </button>
+          <span class="active-filter-chip" [style.--chip-accent]="selectedResourceTypeAccent()">
+            <span class="active-filter-chip__dot"></span>
+            <span class="mono">{{ selectedResourceType() }}.{{ selectedField() }}</span>
+            <button type="button" class="btn-clear" (click)="clearFieldSelection()" aria-label="Clear field filter">
+              <mat-icon>close</mat-icon>
+            </button>
+          </span>
         </div>
       }
 
@@ -119,7 +141,12 @@
         </thead>
         <tbody>
           @for (chain of chains().items; track chain.resourceId + chain.destinationField) {
-            <tr class="data-table__row" (click)="openDetail(chain)">
+            <tr
+              class="data-table__row"
+              [class.data-table__row--failed]="!chainSucceeded(chain)"
+              [class.data-table__row--active]="selectedChain() === chain"
+              (click)="openDetail(chain)"
+            >
               <td class="mono">{{ chain.resourceId }}</td>
               <td class="mono">{{ chain.destinationField }}</td>
               <td class="mono">{{ firstSourceValue(chain) }}</td>
@@ -127,7 +154,7 @@
               <td class="mono">{{ lastDestinationValue(chain) }}</td>
               <td>
                 <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
-                  {{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
+                  <span class="status-dot"></span>{{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
                 </span>
               </td>
               <td><mat-icon class="chevron">chevron_right</mat-icon></td>
@@ -191,8 +218,12 @@
             <mat-icon class="flow-arrow">arrow_downward</mat-icon>
 
             @for (hop of chain.hops; track hop.nodeOrder) {
-              <div class="flow-card flow-card--node" [class.flow-card--failed]="!hop.success">
-                <mat-icon>settings</mat-icon>
+              <div
+                class="flow-card flow-card--node"
+                [class.flow-card--failed]="!hop.success"
+                [style.--tn-accent]="nodeAccent(hop.nodeType)"
+              >
+                <span class="flow-card__glyph">{{ nodeGlyph(hop.nodeType) }}</span>
                 <div>
                   <span class="flow-card__title">Transformation Node #{{ hop.nodeOrder + 1 }}</span>
                   <span class="cell-muted">{{ hop.nodeType }}</span>
@@ -236,10 +267,13 @@
           @if (detailTab() === 'nodeInfo') {
             <div class="node-info-list">
               @for (hop of chain.hops; track hop.nodeOrder) {
-                <div class="node-info-row">
+                <div class="node-info-row" [style.--tn-accent]="nodeAccent(hop.nodeType)">
                   <span class="node-info-row__index">{{ hop.nodeOrder + 1 }}</span>
                   <div class="node-info-row__body">
-                    <span class="cell-primary">{{ hop.nodeType }}</span>
+                    <div class="node-info-row__heading">
+                      <span class="flow-card__glyph flow-card__glyph--sm">{{ nodeGlyph(hop.nodeType) }}</span>
+                      <span class="cell-primary">{{ hop.nodeType }}</span>
+                    </div>
                     <span class="cell-muted">{{ formatConfig(hop.configJson) }}</span>
                     <span class="cell-muted">{{ hop.executedAtUtc | date:'MMM d, y, h:mm:ss a' }} · {{ hop.durationMs | number:'1.0-2' }} ms</span>
                     @if (hop.errorMessage) {

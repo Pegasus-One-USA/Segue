@@ -112,6 +112,24 @@ services:
       timeout: 10s
       retries: 10
 
+  # Azure Blob Storage emulator, for exercising the Blob destination writer locally without a real storage
+  # account. Connection string for a Connection String-mode destination: "UseDevelopmentStorage=true"
+  # (from inside this compose network) or the equivalent with 127.0.0.1 substituted for the host name when
+  # connecting from the API/Worker running outside Docker.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: fhirbridge-azurite
+    command: ["azurite", "--blobHost", "0.0.0.0", "--location", "/data", "--skipApiVersionCheck"]
+    ports:
+      - "${AZURITE_BLOB_PORT:-10000}:10000"
+    volumes:
+      - azurite-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 10000 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
   seq:
     image: datalust/seq:latest
     container_name: fhirbridge-seq
@@ -228,6 +246,7 @@ volumes:
   rabbitmq-data:
   redis-data:
   minio-data:
+  azurite-data:
   seq-data:
   output-mysql-data:
   output-postgres-data:

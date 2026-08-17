@@ -7,6 +7,8 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Infrastructure.Sources;
 
@@ -24,17 +26,20 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     // registered IFhirAccessTokenProvider (CompositeFhirAccessTokenProvider implements both), the same pattern
     // FhirSourceConnectorBase.ApplyPatientScopeAsync already uses.
     private readonly IFhirAccessTokenProvider? _accessTokenProvider;
+    private readonly ILogger _logger;
 
     public SourceConnectionRuntimeResolver(
         IConfigurationRepository repository,
         ISecretProvider secretProvider,
         IScopeGeneratorService scopeGenerator,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        ILogger<SourceConnectionRuntimeResolver>? logger = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
         _scopeGenerator = scopeGenerator;
         _accessTokenProvider = accessTokenProvider;
+        _logger = logger ?? NullLogger<SourceConnectionRuntimeResolver>.Instance;
     }
 
     public async Task<FhirSourceConfiguration?> ResolveAsync(
@@ -58,7 +63,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             SourceSystemType.Cerner => RuntimeSourceType.Cerner,
             SourceSystemType.Allscripts => RuntimeSourceType.Allscripts,
             SourceSystemType.GenericFhir => RuntimeSourceType.GenericFhir,
-            SourceSystemType.Athenahealth => RuntimeSourceType.GenericFhir,
+            SourceSystemType.Athenahealth => RuntimeSourceType.Athenahealth,
             SourceSystemType.Healow => RuntimeSourceType.Healow,
             SourceSystemType.MeditechGreenfield => RuntimeSourceType.MeditechGreenfield,
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported by the workflow engine.")
@@ -87,22 +92,51 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var retrieval = sourceConnection.Retrieval;
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
-        // A source connection that was created/re-saved without ever going through the wizard's scope preview (or
-        // the admin resync endpoint — see IEpicSourceConnectionScopeSyncService) can reach here with an empty
-        // persisted Authentication.Scopes list. Falling through to SmartAuthorizationCodeTokenProvider.ResolveScopes'
-        // own last-resort default in that case is wrong for anything but a Patient-type source — it hardcodes
-        // launch/patient + patient/*.read, which for a Standalone/EhrLaunch (Provider) source makes Epic show its
-        // native patient-search screen instead of going straight to consent. Generating from this workflow's own
-        // configured resource types (the same generator the wizard and the resync endpoint already use) keeps this
-        // in sync with actual usage without requiring an admin to remember to resync.
-        var scopes = sourceConnection.Authentication.Scopes.Any()
-            ? sourceConnection.Authentication.Scopes
-            : _scopeGenerator.Generate(
+        // athenahealth's Backend System app registrations verified against the live preview sandbox are
+        // provisioned with v1 coarse scopes only (system/{Type}.read) — v2 granular scopes (system/{Type}.rs)
+        // get rejected by the token endpoint with "Invalid Scope". Every other vendor keeps the v2 default (see
+        // the portal's identical vendor check in ehr-vendor-source-form.component.ts).
+        var scopeVersion = sourceConnection.SourceSystemType == SourceSystemType.Athenahealth ? "v1" : "v2";
+
+        // Backend System / Provider Standalone sources own their resource-type list directly (Retrieval.ResourceTypes
+        // — the same Resource Type picker Settings already exposes), so it is always regenerated fresh here rather
+        // than trusted from whatever Authentication.Scopes last happened to persist. A stale/never-resynced scope
+        // snapshot was a real, repeated failure mode (an edited Resource Type selection silently kept requesting the
+        // OLD resource set's scopes, tripping providers — athenahealth included — that reject the whole token
+        // request for a single unrecognized scope) — regenerating on every resolve makes the Resource Type picker
+        // the single, always-correct source of truth, with no separate sync step to remember to run.
+        //
+        // Interactive-only sources (EHR launch / Patient) have no Retrieval config of their own — there is nothing
+        // to regenerate FROM here, so they keep using whatever IEpicSourceConnectionScopeSyncService (destination-
+        // union, on workflow save) or the wizard's own scope preview last persisted, falling back to a generated
+        // default only when that's genuinely never been populated.
+        var scopes = retrieval is not null
+            ? _scopeGenerator.Generate(
                 sourceConnection.ApplicationType,
-                retrieval?.ResourceTypes ?? [],
-                scopeVersion: "v2",
+                retrieval.ResourceTypes,
+                scopeVersion: scopeVersion,
                 scopeVersionDetected: false,
-                supportedScopes: null).Scopes;
+                supportedScopes: null).Scopes
+            : sourceConnection.Authentication.Scopes.Any()
+                ? sourceConnection.Authentication.Scopes
+                : _scopeGenerator.Generate(
+                    sourceConnection.ApplicationType,
+                    [],
+                    scopeVersion: scopeVersion,
+                    scopeVersionDetected: false,
+                    supportedScopes: null).Scopes;
+
+        _logger.LogInformation(
+            "SourceConnectionRuntimeResolver: resolved connection {SourceConnectionId} ({SourceSystemType}) — " +
+            "baseUrl={BaseUrl} tokenEndpoint={TokenEndpoint} practiceId={PracticeId} authPlacement={AuthPlacement} " +
+            "scopesFrom={ScopesFrom} scope=\"{Scope}\"",
+            sourceConnection.Id, sourceConnection.SourceSystemType, sourceConnection.BaseUrl,
+            sourceConnection.Authentication.TokenEndpoint, sourceConnection.Authentication.PracticeId,
+            sourceConnection.Authentication.AuthPlacement,
+            retrieval is not null
+                ? $"regenerated-from-retrieval({scopeVersion})"
+                : sourceConnection.Authentication.Scopes.Any() ? "stored" : $"fallback-generated({scopeVersion})",
+            string.Join(' ', scopes));
 
         var config = new FhirSourceConfiguration(
             sourceType,
@@ -142,7 +176,9 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 : null,
             TargetPatientId: targetPatientId,
             PatientSearchCriteria: patientSearchCriteria,
-            CallerId: callerId);
+            CallerId: callerId,
+            PracticeId: sourceConnection.Authentication.PracticeId,
+            AuthPlacement: sourceConnection.Authentication.AuthPlacement);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME

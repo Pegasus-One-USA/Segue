@@ -44,15 +44,15 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.MongoDestination),
         Destination(WorkflowNodeTypes.PostgreSqlDestination),
         Destination(WorkflowNodeTypes.FhirRepositoryDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + FhirRepository destinations
-        // are exposed in the palette. The writers below remain registered in ConfiguredDestinationWriterFactory
-        // and can be re-listed here as each is productized.
+        Destination(WorkflowNodeTypes.BlobDestination),
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + FhirRepository + Blob
+        // destinations are exposed in the palette. The writers below remain registered in
+        // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
         // Destination(WorkflowNodeTypes.PowerBiDestination),
         // Destination(WorkflowNodeTypes.TableauDestination),
         // Destination(WorkflowNodeTypes.DatabricksDestination),
-        // Destination(WorkflowNodeTypes.BlobDestination),
         // Destination(WorkflowNodeTypes.S3Destination),
         // Destination(WorkflowNodeTypes.ExcelDestination),
         // Destination(WorkflowNodeTypes.NdjsonDestination),
@@ -207,6 +207,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MongoDestination => "dest-mongo",
             WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
             WorkflowNodeTypes.FhirRepositoryDestination => "dest-fhir",
+            WorkflowNodeTypes.BlobDestination => "dest-blob",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -225,6 +226,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
             WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
+            WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -243,6 +245,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
             WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
+            WorkflowNodeTypes.BlobDestination => "Write mapped records to Azure Blob Storage.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

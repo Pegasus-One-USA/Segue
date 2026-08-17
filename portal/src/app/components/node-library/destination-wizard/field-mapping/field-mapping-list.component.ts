@@ -212,13 +212,6 @@ export class FieldMappingListComponent {
     });
   }
 
-  onInstanceAggregateChange(row: MappingRow, checked: boolean): void {
-    this.instanceChanged.emit({
-      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
-      instance: { ...row.instance, type: 'all', aggregate: checked ? 'csv' : 'rows' },
-    });
-  }
-
   // ── reference-lookup control — only meaningful for a FHIR reference field (path ends ".reference") ──
   isReferenceField = isReferenceField;
 

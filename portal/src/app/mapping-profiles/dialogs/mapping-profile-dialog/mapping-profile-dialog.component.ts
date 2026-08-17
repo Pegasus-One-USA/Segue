@@ -5,7 +5,8 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
-import { MappingProfileFormComponent, MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
 import {
@@ -17,7 +18,7 @@ import {
 } from '../../models/mapping-profile.model';
 import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
 import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
-import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 
 export interface MappingProfileDialogData {
   mode: 'create' | 'edit' | 'view';
@@ -112,7 +113,7 @@ function toMappingFieldDto(row: MappingRow): MappingFieldDto {
 @Component({
   selector: 'app-mapping-profile-dialog',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileFormComponent],
+  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileCanvasComponent],
   templateUrl: './mapping-profile-dialog.component.html',
   styleUrl: './mapping-profile-dialog.component.scss',
 })
@@ -124,13 +125,31 @@ export class MappingProfileDialogComponent {
   private readonly dialogRef = inject(MatDialogRef<MappingProfileDialogComponent>);
   readonly data = inject<MappingProfileDialogData>(MAT_DIALOG_DATA);
 
-  readonly mappingForm = viewChild(MappingProfileFormComponent);
+  readonly mappingForm = viewChild(MappingProfileCanvasComponent);
+
+  /** Toggles the dialog between its normal size and true edge-to-edge fullscreen — same maximize
+   *  affordance NodeLibraryDialogComponent's own header offers, adapted to a MatDialogRef. updateSize()
+   *  alone would still leave Material's own dialog-surface padding/border-radius/box-shadow visible
+   *  (not truly fullscreen, just a bigger centered card) — the 'mpd-fullscreen' panel class (see this
+   *  component's .scss) strips those too. */
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void {
+    const next = !this.isMaximized();
+    this.isMaximized.set(next);
+    this.dialogRef.updateSize(next ? '100vw' : 'min(92vw, 1100px)', next ? '100vh' : 'min(88vh, 740px)');
+    if (next) this.dialogRef.addPanelClass('mpd-fullscreen');
+    else this.dialogRef.removePanelClass('mpd-fullscreen');
+  }
 
   readonly mode = this.data.mode;
   readonly isCreate = this.mode === 'create';
   readonly isView = this.mode === 'view';
 
-  readonly resourceTypeOptions = FHIR_RESOURCES;
+  // The dropdown used to be scoped to FHIR_RESOURCES (the MVP1 11-resource subset the source-connection
+  // scope picker still uses) — Mapping Profiles has no such scoping reason to hide the rest of what the
+  // backend actually catalogs a template for, so this offers every resource in SUPPORTED_RESOURCE_TYPES
+  // (kept in sync with SupportedFhirResourceTypes.All) instead.
+  readonly resourceTypeOptions = SUPPORTED_RESOURCE_TYPES;
   readonly sourceOptions = signal<NamedEntity[]>([]);
   readonly destinationOptions = signal<NamedEntity[]>([]);
 
@@ -156,6 +175,24 @@ export class MappingProfileDialogComponent {
   );
   readonly destType = computed(() => toDestKind(this.selectedDestinationType()));
 
+  /** Human-readable label for the header's destination-type badge — a handful of common types get a real
+   *  display name (matching how the destination wizard itself labels them); anything else (Snowflake,
+   *  BlobStorage, ...) falls back to space-separating the PascalCase DestinationType value itself rather
+   *  than needing an entry for all 22. */
+  private static readonly DEST_TYPE_LABELS: Partial<Record<DestinationType, string>> = {
+    SqlServer: 'SQL Server', AzureSql: 'Azure SQL', MySql: 'MySQL', PostgreSql: 'PostgreSQL',
+    Mongo: 'MongoDB', Csv: 'CSV', Sftp: 'SFTP', RestApi: 'REST API', FhirRepository: 'FHIR Repository',
+  };
+  readonly destTypeLabel = computed<string | null>(() => {
+    const t = this.selectedDestinationType();
+    if (!t) return null;
+    return MappingProfileDialogComponent.DEST_TYPE_LABELS[t] ?? t.replace(/([a-z])([A-Z])/g, '$1 $2');
+  });
+
+  /** Live field-mapping count for the header badge — reads straight off the embedded canvas's own row
+   *  state (already public, see MappingProfileCanvasComponent.rowsRich) rather than duplicating it here. */
+  readonly mappingCount = computed(() => this.mappingForm()?.rowsRich().length ?? 0);
+
   /** Live tables/columns of the selected destination, introspected server-side from its stored secret — empty
    *  for a non-relational destination type or before one is selected. Feeds MappingProfileFormComponent's
    *  [sqlTables] so the SQL column pickers show real columns instead of always falling back to free text. */
@@ -176,6 +213,10 @@ export class MappingProfileDialogComponent {
 
   readonly saving = signal(false);
   readonly errorMessage = signal<string | null>(null);
+  /** Per-row problems found by validateMappingForSave, rendered as a blocking list right above the
+   *  canvas — kept separate from errorMessage (a single generic line) since there can be several of
+   *  these at once and each names the exact field/table at fault. */
+  readonly mappingErrors = signal<string[]>([]);
 
   constructor() {
     this.http.get<NamedEntity[]>(SOURCE_CONNECTIONS_ENDPOINTS.list).subscribe({
@@ -214,6 +255,7 @@ export class MappingProfileDialogComponent {
 
   save(): void {
     this.errorMessage.set(null);
+    this.mappingErrors.set([]);
 
     if (this.metaForm.invalid) {
       this.metaForm.markAllAsTouched();
@@ -223,6 +265,12 @@ export class MappingProfileDialogComponent {
     const rows = this.mappingForm()?.getRows() ?? [];
     if (rows.length === 0) {
       this.errorMessage.set('Map at least one field before saving.');
+      return;
+    }
+
+    const mappingErrors = this.validateMappingForSave();
+    if (mappingErrors.length > 0) {
+      this.mappingErrors.set(mappingErrors);
       return;
     }
 
@@ -255,5 +303,98 @@ export class MappingProfileDialogComponent {
         this.errorMessage.set(err.error?.message ?? 'Failed to save the mapping profile.');
       },
     });
+  }
+
+  /** Mirrors DestinationWizardComponent.validateMappingForSave — the same class of mistakes (a target
+   *  row never actually wired to a source, a row left pointed at a table/column the live schema no
+   *  longer has, a row targeting an identity/computed or foreign-key column, two fields both writing the
+   *  same column) checked there before its own canvas's "Save" is allowed through. This dialog hosts the
+   *  identical FieldMappingCanvasComponent (see
+   *  MappingProfileCanvasComponent's own doc comment) so it's exposed to exactly the same failure modes,
+   *  just with no equivalent check of its own until now. Reads the canvas's rich rows (rowsRich(), not
+   *  getRows()'s already-flattened output) because "no source wired" and "no source group picked" are
+   *  properties of the rich row's mode/sources/childNodeId — information serializeRowsFlat has already
+   *  collapsed away by the time getRows() returns. */
+  private validateMappingForSave(): string[] {
+    const errors: string[] = [];
+    const rows = this.mappingForm()?.rowsRich() ?? [];
+    if (rows.length === 0) return errors;
+
+    const isSqlFamily = this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres';
+    const tables = this.sqlTables();
+    const knownTables = isSqlFamily && tables.length > 0 ? new Set(tables.map(t => t.fullName)) : null;
+    const targetCounts = new Map<string, number>();
+
+    for (const row of rows) {
+      const label = row.targetName || '(unnamed field)';
+      const table = row.tableName || 'the destination';
+
+      if (row.mode === 'value' && row.sources.length === 0) {
+        errors.push(`"${label}" on ${table} has no source field selected.`);
+        continue;
+      }
+      if (row.mode === 'childJson' && !row.childNodeId) {
+        errors.push(`"${label}" on ${table} has no source group selected.`);
+        continue;
+      }
+      if (!row.targetName) {
+        errors.push(`A mapped field on ${table} has no destination column selected.`);
+        continue;
+      }
+
+      if (knownTables && !knownTables.has(row.tableName)) {
+        errors.push(`${row.tableName} no longer exists in the destination database — remove or retarget "${label}".`);
+        continue;
+      }
+      if (knownTables) {
+        const schemaTable = tables.find(t => t.fullName === row.tableName);
+        const schemaColumn = schemaTable?.columns.find(c => c.name === row.targetName);
+        if (schemaTable && !schemaColumn) {
+          errors.push(`"${label}" no longer exists in ${row.tableName}'s columns.`);
+          continue;
+        }
+        // Belt-and-suspenders for a row wired before FieldMappingCanvasComponent.completeMapping
+        // started guarding against these (or restored from an older/legacy snapshot) — the column's
+        // value is filled in automatically regardless (by the database for isAutoGenerated, by the
+        // mapping engine's own child-table relationship resolution for isForeignKey), so a direct
+        // write to it is never valid.
+        if (schemaColumn?.isAutoGenerated) {
+          errors.push(`"${label}" is an identity or computed column in ${row.tableName} and cannot be a mapping write target — remove or retarget this field.`);
+          continue;
+        }
+        if (schemaColumn?.isForeignKey) {
+          errors.push(`"${label}" is a foreign key on ${row.tableName}${schemaColumn.references ? ` (→ ${schemaColumn.references})` : ''} — it's populated automatically from that relationship and cannot be a mapping write target. Remove or retarget this field.`);
+          continue;
+        }
+        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
+        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
+        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
+        // mismatch is caught on this dialog's own Save instead of only surfacing once the whole workflow is
+        // saved. childJson rows are exempt — their value is always written as JSON text, a distinct concern
+        // from a scalar field's own type.
+        if (schemaColumn?.mappingValueType && row.mode === 'value') {
+          const sourceValueType = row.sources[0]?.valueType;
+          if (sourceValueType && sourceValueType.toLowerCase() !== schemaColumn.mappingValueType.toLowerCase()) {
+            errors.push(
+              `"${label}" on ${row.tableName} is a ${schemaColumn.dataType} column (expects ${schemaColumn.mappingValueType}), ` +
+                `but "${row.sources[0]?.label ?? label}" is mapped as ${sourceValueType} — pick a compatible ` +
+                `source field or retarget to a ${sourceValueType}-compatible column.`,
+            );
+            continue;
+          }
+        }
+      }
+
+      const key = `${row.tableName}::${row.targetName}`;
+      targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
+    }
+
+    for (const [key, count] of targetCounts) {
+      if (count <= 1) continue;
+      const [tableName, targetName] = key.split('::');
+      errors.push(`${tableName}.${targetName} is mapped ${count} times — only one mapping would actually be written.`);
+    }
+
+    return errors;
   }
 }

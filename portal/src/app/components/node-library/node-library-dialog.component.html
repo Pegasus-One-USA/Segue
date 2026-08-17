@@ -1,4 +1,4 @@
-<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(showEpicForm() || showDestWizard() || showGenericFhirForm())" (closed)="onOverlayClosed()">
+<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(openSourceFormType() !== null || showDestWizard())" (closed)="onOverlayClosed()">
   <div class="nld" [class.nld--maximized]="isMaximized()">
 
     <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
@@ -45,12 +45,13 @@
     }
 
     <!-- ── Floating maximize/close ── for whichever states have no header/topbar of their own to carry
-         them: plain node browsing, and the inline Generic FHIR form (unlike Epic/dest-wizard, it never
-         grew its own topbar). Epic/dest-wizard are excluded here since their .eaf-topbar/.dw-topbar
+         them: plain node browsing, and a "headless" inline source form (generic-fhir, hl7v2 — unlike the
+         self-contained vendor forms/dest-wizard, they never grew their own topbar). Self-contained vendor
+         forms (Epic, Cerner, ...) and dest-wizard are excluded here since their .eaf-topbar/.dw-topbar
          already show these controls next to "← Back to library" — this would just duplicate them.
          Absolutely positioned over the top-right corner rather than living in a full-width row, since
          nothing else in these states needs one. -->
-    @if (!destMappingTitle() && !showEpicForm() && !showDestWizard()) {
+    @if (!destMappingTitle() && !isSelfContainedSourceForm() && !showDestWizard()) {
       <div class="nld-floating-controls">
         <button
           class="nld-maximize"
@@ -116,7 +117,7 @@
       <nav class="nld-sidebar" [class.nld-sidebar--mini]="isSidebarMini()" aria-label="Node library">
 
         <!-- Collapse / expand toggle (visible only when a form is active) -->
-        @if (showEpicForm() || showDestWizard() || showGenericFhirForm()) {
+        @if (openSourceFormType() !== null || showDestWizard()) {
           <button
             class="nld-sidebar-toggle"
             type="button"
@@ -203,33 +204,91 @@
       <!-- RIGHT: Detail / config panel -->
       <section
         class="nld-detail"
-        [class.nld-detail--form]="showEpicForm() || showDestWizard() || showGenericFhirForm()"
+        [class.nld-detail--form]="openSourceFormType() !== null || showDestWizard()"
         [class.nld-detail--canvas]="destMappingCanvasActive()"
       >
 
-        <!-- ── Inline Epic Audience Form ─────────────────────────────────── -->
-        @if (showEpicForm()) {
-          <app-epic-audience-form
-            [isMaximized]="isMaximized()"
-            (saved)="onEpicFormSaved()"
-            (cancelled)="onEpicFormCancelled()"
-            (closeAll)="close()"
-            (toggleMaximizeRequest)="toggleMaximize()"
-          />
+        <!-- ── Inline self-contained vendor source form (Epic, Cerner, Athenahealth, Allscripts, Healow,
+             Meditech, Sample) — each owns its full save/cancel/maximize flow via WizardService, exactly as
+             EpicAudienceFormComponent always did. Dispatched by a `@switch` over openSourceFormType() rather than
+             NgComponentOutlet: Angular has no template mechanism to bind a dynamically-resolved component's
+             *outputs*, only its inputs (NgComponentOutlet's `inputs`), so the concrete tag has to be written out
+             per vendor — the registry-driven part is *which* case is active, decided once in selectItem()/the
+             constructor's edit-detection effect, never here. -->
+        @if (isSelfContainedSourceForm()) {
+          @switch (openSourceFormType()) {
+            @case ('epic') {
+              <app-epic-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('cerner') {
+              <app-cerner-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('athena') {
+              <app-athenahealth-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('allscripts') {
+              <app-allscripts-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('healow') {
+              <app-healow-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('meditech') {
+              <app-meditech-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('sample') {
+              <app-sample-source-form
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+          }
 
-        } @else if (showGenericFhirForm()) {
+        } @else if (openSourceFormType()) {
 
-          <!-- ── Inline Generic FHIR Source Form ───────────────────────────── -->
+          <!-- ── Inline "headless" source form (generic-fhir, hl7v2, ...) ── these only implement
+               SourceConfigFormComponent.getFields(); this dialog owns their title + Cancel/Save chrome and reads
+               the field bag back out via sourceFormOutlet()'s componentInstance, generalizing the old
+               genericFhirForm()?.getFields() call site. -->
           <div class="nld-generic-fhir">
-            <h3 class="nld-generic-fhir-title">{{ genericFhirEditNode() ? 'Edit' : 'Configure' }} Generic FHIR Source</h3>
-            <app-generic-fhir-source-form [initialFields]="genericFhirEditNode()?.fields ?? null" />
-            @if (genericFhirError()) {
-              <p class="nld-generic-fhir-error">{{ genericFhirError() }}</p>
+            <h3 class="nld-generic-fhir-title">
+              {{ sourceFormEditNode() ? 'Edit' : 'Configure' }} {{ sourceFormTitle() }}
+            </h3>
+            <ng-container
+              [ngComponentOutlet]="currentSourceFormComponent()"
+              [ngComponentOutletInputs]="{ initialFields: sourceFormEditNode()?.fields ?? null }"
+            />
+            @if (sourceFormError()) {
+              <p class="nld-generic-fhir-error">{{ sourceFormError() }}</p>
             }
             <div class="nld-generic-fhir-actions">
-              <button class="nld-generic-fhir-cancel" type="button" (click)="onGenericFhirFormCancelled()">Cancel</button>
-              <button class="nld-cta" type="button" (click)="onGenericFhirFormSave()">
-                {{ genericFhirEditNode() ? 'Save' : 'Add to Workflow' }}
+              <button class="nld-generic-fhir-cancel" type="button" (click)="onSourceFormCancelled()">Cancel</button>
+              <button class="nld-cta" type="button" (click)="onHeadlessSourceFormSave()">
+                {{ sourceFormEditNode() ? 'Save' : 'Add to Workflow' }}
               </button>
             </div>
           </div>
@@ -246,6 +305,7 @@
             [sourceResources]="sourceResources()"
             [sourceVendor]="wiz.ehrType()"
             [sourceConnectionId]="sourceConnectionId()"
+            [sourceDiscoveredResourceTypes]="sourceDiscoveredResourceTypes()"
             [exitMappingRequest]="exitMappingTrigger()"
             [saveMappingRequest]="saveMappingTrigger()"
             [saveSnapshotRequest]="saveSnapshotTrigger()"
@@ -461,7 +521,7 @@
           </div><!-- /nld-config -->
         }
 
-        }<!-- /else showEpicForm/showDestWizard -->
+        }<!-- /else source form / dest wizard -->
 
       </section>
     </div><!-- /nld-body -->
@@ -481,6 +541,26 @@
           <div class="nld-confirm-actions">
             <button type="button" class="btn btn-secondary" (click)="cancelDestSwitch()">Keep editing</button>
             <button type="button" class="btn btn-danger" (click)="confirmDestSwitch()">Discard &amp; switch</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Confirm before backing out of an in-progress destination config to the library -->
+    @if (pendingDestCancel()) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmCancelBackdropClick($event)"
+           (keydown.escape)="cancelDestCancel()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Discard changes?</h3>
+          <p class="nld-confirm-body">
+            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Going back to the library now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDestCancel()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDestCancel()">Discard &amp; go back</button>
           </div>
         </div>
       </div>

@@ -178,6 +178,99 @@
           }
         </div>
 
+        <!-- Email / SMTP settings — saved enabled alongside the admin account -->
+        <div class="setup-section">
+          <h3 class="setup-section-title">Email server</h3>
+          <p class="setup-section-sub">
+            Segue sends account and notification email through this server. It is saved and enabled as part of
+            finishing setup.
+          </p>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="smtpHost">SMTP host <span class="required">*</span></label>
+              <input
+                id="smtpHost"
+                class="text-input"
+                type="text"
+                formControlName="smtpHost"
+                placeholder="smtp.example.com"
+              />
+              @if (submitted() && form.get('smtpHost')!.invalid) {
+                <p class="field-hint field-hint--error">Host is required.</p>
+              }
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="smtpPort">Port <span class="required">*</span></label>
+              <input
+                id="smtpPort"
+                class="text-input"
+                type="number"
+                formControlName="smtpPort"
+                placeholder="587"
+              />
+              @if (submitted() && form.get('smtpPort')!.invalid) {
+                <p class="field-hint field-hint--error">Enter a valid port (1–65535).</p>
+              }
+            </div>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" formControlName="smtpEnableSsl" />
+            <span>Use SSL/TLS</span>
+          </label>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="smtpUsername">Username</label>
+              <input id="smtpUsername" class="text-input" type="text" formControlName="smtpUsername" autocomplete="off" />
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="smtpPassword">Password</label>
+              <input id="smtpPassword" class="text-input" type="password" formControlName="smtpPassword" autocomplete="new-password" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="smtpFromAddress">From address <span class="required">*</span></label>
+              <input
+                id="smtpFromAddress"
+                class="text-input"
+                type="email"
+                formControlName="smtpFromAddress"
+                placeholder="no-reply@your-org.com"
+              />
+              @if (submitted() && form.get('smtpFromAddress')!.invalid) {
+                <p class="field-hint field-hint--error">Enter a valid email address.</p>
+              }
+            </div>
+
+            <div class="field-group">
+              <label class="field-label" for="smtpFromName">From name <span class="required">*</span></label>
+              <input id="smtpFromName" class="text-input" type="text" formControlName="smtpFromName" placeholder="FHIRBridge" />
+              @if (submitted() && form.get('smtpFromName')!.invalid) {
+                <p class="field-hint field-hint--error">From name is required.</p>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Accept Terms -->
+        <div class="terms-row">
+          <mat-checkbox formControlName="acceptTerms" color="primary">
+            I accept the
+            <a href="javascript:void(0)" class="terms-link" (click)="$event.stopPropagation(); openTermsDialog()">
+              Terms and Conditions
+            </a>
+          </mat-checkbox>
+          @if (submitted() && form.get('acceptTerms')!.invalid) {
+            <p class="field-hint field-hint--error">You must accept the Terms and Conditions to continue.</p>
+          }
+        </div>
+
         <!-- Submit -->
         <button
           type="submit"

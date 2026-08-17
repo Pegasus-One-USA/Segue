@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -9,7 +10,9 @@ namespace FHIRBridge.Application.Services;
 /// <summary>
 /// First-run setup. "Requires setup" is simply "no user exists yet". Creating the first SuperAdmin reuses the normal
 /// local-user creation + login paths, then signs the caller in. The empty-database guard is re-checked here so the
-/// endpoint is self-guarding even though it is anonymous.
+/// endpoint is self-guarding even though it is anonymous. Also saves the outbound SMTP configuration collected on
+/// the same screen (forced enabled) and requires Terms &amp; Conditions acceptance — this deployment ships as a
+/// package with no separate "configure email first" step.
 /// </summary>
 public sealed class SetupService : ISetupService
 {
@@ -17,17 +20,20 @@ public sealed class SetupService : ISetupService
     private readonly IUserManagementService _userManagement;
     private readonly ILocalAuthService _localAuth;
     private readonly IExternalTokenValidator _externalTokenValidator;
+    private readonly INotificationSettingsService _notificationSettings;
 
     public SetupService(
         IUserAccessRepository repository,
         IUserManagementService userManagement,
         ILocalAuthService localAuth,
-        IExternalTokenValidator externalTokenValidator)
+        IExternalTokenValidator externalTokenValidator,
+        INotificationSettingsService notificationSettings)
     {
         _repository = repository;
         _userManagement = userManagement;
         _localAuth = localAuth;
         _externalTokenValidator = externalTokenValidator;
+        _notificationSettings = notificationSettings;
     }
 
     public async Task<bool> RequiresSetupAsync(CancellationToken cancellationToken)
@@ -45,6 +51,25 @@ public sealed class SetupService : ISetupService
             // Once any user exists the deployment is initialized; the first-run path is closed permanently.
             throw new InvalidOperationException("Setup has already been completed.");
         }
+
+        if (!request.AcceptTerms)
+        {
+            throw new InvalidOperationException("You must accept the Terms and Conditions to continue.");
+        }
+
+        // Forced enabled: this deployment ships as a self-hosted package, so email is always on once the
+        // first admin exists rather than requiring a separate "configure email" step beforehand.
+        await _notificationSettings.UpdateAsync(
+            new UpdateNotificationSettingsRequest(
+                IsEnabled: true,
+                request.EmailSettings.Host,
+                request.EmailSettings.Port,
+                request.EmailSettings.EnableSsl,
+                request.EmailSettings.Username ?? string.Empty,
+                request.EmailSettings.FromAddress,
+                request.EmailSettings.FromName,
+                request.EmailSettings.Password),
+            cancellationToken);
 
         await _userManagement.CreateLocalUserAsync(
             new CreateLocalUserRequest(

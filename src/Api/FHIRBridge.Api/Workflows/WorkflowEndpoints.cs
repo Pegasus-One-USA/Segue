@@ -10,6 +10,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -97,6 +98,13 @@ public static class WorkflowEndpoints
             var sourceIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             var destinationIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
             var mappingIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            // Every source connection this build actually references, including ones resolved via the "Existing
+            // Source" picker fallback in TryResolveEntityId below (never added to sourceIds itself — that dictionary
+            // only ever holds freshly created/updated connections from the request.Sources loop). Scope/retrieval
+            // sync below must run for BOTH, or a shared connection reused unchanged via "Existing Source" never
+            // gets its Retrieval.ResourceTypes kept in sync with what its destinations actually consume — the whole
+            // point of allowing "Existing Source" to be usable for athenahealth at all.
+            var allReferencedSourceConnectionIds = new HashSet<Guid>();
 
             // 1. Destinations first — self-contained, and they provision the inline secret whose reference the node needs.
             foreach (var spec in request.Destinations ?? [])
@@ -162,6 +170,7 @@ public static class WorkflowEndpoints
                     return ValidationBadRequest(
                         $"Mapping spec '{spec.NodeId}' references source node '{spec.SourceNodeId}' with no created or referenced source connection.");
                 }
+                allReferencedSourceConnectionIds.Add(sourceConnectionId);
 
                 if (!TryResolveEntityId(spec.DestinationNodeId, destinationIds, nodes, "destinationId", out var destinationId))
                 {
@@ -298,10 +307,15 @@ public static class WorkflowEndpoints
 
             // Re-derive each referenced source connection's OAuth scopes from what every pipeline sharing it
             // actually consumes downstream, now that this save may have changed a destination's resource selection
-            // (or introduced/removed a workflow referencing the connection). Distinct: the same connection can be
-            // wired to more than one source node spec in a single build request.
+            // (or introduced/removed a workflow referencing the connection). Union with sourceIds.Values (rather
+            // than iterating sourceIds alone): a node using "Existing Source" unchanged never appears in sourceIds
+            // (that dictionary is only ever populated by the request.Sources create/update loop above) — its
+            // connection id is only ever resolved via TryResolveEntityId's node-config fallback inside the mappings
+            // loop, captured into allReferencedSourceConnectionIds there. Without this union, a shared connection
+            // reused via "Existing Source" would never get synced at all, no matter how many times its workflow is
+            // rebuilt.
             var syncedScopes = new Dictionary<Guid, IReadOnlyList<string>>();
-            foreach (var sourceConnectionId in sourceIds.Values.Distinct())
+            foreach (var sourceConnectionId in allReferencedSourceConnectionIds.Union(sourceIds.Values).Distinct())
             {
                 var scopes = await scopeSyncService.SyncAsync(sourceConnectionId, cancellationToken);
                 if (scopes is not null)
@@ -647,15 +661,22 @@ public static class WorkflowEndpoints
             return Results.Ok(workflow);
         });
 
-        // Duplicates an existing workflow definition under a new name — every node/edge/config is copied exactly
-        // (same node types, ranks, positions, and ConfigurationJson, so any source/destination/mapping ids embedded
-        // in a node's config keep pointing at the same backing connections as the original). New Guids throughout
-        // (workflow id + every node/edge id) via the same BuildWorkflow path every other create/save uses, so this
-        // can never diverge from what a normal save would have produced.
+        // Duplicates an existing workflow definition under a new name. Every referenced SourceConnection/
+        // DestinationConfiguration/MappingProfile is deep-cloned into its OWN new row (see CloneSourceConnectionAsync/
+        // CloneDestinationConfigurationAsync/CloneMappingProfileAsync below) and each node's ConfigurationJson is
+        // rewritten to point at the clones — copying the JSON verbatim (the previous behavior) left the copy silently
+        // sharing the exact same backing connections as the original, so editing one (e.g. the source's audience) on
+        // either workflow changed what BOTH displayed, since the workflow list re-derives that display live from
+        // whichever SourceConnection row the node's id currently resolves to. New Guids throughout (workflow id +
+        // every node/edge id) via the same BuildWorkflow path every other create/save uses.
         group.MapPost("/workflows/{workflowId:guid}/copy", async (
             Guid workflowId,
             CopyWorkflowRequest request,
             IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            IConfigurationService configurationService,
+            ISecretProvider secretProvider,
+            ISecretWriter secretWriter,
             CancellationToken cancellationToken) =>
         {
             var name = request.Name?.Trim();
@@ -670,19 +691,122 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            // Same all-or-nothing rationale as /workflows/build: several entities get created below before the
+            // workflow definition itself is saved, and a failure partway through (a validation rejection on the
+            // cloned mapping profile, say) must not leave an orphaned SourceConnection/DestinationConfiguration
+            // clone behind with no workflow ever pointing at it.
+            await using var transaction = await configurationRepository.BeginTransactionAsync(cancellationToken);
+
+            // Keyed by the ORIGINAL entity id, so an entity referenced by more than one node (or re-referenced in a
+            // mapping node's own sourceConnectionId/destinationId re-resolution fields) is only ever cloned once.
+            var clonedSourceConnectionIds = new Dictionary<Guid, (Guid Id, ApplicationType? ApplicationType)>();
+            var clonedDestinations = new Dictionary<Guid, (Guid Id, string KeyVaultName, string SecretName)>();
+            var clonedMappingProfileIds = new Dictionary<Guid, Guid>();
+
+            // 1. Source nodes first — nothing else depends on anything BUT these ids, and mapping profiles below
+            // need the clone's new id to repoint their own SourceConnectionId onto.
+            foreach (var node in source.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    await CloneSourceConnectionAsync(
+                        sourceConnectionId, clonedSourceConnectionIds, configurationRepository, configurationService,
+                        secretProvider, secretWriter, cancellationToken);
+                }
+            }
+
+            // 2. Destination nodes — same reasoning as Source nodes above.
+            foreach (var node in source.Nodes.Where(n => n.Category == WorkflowNodeCategory.Destination))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
+                {
+                    await CloneDestinationConfigurationAsync(
+                        destinationId, clonedDestinations, configurationRepository, configurationService,
+                        secretProvider, secretWriter, cancellationToken);
+                }
+            }
+
+            // 3. Mapping/Transform nodes — clone every MappingProfile they reference (legacy single id + the
+            // per-resource map both), pointed at the CLONED source/destination ids resolved above.
+            foreach (var node in source.Nodes.Where(n => n.Category == WorkflowNodeCategory.Transform))
+            {
+                foreach (var mappingProfileId in GetMappingProfileIdsFromConfiguration(node.ConfigurationJson).Distinct())
+                {
+                    await CloneMappingProfileAsync(
+                        mappingProfileId, clonedMappingProfileIds, clonedSourceConnectionIds, clonedDestinations,
+                        configurationRepository, configurationService, cancellationToken);
+                }
+            }
+
+            // 4. Rewrite every node's ConfigurationJson to point at the clones instead of the originals — the
+            // node's OWN category-specific id (sourceConnectionId/destinationId) plus mappingProfileId/
+            // mappingProfileIds and the mapping node's own re-resolution copies of sourceConnectionId/destinationId.
             var nodeRequests = source.Nodes
-                .Select(node => new WorkflowNodeRequest(
-                    node.Id.ToString(),
-                    node.NodeType,
-                    node.Category,
-                    node.Rank,
-                    node.SubRank,
-                    node.DisplayName,
-                    node.ConfigurationJson,
-                    node.PositionX,
-                    node.PositionY,
-                    node.IsEnabled,
-                    node.CheckpointUrlEnabled))
+                .Select(node => WithConfiguration(
+                    new WorkflowNodeRequest(
+                        node.Id.ToString(),
+                        node.NodeType,
+                        node.Category,
+                        node.Rank,
+                        node.SubRank,
+                        node.DisplayName,
+                        node.ConfigurationJson,
+                        node.PositionX,
+                        node.PositionY,
+                        node.IsEnabled,
+                        node.CheckpointUrlEnabled),
+                    config =>
+                    {
+                        if (config["sourceConnectionId"]?.ToString() is { } rawSourceId
+                            && Guid.TryParse(rawSourceId, out var originalSourceId)
+                            && clonedSourceConnectionIds.TryGetValue(originalSourceId, out var clonedSource))
+                        {
+                            config["sourceConnectionId"] = clonedSource.Id.ToString();
+                            // "Epic audience" is a node-local cache the Angular EHR-vendor source form writes at
+                            // save time and reads straight back to pre-populate its own dropdown on reopen —
+                            // NEVER re-derived from the live SourceConnection.ApplicationType (see
+                            // portal/src/app/services/wizard.service.ts's open()/APPLICATION_TYPE_TO_AUDIENCE).
+                            // Left untouched, a copy would keep showing whatever audience the ORIGINAL workflow's
+                            // node happened to have cached — which can genuinely differ from the clone's own,
+                            // correctly-cloned SourceConnection.ApplicationType above. Only rewritten when the key
+                            // is already present, so a non-Epic source node (which never had this key) doesn't
+                            // gain a bogus one.
+                            if (config.ContainsKey("Epic audience"))
+                            {
+                                config["Epic audience"] = ApplicationTypeToEpicAudienceSlug(clonedSource.ApplicationType);
+                            }
+                        }
+
+                        if (config["destinationId"]?.ToString() is { } rawDestinationId
+                            && Guid.TryParse(rawDestinationId, out var originalDestinationId)
+                            && clonedDestinations.TryGetValue(originalDestinationId, out var clonedDestination))
+                        {
+                            config["destinationId"] = clonedDestination.Id.ToString();
+                            config["secretKeyVaultName"] = clonedDestination.KeyVaultName;
+                            config["secretName"] = clonedDestination.SecretName;
+                        }
+
+                        if (config["mappingProfileId"]?.ToString() is { } rawMappingId
+                            && Guid.TryParse(rawMappingId, out var originalMappingId)
+                            && clonedMappingProfileIds.TryGetValue(originalMappingId, out var newMappingId))
+                        {
+                            config["mappingProfileId"] = newMappingId.ToString();
+                        }
+
+                        if (config["mappingProfileIds"] is JsonObject idsByResource)
+                        {
+                            var rewritten = new JsonObject();
+                            foreach (var entry in idsByResource)
+                            {
+                                rewritten[entry.Key] = entry.Value?.ToString() is { } rawId
+                                    && Guid.TryParse(rawId, out var parsedId)
+                                    && clonedMappingProfileIds.TryGetValue(parsedId, out var mappedId)
+                                        ? mappedId.ToString()
+                                        : entry.Value?.DeepClone();
+                            }
+                            config["mappingProfileIds"] = rewritten;
+                        }
+                    }))
                 .ToArray();
 
             var edgeRequests = source.Edges
@@ -699,6 +823,10 @@ public static class WorkflowEndpoints
             var definitionRequest = new WorkflowDefinitionRequest(name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest);
             var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(copy, cancellationToken);
+
+            // Everything above (cloned source/destination/mapping entities, the workflow definition itself) is
+            // durable only from this point on — nothing before here survives if any step failed or threw.
+            await transaction.CommitAsync(cancellationToken);
 
             return Results.Created($"/api/v1/workflows/{copy.Id}", copy);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
@@ -1543,6 +1671,219 @@ public static class WorkflowEndpoints
         }
 
         return null;
+    }
+
+    // ── /workflows/{id}/copy entity cloning ─────────────────────────────────────────────────────────────
+    // Deep-clones the entities a workflow copy must NOT keep sharing with its original — see the copy endpoint's
+    // own doc comment. Each helper is idempotent per (originalId, the passed-in map): a second call for the same
+    // originalId returns the already-cloned id instead of creating a duplicate, since the same SourceConnection/
+    // DestinationConfiguration/MappingProfile can legitimately be referenced by more than one node.
+
+    private static async Task<(Guid Id, ApplicationType? ApplicationType)> CloneSourceConnectionAsync(
+        Guid originalId,
+        Dictionary<Guid, (Guid Id, ApplicationType? ApplicationType)> clonedIds,
+        IConfigurationRepository configurationRepository,
+        IConfigurationService configurationService,
+        ISecretProvider secretProvider,
+        ISecretWriter secretWriter,
+        CancellationToken cancellationToken)
+    {
+        if (clonedIds.TryGetValue(originalId, out var alreadyCloned))
+        {
+            return alreadyCloned;
+        }
+
+        var original = await configurationRepository.GetSourceConnectionAsync(originalId, cancellationToken);
+        if (original is null)
+        {
+            // Nothing to clone (a stale/dangling id already orphaned before this copy) — leave the node pointed
+            // at whatever it already had rather than failing the whole copy over an unrelated, pre-existing gap.
+            var fallback = (originalId, (ApplicationType?)null);
+            clonedIds[originalId] = fallback;
+            return fallback;
+        }
+
+        var dto = ConfigurationMapper.ToDto(original);
+        var authentication = await CloneAuthenticationAsync(dto.Authentication, secretProvider, secretWriter, cancellationToken);
+
+        // SourceConnection.Name must be unique (see IConfigurationRepository.ExistsWithNameAsync) — a short random
+        // suffix guarantees that regardless of how many times the same workflow (or the same source) gets copied.
+        var uniqueSuffix = Guid.NewGuid().ToString("N")[..8];
+        var clonedName = $"{dto.Name} (copy {uniqueSuffix})";
+        var createRequest = new CreateSourceConnectionRequest(
+            clonedName,
+            dto.SourceSystemType,
+            dto.BaseUrl,
+            authentication,
+            dto.ApplicationType,
+            dto.Interactive,
+            // Resets the incremental-sync cursor — the clone has never actually run, so LastSuccessfulSyncUtc
+            // carried over from the original would make its first real run think resources up to that point
+            // were already fetched by THIS connection, silently skipping them.
+            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null);
+
+        var cloned = await configurationService.AddSourceConnectionAsync(createRequest, cancellationToken);
+        var result = (cloned.Id, cloned.ApplicationType);
+        clonedIds[originalId] = result;
+        return result;
+    }
+
+    /// <summary>Mirrors the portal's APPLICATION_TYPE_TO_AUDIENCE (wizard.service.ts) — the machine slug the
+    /// EHR-vendor source form caches on its own node under the "Epic audience" key, used to pre-populate that
+    /// form's dropdown when the node is reopened, rather than ever re-deriving it from the live SourceConnection.
+    /// Null (a legacy connection created before ApplicationType existed) matches the portal's own null-safe
+    /// default of 'provider-ehr-launch'.</summary>
+    private static string ApplicationTypeToEpicAudienceSlug(ApplicationType? applicationType) => applicationType switch
+    {
+        ApplicationType.Backend    => "backend-system",
+        ApplicationType.EhrLaunch  => "provider-ehr-launch",
+        ApplicationType.Standalone => "provider-standalone",
+        ApplicationType.Patient    => "patient",
+        _                          => "provider-ehr-launch",
+    };
+
+    private static async Task<(Guid Id, string KeyVaultName, string SecretName)> CloneDestinationConfigurationAsync(
+        Guid originalId,
+        Dictionary<Guid, (Guid Id, string KeyVaultName, string SecretName)> clonedDestinations,
+        IConfigurationRepository configurationRepository,
+        IConfigurationService configurationService,
+        ISecretProvider secretProvider,
+        ISecretWriter secretWriter,
+        CancellationToken cancellationToken)
+    {
+        if (clonedDestinations.TryGetValue(originalId, out var already))
+        {
+            return already;
+        }
+
+        var original = await configurationRepository.GetDestinationAsync(originalId, cancellationToken);
+        if (original is null)
+        {
+            var fallback = (originalId, string.Empty, string.Empty);
+            clonedDestinations[originalId] = fallback;
+            return fallback;
+        }
+
+        var dto = ConfigurationMapper.ToDto(original);
+        var secretReference = await CloneSecretAsync(dto.KeyVaultName, dto.SecretName, secretProvider, secretWriter, cancellationToken)
+            ?? new SecretReference(dto.KeyVaultName, dto.SecretName);
+
+        var createRequest = new CreateDestinationConfigurationRequest(
+            dto.Name,
+            dto.DestinationType,
+            secretReference.KeyVaultName,
+            secretReference.SecretName,
+            dto.Target,
+            InlineSecret: null,
+            ConnectionMetadataJson: dto.ConnectionMetadataJson);
+
+        var cloned = await configurationService.AddDestinationConfigurationAsync(createRequest, cancellationToken);
+        var result = (cloned.Id, cloned.KeyVaultName, cloned.SecretName);
+        clonedDestinations[originalId] = result;
+        return result;
+    }
+
+    private static async Task<Guid> CloneMappingProfileAsync(
+        Guid originalId,
+        Dictionary<Guid, Guid> clonedMappingProfileIds,
+        Dictionary<Guid, (Guid Id, ApplicationType? ApplicationType)> clonedSourceConnectionIds,
+        Dictionary<Guid, (Guid Id, string KeyVaultName, string SecretName)> clonedDestinations,
+        IConfigurationRepository configurationRepository,
+        IConfigurationService configurationService,
+        CancellationToken cancellationToken)
+    {
+        if (clonedMappingProfileIds.TryGetValue(originalId, out var already))
+        {
+            return already;
+        }
+
+        var original = await configurationRepository.GetMappingProfileAsync(originalId, cancellationToken);
+        if (original is null)
+        {
+            clonedMappingProfileIds[originalId] = originalId;
+            return originalId;
+        }
+
+        var dto = ConfigurationMapper.ToDto(original);
+        var newSourceConnectionId = clonedSourceConnectionIds.TryGetValue(dto.SourceConnectionId, out var clonedSourceForMapping)
+            ? clonedSourceForMapping.Id
+            : dto.SourceConnectionId;
+        var newDestinationId = clonedDestinations.TryGetValue(dto.DestinationId, out var destInfo)
+            ? destInfo.Id
+            : dto.DestinationId;
+
+        var createRequest = new CreateMappingProfileRequest(
+            dto.Name,
+            dto.ResourceType,
+            newSourceConnectionId,
+            newDestinationId,
+            dto.DestinationObject,
+            dto.Fields);
+        // SourceConfigurationId deliberately omitted (null) — AddMappingProfileAsync's own
+        // ResolveSourceConfigurationForCreateAsync auto-provisions a fresh, independent SourceConfiguration for
+        // the cloned SourceConnectionId, rather than this clone reusing the original's.
+        var cloned = await configurationService.AddMappingProfileAsync(createRequest, cancellationToken);
+
+        // CreateMappingProfileRequest has no MappingJson slot — a profile authored via the richer Mapping Config
+        // Import wizard (MappingJson set) needs that raw JSON carried over directly onto the entity, or the
+        // clone would silently downgrade to only the flattened Fields projection AddMappingProfileAsync builds.
+        if (!string.IsNullOrWhiteSpace(dto.MappingJson))
+        {
+            var clonedEntity = await configurationRepository.GetMappingProfileAsync(cloned.Id, cancellationToken);
+            if (clonedEntity is not null)
+            {
+                clonedEntity.SetMappingJson(dto.MappingJson);
+                await configurationRepository.UpdateMappingProfileAsync(clonedEntity, cancellationToken);
+            }
+        }
+
+        clonedMappingProfileIds[originalId] = cloned.Id;
+        return cloned.Id;
+    }
+
+    /// <summary>Re-provisions ClientSecret/PrivateKey under brand-new secret names so the clone's credentials are
+    /// never the same stored secret as the original's — rotating or deleting one must never affect the other.</summary>
+    private static async Task<SourceAuthenticationDto> CloneAuthenticationAsync(
+        SourceAuthenticationDto original,
+        ISecretProvider secretProvider,
+        ISecretWriter secretWriter,
+        CancellationToken cancellationToken)
+    {
+        var clientSecret = await CloneSecretAsync(
+            original.ClientSecretKeyVaultName, original.ClientSecretName, secretProvider, secretWriter, cancellationToken);
+        var privateKey = await CloneSecretAsync(
+            original.PrivateKeyKeyVaultName, original.PrivateKeySecretName, secretProvider, secretWriter, cancellationToken);
+
+        return original with
+        {
+            ClientSecretKeyVaultName = clientSecret?.KeyVaultName,
+            ClientSecretName = clientSecret?.SecretName,
+            PrivateKeyKeyVaultName = privateKey?.KeyVaultName,
+            PrivateKeySecretName = privateKey?.SecretName,
+        };
+    }
+
+    /// <summary>Reads the secret value at (keyVaultName, secretName) and re-provisions it under a brand-new secret
+    /// name — never the original's — so the copy's credential is fully independent (see ISecretWriter's own doc
+    /// comment: it always lands in the app's DB-provisioned secret store, functionally equivalent to the original
+    /// regardless of whether the original itself came from real Azure Key Vault or that same store). Null when
+    /// there's no secret reference to clone in the first place (an optional auth field the connection never set).</summary>
+    private static async Task<SecretReference?> CloneSecretAsync(
+        string? keyVaultName,
+        string? secretName,
+        ISecretProvider secretProvider,
+        ISecretWriter secretWriter,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(keyVaultName) || string.IsNullOrWhiteSpace(secretName))
+        {
+            return null;
+        }
+
+        var value = await secretProvider.GetSecretAsync(new SecretReference(keyVaultName, secretName), cancellationToken);
+        var newReference = new SecretReference(keyVaultName, $"{secretName}-copy-{Guid.NewGuid():N}");
+        await secretWriter.WriteSecretAsync(newReference, value, cancellationToken);
+        return newReference;
     }
 
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)

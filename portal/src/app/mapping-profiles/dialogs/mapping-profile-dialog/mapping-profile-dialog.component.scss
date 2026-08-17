@@ -1,6 +1,145 @@
+// Toggled via MatDialogRef.addPanelClass/removePanelClass (see toggleMaximize()) on the CDK overlay
+// pane itself — updateSize() alone resizes the pane to 100vw/100vh, but Material's own dialog surface
+// still draws its usual rounded corners/box-shadow/padding on top of that, which reads as "a bigger
+// centered card", not truly fullscreen. ::ng-deep is required here: .cdk-overlay-pane and the Material-
+// generated surface underneath it are outside this component's own view (ancestors added by the CDK),
+// unreachable by a normal view-encapsulated selector.
+::ng-deep .cdk-overlay-pane.mpd-fullscreen {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+
+  .mat-mdc-dialog-container, .mdc-dialog__surface {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
 .mpd-content {
   min-width: 640px;
-  max-width: 900px;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  // Mirrors the dialog's own MatDialogConfig height (mapping-profile-list.component.ts's _openDialog —
+  // the same XL-modal min(92vw,1100px)/min(88vh,740px) NodeLibraryDialogComponent uses) minus the title
+  // row's own height, rather than a percentage-of-parent calc() — mat-dialog-content's actual parent
+  // chain up to the CDK overlay pane isn't guaranteed to carry an explicit height at every level for a
+  // percentage to resolve against, but the viewport-relative expression always does. Cancel/Save live in
+  // the header instead of a footer (see .mpd-header-actions), so no footer strip needs reserving either.
+  max-height: calc(min(88vh, 740px) - 60px);
+  padding-bottom: 8px !important;
+  display: flex;
+  flex-direction: column;
+
+  &--maximized {
+    min-width: unset;
+    max-width: unset;
+    max-height: calc(100vh - 60px);
+  }
+}
+
+.mpd-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-right: 24px;
+  padding-bottom: var(--space-6);
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mpd-title-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  line-height: 1;
+}
+
+.mpd-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--color-ink);
+  letter-spacing: -0.2px;
+}
+
+.mpd-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 20px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &--resource { background: var(--color-primary-soft); color: var(--color-primary-dark); }
+  &--dest     { background: var(--color-info-soft); color: var(--color-info-strong); }
+  &--count    { background: var(--color-side); color: var(--color-muted); border: 1px solid var(--color-border); }
+}
+
+// Cancel/Save moved up here from the old bottom mat-dialog-actions row — frees that entire strip for
+// the canvas below (.mpd-canvas-wrap's flex: 1 absorbs whatever height this no longer takes).
+.mpd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mpd-maximize {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-base);
+
+  &:hover { background: var(--color-side); color: var(--color-ink-2); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+.mpd-maximize-ico {
+  width: 16px;
+  height: 16px;
+}
+
+// The canvas needs real, flexible height to be usable — a fixed short box would defeat the point of a
+// pan/zoom mapping surface, so this always fills whatever room .mpd-content (now flex-column at every
+// size, not just maximized) has left after the meta form and mapping-head hint above it.
+.mpd-canvas-wrap {
+  flex: 1;
+  min-height: 560px;
+  margin-bottom: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-8);
+  box-sizing: border-box;
+  overflow: hidden;
+
+  // NOT `display: block` — a plain tag selector here outranks the component's own `:host { display:
+  // flex }` (tag+attribute beats attribute-only in Angular's emulated scoping), which would silently
+  // flatten it back to block and break its internal flex-fill chain, leaving a tall, empty block-level
+  // box below whatever content that chain collapsed down to instead of the canvas actually growing.
+  app-mapping-profile-canvas {
+    height: 100%;
+  }
 }
 
 .mpd-hint {
@@ -15,13 +154,56 @@
   margin-top: 12px;
 }
 
-.mpd-meta-form {
-  margin-bottom: 16px;
+.mpd-error-banner {
+  margin-top: 12px;
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-base);
 }
 
+.mpd-error-banner-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-error-strong);
+}
+
+.mpd-error-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--color-error-strong);
+
+  li { margin-bottom: 2px; }
+}
+
+.mpd-meta-section {
+  flex-shrink: 0;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.mpd-meta-title {
+  margin: 0 0 var(--space-6);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.mpd-meta-form {
+  margin-bottom: 8px;
+}
+
+// auto-fit instead of a fixed 2 columns — the dialog is 95vw wide (see .mpd-content), so this now flows
+// Name/Resource Type/Source/Destination/Destination Object/Enabled across 1-2 rows instead of 4,
+// handing the reclaimed height straight to the canvas below (same flex: 1 chain as the header-actions move).
 .mpd-meta-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
@@ -57,16 +239,3 @@
 }
 
 .mpd-req { color: var(--color-error); }
-
-.mpd-mapping-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.mpd-mapping-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-ink);
-}

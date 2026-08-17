@@ -31,7 +31,20 @@ export class FieldMappingJoinPopoverComponent {
   readonly draft = signal<MappingRow | null>(null);
 
   constructor() {
-    effect(() => this.draft.set(structuredClone(this.row())));
+    effect(() => this.draft.set(this.withForcedAggregate(structuredClone(this.row()))));
+  }
+
+  /** "All records" without combining (RepeatParent) duplicates the entire destination row once per array
+   *  item — correct only for a genuine child/array destination table, where this choice doesn't even matter
+   *  (serializeRowsFlat overrides the array policy to SeparateDestination there regardless). On any other
+   *  (same-table) target it duplicates the whole row per array item, which is essentially always wrong — so
+   *  "All records" always combines into one delimited string, with no way to opt out via the UI. Applied both
+   *  when the user picks "All records" (onInstanceTypeChange) and when a row already saved with that
+   *  combination is reopened (constructor effect above), so the checkbox — always disabled while type is
+   *  'all' — never shows unchecked-but-locked. */
+  private withForcedAggregate(row: MappingRow): MappingRow {
+    if (row.instance?.type !== 'all' || row.instance.aggregate === 'csv') return row;
+    return { ...row, instance: { ...row.instance, aggregate: 'csv' } };
   }
 
   // ── drag-by-header (position: fixed, so plain viewport pixels — no canvas pan/zoom to correct for) ──
@@ -110,7 +123,7 @@ export class FieldMappingJoinPopoverComponent {
   }
 
   onInstanceTypeChange(type: MappingInstanceSelection['type']): void {
-    this.draft.update(d => (d ? { ...d, instance: { ...(d.instance ?? { type: 'first' }), type } } : d));
+    this.draft.update(d => (d ? this.withForcedAggregate({ ...d, instance: { ...(d.instance ?? { type: 'first' }), type } }) : d));
   }
 
   onInstanceField(patch: Partial<MappingInstanceSelection>): void {

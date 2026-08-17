@@ -73,7 +73,7 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
     {
     }
 }
@@ -236,7 +236,16 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
         }
 
-        if (source.SourceType != _sourceType)
+        // TEMPORARY carve-out: every canvas source node is currently persisted with NodeType "EpicSourceNode"
+        // regardless of actual vendor (workflow-graph-mapper.service.ts's transformIdForNode() falls through to
+        // 'epic' for every vendor except Sample/GenericFhir — a real frontend bug, not yet fixed). That pins this
+        // executor's _sourceType to RuntimeSourceType.Epic even for an athenahealth connection, so the unconditional
+        // override below would silently stomp SourceConnectionRuntimeResolver's correctly-resolved Athenahealth type
+        // back to Epic right before client selection — sending the request through EpicFhirSourceClient (no
+        // ah-practice injection, wrong defaults) instead of AthenahealthFhirSourceClient. Trust the resolver's value
+        // for athenahealth specifically until the frontend node-type labeling is fixed; every other vendor keeps the
+        // existing override behavior unchanged.
+        if (source.SourceType != _sourceType && source.SourceType != RuntimeSourceType.Athenahealth)
         {
             source = source with { SourceType = _sourceType };
         }
@@ -277,7 +286,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             };
         }
 
-        var client = _sourceClientFactory.Create(_sourceType);
+        var client = _sourceClientFactory.Create(
+            source.SourceType == RuntimeSourceType.Athenahealth ? source.SourceType : _sourceType);
 
         // Below configuredResources in priority: a Backend System Search REST retrieval config carries its own
         // resource-type list on the connection itself (potentially several types under one connection with no

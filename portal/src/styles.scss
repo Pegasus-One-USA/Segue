@@ -288,8 +288,12 @@ html {
   --z-backdrop: 50;
   --z-modal:    200;
   /* Toasts sit above every modal — a confirmation for an action taken inside a dialog (e.g. "Copied" on the
-     Launch URL modal) must stay visible, not be hidden behind the dialog it was triggered from. */
-  --z-toast:    300;
+     Launch URL modal, "Step saved" on the Transformation Rules dialog) must stay visible, not be hidden
+     behind the dialog it was triggered from. 300 clears every custom app modal using --z-modal above, but
+     NOT Angular Material's own MatDialog/MatMenu/etc. — those render into .cdk-overlay-container, a
+     separate layer Angular CDK defaults to z-index: 1000 regardless of this app's own scale, so a toast at
+     300 still lost to any open MatDialog. 1100 clears that CDK default with headroom to spare. */
+  --z-toast:    1100;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1365,6 +1369,23 @@ input:-webkit-autofill:active {
     border-top-color: #E2E8F0 !important;
     margin:           4px 0 !important;
     opacity:          1 !important;
+  }
+}
+
+/* mat-menu class is placed ON the panel element, so no descendant combinator (same convention as
+   .user-action-menu above). Backs the Execution History field-lineage panel's resource-tree popover
+   (see field-lineage-panel.component.html's #resourceMenu) — its own content (.resource-tree etc.) is
+   styled normally from that component's scoped stylesheet; only the CDK-overlay-owned panel chrome
+   needs a global rule + !important to beat MDC's own generated width/padding. */
+.mat-mdc-menu-panel.resource-menu-panel {
+  min-width: 280px !important;
+  max-width: 320px !important;
+  max-height: min(60vh, 480px) !important;
+
+  .mat-mdc-menu-content {
+    padding: 8px !important;
+    max-height: min(60vh, 480px);
+    overflow-y: auto;
   }
 }
 

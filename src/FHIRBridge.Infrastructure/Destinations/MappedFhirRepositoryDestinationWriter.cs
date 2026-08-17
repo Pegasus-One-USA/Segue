@@ -318,6 +318,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         var autoFetchBudgetRemaining = autoFetchMaxCount;
         var skippedDueToCapCount = 0;
         var frontier = records.ToList();
+        var fetchFailureReasons = new Dictionary<ResourceReference, string>();
 
         while (frontier.Count > 0)
         {
@@ -385,11 +386,16 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 }
 
                 autoFetchBudgetRemaining--;
-                var fetchedRecord = await TryFetchRecordForReferenceAsync(
+                var (fetchedRecord, failureReason) = await TryFetchRecordForReferenceAsync(
                     reference, fetchMissingReferenceAsync, pipelineRunId, cancellationToken);
                 if (fetchedRecord is null)
                 {
                     confirmedMissing.Add(reference);
+                    if (failureReason is not null)
+                    {
+                        fetchFailureReasons[reference] = failureReason;
+                    }
+
                     continue;
                 }
 
@@ -440,7 +446,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 }
 
                 var recordLabel = $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}";
-                var missingLabel = string.Join(", ", missing.Select(m => $"{m.Type}/{m.Id}"));
+                var missingLabel = string.Join(", ", missing.Select(m =>
+                    fetchFailureReasons.TryGetValue(m, out var reason)
+                        ? $"{m.Type}/{m.Id} (auto-fetch failed: {reason})"
+                        : $"{m.Type}/{m.Id}"));
                 errors.Add(
                     $"{recordLabel}: references {missingLabel}, which {(missing.Count == 1 ? "was" : "were")} not found in this " +
                     "batch, at the destination, or via auto-fetch — record was not written. Add the missing resource type to " +
@@ -480,7 +489,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// <see cref="MappedDestinationRecord"/> on success, or null for anything that falls back to ordinary blocking:
     /// a null/empty response, unparseable JSON, or a <c>resourceType</c> that doesn't match what was asked for.
     /// </summary>
-    private static async Task<MappedDestinationRecord?> TryFetchRecordForReferenceAsync(
+    private static async Task<(MappedDestinationRecord? Record, string? FailureReason)> TryFetchRecordForReferenceAsync(
         ResourceReference reference,
         Func<string, string, CancellationToken, Task<string?>> fetchMissingReferenceAsync,
         Guid pipelineRunId,
@@ -489,24 +498,31 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         try
         {
             var json = await fetchMissingReferenceAsync(reference.Type, reference.Id, cancellationToken);
-            if (string.IsNullOrWhiteSpace(json)
-                || JsonNode.Parse(json) is not JsonObject fetchedResource
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                // A null/empty response means the source genuinely doesn't have it (e.g. a 404) — the fetch
+                // delegate itself has no way to distinguish "not found" from other quiet failures, so this
+                // case has no specific reason to report.
+                return (null, null);
+            }
+
+            if (JsonNode.Parse(json) is not JsonObject fetchedResource
                 || !string.Equals(fetchedResource["resourceType"]?.GetValue<string>(), reference.Type, StringComparison.OrdinalIgnoreCase))
             {
-                return null;
+                return (null, "fetched response did not match the expected resource type");
             }
 
             fetchedResource["id"] = reference.Id;
-            return new MappedDestinationRecord(
+            return (new MappedDestinationRecord(
                 pipelineRunId, reference.Type, reference.Type, reference.Id, new Dictionary<string, object?>(),
-                fetchedResource.ToJsonString(JsonOptions));
+                fetchedResource.ToJsonString(JsonOptions)), null);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Fetch/parse failed — the caller adds this reference to confirmedMissing, falling through to ordinary
-            // blocking behavior, same as if auto-fetch had never been attempted.
-            _ = exception;
-            return null;
+            // blocking behavior, same as if auto-fetch had never been attempted, but the underlying reason (e.g.
+            // "403 Forbidden" from the source EHR) is preserved so it doesn't look identical to a plain 404.
+            return (null, exception.Message);
         }
     }
 

@@ -78,13 +78,23 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
  * DestinationConfiguration.ConnectionMetadataJson so a later "select existing" can repopulate a form's
  * non-secret fields without ever reading the secret back.
  */
-export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'fhir'): string {
+export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'fhir' | 'blob'): string {
   const keys =
     kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'
         ? ['dest_name', 'dest_baseUrl', 'dest_project', 'dest_writeMode', 'dest_fhirWriteMode',
            'dest_tokenEndpoint', 'dest_clientId', 'dest_username']
+        : kind === 'blob'
+          ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
+             'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
+             'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
+             // Two independent settings: how many records share one blob (bulk vs individual), and — only
+             // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
+             'dest_blobGranularity', 'dest_blobRecordMode',
+             // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
+             // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
+             'dest_blobFolderPattern', 'dest_blobFileNamePattern']
         : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
            'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
            'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',

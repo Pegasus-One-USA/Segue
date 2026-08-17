@@ -34,6 +34,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-mysql': 'MySqlDestinationNode',
   'dest-postgres': 'PostgreSqlDestinationNode',
   'dest-mongo': 'MongoDestinationNode',
+  'dest-blob': 'BlobDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'dest-fhir': 'FhirRepositoryDestinationNode',
   'audit-lineage': 'AuditLineageNode',
@@ -47,6 +48,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
 // the in-memory store to build the encrypted inlineSecret instead.
 const SECRET_FIELD_KEYS = new Set([
   'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
+  'dest_blobSecret',
 ]);
 
 @Injectable({ providedIn: 'root' })

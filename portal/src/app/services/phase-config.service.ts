@@ -25,12 +25,13 @@ export interface PhaseConfig {
 // Sources:      Epic only
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
-// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB only
+// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Azure Blob only
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
     'generic-fhir',
-    // Phase 2+: 'cerner', 'athena', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
+    'athena',
+    // Phase 2+: 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
@@ -41,11 +42,12 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-mongo',
     'dest-postgres',
     'dest-fhir',
+    'dest-blob',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',
     //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',
-    //   'dest-blob', 'dest-s3', 'dest-xlsx', 'dest-ndjson',
+    //   'dest-s3', 'dest-xlsx', 'dest-ndjson',
     //   'dest-parquet', 'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp',
     //   'dest-restapi', 'dest-inmemory'
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'

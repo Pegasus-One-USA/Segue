@@ -5,7 +5,7 @@
     (pointermove)="onHeadPointerMove($event)"
     (pointerup)="onHeadPointerUp($event)"
   >
-    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : 'file' }}</span>
+    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : destType() === 'blob' ? 'blob' : 'file' }}</span>
     <span class="fm-target-name">{{ tableName() || resource() }}</span>
     <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
       <input
@@ -35,7 +35,11 @@
 
 
   <div class="fm-target-rows">
-    @if (destType() === 'sql') {
+    @if (destType() === 'sql' && hasSqlTables() && !schemaAuthoringEnabled()) {
+      <!-- No live credentials to back a real ALTER TABLE here (see FieldMappingCanvasComponent.
+           schemaAuthoringEnabled) — this table's real, already-probed columns are the only ones
+           mappable; nothing to add. -->
+    } @else if (destType() === 'sql') {
       <div class="fm-target-row fm-target-row--add">
         <button
           type="button"

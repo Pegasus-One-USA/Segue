@@ -541,11 +541,14 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
 
 public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
-    // Destination types backed by a real relational schema, where each resource type in a mixed batch normally
-    // targets its OWN table (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a
-    // mixed batch per resource type at write time (see ExecuteAsync) — every other destination type keeps writing
-    // the whole batch in one call, unchanged, since e.g. a CSV/Blob writer already groups multi-resource output
-    // itself (a multi-resource ZIP, say) and splitting the call here would silently break that.
+    // Destination types where each resource type in a mixed batch normally targets its OWN table/collection/blob
+    // (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a mixed batch per resource
+    // type at write time (see ExecuteAsync) — every other destination type keeps writing the whole batch in one
+    // call, unchanged, since e.g. a CSV writer already groups multi-resource output itself (a multi-resource ZIP)
+    // and splitting the call here would silently break that.
+    // BlobStorage is included here (not just relational/Mongo) because MappedBlobStorageDestinationWriter does
+    // NOT group by resource type internally — without this, a mixed batch reaching a Blob node in one call would
+    // land in a single blob whose metadata falsely claims only one resource type.
     private static readonly HashSet<DestinationType> MultiTableRelationalDestinationTypes =
     [
         DestinationType.SqlServer,
@@ -554,6 +557,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.PostgreSql,
         DestinationType.Snowflake,
         DestinationType.Mongo,
+        DestinationType.BlobStorage,
     ];
 
     // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs
@@ -757,7 +761,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
                     ? matched
                     : await ResolveMappingProfileAsync(node, group.Key, groupRecords, cancellationToken);
-                var effectiveProfile = ApplyWriteModeSuffix(profile, writeModeSuffix);
+                // The ";mode=..." suffix convention only means anything to MappedSqlServerDestinationWriter's
+                // ParseDestinationTarget — Blob reads its write mode straight off the destination's own
+                // ConnectionMetadataJson (BlobDestinationSettings.Parse) regardless of grouping, so splicing this
+                // onto its DestinationObject would just corrupt the blob name/folder for no benefit.
+                var effectiveProfile = _destinationType == DestinationType.BlobStorage
+                    ? profile
+                    : ApplyWriteModeSuffix(profile, writeModeSuffix);
                 var groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
                 totalWritten += groupResult.Count;
                 firstDownloadUrl ??= groupResult.DownloadUrl;

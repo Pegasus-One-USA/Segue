@@ -94,6 +94,12 @@ export const NOTIFICATION_SETTINGS_ENDPOINTS = {
   testSend: `${API_V1_BASE}/notification-settings/test-send`,
 };
 
+// ─── Legal content (static files served from Content/legal, see Program.cs) ────
+// Not under /api/v1 — plain static HTML, deploy-replaceable without a rebuild.
+export const LEGAL_ENDPOINTS = {
+  termsAndConditions: `${APP_ORIGIN}/legal/terms-and-conditions.html`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
   list:                `${API_V1_BASE}/destinations`,

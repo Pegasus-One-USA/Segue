@@ -65,4 +65,10 @@ public sealed record FhirSourceConfiguration(
     // fetches each resource type via its own independent request, so each tracks its own cursor rather than sharing
     // one connection-wide value (contrast with Since above, bulk export's single job-level cursor). Null when
     // incremental sync isn't enabled, or the referenced SourceConnection has no retrieval config at all.
-    IReadOnlyDictionary<string, DateTime>? LastUpdatedWatermarks = null);
+    IReadOnlyDictionary<string, DateTime>? LastUpdatedWatermarks = null,
+    // Tenant-scoping identifier some vendors require on every request (e.g. athenahealth's numeric practice id).
+    // Null for every vendor that doesn't need per-tenant request scoping — unchanged behavior for all of them.
+    string? PracticeId = null,
+    // Where OAuth2ClientCredentialsTokenProvider places client id/secret — "post" (default) or "basic". Null
+    // behaves as "post", unchanged from before this field existed.
+    string? AuthPlacement = null);

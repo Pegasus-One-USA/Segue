@@ -19,10 +19,23 @@ export interface SetupStatusResponse {
   requiresSetup: boolean;
 }
 
+/** The SMTP settings collected on the same first-run screen — saved enabled alongside the admin account. */
+export interface FirstRunEmailSettings {
+  host: string;
+  port: number;
+  enableSsl: boolean;
+  username: string | null;
+  password: string | null;
+  fromAddress: string;
+  fromName: string;
+}
+
 export interface CreateSuperAdminRequest {
   email: string;
   displayName: string;
   password: string;
+  acceptTerms: boolean;
+  emailSettings: FirstRunEmailSettings;
   firstName?: string;
   lastName?: string;
 }

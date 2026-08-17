@@ -1,41 +1,112 @@
 import {
-  Component, ElementRef, Injector, input, output, signal, computed, effect,
-  untracked, inject, viewChild, afterNextRender, OnInit,
+  Component,
+  ElementRef,
+  Injector,
+  input,
+  output,
+  signal,
+  computed,
+  effect,
+  Type,
+  untracked,
+  inject,
+  viewChild,
+  afterNextRender,
+  OnInit,
 } from '@angular/core';
-import {
-  FormBuilder, Validators, ReactiveFormsModule,
-} from '@angular/forms';
+import { NgComponentOutlet } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, of, from, Observable } from 'rxjs';
-import { catchError, map, switchMap, concatMap, toArray, finalize } from 'rxjs/operators';
+import {
+  catchError,
+  map,
+  switchMap,
+  concatMap,
+  toArray,
+  finalize,
+} from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
 import { AddTransformEvent } from '../node-library-dialog.component';
-import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
-import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
-import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
-import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
-import { buildConnectionMetadata, buildFhirSecretBlob, buildSftpUri, buildSqlConnectionString, newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
-import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
-import { MappingRow, migrateLegacyRow, serializeRowsFlat, LegacyMappingRow, PendingSchemaOp, MappingDestType } from './field-mapping/field-mapping-model';
-import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
-import { MappingSnapshot, MappingSnapshotSummary } from './field-mapping/mapping-snapshot.model';
 import {
-  MappingSummaryDocument, ChildTableRelation, buildMappingSummaryDocument, applyMappingSummaryDocument,
+  DestinationSchemaService,
+  DestinationTable,
+  DestinationColumn,
+  DestinationProbeRequest,
+} from '../../../services/destination-schema.service';
+import {
+  MappingCatalogService,
+  FhirElement,
+} from '../../../services/mapping-catalog.service';
+import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
+import {
+  CreateDestinationConfigurationRequest,
+  DestinationConfigurationDto,
+  DestinationType,
+} from '../../../destination-connections/models/destination-configuration.model';
+import {
+  buildFhirSecretBlob,
+  newSecretName,
+} from '../../../destination-connections/utils/destination-connection-secret.util';
+import { DestinationConfigFormComponent } from '../../shared/config-form/config-form.contract';
+import { DESTINATION_FORM_REGISTRY } from './destination-forms/destination-form.registry';
+import {
+  WizardDestinationFormApi,
+  SqlFamilyFormApi,
+  isSqlFamilyForm,
+} from './destination-forms/destination-form-api';
+import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
+import {
+  MappingRow,
+  migrateLegacyRow,
+  serializeRowsFlat,
+  LegacyMappingRow,
+  PendingSchemaOp,
+  MappingDestType,
+} from './field-mapping/field-mapping-model';
+import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
+import {
+  MappingSnapshot,
+  MappingSnapshotSummary,
+} from './field-mapping/mapping-snapshot.model';
+import {
+  MappingSummaryDocument,
+  ChildTableRelation,
+  buildMappingSummaryDocument,
+  applyMappingSummaryDocument,
   pruneOrphanedMappingRows,
 } from './field-mapping/field-mapping-summary.model';
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { TransformRulesDialogComponent, TransformRulesDialogData } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
+import {
+  TransformRulesDialogComponent,
+  TransformRulesDialogData,
+} from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
 import { TransformationRulesService } from './field-mapping/transformation-rules.service';
-import { ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData } from './field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component';
-import { PromoteMappingProfileDialogComponent, PromoteMappingProfileDialogData } from './field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component';
+import {
+  ExistingMappingProfileDialogComponent,
+  ExistingMappingProfileDialogData,
+} from './field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component';
+import {
+  PromoteMappingProfileDialogComponent,
+  PromoteMappingProfileDialogData,
+} from './field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component';
 import { MappingProfileService } from '../../../mapping-profiles/services/mapping-profile.service';
-import { MappingProfileDto, MappingFieldDto } from '../../../mapping-profiles/models/mapping-profile.model';
-import { sortByDependencyRank, dependencyRankFor, recommendedFor } from './resource-dependency.config';
+import {
+  MappingProfileDto,
+  MappingFieldDto,
+} from '../../../mapping-profiles/models/mapping-profile.model';
+import {
+  sortByDependencyRank,
+  dependencyRankFor,
+  recommendedFor,
+} from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { PipelineStore } from '../../../services/pipeline.store';
+import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
+import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -55,11 +126,26 @@ export type WizardDestType = MappingDestType | 'fhir';
  *  duplicate the standalone De-identification node's job — implemented here per explicit request, flagged as a
  *  known overlap in the plan doc, not silently resolved. */
 export type FhirTransformType =
-  | 'dateFormat' | 'typeCast' | 'booleanConversion' | 'unitConversion' | 'quantityRange' | 'roundPrecision'
-  | 'codeLookup' | 'codeableConcept' | 'statusCoercion'
-  | 'referenceConstruct' | 'telecom' | 'identifierFormat' | 'humanNameFormat' | 'addressParse'
-  | 'stringClean' | 'stringTemplate' | 'arrayOp'
-  | 'coalesce' | 'dateShift' | 'hashMask';
+  | 'dateFormat'
+  | 'typeCast'
+  | 'booleanConversion'
+  | 'unitConversion'
+  | 'quantityRange'
+  | 'roundPrecision'
+  | 'codeLookup'
+  | 'codeableConcept'
+  | 'statusCoercion'
+  | 'referenceConstruct'
+  | 'telecom'
+  | 'identifierFormat'
+  | 'humanNameFormat'
+  | 'addressParse'
+  | 'stringClean'
+  | 'stringTemplate'
+  | 'arrayOp'
+  | 'coalesce'
+  | 'dateShift'
+  | 'hashMask';
 
 export interface FhirCustomRule {
   field: string;
@@ -104,7 +190,7 @@ export interface FhirLookupPair {
 
 export interface ResourceFieldDef {
   label: string;
-  path:  string;
+  path: string;
   sqlColumn: string;
   csvColumn: string;
   // Array-aware metadata from the backend FHIR catalog (absent for the built-in fallback defs).
@@ -114,64 +200,214 @@ export interface ResourceFieldDef {
 }
 
 export interface ResourceDef {
-  scope:    string;
+  scope: string;
   sqlTable: string;
-  csvFile:  string;
-  fields:   ResourceFieldDef[];
+  csvFile: string;
+  fields: ResourceFieldDef[];
 }
 
 export const DEST_RESOURCE_DEFS: Record<string, ResourceDef> = {
   Patient: {
-    scope: 'user/Patient.read', sqlTable: 'dbo.Patient', csvFile: 'patients.csv',
+    scope: 'user/Patient.read',
+    sqlTable: 'dbo.Patient',
+    csvFile: 'patients.csv',
     fields: [
-      { label: 'Patient ID',    path: 'Patient.id',            sqlColumn: 'SourcePatientId', csvColumn: 'PatientId' },
-      { label: 'First Name',    path: 'Patient.name.given',    sqlColumn: 'FirstName',       csvColumn: 'FirstName' },
-      { label: 'Last Name',     path: 'Patient.name.family',   sqlColumn: 'LastName',        csvColumn: 'LastName' },
-      { label: 'Date of Birth', path: 'Patient.birthDate',     sqlColumn: 'DateOfBirth',     csvColumn: 'DateOfBirth' },
-      { label: 'Gender',        path: 'Patient.gender',        sqlColumn: 'Gender',          csvColumn: 'Gender' },
-      { label: 'Phone',         path: 'Patient.telecom.value', sqlColumn: 'Phone',           csvColumn: 'Phone' },
+      {
+        label: 'Patient ID',
+        path: 'Patient.id',
+        sqlColumn: 'SourcePatientId',
+        csvColumn: 'PatientId',
+      },
+      {
+        label: 'First Name',
+        path: 'Patient.name.given',
+        sqlColumn: 'FirstName',
+        csvColumn: 'FirstName',
+      },
+      {
+        label: 'Last Name',
+        path: 'Patient.name.family',
+        sqlColumn: 'LastName',
+        csvColumn: 'LastName',
+      },
+      {
+        label: 'Date of Birth',
+        path: 'Patient.birthDate',
+        sqlColumn: 'DateOfBirth',
+        csvColumn: 'DateOfBirth',
+      },
+      {
+        label: 'Gender',
+        path: 'Patient.gender',
+        sqlColumn: 'Gender',
+        csvColumn: 'Gender',
+      },
+      {
+        label: 'Phone',
+        path: 'Patient.telecom.value',
+        sqlColumn: 'Phone',
+        csvColumn: 'Phone',
+      },
     ],
   },
   Observation: {
-    scope: 'user/Observation.read', sqlTable: 'dbo.PatientObservation', csvFile: 'observations.csv',
+    scope: 'user/Observation.read',
+    sqlTable: 'dbo.PatientObservation',
+    csvFile: 'observations.csv',
     fields: [
-      { label: 'Observation ID', path: 'Observation.id',                   sqlColumn: 'SourceObservationId', csvColumn: 'ObservationId' },
-      { label: 'Code',           path: 'Observation.code.coding.code',     sqlColumn: 'Code',               csvColumn: 'Code' },
-      { label: 'Display',        path: 'Observation.code.coding.display',  sqlColumn: 'Display',            csvColumn: 'Display' },
-      { label: 'Value',          path: 'Observation.valueQuantity.value',  sqlColumn: 'Value',              csvColumn: 'Value' },
-      { label: 'Unit',           path: 'Observation.valueQuantity.unit',   sqlColumn: 'Unit',               csvColumn: 'Unit' },
-      { label: 'Observed At',    path: 'Observation.effectiveDateTime',    sqlColumn: 'ObservedAt',         csvColumn: 'ObservedAt' },
+      {
+        label: 'Observation ID',
+        path: 'Observation.id',
+        sqlColumn: 'SourceObservationId',
+        csvColumn: 'ObservationId',
+      },
+      {
+        label: 'Code',
+        path: 'Observation.code.coding.code',
+        sqlColumn: 'Code',
+        csvColumn: 'Code',
+      },
+      {
+        label: 'Display',
+        path: 'Observation.code.coding.display',
+        sqlColumn: 'Display',
+        csvColumn: 'Display',
+      },
+      {
+        label: 'Value',
+        path: 'Observation.valueQuantity.value',
+        sqlColumn: 'Value',
+        csvColumn: 'Value',
+      },
+      {
+        label: 'Unit',
+        path: 'Observation.valueQuantity.unit',
+        sqlColumn: 'Unit',
+        csvColumn: 'Unit',
+      },
+      {
+        label: 'Observed At',
+        path: 'Observation.effectiveDateTime',
+        sqlColumn: 'ObservedAt',
+        csvColumn: 'ObservedAt',
+      },
     ],
   },
   Encounter: {
-    scope: 'user/Encounter.read', sqlTable: 'dbo.Encounter', csvFile: 'encounters.csv',
+    scope: 'user/Encounter.read',
+    sqlTable: 'dbo.Encounter',
+    csvFile: 'encounters.csv',
     fields: [
-      { label: 'Encounter ID',      path: 'Encounter.id',                sqlColumn: 'SourceEncounterId',  csvColumn: 'EncounterId' },
-      { label: 'Status',            path: 'Encounter.status',            sqlColumn: 'Status',             csvColumn: 'Status' },
-      { label: 'Class',             path: 'Encounter.class.code',        sqlColumn: 'ClassCode',          csvColumn: 'ClassCode' },
-      { label: 'Patient Reference', path: 'Encounter.subject.reference', sqlColumn: 'PatientReference',   csvColumn: 'PatientReference' },
-      { label: 'Start',             path: 'Encounter.period.start',      sqlColumn: 'StartDate',          csvColumn: 'StartDate' },
-      { label: 'End',               path: 'Encounter.period.end',        sqlColumn: 'EndDate',            csvColumn: 'EndDate' },
+      {
+        label: 'Encounter ID',
+        path: 'Encounter.id',
+        sqlColumn: 'SourceEncounterId',
+        csvColumn: 'EncounterId',
+      },
+      {
+        label: 'Status',
+        path: 'Encounter.status',
+        sqlColumn: 'Status',
+        csvColumn: 'Status',
+      },
+      {
+        label: 'Class',
+        path: 'Encounter.class.code',
+        sqlColumn: 'ClassCode',
+        csvColumn: 'ClassCode',
+      },
+      {
+        label: 'Patient Reference',
+        path: 'Encounter.subject.reference',
+        sqlColumn: 'PatientReference',
+        csvColumn: 'PatientReference',
+      },
+      {
+        label: 'Start',
+        path: 'Encounter.period.start',
+        sqlColumn: 'StartDate',
+        csvColumn: 'StartDate',
+      },
+      {
+        label: 'End',
+        path: 'Encounter.period.end',
+        sqlColumn: 'EndDate',
+        csvColumn: 'EndDate',
+      },
     ],
   },
   Condition: {
-    scope: 'user/Condition.read', sqlTable: 'dbo.Condition', csvFile: 'conditions.csv',
+    scope: 'user/Condition.read',
+    sqlTable: 'dbo.Condition',
+    csvFile: 'conditions.csv',
     fields: [
-      { label: 'Condition ID',    path: 'Condition.id',                         sqlColumn: 'SourceConditionId', csvColumn: 'ConditionId' },
-      { label: 'Code',            path: 'Condition.code.coding.code',           sqlColumn: 'Code',              csvColumn: 'Code' },
-      { label: 'Display',         path: 'Condition.code.coding.display',        sqlColumn: 'Display',           csvColumn: 'Display' },
-      { label: 'Clinical Status', path: 'Condition.clinicalStatus.coding.code', sqlColumn: 'ClinicalStatus',    csvColumn: 'ClinicalStatus' },
-      { label: 'Onset Date',      path: 'Condition.onsetDateTime',              sqlColumn: 'OnsetDate',         csvColumn: 'OnsetDate' },
+      {
+        label: 'Condition ID',
+        path: 'Condition.id',
+        sqlColumn: 'SourceConditionId',
+        csvColumn: 'ConditionId',
+      },
+      {
+        label: 'Code',
+        path: 'Condition.code.coding.code',
+        sqlColumn: 'Code',
+        csvColumn: 'Code',
+      },
+      {
+        label: 'Display',
+        path: 'Condition.code.coding.display',
+        sqlColumn: 'Display',
+        csvColumn: 'Display',
+      },
+      {
+        label: 'Clinical Status',
+        path: 'Condition.clinicalStatus.coding.code',
+        sqlColumn: 'ClinicalStatus',
+        csvColumn: 'ClinicalStatus',
+      },
+      {
+        label: 'Onset Date',
+        path: 'Condition.onsetDateTime',
+        sqlColumn: 'OnsetDate',
+        csvColumn: 'OnsetDate',
+      },
     ],
   },
   MedicationRequest: {
-    scope: 'user/MedicationRequest.read', sqlTable: 'dbo.MedicationRequest', csvFile: 'medication_requests.csv',
+    scope: 'user/MedicationRequest.read',
+    sqlTable: 'dbo.MedicationRequest',
+    csvFile: 'medication_requests.csv',
     fields: [
-      { label: 'Medication ID',   path: 'MedicationRequest.id',                                   sqlColumn: 'SourceMedicationRequestId', csvColumn: 'MedicationRequestId' },
-      { label: 'Status',          path: 'MedicationRequest.status',                               sqlColumn: 'Status',                   csvColumn: 'Status' },
-      { label: 'Intent',          path: 'MedicationRequest.intent',                               sqlColumn: 'Intent',                   csvColumn: 'Intent' },
-      { label: 'Medication Code', path: 'MedicationRequest.medicationCodeableConcept.coding.code', sqlColumn: 'MedicationCode',           csvColumn: 'MedicationCode' },
-      { label: 'Requester',       path: 'MedicationRequest.requester.reference',                  sqlColumn: 'RequesterReference',       csvColumn: 'RequesterReference' },
+      {
+        label: 'Medication ID',
+        path: 'MedicationRequest.id',
+        sqlColumn: 'SourceMedicationRequestId',
+        csvColumn: 'MedicationRequestId',
+      },
+      {
+        label: 'Status',
+        path: 'MedicationRequest.status',
+        sqlColumn: 'Status',
+        csvColumn: 'Status',
+      },
+      {
+        label: 'Intent',
+        path: 'MedicationRequest.intent',
+        sqlColumn: 'Intent',
+        csvColumn: 'Intent',
+      },
+      {
+        label: 'Medication Code',
+        path: 'MedicationRequest.medicationCodeableConcept.coding.code',
+        sqlColumn: 'MedicationCode',
+        csvColumn: 'MedicationCode',
+      },
+      {
+        label: 'Requester',
+        path: 'MedicationRequest.requester.reference',
+        sqlColumn: 'RequesterReference',
+        csvColumn: 'RequesterReference',
+      },
     ],
   },
 };
@@ -183,9 +419,24 @@ function genericResourceDef(r: string): ResourceDef {
     sqlTable: `dbo.${r}`,
     csvFile: `${r.toLowerCase()}.csv`,
     fields: [
-      { label: `${r} ID`, path: `${r}.id`,                sqlColumn: `Source${r}Id`,     csvColumn: `${r}Id` },
-      { label: 'Status',  path: `${r}.status`,            sqlColumn: 'Status',           csvColumn: 'Status' },
-      { label: 'Subject', path: `${r}.subject.reference`, sqlColumn: 'SubjectReference', csvColumn: 'SubjectReference' },
+      {
+        label: `${r} ID`,
+        path: `${r}.id`,
+        sqlColumn: `Source${r}Id`,
+        csvColumn: `${r}Id`,
+      },
+      {
+        label: 'Status',
+        path: `${r}.status`,
+        sqlColumn: 'Status',
+        csvColumn: 'Status',
+      },
+      {
+        label: 'Subject',
+        path: `${r}.subject.reference`,
+        sqlColumn: 'SubjectReference',
+        csvColumn: 'SubjectReference',
+      },
     ],
   };
 }
@@ -195,7 +446,13 @@ function genericResourceDef(r: string): ResourceDef {
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
-  imports: [ReactiveFormsModule, FieldMappingCanvasComponent, FieldMappingExportPreviewModalComponent, MatDialogModule],
+  imports: [
+    ReactiveFormsModule,
+    NgComponentOutlet,
+    FieldMappingCanvasComponent,
+    FieldMappingExportPreviewModalComponent,
+    MatDialogModule,
+  ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
 })
@@ -204,15 +461,21 @@ export class DestinationWizardComponent implements OnInit {
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
-  private readonly destinationConfigSvc = inject(DestinationConfigurationService);
+  private readonly destinationConfigSvc = inject(
+    DestinationConfigurationService,
+  );
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
-  private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
+  private readonly mappingProfileImportSvc = inject(
+    MappingProfileImportService,
+  );
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
   private readonly dialog = inject(MatDialog);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
+  private readonly discoverySvc = inject(EpicDiscoveryService);
+  private readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
   // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
   // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
@@ -224,16 +487,20 @@ export class DestinationWizardComponent implements OnInit {
 
   // Backend FHIR catalog fields per resource type (array-aware paths). Empty until fetched; the
   // built-in DEST_RESOURCE_DEFS act as the fallback when a resource isn't (yet) loaded.
-  private readonly catalogByResource = signal<Record<string, ResourceFieldDef[]>>({});
+  private readonly catalogByResource = signal<
+    Record<string, ResourceFieldDef[]>
+  >({});
 
   // Fields derived from a real FHIR JSON payload the user pasted via the canvas's "Load JSON payload"
   // affordance — takes priority over both the backend catalog and the built-in fallback for that
   // resource, since it mirrors data the user actually has rather than a generic field list.
-  private readonly payloadFieldsByResource = signal<Record<string, ResourceFieldDef[]>>({});
+  private readonly payloadFieldsByResource = signal<
+    Record<string, ResourceFieldDef[]>
+  >({});
 
-  readonly destType   = input.required<WizardDestType>();
+  readonly destType = input.required<WizardDestType>();
   readonly attachNode = input.required<CanvasNode>();
-  readonly editNode   = input<CanvasNode | null>(null);
+  readonly editNode = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
   readonly sourceResources = input<string[]>([]);
   /** The upstream source's EHR vendor (e.g. "Epic") — the Mapping JSON's top-level "source" field. */
@@ -241,6 +508,12 @@ export class DestinationWizardComponent implements OnInit {
   /** The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
    *  "sourceConnectionId" field. Null if no source is wired up yet. */
   readonly sourceConnectionId = input<string | null>(null);
+  /** FHIR resource types the source's live Discover (/metadata) probe actually returned THIS canvas
+   *  session (see EhrVendorSourceFormComponent's 'Discovered resource types' field) — the preferred source
+   *  for availableGroups' intersection filter below, since it needs no extra network round trip and is
+   *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
+   *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
+  readonly sourceDiscoveredResourceTypes = input<string[]>([]);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
@@ -285,16 +558,16 @@ export class DestinationWizardComponent implements OnInit {
    *  avoid two title bars stacked on top of each other. */
   readonly isMaximized = input<boolean>(false);
 
-  readonly saved     = output<AddTransformEvent>();
+  readonly saved = output<AddTransformEvent>();
   readonly cancelled = output<void>();
-  readonly closeAll  = output<void>();
+  readonly closeAll = output<void>();
   readonly toggleMaximizeRequest = output<void>();
   /** Total field-mapping count for the currently open group — the dialog header shows it next to the title. */
   readonly mappingCountChange = output<number>();
 
   // Lets the parent (Node Library sidebar) lock out the other destination type
   // mid-wizard, and warn before discarding progress if the user switches anyway.
-  readonly stepChange     = output<number>();
+  readonly stepChange = output<number>();
   readonly progressChange = output<boolean>();
 
   // Lets the parent hide its own sidebar while a specific group's mapping canvas is open, so the
@@ -305,7 +578,7 @@ export class DestinationWizardComponent implements OnInit {
   readonly mappingCanvasTitle = output<string | null>();
 
   // ── step state ────────────────────────────────────────────────────────────
-  readonly step        = signal(1);
+  readonly step = signal(1);
   readonly TOTAL_STEPS = 4;
   readonly STEP_LABELS = ['Configure', 'Data groups', 'Map fields', 'Review'];
 
@@ -313,77 +586,115 @@ export class DestinationWizardComponent implements OnInit {
   // stays true even after going back to step 1, so switching still warns.
   private readonly _hasProgressed = signal(false);
 
-  // ── forms ─────────────────────────────────────────────────────────────────
-  readonly sqlForm = this.fb.group({
-    name:      ['SQL Production', [Validators.required]],
-    server:    ['', [Validators.required]],
-    database:  ['', [Validators.required]],
-    auth:      ['sql-auth', [Validators.required]],
-    username:  [''],
-    password:  [''],
-    schema:    ['dbo', []],
-    writeMode: ['upsert', []],
-    // MySQL/PostgreSQL only (see DestinationConnectionProbeRequest.RequireSsl backend-side): off by default so
-    // a local/docker instance with SSL disabled still connects; check for managed providers that enforce SSL
-    // (e.g. AWS RDS's rds.force_ssl).
-    requireSsl: [false, []],
+  // ── connection form (Step 1) ─────────────────────────────────────────────
+  // The old inline sqlForm/csvForm/mongoForm reactive forms are gone — Step 1 now hosts whichever
+  // DESTINATION_FORM_REGISTRY component matches this wizard's destType() via NgComponentOutlet, and every
+  // downstream read (validity, review display, provisioning, save, existing-connection diffing, the mapping
+  // canvas's connectionInfo/csvDelimiterKey) goes through activeForm()/activeFormConfig() instead of a class
+  // field FormGroup. The outlet stays mounted for the wizard's whole lifetime (see the template's dw-hidden
+  // toggle) so those reads keep working after Step 1 is behind — exactly like the old FormGroup fields did
+  // just by existing on this class the whole time.
+  private readonly formOutlet = viewChild(NgComponentOutlet);
+
+  /** 'sql' is this wizard's existing shorthand specifically for SQL Server (see isSql()/isMySql()/isPostgres()
+   *  below) — mapped to the registry's 'SqlServer' key. Mongo/csv/mysql/postgres map 1:1 onto their
+   *  DestinationType names. */
+  private readonly registryKey = computed<DestinationType>(() => {
+    switch (this.destType()) {
+      case 'mysql':
+        return 'MySql';
+      case 'postgres':
+        return 'PostgreSql';
+      case 'mongo':
+        return 'Mongo';
+      case 'csv':
+        return 'Csv';
+      case 'blob':
+        return 'BlobStorage';
+      default:
+        return 'SqlServer';
+    }
   });
 
-  readonly mongoForm = this.fb.group({
-    name:             ['MongoDB Production', [Validators.required]],
-    // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
-    // what MappedMongoDestinationWriter expects. Treated as a whole as a secret (see SECRET_FIELD_KEYS): there's
-    // no live probe to validate a split server/database/credentials form against, so one opaque field is
-    // simplest and avoids a redundant connection-string-assembly step this wizard would otherwise need.
-    connectionString: ['', [Validators.required]],
-    collection:       ['', [Validators.required]],
-    writeMode:        ['upsert', []],
-  });
+  readonly activeFormType =
+    computed<Type<DestinationConfigFormComponent> | null>(
+      () => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null,
+    );
 
-  readonly csvForm = this.fb.group({
-    name:         ['CSV Export', [Validators.required]],
-    deliveryMode: ['download', [Validators.required]],
-    filePattern:  ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
-    delimiter:    ['comma', []],
-    encoding:     ['utf-8', []],
-    // ── SFTP-only connection details ─────────────────────────────────────────
-    sftpHost:         ['', []],
-    sftpPort:         [22, []],
-    sftpUsername:     ['', []],
-    sftpAuthType:     ['password', []],
-    sftpPassword:     ['', []],
-    sftpRemoteFolder: ['', []],
-    // ── Email-only fields ─────────────────────────────────────────────────────
-    emailTo:              ['', []],
-    emailCc:               ['', []],
-    emailSubjectTemplate: ['FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}', []],
-    emailBodyTemplate:    ['Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.', []],
-    // ── Download-link-only field ─────────────────────────────────────────────
-    downloadLinkExpiryMinutes: [60, []],
-  });
+  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
+   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
+   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
+   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
+   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
+   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
+   *  this fresh on every change-detection pass instead. */
+  activeFormInputs(): Record<string, unknown> {
+    if (this.isSql() || this.isMongo()) return {};
+    return {
+      reusingExisting:
+        this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+    };
+  }
+
+  /** Live instance of whatever DESTINATION_FORM_REGISTRY component is currently loaded, or null before the
+   *  view has finished initializing. Read fresh on every call (never memoized) — NgComponentOutlet's own
+   *  `componentInstance` getter isn't itself a signal, so caching this in a computed() risks freezing on a
+   *  stale (pre-creation) null the first time it's read. */
+  activeForm(): WizardDestinationFormApi | null {
+    return (
+      (this.formOutlet()
+        ?.componentInstance as WizardDestinationFormApi | null) ?? null
+    );
+  }
+
+  /** Full dest_*-keyed config bag of whatever's currently loaded — used by the mapping canvas's
+   *  connectionInfo/csvDelimiterKey bindings and Step 4's review cards, all of which used to read
+   *  sqlForm.value/csvForm.value/mongoForm.value directly. */
+  activeFormConfig(): Record<string, string> {
+    return this.activeForm()?.getFullConfig() ?? {};
+  }
+
+  // A saved node's fields (editing) or a picked existing connection's metadata can arrive before the Step 1
+  // form component has actually been created (both can fire during ngOnInit, before the view — and this
+  // outlet's child — exists). Queued here and flushed by the effect in the constructor the moment the form
+  // instance becomes available, instead of relying on it already being there like the old FormGroup fields.
+  private readonly _pendingFormPatch = signal<{
+    fields: Record<string, string>;
+    target: string | null;
+    isExistingSelection?: boolean;
+  } | null>(null);
+
+  // Snapshot of Step 1's raw form value taken once, right after the outlet's child first exists — either
+  // its blank defaults (brand-new destination) or right after _populateFromNode()'s/selectExisting()'s
+  // queued patch has flushed onto it (editing/reusing), same ordering the _pendingFormPatch effect below
+  // relies on. Compared against the live value by isStep1Dirty() to tell "closed without ever really
+  // touching Step 1" (safe to discard silently) apart from "typed something but never clicked Next/Save"
+  // (needs the same confirm-before-discard treatment as switching type or closing the whole dialog already
+  // get via _hasProgressed — see cancel()/node-library-dialog's onDestWizardCancelled()).
+  private _step1Baseline: Record<string, unknown> | null = null;
 
   readonly fhirForm = this.fb.group({
-    name:          ['Aidbox Production', [Validators.required]],
-    baseUrl:       ['', [Validators.required]],
-    project:       ['', []],
-    authType:      ['oauth2', [Validators.required]],
-    writeMode:     ['upsert', []],
+    name: ['Aidbox Production', [Validators.required]],
+    baseUrl: ['', [Validators.required]],
+    project: ['', []],
+    authType: ['oauth2', [Validators.required]],
+    writeMode: ['upsert', []],
     // ── OAuth2 Client Credentials fields (conditional on authType) ───────────
     tokenEndpoint: ['', []],
-    clientId:      ['', []],
-    clientSecret:  ['', []],
+    clientId: ['', []],
+    clientSecret: ['', []],
     // ── Basic auth fields (conditional) ──────────────────────────────────────
-    username:      ['', []],
-    password:      ['', []],
+    username: ['', []],
+    password: ['', []],
     // ── Bearer token field (conditional) ─────────────────────────────────────
-    bearerToken:   ['', []],
+    bearerToken: ['', []],
     // ── Auto-fetch missing references (opt-in) ────────────────────────────────
     // Only ever fetches a reference the write-time existence check already confirmed missing from both this
     // batch and the destination (see MappedFhirRepositoryDestinationWriter.ResolveMissingReferencesAsync) — never
     // a first resort. Requires the source's own app registration to have read access to whatever resource type
     // turns up missing, since it fetches from the same EHR source feeding this destination.
     autoFetchMissingReferences: [false, []],
-    autoFetchMaxCount:         [25, []],
+    autoFetchMaxCount: [25, []],
   });
 
   // ── FHIR field-handling (step 3: passthrough vs. customize) ──────────────
@@ -403,13 +714,18 @@ export class DestinationWizardComponent implements OnInit {
   private _ensureFhirFieldCatalog(resourceType: string): void {
     if (this._fhirCatalogRequested.has(resourceType)) return;
     this._fhirCatalogRequested.add(resourceType);
-    this.catalogSvc.fields(resourceType, this.sourceConnectionId(), this.sourceVendor()).subscribe(fields => {
-      if (!fields.length) { this._fhirCatalogRequested.delete(resourceType); return; }
-      // Drop the mapping engine's virtual @token system fields (@runId, @now, ...) — those only resolve inside
-      // MappingNodeExecutor's field-mapping engine, not on the raw resource JSON this screen's rules run against.
-      const real = fields.filter(f => !f.fhirPath.startsWith('@'));
-      this.fhirFieldCatalog.update(m => ({ ...m, [resourceType]: real }));
-    });
+    this.catalogSvc
+      .fields(resourceType, this.sourceConnectionId(), this.sourceVendor())
+      .subscribe((fields) => {
+        if (!fields.length) {
+          this._fhirCatalogRequested.delete(resourceType);
+          return;
+        }
+        // Drop the mapping engine's virtual @token system fields (@runId, @now, ...) — those only resolve inside
+        // MappingNodeExecutor's field-mapping engine, not on the raw resource JSON this screen's rules run against.
+        const real = fields.filter((f) => !f.fhirPath.startsWith('@'));
+        this.fhirFieldCatalog.update((m) => ({ ...m, [resourceType]: real }));
+      });
   }
 
   selectFhirCustomizeMode(): void {
@@ -432,9 +748,11 @@ export class DestinationWizardComponent implements OnInit {
     return rt ? (this.fhirCustomRules()[rt] ?? []) : [];
   }
 
-  fieldOptionsFor(resourceType: string | null): { path: string; label: string }[] {
+  fieldOptionsFor(
+    resourceType: string | null,
+  ): { path: string; label: string }[] {
     if (!resourceType) return [];
-    return (this.fhirFieldCatalog()[resourceType] ?? []).map(f => ({
+    return (this.fhirFieldCatalog()[resourceType] ?? []).map((f) => ({
       path: this._withDefaultArrayIndices(f.fhirPath, f.arrays),
       label: f.label || f.fhirPath,
     }));
@@ -450,7 +768,7 @@ export class DestinationWizardComponent implements OnInit {
     let running = '';
     return fhirPath
       .split('.')
-      .map(segment => {
+      .map((segment) => {
         running = running ? `${running}.${segment}` : segment;
         return arraySet.has(running) ? `${segment}[0]` : segment;
       })
@@ -464,16 +782,19 @@ export class DestinationWizardComponent implements OnInit {
   addFhirRule(): void {
     const rt = this.activeRuleResource();
     if (!rt) return;
-    this.fhirCustomRules.update(rules => ({
+    this.fhirCustomRules.update((rules) => ({
       ...rules,
-      [rt]: [...(rules[rt] ?? []), { field: '', transform: 'dateFormat', params: {} }],
+      [rt]: [
+        ...(rules[rt] ?? []),
+        { field: '', transform: 'dateFormat', params: {} },
+      ],
     }));
   }
 
   removeFhirRule(index: number): void {
     const rt = this.activeRuleResource();
     if (!rt) return;
-    this.fhirCustomRules.update(rules => ({
+    this.fhirCustomRules.update((rules) => ({
       ...rules,
       [rt]: (rules[rt] ?? []).filter((_, i) => i !== index),
     }));
@@ -482,18 +803,22 @@ export class DestinationWizardComponent implements OnInit {
   updateFhirRule(index: number, patch: Partial<FhirCustomRule>): void {
     const rt = this.activeRuleResource();
     if (!rt) return;
-    this.fhirCustomRules.update(rules => ({
+    this.fhirCustomRules.update((rules) => ({
       ...rules,
-      [rt]: (rules[rt] ?? []).map((r, i) => (i === index ? { ...r, ...patch } : r)),
+      [rt]: (rules[rt] ?? []).map((r, i) =>
+        i === index ? { ...r, ...patch } : r,
+      ),
     }));
   }
 
   updateFhirRuleParam(index: number, key: string, value: string): void {
     const rt = this.activeRuleResource();
     if (!rt) return;
-    this.fhirCustomRules.update(rules => ({
+    this.fhirCustomRules.update((rules) => ({
       ...rules,
-      [rt]: (rules[rt] ?? []).map((r, i) => (i === index ? { ...r, params: { ...r.params, [key]: value } } : r)),
+      [rt]: (rules[rt] ?? []).map((r, i) =>
+        i === index ? { ...r, params: { ...r.params, [key]: value } } : r,
+      ),
     }));
   }
 
@@ -508,7 +833,10 @@ export class DestinationWizardComponent implements OnInit {
   onTransformChange(index: number, value: string): void {
     // Reset params on transform change — a previous transform's params (e.g. fromUnit/toUnit) don't carry
     // any meaning for a newly-chosen transform (e.g. coalesce's defaultValue).
-    this.updateFhirRule(index, { transform: value as FhirTransformType, params: {} });
+    this.updateFhirRule(index, {
+      transform: value as FhirTransformType,
+      params: {},
+    });
   }
 
   // ── codeLookup / statusCoercion nested pairs sub-editor ───────────────────
@@ -528,25 +856,46 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   addLookupPair(index: number): void {
-    this.setLookupPairs(index, [...this.getLookupPairs(this.rulesForActiveResource()[index]), { from: '', to: '' }]);
+    this.setLookupPairs(index, [
+      ...this.getLookupPairs(this.rulesForActiveResource()[index]),
+      { from: '', to: '' },
+    ]);
   }
 
   removeLookupPair(index: number, pairIndex: number): void {
-    this.setLookupPairs(index, this.getLookupPairs(this.rulesForActiveResource()[index]).filter((_, i) => i !== pairIndex));
+    this.setLookupPairs(
+      index,
+      this.getLookupPairs(this.rulesForActiveResource()[index]).filter(
+        (_, i) => i !== pairIndex,
+      ),
+    );
   }
 
-  updateLookupPair(index: number, pairIndex: number, key: 'from' | 'to', value: string): void {
+  updateLookupPair(
+    index: number,
+    pairIndex: number,
+    key: 'from' | 'to',
+    value: string,
+  ): void {
     const pairs = this.getLookupPairs(this.rulesForActiveResource()[index]);
-    this.setLookupPairs(index, pairs.map((p, i) => (i === pairIndex ? { ...p, [key]: value } : p)));
+    this.setLookupPairs(
+      index,
+      pairs.map((p, i) => (i === pairIndex ? { ...p, [key]: value } : p)),
+    );
   }
 
   totalFhirRuleCount(): number {
-    return Object.values(this.fhirCustomRules()).reduce((sum, rows) => sum + rows.length, 0);
+    return Object.values(this.fhirCustomRules()).reduce(
+      (sum, rows) => sum + rows.length,
+      0,
+    );
   }
 
   fhirFieldLabel(resourceType: string | null, path: string): string {
     if (!path) return '(no field selected)';
-    const entry = this.fieldOptionsFor(resourceType).find(f => f.path === path);
+    const entry = this.fieldOptionsFor(resourceType).find(
+      (f) => f.path === path,
+    );
     return entry?.label ?? path;
   }
 
@@ -556,7 +905,7 @@ export class DestinationWizardComponent implements OnInit {
     const field = this.fhirFieldLabel(this.activeRuleResource(), rule.field);
     switch (rule.transform) {
       case 'dateFormat':
-        return `Format ${field} as ${rule.params['targetFormat'] === 'custom' ? (rule.params['pattern'] || 'a custom pattern') : 'ISO 8601'}.`;
+        return `Format ${field} as ${rule.params['targetFormat'] === 'custom' ? rule.params['pattern'] || 'a custom pattern' : 'ISO 8601'}.`;
       case 'typeCast':
         return `Cast ${field} to ${rule.params['targetType'] || 'string'}.`;
       case 'booleanConversion':
@@ -606,17 +955,32 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
-  // Always the full curated FHIR resource list — not derived from the upstream source's own
-  // selection, since the destination's resource picks are independent of whatever the source
-  // happened to have selected (and a destination added before any source is configured still
-  // needs the full list to choose from).
-  readonly availableGroups = computed(() => SUPPORTED_RESOURCE_TYPES);
+  // The full curated FHIR resource list, intersected with whatever the upstream source's live
+  // Discover/metadata probe returns (see the sourceConnectionId effect below) once that's known — so a
+  // source whose CapabilityStatement only supports e.g. 20 of our 37 catalog resources only ever offers
+  // those 20 here, dynamically, without a separately hand-maintained list. Falls back to the full catalog
+  // unfiltered whenever discovery hasn't run yet, has no source to run against, or came back inconclusive
+  // (no network access to re-probe, endpoint unreachable, etc.) — same as this wizard's behavior before
+  // this filter existed, so a destination added before any source is configured still gets the full list.
+  readonly discoveredResourceTypes = signal<string[] | null>(null);
+  readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>(
+    'idle',
+  );
+  /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
+   *  const itself isn't reachable from the template. */
+  readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
+  readonly availableGroups = computed(() => {
+    const discovered = this.discoveredResourceTypes();
+    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
+    const discoveredSet = new Set(discovered);
+    return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+  });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
   readonly filteredGroups = computed(() => {
     const q = this.groupSearchQuery().trim().toLowerCase();
     if (!q) return this.availableGroups();
-    return this.availableGroups().filter(r => r.toLowerCase().includes(q));
+    return this.availableGroups().filter((r) => r.toLowerCase().includes(q));
   });
 
   onGroupSearchInput(value: string): void {
@@ -635,7 +999,7 @@ export class DestinationWizardComponent implements OnInit {
   readonly targetByResource = signal<Record<string, string>>({});
 
   // ── SQL connection probe (test connection → load tables/columns) ────────────
-  readonly sqlTables  = signal<DestinationTable[]>([]);
+  readonly sqlTables = signal<DestinationTable[]>([]);
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
@@ -646,17 +1010,23 @@ export class DestinationWizardComponent implements OnInit {
   // Existing tables only — no schema authoring (no "create a new table").
   readonly extraTablesByGroup = signal<Record<string, string[]>>({});
 
-  extraTablesFor(group: string): string[] { return this.extraTablesByGroup()[group] ?? []; }
+  extraTablesFor(group: string): string[] {
+    return this.extraTablesByGroup()[group] ?? [];
+  }
 
   /** The canvas computes and emits the new desired list directly (add: appended, remove: filtered) —
    *  this just stores it and cleans up any mappings that targeted a table that's no longer in the list. */
   onExtraTablesChange(tables: string[]): void {
     const g = this.activeMappingGroup();
     if (!g) return;
-    const removed = this.extraTablesFor(g).filter(t => !tables.includes(t));
-    this.extraTablesByGroup.update(m => ({ ...m, [g]: tables }));
+    const removed = this.extraTablesFor(g).filter((t) => !tables.includes(t));
+    this.extraTablesByGroup.update((m) => ({ ...m, [g]: tables }));
     if (removed.length) {
-      this.mappingRows.update(rows => rows.filter(r => !(r.resource === g && removed.includes(r.tableName))));
+      this.mappingRows.update((rows) =>
+        rows.filter(
+          (r) => !(r.resource === g && removed.includes(r.tableName)),
+        ),
+      );
     }
   }
 
@@ -666,10 +1036,18 @@ export class DestinationWizardComponent implements OnInit {
   // FieldMappingCanvasComponent, which meant it was lost the moment a different resource's canvas
   // opened (a fresh component instance) — lifted here so it survives resource navigation, node reload,
   // and the Mapping JSON export/import.
-  readonly childTableRelationsByTable = signal<Record<string, ChildTableRelation>>({});
+  readonly childTableRelationsByTable = signal<
+    Record<string, ChildTableRelation>
+  >({});
 
-  onChildTableRelationAdded(e: { tableName: string; relation: ChildTableRelation }): void {
-    this.childTableRelationsByTable.update(m => ({ ...m, [e.tableName]: e.relation }));
+  onChildTableRelationAdded(e: {
+    tableName: string;
+    relation: ChildTableRelation;
+  }): void {
+    this.childTableRelationsByTable.update((m) => ({
+      ...m,
+      [e.tableName]: e.relation,
+    }));
   }
 
   // ── Mapping JSON — the one canonical save/load contract for this screen (see field-mapping-summary.
@@ -677,7 +1055,9 @@ export class DestinationWizardComponent implements OnInit {
   // dest_mappings/dest_mappings_v2 (still feed workflow-build-assembler.service.ts unmodified). ────────
   readonly lastMappingSummary = signal<MappingSummaryDocument | null>(null);
   readonly mappingSummaryPreviewOpen = signal(false);
-  readonly canSaveMappingSummary = computed(() => this.mappingRows().length > 0);
+  readonly canSaveMappingSummary = computed(
+    () => this.mappingRows().length > 0,
+  );
 
   buildAndShowMappingSummary(): void {
     const doc = buildMappingSummaryDocument({
@@ -694,7 +1074,10 @@ export class DestinationWizardComponent implements OnInit {
     });
     this.lastMappingSummary.set(doc);
     this.mappingSummarySvc.save(doc).subscribe(() => {
-      this.toast.success('Mapping saved', `${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} saved.`);
+      this.toast.success(
+        'Mapping saved',
+        `${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} saved.`,
+      );
     });
   }
 
@@ -722,14 +1105,29 @@ export class DestinationWizardComponent implements OnInit {
 
   submitLoadMappingSummary(): void {
     const raw = this.mappingSummaryLoadText().trim();
-    if (!raw) { this.mappingSummaryLoadError.set('Paste a Mapping JSON document first.'); return; }
+    if (!raw) {
+      this.mappingSummaryLoadError.set('Paste a Mapping JSON document first.');
+      return;
+    }
     let doc: MappingSummaryDocument;
-    try { doc = JSON.parse(raw) as MappingSummaryDocument; }
-    catch (e) { this.mappingSummaryLoadError.set(`Invalid JSON: ${(e as Error).message}`); return; }
-    if (!Array.isArray(doc?.mappings)) { this.mappingSummaryLoadError.set('Not a recognized Mapping JSON document (missing "mappings").'); return; }
+    try {
+      doc = JSON.parse(raw) as MappingSummaryDocument;
+    } catch (e) {
+      this.mappingSummaryLoadError.set(`Invalid JSON: ${(e as Error).message}`);
+      return;
+    }
+    if (!Array.isArray(doc?.mappings)) {
+      this.mappingSummaryLoadError.set(
+        'Not a recognized Mapping JSON document (missing "mappings").',
+      );
+      return;
+    }
     this.mappingSummaryLoadError.set(null);
     this.loadMappingSummary(doc);
-    this.toast.success('Mapping loaded', `Restored ${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} from the pasted JSON.`);
+    this.toast.success(
+      'Mapping loaded',
+      `Restored ${doc.mappings.length} resource mapping${doc.mappings.length === 1 ? '' : 's'} from the pasted JSON.`,
+    );
   }
 
   // ── mapping snapshot (independent of the workflow — see mapping-snapshot.model.ts) ─────────────
@@ -745,10 +1143,15 @@ export class DestinationWizardComponent implements OnInit {
   private _loadedSnapshotId: string | null = null;
 
   refreshSnapshotList(): void {
-    this.mappingSnapshotSvc.list().subscribe(list => this.savedSnapshots.set(list));
+    this.mappingSnapshotSvc
+      .list()
+      .subscribe((list) => this.savedSnapshots.set(list));
   }
 
-  private _buildSnapshot(): Omit<MappingSnapshot, 'id' | 'createdAt' | 'updatedAt'> {
+  private _buildSnapshot(): Omit<
+    MappingSnapshot,
+    'id' | 'createdAt' | 'updatedAt'
+  > {
     const group = this.activeMappingGroup();
     return {
       name: group ? `${group} mapping` : 'Untitled mapping',
@@ -768,12 +1171,18 @@ export class DestinationWizardComponent implements OnInit {
    *  user-created), mapping rows, and which group/resources are selected. No workflow-level data at all. */
   saveMappingSnapshot(): void {
     this.snapshotBusy.set(true);
-    const draft = { ...this._buildSnapshot(), id: this._loadedSnapshotId ?? undefined };
-    this.mappingSnapshotSvc.save(draft).subscribe(saved => {
+    const draft = {
+      ...this._buildSnapshot(),
+      id: this._loadedSnapshotId ?? undefined,
+    };
+    this.mappingSnapshotSvc.save(draft).subscribe((saved) => {
       this._loadedSnapshotId = saved.id;
       this.snapshotBusy.set(false);
       this.refreshSnapshotList();
-      this.toast.success('Mapping snapshot saved', `Saved as "${saved.name}" (id: ${saved.id}).`);
+      this.toast.success(
+        'Mapping snapshot saved',
+        `Saved as "${saved.name}" (id: ${saved.id}).`,
+      );
     });
   }
 
@@ -782,9 +1191,15 @@ export class DestinationWizardComponent implements OnInit {
   loadMappingSnapshot(id: string): void {
     if (!id) return;
     this.snapshotBusy.set(true);
-    this.mappingSnapshotSvc.get(id).subscribe(snapshot => {
+    this.mappingSnapshotSvc.get(id).subscribe((snapshot) => {
       this.snapshotBusy.set(false);
-      if (!snapshot) { this.toast.error('Load failed', 'That saved mapping could not be found.'); return; }
+      if (!snapshot) {
+        this.toast.error(
+          'Load failed',
+          'That saved mapping could not be found.',
+        );
+        return;
+      }
       this._restoreFromSnapshot(snapshot);
       this.toast.success('Mapping loaded', `Restored "${snapshot.name}".`);
     });
@@ -805,33 +1220,33 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedGroupForMapping.set(s.activeGroup);
   }
 
-  /** Column names of any already-probed SQL table by its full name — used for extra target tables. */
+  /** Column names of any already-probed SQL table by its full name — used for extra target tables, and
+   *  for the target card's own [columns] rendering (via the canvas's columnsForCardFn). Deliberately
+   *  includes identity/computed and foreign-key columns — a table's real shape, PK/FK badges included,
+   *  should stay visible; FieldMappingCanvasComponent.isProtectedColumn is what actually stops one of
+   *  these from becoming a mapping target, checked at the point a mapping is completed instead of here. */
   readonly columnsForTableFn = (tableFullName: string): string[] => {
-    const table = this.sqlTables().find(t => t.fullName === tableFullName);
-    return table ? table.columns.map(c => c.name) : [];
+    const table = this.sqlTables().find((t) => t.fullName === tableFullName);
+    return table ? table.columns.map((c) => c.name) : [];
   };
 
   /** Already-probed tables not yet used as this group's primary or extra targets — offered in "+ Add a table". */
   readonly availableTablesToAddFn = (group: string): string[] => {
-    const used = new Set([this.targetFor(group), ...this.extraTablesFor(group)]);
-    return this.sqlTables().map(t => t.fullName).filter(t => !used.has(t));
+    const used = new Set([
+      this.targetFor(group),
+      ...this.extraTablesFor(group),
+    ]);
+    return this.sqlTables()
+      .map((t) => t.fullName)
+      .filter((t) => !used.has(t));
   };
 
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
-  readonly connectionInfo = computed<DestinationProbeRequest | null>(() => {
-    if (!this.isSql()) return null;
-    const v = this.sqlForm.value;
-    return {
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server: v.server ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-    };
-  });
+  connectionInfo(): DestinationProbeRequest | null {
+    const form = this.activeForm();
+    if (!this.isSql() || !isSqlFamilyForm(form)) return null;
+    return form.getProbeRequest();
+  }
 
   /** A column was added via the canvas's Add Column modal — upserted (not blindly appended) into the
    *  known schema, since this fires TWICE for the same column: once immediately with a locally-synthesized
@@ -841,22 +1256,40 @@ export class DestinationWizardComponent implements OnInit {
    *  can tell it apart from a probed/pre-existing column.
    *  If `table` is set, the target table didn't already exist locally — upserted the same way, by fullName,
    *  rather than trying (and failing) to append to a table that was never there. */
-  onColumnAdded(e: { tableName: string; column: DestinationColumn; table?: DestinationTable }): void {
+  onColumnAdded(e: {
+    tableName: string;
+    column: DestinationColumn;
+    table?: DestinationTable;
+  }): void {
     if (e.table) {
-      const tagged = { ...e.table, origin: 'userCreated' as const, columns: e.table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
-      this.sqlTables.update(tables => {
-        const idx = tables.findIndex(t => t.fullName === tagged.fullName);
-        return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+      const tagged = {
+        ...e.table,
+        origin: 'userCreated' as const,
+        columns: e.table.columns.map((c) => ({
+          ...c,
+          origin: 'userCreated' as const,
+        })),
+      };
+      this.sqlTables.update((tables) => {
+        const idx = tables.findIndex((t) => t.fullName === tagged.fullName);
+        return idx === -1
+          ? [...tables, tagged]
+          : tables.map((t, i) => (i === idx ? tagged : t));
       });
       return;
     }
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
-    this.sqlTables.update(tables => tables.map(t => {
-      if (t.fullName !== e.tableName) return t;
-      const idx = t.columns.findIndex(c => c.name === column.name);
-      const columns = idx === -1 ? [...t.columns, column] : t.columns.map((c, i) => i === idx ? column : c);
-      return { ...t, columns };
-    }));
+    this.sqlTables.update((tables) =>
+      tables.map((t) => {
+        if (t.fullName !== e.tableName) return t;
+        const idx = t.columns.findIndex((c) => c.name === column.name);
+        const columns =
+          idx === -1
+            ? [...t.columns, column]
+            : t.columns.map((c, i) => (i === idx ? column : c));
+        return { ...t, columns };
+      }),
+    );
   }
 
   /** A table was created via the canvas's "Create a new table…" modal — upserted (not skipped when
@@ -867,42 +1300,76 @@ export class DestinationWizardComponent implements OnInit {
    *  flushes the queued CREATE TABLE for real (see flushPendingSchemaOps). Tagged 'userCreated' (table and
    *  all its columns) for the same reason as onColumnAdded. */
   onTableCreated(table: DestinationTable): void {
-    const tagged = { ...table, origin: 'userCreated' as const, columns: table.columns.map(c => ({ ...c, origin: 'userCreated' as const })) };
-    this.sqlTables.update(tables => {
-      const idx = tables.findIndex(t => t.fullName === tagged.fullName);
-      return idx === -1 ? [...tables, tagged] : tables.map((t, i) => i === idx ? tagged : t);
+    const tagged = {
+      ...table,
+      origin: 'userCreated' as const,
+      columns: table.columns.map((c) => ({
+        ...c,
+        origin: 'userCreated' as const,
+      })),
+    };
+    this.sqlTables.update((tables) => {
+      const idx = tables.findIndex((t) => t.fullName === tagged.fullName);
+      return idx === -1
+        ? [...tables, tagged]
+        : tables.map((t, i) => (i === idx ? tagged : t));
     });
   }
 
   /** A column was really dropped via the canvas's delete-column flow — remove it from the known schema. */
   onColumnDropped(e: { tableName: string; column: string }): void {
-    this.sqlTables.update(tables => tables.map(t =>
-      t.fullName === e.tableName ? { ...t, columns: t.columns.filter(c => c.name !== e.column) } : t
-    ));
+    this.sqlTables.update((tables) =>
+      tables.map((t) =>
+        t.fullName === e.tableName
+          ? { ...t, columns: t.columns.filter((c) => c.name !== e.column) }
+          : t,
+      ),
+    );
   }
 
   /** A column was really altered (rename and/or data type change) — update its entry in sqlTables()
    *  (preserving its 'userCreated'/'probed' origin) and, if it was renamed, re-point any mapping that
    *  targeted the old column name so it doesn't silently point at a column that no longer exists. */
-  onColumnAltered(e: { tableName: string; oldColumnName: string; column: DestinationColumn }): void {
-    this.sqlTables.update(tables => tables.map(t =>
-      t.fullName === e.tableName
-        ? { ...t, columns: t.columns.map(c => c.name === e.oldColumnName ? { ...e.column, origin: c.origin } : c) }
-        : t
-    ));
+  onColumnAltered(e: {
+    tableName: string;
+    oldColumnName: string;
+    column: DestinationColumn;
+  }): void {
+    this.sqlTables.update((tables) =>
+      tables.map((t) =>
+        t.fullName === e.tableName
+          ? {
+              ...t,
+              columns: t.columns.map((c) =>
+                c.name === e.oldColumnName
+                  ? { ...e.column, origin: c.origin }
+                  : c,
+              ),
+            }
+          : t,
+      ),
+    );
     if (e.column.name !== e.oldColumnName) {
-      this.mappingRows.update(rows => rows.map(r =>
-        r.tableName === e.tableName && r.targetName === e.oldColumnName
-          ? { ...r, targetName: e.column.name }
-          : r
-      ));
+      this.mappingRows.update((rows) =>
+        rows.map((r) =>
+          r.tableName === e.tableName && r.targetName === e.oldColumnName
+            ? { ...r, targetName: e.column.name }
+            : r,
+        ),
+      );
     }
   }
 
   /** A real FHIR JSON payload was pasted and parsed via the canvas's "Load JSON payload" modal —
    *  store its fields so the source tree for this resource mirrors the payload's actual shape. */
-  onSourcePayloadLoaded(e: { resource: string; fields: ResourceFieldDef[] }): void {
-    this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
+  onSourcePayloadLoaded(e: {
+    resource: string;
+    fields: ResourceFieldDef[];
+  }): void {
+    this.payloadFieldsByResource.update((m) => ({
+      ...m,
+      [e.resource]: e.fields,
+    }));
   }
 
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
@@ -915,7 +1382,21 @@ export class DestinationWizardComponent implements OnInit {
   readonly applyingSchemaOps = signal(false);
 
   onSchemaOpQueued(op: PendingSchemaOp): void {
-    this.pendingSchemaOps.update(ops => [...ops, op]);
+    this.pendingSchemaOps.update((ops) => [...ops, op]);
+  }
+
+  /** A table was removed from the canvas (FieldMappingCanvasComponent.confirmRemoveTable) — drop any of
+   *  ITS OWN still-queued schema ops along with it (the "createTable" op that made it exist as a preview
+   *  in the first place, or an "addColumn"/"alterColumn"/"dropColumn" queued on it before removal).
+   *  Without this, a table the user created and then removed left its queue entries dangling: nothing in
+   *  the canvas still shows or maps to the table, but "Add to Workflow" would still create it for real,
+   *  and validateMappingForSave's own pendingSchemaOps check would keep naming a table no longer on
+   *  screen. Filtering by name is harmless even when nothing matches (a real, already-probed table
+   *  removed via its extra-table "✕" was never queued in the first place). */
+  onSchemaOpsCancelledForTable(tableName: string): void {
+    this.pendingSchemaOps.update((ops) =>
+      ops.filter((op) => op.request.tableName !== tableName),
+    );
   }
 
   /** Runs every queued schema op for real, strictly in the order they were queued (a later op — e.g. add
@@ -929,16 +1410,23 @@ export class DestinationWizardComponent implements OnInit {
 
     this.applyingSchemaOps.set(true);
     return from(ops).pipe(
-      concatMap(op => this._applyOneSchemaOp(op).pipe(
-        map(() => {
-          this.pendingSchemaOps.update(list => list.filter(o => o !== op));
-          return true;
-        }),
-      )),
+      concatMap((op) =>
+        this._applyOneSchemaOp(op).pipe(
+          map(() => {
+            this.pendingSchemaOps.update((list) =>
+              list.filter((o) => o !== op),
+            );
+            return true;
+          }),
+        ),
+      ),
       toArray(),
-      map(results => results.every(Boolean)),
-      catchError(err => {
-        const msg = err instanceof Error ? err.message : 'Failed to apply a queued schema change.';
+      map((results) => results.every(Boolean)),
+      catchError((err) => {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Failed to apply a queued schema change.';
         this.toast.error('Schema change failed', msg);
         return of(false);
       }),
@@ -949,24 +1437,52 @@ export class DestinationWizardComponent implements OnInit {
   private _applyOneSchemaOp(op: PendingSchemaOp): Observable<void> {
     switch (op.kind) {
       case 'createTable':
-        return this.schemaSvc.createTable(op.request).pipe(map(result => {
-          if (!result.success) throw new Error(`Create table "${op.request.tableName}" failed: ${result.error ?? 'unknown error'}`);
-          if (result.table) this.onTableCreated(result.table);
-        }));
+        return this.schemaSvc.createTable(op.request).pipe(
+          map((result) => {
+            if (!result.success)
+              throw new Error(
+                `Create table "${op.request.tableName}" failed: ${result.error ?? 'unknown error'}`,
+              );
+            if (result.table) this.onTableCreated(result.table);
+          }),
+        );
       case 'addColumn':
-        return this.schemaSvc.addColumn(op.request).pipe(map(result => {
-          if (!result.success || !result.column) throw new Error(`Add column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
-          this.onColumnAdded({ tableName: op.request.tableName, column: result.column, table: result.table ?? undefined });
-        }));
+        return this.schemaSvc.addColumn(op.request).pipe(
+          map((result) => {
+            if (!result.success || !result.column)
+              throw new Error(
+                `Add column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`,
+              );
+            this.onColumnAdded({
+              tableName: op.request.tableName,
+              column: result.column,
+              table: result.table ?? undefined,
+            });
+          }),
+        );
       case 'dropColumn':
-        return this.schemaSvc.dropColumn(op.request).pipe(map(result => {
-          if (!result.success) throw new Error(`Drop column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
-        }));
+        return this.schemaSvc.dropColumn(op.request).pipe(
+          map((result) => {
+            if (!result.success)
+              throw new Error(
+                `Drop column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`,
+              );
+          }),
+        );
       case 'alterColumn':
-        return this.schemaSvc.alterColumn(op.request).pipe(map(result => {
-          if (!result.success || !result.column) throw new Error(`Update column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`);
-          this.onColumnAltered({ tableName: op.request.tableName, oldColumnName: op.request.columnName, column: result.column });
-        }));
+        return this.schemaSvc.alterColumn(op.request).pipe(
+          map((result) => {
+            if (!result.success || !result.column)
+              throw new Error(
+                `Update column "${op.request.columnName}" on ${op.request.tableName} failed: ${result.error ?? 'unknown error'}`,
+              );
+            this.onColumnAltered({
+              tableName: op.request.tableName,
+              oldColumnName: op.request.columnName,
+              column: result.column,
+            });
+          }),
+        );
     }
   }
 
@@ -998,22 +1514,34 @@ export class DestinationWizardComponent implements OnInit {
   readonly resolvedSecretName = signal<string | null>(null);
   readonly provisioningDestination = signal(false);
 
-  private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
+  private static readonly SQL_TYPES: DestinationType[] = [
+    'SqlServer',
+    'AzureSql',
+    'PostgreSql',
+    'MySql',
+  ];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
+  private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
-  // only the probed destinationType and saved transformId differ from SQL Server. Mongo is its own family:
-  // no live introspection, so it gets its own form/branches rather than reusing SQL's or CSV's.
-  readonly isSql        = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
-  readonly isMySql      = computed(() => this.destType() === 'mysql');
-  readonly isPostgres   = computed(() => this.destType() === 'postgres');
-  readonly isMongo      = computed(() => this.destType() === 'mongo');
+  // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
+  // families: no live introspection, so each gets its own form/branches rather than reusing SQL's or CSV's.
+  readonly isSql = computed(
+    () =>
+      this.destType() === 'sql' ||
+      this.destType() === 'mysql' ||
+      this.destType() === 'postgres',
+  );
+  readonly isMySql = computed(() => this.destType() === 'mysql');
+  readonly isPostgres = computed(() => this.destType() === 'postgres');
+  readonly isMongo = computed(() => this.destType() === 'mongo');
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
-  readonly isFhir       = computed(() => this.destType() === 'fhir');
+  readonly isFhir = computed(() => this.destType() === 'fhir');
+  readonly isBlob = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
@@ -1026,13 +1554,21 @@ export class DestinationWizardComponent implements OnInit {
     return this.destType() as MappingDestType;
   }
 
-  readonly destLabel    = computed(() =>
-    this.destType() === 'sql' ? 'SQL Server'
-      : this.destType() === 'mysql' ? 'MySQL'
-      : this.destType() === 'postgres' ? 'PostgreSQL'
-      : this.destType() === 'mongo' ? 'MongoDB'
-      : this.destType() === 'fhir' ? 'Aidbox'
-      : 'CSV');
+  readonly destLabel = computed(() =>
+    this.destType() === 'sql'
+      ? 'SQL Server'
+      : this.destType() === 'mysql'
+        ? 'MySQL'
+        : this.destType() === 'postgres'
+          ? 'PostgreSQL'
+          : this.destType() === 'mongo'
+            ? 'MongoDB'
+            : this.destType() === 'fhir'
+              ? 'Aidbox'
+              : this.destType() === 'blob'
+                ? 'Azure Blob Storage'
+                : 'CSV',
+  );
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
@@ -1040,43 +1576,87 @@ export class DestinationWizardComponent implements OnInit {
     return DEST_RESOURCE_DEFS[r] ?? genericResourceDef(r);
   }
 
-  readonly reviewSummary = computed(() => {
-    const fv = this.isSql() ? this.sqlForm.value
-      : this.isMongo() ? this.mongoForm.value
-      : this.isFhir() ? this.fhirForm.value
-      : this.csvForm.value;
-    const rows = this.mappingRows();
-    const resources = this.selectedResources();
-    return { fv, rows, resources };
-  });
-
   constructor() {
     // Rebuild mapping rows whenever selected resources or destType change
     effect(() => {
       const resources = this.selectedResources();
-      const type      = this.nonFhirDestType();
+      const type = this.nonFhirDestType();
       // A FHIR repository has no per-resource table/file target and no mapping rows at all — seeding either
       // would only leave dead state behind on a destination that never renders the mapping canvas.
       if (this.isFhir()) return;
       untracked(() => this._rebuildRows(resources, type));
     });
 
-    // SFTP/email/download-link fields are required only while their mode is selected.
-    this._syncDeliveryModeValidators(this.csvForm.controls.deliveryMode.value);
-    this.csvForm.controls.deliveryMode.valueChanges.subscribe(v => this._syncDeliveryModeValidators(v));
+    // Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component
+    // the moment it actually exists — both editing a saved node and picking an existing connection can fire
+    // before the outlet's child is created (ngOnInit runs before the view/its children do), unlike the old
+    // FormGroup fields, which existed synchronously as class fields from the constructor onward.
+    effect(() => {
+      const outlet = this.formOutlet();
+      const pending = this._pendingFormPatch();
+      if (!outlet || !pending) return;
+      // Deferred via afterNextRender() even on this first attempt, not just the retries inside
+      // _flushPendingFormPatch — applying the patch synchronously here (mid-render, since this effect fires
+      // as part of the newly-created component's own initial change-detection pass) flips the Step 1 form
+      // from invalid to valid *during* that same pass, which trips NG0100
+      // (ExpressionChangedAfterItHasBeenCheckedError) on isNextDisabled()'s "Test connection & Next" binding.
+      // Running after the render is done avoids fighting Angular's own dev-mode consistency check.
+      untracked(() =>
+        afterNextRender(() => this._flushPendingFormPatch(pending), {
+          injector: this.injector,
+        }),
+      );
+    });
+
+    // Captures Step 1's pristine baseline exactly once per wizard instance — runs right after the effect
+    // above on the same flush (registration order), so a queued edit/existing-connection patch has already
+    // landed on the form by the time this reads it. Same retry rationale as that effect (see
+    // _flushPendingFormPatch's doc comment) — getRawValue() can hit the exact same not-ready-yet outlet.
+    effect(() => {
+      const outlet = this.formOutlet();
+      if (!outlet || this._step1Baseline !== null) return;
+      untracked(() =>
+        afterNextRender(() => this._captureStep1Baseline(), {
+          injector: this.injector,
+        }),
+      );
+    });
+    // FHIR bypasses the outlet entirely (see isFhir()'s doc comment), so the effect above never fires for
+    // it — fhirForm exists synchronously as a class field, so its baseline can be captured immediately
+    // rather than waiting on afterNextRender()/an outlet that will never mount.
+    effect(() => {
+      if (!this.isFhir() || this._step1Baseline !== null) return;
+      untracked(() => {
+        this._step1Baseline = this.fhirForm.getRawValue();
+      });
+    });
 
     // FHIR auth fields required only while their auth type is selected.
     this._syncFhirAuthValidators(this.fhirForm.controls.authType.value);
-    this.fhirForm.controls.authType.valueChanges.subscribe(v => this._syncFhirAuthValidators(v));
+    this.fhirForm.controls.authType.valueChanges.subscribe((v) =>
+      this._syncFhirAuthValidators(v),
+    );
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
-    effect(() => this.mappingCanvasActive.emit(this.activeMappingGroup() !== null));
+    effect(() =>
+      this.mappingCanvasActive.emit(this.activeMappingGroup() !== null),
+    );
     effect(() => {
       const g = this.activeMappingGroup();
       this.mappingCanvasTitle.emit(g ? `Map fields — ${g}` : null);
     });
-    effect(() => this.mappingCountChange.emit(this.mappingRows().length));
+    // Scoped to the currently open group's own rows — mappingRows() itself holds every resource's mapping for
+    // this whole destination, not just the one open in the canvas (see saveGroupMapping/validateMappingForSave,
+    // which filter the same way for the same reason). Unfiltered, this badge showed the workflow-wide total
+    // (e.g. "437 field mappings") next to a "Map fields — Patient" title that only ever meant Patient's own.
+    effect(() =>
+      this.mappingCountChange.emit(
+        this.mappingRows().filter(
+          (r) => r.resource === this.activeMappingGroup(),
+        ).length,
+      ),
+    );
 
     // Header-level Close/Save trigger counters — react only on an actual increment while this wizard
     // instance is alive. The first run just learns the real baseline (whatever the ancestor's counter
@@ -1084,23 +1664,47 @@ export class DestinationWizardComponent implements OnInit {
     // it's this instance catching up.
     effect(() => {
       const v = this.exitMappingRequest();
-      if (this._lastExitTrigger === null) { this._lastExitTrigger = v; return; }
-      if (v !== this._lastExitTrigger) { this._lastExitTrigger = v; if (v > 0) this.requestExitMapping(); }
+      if (this._lastExitTrigger === null) {
+        this._lastExitTrigger = v;
+        return;
+      }
+      if (v !== this._lastExitTrigger) {
+        this._lastExitTrigger = v;
+        if (v > 0) this.requestExitMapping();
+      }
     });
     effect(() => {
       const v = this.saveMappingRequest();
-      if (this._lastSaveTrigger === null) { this._lastSaveTrigger = v; return; }
-      if (v !== this._lastSaveTrigger) { this._lastSaveTrigger = v; if (v > 0) this.saveGroupMapping(); }
+      if (this._lastSaveTrigger === null) {
+        this._lastSaveTrigger = v;
+        return;
+      }
+      if (v !== this._lastSaveTrigger) {
+        this._lastSaveTrigger = v;
+        if (v > 0) this.saveGroupMapping();
+      }
     });
     effect(() => {
       const v = this.saveSnapshotRequest();
-      if (this._lastSaveSnapshotTrigger === null) { this._lastSaveSnapshotTrigger = v; return; }
-      if (v !== this._lastSaveSnapshotTrigger) { this._lastSaveSnapshotTrigger = v; if (v > 0) this.saveMappingSnapshot(); }
+      if (this._lastSaveSnapshotTrigger === null) {
+        this._lastSaveSnapshotTrigger = v;
+        return;
+      }
+      if (v !== this._lastSaveSnapshotTrigger) {
+        this._lastSaveSnapshotTrigger = v;
+        if (v > 0) this.saveMappingSnapshot();
+      }
     });
     effect(() => {
       const v = this.markAsMasterRequest();
-      if (this._lastMarkAsMasterTrigger === null) { this._lastMarkAsMasterTrigger = v; return; }
-      if (v !== this._lastMarkAsMasterTrigger) { this._lastMarkAsMasterTrigger = v; if (v > 0) this.markActiveGroupAsMaster(); }
+      if (this._lastMarkAsMasterTrigger === null) {
+        this._lastMarkAsMasterTrigger = v;
+        return;
+      }
+      if (v !== this._lastMarkAsMasterTrigger) {
+        this._lastMarkAsMasterTrigger = v;
+        if (v > 0) this.markActiveGroupAsMaster();
+      }
     });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
@@ -1115,26 +1719,150 @@ export class DestinationWizardComponent implements OnInit {
     effect(() => {
       const sourceConnectionId = this.sourceConnectionId();
       const sourceVendor = this.sourceVendor();
-      for (const r of this.availableGroups()) this._ensureCatalog(r, sourceConnectionId, sourceVendor);
+      for (const r of this.availableGroups())
+        this._ensureCatalog(r, sourceConnectionId, sourceVendor);
     });
+
+    // Populates discoveredResourceTypes (see availableGroups above) from whichever source is available,
+    // in priority order:
+    //  1. sourceDiscoveredResourceTypes input — this canvas session's own Discover result, already fetched
+    //     by EhrVendorSourceFormComponent, no extra network call needed. Available the moment the source
+    //     form is saved, even before a real sourceConnectionId exists.
+    //  2. A live re-probe via sourceConnectionId — fallback for editing a destination on an already-saved
+    //     workflow whose source form hasn't been reopened this session, so carries no node-level
+    //     'Discovered resource types' field yet.
+    // A null/empty result from both resolves to discoveredResourceTypes=null, which availableGroups treats
+    // as "show everything" — this filter can only ever narrow the list, never leave the user with nothing
+    // to pick from.
+    effect(() => {
+      const fromNode = this.sourceDiscoveredResourceTypes();
+      const id = this.sourceConnectionId();
+
+      if (fromNode.length > 0) {
+        this._probedConnectionId = id; // mark handled so a later id-only change doesn't also fire a live probe
+        this.discoveredResourceTypes.set(fromNode);
+        this.discoverProbeStatus.set('done');
+        return;
+      }
+
+      if (id === this._probedConnectionId) return;
+      this._probedConnectionId = id;
+      if (!id) {
+        this.discoveredResourceTypes.set(null);
+        this.discoverProbeStatus.set('idle');
+        return;
+      }
+      this.discoverProbeStatus.set('probing');
+      this.sourceConnectionSvc
+        .getById(id)
+        .pipe(
+          switchMap((conn) => this.discoverySvc.discover(conn.baseUrl)),
+          catchError(() => of(null)),
+        )
+        .subscribe((result) => {
+          // The session's own Discover result (fromNode, above) may have arrived while this slower live
+          // probe was in flight — that's the more authoritative, already-in-session source, so don't let a
+          // late network response clobber it.
+          if (this.sourceDiscoveredResourceTypes().length > 0) return;
+          if (result && result.resourceTypes.length > 0) {
+            this.discoveredResourceTypes.set(result.resourceTypes);
+            this.discoverProbeStatus.set('done');
+          } else {
+            this.discoveredResourceTypes.set(null);
+            this.discoverProbeStatus.set('error');
+          }
+        });
+    });
+  }
+
+  /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
+   *  Re-reads formOutlet() fresh on every attempt rather than closing over a single snapshot, because the
+   *  failure mode here isn't just "the SQL-family wrapper's nested viewChild throws" (see the try/catch
+   *  below) — NgComponentOutlet's own directive instance can already exist (formOutlet() truthy) *before*
+   *  it has actually instantiated its dynamic child, so `outlet.componentInstance` alone can be `null` with
+   *  nothing thrown at all. That's a silent, permanent drop: neither `formOutlet()` nor `_pendingFormPatch()`
+   *  change again afterward, so the effect that got us here never re-fires on its own. Retrying via
+   *  afterNextRender() on *both* the "still null" and "threw" cases is what actually closes the gap. */
+  private _flushPendingFormPatch(pending: {
+    fields: Record<string, string>;
+    target: string | null;
+    isExistingSelection?: boolean;
+  }): void {
+    const form = this.formOutlet()
+      ?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._flushPendingFormPatch(pending), {
+        injector: this.injector,
+      });
+      return;
+    }
+    try {
+      form.patchFrom(pending.fields, pending.target);
+      if (pending.isExistingSelection)
+        this._existingBaseline = form.getRawValue();
+      this._pendingFormPatch.set(null);
+    } catch (err) {
+      console.error(
+        'Step 1 form was not ready to restore its saved values — retrying after next render.',
+        err,
+      );
+      afterNextRender(() => this._flushPendingFormPatch(pending), {
+        injector: this.injector,
+      });
+    }
+  }
+
+  /** Captures Step 1's pristine baseline the moment the form actually exists — see isStep1Dirty(). Same
+   *  "outlet exists but componentInstance is still null" race as _flushPendingFormPatch above, so it
+   *  retries the same way rather than reading formOutlet() once and giving up. */
+  private _captureStep1Baseline(): void {
+    const form = this.formOutlet()
+      ?.componentInstance as WizardDestinationFormApi | null;
+    if (!form) {
+      afterNextRender(() => this._captureStep1Baseline(), {
+        injector: this.injector,
+      });
+      return;
+    }
+    try {
+      this._step1Baseline = form.getRawValue();
+    } catch {
+      afterNextRender(() => this._captureStep1Baseline(), {
+        injector: this.injector,
+      });
+    }
   }
 
   private readonly _requested = new Set<string>();
+  // undefined = the probe effect hasn't run yet; null/string thereafter = the last sourceConnectionId it
+  // actually probed for, so a redundant re-fire with the same id (e.g. an unrelated signal read in the same
+  // effect) doesn't re-probe.
+  private _probedConnectionId: string | null | undefined = undefined;
 
-  private _ensureCatalog(resource: string, sourceConnectionId: string | null, sourceVendor: string): void {
+  private _ensureCatalog(
+    resource: string,
+    sourceConnectionId: string | null,
+    sourceVendor: string,
+  ): void {
     const key = `${resource}::${sourceConnectionId ?? ''}::${sourceVendor}`;
     if (this._requested.has(key)) return;
     this._requested.add(key);
-    this.catalogSvc.fields(resource, sourceConnectionId, sourceVendor).subscribe(fields => {
-      if (!fields.length) { this._requested.delete(key); return; }
-      const defs = fields.map(f => this._toFieldDef(resource, f));
-      this.catalogByResource.update(m => ({ ...m, [resource]: defs }));
-    });
+    this.catalogSvc
+      .fields(resource, sourceConnectionId, sourceVendor)
+      .subscribe((fields) => {
+        if (!fields.length) {
+          this._requested.delete(key);
+          return;
+        }
+        const defs = fields.map((f) => this._toFieldDef(resource, f));
+        this.catalogByResource.update((m) => ({ ...m, [resource]: defs }));
+      });
   }
 
   private _toFieldDef(resource: string, f: FhirElement): ResourceFieldDef {
-    const column = f.fhirPath.split('.')
-      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+    const column = f.fhirPath
+      .split('.')
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join('');
     return {
       label: f.label || f.fhirPath,
@@ -1147,41 +1875,12 @@ export class DestinationWizardComponent implements OnInit {
     };
   }
 
-  private _syncDeliveryModeValidators(deliveryMode: string | null): void {
-    const isSftp = deliveryMode === 'sftp';
-    // sftpPassword is a secret — selectExisting() deliberately never repopulates it (secrets never come back from
-    // the API), so requiring it here would permanently block reusing an existing SFTP connection unless the user
-    // types something just to satisfy validation. Reusing-as-is never sends a password anywhere (see _save()'s
-    // "unchanged" branch), so it doesn't need one; only a genuinely NEW connection (mode 'new', or an edited
-    // 'existing' one that forks) does.
-    const requirePassword = isSftp && this.connectionMode() === 'new';
-    (['sftpHost', 'sftpUsername', 'sftpRemoteFolder'] as const).forEach(name => {
-      const ctrl = this.csvForm.get(name)!;
-      ctrl.setValidators(isSftp ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
-    const passwordCtrl = this.csvForm.get('sftpPassword')!;
-    passwordCtrl.setValidators(requirePassword ? [Validators.required] : []);
-    passwordCtrl.updateValueAndValidity({ emitEvent: false });
-    const port = this.csvForm.get('sftpPort')!;
-    port.setValidators(isSftp ? [Validators.required, Validators.min(1), Validators.max(65535)] : []);
-    port.updateValueAndValidity({ emitEvent: false });
-
-    const isEmail = deliveryMode === 'email';
-    const emailTo = this.csvForm.get('emailTo')!;
-    emailTo.setValidators(isEmail ? [Validators.required] : []);
-    emailTo.updateValueAndValidity({ emitEvent: false });
-
-    const isDownloadUrl = deliveryMode === 'downloadUrl';
-    const expiry = this.csvForm.get('downloadLinkExpiryMinutes')!;
-    expiry.setValidators(isDownloadUrl ? [Validators.required, Validators.min(1), Validators.max(10080)] : []);
-    expiry.updateValueAndValidity({ emitEvent: false });
-  }
-
   // Reverse of buildConnectionMetadata's oauth2 -> clientCredentials bridge, for populating the wizard from an
   // existing DestinationConfiguration's real dest_fhirAuthType value. 'none' has no representation in this
   // wizard's dropdown (oauth2/basic/bearer only), so it — like an absent value — falls back to the default.
-  private _fhirAuthTypeFromBackend(value: string | undefined): 'oauth2' | 'basic' | 'bearer' {
+  private _fhirAuthTypeFromBackend(
+    value: string | undefined,
+  ): 'oauth2' | 'basic' | 'bearer' {
     return value === 'basic' || value === 'bearer' ? value : 'oauth2';
   }
 
@@ -1191,7 +1890,10 @@ export class DestinationWizardComponent implements OnInit {
   // dest_writeMode as before. 'conditional' is a stale value from the now-removed "Conditional update by
   // identifier" option (never implemented server-side — it behaved identically to plain upsert) — remap it to
   // 'upsert' so an old destination saved with it still shows a valid, matching dropdown selection.
-  private _fhirWriteModeFromBackend(destWriteMode: string | undefined, destFhirWriteMode: string | undefined): string {
+  private _fhirWriteModeFromBackend(
+    destWriteMode: string | undefined,
+    destFhirWriteMode: string | undefined,
+  ): string {
     if (destFhirWriteMode === 'bundle') return 'upsertBundle';
     if (destFhirWriteMode === 'transaction') return 'upsertTransaction';
     if (destWriteMode === 'conditional') return 'upsert';
@@ -1202,23 +1904,27 @@ export class DestinationWizardComponent implements OnInit {
     // tokenEndpoint is deliberately NOT in this list — it's no longer user-entered. For oauth2/clientCredentials
     // it's discovered from baseUrl (GET {baseUrl}/.well-known/smart-configuration) during testFhirConnection()
     // and patched into this same control, so it still ends up in dest_tokenEndpoint at save time.
-    (['clientId', 'clientSecret'] as const).forEach(name => {
+    (['clientId', 'clientSecret'] as const).forEach((name) => {
       const ctrl = this.fhirForm.get(name)!;
       ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
-    (['username', 'password'] as const).forEach(name => {
+    (['username', 'password'] as const).forEach((name) => {
       const ctrl = this.fhirForm.get(name)!;
       ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
     const bearerToken = this.fhirForm.get('bearerToken')!;
-    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.setValidators(
+      authType === 'bearer' ? [Validators.required] : [],
+    );
     bearerToken.updateValueAndValidity({ emitEvent: false });
   }
 
   ngOnInit(): void {
-    this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));
+    this.transformationRulesSvc
+      .isHidden()
+      .subscribe((hidden) => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
     const edit = this.editNode();
     if (edit) {
@@ -1235,19 +1941,25 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   // ── step helpers ──────────────────────────────────────────────────────────
-  isStepActive(n: number) { return this.step() === n; }
-  isStepDone(n: number)   { return this.step() > n; }
+  isStepActive(n: number) {
+    return this.step() === n;
+  }
+  isStepDone(n: number) {
+    return this.step() > n;
+  }
 
   isNextDisabled(): boolean {
     const s = this.step();
     if (s === 1) {
-      if (this.connectionMode() === 'existing' && !this.selectedExistingId()) return true;
-      // FHIR additionally requires a successful Test Connection before advancing — unlike SQL/Mongo/CSV, wrong
-      // credentials here don't surface as a form-validation error (the fields themselves are well-formed
+      if (this.connectionMode() === 'existing' && !this.selectedExistingId())
+        return true;
+      // FHIR additionally requires a successful Test Connection before advancing — unlike SQL/Mongo/CSV/Blob,
+      // wrong credentials here don't surface as a form-validation error (the fields themselves are well-formed
       // strings), so form validity alone would let someone click through with credentials already known to be
-      // wrong. Mirrors the SQL branch in next(), which likewise gates on probeState().
+      // wrong. Mirrors the FHIR branch in next(), which likewise gates on probeState().
       if (this.isFhir()) return this.fhirForm.invalid;
-      return this.isSql() ? this.sqlForm.invalid : this.isMongo() ? this.mongoForm.invalid : this.csvForm.invalid;
+      const form = this.activeForm();
+      return !form || !form.isValid();
     }
     if (s === 2) return this.selectedResources().length === 0;
     return false;
@@ -1255,23 +1967,48 @@ export class DestinationWizardComponent implements OnInit {
 
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
-    // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
-    // real DestinationConfiguration happens inside testConnection()'s success handler, right before it advances.
-    if (this.step() === 1 && this.isSql() && this.probeState() !== 'ok') {
-      this.testConnection();
-      return;
-    }
-    // FHIR (Aidbox): same shape as the SQL branch above — leaving Configure first tests the base URL and
-    // credentials against the real server, and only provisions/advances once that succeeds. There's no schema
-    // to introspect, so the test just validates the connection (and discovers the OAuth2 token endpoint).
-    if (this.step() === 1 && this.isFhir() && this.probeState() !== 'ok') {
-      this.testFhirConnection();
-      return;
-    }
-    // CSV: no connection probe gate — provision (create/update) the real DestinationConfiguration here,
-    // immediately on leaving Configure, then advance once it succeeds.
-    if (this.step() === 1 && !this.isSql() && !this.isFhir()) {
-      this.provisionDestinationConnection(() => this._advancePastStep1());
+    if (this.step() === 1) {
+      // FHIR (Aidbox) is hand-rolled, not registry-routed (see isFhir()'s doc comment) — leaving Configure
+      // first tests the base URL and credentials against the real server, and only provisions/advances once
+      // that succeeds. There's no schema to introspect, so the test just validates the connection (and
+      // discovers the OAuth2 token endpoint).
+      if (this.isFhir()) {
+        if (this.probeState() !== 'ok') {
+          this.testFhirConnection();
+          return;
+        }
+        const metadata = this._getFhirMetadata();
+        if (metadata)
+          this.provisionDestinationConnection(metadata, () =>
+            this._advancePastStep1(),
+          );
+        return;
+      }
+
+      const form = this.activeForm();
+      if (!form) return;
+      // SQL: leaving Configure auto-tests the connection and loads tables before advancing; provisioning the
+      // real DestinationConfiguration happens once the probe succeeds, right before advancing.
+      if (isSqlFamilyForm(form) && form.probeState() !== 'ok') {
+        form.testConnection((result) => {
+          if (!result.connected) return;
+          this.sqlTables.set(result.tables);
+          this.probeState.set('ok');
+          const metadata = form.getMetadata();
+          if (metadata)
+            this.provisionDestinationConnection(metadata, () =>
+              this._advancePastStep1(),
+            );
+        });
+        return;
+      }
+      // CSV/Mongo/Blob (and SQL once already probed 'ok'): provision (create/update) the real
+      // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
+      const metadata = form.getMetadata();
+      if (!metadata) return;
+      this.provisionDestinationConnection(metadata, () =>
+        this._advancePastStep1(),
+      );
       return;
     }
     if (this.step() < this.TOTAL_STEPS) {
@@ -1283,7 +2020,12 @@ export class DestinationWizardComponent implements OnInit {
         // resource (e.g. Patient) always before whatever requires it — not raw selection-click order.
         const sorted = sortByDependencyRank(this.selectedResources());
         this.selectedResources.set(sorted);
-        console.table(sorted.map(resource => ({ resource, rank: dependencyRankFor(resource) })));
+        console.table(
+          sorted.map((resource) => ({
+            resource,
+            rank: dependencyRankFor(resource),
+          })),
+        );
       }
       // Leaving Map fields (3) — every resource's mapping is done — log the full, rank-ordered Mapping
       // JSON across every resource that has at least one mapping, so it's there to copy without needing
@@ -1298,18 +2040,19 @@ export class DestinationWizardComponent implements OnInit {
           childTableRelationsByTable: this.childTableRelationsByTable(),
           availableFields: this.availableFieldsFn,
           sourceConnectionId: this.sourceConnectionId(),
-          destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+          destinationId:
+            this.selectedExistingId() ?? this.resolvedDestinationId(),
           targetByResource: this.targetByResource(),
         });
         console.log(JSON.stringify(doc, null, 2));
       }
-      this.step.update(x => x + 1);
+      this.step.update((x) => x + 1);
       this._hasProgressed.set(true);
     } else {
       // Nothing hits the real database until this exact moment: every create-table/add-column/drop-column/
       // alter-column queued while mapping runs for real here, in order, before the mapping profile itself
       // is ever saved — see flushPendingSchemaOps.
-      this.flushPendingSchemaOps().subscribe(ok => {
+      this.flushPendingSchemaOps().subscribe((ok) => {
         if (ok) this._save();
       });
     }
@@ -1345,8 +2088,13 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
-    return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
+    return this.isMySql()
+      ? 'MySql'
+      : this.isPostgres()
+        ? 'PostgreSql'
+        : 'SqlServer';
   }
 
   /** Opens the Rules modal for one resource's already-mapped columns — shows whichever rule is
@@ -1355,8 +2103,8 @@ export class DestinationWizardComponent implements OnInit {
    *  mappingRows() itself, so there's no snapshot/discard-guard needed around it. */
   openRulesForResource(resource: string): void {
     const columns = this.mappingRows()
-      .filter(r => r.resource === resource)
-      .map(r => ({
+      .filter((r) => r.resource === resource)
+      .map((r) => ({
         tableName: r.tableName,
         targetName: r.targetName,
         sourceField: r.sources[0]?.fhirPath ?? null,
@@ -1364,21 +2112,30 @@ export class DestinationWizardComponent implements OnInit {
       }));
 
     if (columns.length === 0) {
-      this.toast.error(`Map at least one field for ${resource} before configuring its transformation rules.`);
+      this.toast.error(
+        `Map at least one field for ${resource} before configuring its transformation rules.`,
+      );
       return;
     }
 
-    this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(TransformRulesDialogComponent, {
-      width: '680px',
-      maxWidth: '95vw',
-      restoreFocus: false,
-      data: {
-        resourceType: resource,
-        destinationType: this.resolveDestinationTypeForRules(),
-        sourceSystem: this.sourceVendor() || null,
-        columns,
+    this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(
+      TransformRulesDialogComponent,
+      {
+        width: '680px',
+        // NOT a tighter cap like '95vw' — MatDialogConfig's maxWidth/maxHeight apply once at open and
+        // aren't revisited by dialogRef.updateSize() later, so a smaller static cap here would silently
+        // clamp TransformRulesDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
+        maxWidth: '100vw',
+        maxHeight: '100vh',
+        restoreFocus: false,
+        data: {
+          resourceType: resource,
+          destinationType: this.resolveDestinationTypeForRules(),
+          sourceSystem: this.sourceVendor() || null,
+          columns,
+        },
       },
-    });
+    );
   }
 
   /** "Select Existing" is only offered once a real sourceConnectionId, destinationId, and vendor are all
@@ -1386,25 +2143,34 @@ export class DestinationWizardComponent implements OnInit {
    *  inline source has no sourceConnectionId until the whole workflow is built; see wizard.service.ts's save()).
    *  Destination is real by this point in virtually every case, since provisionDestinationConnection() runs
    *  right after Step 1. */
-  readonly canSelectExistingProfile = computed(() =>
-    !!this.sourceConnectionId() && !!(this.selectedExistingId() ?? this.resolvedDestinationId()) && !!this.sourceVendor());
+  readonly canSelectExistingProfile = computed(
+    () =>
+      !!this.sourceConnectionId() &&
+      !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&
+      !!this.sourceVendor(),
+  );
 
   openExistingProfilePicker(resource: string): void {
     const sourceConnectionId = this.sourceConnectionId();
-    const destinationId = this.selectedExistingId() ?? this.resolvedDestinationId();
+    const destinationId =
+      this.selectedExistingId() ?? this.resolvedDestinationId();
     if (!sourceConnectionId || !destinationId) return;
 
-    this.dialog.open<ExistingMappingProfileDialogComponent, ExistingMappingProfileDialogData, MappingProfileDto | null>(
-      ExistingMappingProfileDialogComponent,
-      {
+    this.dialog
+      .open<
+        ExistingMappingProfileDialogComponent,
+        ExistingMappingProfileDialogData,
+        MappingProfileDto | null
+      >(ExistingMappingProfileDialogComponent, {
         width: '640px',
         maxWidth: '95vw',
         restoreFocus: false,
         data: { resourceType: resource, sourceConnectionId, destinationId },
-      },
-    ).afterClosed().subscribe(profile => {
-      if (profile) this._applyExistingProfile(resource, profile);
-    });
+      })
+      .afterClosed()
+      .subscribe((profile) => {
+        if (profile) this._applyExistingProfile(resource, profile);
+      });
   }
 
   /** "Mark as Master" for whichever resource's mapping canvas is currently open — promotes the mapping
@@ -1417,31 +2183,56 @@ export class DestinationWizardComponent implements OnInit {
     if (!resource) return;
 
     const mappingNode = this.pipelineStore.byId(this.attachNode().id);
-    const existingIds = this._parseExistingMappingProfileIds(mappingNode?.fields ?? {});
+    const existingIds = this._parseExistingMappingProfileIds(
+      mappingNode?.fields ?? {},
+    );
     const profileId = existingIds[resource];
     if (!profileId) {
-      this.toast.show('Save the mapping first', `Save "${resource}"'s mapping at least once before marking it as a master template.`);
+      this.toast.show(
+        'Save the mapping first',
+        `Save "${resource}"'s mapping at least once before marking it as a master template.`,
+      );
       return;
     }
 
-    this.dialog.open<PromoteMappingProfileDialogComponent, PromoteMappingProfileDialogData, string | null>(
-      PromoteMappingProfileDialogComponent,
-      {
+    this.dialog
+      .open<
+        PromoteMappingProfileDialogComponent,
+        PromoteMappingProfileDialogData,
+        string | null
+      >(PromoteMappingProfileDialogComponent, {
         width: '480px',
         maxWidth: '95vw',
         restoreFocus: false,
-        data: { resourceType: resource, suggestedName: `${resource} — ${this.destLabel()}` },
-      },
-    ).afterClosed().subscribe(name => {
-      if (!name) return;
-      this.mappingProfileSvc.promoteToMaster(profileId, name).subscribe({
-        next: () => this.toast.success('Master mapping saved', `"${name}" is now available via "Select Existing".`),
-        error: err => {
-          const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to save the master mapping.';
-          this.toast.show('Master mapping not saved', typeof msg === 'string' ? msg : 'Failed to save the master mapping.');
+        data: {
+          resourceType: resource,
+          suggestedName: `${resource} — ${this.destLabel()}`,
         },
+      })
+      .afterClosed()
+      .subscribe((name) => {
+        if (!name) return;
+        this.mappingProfileSvc.promoteToMaster(profileId, name).subscribe({
+          next: () =>
+            this.toast.success(
+              'Master mapping saved',
+              `"${name}" is now available via "Select Existing".`,
+            ),
+          error: (err) => {
+            const msg =
+              err?.error?.title ??
+              err?.error?.error ??
+              err?.message ??
+              'Failed to save the master mapping.';
+            this.toast.show(
+              'Master mapping not saved',
+              typeof msg === 'string'
+                ? msg
+                : 'Failed to save the master mapping.',
+            );
+          },
+        });
       });
-    });
   }
 
   /** MappingProfile.DestinationObject is stored as the bare table name (e.g. "Patient_NewMapped"), but
@@ -1451,11 +2242,15 @@ export class DestinationWizardComponent implements OnInit {
    *  even though mappingRows() is populated) rather than erroring, so this resolves it against the live
    *  probed schema first. Returns null (caller warns) when the destination's schema wasn't probed with a
    *  matching table at all — a real "the two don't line up" case, not just a naming quirk. */
-  private _resolveDestinationObjectForCanvas(destinationObject: string): string | null {
+  private _resolveDestinationObjectForCanvas(
+    destinationObject: string,
+  ): string | null {
     if (!this.isSql()) return destinationObject; // CSV/Mongo targets are never schema-qualified
-    const table = this.sqlTables().find(t =>
-      t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
-      t.tableName.toLowerCase() === destinationObject.toLowerCase());
+    const table = this.sqlTables().find(
+      (t) =>
+        t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
+        t.tableName.toLowerCase() === destinationObject.toLowerCase(),
+    );
     return table?.fullName ?? null;
   }
 
@@ -1468,19 +2263,39 @@ export class DestinationWizardComponent implements OnInit {
    *  intact. Resolving against the same FHIR catalog the rest of the wizard already uses (availableFields)
    *  gets the real fhirPath — matched by jsonPath first (exact, since both come from the same catalog),
    *  falling back to the destination column name for the rare field the catalog doesn't carry. */
-  private _resolveFhirPath(resource: string, f: MappingFieldDto): { fhirPath: string; label: string; arrays?: string[] } {
+  private _resolveFhirPath(
+    resource: string,
+    f: MappingFieldDto,
+  ): { fhirPath: string; label: string; arrays?: string[] } {
     const catalog = this.availableFields(resource);
-    const byJsonPath = f.jsonPath ? catalog.find(c => c.jsonPath === f.jsonPath) : undefined;
-    const byColumnName = byJsonPath ?? catalog.find(c =>
-      c.sqlColumn.toLowerCase() === f.targetField.toLowerCase() || c.csvColumn.toLowerCase() === f.targetField.toLowerCase());
-    if (byColumnName) return { fhirPath: byColumnName.path, label: byColumnName.label, arrays: byColumnName.arrays };
+    const byJsonPath = f.jsonPath
+      ? catalog.find((c) => c.jsonPath === f.jsonPath)
+      : undefined;
+    const byColumnName =
+      byJsonPath ??
+      catalog.find(
+        (c) =>
+          c.sqlColumn.toLowerCase() === f.targetField.toLowerCase() ||
+          c.csvColumn.toLowerCase() === f.targetField.toLowerCase(),
+      );
+    if (byColumnName)
+      return {
+        fhirPath: byColumnName.path,
+        label: byColumnName.label,
+        arrays: byColumnName.arrays,
+      };
     return { fhirPath: `${resource}.${f.targetField}`, label: f.targetField };
   }
 
   /** Replaces one resource's mapping rows and target with an existing MappingProfile's saved fields —
    *  every other resource's rows are left untouched. */
-  private _applyExistingProfile(resource: string, profile: MappingProfileDto): void {
-    const resolvedTarget = this._resolveDestinationObjectForCanvas(profile.destinationObject);
+  private _applyExistingProfile(
+    resource: string,
+    profile: MappingProfileDto,
+  ): void {
+    const resolvedTarget = this._resolveDestinationObjectForCanvas(
+      profile.destinationObject,
+    );
     if (!resolvedTarget) {
       this.toast.error(
         'Target table not found',
@@ -1489,19 +2304,24 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    const newRows: MappingRow[] = profile.fields.map(f => {
+    const newRows: MappingRow[] = profile.fields.map((f) => {
       const resolved = this._resolveFhirPath(resource, f);
       return {
         resource,
-        sources: [{
-          fhirPath: resolved.fhirPath,
-          label: resolved.label,
-          jsonPath: f.jsonPath,
-          valueType: f.valueType,
-          arrays: resolved.arrays,
-        }],
+        sources: [
+          {
+            fhirPath: resolved.fhirPath,
+            label: resolved.label,
+            jsonPath: f.jsonPath,
+            valueType: f.valueType,
+            arrays: resolved.arrays,
+          },
+        ],
         mode: 'value',
-        instance: f.arrayPolicy === 'RepeatParent' ? { type: 'all', aggregate: 'rows' } : { type: 'first' },
+        instance:
+          f.arrayPolicy === 'RepeatParent'
+            ? { type: 'all', aggregate: 'rows' }
+            : { type: 'first' },
         targetName: f.targetField,
         tableName: resolvedTarget,
         isRequired: f.isRequired,
@@ -1511,9 +2331,15 @@ export class DestinationWizardComponent implements OnInit {
       };
     });
 
-    this.mappingRows.update(rows => [...rows.filter(r => r.resource !== resource), ...newRows]);
-    this.targetByResource.update(m => ({ ...m, [resource]: resolvedTarget }));
-    this.toast.success('Mapping profile applied', `Loaded "${profile.name}" for ${resource}.`);
+    this.mappingRows.update((rows) => [
+      ...rows.filter((r) => r.resource !== resource),
+      ...newRows,
+    ]);
+    this.targetByResource.update((m) => ({ ...m, [resource]: resolvedTarget }));
+    this.toast.success(
+      'Mapping profile applied',
+      `Loaded "${profile.name}" for ${resource}.`,
+    );
   }
 
   openGroupMapping(resource: string): void {
@@ -1531,7 +2357,10 @@ export class DestinationWizardComponent implements OnInit {
   /** "Save" below the canvas — keeps whatever's mapped so far, returns to the group list, and shows the
    *  canonical Mapping JSON built from every resource mapped so far (not just this one). Blocked by
    *  validateMappingForSave: the canvas stays open (never closeGroupMapping()s) until every error for
-   *  this resource is fixed, so nothing wrong ever actually gets persisted. */
+   *  this resource is fixed, so nothing wrong ever actually gets persisted. This is the ONLY caller of
+   *  validateMappingForSave — the Review step's "Add to Workflow" (next()/buildWorkflow) intentionally
+   *  never re-runs it; by the time a resource's mapping reaches Review it has already been through this
+   *  gate, so Add to Workflow's job is just provisioning/saving the already-valid configuration. */
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
     if (!group) return;
@@ -1545,7 +2374,8 @@ export class DestinationWizardComponent implements OnInit {
     }
     this.closeGroupMapping();
     if (this.canSaveMappingSummary()) this.buildAndShowMappingSummary();
-    else this.toast.success('Mapping saved', `${group} mapping progress saved.`);
+    else
+      this.toast.success('Mapping saved', `${group} mapping progress saved.`);
   }
 
   /** Catches mappings that would silently write wrong or lost data rather than letting them through
@@ -1554,25 +2384,131 @@ export class DestinationWizardComponent implements OnInit {
    *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
   private validateMappingForSave(resource: string): string[] {
     const errors: string[] = [];
-    const rows = this.mappingRows().filter(r => r.resource === resource);
-    if (rows.length === 0) return errors; // nothing mapped yet isn't itself an error — Save just no-ops.
 
-    const knownTables = this.hasSqlTables() ? new Set(this.sqlTableOptions()) : null;
+    // A still-queued "add column" whose name collides with a column the live probe already found on
+    // that table (origin 'probed' — it predates anything queued via the canvas's own "+ Add column"
+    // this session) — the backend rejects this the moment "Add to Workflow" flushes the queue for real
+    // ("Column names in each table must be unique..."), several steps after the mapping canvas that
+    // queued it. Checked here instead, so it's caught on this canvas's own Save — regardless of whether
+    // this resource has any mapped rows yet, hence ahead of the early-return below.
+    for (const op of this.pendingSchemaOps()) {
+      if (op.kind !== 'addColumn') continue;
+      const table = this.sqlTables().find(
+        (t) => t.fullName === op.request.tableName,
+      );
+      const collides = table?.columns.some(
+        (c) =>
+          c.origin === 'probed' &&
+          c.name.toLowerCase() === op.request.columnName.toLowerCase(),
+      );
+      if (collides) {
+        errors.push(
+          `"${op.request.columnName}" already exists on ${op.request.tableName} — remove the queued "Add column" and map to the existing column instead.`,
+        );
+      }
+    }
+
+    const rows = this.mappingRows().filter((r) => r.resource === resource);
+    if (rows.length === 0) return errors; // nothing else mapped yet isn't itself an error — Save just no-ops.
+
+    // Mirrors WorkflowBuildAssemblerService.buildMappingForResource's own "Upsert/Update with no id
+    // column mapped" check — that one only ever ran once "Add to Workflow" assembled the full build
+    // request, several steps after the mapping canvas that's actually missing the id column. The
+    // destination's write mode was already committed in Step 1 (dest_writeMode) — read the same way the
+    // canvas's own connectionInfo/csvDelimiterKey bindings already read config from that step. Deliberately
+    // AFTER the rows.length===0 early-return above, not ahead of it — a resource with nothing mapped at all
+    // (including one that just had its only mapped table/field removed) isn't a broken mapping, it's an
+    // unstarted one, same as every other check below; this must not be the one exception that blocks Save
+    // on an empty canvas.
+    const writeMode = this.activeFormConfig()['dest_writeMode'];
+    if (writeMode === 'upsert' || writeMode === 'update') {
+      const hasIdMapping = rows.some(
+        (r) => r.isUpsertKey || r.sources[0]?.fhirPath === `${resource}.id`,
+      );
+      if (!hasIdMapping) {
+        const modeLabel =
+          writeMode === 'upsert' ? 'Upsert by source id' : 'Update only';
+        errors.push(
+          `"${resource}" destination is set to ${modeLabel}, but no destination column is mapped from ` +
+            `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+        );
+      }
+    }
+
+    const knownTables = this.hasSqlTables()
+      ? new Set(this.sqlTableOptions())
+      : null;
     const targetCounts = new Map<string, number>();
 
     for (const row of rows) {
       if (row.mode === 'value' && row.sources.length === 0) {
-        errors.push(`"${row.targetName}" on ${row.tableName} has no source field selected.`);
+        errors.push(
+          `"${row.targetName}" on ${row.tableName} has no source field selected.`,
+        );
         continue;
       }
 
       if (knownTables && !knownTables.has(row.tableName)) {
-        errors.push(`${row.tableName} no longer exists in the destination database — remove or retarget "${row.targetName}".`);
+        errors.push(
+          `${row.tableName} no longer exists in the destination database — remove or retarget "${row.targetName}".`,
+        );
         continue;
       }
 
-      if (knownTables && !this.columnsForTableFn(row.tableName).includes(row.targetName)) {
-        errors.push(`"${row.targetName}" no longer exists in ${row.tableName}'s columns.`);
+      // Belt-and-suspenders for a row wired before FieldMappingCanvasComponent.completeMapping started
+      // guarding against these (or restored from an older/legacy snapshot saved before that guard
+      // existed) — the column's value is filled in automatically regardless (by the database for an
+      // identity/computed column, by the mapping engine's own child-table relationship resolution for a
+      // foreign key), so a direct write to it is never valid; catch it here instead of leaving that as
+      // the user's first signal, several steps after the mapping canvas that let it happen.
+      if (knownTables) {
+        const table = this.sqlTables().find(
+          (t) => t.fullName === row.tableName,
+        );
+        const column = table?.columns.find((c) => c.name === row.targetName);
+        if (column?.isAutoGenerated) {
+          errors.push(
+            `"${row.targetName}" is an identity or computed column in ${row.tableName} and cannot be a mapping write target — remove or retarget this field.`,
+          );
+          continue;
+        }
+        if (column?.isForeignKey) {
+          errors.push(
+            `"${row.targetName}" is a foreign key on ${row.tableName}${column.references ? ` (→ ${column.references})` : ''} — it's populated automatically from that relationship and cannot be a mapping write target. Remove or retarget this field.`,
+          );
+          continue;
+        }
+
+        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
+        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
+        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
+        // mismatch is caught on this canvas's own Save instead of only surfacing once the whole workflow is
+        // saved. childJson rows are exempt — their value is always written as JSON text (see
+        // resolveArrayPolicy's StoreJson branch), a distinct concern from a scalar field's own type.
+        if (column?.mappingValueType && row.mode === 'value') {
+          const sourceValueType = row.sources[0]?.valueType;
+          if (
+            sourceValueType &&
+            sourceValueType.toLowerCase() !==
+              column.mappingValueType.toLowerCase()
+          ) {
+            errors.push(
+              `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
+                `but "${row.sources[0]?.label ?? row.targetName}" is mapped as ${sourceValueType} — pick a compatible ` +
+                `source field or retarget to a ${sourceValueType}-compatible column.`,
+            );
+            continue;
+          }
+        }
+      }
+
+      if (
+        knownTables &&
+        !this.columnsForTableFn(row.tableName).includes(row.targetName)
+      ) {
+        errors.push(
+          `"${row.targetName}" no longer exists in ${row.tableName}'s columns.`,
+        );
         continue;
       }
 
@@ -1583,127 +2519,119 @@ export class DestinationWizardComponent implements OnInit {
     for (const [key, count] of targetCounts) {
       if (count <= 1) continue;
       const [tableName, targetName] = key.split('::');
-      errors.push(`${tableName}.${targetName} is mapped ${count} times — only one mapping would actually be written.`);
+      errors.push(
+        `${tableName}.${targetName} is mapped ${count} times — only one mapping would actually be written.`,
+      );
     }
 
     return errors;
   }
 
   /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */
-  requestExitMapping(): void { this.pendingExitConfirm.set(true); }
-  cancelExitMapping(): void { this.pendingExitConfirm.set(false); }
+  requestExitMapping(): void {
+    this.pendingExitConfirm.set(true);
+  }
+  cancelExitMapping(): void {
+    this.pendingExitConfirm.set(false);
+  }
 
   onExitConfirmBackdropClick(e: MouseEvent): void {
     if (e.target === e.currentTarget) this.cancelExitMapping();
   }
 
   confirmExitMapping(): void {
-    if (this.mappingRowsSnapshot) this.mappingRows.set(this.mappingRowsSnapshot);
-    if (this.targetByResourceSnapshot) this.targetByResource.set(this.targetByResourceSnapshot);
+    if (this.mappingRowsSnapshot)
+      this.mappingRows.set(this.mappingRowsSnapshot);
+    if (this.targetByResourceSnapshot)
+      this.targetByResource.set(this.targetByResourceSnapshot);
     this.pendingExitConfirm.set(false);
     this.closeGroupMapping();
   }
 
   back(): void {
     if (this.step() > 1) {
-      this.step.update(x => x - 1);
+      this.step.update((x) => x - 1);
       // Returning to Configure invalidates a prior probe — force a re-test on the next advance.
-      if (this.step() === 1 && this.isSql()) { this.probeState.set('idle'); this.sqlTables.set([]); }
-      if (this.step() === 1 && this.isFhir()) { this.probeState.set('idle'); }
+      if (this.step() === 1 && this.isSql()) {
+        this.probeState.set('idle');
+        this.sqlTables.set([]);
+        const form = this.activeForm();
+        if (isSqlFamilyForm(form)) form.resetProbe();
+      }
+      if (this.step() === 1 && this.isFhir()) {
+        this.probeState.set('idle');
+      }
     }
   }
 
-  cancel(): void { this.cancelled.emit(); }
-
-  // ── SQL connection test + table/column loading ──────────────────────────────
-  testConnection(): void {
-    const v = this.sqlForm.value;
-    this.probeState.set('testing');
-    this.probeError.set(null);
-    this.schemaSvc.probe({
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server:   v.server   ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-      requireSsl: v.requireSsl ?? false,
-    }).subscribe({
-      next: res => {
-        if (res.connected) {
-          // Tagged 'probed' so a MappingSnapshot can tell these apart from anything the user creates
-          // afterwards via "+ Add a table"/"+ Add column" (onTableCreated/onColumnAdded, both 'userCreated').
-          this.sqlTables.set(res.tables.map(t => ({
-            ...t,
-            origin: 'probed',
-            columns: t.columns.map(c => ({ ...c, origin: 'probed' })),
-          })));
-          this.probeState.set('ok');
-          if (this.step() < this.TOTAL_STEPS) {
-            this.provisionDestinationConnection(() => this._advancePastStep1());
-          }
-        } else {
-          this.probeState.set('error');
-          this.probeError.set(res.error ?? 'Connection failed.');
-        }
-      },
-      error: err => {
-        this.probeState.set('error');
-        this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
-      },
-    });
+  cancel(): void {
+    this.cancelled.emit();
   }
 
   // ── FHIR (Aidbox) connection test ─────────────────────────────────────────
-  // Triggered by the footer's own Next button (see next(), mirroring the SQL branch right above it).
-  // No tokenEndpoint in the request — for oauth2/clientCredentials the backend discovers it from baseUrl via
-  // GET {baseUrl}/.well-known/smart-configuration and returns it as resolvedTokenEndpoint. On success we patch
-  // that into this form's (hidden) tokenEndpoint control — so it still lands in dest_tokenEndpoint at save
-  // time, exactly as a manually-typed value would have — then provision and advance, folding what used to be
-  // two clicks (Test Connection, then Next) into one.
+  // Triggered by the footer's own Next button (see next(), mirroring the SQL-family branch there). FHIR stays
+  // hand-rolled (see isFhir()'s doc comment), so it keeps its own test flow instead of going through
+  // SqlFamilyFormApi.testConnection(). No tokenEndpoint in the request — for oauth2/clientCredentials the
+  // backend discovers it from baseUrl via GET {baseUrl}/.well-known/smart-configuration and returns it as
+  // resolvedTokenEndpoint. On success we patch that into this form's (hidden) tokenEndpoint control — so it
+  // still lands in dest_tokenEndpoint at save time, exactly as a manually-typed value would have — then
+  // provision and advance, folding what used to be two clicks (Test Connection, then Next) into one.
   testFhirConnection(): void {
     const v = this.fhirForm.value;
     this.probeState.set('testing');
     this.probeError.set(null);
-    this.schemaSvc.testFhir({
-      baseUrl:      v.baseUrl ?? '',
-      authType:     v.authType ?? 'oauth2',
-      clientId:     v.clientId ?? undefined,
-      clientSecret: v.clientSecret ?? undefined,
-      username:     v.username ?? undefined,
-      password:     v.password ?? undefined,
-      bearerToken:  v.bearerToken ?? undefined,
-    }).subscribe({
-      next: res => {
-        if (!res.connected) {
+    this.schemaSvc
+      .testFhir({
+        baseUrl: v.baseUrl ?? '',
+        authType: v.authType ?? 'oauth2',
+        clientId: v.clientId ?? undefined,
+        clientSecret: v.clientSecret ?? undefined,
+        username: v.username ?? undefined,
+        password: v.password ?? undefined,
+        bearerToken: v.bearerToken ?? undefined,
+      })
+      .subscribe({
+        next: (res) => {
+          if (!res.connected) {
+            this.probeState.set('error');
+            this.probeError.set(res.error ?? 'Connection failed.');
+            return;
+          }
+          if (res.resolvedTokenEndpoint) {
+            this.fhirForm.patchValue({
+              tokenEndpoint: res.resolvedTokenEndpoint,
+            });
+          }
+          this.probeState.set('ok');
+          if (this.step() < this.TOTAL_STEPS) {
+            const metadata = this._getFhirMetadata();
+            if (metadata)
+              this.provisionDestinationConnection(metadata, () =>
+                this._advancePastStep1(),
+              );
+          }
+        },
+        error: (err) => {
           this.probeState.set('error');
-          this.probeError.set(res.error ?? 'Connection failed.');
-          return;
-        }
-        if (res.resolvedTokenEndpoint) {
-          this.fhirForm.patchValue({ tokenEndpoint: res.resolvedTokenEndpoint });
-        }
-        this.probeState.set('ok');
-        if (this.step() < this.TOTAL_STEPS) {
-          this.provisionDestinationConnection(() => this._advancePastStep1());
-        }
-      },
-      error: err => {
-        this.probeState.set('error');
-        this.probeError.set(typeof err?.error?.error === 'string' ? err.error.error : (err?.message ?? 'Connection failed.'));
-      },
-    });
+          this.probeError.set(
+            typeof err?.error?.error === 'string'
+              ? err.error.error
+              : (err?.message ?? 'Connection failed.'),
+          );
+        },
+      });
   }
 
   // ── select existing connection ───────────────────────────────────────────
   setConnectionMode(mode: 'new' | 'existing'): void {
     this.connectionMode.set(mode);
-    if (mode === 'existing' && this.existingOptions().length === 0 && !this.existingOptionsLoading()) {
+    if (
+      mode === 'existing' &&
+      this.existingOptions().length === 0 &&
+      !this.existingOptionsLoading()
+    ) {
       this._loadExistingOptions();
     }
-    if (!this.isSql() && !this.isMongo() && !this.isFhir()) this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
   }
 
   /** The "✕" next to the dropdown — undoes a clone and returns the active form to a blank "New" state. This is
@@ -1712,19 +2640,16 @@ export class DestinationWizardComponent implements OnInit {
     this.connectionMode.set('new');
     this.selectedExistingId.set(null);
     this._existingBaseline = null;
+    const form = this.activeForm();
+    form?.reset();
     if (this.isSql()) {
-      this.sqlForm.reset();
       this.probeState.set('idle');
       this.sqlTables.set([]);
-    } else if (this.isMongo()) {
-      this.mongoForm.reset();
+      if (isSqlFamilyForm(form)) form.resetProbe();
     } else if (this.isFhir()) {
       this.fhirForm.reset();
       this.probeState.set('idle');
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
-    } else {
-      this.csvForm.reset();
-      this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null);
     }
   }
 
@@ -1733,31 +2658,41 @@ export class DestinationWizardComponent implements OnInit {
     this.destinationConfigSvc
       .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
       .pipe(
-        map(page => {
+        map((page) => {
           const wantedTypes = this.isSql()
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
               : this.isFhir()
                 ? DestinationWizardComponent.FHIR_TYPES
-                : DestinationWizardComponent.CSV_TYPES;
-          return page.items.filter(item => wantedTypes.includes(item.destinationType));
+                : this.isBlob()
+                  ? DestinationWizardComponent.BLOB_TYPES
+                  : DestinationWizardComponent.CSV_TYPES;
+          return page.items.filter((item) =>
+            wantedTypes.includes(item.destinationType),
+          );
         }),
-        switchMap(candidates =>
+        switchMap((candidates) =>
           candidates.length === 0
             ? of([] as DestinationConfigurationDto[])
             : forkJoin(
-                candidates.map(item =>
+                candidates.map((item) =>
                   this.destinationConfigSvc.hasExecutionHistory(item.id).pipe(
-                    map(res => (res.hasExecutionHistory ? null : item)),
+                    map((res) => (res.hasExecutionHistory ? null : item)),
                     catchError(() => of(item)),
                   ),
                 ),
-              ).pipe(map(results => results.filter((x): x is DestinationConfigurationDto => x !== null))),
+              ).pipe(
+                map((results) =>
+                  results.filter(
+                    (x): x is DestinationConfigurationDto => x !== null,
+                  ),
+                ),
+              ),
         ),
       )
       .subscribe({
-        next: options => {
+        next: (options) => {
           this.existingOptions.set(options);
           this.existingOptionsLoading.set(false);
         },
@@ -1774,84 +2709,69 @@ export class DestinationWizardComponent implements OnInit {
   selectExisting(id: string): void {
     this.connectionMode.set('existing');
     this.selectedExistingId.set(id);
-    const selected = this.existingOptions().find(o => o.id === id);
+    const selected = this.existingOptions().find((o) => o.id === id);
     if (!selected) return;
 
-    const metadata = this._parseConnectionMetadata(selected.connectionMetadataJson);
+    const metadata = this._parseConnectionMetadata(
+      selected.connectionMetadataJson,
+    );
+    // dest_name always falls back to the saved record's own name (metadata's dest_name is only ever absent
+    // for a record saved before this key existed) — folded into the bag handed to patchFrom so every type's
+    // patchFrom sees the same fallback without each needing to special-case it.
+    if (!metadata['dest_name']) metadata['dest_name'] = selected.name;
 
-    if (this.isSql()) {
-      this.sqlForm.patchValue({
-        name:      metadata['dest_name']      || selected.name,
-        server:    metadata['dest_server']    || '',
-        database:  metadata['dest_database']  || '',
-        auth:      metadata['dest_auth']      || 'sql-auth',
-        username:  metadata['dest_username']  || '',
-        password:  '',
-        schema:    metadata['dest_schema']    || 'dbo',
-        writeMode: metadata['dest_writeMode'] || 'upsert',
-        requireSsl: metadata['dest_requireSsl'] === 'true',
-      });
-      this._existingBaseline = this.sqlForm.getRawValue();
-    } else if (this.isMongo()) {
-      this.mongoForm.patchValue({
-        name:             metadata['dest_name']       || selected.name,
-        connectionString: '',
-        collection:       metadata['dest_collection']  || selected.target || '',
-        writeMode:        metadata['dest_writeMode']    || 'upsert',
-      });
-      this._existingBaseline = this.mongoForm.getRawValue();
-    } else if (this.isFhir()) {
+    if (this.isFhir()) {
       this.fhirForm.patchValue({
-        name:          metadata['dest_name']          || selected.name,
-        baseUrl:       metadata['dest_baseUrl']       || selected.target || '',
-        project:       metadata['dest_project']       || '',
+        name: metadata['dest_name'] || selected.name,
+        baseUrl: metadata['dest_baseUrl'] || selected.target || '',
+        project: metadata['dest_project'] || '',
         // The backend persists this as dest_fhirAuthType with its own vocabulary (none/bearer/basic/
         // clientCredentials — see buildConnectionMetadata's bridge comment); translate it back to the
         // wizard's own authType values here rather than reading the wrong key.
-        authType:      this._fhirAuthTypeFromBackend(metadata['dest_fhirAuthType']),
-        writeMode:     this._fhirWriteModeFromBackend(metadata['dest_writeMode'], metadata['dest_fhirWriteMode']),
+        authType: this._fhirAuthTypeFromBackend(metadata['dest_fhirAuthType']),
+        writeMode: this._fhirWriteModeFromBackend(
+          metadata['dest_writeMode'],
+          metadata['dest_fhirWriteMode'],
+        ),
         tokenEndpoint: metadata['dest_tokenEndpoint'] || '',
-        clientId:      metadata['dest_clientId']      || '',
-        clientSecret:  '',
-        username:      metadata['dest_username']      || '',
-        password:      '',
-        bearerToken:   '',
-        autoFetchMissingReferences: metadata['dest_autoFetchMissingReferences'] === 'true',
-        autoFetchMaxCount: metadata['dest_autoFetchMaxCount'] ? Number(metadata['dest_autoFetchMaxCount']) : 25,
+        clientId: metadata['dest_clientId'] || '',
+        clientSecret: '',
+        username: metadata['dest_username'] || '',
+        password: '',
+        bearerToken: '',
+        autoFetchMissingReferences:
+          metadata['dest_autoFetchMissingReferences'] === 'true',
+        autoFetchMaxCount: metadata['dest_autoFetchMaxCount']
+          ? Number(metadata['dest_autoFetchMaxCount'])
+          : 25,
       });
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       this._existingBaseline = this.fhirForm.getRawValue();
-    } else {
-      this.csvForm.patchValue({
-        name:             metadata['dest_name']             || selected.name,
-        deliveryMode:     metadata['dest_deliveryMode']     || 'download',
-        filePattern:      metadata['dest_filePattern']       || selected.target || this.csvForm.value.filePattern,
-        delimiter:        metadata['dest_delimiter']         || 'comma',
-        encoding:         metadata['dest_encoding']          || 'utf-8',
-        sftpHost:         metadata['dest_sftpHost']          || '',
-        sftpPort:         metadata['dest_sftpPort'] ? Number(metadata['dest_sftpPort']) : 22,
-        sftpUsername:     metadata['dest_sftpUsername']      || '',
-        sftpAuthType:     metadata['dest_sftpAuthType']      || 'password',
-        sftpPassword:     '',
-        sftpRemoteFolder: metadata['dest_sftpRemoteFolder']  || '',
-        emailTo:              metadata['dest_emailTo']              || '',
-        emailCc:               metadata['dest_emailCc']               || '',
-        emailSubjectTemplate: metadata['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
-        emailBodyTemplate:
-          metadata['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
-        downloadLinkExpiryMinutes: metadata['dest_downloadLinkExpiryMinutes']
-          ? Number(metadata['dest_downloadLinkExpiryMinutes'])
-          : 60,
-      });
-      this._existingBaseline = this.csvForm.getRawValue();
+      return;
     }
+
+    const form = this.activeForm();
+    if (!form) {
+      this._pendingFormPatch.set({
+        fields: metadata,
+        target: selected.target ?? null,
+        isExistingSelection: true,
+      });
+      return;
+    }
+    form.patchFrom(metadata, selected.target ?? null);
+    this._existingBaseline = form.getRawValue();
   }
 
-  private _parseConnectionMetadata(json: string | null | undefined): Record<string, string> {
+  private _parseConnectionMetadata(
+    json: string | null | undefined,
+  ): Record<string, string> {
     if (!json) return {};
     try {
       const parsed = JSON.parse(json) as unknown;
-      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, string>) : {};
+      return typeof parsed === 'object' && parsed !== null
+        ? (parsed as Record<string, string>)
+        : {};
     } catch {
       return {};
     }
@@ -1865,14 +2785,53 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set(['password', 'sftpPassword', 'connectionString', 'clientSecret', 'bearerToken']);
+    const secretKeys = new Set([
+      'password',
+      'sftpPassword',
+      'connectionString',
+      'secretValue',
+      'clientSecret',
+      'bearerToken',
+    ]);
     const strip = (v: Record<string, unknown>) =>
-      Object.fromEntries(Object.entries(v).filter(([key]) => !secretKeys.has(key)));
-    const current = this.isSql() ? this.sqlForm.getRawValue()
-      : this.isMongo() ? this.mongoForm.getRawValue()
-      : this.isFhir() ? this.fhirForm.getRawValue()
-      : this.csvForm.getRawValue();
-    return JSON.stringify(strip(current)) !== JSON.stringify(strip(this._existingBaseline));
+      Object.fromEntries(
+        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+      );
+    const current = this.isFhir()
+      ? this.fhirForm.getRawValue()
+      : (this.activeForm()?.getRawValue() ?? {});
+    return (
+      JSON.stringify(strip(current)) !==
+      JSON.stringify(strip(this._existingBaseline))
+    );
+  }
+
+  /** True once Step 1's form has been edited away from its pristine baseline (see _step1Baseline) — the
+   *  "there's something here worth confirming before discarding" check for leaving Step 1 *without* ever
+   *  advancing past it (_hasProgressed alone misses this: it only flips true once the user clicks Next/Save
+   *  — see _advancePastStep1()/_save()). Used alongside _hasProgressed, never instead of it, by both
+   *  cancel() here and node-library-dialog's switch-type guard. Secret fields excluded, same rationale and
+   *  key list as hasExistingChanged(). */
+  isStep1Dirty(): boolean {
+    if (!this._step1Baseline) return false;
+    const secretKeys = new Set([
+      'password',
+      'sftpPassword',
+      'connectionString',
+      'clientSecret',
+      'bearerToken',
+    ]);
+    const strip = (v: Record<string, unknown>) =>
+      Object.fromEntries(
+        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+      );
+    const current = this.isFhir()
+      ? this.fhirForm.getRawValue()
+      : (this.activeForm()?.getRawValue() ?? {});
+    return (
+      JSON.stringify(strip(current)) !==
+      JSON.stringify(strip(this._step1Baseline))
+    );
   }
 
   /**
@@ -1881,8 +2840,11 @@ export class DestinationWizardComponent implements OnInit {
    * untouched (forceSuffix true, desiredName === the original's own name), a suffix is always appended, since the
    * original itself already holds that exact name.
    */
-  private _resolveUniqueName(desiredName: string, forceSuffix: boolean): string {
-    const taken = new Set(this.existingOptions().map(o => o.name));
+  private _resolveUniqueName(
+    desiredName: string,
+    forceSuffix: boolean,
+  ): string {
+    const taken = new Set(this.existingOptions().map((o) => o.name));
     if (!forceSuffix && !taken.has(desiredName)) return desiredName;
     let suffix = 1;
     let candidate = `${desiredName}-${suffix}`;
@@ -1897,12 +2859,15 @@ export class DestinationWizardComponent implements OnInit {
    *  singular mappingProfileId, attributed to this node's primary resource, for a node saved before the map
    *  existed) — mirrors WorkflowBuildAssemblerService.parseExistingMappingProfileIds so both save paths agree
    *  on which id belongs to which resource. */
-  private _parseExistingMappingProfileIds(fields: Record<string, string>): Record<string, string> {
+  private _parseExistingMappingProfileIds(
+    fields: Record<string, string>,
+  ): Record<string, string> {
     const raw = fields['mappingProfileIds'];
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as unknown;
-        if (parsed && typeof parsed === 'object') return parsed as Record<string, string>;
+        if (parsed && typeof parsed === 'object')
+          return parsed as Record<string, string>;
       } catch {
         // fall through to the legacy singular field below
       }
@@ -1913,34 +2878,49 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   hasSqlTables(): boolean {
-    return this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0;
+    return (
+      this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0
+    );
   }
 
   sqlTableOptions(): string[] {
-    return this.sqlTables().map(t => t.fullName);
+    return this.sqlTables().map((t) => t.fullName);
   }
 
-  // Columns of the table currently chosen for a resource (drives the per-row column dropdown).
+  // Columns of the table currently chosen for a resource (drives the target card's own rendering).
+  // Deliberately unfiltered — see columnsForTableFn's own doc comment for why.
   columnsForResourceTarget(r: string): string[] {
     const target = this.targetFor(r);
-    const table = this.sqlTables().find(t => t.fullName === target || t.tableName === target);
-    return table ? table.columns.map(c => c.name) : [];
+    const table = this.sqlTables().find(
+      (t) => t.fullName === target || t.tableName === target,
+    );
+    return table ? table.columns.map((c) => c.name) : [];
   }
 
   /** Real data type (e.g. "nvarchar(50)") of one column on any already-known SQL table — undefined for
    *  CSV destinations or free-text/pending columns that have no real schema behind them yet. Purely a
    *  display concern for the mapping canvas's cards; column identity everywhere else stays the name. */
-  dataTypeForTableColumn(tableFullName: string, column: string): string | undefined {
-    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
-    return table?.columns.find(c => c.name === column)?.dataType;
+  dataTypeForTableColumn(
+    tableFullName: string,
+    column: string,
+  ): string | undefined {
+    const table = this.sqlTables().find(
+      (t) => t.fullName === tableFullName || t.tableName === tableFullName,
+    );
+    return table?.columns.find((c) => c.name === column)?.dataType;
   }
 
   /** Real PK/FK status of one column on any already-known SQL table (see DestinationColumn.isPrimaryKey/
    *  isForeignKey/references) — undefined for CSV destinations or free-text/pending columns with no real
    *  schema behind them yet. Same display-only role as dataTypeForTableColumn. */
-  keyInfoForTableColumn(tableFullName: string, column: string): DestinationColumn | undefined {
-    const table = this.sqlTables().find(t => t.fullName === tableFullName || t.tableName === tableFullName);
-    return table?.columns.find(c => c.name === column);
+  keyInfoForTableColumn(
+    tableFullName: string,
+    column: string,
+  ): DestinationColumn | undefined {
+    const table = this.sqlTables().find(
+      (t) => t.fullName === tableFullName || t.tableName === tableFullName,
+    );
+    return table?.columns.find((c) => c.name === column);
   }
 
   // ── data groups ───────────────────────────────────────────────────────────
@@ -1951,9 +2931,13 @@ export class DestinationWizardComponent implements OnInit {
   // (SourceNodeExecutors.GetDestinationResourceTypesAsync) — an unselected type referenced by a selected one
   // (Organization, Location, Practitioner, ...) is genuinely left out and can 422 at the destination, so this
   // hint is real guidance worth acting on, not just a nice-to-have.
-  isResourceSelected(r: string): boolean { return this.selectedResources().includes(r); }
+  isResourceSelected(r: string): boolean {
+    return this.selectedResources().includes(r);
+  }
 
-  private readonly dismissedRecommendations = signal<ReadonlySet<string>>(new Set());
+  private readonly dismissedRecommendations = signal<ReadonlySet<string>>(
+    new Set(),
+  );
 
   /** Recommended-but-not-yet-selected resources across everything currently selected, minus whatever the user
    *  already dismissed this session. Recomputed from scratch on every selection change (not just filtered) so a
@@ -1987,21 +2971,25 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   dismissRecommendation(r: string): void {
-    this.dismissedRecommendations.update(set => new Set(set).add(r));
+    this.dismissedRecommendations.update((set) => new Set(set).add(r));
   }
 
   dismissAllRecommendations(): void {
-    this.dismissedRecommendations.update(set => new Set([...set, ...this.recommendedResources()]));
+    this.dismissedRecommendations.update(
+      (set) => new Set([...set, ...this.recommendedResources()]),
+    );
   }
 
   toggleResource(r: string): void {
     if (this.isResourceSelected(r)) {
-      this.selectedResources.update(list => list.filter(x => x !== r));
+      this.selectedResources.update((list) => list.filter((x) => x !== r));
       // Deselecting here only ever shrank dest_resources — mappingRows/targetByResource/extraTablesByGroup/
       // payloadFieldsByResource kept every row this resource ever had, so buildMappingSummaryDocument (which
       // derives its resource list from mappingRows, not selectedResources) and the mapping-profile import it
       // feeds kept saving this resource's mapping to the DB even after unselecting it here. Prune all of it.
-      this.mappingRows.update(rows => rows.filter(row => row.resource !== r));
+      this.mappingRows.update((rows) =>
+        rows.filter((row) => row.resource !== r),
+      );
       const drop = <T>(m: Record<string, T>): Record<string, T> => {
         const rest = { ...m };
         delete rest[r];
@@ -2012,7 +3000,7 @@ export class DestinationWizardComponent implements OnInit {
       this.payloadFieldsByResource.update(drop);
       return;
     }
-    this.selectedResources.update(list => [...list, r]);
+    this.selectedResources.update((list) => [...list, r]);
   }
 
   // ── drag-to-reorder the Step 3 data-group rows ──────────────────────────────
@@ -2022,11 +3010,12 @@ export class DestinationWizardComponent implements OnInit {
   // position TO the new one) since a plain DOM/array reorder otherwise just snaps rows into place —
   // and a midpoint threshold so hovering right at a row's edge doesn't flicker the order back and forth.
   readonly draggingResource = signal<string | null>(null);
-  private readonly groupsTableBody = viewChild<ElementRef<HTMLElement>>('groupsBody');
+  private readonly groupsTableBody =
+    viewChild<ElementRef<HTMLElement>>('groupsBody');
 
   private moveResource(dragged: string, target: string): void {
     if (dragged === target) return;
-    this.selectedResources.update(list => {
+    this.selectedResources.update((list) => {
       const from = list.indexOf(dragged);
       const to = list.indexOf(target);
       if (from === -1 || to === -1) return list;
@@ -2049,34 +3038,42 @@ export class DestinationWizardComponent implements OnInit {
    *  API Angular provides specifically to run code only once a render has actually been committed. */
   private animateReorder(reorder: () => void): void {
     const body = this.groupsTableBody()?.nativeElement;
-    if (!body) { reorder(); return; }
+    if (!body) {
+      reorder();
+      return;
+    }
 
     const before = new Map<string, DOMRect>();
-    body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
+    body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach((row) => {
       before.set(row.dataset['resourceRow']!, row.getBoundingClientRect());
     });
 
     reorder();
 
-    afterNextRender(() => {
-      body.querySelectorAll<HTMLElement>('[data-resource-row]').forEach(row => {
-        const oldRect = before.get(row.dataset['resourceRow']!);
-        if (!oldRect) return;
-        const dy = oldRect.top - row.getBoundingClientRect().top;
-        if (!dy) return;
-        // Jump back to the old spot with no transition, force a reflow so that's actually painted,
-        // then clear the transform on the NEXT frame — the row's own CSS transition animates this
-        // last step. (This inner part IS a plain browser paint-cycle concern, not an Angular-render
-        // one, so a raw rAF is correct and sufficient here.)
-        row.style.transition = 'none';
-        row.style.transform = `translateY(${dy}px)`;
-        row.getBoundingClientRect();
-        requestAnimationFrame(() => {
-          row.style.transition = '';
-          row.style.transform = '';
-        });
-      });
-    }, { injector: this.injector });
+    afterNextRender(
+      () => {
+        body
+          .querySelectorAll<HTMLElement>('[data-resource-row]')
+          .forEach((row) => {
+            const oldRect = before.get(row.dataset['resourceRow']!);
+            if (!oldRect) return;
+            const dy = oldRect.top - row.getBoundingClientRect().top;
+            if (!dy) return;
+            // Jump back to the old spot with no transition, force a reflow so that's actually painted,
+            // then clear the transform on the NEXT frame — the row's own CSS transition animates this
+            // last step. (This inner part IS a plain browser paint-cycle concern, not an Angular-render
+            // one, so a raw rAF is correct and sufficient here.)
+            row.style.transition = 'none';
+            row.style.transform = `translateY(${dy}px)`;
+            row.getBoundingClientRect();
+            requestAnimationFrame(() => {
+              row.style.transition = '';
+              row.style.transform = '';
+            });
+          });
+      },
+      { injector: this.injector },
+    );
   }
 
   onGroupRowDragHandlePointerDown(r: string, ev: PointerEvent): void {
@@ -2089,15 +3086,20 @@ export class DestinationWizardComponent implements OnInit {
   onGroupRowDragPointerMove(ev: PointerEvent): void {
     const dragged = this.draggingResource();
     if (!dragged) return;
-    const overRow = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
-      ?.closest<HTMLElement>('[data-resource-row]');
+    const overRow = (
+      document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null
+    )?.closest<HTMLElement>('[data-resource-row]');
     const overResource = overRow?.dataset['resourceRow'];
     if (!overResource || overResource === dragged) return;
 
     const list = this.selectedResources();
     const movingDown = list.indexOf(dragged) < list.indexOf(overResource);
-    const midpoint = overRow!.getBoundingClientRect().top + overRow!.getBoundingClientRect().height / 2;
-    const pastMidpoint = movingDown ? ev.clientY > midpoint : ev.clientY < midpoint;
+    const midpoint =
+      overRow!.getBoundingClientRect().top +
+      overRow!.getBoundingClientRect().height / 2;
+    const pastMidpoint = movingDown
+      ? ev.clientY > midpoint
+      : ev.clientY < midpoint;
     if (!pastMidpoint) return;
 
     this.animateReorder(() => this.moveResource(dragged, overResource));
@@ -2105,31 +3107,45 @@ export class DestinationWizardComponent implements OnInit {
 
   onGroupRowDragPointerUp(ev: PointerEvent): void {
     const el = ev.currentTarget as HTMLElement;
-    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    if (el.hasPointerCapture(ev.pointerId))
+      el.releasePointerCapture(ev.pointerId);
     this.draggingResource.set(null);
   }
 
   // ── per-resource target (file name / table) ────────────────────────────────
-  targetFor(r: string): string { return this.targetByResource()[r] ?? ''; }
+  targetFor(r: string): string {
+    return this.targetByResource()[r] ?? '';
+  }
 
   updateTarget(r: string, val: string): void {
-    this.targetByResource.update(m => ({ ...m, [r]: val }));
+    this.targetByResource.update((m) => ({ ...m, [r]: val }));
   }
 
   // ── business-field selection ───────────────────────────────────────────────
   availableFields(r: string): ResourceFieldDef[] {
     // Prefer a pasted real payload for this resource; then the array-aware backend catalog; fall back
     // to the built-in defs until the catalog loads (or if offline).
-    return this.payloadFieldsByResource()[r] ?? this.catalogByResource()[r] ?? this.defFor(r).fields;
+    return (
+      this.payloadFieldsByResource()[r] ??
+      this.catalogByResource()[r] ??
+      this.defFor(r).fields
+    );
   }
 
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
-  readonly availableFieldsFn = (r: string): ResourceFieldDef[] => this.availableFields(r);
-  readonly columnsForResourceTargetFn = (r: string): string[] => this.columnsForResourceTarget(r);
-  readonly dataTypeForTableColumnFn = (tableFullName: string, column: string): string | undefined =>
-    this.dataTypeForTableColumn(tableFullName, column);
-  readonly keyInfoForTableColumnFn = (tableFullName: string, column: string): DestinationColumn | undefined =>
+  readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
+    this.availableFields(r);
+  readonly columnsForResourceTargetFn = (r: string): string[] =>
+    this.columnsForResourceTarget(r);
+  readonly dataTypeForTableColumnFn = (
+    tableFullName: string,
+    column: string,
+  ): string | undefined => this.dataTypeForTableColumn(tableFullName, column);
+  readonly keyInfoForTableColumnFn = (
+    tableFullName: string,
+    column: string,
+  ): DestinationColumn | undefined =>
     this.keyInfoForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
@@ -2145,18 +3161,30 @@ export class DestinationWizardComponent implements OnInit {
       const def = this.defFor(r);
       // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
       // collection name of its own, so it reuses the same table name as a sensible default collection.
-      targets[r] = type === 'csv' ? def.csvFile : def.sqlTable;
+      // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject), not
+      // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
+      // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      targets[r] =
+        type === 'csv'
+          ? def.csvFile
+          : type === 'blob'
+            ? def.csvFile.replace(/\.csv$/i, '')
+            : def.sqlTable;
     }
     this.targetByResource.set(targets);
-    this.mappingRows.update(rows =>
+    this.mappingRows.update((rows) =>
       rows
-        .filter(row => resources.includes(row.resource))
-        .map(row => {
+        .filter((row) => resources.includes(row.resource))
+        .map((row) => {
           // Only re-sync rows that were on the resource's OLD primary table — never touch rows on an
           // extra/child table, which the resource's primary-target rename doesn't affect.
-          const wasOnPrimary = row.tableName === (oldTargets[row.resource] ?? row.tableName);
-          return wasOnPrimary ? { ...row, tableName: targets[row.resource] ?? row.tableName } : row;
-        })
+          const wasOnPrimary =
+            row.tableName === (oldTargets[row.resource] ?? row.tableName);
+          return wasOnPrimary
+            ? { ...row, tableName: targets[row.resource] ?? row.tableName }
+            : row;
+        }),
     );
   }
 
@@ -2165,68 +3193,51 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
-    if (this.isSql()) {
-      this.sqlForm.patchValue({
-        name:      f['dest_name']      || 'SQL Production',
-        server:    f['dest_server']    || '',
-        database:  f['dest_database']  || '',
-        auth:      f['dest_auth']      || 'managed-identity',
-        username:  f['dest_username']  || '',
-        password:  f['dest_password']  || '',
-        schema:    f['dest_schema']    || 'dbo',
-        writeMode: f['dest_writeMode'] || 'upsert',
-        requireSsl: f['dest_requireSsl'] === 'true',
-      });
-    } else if (this.isMongo()) {
-      this.mongoForm.patchValue({
-        name:             f['dest_name']       || 'MongoDB Production',
-        connectionString: '',
-        collection:       f['dest_collection']  || '',
-        writeMode:        f['dest_writeMode']    || 'upsert',
-      });
-    } else if (this.isFhir()) {
+    if (this.isFhir()) {
       this.fhirForm.patchValue({
-        name:          f['dest_name']          || 'Aidbox Production',
-        baseUrl:       f['dest_baseUrl']       || '',
-        project:       f['dest_project']       || '',
-        authType:      f['dest_authType']      || 'oauth2',
-        writeMode:     this._fhirWriteModeFromBackend(f['dest_writeMode'], f['dest_fhirWriteMode']),
+        name: f['dest_name'] || 'Aidbox Production',
+        baseUrl: f['dest_baseUrl'] || '',
+        project: f['dest_project'] || '',
+        authType: f['dest_authType'] || 'oauth2',
+        writeMode: this._fhirWriteModeFromBackend(
+          f['dest_writeMode'],
+          f['dest_fhirWriteMode'],
+        ),
         tokenEndpoint: f['dest_tokenEndpoint'] || '',
-        clientId:      f['dest_clientId']      || '',
-        clientSecret:  '',
-        username:      f['dest_username']      || '',
-        password:      '',
-        bearerToken:   '',
-        autoFetchMissingReferences: f['dest_autoFetchMissingReferences'] === 'true',
-        autoFetchMaxCount: f['dest_autoFetchMaxCount'] ? Number(f['dest_autoFetchMaxCount']) : 25,
+        clientId: f['dest_clientId'] || '',
+        clientSecret: '',
+        username: f['dest_username'] || '',
+        password: '',
+        bearerToken: '',
+        autoFetchMissingReferences:
+          f['dest_autoFetchMissingReferences'] === 'true',
+        autoFetchMaxCount: f['dest_autoFetchMaxCount']
+          ? Number(f['dest_autoFetchMaxCount'])
+          : 25,
       });
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       if (f['dest_fhirMapMode']) {
-        this.fhirMapMode.set(f['dest_fhirMapMode'] === 'customize' ? 'customize' : 'passthrough');
+        this.fhirMapMode.set(
+          f['dest_fhirMapMode'] === 'customize' ? 'customize' : 'passthrough',
+        );
       }
       if (f['dest_fhirCustomRules']) {
-        try { this.fhirCustomRules.set(JSON.parse(f['dest_fhirCustomRules'])); } catch { /* ignore malformed */ }
+        try {
+          this.fhirCustomRules.set(JSON.parse(f['dest_fhirCustomRules']));
+        } catch {
+          /* ignore malformed */
+        }
       }
     } else {
-      this.csvForm.patchValue({
-        name:         f['dest_name']         || 'CSV Export',
-        deliveryMode: f['dest_deliveryMode'] || 'download',
-        filePattern:  f['dest_filePattern']  || '{resource}_{yyyyMMdd_HHmmss}.csv',
-        delimiter:    f['dest_delimiter']    || 'comma',
-        encoding:     f['dest_encoding']     || 'utf-8',
-        sftpHost:         f['dest_sftpHost']         || '',
-        sftpPort:         f['dest_sftpPort'] ? Number(f['dest_sftpPort']) : 22,
-        sftpUsername:     f['dest_sftpUsername']     || '',
-        sftpAuthType:     f['dest_sftpAuthType']     || 'password',
-        sftpPassword:     f['dest_sftpPassword']     || '',
-        sftpRemoteFolder: f['dest_sftpRemoteFolder'] || '',
-        emailTo:              f['dest_emailTo']              || '',
-        emailCc:               f['dest_emailCc']               || '',
-        emailSubjectTemplate: f['dest_emailSubjectTemplate'] || 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',
-        emailBodyTemplate:
-          f['dest_emailBodyTemplate'] || 'Attached is your requested export ({{RowCount}} record(s)), generated {{RunDate}}.',
-        downloadLinkExpiryMinutes: f['dest_downloadLinkExpiryMinutes'] ? Number(f['dest_downloadLinkExpiryMinutes']) : 60,
-      });
+      // Queued rather than applied directly — this runs from ngOnInit, before the Step 1 form component (the
+      // outlet's child) has necessarily been created; the effect in the constructor flushes it onto the form
+      // the moment it exists. dest_auth's 'managed-identity' fallback (vs. patchFrom's own 'sql-auth' fallback,
+      // used for a brand-new form/an existing-connection pick) only matters for a node saved before dest_auth
+      // was always written, so it's folded into the queued bag here rather than needing a patchFrom parameter.
+      const fields = { ...f };
+      if (this.isSql() && !fields['dest_auth'])
+        fields['dest_auth'] = 'managed-identity';
+      this._pendingFormPatch.set({ fields, target: null });
     }
     // The mapping-restore branches below (loadMappingSummary included, each of which returns early) only
     // ever populate sqlTables() with tables this mapping already uses — a saved Mapping JSON was never
@@ -2235,51 +3246,83 @@ export class DestinationWizardComponent implements OnInit {
     // the connection form above is populated — must run before any of the early returns below, not after.
     this._refreshSqlTablesFromLiveSchema();
     if (f['dest_resources']) {
-      this.selectedResources.set(f['dest_resources'].split(',').filter(Boolean));
+      this.selectedResources.set(
+        f['dest_resources'].split(',').filter(Boolean),
+      );
     }
     // Seeded only once selectedResources() above is populated — the rules editor's resource tabs are driven
     // by it, so an earlier default would land on a resource that isn't in the restored selection.
-    if (this.isFhir() && this.fhirMapMode() === 'customize' && this.selectedResources().length > 0) {
+    if (
+      this.isFhir() &&
+      this.fhirMapMode() === 'customize' &&
+      this.selectedResources().length > 0
+    ) {
       this.activeRuleResource.set(this.selectedResources()[0]);
       this._ensureFhirFieldCatalog(this.selectedResources()[0]);
     }
     if (f['dest_targets']) {
-      try { this.targetByResource.set(JSON.parse(f['dest_targets'])); } catch { /* ignore malformed */ }
+      try {
+        this.targetByResource.set(JSON.parse(f['dest_targets']));
+      } catch {
+        /* ignore malformed */
+      }
     }
     if (f['dest_extraTables']) {
-      try { this.extraTablesByGroup.set(JSON.parse(f['dest_extraTables'])); } catch { /* ignore malformed */ }
+      try {
+        this.extraTablesByGroup.set(JSON.parse(f['dest_extraTables']));
+      } catch {
+        /* ignore malformed */
+      }
     }
     if (f['dest_sourcePayloadFields']) {
-      try { this.payloadFieldsByResource.set(JSON.parse(f['dest_sourcePayloadFields'])); } catch { /* ignore malformed */ }
+      try {
+        this.payloadFieldsByResource.set(
+          JSON.parse(f['dest_sourcePayloadFields']),
+        );
+      } catch {
+        /* ignore malformed */
+      }
     }
     // Preferred: the canonical Mapping JSON — restores tables/relations/mappings in one shot, including
     // anything dest_mappings_v2 alone can't (e.g. which extra tables are children, and of what). Falls
     // back to dest_mappings_v2/dest_mappings for nodes saved before this contract existed.
     if (f['dest_mapping_summary_v1']) {
       try {
-        this.loadMappingSummary(JSON.parse(f['dest_mapping_summary_v1']) as MappingSummaryDocument);
+        this.loadMappingSummary(
+          JSON.parse(f['dest_mapping_summary_v1']) as MappingSummaryDocument,
+        );
         // loadMappingSummary derives selectedResources solely from resources that have actual mapped
         // columns in the doc — a resource checked in Step 2 but never given a field mapping in Step 3
         // is absent from it, so it would otherwise lose its checkmark on reopen. Union dest_resources
         // back in, since that field is always the full, authoritative Step-2 selection.
         if (f['dest_resources']) {
-          const fromDestResources = f['dest_resources'].split(',').filter(Boolean);
-          this.selectedResources.update(list => Array.from(new Set([...list, ...fromDestResources])));
+          const fromDestResources = f['dest_resources']
+            .split(',')
+            .filter(Boolean);
+          this.selectedResources.update((list) =>
+            Array.from(new Set([...list, ...fromDestResources])),
+          );
         }
         return;
-      } catch { /* fall through to the older loaders below */ }
+      } catch {
+        /* fall through to the older loaders below */
+      }
     }
     if (f['dest_mappings_v2']) {
       try {
         this.mappingRows.set(JSON.parse(f['dest_mappings_v2']) as MappingRow[]);
         return;
-      } catch { /* fall through to the legacy loader below */ }
+      } catch {
+        /* fall through to the legacy loader below */
+      }
     }
     if (f['dest_mappings']) {
       try {
         const saved = JSON.parse(f['dest_mappings']) as LegacyMappingRow[];
         this.mappingRows.set(saved.map(migrateLegacyRow));
-      } catch { /* ignore malformed */ }
+      } catch {
+        /* ignore malformed */
+      }
     }
   }
 
@@ -2299,132 +3342,130 @@ export class DestinationWizardComponent implements OnInit {
 
     const destinationId = this.resolvedDestinationId();
     const applyTables = (tables: DestinationTable[]) => {
-      this.sqlTables.set(tables.map(t => ({
-        ...t,
-        origin: 'probed' as const,
-        columns: t.columns.map(c => ({ ...c, origin: 'probed' as const })),
-      })));
+      this.sqlTables.set(
+        tables.map((t) => ({
+          ...t,
+          origin: 'probed' as const,
+          columns: t.columns.map((c) => ({ ...c, origin: 'probed' as const })),
+        })),
+      );
       this.probeState.set('ok');
     };
 
     if (destinationId) {
       this.schemaSvc.getSchema(destinationId).subscribe({
-        next: res => applyTables(res.tables),
-        error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reload */ },
+        next: (res) => applyTables(res.tables),
+        error: () => {
+          /* keep the mapping-summary-restored list; don't block editing on a failed reload */
+        },
       });
       return;
     }
 
-    const v = this.sqlForm.value;
-    if (!v.server || !v.database || !v.password) return;
+    // Ad-hoc probe path for a not-yet-provisioned SQL node — needs the live form's raw values (including its
+    // plaintext password), which may not exist yet this early (see _populateFromNode's queued patch above).
+    // Not worth deferring further: this is a narrow edge case (editing a brand-new, never-saved SQL node),
+    // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
+    // every other failure path here.
+    const form = this.activeForm();
+    if (!isSqlFamilyForm(form)) return;
+    const request = form.getProbeRequest();
+    if (!request.server || !request.database || !request.password) return;
 
-    this.schemaSvc.probe({
-      destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
-      server: v.server ?? '',
-      database: v.database ?? '',
-      authentication: v.auth ?? 'sql-auth',
-      username: v.username ?? undefined,
-      password: v.password ?? undefined,
-      trustServerCertificate: true,
-      encrypt: true,
-    }).subscribe({
-      next: res => { if (res.connected) applyTables(res.tables); },
-      error: () => { /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */ },
+    this.schemaSvc.probe(request).subscribe({
+      next: (res) => {
+        if (res.connected) applyTables(res.tables);
+      },
+      error: () => {
+        /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */
+      },
     });
   }
 
-  // Connection-only fields (server/database/auth for SQL; folder/sftp for CSV), keyed the same way both
-  // _save() and provisionDestinationConnection() need them — shared so the two never drift apart.
-  private _buildConnectionConfig(): Record<string, string> {
+  // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/
+  // getMetadata()-shaped builders — every other type's equivalent now lives on its own destination-forms/
+  // component (see e.g. SqlFamilyDestinationFormComponent), reached through activeFormConfig()/activeForm().
+  // activeFormConfig() resolves to {} for FHIR (activeForm() is null — the registry outlet never mounts for
+  // it), so _save() must reach this directly instead for its node-config bag.
+  //
+  // Full dest_*-keyed config, INCLUDING secret-bearing keys (dest_clientSecret/dest_password/dest_bearerToken)
+  // — mirrors WizardDestinationFormApi.getFullConfig()'s contract exactly (secrets included here, stripped
+  // later by workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS, same as every other destination type).
+  private _getFhirFullConfig(): Record<string, string> {
+    const v = this.fhirForm.value;
     const config: Record<string, string> = {};
-    if (this.isSql()) {
-      const v = this.sqlForm.value;
-      config['dest_name']      = v.name      ?? '';
-      config['dest_engine']    = this.isMySql() ? 'mysql' : this.isPostgres() ? 'postgres' : 'sqlserver';
-      config['dest_server']    = v.server    ?? '';
-      config['dest_database']  = v.database  ?? '';
-      config['dest_auth']      = v.auth      ?? '';
-      config['dest_schema']    = v.schema    ?? 'dbo';
-      config['dest_writeMode'] = v.writeMode ?? 'upsert';
-      config['dest_requireSsl'] = String(v.requireSsl ?? false);
-      // Persisted so create-on-save can assemble the connection string (server-side it is encrypted at rest via
-      // ProvisionedSecrets; the entity only ever stores the secret reference). Only kept for SQL username/password auth.
-      if ((v.auth ?? 'sql-auth') === 'sql-auth') {
-        config['dest_username'] = v.username ?? '';
-        config['dest_password'] = v.password ?? '';
-      }
-    } else if (this.isMongo()) {
-      const v = this.mongoForm.value;
-      config['dest_name']             = v.name             ?? '';
-      config['dest_connectionString'] = v.connectionString ?? '';
-      config['dest_collection']       = v.collection       ?? '';
-      config['dest_writeMode']        = v.writeMode        ?? 'upsert';
-    } else if (this.isFhir()) {
-      const v = this.fhirForm.value;
-      config['dest_name']      = v.name      ?? '';
-      config['dest_baseUrl']   = v.baseUrl   ?? '';
-      // Mirrors the `selected.target` stamp the "reuse existing destination" branch sets below — without this,
-      // a freshly-created FHIR destination's own node fields never carry `target`, and a graph-driven run falls
-      // back to DestinationNodeExecutors.CreateDestinationConfiguration()'s raw-field reconstruction, which used
-      // to leave Target null and throw. That fallback now also reads dest_baseUrl, but stamping it here directly
-      // keeps the node's own config consistent with the persisted DestinationConfigurations row from the start.
-      config['target']        = v.baseUrl   ?? '';
-      config['dest_project']   = v.project   ?? '';
-      config['dest_authType']  = v.authType  ?? 'oauth2';
-      // "Upsert by resource id (Bundle)"/"(Transaction)" are Write-mode options that are really a combination of
-      // two orthogonal things: it's still upsert-by-id semantics (dest_writeMode), just delivered as one bundled/
-      // transactional request instead of N individual ones (dest_fhirWriteMode — see
-      // MappedFhirRepositoryDestinationWriter's own doc comment). Folded into one dropdown rather than two separate
-      // fields since there's no other real second dimension to conflict with — a prior "conditional update by
-      // identifier" option was removed since it was never implemented server-side.
-      const writeMode = v.writeMode ?? 'upsert';
-      config['dest_writeMode']     = writeMode === 'upsertBundle' || writeMode === 'upsertTransaction' ? 'upsert' : writeMode;
-      config['dest_fhirWriteMode'] = writeMode === 'upsertBundle' ? 'bundle' : writeMode === 'upsertTransaction' ? 'transaction' : 'individual';
-      if (v.authType === 'oauth2') {
-        config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
-        config['dest_clientId']      = v.clientId      ?? '';
-        config['dest_clientSecret']  = v.clientSecret  ?? '';
-      } else if (v.authType === 'basic') {
-        config['dest_username'] = v.username ?? '';
-        config['dest_password'] = v.password ?? '';
-      } else if (v.authType === 'bearer') {
-        config['dest_bearerToken'] = v.bearerToken ?? '';
-      }
-      config['dest_fhirMapMode'] = this.fhirMapMode();
-      if (this.fhirMapMode() === 'customize') {
-        config['dest_fhirCustomRules'] = JSON.stringify(this.fhirCustomRules());
-      }
-      // Only ever fetches a reference the write-time existence check already confirmed missing from both the
-      // batch and the destination — never a first resort. Omitted (not just "false") when off, so an existing
-      // destination saved before this capability existed reads back as off, same as every other opt-in dest_* flag.
-      if (v.autoFetchMissingReferences) {
-        config['dest_autoFetchMissingReferences'] = 'true';
-        config['dest_autoFetchMaxCount'] = String(v.autoFetchMaxCount ?? 25);
-      }
-    } else {
-      const v = this.csvForm.value;
-      config['dest_name']         = v.name         ?? '';
-      config['dest_deliveryMode'] = v.deliveryMode ?? 'download';
-      config['dest_filePattern']  = v.filePattern  ?? '';
-      config['dest_delimiter']    = v.delimiter    ?? 'comma';
-      config['dest_encoding']     = v.encoding     ?? 'utf-8';
-      if (v.deliveryMode === 'sftp') {
-        config['dest_sftpHost']         = v.sftpHost         ?? '';
-        config['dest_sftpPort']         = String(v.sftpPort  ?? 22);
-        config['dest_sftpUsername']     = v.sftpUsername     ?? '';
-        config['dest_sftpAuthType']     = v.sftpAuthType     ?? 'password';
-        config['dest_sftpPassword']     = v.sftpPassword     ?? '';
-        config['dest_sftpRemoteFolder'] = v.sftpRemoteFolder ?? '';
-      } else if (v.deliveryMode === 'email') {
-        config['dest_emailTo']              = v.emailTo              ?? '';
-        config['dest_emailCc']               = v.emailCc               ?? '';
-        config['dest_emailSubjectTemplate'] = v.emailSubjectTemplate ?? '';
-        config['dest_emailBodyTemplate']    = v.emailBodyTemplate    ?? '';
-      } else if (v.deliveryMode === 'downloadUrl') {
-        config['dest_downloadLinkExpiryMinutes'] = String(v.downloadLinkExpiryMinutes ?? 60);
-      }
+    config['dest_name'] = v.name ?? '';
+    config['dest_baseUrl'] = v.baseUrl ?? '';
+    // Mirrors the `selected.target` stamp the "reuse existing destination" branch sets below — without this,
+    // a freshly-created FHIR destination's own node fields never carry `target`, and a graph-driven run falls
+    // back to DestinationNodeExecutors.CreateDestinationConfiguration()'s raw-field reconstruction, which used
+    // to leave Target null and throw. That fallback now also reads dest_baseUrl, but stamping it here directly
+    // keeps the node's own config consistent with the persisted DestinationConfigurations row from the start.
+    config['target'] = v.baseUrl ?? '';
+    config['dest_project'] = v.project ?? '';
+    config['dest_authType'] = v.authType ?? 'oauth2';
+    // "Upsert by resource id (Bundle)"/"(Transaction)" are Write-mode options that are really a combination of
+    // two orthogonal things: it's still upsert-by-id semantics (dest_writeMode), just delivered as one bundled/
+    // transactional request instead of N individual ones (dest_fhirWriteMode — see
+    // MappedFhirRepositoryDestinationWriter's own doc comment). Folded into one dropdown rather than two separate
+    // fields since there's no other real second dimension to conflict with — a prior "conditional update by
+    // identifier" option was removed since it was never implemented server-side.
+    const writeMode = v.writeMode ?? 'upsert';
+    config['dest_writeMode'] =
+      writeMode === 'upsertBundle' || writeMode === 'upsertTransaction'
+        ? 'upsert'
+        : writeMode;
+    config['dest_fhirWriteMode'] =
+      writeMode === 'upsertBundle'
+        ? 'bundle'
+        : writeMode === 'upsertTransaction'
+          ? 'transaction'
+          : 'individual';
+    if (v.authType === 'oauth2') {
+      config['dest_tokenEndpoint'] = v.tokenEndpoint ?? '';
+      config['dest_clientId'] = v.clientId ?? '';
+      config['dest_clientSecret'] = v.clientSecret ?? '';
+    } else if (v.authType === 'basic') {
+      config['dest_username'] = v.username ?? '';
+      config['dest_password'] = v.password ?? '';
+    } else if (v.authType === 'bearer') {
+      config['dest_bearerToken'] = v.bearerToken ?? '';
+    }
+    config['dest_fhirMapMode'] = this.fhirMapMode();
+    if (this.fhirMapMode() === 'customize') {
+      config['dest_fhirCustomRules'] = JSON.stringify(this.fhirCustomRules());
+    }
+    // Only ever fetches a reference the write-time existence check already confirmed missing from both the
+    // batch and the destination — never a first resort. Omitted (not just "false") when off, so an existing
+    // destination saved before this capability existed reads back as off, same as every other opt-in dest_* flag.
+    if (v.autoFetchMissingReferences) {
+      config['dest_autoFetchMissingReferences'] = 'true';
+      config['dest_autoFetchMaxCount'] = String(v.autoFetchMaxCount ?? 25);
     }
     return config;
+  }
+
+  private static readonly FHIR_SECRET_FIELD_KEYS = [
+    'dest_clientSecret',
+    'dest_password',
+    'dest_bearerToken',
+  ];
+
+  /** Non-secret fields (for connectionMetadataJson) + the already-assembled secret blob (for inlineSecret) —
+   *  the getMetadata()-shaped contract provisionDestinationConnection()/next()/testFhirConnection() need. */
+  private _getFhirMetadata(): {
+    fields: Record<string, string>;
+    secret?: string | null;
+  } | null {
+    if (this.fhirForm.invalid) return null;
+    const full = this._getFhirFullConfig();
+    const fields: Record<string, string> = {};
+    for (const [key, value] of Object.entries(full)) {
+      if (!DestinationWizardComponent.FHIR_SECRET_FIELD_KEYS.includes(key))
+        fields[key] = value;
+    }
+    const secret = buildFhirSecretBlob(full);
+    return { fields, secret };
   }
 
   // Creates (or updates, if Step 1 was already provisioned earlier this session) the real DestinationConfiguration
@@ -2432,60 +3473,94 @@ export class DestinationWizardComponent implements OnInit {
   // sourceConnectionId now does for the Epic source wizard (see wizard.service.ts's save()), rather than only after
   // the whole workflow gets built. Skipped when reusing an existing connection (selectedExistingId already has a
   // real id) or when editing a destination whose connection came from an "existing" pick (same reason).
-  private provisionDestinationConnection(onDone: () => void): void {
+  //
+  // `metadata` is whatever the Step 1 form's own getMetadata() just returned — its `fields` are the non-secret
+  // dest_* bag (used as connectionMetadataJson) and `secret` is the already-assembled connection string/URI
+  // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
+  // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
+  // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
+  private provisionDestinationConnection(
+    metadata: { fields: Record<string, string>; secret?: string | null },
+    onDone: () => void,
+  ): void {
     if (this.connectionMode() === 'existing') {
       onDone();
       return;
     }
 
-    const config = this._buildConnectionConfig();
     const isSql = this.isSql();
     const isMongo = this.isMongo();
     const isFhir = this.isFhir();
-    const name = config['dest_name']
-      || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isFhir ? 'Aidbox Destination' : 'File Destination');
+    const isBlob = this.isBlob();
+    const name =
+      metadata.fields['dest_name'] ||
+      (isSql
+        ? 'SQL Destination'
+        : isMongo
+          ? 'MongoDB Destination'
+          : isFhir
+            ? 'Aidbox Destination'
+            : isBlob
+              ? 'Azure Blob Destination'
+              : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
           name,
-          destinationType: this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer',
+          destinationType: this.isMySql()
+            ? 'MySql'
+            : this.isPostgres()
+              ? 'PostgreSql'
+              : 'SqlServer',
           keyVaultName: 'workflow-secrets',
           secretName,
           target: null,
-          inlineSecret: buildSqlConnectionString(config),
-          connectionMetadataJson: buildConnectionMetadata(config, 'sql'),
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
         }
       : isMongo
-      ? {
-          name,
-          destinationType: 'Mongo',
-          keyVaultName: 'workflow-secrets',
-          secretName,
-          target: config['dest_collection'] || null,
-          inlineSecret: config['dest_connectionString'] || '',
-          connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
-        }
-      : isFhir
-      ? {
-          name,
-          destinationType: 'FhirRepository',
-          keyVaultName: 'workflow-secrets',
-          secretName,
-          // The FHIR base URL doubles as the destination's target, mirroring how the CSV branch below uses its
-          // file pattern — it's what a later "select existing" repopulates baseUrl from.
-          target: config['dest_baseUrl'] || null,
-          inlineSecret: buildFhirSecretBlob(config),
-          connectionMetadataJson: buildConnectionMetadata(config, 'fhir'),
-        }
-      : {
-          name,
-          destinationType: config['dest_storageType'] === 'sftp' ? 'Sftp' : 'Csv',
-          keyVaultName: 'workflow-secrets',
-          secretName,
-          target: config['dest_filePattern'] || null,
-          inlineSecret: config['dest_storageType'] === 'sftp' ? buildSftpUri(config) : (config['dest_folder'] || ''),
-          connectionMetadataJson: buildConnectionMetadata(config, 'csv'),
-        };
+        ? {
+            name,
+            destinationType: 'Mongo',
+            keyVaultName: 'workflow-secrets',
+            secretName,
+            target: metadata.fields['dest_collection'] || null,
+            inlineSecret: metadata.secret ?? '',
+            connectionMetadataJson: JSON.stringify(metadata.fields),
+          }
+        : isFhir
+          ? {
+              name,
+              destinationType: 'FhirRepository',
+              keyVaultName: 'workflow-secrets',
+              secretName,
+              // The FHIR base URL doubles as the destination's target, mirroring how the CSV branch below uses its
+              // file pattern — it's what a later "select existing" repopulates baseUrl from.
+              target: metadata.fields['dest_baseUrl'] || null,
+              inlineSecret: metadata.secret ?? '',
+              connectionMetadataJson: JSON.stringify(metadata.fields),
+            }
+          : isBlob
+            ? {
+                name,
+                destinationType: 'BlobStorage',
+                keyVaultName: 'workflow-secrets',
+                secretName,
+                target: metadata.fields['dest_blobContainer'] || null,
+                // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
+                // secret" rule into metadata.secret — no extra auth-mode check needed here.
+                inlineSecret: metadata.secret ?? '',
+                connectionMetadataJson: JSON.stringify(metadata.fields),
+              }
+            : {
+                name,
+                destinationType: 'Csv',
+                keyVaultName: 'workflow-secrets',
+                secretName,
+                target: metadata.fields['dest_filePattern'] || null,
+                inlineSecret: metadata.secret ?? '',
+                connectionMetadataJson: JSON.stringify(metadata.fields),
+              };
 
     const existingId = this.resolvedDestinationId();
     this.provisioningDestination.set(true);
@@ -2493,17 +3568,26 @@ export class DestinationWizardComponent implements OnInit {
       ? this.destinationConfigSvc.update(existingId, request)
       : this.destinationConfigSvc.create(request);
     obs.subscribe({
-      next: dto => {
+      next: (dto) => {
         this.resolvedDestinationId.set(dto.id);
         this.resolvedSecretKeyVaultName.set(dto.keyVaultName);
         this.resolvedSecretName.set(dto.secretName);
         this.provisioningDestination.set(false);
         onDone();
       },
-      error: err => {
+      error: (err) => {
         this.provisioningDestination.set(false);
-        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the destination connection.';
-        this.toast.show('Destination not created', typeof msg === 'string' ? msg : 'Failed to create the destination connection.');
+        const msg =
+          err?.error?.title ??
+          err?.error?.error ??
+          err?.message ??
+          'Failed to create the destination connection.';
+        this.toast.show(
+          'Destination not created',
+          typeof msg === 'string'
+            ? msg
+            : 'Failed to create the destination connection.',
+        );
       },
     });
   }
@@ -2513,15 +3597,20 @@ export class DestinationWizardComponent implements OnInit {
     // the database (rather than through this wizard) — without this, a save can silently persist (and a
     // later workflow run can fail on) a column that no longer exists anywhere. Applied to the actual
     // mappingRows signal, not just the outgoing payload, so the Mapping list UI stops showing the ghost row too.
-    const pruned = pruneOrphanedMappingRows(this.mappingRows(), this.sqlTables());
+    const pruned = pruneOrphanedMappingRows(
+      this.mappingRows(),
+      this.sqlTables(),
+    );
     if (pruned.length !== this.mappingRows().length) {
       this.mappingRows.set(pruned);
     }
 
     const type = this.destType();
+    // FHIR bypasses the registry entirely (see isFhir()'s doc comment), so activeFormConfig() resolves to {}
+    // for it (activeForm() is null, no outlet mounts) — reach its own full-config builder directly instead.
     const config: Record<string, string> = {
       dest_resources: this.selectedResources().join(','),
-      ...this._buildConnectionConfig(),
+      ...(this.isFhir() ? this._getFhirFullConfig() : this.activeFormConfig()),
     };
 
     // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form
@@ -2534,7 +3623,9 @@ export class DestinationWizardComponent implements OnInit {
     //  - Edited, name also changed by hand: honor that name as typed (only deduped on an actual collision) rather
     //    than silently suffixing a name the user deliberately chose.
     if (this.connectionMode() === 'existing' && this.selectedExistingId()) {
-      const selected = this.existingOptions().find(o => o.id === this.selectedExistingId());
+      const selected = this.existingOptions().find(
+        (o) => o.id === this.selectedExistingId(),
+      );
       if (selected && !this.hasExistingChanged()) {
         config['destinationId'] = selected.id;
         config['secretKeyVaultName'] = selected.keyVaultName;
@@ -2548,7 +3639,10 @@ export class DestinationWizardComponent implements OnInit {
           ? this._resolveUniqueName(currentName, false)
           : this._resolveUniqueName(selected.name, true);
       }
-    } else if (this.connectionMode() === 'new' && this.resolvedDestinationId()) {
+    } else if (
+      this.connectionMode() === 'new' &&
+      this.resolvedDestinationId()
+    ) {
       // Step 1 already created/updated the real DestinationConfiguration with these exact connection details
       // (see provisionDestinationConnection) — mark it resolved so workflow-build-assembler.service.ts doesn't
       // redundantly recreate the secret under a new name on every build.
@@ -2563,24 +3657,32 @@ export class DestinationWizardComponent implements OnInit {
     // workflow-build-assembler.service.ts keeps working unmodified; dest_mappings_v2 round-trips the
     // full rich shape (joins, instance selection) so re-opening the wizard restores them exactly.
     config['dest_mappingCount'] = String(this.mappingRows().length);
-    config['dest_targets']      = JSON.stringify(this.targetByResource());
+    config['dest_targets'] = JSON.stringify(this.targetByResource());
     // dest_extraTables is disabled (not removed — re-enable if needed later): fully superseded by
     // dest_mapping_summary_v1, which restores extraTablesByGroup on its own via loadMappingSummary.
     // config['dest_extraTables']  = JSON.stringify(this.extraTablesByGroup());
     // dest_sourcePayloadFields is the only thing that restores payloadFieldsByResource on reopen — without
     // it, reopening a saved destination node forgets any "Load JSON payload" data and falls back to the
     // built-in generic field list, making the source tree look unloaded even though mapping rows survive.
-    config['dest_sourcePayloadFields'] = JSON.stringify(this.payloadFieldsByResource());
-    config['dest_mappings']     = JSON.stringify(serializeRowsFlat(
-      this.mappingRows(), this.targetByResource(), this.sqlTables(), this.childTableRelationsByTable(),
-    ));
-    config['dest_mappings_v2']  = JSON.stringify(this.mappingRows());
+    config['dest_sourcePayloadFields'] = JSON.stringify(
+      this.payloadFieldsByResource(),
+    );
+    config['dest_mappings'] = JSON.stringify(
+      serializeRowsFlat(
+        this.mappingRows(),
+        this.targetByResource(),
+        this.sqlTables(),
+        this.childTableRelationsByTable(),
+      ),
+    );
+    config['dest_mappings_v2'] = JSON.stringify(this.mappingRows());
     // This wizard's own Field Mapping node's previously-saved profile id per resource (mappingProfileIds,
     // falling back to the legacy singular mappingProfileId for the primary resource) — passed through so the
     // import call below updates THOSE exact profiles rather than letting the backend search for "the" profile
     // matching (resourceType, sourceConnectionId, destinationId), a triple more than one workflow can share.
     const mappingNodeForIds = this.pipelineStore.byId(this.attachNode().id);
-    const existingMappingProfileIdByResource = this._parseExistingMappingProfileIds(mappingNodeForIds?.fields ?? {});
+    const existingMappingProfileIdByResource =
+      this._parseExistingMappingProfileIds(mappingNodeForIds?.fields ?? {});
 
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
     // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
@@ -2603,14 +3705,22 @@ export class DestinationWizardComponent implements OnInit {
 
     const emitSaved = () => {
       this.saved.emit({
-        attachNode:  this.attachNode(),
-        transformId: type === 'sql' ? 'dest-sqlserver'
-          : type === 'mysql' ? 'dest-mysql'
-          : type === 'postgres' ? 'dest-postgres'
-          : type === 'mongo' ? 'dest-mongo'
-          : type === 'fhir' ? 'dest-fhir'
-          : 'dest-csv',
-        status:      'enabled',
+        attachNode: this.attachNode(),
+        transformId:
+          type === 'sql'
+            ? 'dest-sqlserver'
+            : type === 'mysql'
+              ? 'dest-mysql'
+              : type === 'postgres'
+                ? 'dest-postgres'
+                : type === 'mongo'
+                  ? 'dest-mongo'
+                  : type === 'fhir'
+                    ? 'dest-fhir'
+                    : type === 'blob'
+                      ? 'dest-blob'
+                      : 'dest-csv',
+        status: 'enabled',
         config,
       });
     };
@@ -2620,16 +3730,30 @@ export class DestinationWizardComponent implements OnInit {
     // exactly like before this endpoint existed. Either way "Add to Pipeline"/"Update" still completes —
     // a failed import is surfaced as a toast, not a blocker, since the node's own local save (config above)
     // never depended on it.
-    if (doc.sourceConnectionId && doc.destinationId && doc.mappings.length > 0) {
+    if (
+      doc.sourceConnectionId &&
+      doc.destinationId &&
+      doc.mappings.length > 0
+    ) {
       this.savingMappingProfiles.set(true);
       this.mappingProfileImportSvc.import(doc).subscribe({
-        next: result => {
+        next: (result) => {
           this.savingMappingProfiles.set(false);
-          const failed = result.profiles.filter(p => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID);
+          const failed = result.profiles.filter(
+            (p) => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID,
+          );
           if (failed.length) {
-            this.toast.show('Mapping profile import had issues', failed.map(p => `${p.resourceType}: ${p.warnings.join(' ')}`).join(' '));
+            this.toast.show(
+              'Mapping profile import had issues',
+              failed
+                .map((p) => `${p.resourceType}: ${p.warnings.join(' ')}`)
+                .join(' '),
+            );
           } else {
-            this.toast.success('Mapping profile saved', `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`);
+            this.toast.success(
+              'Mapping profile saved',
+              `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`,
+            );
           }
           // Stamp every resource's real, server-assigned mappingProfileId straight onto the Field Mapping node
           // this wizard is attached to — without this, the ids this call just returned are discarded, the next
@@ -2638,15 +3762,24 @@ export class DestinationWizardComponent implements OnInit {
           // fix, fall back to searching by (resourceType, sourceConnectionId, destinationId) — the exact search
           // that let one workflow's save silently overwrite another's profile). Keeps the legacy singular
           // mappingProfileId in sync too (primary resource only) for anything still reading that older field.
-          const succeeded = result.profiles.filter(p => p.mappingProfileId !== EMPTY_GUID);
+          const succeeded = result.profiles.filter(
+            (p) => p.mappingProfileId !== EMPTY_GUID,
+          );
           if (succeeded.length > 0) {
             const mappingNode = this.pipelineStore.byId(this.attachNode().id);
             if (mappingNode) {
               const mappingProfileIds = {
-                ...this._parseExistingMappingProfileIds(mappingNode.fields ?? {}),
-                ...Object.fromEntries(succeeded.map(p => [p.resourceType, p.mappingProfileId])),
+                ...this._parseExistingMappingProfileIds(
+                  mappingNode.fields ?? {},
+                ),
+                ...Object.fromEntries(
+                  succeeded.map((p) => [p.resourceType, p.mappingProfileId]),
+                ),
               };
-              const primary = succeeded.find(p => p.resourceType === doc.mappings[0]?.resourceType) ?? succeeded[0];
+              const primary =
+                succeeded.find(
+                  (p) => p.resourceType === doc.mappings[0]?.resourceType,
+                ) ?? succeeded[0];
               this.pipelineStore.updateNode(mappingNode.id, {
                 fields: {
                   ...mappingNode.fields,
@@ -2658,10 +3791,19 @@ export class DestinationWizardComponent implements OnInit {
           }
           emitSaved();
         },
-        error: err => {
+        error: (err) => {
           this.savingMappingProfiles.set(false);
-          const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to import the mapping profile.';
-          this.toast.show('Mapping profile not saved', typeof msg === 'string' ? msg : 'Failed to import the mapping profile.');
+          const msg =
+            err?.error?.title ??
+            err?.error?.error ??
+            err?.message ??
+            'Failed to import the mapping profile.';
+          this.toast.show(
+            'Mapping profile not saved',
+            typeof msg === 'string'
+              ? msg
+              : 'Failed to import the mapping profile.',
+          );
           emitSaved();
         },
       });

@@ -27,6 +27,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Static legal content (e.g. Terms and Conditions) served directly from disk — replaceable at
+         deploy time without a rebuild; see Program.cs's "/legal" static file mapping. -->
+    <Content Include="Content\legal\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\FHIRBridge.Application\FHIRBridge.Application.csproj" />
     <ProjectReference Include="..\..\FHIRBridge.Infrastructure\FHIRBridge.Infrastructure.csproj" />
     <ProjectReference Include="..\..\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />

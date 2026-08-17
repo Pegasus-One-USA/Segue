@@ -116,8 +116,10 @@ export interface MappingRow {
   isEnabled?: boolean;
 }
 
-/** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable. */
-function genericResourceDef(r: string): ResourceDef {
+/** Field set for a resource not in DEST_RESOURCE_DEFS, so any source-selected resource stays mappable.
+ *  Exported for MappingProfileCanvasComponent, which needs the exact same fallback (docs/backend/14-
+ *  mapping-profile-master-screen-plan.md §5.1's "share the field-level catalog, not just the shell"). */
+export function genericResourceDef(r: string): ResourceDef {
   return {
     scope: `user/${r}.read`,
     sqlTable: `dbo.${r}`,

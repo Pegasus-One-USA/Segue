@@ -68,6 +68,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
+        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
@@ -96,12 +97,14 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
+        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        var authentication = PreserveSecretsIfBlank(ConfigurationMapper.ToDomain(request.Authentication), sourceConnection.Authentication);
         sourceConnection.Update(
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            ConfigurationMapper.ToDomain(request.Authentication),
+            authentication,
             request.ApplicationType,
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval));
@@ -129,6 +132,58 @@ public sealed class ConfigurationService : IConfigurationService
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
 
         return ConfigurationMapper.ToDto(sourceConnection);
+    }
+
+    /// <summary>
+    /// Provisions a wizard-typed client secret into the secret store, mirroring how
+    /// <see cref="AddDestinationConfigurationAsync"/>/<see cref="UpdateDestinationConfigurationAsync"/> handle
+    /// <c>InlineSecret</c>. No-op when the request carries no raw secret (an unedited "Existing Source" reuse, or
+    /// a non-secret auth method) — the KeyVaultName/SecretName reference then just points at whatever was already
+    /// provisioned, or nothing has ever authenticated with a secret for that connection.
+    /// </summary>
+    private async Task WriteInlineClientSecretAsync(SourceAuthenticationDto authentication, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(authentication.InlineClientSecret))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(authentication.ClientSecretKeyVaultName) ||
+            string.IsNullOrWhiteSpace(authentication.ClientSecretName))
+        {
+            throw new InvalidOperationException("A client secret Key Vault name and secret name are required to store the client secret.");
+        }
+
+        var secretReference = new SecretReference(authentication.ClientSecretKeyVaultName, authentication.ClientSecretName);
+        await _secretWriter.WriteSecretAsync(secretReference, authentication.InlineClientSecret, cancellationToken);
+    }
+
+    // Neither the canvas rebuild path nor the entity-mode edit form ever re-displays a previously stored secret,
+    // so a re-save with blank Client Secret / Private Key fields is ambiguous between "nothing changed" and
+    // "clear it" — and every caller today means the former. Only an explicit new InlineClientSecret or key-vault
+    // reference in the request should actually replace what's stored; a blank field on update preserves it.
+    private static SourceAuthenticationConfiguration PreserveSecretsIfBlank(
+        SourceAuthenticationConfiguration requested, SourceAuthenticationConfiguration existing)
+    {
+        var clientSecret = requested.ClientSecret ?? existing.ClientSecret;
+        var privateKey = requested.PrivateKey ?? existing.PrivateKey;
+        if (ReferenceEquals(clientSecret, requested.ClientSecret) && ReferenceEquals(privateKey, requested.PrivateKey))
+        {
+            return requested;
+        }
+
+        return new SourceAuthenticationConfiguration(
+            requested.AuthenticationType,
+            requested.ClientId,
+            requested.TokenEndpoint,
+            requested.Scopes,
+            clientSecret,
+            privateKey,
+            requested.KeyId,
+            requested.JwksUrl,
+            requested.DiscoveredScopes,
+            requested.PracticeId,
+            requested.AuthPlacement);
     }
 
     public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
