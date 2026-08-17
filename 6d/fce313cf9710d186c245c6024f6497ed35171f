@@ -1,0 +1,23 @@
+containerization/azure-deploy/main.bicep
+  s_6d2ed7df8f8732::t_6071256d100d90 395-396
+containerization/terraform/environments/azure/main.tf
+  s_6d2ed7df8f8732::t_a5f9082ad2f32e 457-461
+containerization/azure-deploy/main.json
+  s_6d2ed7df8f8732::t_e05796acb6c112 8,517
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6dfce313cf9710d186c245c6024f6497ed35171f",
+  "prompts": {},
+  "sessions": {
+    "s_6d2ed7df8f8732": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "34f2306f-48da-40d5-bca7-b4a62d39affd",
+        "model": "grok-4.5"
+      },
+      "human_author": "Yashkumar <yashkumars@teknobloomconsulting.com>"
+    }
+  }
+}
