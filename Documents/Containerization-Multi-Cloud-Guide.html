@@ -279,7 +279,7 @@
     <div class="meta">
       <div><strong>Scope</strong> containerization/ (new folder), .dockerignore, src/Gateway/FHIRBridge.Gateway/Program.cs (1 bug fix)</div>
       <div><strong>Status</strong> Docker path built, run, and verified end-to-end &middot; Azure/AWS Terraform written and reviewed, not yet applied to a real subscription</div>
-      <div><strong>Containers</strong> 5 &mdash; fhirbridge-app, demo-app, sqlserver, redis, worker</div>
+      <div><strong>Containers</strong> 5 &mdash; segue-app, demo-app, sqlserver, redis, worker</div>
     </div>
   </div>
 </header>
@@ -370,7 +370,7 @@
     <tr><th>#</th><th>Container</th><th>Runs</th><th>Public?</th></tr>
     <tr>
       <td class="why"><strong>1</strong></td>
-      <td class="why"><code>fhirbridge-app</code></td>
+      <td class="why"><code>segue-app</code></td>
       <td class="why"><code>FHIRBridge.Api</code> (loopback-only, <code>127.0.0.1:5000</code>) + <code>FHIRBridge.Gateway</code> (serves the Angular portal, reverse-proxies <code>/api/**</code> + <code>/swagger/**</code> to the Api)</td>
       <td class="why">Yes &mdash; port 80</td>
     </tr>
@@ -383,7 +383,7 @@
     <tr>
       <td class="why"><strong>3</strong></td>
       <td class="why"><code>sqlserver</code></td>
-      <td class="why"><code>mcr.microsoft.com/mssql/server:2022-latest</code>, <code>MSSQL_PID=Express</code> &mdash; hosts both <code>FHIRBridge</code> and <code>HealthAppDb</code></td>
+      <td class="why"><code>mcr.microsoft.com/mssql/server:2022-latest</code>, <code>MSSQL_PID=Express</code> &mdash; hosts both <code>Segue</code> and <code>HealthAppDb</code></td>
       <td class="why">No &mdash; internal only</td>
     </tr>
     <tr>
@@ -400,7 +400,7 @@
     </tr>
   </table>
   <div class="callout">
-    <strong>Why fhirbridge-app bundles two processes</strong>
+    <strong>Why segue-app bundles two processes</strong>
     Rather than inventing a new split, this mirrors the Windows Service topology exactly: the Api is
     never exposed outside its own container (identical to never being exposed outside the VM in
     production), and the Gateway is the only thing anyone talks to. One image, one <code>entrypoint.sh</code>,
@@ -694,7 +694,7 @@ services:
       sqlserver: { condition: service_healthy }
       redis: { condition: service_healthy }
     environment:
-      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=Segue;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       Authentication__SigningKey: "${JWT_SIGNING_KEY}"
       DataProtection__KeyRingPath: "/app/keys"
@@ -721,7 +721,7 @@ services:
       redis: { condition: service_healthy }
       fhirbridge-app: { condition: service_started }   # head start, not a guarantee
     environment:
-      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=Segue;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       RuntimeWorker__Enabled: "true"
       Messaging__Provider: "InMemory"
@@ -786,7 +786,7 @@ REDIS_HOST_PORT=6380</code></pre>
 ./build-images.sh                                          # local tags only, no push
 ./build-images.sh -t v1.2.0                                 # local tags, specific version
 ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p     # build, tag, push to ACR
-./build-images.sh -r &lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/fhirbridge -t v1.2.0 -p  # ECR
+./build-images.sh -r &lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/segue -t v1.2.0 -p  # ECR
 
 # PowerShell equivalent
 ./build-images.ps1 -Registry myregistry.azurecr.io -Tag v1.2.0 -Push</code></pre>
@@ -873,7 +873,7 @@ REDIS_HOST_PORT=6380</code></pre>
     <tr><td class="why">2&times; Azure Files shares (sql-data, redis-data)</td><td class="why">Storage</td><td class="status"><span class="pill pill-modified">Paid</span></td><td class="why">Billed on <em>actual</em> data stored, not the 50GB/10GB quota ceiling</td></tr>
     <tr><td class="why"><code>sqlserver</code> Container App (1 vCPU / 2GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why"><code>minReplicas: 1</code> means this never scales to zero &mdash; billed vCPU-seconds + GiB-seconds 24/7</td></tr>
     <tr><td class="why"><code>redis</code> Container App (0.5 vCPU / 1GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Same &mdash; always-on</td></tr>
-    <tr><td class="why"><code>fhirbridge-app</code> Container App (0.5 vCPU / 1GiB, 1&ndash;3 replicas)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">At least 1 replica always running; scales up to 3 under load</td></tr>
+    <tr><td class="why"><code>segue-app</code> Container App (0.5 vCPU / 1GiB, 1&ndash;3 replicas)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">At least 1 replica always running; scales up to 3 under load</td></tr>
     <tr><td class="why"><code>demo-app</code> Container App (0.25 vCPU / 0.5GiB, 1&ndash;3 replicas)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Same pattern</td></tr>
     <tr><td class="why"><code>worker</code> Container App (0.25 vCPU / 0.5GiB, always-on)</td><td class="why">Compute</td><td class="status"><span class="pill pill-fixed">Paid, continuous</span></td><td class="why">Always-on, no ingress</td></tr>
   </table>
@@ -886,7 +886,7 @@ REDIS_HOST_PORT=6380</code></pre>
     Calculator</a> for current, region-specific numbers before relying on them.
   </div>
   <p><strong>Tagging:</strong> every resource above that supports tags carries the same 4 tags
-  (<code>Project=FHIRBridge</code>, <code>Component=containerization</code>,
+  (<code>Project=Segue</code>, <code>Component=containerization</code>,
   <code>Environment=&lt;name_prefix&gt;</code>, <code>ManagedBy=Terraform</code> or
   <code>Bicep</code>) &mdash; defined once as <code>local.common_tags</code> /
   <code>commonTags</code> and applied per-resource, since (unlike AWS) the azurerm provider has no
@@ -894,7 +894,7 @@ REDIS_HOST_PORT=6380</code></pre>
   "group by tag" view, and are what the Bicep path's tag-based cleanup mode matches against.</p>
 
   <h3 id="azure-variables"><code class="file-title">azure/variables.tf</code> <span class="pill pill-new">new</span></h3>
-  <pre><code>variable "name_prefix"         { default = "fhirbridge" }      # builds every resource name
+  <pre><code>variable "name_prefix"         { default = "segue" }      # builds every resource name
 variable "resource_group_name" { default = "rg-tusharpuri" }   # must already exist — see below
 variable "image_tag"           { default = "latest" }          # must match what build-images pushed
 variable "sql_port"            { default = 1433 }              # client-configurable per environment
@@ -911,7 +911,7 @@ variable "redis_password"      { sensitive = true }             # HIPAA pass: Re
     as the group. There is no <code>location</code> variable anymore — removed when this changed.
   </div>
   <div class="callout azure">
-    <strong>No port variable for <code>fhirbridge-app</code> / <code>demo-app</code></strong>
+    <strong>No port variable for <code>segue-app</code> / <code>demo-app</code></strong>
     <code>sql_port</code>/<code>redis_port</code> only apply to the two internal-only Container
     Apps. The two public apps have no equivalent — Azure Container Apps external HTTP ingress is
     always served at <code>https://&lt;app-name&gt;.&lt;environment-domain&gt;</code> on standard
@@ -1116,7 +1116,7 @@ resource "azurerm_container_app_environment_storage" "sql_data" {
             traffic_weight { latest_revision = true, percentage = 100 } }
 }</code></pre>
 
-  <h4>fhirbridge-app — public, autoscaling</h4>
+  <h4>segue-app — public, autoscaling</h4>
   <pre><code>resource "azurerm_container_app" "fhirbridge_app" {
   depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
 
@@ -1131,7 +1131,7 @@ resource "azurerm_container_app_environment_storage" "sql_data" {
       image = "${acr.login_server}/fhirbridge-app:${var.image_tag}"
       cpu = 0.5, memory = "1Gi"
       env { name = "ConnectionStrings__FHIRBridgeDb"
-            value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True" }
+            value = "Server=${local.sqlserver_name},${var.sql_port};Database=Segue;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True" }
       env { name = "ConnectionStrings__Redis"
             value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value}" }
       env { name = "Authentication__SigningKey", secret_name = "jwt-signing-key" }
@@ -1143,7 +1143,7 @@ resource "azurerm_container_app_environment_storage" "sql_data" {
   ingress { external_enabled = true, target_port = 80, transport = "auto"
             traffic_weight { latest_revision = true, percentage = 100 } }
 }</code></pre>
-  <p>Note <code>fhirbridge-app</code>'s own ingress stays fixed at <code>target_port = 80</code> —
+  <p>Note <code>segue-app</code>'s own ingress stays fixed at <code>target_port = 80</code> —
   external HTTP ingress on Container Apps has no client-configurable port, so <code>sql_port</code>/
   <code>redis_port</code> only ever affect the two internal-only apps and the connection strings
   that point at them.</p>
@@ -1151,7 +1151,7 @@ resource "azurerm_container_app_environment_storage" "sql_data" {
     <strong>How cross-container URLs resolve without a second <code>apply</code></strong>
     A Container App's public FQDN is always predictable: <code>&lt;app-name&gt;.&lt;environment
     default_domain&gt;</code>. Since the environment's <code>default_domain</code> is a property of
-    the <em>environment</em>, not of any individual app, <code>fhirbridge-app</code> can compute
+    the <em>environment</em>, not of any individual app, <code>segue-app</code> can compute
     <code>demo-app</code>'s URL (for CORS) from a plain string + that shared domain — no self-
     reference, no waiting for a second apply.
   </div>
@@ -1217,7 +1217,7 @@ output "key_vault_name" {
   description = "Rotate a secret with: az keyvault secret set --vault-name &lt;this&gt; --name &lt;sql-sa-password|jwt-signing-key|redis-password&gt; --value &lt;new-value&gt;, then restart the affected Container App revisions."
 }</code></pre>
   <pre><code># terraform.tfvars.example
-name_prefix         = "fhirbridge"
+name_prefix         = "segue"
 resource_group_name = "rg-tusharpuri"   # must already exist
 image_tag           = "v1"
 sql_port            = 1433
@@ -1259,7 +1259,7 @@ redis_password      = "replace-with-a-strong-redis-password"</code></pre>
   <table class="file-table">
     <tr><th>File</th><th>What it does</th></tr>
     <tr><td class="file-path">main.bicep</td><td class="why">The template itself &mdash; compiles cleanly with <code>bicep build</code> (verified). Resource-group scoped: the customer picks/creates the resource group in the Portal wizard, this template doesn't create it. Takes <code>sqlSaPassword</code>/<code>jwtSigningKey</code> as <code>@secure()</code> parameters, plus <code>imageRegistryServer</code>/<code>imageTag</code>/<code>imageRegistryUsername</code>/<code>imageRegistryPassword</code> so it can pull the 3 images from wherever you've published them &mdash; a one-click deploy is only possible if those images already exist somewhere reachable <em>before</em> the customer clicks deploy.</td></tr>
-    <tr><td class="file-path">createUiDefinition.json</td><td class="why">A ready-to-use custom Portal wizard (grouped "FHIRBridge Settings" — SQL SA password, JWT signing key, Redis password, all three <code>PasswordBox</code> fields — and "Version" steps) for the Template Specs, Marketplace Managed Application, or plain "Deploy to Azure" button paths. Registry access is <em>not</em> a customer-facing field anymore: it's a fixed, scoped read-only ACR pull token baked into the file's <code>outputs</code> (see the vendor registry section below), so the customer only ever picks the version tag to install. Testable standalone in Microsoft's <a href="https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade">CreateUiDefinition sandbox</a> without deploying anything.</td></tr>
+    <tr><td class="file-path">createUiDefinition.json</td><td class="why">A ready-to-use custom Portal wizard (grouped "FHIRBridge Settings" — SQL SA password, JWT signing key, Redis password, all three <code>PasswordBox</code> fields — and "Version" steps) for the Template Specs, Marketplace Managed Application, or plain "Deploy to Azure" button paths. (The Bicep one-click path itself isn't part of this Terraform-only rebrand pass — its own Segue rename is a separate, later pass, so this still accurately reflects the file's current label.) Registry access is <em>not</em> a customer-facing field anymore: it's a fixed, scoped read-only ACR pull token baked into the file's <code>outputs</code> (see the vendor registry section below), so the customer only ever picks the version tag to install. Testable standalone in Microsoft's <a href="https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade">CreateUiDefinition sandbox</a> without deploying anything.</td></tr>
     <tr><td class="file-path">main.parameters.example.json</td><td class="why">Committed parameter-file template for the CLI deploy path (<code>az deployment group create --parameters @main.parameters.json</code>).</td></tr>
     <tr><td class="file-path">cleanup.sh / cleanup.ps1</td><td class="why">Since this path has no Terraform state, cleanup reads <code>main.bicep</code>'s own <code>resourceManifest</code> output first (every resource ID this deployment created, straight from the deployment's own history — no extra resource needed to store it) and deletes exactly those IDs, which is precise even in a shared resource group. Only falls back to deleting the whole resource group (<code>-g</code>/<code>-ResourceGroup</code>, and only if it contains no disk snapshots — this is a hard, unbypassable gate, since snapshots are how backups of anything else sharing that resource group are protected) or finds-and-deletes every resource carrying a matching <code>Environment</code> AND <code>ManagedBy=Bicep</code> tag (<code>-e</code>/<code>-EnvironmentTag</code>) if that manifest isn't found (e.g. an older deployment, or history was purged).</td></tr>
     <tr><td class="file-path">README.md</td><td class="why">The full three-tier story: (1) one CLI command, works today; (2) a real "Deploy to Azure" button once <code>main.json</code> (compiled via <code>az bicep build</code>) is hosted at a public URL; (3) Template Specs or a full Marketplace Managed Application listing using the same <code>createUiDefinition.json</code>.</td></tr>
@@ -1319,14 +1319,14 @@ redis_password      = "replace-with-a-strong-redis-password"</code></pre>
   <p><strong>Tagging:</strong> handled with a single <code>default_tags</code> block on the
   <code>aws</code> provider itself (in <code>main.tf</code>) rather than repeating a
   <code>tags = {...}</code> on every resource &mdash; AWS's provider applies
-  <code>Project=FHIRBridge</code>, <code>Component=containerization</code>,
+  <code>Project=Segue</code>, <code>Component=containerization</code>,
   <code>Environment=&lt;name_prefix&gt;</code>, <code>ManagedBy=Terraform</code> to every taggable
   resource automatically, guaranteeing nothing gets missed. Find everything via AWS Cost Explorer's
   "group by tag," or <code>aws resourcegroupstaggingapi get-resources --tag-filters
-  Key=Project,Values=FHIRBridge</code>.</p>
+  Key=Project,Values=Segue</code>.</p>
 
   <h3 id="aws-variables"><code class="file-title">aws/variables.tf</code> <span class="pill pill-new">new</span></h3>
-  <pre><code>variable "name_prefix"        { default = "fhirbridge" }
+  <pre><code>variable "name_prefix"        { default = "segue" }
 variable "aws_region"         { default = "us-east-1" }
 variable "vpc_cidr"           { default = "10.90.0.0/16" }
 variable "image_tag"          { default = "latest" }
@@ -1393,7 +1393,7 @@ resource "aws_route_table_association" "private" { count = 2, subnet_id = aws_su
 
   <h4>Security groups</h4>
   <pre><code>resource "aws_security_group" "alb" {
-  ingress { from_port = 80,   to_port = 80,   cidr_blocks = ["0.0.0.0/0"] }   # fhirbridge-app
+  ingress { from_port = 80,   to_port = 80,   cidr_blocks = ["0.0.0.0/0"] }   # segue-app
   ingress { from_port = 5500, to_port = 5500, cidr_blocks = ["0.0.0.0/0"] }   # demo-app
   egress  { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] }
 }
@@ -1425,7 +1425,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   policy = data.aws_iam_policy_document.ecs_task_execution_secrets.json   # secretsmanager:GetSecretValue, scoped to the 3 secrets above
 }
 
-resource "aws_cloudwatch_log_group" "fhirbridge_app" { name = "/ecs/${var.name_prefix}/fhirbridge-app", retention_in_days = 14 }
+resource "aws_cloudwatch_log_group" "fhirbridge_app" { name = "/ecs/${var.name_prefix}/segue-app", retention_in_days = 14 }
 # ...one more per service (demo_app, worker, sqlserver, redis)</code></pre>
   <p>The task execution role is deliberately narrow: the managed
   <code>AmazonECSTaskExecutionRolePolicy</code> (pull images, write to CloudWatch) plus one inline
@@ -1484,22 +1484,22 @@ resource "aws_efs_access_point" "redis_data" { ...path = "/redis-data"... }</cod
 
   <h3 id="aws-discovery"><code class="file-title">aws/discovery.tf</code> <span class="pill pill-new">new</span></h3>
   <p>AWS Cloud Map — the ECS equivalent of Docker Compose's automatic container-name DNS. Lets
-  <code>fhirbridge-app</code>/<code>demo-app</code>/<code>worker</code> reach <code>sqlserver</code>
+  <code>segue-app</code>/<code>demo-app</code>/<code>worker</code> reach <code>sqlserver</code>
   and <code>redis</code> by hostname instead of hunting for IPs.</p>
   <pre><code>resource "aws_service_discovery_private_dns_namespace" "main" {
-  name = "${var.name_prefix}.internal"   # e.g. fhirbridge.internal
+  name = "${var.name_prefix}.internal"   # e.g. segue.internal
   vpc  = aws_vpc.main.id
 }
 
 resource "aws_service_discovery_service" "sqlserver" {
-  name = "sqlserver"   # resolves as sqlserver.fhirbridge.internal
+  name = "sqlserver"   # resolves as sqlserver.segue.internal
   dns_config { namespace_id = ..., dns_records { ttl = 10, type = "A" }, routing_policy = "MULTIVALUE" }
 }
-resource "aws_service_discovery_service" "redis" { name = "redis", ... }   # redis.fhirbridge.internal</code></pre>
+resource "aws_service_discovery_service" "redis" { name = "redis", ... }   # redis.segue.internal</code></pre>
 
   <h3 id="aws-alb"><code class="file-title">aws/alb.tf</code> <span class="pill pill-new">new</span></h3>
   <p>One Application Load Balancer, two listeners — <code>var.fhirbridge_app_port</code> (default 80)
-  for <code>fhirbridge-app</code>, <code>var.demo_app_port</code> (default 5500) for
+  for <code>segue-app</code>, <code>var.demo_app_port</code> (default 5500) for
   <code>demo-app</code> (matching its established convention). <code>worker</code>/
   <code>sqlserver</code>/<code>redis</code> get no target group at all; they're reached only via
   Cloud Map inside the VPC, never through the ALB. Both listeners now terminate HTTPS using the
@@ -1539,7 +1539,7 @@ resource "aws_lb_listener" "demo_app" {
     <tr><th>Task</th><th>cpu / memory</th><th>Notable config</th></tr>
     <tr><td class="file-path">sqlserver</td><td class="why">1024 / 4096</td><td class="why">EFS volume (<code>sql-data</code> access point) mounted at <code>/var/opt/mssql</code>; <code>MSSQL_TCP_PORT</code> set from <code>var.sql_port</code> (Fargate's <code>awsvpc</code> mode has no host-level port remap, so this has to reach the process directly); <code>MSSQL_SA_PASSWORD</code> pulled from Secrets Manager via the task's <code>secrets</code> block (never plaintext).</td></tr>
     <tr><td class="file-path">redis</td><td class="why">256 / 512</td><td class="why">EFS volume (<code>redis-data</code>) mounted at <code>/data</code>; command overridden to <code>sh -c "redis-server --port ${var.redis_port} --requirepass \"$REDIS_PASSWORD\""</code>, with <code>REDIS_PASSWORD</code> injected via <code>secrets</code> (Secrets Manager), never plaintext <code>environment</code>.</td></tr>
-    <tr><td class="file-path">fhirbridge-app</td><td class="why">512 / 1024</td><td class="why"><code>ConnectionStrings__FHIRBridgeDb</code>/<code>Redis</code> point at Cloud Map hostnames (<code>sqlserver.fhirbridge.internal</code>) with <code>Encrypt=True</code> and the Redis password appended; <code>Portal__AllowedOrigins__0</code> computed from the ALB's own <code>dns_name</code> (a different resource, so this is a normal forward reference, not a self-reference).</td></tr>
+    <tr><td class="file-path">segue-app</td><td class="why">512 / 1024</td><td class="why"><code>ConnectionStrings__FHIRBridgeDb</code>/<code>Redis</code> point at Cloud Map hostnames (<code>sqlserver.segue.internal</code>) with <code>Encrypt=True</code> and the Redis password appended; <code>Portal__AllowedOrigins__0</code> computed from the ALB's own <code>dns_name</code> (a different resource, so this is a normal forward reference, not a self-reference).</td></tr>
     <tr><td class="file-path">demo-app</td><td class="why">256 / 512</td><td class="why">Same pattern; <code>AllowedFrontendOrigin</code> also derived from the ALB DNS name.</td></tr>
     <tr><td class="file-path">worker</td><td class="why">256 / 512</td><td class="why">No port mappings at all — no HTTP endpoint.</td></tr>
   </table>
@@ -1551,14 +1551,14 @@ resource "aws_lb_listener" "demo_app" {
     trade-off here given Fargate's task-level isolation (no shared host kernel with other tenants'
     containers) — not something to carry over uncritically to a different runtime.
   </div>
-  <p>Representative excerpt (fhirbridge-app):</p>
+  <p>Representative excerpt (segue-app):</p>
   <pre><code>container_definitions = jsonencode([{
-  name  = "fhirbridge-app"
+  name  = "segue-app"
   image = "${aws_ecr_repository.fhirbridge_app.repository_url}:${var.image_tag}"
   portMappings = [{ containerPort = 80, protocol = "tcp" }]
   environment = [
     { name = "ConnectionStrings__FHIRBridgeDb"
-      value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+      value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=Segue;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
     { name = "ConnectionStrings__Redis"
       value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
     { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
@@ -1580,7 +1580,7 @@ resource "aws_lb_listener" "demo_app" {
 
 resource "aws_ecs_service" "fhirbridge_app" {
   depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_lb_listener.fhirbridge_app]
-  load_balancer { target_group_arn = aws_lb_target_group.fhirbridge_app.arn, container_name = "fhirbridge-app", container_port = 80 }
+  load_balancer { target_group_arn = aws_lb_target_group.fhirbridge_app.arn, container_name = "segue-app", container_port = 80 }
   ...
 }
 # demo_app: same shape, its own target group + listener dependency
@@ -1608,7 +1608,7 @@ output "demo_app_url" {
   description = "Self-signed cert — expect a browser trust warning until a CA-issued certificate is swapped in."
 }</code></pre>
   <pre><code># terraform.tfvars.example
-name_prefix         = "fhirbridge"
+name_prefix         = "segue"
 aws_region          = "us-east-1"
 image_tag           = "v1"
 fhirbridge_app_port = 80
@@ -1744,7 +1744,7 @@ output "acr_login_server"  { value = azurerm_container_registry.vendor.login_ser
     <p><code>FHIRBridge.Api</code> and <code>FHIRBridge.Worker</code> both call
     <code>Database.Migrate()</code> against <code>FHIRBridgeDb</code> independently on startup. On
     a brand-new SQL Server instance, both can race to run <code>CREATE DATABASE</code> at the same
-    moment — the loser crashes with <code>SqlException: Database 'FHIRBridge' already exists</code>.
+    moment — the loser crashes with <code>SqlException: Database 'Segue' already exists</code>.
     This is a latent bug in the application's own dual-auto-migration design, not something
     introduced by containerization — the same race could occur in the real Windows Service
     deployment too if both services start close together.</p>

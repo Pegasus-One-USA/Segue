@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "4086935846851975586"
+      "templateHash": "4058819437558962514"
     }
   },
   "parameters": {
@@ -81,6 +81,34 @@
       "type": "securestring",
       "metadata": {
         "description": "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App's configuration — same exposure level as any other command argument."
+      }
+    },
+    "fhirbridgeAppCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default, step 1) to keep using the auto-generated *.azurecontainerapps.io URL. This is a 3-step flow, deliberately split from SSL so the domain can be registered and confirmed reachable before a certificate is requested: (1) deploy with this left blank — read the fhirbridgeAppDomainVerificationId output and fhirbridgeAppUrl's hostname, add a CNAME (this domain -> that hostname) and a TXT record named asuid.<this domain> (value = the verification output) at your DNS provider; (2) set this parameter to the domain and redeploy with fhirbridgeAppSslEnabled left false — this registers the domain on the app's ingress with no certificate yet (bindingType Disabled), reachable but not secured; (3) set fhirbridgeAppSslEnabled = true and redeploy — this is the step that actually requests the free Azure-managed certificate and validates the TXT record, failing cleanly if DNS isn't ready, then upgrades the binding to SniEnabled. Every step here is a redeploy of this same template — no separate CLI/portal action needed."
+      }
+    },
+    "fhirbridgeAppSslEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Step 3 of the fhirbridgeAppCustomDomain flow — leave false (default) while the domain is only registered (step 2). Set to true once the asuid.<domain> TXT record is in place and you're ready to issue+bind the free managed certificate. Has no effect while fhirbridgeAppCustomDomain is blank."
+      }
+    },
+    "demoAppCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the Demo app. Same 3-step flow as fhirbridgeAppCustomDomain — see demoAppSslEnabled and the demoAppDomainVerificationId output."
+      }
+    },
+    "demoAppSslEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Step 3 for demoAppCustomDomain — see fhirbridgeAppSslEnabled for the full explanation, identical behavior here."
       }
     },
     "sqlServerSize": {
@@ -252,6 +280,17 @@
       ]
     },
     {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/keys-data', variables('storageAccountName'))]",
+      "properties": {
+        "shareQuota": 1
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.App/managedEnvironments/storages",
       "apiVersion": "2024-03-01",
       "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
@@ -284,6 +323,24 @@
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
+          "shareName": "keys-data",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
@@ -413,6 +470,34 @@
       ]
     },
     {
+      "condition": "[and(not(empty(parameters('fhirbridgeAppCustomDomain'))), parameters('fhirbridgeAppSslEnabled'))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('fhirbridgeAppCustomDomain')]",
+        "domainControlValidation": "TXT"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[and(not(empty(parameters('demoAppCustomDomain'))), parameters('demoAppSslEnabled'))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('demoAppCustomDomain')]",
+        "domainControlValidation": "TXT"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
+      ]
+    },
+    {
       "type": "Microsoft.App/containerApps",
       "apiVersion": "2024-03-01",
       "name": "[variables('fhirbridgeAppName')]",
@@ -426,7 +511,8 @@
           "ingress": {
             "external": true,
             "targetPort": 80,
-            "transport": "auto"
+            "transport": "auto",
+            "customDomains": "[if(not(empty(parameters('fhirbridgeAppCustomDomain'))), createArray(if(parameters('fhirbridgeAppSslEnabled'), createObject('name', parameters('fhirbridgeAppCustomDomain'), 'certificateId', if(and(not(empty(parameters('fhirbridgeAppCustomDomain'))), parameters('fhirbridgeAppSslEnabled')), resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName'))), null()), 'bindingType', 'SniEnabled'), createObject('name', parameters('fhirbridgeAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
           }
         },
         "template": {
@@ -435,40 +521,20 @@
               "name": "fhirbridge-app",
               "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
-              "env": [
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true')), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
+              "volumeMounts": [
                 {
-                  "name": "ASPNETCORE_ENVIRONMENT",
-                  "value": "Production"
-                },
-                {
-                  "name": "ConnectionStrings__FHIRBridgeDb",
-                  "value": "[format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))]"
-                },
-                {
-                  "name": "ConnectionStrings__Redis",
-                  "value": "[format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
-                },
-                {
-                  "name": "Authentication__SigningKey",
-                  "secretRef": "jwt-signing-key"
-                },
-                {
-                  "name": "DataProtection__KeyRingPath",
-                  "value": "/app/keys"
-                },
-                {
-                  "name": "Portal__AllowedOrigins__0",
-                  "value": "[format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
-                },
-                {
-                  "name": "AllowedHosts",
-                  "value": "*"
-                },
-                {
-                  "name": "Swagger__Enabled",
-                  "value": "true"
+                  "volumeName": "keys-data",
+                  "mountPath": "/app/keys"
                 }
               ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "keys-data",
+              "storageType": "AzureFile",
+              "storageName": "keys-data"
             }
           ],
           "scale": {
@@ -479,6 +545,8 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
         "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
       ]
@@ -497,7 +565,8 @@
           "ingress": {
             "external": true,
             "targetPort": 5500,
-            "transport": "auto"
+            "transport": "auto",
+            "customDomains": "[if(not(empty(parameters('demoAppCustomDomain'))), createArray(if(parameters('demoAppSslEnabled'), createObject('name', parameters('demoAppCustomDomain'), 'certificateId', if(and(not(empty(parameters('demoAppCustomDomain'))), parameters('demoAppSslEnabled')), resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName'))), null()), 'bindingType', 'SniEnabled'), createObject('name', parameters('demoAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
           }
         },
         "template": {
@@ -530,6 +599,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
         "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
       ]
     },
@@ -597,6 +667,42 @@
     "demoAppUrl": {
       "type": "string",
       "value": "[format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+    },
+    "fhirbridgeAppDomainVerificationId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01').customDomainVerificationId]"
+    },
+    "demoAppDomainVerificationId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('demoAppName')), '2024-03-01').customDomainVerificationId]"
+    },
+    "fhirbridgeAppCustomDomainUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated once fhirbridgeAppCustomDomain is set (step 2) and that deploy has completed; empty string otherwise. Note this only means the domain is registered on the app's ingress — it isn't necessarily secured yet. See fhirbridgeAppCustomDomainSslStatus."
+      },
+      "value": "[if(not(empty(parameters('fhirbridgeAppCustomDomain'))), format('https://{0}', parameters('fhirbridgeAppCustomDomain')), '')]"
+    },
+    "fhirbridgeAppCustomDomainSslStatus": {
+      "type": "string",
+      "metadata": {
+        "description": "\"notSet\" if fhirbridgeAppCustomDomain is blank (step 1), \"pending\" if the domain is registered but fhirbridgeAppSslEnabled is still false (step 2), \"secured\" once step 3 has completed."
+      },
+      "value": "[if(empty(parameters('fhirbridgeAppCustomDomain')), 'notSet', if(parameters('fhirbridgeAppSslEnabled'), 'secured', 'pending'))]"
+    },
+    "demoAppCustomDomainUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated once demoAppCustomDomain is set (step 2) and that deploy has completed; empty string otherwise. Note this only means the domain is registered on the app's ingress — it isn't necessarily secured yet. See demoAppCustomDomainSslStatus."
+      },
+      "value": "[if(not(empty(parameters('demoAppCustomDomain'))), format('https://{0}', parameters('demoAppCustomDomain')), '')]"
+    },
+    "demoAppCustomDomainSslStatus": {
+      "type": "string",
+      "metadata": {
+        "description": "\"notSet\" if demoAppCustomDomain is blank (step 1), \"pending\" if the domain is registered but demoAppSslEnabled is still false (step 2), \"secured\" once step 3 has completed."
+      },
+      "value": "[if(empty(parameters('demoAppCustomDomain')), 'notSet', if(parameters('demoAppSslEnabled'), 'secured', 'pending'))]"
     },
     "resourceManifest": {
       "type": "array",

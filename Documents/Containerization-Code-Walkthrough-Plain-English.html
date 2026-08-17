@@ -512,7 +512,7 @@ ENTRYPOINT ["dotnet", "FHIRBridge.Worker.dll"]</code></pre>
       sqlserver: { condition: service_healthy }
       redis: { condition: service_healthy }
     environment:
-      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;..."
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=Segue;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;..."
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       Authentication__SigningKey: "${JWT_SIGNING_KEY}"
       Portal__AllowedOrigins__0: "http://localhost:${DEMO_HOST_PORT:-5500}"
@@ -690,7 +690,7 @@ variable "redis_port"          { default = 6379 }</code></pre>
   <p class="file-summary">The main blueprint — every Azure resource this deployment creates.</p>
   <pre><code>locals {
   common_tags = {
-    Project     = "FHIRBridge"
+    Project     = "Segue"
     Component   = "containerization"
     Environment = var.name_prefix
     ManagedBy   = "Terraform"
@@ -934,7 +934,7 @@ param redisPort int = 6379</code></pre>
     1433/6379.</p>
   </div>
   <pre><code>var commonTags = {
-  Project: 'FHIRBridge'
+  Project: 'Segue'
   Component: 'containerization'
   Environment: namePrefix
   ManagedBy: 'Bicep'
@@ -1048,7 +1048,7 @@ variable "vpc_cidr"   { default = "10.90.0.0/16" }</code></pre>
   region = var.aws_region
   default_tags {
     tags = {
-      Project     = "FHIRBridge"
+      Project     = "Segue"
       Component   = "containerization"
       Environment = var.name_prefix
       ManagedBy   = "Terraform"
@@ -1270,7 +1270,7 @@ resource "aws_ecs_service" "fhirbridge_app" {
     subnets          = aws_subnet.private[*].id
     assign_public_ip = false
   }
-  load_balancer { target_group_arn = ..., container_name = "fhirbridge-app", container_port = 80 }
+  load_balancer { target_group_arn = ..., container_name = "segue-app", container_port = 80 }
 }</code></pre>
   <div class="explain">
     <p><code>desired_count = 1</code> is the instruction "always keep exactly one copy of this

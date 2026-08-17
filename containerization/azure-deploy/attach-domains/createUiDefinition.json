@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "basics": [
+      {
+        "name": "infoBox",
+        "type": "Microsoft.Common.InfoBox",
+        "options": {
+          "icon": "Info",
+          "text": "Attaches custom domains to an already-deployed FHIRBridge environment's two public apps. Domain registration only (no certificate/SSL) -- run this first, add the CNAME/TXT records it reports, then re-run manage-custom-domain.ps1|sh with -Action Bind (or main.bicep's SSL checkboxes) to actually issue and bind the certificate."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "domains",
+        "label": "Attach Domains",
+        "elements": [
+          {
+            "name": "namePrefix",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Deployment name prefix",
+            "defaultValue": "",
+            "toolTip": "The namePrefix used when main.bicep was originally deployed (e.g. \"segue5\") -- this is what the target app/environment names are derived from.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-z0-9-]{1,20}$",
+              "validationMessage": "Lowercase letters, numbers, and hyphens only."
+            }
+          },
+          {
+            "name": "fhirbridgeAppDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "FHIRBridge app domain",
+            "defaultValue": "",
+            "toolTip": "e.g. app.example.com. Leave blank to skip attaching a domain to this app.",
+            "constraints": {
+              "required": false
+            }
+          },
+          {
+            "name": "demoAppDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Demo app domain",
+            "defaultValue": "",
+            "toolTip": "e.g. demo.example.com. Leave blank to skip attaching a domain to this app.",
+            "constraints": {
+              "required": false
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[steps('domains').namePrefix]",
+      "fhirbridgeAppDomain": "[steps('domains').fhirbridgeAppDomain]",
+      "demoAppDomain": "[steps('domains').demoAppDomain]",
+      "location": "[location()]"
+    }
+  }
+}

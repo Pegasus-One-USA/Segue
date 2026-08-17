@@ -1,7 +1,7 @@
 variable "name_prefix" {
   description = "Short name used to build the registry name."
   type        = string
-  default     = "fhirbridge"
+  default     = "segue"
 }
 
 variable "resource_group_name" {

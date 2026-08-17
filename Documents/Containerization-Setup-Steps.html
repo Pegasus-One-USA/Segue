@@ -446,7 +446,7 @@ az account set --subscription "&lt;name or id&gt;"</code></pre>
 cp terraform.tfvars.example terraform.tfvars</code></pre>
       <p>Open <code>terraform.tfvars</code> and fill in real values (same password rules as the
       Local section above):</p>
-      <pre><code>name_prefix         = "fhirbridge"
+      <pre><code>name_prefix         = "segue"
 resource_group_name = "rg-tusharpuri"
 image_tag           = "v1"
 sql_sa_password     = "&lt;a real password&gt;"
@@ -481,18 +481,18 @@ redis_password      = "&lt;a real strong password&gt;"</code></pre>
       <p>Terraform will show you a plan and ask <code>Do you want to perform these actions?</code> —
       type <code>yes</code> and press Enter. When it finishes, note the
       <code>acr_login_server</code> value it prints (looks like
-      <code>fhirbridgeacr1a2b3c.azurecr.io</code>) — you'll need it in the next two steps.</p>
+      <code>segueacr1a2b3c.azurecr.io</code>) — you'll need it in the next two steps.</p>
     </div>
   </div>
   <div class="step">
     <div class="step-num">5</div>
     <div class="step-body">
       <strong>Log in to that registry, then build and upload the 3 images</strong>
-      <pre><code>az acr login --name fhirbridgeacr1a2b3c
+      <pre><code>az acr login --name segueacr1a2b3c
 # (use just the part before ".azurecr.io" from the previous step's output)
 
 cd ../../../scripts
-./build-images.sh -r fhirbridgeacr1a2b3c.azurecr.io -t v1 -p</code></pre>
+./build-images.sh -r segueacr1a2b3c.azurecr.io -t v1 -p</code></pre>
       <p>The <code>-p</code> flag means "and upload it," on top of just building. This step can
       take several minutes the first time.</p>
       <div class="checkpoint"><strong>You'll know it worked</strong> if you see
@@ -586,7 +586,7 @@ terraform output demo_app_domain_verification</code></pre>
     <div class="step-num">1</div>
     <div class="step-body">
       <strong>Create a resource group to deploy into</strong>
-      <pre><code>az group create --name fhirbridge-rg --location eastus</code></pre>
+      <pre><code>az group create --name segue-rg --location eastus</code></pre>
     </div>
   </div>
   <div class="step">
@@ -596,11 +596,11 @@ terraform output demo_app_domain_verification</code></pre>
       <p>Unlike Path A, this template doesn't create its own registry — it expects the images to
       already be built and uploaded (e.g. to an ACR you already have, or a public registry). If you
       don't have one yet, the quickest option is creating one manually and pushing to it:</p>
-      <pre><code>az acr create --resource-group fhirbridge-rg --name fhirbridgeacrXXXX --sku Basic --admin-enabled true
-az acr login --name fhirbridgeacrXXXX
+      <pre><code>az acr create --resource-group segue-rg --name segueacrXXXX --sku Basic --admin-enabled true
+az acr login --name segueacrXXXX
 cd containerization/scripts
-./build-images.sh -r fhirbridgeacrXXXX.azurecr.io -t v1 -p
-az acr credential show --name fhirbridgeacrXXXX
+./build-images.sh -r segueacrXXXX.azurecr.io -t v1 -p
+az acr credential show --name segueacrXXXX
 # note the username and one of the two passwords shown — needed in the next step</code></pre>
     </div>
   </div>
@@ -621,7 +621,7 @@ cp main.parameters.example.json main.parameters.json</code></pre>
       <code>XLarge</code>, defaulting to today's values; bump <code>sqlServerSize</code> to
       <code>XLarge</code> if SQL Server's first-run setup crashes with an out-of-memory exit code.</p>
       <pre><code>az deployment group create \
-  --resource-group fhirbridge-rg \
+  --resource-group segue-rg \
   --template-file main.bicep \
   --parameters main.parameters.json</code></pre>
       <p>This single command creates literally everything — takes 2&ndash;5 minutes.</p>
@@ -640,7 +640,7 @@ cp main.parameters.example.json main.parameters.json</code></pre>
     <div class="step-num">4</div>
     <div class="step-body">
       <strong>Get the URLs</strong>
-      <pre><code>az deployment group show --resource-group fhirbridge-rg --name main --query properties.outputs</code></pre>
+      <pre><code>az deployment group show --resource-group segue-rg --name main --query properties.outputs</code></pre>
     </div>
   </div>
 
@@ -685,7 +685,7 @@ cp main.parameters.example.json main.parameters.json</code></pre>
   </div>
   <p><strong>Path B (Bicep):</strong></p>
   <pre><code>cd containerization/azure-deploy
-./cleanup.sh -g fhirbridge-rg</code></pre>
+./cleanup.sh -g segue-rg</code></pre>
   <div class="callout">
     <strong>Precise by default now</strong>
     This first reads <code>main.bicep</code>'s own <code>resourceManifest</code> output (every
@@ -696,7 +696,7 @@ cp main.parameters.example.json main.parameters.json</code></pre>
     disk snapshot (a snapshot is how a backup is protected — this script will never delete one).
     Use <code>-e &lt;environment-tag-value&gt;</code> instead for a shared group where the manifest
     genuinely isn't available. Confirm the deployment's own resources are gone afterward with
-    <code>az resource list --resource-group fhirbridge-rg</code>.
+    <code>az resource list --resource-group segue-rg</code>.
   </div>
   <div class="callout warn">
     <strong>Changing <code>sqlSaPassword</code> and redeploying into the same resource group +

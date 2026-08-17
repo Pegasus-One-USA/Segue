@@ -1,7 +1,7 @@
 variable "name_prefix" {
   description = "Short name used to build resource names (ACR, storage account, Key Vault, Container Apps)."
   type        = string
-  default     = "fhirbridge"
+  default     = "segue"
 }
 
 variable "resource_group_name" {
@@ -59,15 +59,27 @@ variable "redis_password" {
 }
 
 variable "fhirbridge_app_custom_domain" {
-  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default) to keep using the auto-generated *.azurecontainerapps.io URL. Setting this requires a two-phase apply: (1) apply with this left blank, read the fhirbridge_app_domain_verification output, add a CNAME (pointing this domain at fhirbridge_app_url's hostname) and a TXT record named asuid.<this domain> (value = that output) at your DNS provider, wait for DNS to propagate; (2) set this variable to the domain and re-apply — this provisions a free Azure-managed certificate (which validates the TXT record at apply time, so it fails if DNS isn't ready) and binds the domain."
+  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank (default, step 1) to keep using the auto-generated *.azurecontainerapps.io URL. This is now a 3-step flow, split from SSL on purpose so the domain can be registered and confirmed reachable before a certificate is requested: (1) apply with this left blank — read the fhirbridge_app_domain_verification output and fhirbridge_app_url's hostname, hand them to the client so they can point a CNAME at that hostname and add a TXT record named asuid.<their domain> with the verification value (we assume the client does this on their own DNS once the app exists — see fhirbridge_app_ssl_enabled for why the TXT record specifically only matters for step 3, not this one); (2) set this variable to their domain and re-apply with fhirbridge_app_ssl_enabled left false — this registers the domain on the app's ingress with no certificate yet (bindingType Disabled), so it's reachable but not yet secured; (3) set fhirbridge_app_ssl_enabled = true and re-apply — this is the step that actually requests the free Azure-managed certificate and validates the TXT record, failing cleanly if DNS isn't ready yet, then upgrades the binding to SniEnabled."
   type        = string
   default     = ""
 }
 
+variable "fhirbridge_app_ssl_enabled" {
+  description = "Step 3 of the fhirbridge_app_custom_domain flow — leave false (default) while the domain is only registered (step 2). Set to true once the client has added the asuid.<domain> TXT record and you're ready to issue+bind the free managed certificate. Has no effect while fhirbridge_app_custom_domain is blank. NOTE: unsetting this (or the domain) back to false/blank and re-applying does not itself remove the domain/certificate binding from the live Container App — azapi_update's underlying PATCH has no matching \"undo\" on destroy, so rolling back requires `az containerapp hostname delete` by hand."
+  type        = bool
+  default     = false
+}
+
 variable "demo_app_custom_domain" {
-  description = "Custom domain for the Demo app. Same two-phase flow as fhirbridge_app_custom_domain — see the demo_app_domain_verification output."
+  description = "Custom domain for the Demo app. Same 3-step flow as fhirbridge_app_custom_domain — see demo_app_ssl_enabled and the demo_app_domain_verification output."
   type        = string
   default     = ""
+}
+
+variable "demo_app_ssl_enabled" {
+  description = "Step 3 for demo_app_custom_domain — see fhirbridge_app_ssl_enabled for the full explanation, identical behavior here."
+  type        = bool
+  default     = false
 }
 
 variable "sql_external_access" {

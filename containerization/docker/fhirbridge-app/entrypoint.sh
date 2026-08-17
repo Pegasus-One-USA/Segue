@@ -11,6 +11,12 @@
 # below run from this script's own cwd (/app, the image's WORKDIR), so without an explicit content
 # root each process would look for its config next to /app instead of /app/api or /app/gateway and
 # silently start with none of it — Gateway in particular would load zero YARP routes.
+#
+# Gateway's own Program.cs refuses to start in any non-dev environment without ApiBaseUrl set
+# explicitly (no silent fallback — a deliberate guard against one misconfigured environment
+# proxying into another's Api). Since Api and Gateway are always paired 1:1 in this same container
+# at this fixed loopback address, it's set here to exactly what Api binds to two lines below,
+# rather than relying on that removed default.
 set -e
 
 env ASPNETCORE_URLS=http://127.0.0.1:5000 \
@@ -21,6 +27,7 @@ API_PID=$!
 env ASPNETCORE_URLS=http://+:80 \
     ASPNETCORE_CONTENTROOT=/app/gateway \
     StaticFiles__RootPath=/app/portal \
+    ApiBaseUrl=http://127.0.0.1:5000/ \
     dotnet /app/gateway/FHIRBridge.Gateway.dll &
 GATEWAY_PID=$!
 

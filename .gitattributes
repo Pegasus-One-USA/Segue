@@ -1,0 +1,8 @@
+# Shell scripts must always check out with LF line endings, regardless of core.autocrlf on any
+# given machine — a CRLF shebang line (e.g. "#!/bin/bash\r") makes Linux look for an interpreter
+# literally named "/bin/bash\r", which doesn't exist, failing with a misleading
+# "exec ./script.sh: no such file or directory" even though the file is clearly present. This bit
+# containerization/docker/fhirbridge-app/entrypoint.sh specifically: it's COPY'd into a Linux
+# container image and run directly as ENTRYPOINT, so a Windows checkout with CRLF broke every build
+# until this was added.
+*.sh text eol=lf

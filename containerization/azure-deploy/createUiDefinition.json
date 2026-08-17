@@ -204,7 +204,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "Optional — leave both blank to just use the default *.azurecontainerapps.io URLs. Setting a domain here needs a two-phase deploy: (1) deploy once with these left blank, find the fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId outputs on this deployment afterward, add a CNAME and a TXT record (asuid.<your domain>) at your DNS provider using those values, wait for DNS to propagate; (2) come back, fill in the domain(s) below, and redeploy — that provisions a free managed certificate and binds it."
+              "text": "Optional — leave everything blank to just use the default *.azurecontainerapps.io URLs. Setting a domain here is a 3-step flow, done entirely by redeploying this same wizard, no CLI/portal action needed: (1) deploy once with these left blank, find the fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId outputs on this deployment afterward, add a CNAME (your domain -> the matching *Url output's hostname) and a TXT record (asuid.<your domain>) at your DNS provider using the verification output, wait for DNS to propagate; (2) come back, fill in the domain(s) below with the SSL checkbox(es) still OFF, and redeploy — this registers the domain with no certificate yet (reachable, not secured); (3) once the TXT record is confirmed in place, come back again, turn the matching SSL checkbox ON, and redeploy — this is the step that actually validates the TXT record and issues + binds the free managed certificate, failing cleanly (safe to retry) if DNS isn't ready yet."
             }
           },
           {
@@ -218,6 +218,14 @@
             }
           },
           {
+            "name": "fhirbridgeAppSslEnabled",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Issue + bind SSL certificate for the FHIRBridge app domain (step 3)",
+            "defaultValue": false,
+            "toolTip": "Leave OFF until the asuid.<domain> TXT record is confirmed in place (step 2 already redeployed with the domain above). Turning this ON and redeploying is what actually requests and binds the free managed certificate. Has no effect while the domain above is blank.",
+            "visible": true
+          },
+          {
             "name": "demoAppCustomDomain",
             "type": "Microsoft.Common.TextBox",
             "label": "Demo app custom domain",
@@ -226,6 +234,14 @@
             "constraints": {
               "required": false
             }
+          },
+          {
+            "name": "demoAppSslEnabled",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Issue + bind SSL certificate for the Demo app domain (step 3)",
+            "defaultValue": false,
+            "toolTip": "Same idea as the FHIRBridge app's SSL checkbox above, for the demo app's own domain.",
+            "visible": true
           }
         ]
       },
@@ -265,7 +281,9 @@
       "demoAppSize": "[steps('containerSizing').demoAppSize]",
       "workerSize": "[steps('containerSizing').workerSize]",
       "fhirbridgeAppCustomDomain": "[steps('customDomains').fhirbridgeAppCustomDomain]",
+      "fhirbridgeAppSslEnabled": "[steps('customDomains').fhirbridgeAppSslEnabled]",
       "demoAppCustomDomain": "[steps('customDomains').demoAppCustomDomain]",
+      "demoAppSslEnabled": "[steps('customDomains').demoAppSslEnabled]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "fhirbridgevendor8ae7f3.azurecr.io",
       "imageRegistryUsername": "one-click-pull",

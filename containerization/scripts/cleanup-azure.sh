@@ -69,8 +69,8 @@ if command -v az >/dev/null 2>&1; then
     # az CLI rejects combining --tag with --resource-group on `az resource list` ("you cannot use
     # '--tag' with '--resource-group'") — so filter by tag across the subscription instead and
     # narrow to this resource group client-side via --query.
-    echo "Resources tagged Project=FHIRBridge currently in resource group '${RG_NAME}' (before destroy):"
-    az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
+    echo "Resources tagged Project=Segue currently in resource group '${RG_NAME}' (before destroy):"
+    az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
       || echo "  (couldn't query — not logged in to az, or the group doesn't exist)"
     echo
   fi
@@ -97,8 +97,8 @@ fi
 
 if command -v az >/dev/null 2>&1; then
   echo
-  echo "Resources tagged Project=FHIRBridge remaining in '${RG_NAME}' (should be empty):"
-  az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
+  echo "Resources tagged Project=Segue remaining in '${RG_NAME}' (should be empty):"
+  az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}']" --output table 2>/dev/null \
     || echo "  (couldn't query — not logged in to az)"
 fi
 

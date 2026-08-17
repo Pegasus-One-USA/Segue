@@ -23,8 +23,18 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    # azurerm (3.117.1, as pinned below) has no resource for Azure Container Apps' free managed-
+    # certificate feature — azapi is Microsoft's own official provider that creates any ARM
+    # resource type 1:1 (type + apiVersion + body, same shape as an ARM/Bicep template), used here
+    # only for that one gap. Everything else stays on azurerm.
+    azapi = {
+      source  = "Azure/azapi"
+      version = ">= 1.9.0"
+    }
   }
 }
+
+provider "azapi" {}
 
 provider "azurerm" {
   features {
@@ -79,8 +89,8 @@ resource "random_id" "kv_suffix" {
 
 locals {
   suffix               = random_id.suffix.hex
-  acr_name             = "${var.name_prefix}acr${local.suffix}" # ACR: alnum only, globally unique
-  storage_account_name = "${var.name_prefix}st${local.suffix}"  # Storage account: alnum only, <=24 chars, globally unique
+  acr_name             = "${var.name_prefix}acr${local.suffix}"             # ACR: alnum only, globally unique
+  storage_account_name = "${var.name_prefix}st${local.suffix}"              # Storage account: alnum only, <=24 chars, globally unique
   key_vault_name       = "${var.name_prefix}-kv-${random_id.kv_suffix.hex}" # Key Vault: alnum + hyphens, <=24 chars, globally unique, own random component
 
   # Plain-string app names (not resource attribute lookups) so a Container App can safely compute
@@ -98,7 +108,7 @@ locals {
   # ../../../azure-deploy/cleanup.sh|ps1's -UseTags mode, and az cli one-liners in the
   # containerization guide) matches against instead of relying on Terraform state alone.
   common_tags = {
-    Project     = "FHIRBridge"
+    Project     = "Segue"
     Component   = "containerization"
     Environment = var.name_prefix
     ManagedBy   = "Terraform"
@@ -167,6 +177,23 @@ resource "azurerm_storage_share" "redis_data" {
   quota                = 10
 }
 
+# ASP.NET Core's Data Protection key ring for fhirbridge_app (see DataProtection__KeyRingPath
+# below) — without this, /app/keys is ephemeral per-container storage: every restart (redeploy,
+# scale event, platform maintenance, anything) generates a brand new key ring, permanently
+# orphaning whatever's already encrypted in FHIRBridgeDb's ProvisionedSecrets table (jwt-signing-
+# key, download-link-signing-secret — see AppSecretProvisioner) with a CryptographicException
+# ("key ... was not found in the key ring") that crashes the Api process on every single boot from
+# then on. Unlike sql-data/redis-data above, concurrent multi-instance access to a shared key ring
+# directory is an explicitly supported ASP.NET Core Data Protection pattern (not a SQL Server-style
+# single-writer constraint), so this is also what makes fhirbridge_app's max_replicas = 3 actually
+# safe — without it, scaling out would hit this exact same exception between sibling replicas that
+# each generated their own independent key ring.
+resource "azurerm_storage_share" "keys_data" {
+  name                 = "keys-data"
+  storage_account_name = azurerm_storage_account.main.name
+  quota                = 1
+}
+
 resource "azurerm_container_app_environment_storage" "sql_data" {
   name                         = "sql-data"
   container_app_environment_id = azurerm_container_app_environment.main.id
@@ -182,6 +209,15 @@ resource "azurerm_container_app_environment_storage" "redis_data" {
   account_name                 = azurerm_storage_account.main.name
   access_key                   = azurerm_storage_account.main.primary_access_key
   share_name                   = azurerm_storage_share.redis_data.name
+  access_mode                  = "ReadWrite"
+}
+
+resource "azurerm_container_app_environment_storage" "keys_data" {
+  name                         = "keys-data"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  account_name                 = azurerm_storage_account.main.name
+  access_key                   = azurerm_storage_account.main.primary_access_key
+  share_name                   = azurerm_storage_share.keys_data.name
   access_mode                  = "ReadWrite"
 }
 
@@ -413,11 +449,25 @@ resource "azurerm_container_app" "fhirbridge_app" {
     min_replicas = 1
     max_replicas = 3
 
+    volume {
+      name         = "keys-data"
+      storage_type = "AzureFile"
+      storage_name = azurerm_container_app_environment_storage.keys_data.name
+    }
+
     container {
-      name   = "fhirbridge-app"
+      # Display name only, shown in the Portal's container list — the image reference below is a
+      # separate string and still has to match the real, already-published repo name in the
+      # registry (fhirbridge-app), which isn't being renamed as part of this pass.
+      name   = "segue-app"
       image  = "${azurerm_container_registry.acr.login_server}/fhirbridge-app:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
+
+      volume_mounts {
+        name = "keys-data"
+        path = "/app/keys"
+      }
 
       env {
         name  = "ASPNETCORE_ENVIRONMENT"
@@ -425,7 +475,7 @@ resource "azurerm_container_app" "fhirbridge_app" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
+        value = "Server=${local.sqlserver_name},${var.sql_port};Database=Segue;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
       }
       env {
         name  = "ConnectionStrings__Redis"
@@ -543,50 +593,119 @@ resource "azurerm_container_app" "demo_app" {
 
 # --- Custom domains (optional, per app) ---
 #
-# Two-phase by necessity, not by choice: Azure can't issue or verify a certificate for a domain
-# until DNS proves you control it, and that proof (the TXT record below) can only be generated
-# once the Container App itself already exists. See fhirbridge_app_custom_domain's description in
-# variables.tf for the full apply-twice flow. Left at their default ("") these four resources
-# don't get created at all (count = 0) and both apps behave exactly as before this feature existed.
+# A genuine 3-step flow, not 2 — domain registration and certificate issuance are deliberately
+# separate applies (see fhirbridge_app_custom_domain / fhirbridge_app_ssl_enabled in variables.tf):
+#   1. Both left at their defaults ("" / false) — plain *.azurecontainerapps.io URL, none of the
+#      four resources below exist (count = 0), both apps behave exactly as before this feature
+#      existed.
+#   2. Domain set, ssl_enabled still false — the azapi_update_resource below patches just the
+#      customDomains array on the (otherwise azurerm-managed) Container App, bindingType
+#      "Disabled", no certificate. The domain resolves (once the client's CNAME points at it) but
+#      isn't secured yet.
+#   3. ssl_enabled set to true — the azapi_resource managed-certificate request now exists and
+#      actually performs the DNS validation at apply time (checks the client's asuid TXT record;
+#      fails cleanly if it isn't there yet), and the same azapi_update_resource from step 2 is
+#      updated in place to bindingType "SniEnabled" with that certificate's ID.
 #
-# azurerm_container_app_environment_managed_certificate is the resource that actually performs the
-# DNS validation at apply time (it calls Azure's ACME-backed managed-certificate issuance, which
-# checks the TXT record) — this step fails outright if DNS isn't propagated yet, which is expected.
-# azurerm_container_app_custom_domain then binds that verified, issued certificate to the specific
-# app's ingress.
+# azapi_update_resource (not azurerm_container_app_custom_domain) is used for the domain
+# registration itself because azurerm's own resource currently has an open bug forcing
+# container_app_environment_certificate_id to be set even when certificate_binding_type =
+# "Disabled" (see hashicorp/terraform-provider-azurerm#24110 / #25788), which would make step 2
+# impossible without already having a certificate — defeating the point of splitting these into
+# separate steps. azapi_update_resource PATCHes only the
+# `properties.configuration.ingress.customDomains` array on the container app azurerm_container_app
+# already manages; azurerm's own schema never reads/writes that array itself (that's exactly why a
+# separate resource was needed for it in the first place), so the two don't fight over the same
+# field on subsequent plans.
+#
+# CAVEAT — unverified against a live subscription, same as the managed-certificate resource below.
+# Also: azapi_update_resource's delete is a no-op against the API (there's no inverse PATCH to "undo" a
+# property change) — clearing fhirbridge_app_custom_domain/demo_app_custom_domain back to blank and
+# re-applying will NOT remove the domain from the live Container App; that needs a manual
+# `az containerapp hostname delete --hostname <domain> -g <rg> -n <app>` afterward.
 
-resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app" {
-  count                        = var.fhirbridge_app_custom_domain != "" ? 1 : 0
-  name                         = "${local.fhirbridge_app_name}-cert"
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  subject_name                 = var.fhirbridge_app_custom_domain
-  domain_control_validation    = "CNAME"
-  tags                         = local.common_tags
+locals {
+  fhirbridge_app_custom_domain_body = var.fhirbridge_app_custom_domain == "" ? null : merge(
+    { name = var.fhirbridge_app_custom_domain, bindingType = "Disabled" },
+    var.fhirbridge_app_ssl_enabled ? {
+      bindingType   = "SniEnabled"
+      certificateId = azapi_resource.fhirbridge_app_managed_cert[0].id
+    } : {}
+  )
+
+  demo_app_custom_domain_body = var.demo_app_custom_domain == "" ? null : merge(
+    { name = var.demo_app_custom_domain, bindingType = "Disabled" },
+    var.demo_app_ssl_enabled ? {
+      bindingType   = "SniEnabled"
+      certificateId = azapi_resource.demo_app_managed_cert[0].id
+    } : {}
+  )
 }
 
-resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
-  count                                    = var.fhirbridge_app_custom_domain != "" ? 1 : 0
-  name                                     = var.fhirbridge_app_custom_domain
-  container_app_id                        = azurerm_container_app.fhirbridge_app.id
-  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id
-  certificate_binding_type                 = "SniEnabled"
+# Step 3 only: the managed-certificate request itself. Gated on ssl_enabled (not just the domain
+# being set), so step 2 can apply cleanly with no certificate resource in play at all.
+resource "azapi_resource" "fhirbridge_app_managed_cert" {
+  count     = var.fhirbridge_app_custom_domain != "" && var.fhirbridge_app_ssl_enabled ? 1 : 0
+  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
+  name      = "${local.fhirbridge_app_name}-cert"
+  parent_id = azurerm_container_app_environment.main.id
+  location  = data.azurerm_resource_group.main.location
+  tags      = local.common_tags
+  body = {
+    properties = {
+      subjectName             = var.fhirbridge_app_custom_domain
+      domainControlValidation = "TXT"
+    }
+  }
 }
 
-resource "azurerm_container_app_environment_managed_certificate" "demo_app" {
-  count                        = var.demo_app_custom_domain != "" ? 1 : 0
-  name                         = "${local.demo_app_name}-cert"
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  subject_name                 = var.demo_app_custom_domain
-  domain_control_validation    = "CNAME"
-  tags                         = local.common_tags
+# Steps 2 and 3 both flow through this single resource — its body just changes shape (Disabled vs
+# SniEnabled+certificateId) depending on ssl_enabled, per the locals block above.
+resource "azapi_update_resource" "fhirbridge_app_custom_domain" {
+  count       = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  resource_id = azurerm_container_app.fhirbridge_app.id
+  type        = "Microsoft.App/containerApps@2024-03-01"
+
+  body = {
+    properties = {
+      configuration = {
+        ingress = {
+          customDomains = [local.fhirbridge_app_custom_domain_body]
+        }
+      }
+    }
+  }
 }
 
-resource "azurerm_container_app_custom_domain" "demo_app" {
-  count                                    = var.demo_app_custom_domain != "" ? 1 : 0
-  name                                     = var.demo_app_custom_domain
-  container_app_id                        = azurerm_container_app.demo_app.id
-  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.demo_app[0].id
-  certificate_binding_type                 = "SniEnabled"
+resource "azapi_resource" "demo_app_managed_cert" {
+  count     = var.demo_app_custom_domain != "" && var.demo_app_ssl_enabled ? 1 : 0
+  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
+  name      = "${local.demo_app_name}-cert"
+  parent_id = azurerm_container_app_environment.main.id
+  location  = data.azurerm_resource_group.main.location
+  tags      = local.common_tags
+  body = {
+    properties = {
+      subjectName             = var.demo_app_custom_domain
+      domainControlValidation = "TXT"
+    }
+  }
+}
+
+resource "azapi_update_resource" "demo_app_custom_domain" {
+  count       = var.demo_app_custom_domain != "" ? 1 : 0
+  resource_id = azurerm_container_app.demo_app.id
+  type        = "Microsoft.App/containerApps@2024-03-01"
+
+  body = {
+    properties = {
+      configuration = {
+        ingress = {
+          customDomains = [local.demo_app_custom_domain_body]
+        }
+      }
+    }
+  }
 }
 
 # --- Worker (no ingress) ---
@@ -634,7 +753,7 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
+        value = "Server=${local.sqlserver_name},${var.sql_port};Database=Segue;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
       }
       env {
         name  = "ConnectionStrings__Redis"
@@ -671,7 +790,7 @@ resource "azurerm_storage_container" "manifest" {
 
 locals {
   resource_manifest_text = join("\n", [
-    "FHIRBridge containerization deployment - resource manifest",
+    "Segue containerization deployment - resource manifest",
     "name_prefix: ${var.name_prefix}",
     "resource_group (pre-existing, NOT managed by this config): ${data.azurerm_resource_group.main.name}",
     "",
@@ -686,8 +805,10 @@ locals {
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
     "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
     "azurerm_storage_share.redis_data                      = ${azurerm_storage_share.redis_data.id}",
+    "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
     "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
     "azurerm_container_app_environment_storage.redis_data  = ${azurerm_container_app_environment_storage.redis_data.id}",
+    "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",

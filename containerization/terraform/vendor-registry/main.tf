@@ -62,7 +62,7 @@ locals {
   acr_name = "${var.name_prefix}vendor${random_id.suffix.hex}" # alnum only, globally unique
 
   common_tags = {
-    Project     = "FHIRBridge"
+    Project     = "Segue"
     Component   = "vendor-registry"
     Environment = var.name_prefix
     ManagedBy   = "Terraform"

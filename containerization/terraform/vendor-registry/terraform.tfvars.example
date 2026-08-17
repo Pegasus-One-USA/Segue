@@ -5,5 +5,5 @@
 # affected by those being torn down/recreated during testing — switch resource_group_name once a
 # dedicated group is available.
 
-name_prefix         = "fhirbridge"
+name_prefix         = "segue"
 resource_group_name = "rg-tusharpuri"

@@ -72,8 +72,8 @@ try {
 
         if (-not $manifestShown) {
             Write-Host "Couldn't fetch resources.txt (older deployment, or not logged in to az) - falling back to a tag-based preview instead."
-            Write-Host "Resources tagged Project=FHIRBridge currently in resource group '$RgName' (before destroy):"
-            try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
+            Write-Host "Resources tagged Project=Segue currently in resource group '$RgName' (before destroy):"
+            try { az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
             Write-Host ""
         }
     }
@@ -104,8 +104,8 @@ if ($DestroyExitCode -eq 0) {
 
 if ($azAvailable) {
     Write-Host ""
-    Write-Host "Resources tagged Project=FHIRBridge remaining in '$RgName' (should be empty):"
-    try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az)" }
+    Write-Host "Resources tagged Project=Segue remaining in '$RgName' (should be empty):"
+    try { az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName']" --output table } catch { Write-Host "  (couldn't query - not logged in to az)" }
 }
 
 exit $DestroyExitCode

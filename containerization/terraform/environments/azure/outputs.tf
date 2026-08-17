@@ -32,11 +32,21 @@ output "demo_app_domain_verification" {
 }
 
 output "fhirbridge_app_custom_domain_url" {
-  description = "Populated once fhirbridge_app_custom_domain is set and that apply has completed; null otherwise."
+  description = "Populated once fhirbridge_app_custom_domain is set (step 2) and that apply has completed; null otherwise. Note this only means the domain is registered on the app's ingress — it isn't necessarily secured yet. See fhirbridge_app_custom_domain_ssl_status."
   value       = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null
 }
 
+output "fhirbridge_app_custom_domain_ssl_status" {
+  description = "\"not_set\" if fhirbridge_app_custom_domain is blank (step 1), \"pending\" if the domain is registered but fhirbridge_app_ssl_enabled is still false (step 2), \"secured\" once step 3 has completed."
+  value       = var.fhirbridge_app_custom_domain == "" ? "not_set" : (var.fhirbridge_app_ssl_enabled ? "secured" : "pending")
+}
+
 output "demo_app_custom_domain_url" {
-  description = "Populated once demo_app_custom_domain is set and that apply has completed; null otherwise."
+  description = "Populated once demo_app_custom_domain is set (step 2) and that apply has completed; null otherwise. Note this only means the domain is registered on the app's ingress — it isn't necessarily secured yet. See demo_app_custom_domain_ssl_status."
   value       = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null
+}
+
+output "demo_app_custom_domain_ssl_status" {
+  description = "\"not_set\" if demo_app_custom_domain is blank (step 1), \"pending\" if the domain is registered but demo_app_ssl_enabled is still false (step 2), \"secured\" once step 3 has completed."
+  value       = var.demo_app_custom_domain == "" ? "not_set" : (var.demo_app_ssl_enabled ? "secured" : "pending")
 }

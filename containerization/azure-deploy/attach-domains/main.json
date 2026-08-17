@@ -1,0 +1,119 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "17839321666452779301"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The namePrefix used when main.bicep was originally deployed (e.g. \"segue5\") -- this is what the target app/environment names are derived from."
+      }
+    },
+    "fhirbridgeAppDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain to attach to the FHIRBridge app (e.g. app.example.com). Leave blank to skip."
+      }
+    },
+    "demoAppDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain to attach to the Demo app (e.g. demo.example.com). Leave blank to skip."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the deployment script + its managed identity. Defaults to the resource group's own region."
+      }
+    }
+  },
+  "variables": {
+    "fhirbridgeAppName": "[format('{0}-app', parameters('namePrefix'))]",
+    "demoAppName": "[format('{0}-demo-app', parameters('namePrefix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('{0}-attach-domains-identity', parameters('namePrefix'))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix'))), 'Contributor')]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix'))), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[format('{0}-attach-domains', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix'))))]": {}
+        }
+      },
+      "properties": {
+        "azCliVersion": "2.60.0",
+        "retentionInterval": "PT1H",
+        "timeout": "PT15M",
+        "environmentVariables": [
+          {
+            "name": "RESOURCE_GROUP",
+            "value": "[resourceGroup().name]"
+          },
+          {
+            "name": "FHIRBRIDGE_APP_NAME",
+            "value": "[variables('fhirbridgeAppName')]"
+          },
+          {
+            "name": "DEMO_APP_NAME",
+            "value": "[variables('demoAppName')]"
+          },
+          {
+            "name": "FHIRBRIDGE_DOMAIN",
+            "value": "[parameters('fhirbridgeAppDomain')]"
+          },
+          {
+            "name": "DEMO_DOMAIN",
+            "value": "[parameters('demoAppDomain')]"
+          }
+        ],
+        "scriptContent": "      set -e\n      if [ -n \"$FHIRBRIDGE_DOMAIN\" ]; then\n        echo \"Attaching $FHIRBRIDGE_DOMAIN to $FHIRBRIDGE_APP_NAME...\"\n        az containerapp hostname add --hostname \"$FHIRBRIDGE_DOMAIN\" --resource-group \"$RESOURCE_GROUP\" --name \"$FHIRBRIDGE_APP_NAME\"\n      else\n        echo \"No FHIRBridge app domain given -- skipping.\"\n      fi\n      if [ -n \"$DEMO_DOMAIN\" ]; then\n        echo \"Attaching $DEMO_DOMAIN to $DEMO_APP_NAME...\"\n        az containerapp hostname add --hostname \"$DEMO_DOMAIN\" --resource-group \"$RESOURCE_GROUP\" --name \"$DEMO_APP_NAME\"\n      else\n        echo \"No Demo app domain given -- skipping.\"\n      fi\n    "
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix'))), 'Contributor'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-attach-domains-identity', parameters('namePrefix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "scriptLogs": {
+      "type": "string",
+      "metadata": {
+        "description": "Whatever this deployment script actually printed -- check here first if a domain attach failed (e.g. DNS not resolving yet)."
+      },
+      "value": "[coalesce(tryGet(reference(resourceId('Microsoft.Resources/deploymentScripts', format('{0}-attach-domains', parameters('namePrefix'))), '2023-08-01').outputs, 'logs'), 'No output captured -- check the deploymentScripts resource''s own logs in the Portal (Resource Group -> Deployment Scripts).')]"
+    }
+  }
+}
