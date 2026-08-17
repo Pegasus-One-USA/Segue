@@ -1,0 +1,19 @@
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/MedicationOrder.json
+  s_50c987f1d763d9::t_89df7a2d4a3e01 1-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "56956e5b3e4f18618e7bb0160d56a92259911ef5",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

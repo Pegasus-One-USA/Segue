@@ -1,0 +1,49 @@
+src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_50c987f1d763d9::t_e96e6daac24c78 24,32
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.epic.json
+  s_50c987f1d763d9::t_589b98596c0dd8 40741-40830,46120-46835
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_50c987f1d763d9::t_e289a66c3216c0 841,853,855,864-875,880-888
+  s_50c987f1d763d9::t_31e00fceb4cd46 41-42
+  s_50c987f1d763d9::t_fa838d2b7acc4a 160-161
+  s_50c987f1d763d9::t_cdd4f5644b7e45 842-852,854,856-863,876-879
+  s_50c987f1d763d9::t_ecfa655f3c2fea 344-346
+  s_50c987f1d763d9::t_26348351fec514 932-935
+  s_50c987f1d763d9::t_3276cce4c97f83 335-343,347-352
+  s_50c987f1d763d9::t_5fb3823a18993e 190-195
+tools/EpicTemplateCatalogGenerator/Program.cs
+  s_50c987f1d763d9::t_f6f99a3173d962 31,39
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_50c987f1d763d9::t_a328e93704e7fa 132-134,136-140
+  s_50c987f1d763d9::t_783f8d40158cb1 135
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_50c987f1d763d9::t_d688acdc430447 2071-2078
+src/Runtime/FHIRBridge.Runtime.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_50c987f1d763d9::t_83df5f07fbd4a5 24,32
+portal/src/app/data/scope-constants.data.ts
+  s_50c987f1d763d9::t_07e6c21f8f22d1 17-18
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_50c987f1d763d9::t_862792909cba89 225-239
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_50c987f1d763d9::t_8828b4252335fd 308
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Binary.json
+  s_50c987f1d763d9::t_5c0844d3a3ecb4 1-15
+src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates/Goal.json
+  s_50c987f1d763d9::t_33e35190361a43 1-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "471207870f51472485c17047114807e954f5f59c",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

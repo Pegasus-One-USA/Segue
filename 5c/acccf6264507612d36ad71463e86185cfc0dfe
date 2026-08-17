@@ -1,0 +1,81 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_4332600612c768::t_8a8bb3a9eef866 34
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_4332600612c768::t_2e3e1599982e93 1663-1668,1670,1672-1687,1691-1695,1700,1702-1712,1716,1731-1775,1777-1794,1798-1875
+  s_4332600612c768::t_040da8fa0d893c 1696-1697,1701
+  s_4332600612c768::t_d41b21b2d98d79 1698-1699
+  s_4332600612c768::t_ec975ea5fe890a 749,751-764
+  s_4332600612c768::t_1475ebe43c8665 13
+  s_4332600612c768::t_6eb9b1df5d2970 1776,1795-1797
+  s_4332600612c768::t_d87045c0e9f056 1669,1671,1688-1690,1713-1715,1717-1730
+  s_4332600612c768::t_79180a3003fbe4 689
+  s_4332600612c768::t_c783c065064140 651-658,663-666,681-688,690-730,732-748,750,765-796,814-817
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_4332600612c768::t_d19153549b268f 93-94
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_4332600612c768::t_0a41aa07ef6f11 216-219,274-276
+  s_4332600612c768::t_75005380846824 310-312
+  s_4332600612c768::t_6e1620ccf246c7 369-385
+  s_4332600612c768::t_71bece457f6782 351-352,354-366
+  s_4332600612c768::t_15cadecdd6aae3 307-309,313-350,353,367-368,386-399
+  s_4332600612c768::t_86b1f6fba0d7e3 258,271-273
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.html
+  s_4332600612c768::t_1b33914cdf7e97 34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_4332600612c768::t_bd60f4f3ff1720 317-319,322
+  s_4332600612c768::t_214de199cfc281 827-830
+  s_4332600612c768::t_d1b986a855c916 892-895
+  s_4332600612c768::t_1a1b7a6cc08781 1278-1290,1292,1295
+  s_4332600612c768::t_0ab271877c535b 1181-1201,1203-1211
+  s_4332600612c768::t_6436dd0e8ad857 999-1000
+  s_4332600612c768::t_5e23b3c1529242 278-281
+  s_4332600612c768::t_68f88a71a2f726 174-180
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_4332600612c768::t_7dd853edec4826 23
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_4332600612c768::t_a589d0595972fb 1309-1314,1320-1323
+  s_4332600612c768::t_05d1055f4f157d 632-643
+  s_4332600612c768::t_29b8b1ce0791ba 1326-1343
+  s_4332600612c768::t_02538206d41770 1315-1319,1324-1325,1344-1345
+  s_4332600612c768::t_aa23094420937d 524-528
+  s_4332600612c768::t_7b0de121b361da 793-799
+  s_4332600612c768::t_84a3dc535eded4 1253-1270
+  s_4332600612c768::t_51f08c6ebefcf0 1273-1277,1283-1293
+  s_4332600612c768::t_0b271babd13c6a 1227-1230
+  s_4332600612c768::t_53b9d7814920b4 1564-1565
+  s_4332600612c768::t_4cb04652a627a3 1272,1278-1282
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_4332600612c768::t_89aceb3fd69daa 131-142
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_4332600612c768::t_3c64e23f077fb3 274
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_4332600612c768::t_4480d39f1dc9a4 122-125,127,131
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_4332600612c768::t_94b96093e9bbb0 126
+  s_4332600612c768::t_54e459badf83b4 34-47
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_4332600612c768::t_2d308bca3afd3a 158,162
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_4332600612c768::t_6580025a12313c 157-159,161-168,170-175,177-180
+  s_4332600612c768::t_689ce6281b8c94 160,169,176
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_4332600612c768::t_03116244c35e4d 270
+  s_4332600612c768::t_953b5407b42fb6 323
+  s_4332600612c768::t_1aadcf3b3ad869 643,651,656
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5cacccf6264507612d36ad71463e86185cfc0dfe",
+  "prompts": {},
+  "sessions": {
+    "s_4332600612c768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf9e2857-7293-457a-af6b-6d0d6036c899",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

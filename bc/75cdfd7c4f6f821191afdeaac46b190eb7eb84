@@ -1,0 +1,22 @@
+tests/FHIRBridge.UnitTests/Destinations/MappedFhirRepositoryDestinationWriterTests.cs
+  s_c01d5fd68cf230::t_41b4e1c07dc507 214,216-218,224,231-232,236,250-251
+src/FHIRBridge.Infrastructure/Terminology/UsCoreValueSetCatalog.cs
+  s_c01d5fd68cf230::t_b97b38aceac02d 96-97,103-107
+  s_c01d5fd68cf230::t_edf8e9cc6fadc6 131-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bc75cdfd7c4f6f821191afdeaac46b190eb7eb84",
+  "prompts": {},
+  "sessions": {
+    "s_c01d5fd68cf230": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aee1959c-5a72-4ed5-82f2-c48f8dc029c2",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

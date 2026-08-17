@@ -1,0 +1,19 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_2ec3b4aaed050c::t_94a0237341e29f 452-454
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fe5e4a1baafe54586cd49d02cee6afe02b3de3e4",
+  "prompts": {},
+  "sessions": {
+    "s_2ec3b4aaed050c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "596e9b56-e052-4d40-9f8d-1ac365ee67a2",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

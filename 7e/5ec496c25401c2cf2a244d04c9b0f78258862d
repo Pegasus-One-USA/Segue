@@ -1,0 +1,28 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_b39b77aeb9beb3::t_ce04c17701fb53 172
+  s_b39b77aeb9beb3::t_b5676595f9d9e0 100-106
+  s_b39b77aeb9beb3::t_a44811c0eacfe7 309-315,317
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_b39b77aeb9beb3::t_e3ab6a8688398a 102,107
+  s_b39b77aeb9beb3::t_4e78557edb7d5d 161-188
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_b39b77aeb9beb3::t_9187c250ae8559 5-6,47-49,114
+  s_b39b77aeb9beb3::t_e6b009237b1129 45,50-64,71-73,81-113,115-116,122-126,130-133
+  s_b39b77aeb9beb3::t_2d6fd9f456017b 143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7e5ec496c25401c2cf2a244d04c9b0f78258862d",
+  "prompts": {},
+  "sessions": {
+    "s_b39b77aeb9beb3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de4e1fb1-2dd2-4464-8f4f-28e0e507486b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
