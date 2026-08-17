@@ -83,6 +83,9 @@ services:
       DataProtection__KeyRingPath: "/app/keys"
       Portal__AllowedOrigins__0: "http://localhost:${DEMO_HOST_PORT:-5500}"
       AllowedHosts: "*"
+      # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
+      # loopback-only on 5000, and Gateway throws at startup outside Development without this.
+      ApiBaseUrl: "http://127.0.0.1:5000/"
       # Swagger:Enabled defaults to false outside Development — turn it on for this containerized
       # stack so /swagger/** (proxied by the Gateway) actually has something to serve.
       Swagger__Enabled: "true"

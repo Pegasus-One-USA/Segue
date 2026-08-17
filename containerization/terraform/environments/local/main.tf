@@ -191,6 +191,9 @@ resource "docker_container" "fhirbridge_app" {
     "DataProtection__KeyRingPath=/app/keys",
     "Portal__AllowedOrigins__0=http://localhost:${var.demo_host_port}",
     "AllowedHosts=*",
+    # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
+    # loopback-only on 5000, and Gateway throws at startup outside Development without this.
+    "ApiBaseUrl=http://127.0.0.1:5000/",
   ]
 
   ports {

@@ -124,6 +124,9 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
         # DNS name is known from this same apply (a different resource, not a self-reference).
         { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
         { name = "AllowedHosts", value = "*" },
+        # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
+        # loopback-only on 5000, and Gateway throws at startup outside Development without this.
+        { name = "ApiBaseUrl", value = "http://127.0.0.1:5000/" },
       ]
       secrets = [
         { name = "Authentication__SigningKey", valueFrom = aws_secretsmanager_secret.jwt_signing_key.arn },
