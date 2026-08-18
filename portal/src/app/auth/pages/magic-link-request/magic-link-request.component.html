@@ -17,7 +17,7 @@
         <p class="hint-text">
           The link expires in 15 minutes and can only be used once. Didn't receive it? Check your spam folder or try again.
         </p>
-        <button mat-stroked-button class="back-btn" routerLink="/auth/login">
+        <button type="button" class="back-btn" routerLink="/auth/login">
           <mat-icon>arrow_back</mat-icon>
           Back to sign in
         </button>
@@ -55,8 +55,6 @@
         </mat-form-field>
 
         <button
-          mat-flat-button
-          color="primary"
           type="submit"
           class="submit-btn"
           [disabled]="loading()"

@@ -35,7 +35,7 @@
             }
           </mat-form-field>
 
-          <button mat-flat-button color="primary" type="submit" class="submit-btn" [disabled]="isLoading()">
+          <button type="submit" class="submit-btn" [disabled]="isLoading()">
             @if (isLoading()) {
               <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
               <span>Verifying…</span>
@@ -53,7 +53,7 @@
           </div>
           <h1 class="auth-heading">Link invalid or expired</h1>
           <p class="auth-sub">{{ error() }}</p>
-          <button mat-stroked-button class="back-btn" routerLink="/auth/magic-link">
+          <button type="button" class="back-btn" routerLink="/auth/magic-link">
             Request a new link
           </button>
         </div>

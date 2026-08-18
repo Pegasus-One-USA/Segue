@@ -86,7 +86,7 @@
   margin-bottom: 4px;
 
   .field-icon {
-    color: #9CA3AF;
+    color: var(--color-muted-2);
     font-size: 18px;
     width: 18px;
     height: 18px;
@@ -94,52 +94,34 @@
   }
 }
 
-::ng-deep {
-  .submit-btn .mat-mdc-button-persistent-ripple::before,
-  .back-btn   .mat-mdc-button-persistent-ripple::before {
-    opacity: 0 !important;
-  }
-
-  .submit-btn:hover:not([disabled]) {
-    background-color: var(--color-primary-dark) !important;
-    background:       var(--color-primary-dark) !important;
-    color:            #fff !important;
-  }
-
-  .back-btn:hover:not([disabled]) {
-    background-color: var(--color-primary) !important;
-    background:       var(--color-primary) !important;
-    border-color:     var(--color-primary) !important;
-    color:            #fff !important;
-  }
-}
-
 // ── Submit button ──────────────────────────────────────────────────────────────
+// Plain HTML button (not mat-flat-button) — a custom-styled button has nothing to
+// override, so it needs none of Material's own button theming fought back with !important.
 .submit-btn {
-  position:         relative;
-  width:            100%;
-  height:           48px;
-  font-size:        15px !important;
-  font-weight:      600 !important;
-  margin-top:       8px;
-  border-radius:    var(--radius-md) !important;
-  overflow:         hidden;
-  display:          flex !important;
-  align-items:      center !important;
-  justify-content:  center !important;
-  background-color: var(--color-primary) !important;
-  background:       var(--color-primary) !important;
-  color:            #fff !important;
-  text-transform:   none !important;
+  position:        relative; // lets .btn-spinner sit absolute
+  width:           100%;
+  height:          48px;
+  font-size:       15px;
+  font-weight:     600;
+  font-family:     inherit;
+  margin-top:      8px;
+  border:          none;
+  border-radius:   var(--radius-md);
+  cursor:          pointer;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  background:      var(--color-primary);
+  color:           var(--color-on-primary);
+  transition:      background 0.15s ease;
 
-  --mat-flat-button-hover-state-layer-opacity:   0;
-  --mat-flat-button-focus-state-layer-opacity:   0;
-  --mat-flat-button-pressed-state-layer-opacity: 0.08;
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { opacity: 0.65; cursor: not-allowed; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent); }
 
-  &[disabled] { opacity: 0.65; }
-
+  // Spinner sits absolute-left so the text stays in the true centre
   .btn-spinner {
-    --mdc-circular-progress-active-indicator-color: #fff;
+    --mdc-circular-progress-active-indicator-color: var(--color-on-primary);
     position: absolute;
     left:     18px;
   }
@@ -211,36 +193,34 @@
   line-height: 1.5;
 }
 
+// Same plain-button reasoning as .submit-btn above.
 .back-btn {
   width:           100%;
   height:          44px;
-  font-size:       14px !important;
-  font-weight:     600 !important;
-  text-transform:  none !important;
-  border-radius:   var(--radius-md) !important;
-  border-color:    var(--color-primary) !important;
-  color:           var(--color-primary) !important;
-  background:      transparent !important;
-  display:         flex !important;
-  align-items:     center !important;
-  justify-content: center !important;
+  font-size:       14px;
+  font-weight:     600;
+  font-family:     inherit;
+  cursor:          pointer;
+  border:          1.5px solid var(--color-primary);
+  border-radius:   var(--radius-md);
+  color:           var(--color-primary);
+  background:      transparent;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
   gap:             6px;
-
-  --mat-outlined-button-hover-state-layer-opacity:   0;
-  --mat-outlined-button-focus-state-layer-opacity:   0;
-  --mat-outlined-button-pressed-state-layer-opacity: 0.08;
-  --mat-stroked-button-hover-state-layer-opacity:    0;
-  --mat-stroked-button-focus-state-layer-opacity:    0;
+  transition:      background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 
   &:hover:not([disabled]) {
-    background:   var(--color-primary) !important;
-    border-color: var(--color-primary) !important;
-    color:        #fff !important;
+    background:   var(--color-primary);
+    color:        var(--color-on-primary);
   }
 
   &:active:not([disabled]) {
-    background:   var(--color-primary-dark) !important;
-    border-color: var(--color-primary-dark) !important;
-    color:        #fff !important;
+    background:   var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color:        var(--color-on-primary);
   }
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent); }
 }
