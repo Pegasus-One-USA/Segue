@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -31,6 +32,13 @@ public sealed class AuthController : ControllerBase
     private readonly SamlAuthenticationOptions _samlOptions;
     private readonly ILogger<AuthController> _logger;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly ISystemSettingsCache _settingsCache;
+
+    private const string SamlEnabledKey = "Authentication:Saml:Enabled";
+    private const string ServiceProviderEntityIdKey = "Authentication:Saml:ServiceProviderEntityId";
+    private const string PortalRedirectUrlKey = "Authentication:Saml:PortalRedirectUrl";
+    private const string PortalErrorRedirectUrlKey = "Authentication:Saml:PortalErrorRedirectUrl";
+    private const string MagicLinkEnabledKey = "LocalAuth:MagicLink:Enabled";
 
     public AuthController(
         IUserAccessService userAccessService,
@@ -41,7 +49,8 @@ public sealed class AuthController : ControllerBase
         ISamlConfigurationProvider samlConfigurationProvider,
         IOptions<SamlAuthenticationOptions> samlOptions,
         ILogger<AuthController> logger,
-        IGovernanceLogger governanceLogger)
+        IGovernanceLogger governanceLogger,
+        ISystemSettingsCache settingsCache)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
@@ -51,6 +60,7 @@ public sealed class AuthController : ControllerBase
         _samlConfigurationProvider = samlConfigurationProvider;
         _logger = logger;
         _governanceLogger = governanceLogger;
+        _settingsCache = settingsCache;
         _samlOptions = samlOptions.Value;
     }
 
@@ -131,7 +141,7 @@ public sealed class AuthController : ControllerBase
     [HttpGet("/api/v1/config")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(SsoConfigDto), StatusCodes.Status200OK)]
-    public IActionResult GetSsoConfig()
+    public async Task<IActionResult> GetSsoConfig(CancellationToken cancellationToken)
     {
         var entra = _configuration.GetSection("Authentication:Entra");
         var google = _configuration.GetSection("Authentication:Google");
@@ -143,11 +153,15 @@ public sealed class AuthController : ControllerBase
             ? $"{instance}/{tenantId}"
             : null;
 
+        var samlEnabled = await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken);
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+
         var dto = new SsoConfigDto(
             new SsoEntraConfigDto(entraEnabled, authority, entra["ClientId"]),
             new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]),
-            new SsoSamlConfigDto(_samlOptions.Enabled),
-            new SsoMagicLinkConfigDto(_configuration.GetValue<bool>("LocalAuth:MagicLink:Enabled")));
+            new SsoSamlConfigDto(samlEnabled),
+            new SsoMagicLinkConfigDto(magicLinkEnabled));
 
         return Ok(dto);
     }
@@ -156,14 +170,14 @@ public sealed class AuthController : ControllerBase
     [HttpGet("saml/login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
-    public IActionResult SamlLogin()
+    public async Task<IActionResult> SamlLogin(CancellationToken cancellationToken)
     {
-        if (!_samlOptions.Enabled)
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
         {
             return NotFound();
         }
 
-        var config = _samlConfigurationProvider.GetConfiguration();
+        var config = await _samlConfigurationProvider.GetConfigurationAsync(cancellationToken);
         var authnRequest = new Saml2AuthnRequest(config)
         {
             AssertionConsumerServiceUrl = new Uri(BuildAcsUrl()),
@@ -185,14 +199,14 @@ public sealed class AuthController : ControllerBase
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> SamlAssertionConsumerService(CancellationToken cancellationToken)
     {
-        if (!_samlOptions.Enabled)
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
         {
             return NotFound();
         }
 
         try
         {
-            var config = _samlConfigurationProvider.GetConfiguration();
+            var config = await _samlConfigurationProvider.GetConfigurationAsync(cancellationToken);
             var binding = new Saml2PostBinding();
             var saml2AuthnResponse = new Saml2AuthnResponse(config);
             var genericRequest = Request.ToGenericHttpRequest(validate: true);
@@ -203,7 +217,7 @@ public sealed class AuthController : ControllerBase
                 await _governanceLogger.LogAuthenticationAsync(
                     new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: $"IdP returned status {saml2AuthnResponse.Status}"),
                     cancellationToken);
-                return RedirectToPortalError($"saml_status_{saml2AuthnResponse.Status}");
+                return await RedirectToPortalErrorAsync($"saml_status_{saml2AuthnResponse.Status}", cancellationToken);
             }
 
             binding.Unbind(genericRequest, saml2AuthnResponse);
@@ -215,7 +229,7 @@ public sealed class AuthController : ControllerBase
                 await _governanceLogger.LogAuthenticationAsync(
                     new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: "Assertion carried no NameID/subject"),
                     cancellationToken);
-                return RedirectToPortalError("saml_no_subject");
+                return await RedirectToPortalErrorAsync("saml_no_subject", cancellationToken);
             }
 
             var email = claims.FindFirst(ClaimTypes.Email)?.Value
@@ -229,12 +243,14 @@ public sealed class AuthController : ControllerBase
             var response = await _ssoAuthService.LoginWithIdentityAsync(identity, cancellationToken);
 
             IssueTokenCookiesAndStrip(response);
-            return Redirect(_samlOptions.PortalRedirectUrl ?? "/");
+            var portalRedirectUrl = await _settingsCache.GetStringAsync(
+                PortalRedirectUrlKey, _samlOptions.PortalRedirectUrl ?? string.Empty, cancellationToken);
+            return Redirect(string.IsNullOrWhiteSpace(portalRedirectUrl) ? "/" : portalRedirectUrl);
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning(ex, "SAML ACS: no enabled account matched the asserted identity.");
-            return RedirectToPortalError("saml_no_account");
+            return await RedirectToPortalErrorAsync("saml_no_account", cancellationToken);
         }
         catch (Exception ex)
         {
@@ -244,22 +260,23 @@ public sealed class AuthController : ControllerBase
             await _governanceLogger.LogAuthenticationAsync(
                 new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: ex.Message),
                 cancellationToken);
-            return RedirectToPortalError("saml_failed");
+            return await RedirectToPortalErrorAsync("saml_failed", cancellationToken);
         }
     }
 
     /// <summary>Serves this app's SAML SP metadata so a hospital IT team can configure their IdP to trust it.</summary>
     [HttpGet("saml/metadata")]
     [AllowAnonymous]
-    public IActionResult SamlMetadata()
+    public async Task<IActionResult> SamlMetadata(CancellationToken cancellationToken)
     {
-        if (!_samlOptions.Enabled)
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
         {
             return NotFound();
         }
 
         var acsUrl = BuildAcsUrl();
-        var entityId = _samlOptions.ServiceProviderEntityId;
+        var entityId = await _settingsCache.GetStringAsync(
+            ServiceProviderEntityIdKey, _samlOptions.ServiceProviderEntityId ?? string.Empty, cancellationToken);
         var xml = $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{entityId}">
@@ -282,7 +299,9 @@ public sealed class AuthController : ControllerBase
         [FromBody] MagicLinkRequest request,
         CancellationToken cancellationToken)
     {
-        if (!_configuration.GetValue<bool>("LocalAuth:MagicLink:Enabled"))
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+        if (!magicLinkEnabled)
         {
             return NotFound();
         }
@@ -301,7 +320,9 @@ public sealed class AuthController : ControllerBase
         [FromBody] MagicLinkRedeemRequest request,
         CancellationToken cancellationToken)
     {
-        if (!_configuration.GetValue<bool>("LocalAuth:MagicLink:Enabled"))
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+        if (!magicLinkEnabled)
         {
             return NotFound();
         }
@@ -313,9 +334,15 @@ public sealed class AuthController : ControllerBase
 
     private string BuildAcsUrl() => $"{Request.Scheme}://{Request.Host}/api/v1/auth/saml/acs";
 
-    private IActionResult RedirectToPortalError(string errorCode)
+    private async Task<IActionResult> RedirectToPortalErrorAsync(string errorCode, CancellationToken cancellationToken)
     {
-        var baseUrl = _samlOptions.PortalErrorRedirectUrl ?? "/";
+        var baseUrl = await _settingsCache.GetStringAsync(
+            PortalErrorRedirectUrlKey, _samlOptions.PortalErrorRedirectUrl ?? string.Empty, cancellationToken);
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            baseUrl = "/";
+        }
+
         var separator = baseUrl.Contains('?') ? "&" : "?";
         return Redirect($"{baseUrl}{separator}error={errorCode}");
     }

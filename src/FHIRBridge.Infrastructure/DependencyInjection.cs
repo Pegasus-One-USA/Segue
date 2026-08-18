@@ -127,6 +127,10 @@ public static class DependencyInjection
         services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 
+        // "SSO Configurations" admin screen — reads/writes SAML + magic-link fields as SystemSetting
+        // rows via the two services registered just above, so saves take effect without a restart.
+        services.AddScoped<ISsoConfigurationsService, SsoConfigurationsService>();
+
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();

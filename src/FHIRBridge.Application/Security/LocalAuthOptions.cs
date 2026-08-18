@@ -13,6 +13,15 @@ public sealed class LocalAuthOptions
 
     /// <summary>Account-lockout policy for local password login (brute-force protection).</summary>
     public LockoutOptions Lockout { get; set; } = new();
+
+    /// <summary>Passwordless magic-link sign-in toggle — off by default. Also live-overridable via the
+    /// "LocalAuth:MagicLink:Enabled" SystemSetting, same as everything on the SSO Configurations screen.</summary>
+    public MagicLinkOptions MagicLink { get; set; } = new();
+}
+
+public sealed class MagicLinkOptions
+{
+    public bool Enabled { get; set; }
 }
 
 public sealed class LockoutOptions

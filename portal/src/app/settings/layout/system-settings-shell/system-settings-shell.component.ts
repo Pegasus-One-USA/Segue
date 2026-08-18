@@ -15,6 +15,7 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   { label: 'General', route: 'general', icon: 'tune' },
   { label: 'Security', route: 'security', icon: 'security' },
   { label: 'Terminology Codes', route: 'terminology', icon: 'biotech' },
+  { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings' },
 ];
 
 @Component({

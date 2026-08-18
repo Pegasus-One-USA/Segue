@@ -193,6 +193,14 @@ export const SYSTEM_SETTINGS_ENDPOINTS = {
   decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
 };
 
+// ─── SSO Configurations (SsoConfigurationsController — api/v1/system/sso-configurations) ───
+// SuperAdmin-only: SAML + magic-link fields, DB-backed (SystemSetting rows under the hood) so a save
+// here takes effect immediately, no appsettings edit or restart needed.
+export const SSO_CONFIGURATIONS_ENDPOINTS = {
+  get:    `${API_V1_BASE}/system/sso-configurations`,
+  update: `${API_V1_BASE}/system/sso-configurations`,
+};
+
 // ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──
 // SuperAdmin-only: JWT signing key / download-link signing secret, auto-generated on first boot —
 // this surface only exposes metadata + on-demand regeneration, never the value itself.

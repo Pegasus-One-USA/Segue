@@ -1,7 +1,9 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Infrastructure.Security;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace FHIRBridge.UnitTests.Auth;
 
@@ -21,40 +23,54 @@ public sealed class SamlConfigurationProviderTests
         IdentityProviderCertificate = SelfSignedCertificateBase64,
     };
 
+    // The provider reads every field via ISystemSettingsCache with the appsettings-derived value as the
+    // fallback default — this pass-through mock has no DB rows, so every call resolves straight to
+    // whatever ValidOptions() (or a mutated copy) supplied as the default, same as production behaves
+    // when no admin override has been saved from the SSO Configurations screen yet.
+    private static Mock<ISystemSettingsCache> PassThroughSettingsCache()
+    {
+        var mock = new Mock<ISystemSettingsCache>();
+        mock.Setup(x => x.GetBoolAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, bool defaultValue, CancellationToken _) => defaultValue);
+        mock.Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
+        return mock;
+    }
+
     private static SamlConfigurationProvider Provider(SamlAuthenticationOptions options) =>
-        new(Options.Create(options));
+        new(Options.Create(options), PassThroughSettingsCache().Object);
 
     [Fact]
-    public void GetConfiguration_disabled_throws()
+    public async Task GetConfigurationAsync_disabled_throws()
     {
         var options = ValidOptions();
         options.Enabled = false;
 
-        var act = () => Provider(options).GetConfiguration();
+        var act = () => Provider(options).GetConfigurationAsync(CancellationToken.None);
 
-        act.Should().Throw<InvalidOperationException>();
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Theory]
     [InlineData(nameof(SamlAuthenticationOptions.ServiceProviderEntityId))]
     [InlineData(nameof(SamlAuthenticationOptions.SingleSignOnUrl))]
     [InlineData(nameof(SamlAuthenticationOptions.IdentityProviderCertificate))]
-    public void GetConfiguration_missing_required_field_throws(string missingField)
+    public async Task GetConfigurationAsync_missing_required_field_throws(string missingField)
     {
         var options = ValidOptions();
         typeof(SamlAuthenticationOptions).GetProperty(missingField)!.SetValue(options, null);
 
-        var act = () => Provider(options).GetConfiguration();
+        var act = () => Provider(options).GetConfigurationAsync(CancellationToken.None);
 
-        act.Should().Throw<InvalidOperationException>();
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
-    public void GetConfiguration_valid_options_builds_expected_configuration()
+    public async Task GetConfigurationAsync_valid_options_builds_expected_configuration()
     {
         var options = ValidOptions();
 
-        var config = Provider(options).GetConfiguration();
+        var config = await Provider(options).GetConfigurationAsync(CancellationToken.None);
 
         config.Issuer.Should().Be(options.ServiceProviderEntityId);
         config.SingleSignOnDestination.Should().Be(new Uri(options.SingleSignOnUrl!));
