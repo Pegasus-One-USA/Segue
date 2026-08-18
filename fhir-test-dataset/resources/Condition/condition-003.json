@@ -1,0 +1,76 @@
+{
+  "resourceType": "Condition",
+  "id": "condition-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:condition",
+      "value": "CONDITION-003"
+    }
+  ],
+  "clinicalStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+        "code": "active",
+        "display": "Active"
+      }
+    ],
+    "text": "Active"
+  },
+  "verificationStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+        "code": "confirmed",
+        "display": "Confirmed"
+      }
+    ],
+    "text": "Confirmed"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+          "code": "problem-list-item",
+          "display": "Problem List Item"
+        }
+      ],
+      "text": "Problem List Item"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "13645005",
+        "display": "Chronic obstructive pulmonary disease"
+      },
+      {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J44.9",
+        "display": "COPD, unspecified"
+      }
+    ],
+    "text": "Chronic obstructive pulmonary disease"
+  },
+  "subject": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  },
+  "onsetDateTime": "2018-10-10",
+  "encounter": {
+    "reference": "Encounter/encounter-002",
+    "display": "encounter-002"
+  }
+}

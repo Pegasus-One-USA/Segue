@@ -1,0 +1,41 @@
+{
+  "resourceType": "Medication",
+  "id": "medication-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medication",
+      "value": "MEDICATION-001"
+    }
+  ],
+  "status": "active",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "860975",
+        "display": "Metformin hydrochloride 500 MG Oral Tablet"
+      }
+    ],
+    "text": "Metformin hydrochloride 500 MG Oral Tablet"
+  },
+  "form": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "385055001",
+        "display": "Tablet"
+      }
+    ],
+    "text": "Tablet"
+  }
+}

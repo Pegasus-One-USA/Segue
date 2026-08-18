@@ -1,0 +1,40 @@
+{
+  "resourceType": "CarePlan",
+  "id": "careplan-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:careplan",
+      "value": "CAREPLAN-003"
+    }
+  ],
+  "status": "active",
+  "intent": "plan",
+  "title": "COPD management plan",
+  "subject": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  },
+  "addresses": [
+    {
+      "reference": "Condition/condition-003",
+      "display": "condition-003"
+    }
+  ],
+  "period": {
+    "start": "2026-05-04"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-002",
+    "display": "encounter-002"
+  }
+}

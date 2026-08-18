@@ -1,0 +1,37 @@
+{
+  "resourceType": "Immunization",
+  "id": "immunization-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:immunization",
+      "value": "IMMUNIZATION-003"
+    }
+  ],
+  "status": "completed",
+  "vaccineCode": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/sid/cvx",
+        "code": "133",
+        "display": "Pneumococcal conjugate PCV13"
+      }
+    ],
+    "text": "Pneumococcal conjugate PCV13"
+  },
+  "patient": {
+    "reference": "Patient/patient-005",
+    "display": "Grace Chen"
+  },
+  "occurrenceDateTime": "2025-11-01",
+  "primarySource": true
+}

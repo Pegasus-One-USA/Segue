@@ -1,0 +1,371 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:78793b35-eeec-4b19-8b9b-69bd43433eb9",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:documentreference",
+            "value": "DOCUMENTREFERENCE-003"
+          }
+        ],
+        "status": "current",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34133-9",
+              "display": "Summary of episode note"
+            }
+          ],
+          "text": "Summary of episode note"
+        },
+        "subject": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "date": "2026-05-04T12:00:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+              "title": "Summary of episode note"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DocumentReference",
+        "ifNoneExist": "identifier=urn:segue:test:documentreference|DOCUMENTREFERENCE-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-005"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Chen",
+            "given": [
+              "Grace"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1990-05-17",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1005",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-005"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-001"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "Healthcare Provider"
+              }
+            ],
+            "text": "Healthcare Provider"
+          }
+        ],
+        "name": "Segue General Hospital",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0100",
+            "use": "work"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "100 Health Way"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02115",
+            "country": "US"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:44fe9e10-2b13-449a-8e73-6494162c0de1",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-003"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "133",
+              "display": "Pneumococcal conjugate PCV13"
+            }
+          ],
+          "text": "Pneumococcal conjugate PCV13"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2025-11-01",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:03919b5e-4161-4fc5-840c-43c976516a88",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-002"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "115",
+              "display": "Tdap"
+            }
+          ],
+          "text": "Tdap"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2024-08-12",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:5aab6ed8-3002-473b-8440-aa03f9c985ed",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-001"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "140",
+              "display": "Influenza, seasonal, injectable, preservative free"
+            }
+          ],
+          "text": "Influenza, seasonal, injectable, preservative free"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2025-10-05",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3a3f300a-25b7-46ee-890b-98b7b9c075e9",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-010"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "39156-5",
+              "display": "Body mass index (BMI) [Ratio]"
+            }
+          ],
+          "text": "Body mass index (BMI) [Ratio]"
+        },
+        "subject": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "effectiveDateTime": "2026-03-11T08:00:00Z",
+        "valueQuantity": {
+          "value": 22.4,
+          "unit": "kg/m2",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg/m2"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-010"
+      }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "resourceType": "DocumentReference",
+  "id": "documentreference-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:documentreference",
+      "value": "DOCUMENTREFERENCE-003"
+    }
+  ],
+  "status": "current",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "34133-9",
+        "display": "Summary of episode note"
+      }
+    ],
+    "text": "Summary of episode note"
+  },
+  "subject": {
+    "reference": "Patient/patient-005",
+    "display": "Grace Chen"
+  },
+  "date": "2026-05-04T12:00:00Z",
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+        "title": "Summary of episode note"
+      }
+    }
+  ]
+}

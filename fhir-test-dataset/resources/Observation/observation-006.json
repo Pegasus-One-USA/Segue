@@ -1,0 +1,58 @@
+{
+  "resourceType": "Observation",
+  "id": "observation-006",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:observation",
+      "value": "OBSERVATION-006"
+    }
+  ],
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "vital-signs",
+          "display": "Vital Signs"
+        }
+      ],
+      "text": "Vital Signs"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "2708-6",
+        "display": "Oxygen saturation in Arterial blood"
+      }
+    ],
+    "text": "Oxygen saturation in Arterial blood"
+  },
+  "subject": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  },
+  "effectiveDateTime": "2026-05-02T10:30:00Z",
+  "encounter": {
+    "reference": "Encounter/encounter-002",
+    "display": "encounter-002"
+  },
+  "valueQuantity": {
+    "value": 91,
+    "unit": "%",
+    "system": "http://unitsofmeasure.org",
+    "code": "%"
+  }
+}

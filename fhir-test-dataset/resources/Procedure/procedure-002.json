@@ -1,0 +1,48 @@
+{
+  "resourceType": "Procedure",
+  "id": "procedure-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:procedure",
+      "value": "PROCEDURE-002"
+    }
+  ],
+  "status": "completed",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.ama-assn.org/go/cpt",
+        "code": "94010",
+        "display": "Spirometry"
+      }
+    ],
+    "text": "Spirometry"
+  },
+  "subject": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-002",
+    "display": "encounter-002"
+  },
+  "performedDateTime": "2026-05-02T10:45:00Z",
+  "performer": [
+    {
+      "actor": {
+        "reference": "Practitioner/practitioner-003",
+        "display": "Dr Yuki Tanaka"
+      }
+    }
+  ]
+}

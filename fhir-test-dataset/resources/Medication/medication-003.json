@@ -1,0 +1,41 @@
+{
+  "resourceType": "Medication",
+  "id": "medication-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medication",
+      "value": "MEDICATION-003"
+    }
+  ],
+  "status": "active",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "308191",
+        "display": "Amoxicillin 500 MG Oral Capsule"
+      }
+    ],
+    "text": "Amoxicillin 500 MG Oral Capsule"
+  },
+  "form": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "385049006",
+        "display": "Capsule"
+      }
+    ],
+    "text": "Capsule"
+  }
+}

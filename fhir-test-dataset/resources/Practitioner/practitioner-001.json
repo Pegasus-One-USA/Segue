@@ -1,0 +1,44 @@
+{
+  "resourceType": "Practitioner",
+  "id": "practitioner-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:practitioner",
+      "value": "PRACTITIONER-001"
+    },
+    {
+      "system": "http://hl7.org/fhir/sid/us-npi",
+      "value": "1234567893"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "family": "Reynolds",
+      "given": [
+        "Sarah"
+      ],
+      "prefix": [
+        "Dr"
+      ]
+    }
+  ],
+  "gender": "female",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-0111",
+      "use": "work"
+    }
+  ]
+}

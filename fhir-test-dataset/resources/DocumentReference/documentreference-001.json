@@ -1,0 +1,53 @@
+{
+  "resourceType": "DocumentReference",
+  "id": "documentreference-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:documentreference",
+      "value": "DOCUMENTREFERENCE-001"
+    }
+  ],
+  "status": "current",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "11506-3",
+        "display": "Progress note"
+      }
+    ],
+    "text": "Progress note"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "date": "2026-05-04T12:00:00Z",
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+        "title": "Progress note"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/encounter-001",
+        "display": "encounter-001"
+      }
+    ]
+  }
+}

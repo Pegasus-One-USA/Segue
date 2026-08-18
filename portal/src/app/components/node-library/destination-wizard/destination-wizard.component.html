@@ -169,7 +169,26 @@
 
     <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
     @if (isStepActive(3)) {
-      @if (!activeMappingGroup()) {
+      @if (isMedplum() || isFhir()) {
+        <!-- ── Columnless FHIR server (Medplum / FHIR Repository): the whole normalized resource is written
+             as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing
+             to map field-by-field. Present the single "send as-is" choice instead of the mapping table,
+             matching the Aidbox destination wizard. ── -->
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">Choose how FHIR resources are written to {{ destLabel() }}.</span>
+        </div>
+        <div class="dw-resources">
+          <div class="dw-resource-card selected">
+            <div class="dw-rc-check">●</div>
+            <div class="dw-rc-body">
+              <strong class="dw-rc-name">Send FHIR resources as-is · RECOMMENDED</strong>
+              <span class="dw-rc-scope">Writes the normalized resource unchanged — no mapping to configure.</span>
+            </div>
+          </div>
+        </div>
+      } @else if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
         <div class="dw-section-head">
           <span class="dw-section-num">3</span>
