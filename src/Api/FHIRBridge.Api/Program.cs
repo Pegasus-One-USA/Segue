@@ -528,10 +528,10 @@ app.UseAuthentication();
 var sessionGates = new[]
 {
     (Claim: "pwd_change_required",
-     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
+     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me", "/api/v1/auth/refresh", "/api/v1/auth/internal/login", "/api/v1/auth/logout" },
      Message: "Password change is required before using Segue."),
     (Claim: "mfa_setup_required",
-     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
+     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me", "/api/v1/auth/refresh", "/api/v1/auth/internal/login", "/api/v1/auth/logout" },
      Message: "Two-factor authentication setup is required before using Segue."),
 };
 
