@@ -1,0 +1,58 @@
+{
+  "resourceType": "Observation",
+  "id": "observation-008",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:observation",
+      "value": "OBSERVATION-008"
+    }
+  ],
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "vital-signs",
+          "display": "Vital Signs"
+        }
+      ],
+      "text": "Vital Signs"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "8310-5",
+        "display": "Body temperature"
+      }
+    ],
+    "text": "Body temperature"
+  },
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "effectiveDateTime": "2026-05-01T22:15:00Z",
+  "encounter": {
+    "reference": "Encounter/encounter-003",
+    "display": "encounter-003"
+  },
+  "valueQuantity": {
+    "value": 38.7,
+    "unit": "Cel",
+    "system": "http://unitsofmeasure.org",
+    "code": "Cel"
+  }
+}

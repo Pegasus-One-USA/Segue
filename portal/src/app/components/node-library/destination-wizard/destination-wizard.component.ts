@@ -285,6 +285,8 @@ export class DestinationWizardComponent implements OnInit {
       case 'mongo': return 'Mongo';
       case 'csv': return 'Csv';
       case 'blob': return 'BlobStorage';
+      case 'medplum': return 'Medplum';
+      case 'fhir': return 'FhirRepository';
       default: return 'SqlServer';
     }
   });
@@ -299,7 +301,9 @@ export class DestinationWizardComponent implements OnInit {
    *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
    *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    if (this.isSql() || this.isMongo()) return {};
+    // Medplum's own form (like Mongo's) has no `reusingExisting` input, and FhirRepository's stub form
+    // (SimpleStubFormEngine) declares none either — passing it would throw via ComponentRef.setInput.
+    if (this.isSql() || this.isMongo() || this.isMedplum() || this.isFhir()) return {};
     return { reusingExisting: this.connectionMode() === 'existing' && !this.hasExistingChanged() };
   }
 
@@ -749,6 +753,8 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly SQL_TYPES: DestinationType[] = ['SqlServer', 'AzureSql', 'PostgreSql', 'MySql'];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
+  private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
@@ -759,6 +765,12 @@ export class DestinationWizardComponent implements OnInit {
   readonly isMySql      = computed(() => this.destType() === 'mysql');
   readonly isPostgres   = computed(() => this.destType() === 'postgres');
   readonly isMongo      = computed(() => this.destType() === 'mongo');
+  // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
+  // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
+  readonly isMedplum    = computed(() => this.destType() === 'medplum');
+  // A plain FHIR R4 server destination: columnless (writes whole resources), no live schema probe, a single
+  // target (the FHIR base URL) and NO secret/auth at all. Its own form/branches, like Mongo/Medplum.
+  readonly isFhir       = computed(() => this.destType() === 'fhir');
   readonly isBlob       = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
@@ -767,6 +779,8 @@ export class DestinationWizardComponent implements OnInit {
       : this.destType() === 'mysql' ? 'MySQL'
       : this.destType() === 'postgres' ? 'PostgreSQL'
       : this.destType() === 'mongo' ? 'MongoDB'
+      : this.destType() === 'medplum' ? 'Medplum'
+      : this.destType() === 'fhir' ? 'FHIR Repository'
       : this.destType() === 'blob' ? 'Azure Blob Storage'
       : 'CSV');
   readonly resourceKeys = computed(() => this.selectedResources());
@@ -1096,6 +1110,8 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isMedplum()) return 'Medplum';
+    if (this.isFhir()) return 'FhirRepository';
     if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql() ? 'MySql' : this.isPostgres() ? 'PostgreSql' : 'SqlServer';
@@ -1487,9 +1503,13 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : this.isBlob()
-                ? DestinationWizardComponent.BLOB_TYPES
-                : DestinationWizardComponent.CSV_TYPES;
+              : this.isMedplum()
+                ? DestinationWizardComponent.MEDPLUM_TYPES
+                : this.isFhir()
+                  ? DestinationWizardComponent.FHIR_TYPES
+                  : this.isBlob()
+                    ? DestinationWizardComponent.BLOB_TYPES
+                    : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter(item => wantedTypes.includes(item.destinationType));
         }),
         switchMap(candidates =>
@@ -1962,8 +1982,10 @@ export class DestinationWizardComponent implements OnInit {
 
     const isSql = this.isSql();
     const isMongo = this.isMongo();
+    const isMedplum = this.isMedplum();
+    const isFhir = this.isFhir();
     const isBlob = this.isBlob();
-    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
+    const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     const secretName = newSecretName(name);
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
@@ -1995,6 +2017,30 @@ export class DestinationWizardComponent implements OnInit {
           // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
           // secret" rule into metadata.secret — no extra auth-mode check needed here.
           inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
+        }
+      : isMedplum
+      ? {
+          name,
+          destinationType: 'Medplum',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          // FHIR base URL is the target; the client secret / PEM key is the whole opaque inlineSecret — the
+          // Step 1 form's getMetadata() already assembled both (fields + secret), same as every other family.
+          target: metadata.fields['dest_medplumBaseUrl'] || null,
+          inlineSecret: metadata.secret ?? '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
+        }
+      : isFhir
+      ? {
+          name,
+          destinationType: 'FhirRepository',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          // The FHIR base URL is the whole destination — a plain unauthenticated FHIR R4 server, so there is
+          // no secret at all (inlineSecret null). Base URL still also carried in metadata for the run path.
+          target: metadata.fields['dest_fhirBaseUrl'] || null,
+          inlineSecret: null,
           connectionMetadataJson: JSON.stringify(metadata.fields),
         }
       : {
@@ -2128,6 +2174,8 @@ export class DestinationWizardComponent implements OnInit {
           : type === 'mysql' ? 'dest-mysql'
           : type === 'postgres' ? 'dest-postgres'
           : type === 'mongo' ? 'dest-mongo'
+          : type === 'medplum' ? 'dest-medplum'
+          : type === 'fhir' ? 'dest-fhir'
           : type === 'blob' ? 'dest-blob'
           : 'dest-csv',
         status:      'enabled',

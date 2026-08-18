@@ -1,0 +1,54 @@
+{
+  "resourceType": "Patient",
+  "id": "patient-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:patient",
+      "value": "PATIENT-003"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Delgado",
+      "given": [
+        "Maria"
+      ]
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1959-07-08",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-1003",
+      "use": "home"
+    }
+  ],
+  "address": [
+    {
+      "line": [
+        "1 Elm St"
+      ],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02120",
+      "country": "US"
+    }
+  ],
+  "managingOrganization": {
+    "reference": "Organization/org-001",
+    "display": "Segue General Hospital"
+  }
+}

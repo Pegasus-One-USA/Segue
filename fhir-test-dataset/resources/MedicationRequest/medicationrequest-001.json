@@ -1,0 +1,44 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "medicationrequest-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medicationrequest",
+      "value": "MEDICATIONREQUEST-001"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "medicationReference": {
+    "reference": "Medication/medication-001",
+    "display": "Metformin 500 MG"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "requester": {
+    "reference": "Practitioner/practitioner-001",
+    "display": "Dr Sarah Reynolds"
+  },
+  "authoredOn": "2026-05-04T09:35:00Z",
+  "dosageInstruction": [
+    {
+      "text": "Take 1 tablet by mouth twice daily with meals"
+    }
+  ],
+  "encounter": {
+    "reference": "Encounter/encounter-001",
+    "display": "encounter-001"
+  }
+}

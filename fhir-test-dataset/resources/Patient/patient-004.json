@@ -1,0 +1,54 @@
+{
+  "resourceType": "Patient",
+  "id": "patient-004",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:patient",
+      "value": "PATIENT-004"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Brooks",
+      "given": [
+        "Robert"
+      ]
+    }
+  ],
+  "gender": "male",
+  "birthDate": "1945-01-22",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-1004",
+      "use": "home"
+    }
+  ],
+  "address": [
+    {
+      "line": [
+        "1 Elm St"
+      ],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02120",
+      "country": "US"
+    }
+  ],
+  "managingOrganization": {
+    "reference": "Organization/org-001",
+    "display": "Segue General Hospital"
+  }
+}

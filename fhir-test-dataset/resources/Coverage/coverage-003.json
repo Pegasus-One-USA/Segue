@@ -1,0 +1,45 @@
+{
+  "resourceType": "Coverage",
+  "id": "coverage-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:coverage",
+      "value": "COVERAGE-003"
+    }
+  ],
+  "status": "active",
+  "beneficiary": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "payor": [
+    {
+      "identifier": {
+        "system": "urn:segue:test:organization",
+        "value": "ORG-002"
+      },
+      "display": "BlueShield Health Plan (by identifier)"
+    }
+  ],
+  "subscriberId": "BS-0004",
+  "relationship": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+        "code": "self",
+        "display": "Self"
+      }
+    ],
+    "text": "Self"
+  }
+}

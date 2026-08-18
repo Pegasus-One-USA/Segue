@@ -284,6 +284,40 @@ public static class WorkflowEndpoints
                 }
             }
 
+            // 3b. Stamp destinationId onto any mapping node the mappings loop above didn't touch. A whole-resource
+            // FHIR destination (Medplum, FHIR Repository) writes the source resource verbatim and so carries NO field
+            // mappings — request.Mappings has no spec for it, the loop never runs, and its mapping node is left
+            // without a destinationId. The runtime MappingNodeExecutor resolves the destination TYPE from that id to
+            // decide whether to emit whole-resource SourceJson carrier records; without it the mapping silently drops
+            // every record and the run "succeeds" having written nothing. Derive it from the graph edge
+            // mapping->destination and the destinations created above (never a hard-coded id); also carry the
+            // sourceConnectionId from the source feeding the mapping node, mirroring what the mapping-spec path sets.
+            const string mappingNodeType = "MappingNode"; // WorkflowNodeTypes.Mapping (Runtime.Application, not referenced here)
+            foreach (var edge in request.Edges ?? [])
+            {
+                if (!destinationIds.TryGetValue(edge.ToNodeId, out var wholeResourceDestinationId)
+                    || !nodes.TryGetValue(edge.FromNodeId, out var mappingNode)
+                    || !string.Equals(mappingNode.NodeType, mappingNodeType, StringComparison.Ordinal)
+                    || TryGetConfigurationGuid(mappingNode.ConfigurationJson, "destinationId", out _))
+                {
+                    continue;
+                }
+
+                nodes[edge.FromNodeId] = WithConfiguration(mappingNode, config =>
+                {
+                    config["destinationId"] = wholeResourceDestinationId.ToString();
+                    foreach (var incoming in request.Edges!)
+                    {
+                        if (string.Equals(incoming.ToNodeId, edge.FromNodeId, StringComparison.OrdinalIgnoreCase)
+                            && sourceIds.TryGetValue(incoming.FromNodeId, out var feedingSourceId))
+                        {
+                            config["sourceConnectionId"] = feedingSourceId.ToString();
+                            break;
+                        }
+                    }
+                });
+            }
+
             // 4. Persist the graph carrying the injected references (original node order preserved).
             var definitionRequest = new WorkflowDefinitionRequest(
                 request.Name,

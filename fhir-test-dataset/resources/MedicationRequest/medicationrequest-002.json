@@ -1,0 +1,40 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "medicationrequest-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medicationrequest",
+      "value": "MEDICATIONREQUEST-002"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "medicationReference": {
+    "reference": "Medication/medication-002",
+    "display": "Lisinopril 10 MG"
+  },
+  "subject": {
+    "reference": "Patient/patient-002",
+    "display": "Linda Nguyen"
+  },
+  "requester": {
+    "reference": "Practitioner/practitioner-001",
+    "display": "Dr Sarah Reynolds"
+  },
+  "authoredOn": "2026-04-20T14:15:00Z",
+  "dosageInstruction": [
+    {
+      "text": "Take 1 tablet by mouth once daily"
+    }
+  ]
+}

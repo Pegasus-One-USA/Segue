@@ -1,0 +1,30 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "neg-medicationrequest-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medicationrequest",
+      "value": "NEG-MEDICATIONREQUEST-001"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "medicationReference": {
+    "reference": "Medication/medication-999-missing",
+    "display": "MISSING medication"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  }
+}

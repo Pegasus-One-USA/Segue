@@ -610,7 +610,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     const node = this.store.byId(nodeId);
     if (node?.kind === 'transform') {
       const tId = (node as TransformNode).transformId;
-      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-blob') {
+      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-fhir') {
         // Edit destination node — open library in transform mode with parent as origin.
         const parent = this.store.parentOf(nodeId);
         this.editingNodeId.set(nodeId);

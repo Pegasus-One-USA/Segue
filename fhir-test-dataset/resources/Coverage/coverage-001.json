@@ -1,0 +1,42 @@
+{
+  "resourceType": "Coverage",
+  "id": "coverage-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:coverage",
+      "value": "COVERAGE-001"
+    }
+  ],
+  "status": "active",
+  "beneficiary": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "payor": [
+    {
+      "reference": "Organization/org-002",
+      "display": "BlueShield Health Plan"
+    }
+  ],
+  "subscriberId": "BS-0001",
+  "relationship": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+        "code": "self",
+        "display": "Self"
+      }
+    ],
+    "text": "Self"
+  }
+}

@@ -169,13 +169,32 @@
 
     <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
     @if (isStepActive(3)) {
-      @if (!activeMappingGroup()) {
+      @if (isMedplum() || isFhir()) {
+        <!-- ── Columnless FHIR server (Medplum / FHIR Repository): the whole normalized resource is written
+             as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing
+             to map field-by-field. Present the single "send as-is" choice instead of the mapping table,
+             matching the Aidbox destination wizard. ── -->
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">Choose how FHIR resources are written to {{ destLabel() }}.</span>
+        </div>
+        <div class="dw-resources">
+          <div class="dw-resource-card selected">
+            <div class="dw-rc-check">●</div>
+            <div class="dw-rc-body">
+              <strong class="dw-rc-name">Send FHIR resources as-is · RECOMMENDED</strong>
+              <span class="dw-rc-scope">Writes the normalized resource unchanged — no mapping to configure.</span>
+            </div>
+          </div>
+        </div>
+      } @else if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
         <div class="dw-section-head">
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -338,6 +357,32 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
+          </div>
+        } @else if (isMedplum()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_medplumBaseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth method</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumAuthMethod'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumWriteMode'] }}</span>
+          </div>
+        } @else if (isFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_fhirBaseUrl'] || '—' }}</span>
           </div>
         } @else if (isBlob()) {
           <div class="dw-review-card">

@@ -1,0 +1,50 @@
+{
+  "resourceType": "CareTeam",
+  "id": "careteam-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:careteam",
+      "value": "CARETEAM-003"
+    }
+  ],
+  "status": "active",
+  "name": "Care team for Robert Brooks",
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "participant": [
+    {
+      "role": [
+        {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "158965000",
+              "display": "Medical practitioner"
+            }
+          ],
+          "text": "Medical practitioner"
+        }
+      ],
+      "member": {
+        "reference": "Practitioner/practitioner-002",
+        "display": "practitioner-002"
+      }
+    }
+  ],
+  "encounter": {
+    "reference": "Encounter/encounter-003",
+    "display": "encounter-003"
+  }
+}

@@ -141,6 +141,17 @@ public sealed class MongoDestinationNodeExecutor : DestinationNodeExecutor
     }
 }
 
+public sealed class MedplumDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public MedplumDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.MedplumDestination, DestinationType.Medplum, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
 public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecutor
 {
     public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,

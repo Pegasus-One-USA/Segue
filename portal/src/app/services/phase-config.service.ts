@@ -41,12 +41,14 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-mysql',
     'dest-mongo',
     'dest-postgres',
+    'dest-medplum',
+    'dest-fhir',
     'dest-blob',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',
     //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',
-    //   'dest-s3', 'dest-fhir', 'dest-xlsx', 'dest-ndjson',
+    //   'dest-s3', 'dest-xlsx', 'dest-ndjson',
     //   'dest-parquet', 'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp',
     //   'dest-restapi', 'dest-inmemory'
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'

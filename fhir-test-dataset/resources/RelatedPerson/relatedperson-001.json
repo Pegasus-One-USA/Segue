@@ -1,0 +1,53 @@
+{
+  "resourceType": "RelatedPerson",
+  "id": "relatedperson-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:relatedperson",
+      "value": "RELATEDPERSON-001"
+    }
+  ],
+  "active": true,
+  "patient": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "relationship": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+          "code": "SPS",
+          "display": "Spouse"
+        }
+      ],
+      "text": "Spouse"
+    }
+  ],
+  "name": [
+    {
+      "family": "Whitfield",
+      "given": [
+        "Karen"
+      ]
+    }
+  ],
+  "gender": "female",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-1991",
+      "use": "home"
+    }
+  ]
+}
