@@ -1,0 +1,708 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "13219342127638124710"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "fhirbridge",
+      "metadata": {
+        "description": "Short name used to build every resource name in this deployment."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for every resource. Defaults to the resource group's own region."
+      }
+    },
+    "sqlSaPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Server SA password. Must satisfy SQL Server's complexity policy."
+      }
+    },
+    "jwtSigningKey": {
+      "type": "securestring",
+      "minLength": 32,
+      "metadata": {
+        "description": "FHIRBridge.Api's Authentication:SigningKey (HS256). At least 32 random characters."
+      }
+    },
+    "imageRegistryServer": {
+      "type": "string",
+      "metadata": {
+        "description": "Registry the 3 custom images were published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package)."
+      }
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Tag the 3 custom images were published under."
+      }
+    },
+    "imageRegistryUsername": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Registry username. Leave blank if the registry allows anonymous/public pull (e.g. a public GHCR package) — no registry credentials are configured in that case."
+      }
+    },
+    "imageRegistryPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Registry password/token. Leave blank alongside imageRegistryUsername for anonymous/public pull."
+      }
+    },
+    "sqlPort": {
+      "type": "int",
+      "defaultValue": 1433,
+      "metadata": {
+        "description": "Port SQL Server Express listens on (internal-only — reached only by the other Container Apps in this environment, never externally). Passed to the container as MSSQL_TCP_PORT since ingress targetPort alone does not change what SQL Server itself listens on."
+      }
+    },
+    "redisPort": {
+      "type": "int",
+      "defaultValue": 6379,
+      "metadata": {
+        "description": "Port Redis listens on (internal-only). Passed to the container via a redis-server --port override, since Redis has no env-var port setting."
+      }
+    },
+    "redisPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App's configuration — same exposure level as any other command argument."
+      }
+    },
+    "fhirbridgeAppCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED two-phase flow to avoid RequireCustomHostnameInEnvironment: (1) set this domain with bindCustomDomainCertificates=false — registers the hostname on the app with bindingType Disabled (no cert yet); read fhirbridgeAppDomainVerificationId, create CNAME (domain -> fhirbridgeAppUrl hostname) + TXT asuid.<domain>, wait for DNS; (2) redeploy with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL."
+      }
+    },
+    "demoAppCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the Demo app. Same two-phase flow as fhirbridgeAppCustomDomain — see the demoAppDomainVerificationId output."
+      }
+    },
+    "bindCustomDomainCertificates": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment."
+      }
+    },
+    "sqlServerSize": {
+      "type": "string",
+      "defaultValue": "Large",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "SQL Server container size."
+      }
+    },
+    "redisSize": {
+      "type": "string",
+      "defaultValue": "Medium",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "Redis container size."
+      }
+    },
+    "fhirbridgeAppSize": {
+      "type": "string",
+      "defaultValue": "Medium",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "FHIRBridge app (Api + Gateway) container size."
+      }
+    },
+    "demoAppSize": {
+      "type": "string",
+      "defaultValue": "Small",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "Demo app container size."
+      }
+    },
+    "workerSize": {
+      "type": "string",
+      "defaultValue": "Small",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "Worker container size."
+      }
+    }
+  },
+  "variables": {
+    "containerSizes": {
+      "Small": {
+        "cpu": "[json('0.25')]",
+        "memory": "0.5Gi"
+      },
+      "Medium": {
+        "cpu": "[json('0.5')]",
+        "memory": "1Gi"
+      },
+      "Large": {
+        "cpu": "[json('1.0')]",
+        "memory": "2Gi"
+      },
+      "XLarge": {
+        "cpu": "[json('2.0')]",
+        "memory": "4Gi"
+      }
+    },
+    "commonTags": {
+      "Project": "FHIRBridge",
+      "Component": "containerization",
+      "Environment": "[parameters('namePrefix')]",
+      "ManagedBy": "Bicep"
+    },
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
+    "storageAccountName": "[toLower(format('{0}st{1}', parameters('namePrefix'), variables('uniqueSuffix')))]",
+    "sqlServerName": "[format('{0}-sqlserver', parameters('namePrefix'))]",
+    "redisName": "[format('{0}-redis', parameters('namePrefix'))]",
+    "fhirbridgeAppName": "[format('{0}-app', parameters('namePrefix'))]",
+    "demoAppName": "[format('{0}-demo-app', parameters('namePrefix'))]",
+    "workerName": "[format('{0}-worker', parameters('namePrefix'))]",
+    "hasRegistryCreds": "[not(empty(parameters('imageRegistryUsername')))]",
+    "registryConfig": "[if(variables('hasRegistryCreds'), createArray(createObject('server', parameters('imageRegistryServer'), 'username', parameters('imageRegistryUsername'), 'passwordSecretRef', 'registry-password')), createArray())]",
+    "registrySecret": "[if(variables('hasRegistryCreds'), createArray(createObject('name', 'registry-password', 'value', parameters('imageRegistryPassword'))), createArray())]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-logs', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}-env', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix'))), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix'))), '2023-09-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/sql-data', variables('storageAccountName'))]",
+      "properties": {
+        "shareQuota": 50
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/redis-data', variables('storageAccountName'))]",
+      "properties": {
+        "shareQuota": 10
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/keys-data', variables('storageAccountName'))]",
+      "properties": {
+        "shareQuota": 1
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
+          "shareName": "sql-data",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'redis-data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
+          "shareName": "redis-data",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
+          "shareName": "keys-data",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('sqlServerName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "secrets": [
+            {
+              "name": "sql-sa-password",
+              "value": "[parameters('sqlSaPassword')]"
+            }
+          ],
+          "ingress": {
+            "external": false,
+            "targetPort": "[parameters('sqlPort')]",
+            "transport": "tcp"
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "sqlserver",
+              "image": "mcr.microsoft.com/mssql/server:2022-latest",
+              "resources": "[variables('containerSizes')[parameters('sqlServerSize')]]",
+              "env": [
+                {
+                  "name": "ACCEPT_EULA",
+                  "value": "Y"
+                },
+                {
+                  "name": "MSSQL_PID",
+                  "value": "Express"
+                },
+                {
+                  "name": "MSSQL_SA_PASSWORD",
+                  "secretRef": "sql-sa-password"
+                },
+                {
+                  "name": "MSSQL_TCP_PORT",
+                  "value": "[string(parameters('sqlPort'))]"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "sql-data",
+                  "mountPath": "/var/opt/mssql"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "sql-data",
+              "storageType": "AzureFile",
+              "storageName": "sql-data"
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'sql-data')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('redisName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "ingress": {
+            "external": false,
+            "targetPort": "[parameters('redisPort')]",
+            "transport": "tcp"
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "redis",
+              "image": "redis:7-alpine",
+              "resources": "[variables('containerSizes')[parameters('redisSize')]]",
+              "command": [
+                "redis-server",
+                "--port",
+                "[string(parameters('redisPort'))]",
+                "--requirepass",
+                "[parameters('redisPassword')]"
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "redis-data",
+                  "mountPath": "/data"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "redis-data",
+              "storageType": "AzureFile",
+              "storageName": "redis-data"
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')]"
+      ]
+    },
+    {
+      "condition": "[and(not(empty(parameters('fhirbridgeAppCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('fhirbridgeAppCustomDomain')]",
+        "domainControlValidation": "CNAME"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[and(not(empty(parameters('demoAppCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('demoAppCustomDomain')]",
+        "domainControlValidation": "CNAME"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('fhirbridgeAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "secrets": "[concat(createArray(createObject('name', 'sql-sa-password', 'value', parameters('sqlSaPassword')), createObject('name', 'jwt-signing-key', 'value', parameters('jwtSigningKey'))), variables('registrySecret'))]",
+          "registries": "[variables('registryConfig')]",
+          "ingress": {
+            "external": true,
+            "targetPort": 80,
+            "transport": "auto",
+            "customDomains": "[if(not(empty(parameters('fhirbridgeAppCustomDomain'))), createArray(if(parameters('bindCustomDomainCertificates'), createObject('name', parameters('fhirbridgeAppCustomDomain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('fhirbridgeAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "fhirbridge-app",
+              "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true')), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
+              "volumeMounts": [
+                {
+                  "volumeName": "keys-data",
+                  "mountPath": "/app/keys"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "keys-data",
+              "storageType": "AzureFile",
+              "storageName": "keys-data"
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 3
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
+        "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('demoAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "secrets": "[variables('registrySecret')]",
+          "registries": "[variables('registryConfig')]",
+          "ingress": {
+            "external": true,
+            "targetPort": 5500,
+            "transport": "auto",
+            "customDomains": "[if(not(empty(parameters('demoAppCustomDomain'))), createArray(if(parameters('bindCustomDomainCertificates'), createObject('name', parameters('demoAppCustomDomain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('demoAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "demo-app",
+              "image": "[format('{0}/demo-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "resources": "[variables('containerSizes')[parameters('demoAppSize')]]",
+              "env": [
+                {
+                  "name": "ASPNETCORE_ENVIRONMENT",
+                  "value": "Production"
+                },
+                {
+                  "name": "ConnectionStrings__Default",
+                  "value": "[format('Server={0},{1};Database=HealthAppDb;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))]"
+                },
+                {
+                  "name": "AllowedFrontendOrigin",
+                  "value": "[if(not(empty(parameters('demoAppCustomDomain'))), format('https://{0}', parameters('demoAppCustomDomain')), format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain))]"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 3
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
+        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('workerName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "secrets": "[variables('registrySecret')]",
+          "registries": "[variables('registryConfig')]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "worker",
+              "image": "[format('{0}/fhirbridge-worker:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "resources": "[variables('containerSizes')[parameters('workerSize')]]",
+              "env": [
+                {
+                  "name": "ASPNETCORE_ENVIRONMENT",
+                  "value": "Production"
+                },
+                {
+                  "name": "ConnectionStrings__FHIRBridgeDb",
+                  "value": "[format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))]"
+                },
+                {
+                  "name": "ConnectionStrings__Redis",
+                  "value": "[format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
+                },
+                {
+                  "name": "RuntimeWorker__Enabled",
+                  "value": "true"
+                },
+                {
+                  "name": "Messaging__Provider",
+                  "value": "InMemory"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "fhirbridgeAppUrl": {
+      "type": "string",
+      "value": "[format('https://{0}.{1}', variables('fhirbridgeAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+    },
+    "demoAppUrl": {
+      "type": "string",
+      "value": "[format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+    },
+    "fhirbridgeAppDomainVerificationId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01').customDomainVerificationId]"
+    },
+    "demoAppDomainVerificationId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('demoAppName')), '2024-03-01').customDomainVerificationId]"
+    },
+    "fhirbridgeAppCustomDomainUrl": {
+      "type": "string",
+      "value": "[if(not(empty(parameters('fhirbridgeAppCustomDomain'))), format('https://{0}', parameters('fhirbridgeAppCustomDomain')), '')]"
+    },
+    "demoAppCustomDomainUrl": {
+      "type": "string",
+      "value": "[if(not(empty(parameters('demoAppCustomDomain'))), format('https://{0}', parameters('demoAppCustomDomain')), '')]"
+    },
+    "bindCustomDomainCertificates": {
+      "type": "bool",
+      "value": "[parameters('bindCustomDomainCertificates')]"
+    },
+    "customDomainPhase": {
+      "type": "string",
+      "value": "[if(and(empty(parameters('fhirbridgeAppCustomDomain')), empty(parameters('demoAppCustomDomain'))), 'none', if(parameters('bindCustomDomainCertificates'), 'ssl-bound-or-binding', 'hostname-only-set-dns-then-redeploy-with-bind-true'))]"
+    },
+    "resourceManifest": {
+      "type": "array",
+      "value": [
+        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('demoAppName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('workerName'))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))]"
+      ]
+    }
+  }
+}

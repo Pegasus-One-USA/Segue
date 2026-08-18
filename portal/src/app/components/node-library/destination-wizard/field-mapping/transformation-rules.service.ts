@@ -84,7 +84,9 @@ export interface TransformPreviewRequest {
   sourceField?: string | null;
 }
 
-export type ConfigFieldInputKind = 'text' | 'select' | 'checkbox';
+// 'combo' = a dropdown of common presets that still allows a genuinely custom value (unlike 'select', which
+// forces the value back to a preset) — used for fields where "none of the above" is a legitimate answer.
+export type ConfigFieldInputKind = 'text' | 'select' | 'checkbox' | 'combo';
 
 export interface TransformConfigFieldSchema {
   key: string;

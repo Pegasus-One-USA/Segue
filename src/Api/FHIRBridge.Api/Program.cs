@@ -95,6 +95,23 @@ if (string.IsNullOrWhiteSpace(keyRingPath))
 
 Directory.CreateDirectory(keyRingPath);
 dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+
+// HIPAA #11: encrypt the key ring at rest with a certificate. Wraps (does not rotate/regenerate) the existing
+// keys — Data Protection decides per-key how to decrypt based on that key's own stored descriptor, so keys
+// written before this was configured stay readable; only newly generated keys get certificate-protected.
+// Conditioned on a configured cert (never required in Development) so local/docker-compose startup, which has
+// no certificate provisioned, is unaffected.
+var dataProtectionCertPath = builder.Configuration["DataProtection:CertificatePath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionCertPath) && !builder.Environment.IsDevelopment())
+{
+    var dataProtectionCertPassword = builder.Configuration["DataProtection:CertificatePassword"];
+    var dataProtectionCert = string.IsNullOrEmpty(dataProtectionCertPassword)
+        ? System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificateFromFile(dataProtectionCertPath)
+        : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
+            dataProtectionCertPath, dataProtectionCertPassword);
+    dataProtection.ProtectKeysWithCertificate(dataProtectionCert);
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -462,6 +479,36 @@ app.MapHealthChecks("/health");
 
 app.UseCors("Portal");
 
+// HIPAA #7: double-submit CSRF check. Cookie-based auth means the browser attaches the session cookie to
+// cross-site requests too, so a state-changing request must also prove it came from our own page by echoing
+// back the non-HttpOnly CSRF cookie as a header. Only enforced when the access-token cookie is actually
+// present — a request still using the (legacy/transitional) Authorization header isn't cookie-authenticated
+// and has nothing for a cross-site form/script to silently ride along on.
+app.Use(async (context, next) =>
+{
+    var isStateChanging = HttpMethods.IsPost(context.Request.Method) ||
+                          HttpMethods.IsPut(context.Request.Method) ||
+                          HttpMethods.IsPatch(context.Request.Method) ||
+                          HttpMethods.IsDelete(context.Request.Method);
+
+    if (isStateChanging &&
+        context.Request.Path.StartsWithSegments("/api/v1") &&
+        context.Request.Cookies.ContainsKey("fhirbridge_access_token"))
+    {
+        var cookieToken = context.Request.Cookies[FHIRBridge.Api.Controllers.V1.AuthController.CsrfCookieName];
+        var headerToken = context.Request.Headers["X-CSRF-Token"].ToString();
+
+        if (string.IsNullOrEmpty(cookieToken) || !string.Equals(cookieToken, headerToken, StringComparison.Ordinal))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { message = "CSRF token missing or invalid." });
+            return;
+        }
+    }
+
+    await next();
+});
+
 // Static legal content (e.g. Terms and Conditions), served from disk under Content/legal at
 // "/legal/<file>" — anonymous, deploy-mutable (replace the file without a rebuild), independent of the
 // portal's wwwroot. Placed after UseCors so the portal can fetch it cross-origin in local dev (portal on
@@ -481,10 +528,10 @@ app.UseAuthentication();
 var sessionGates = new[]
 {
     (Claim: "pwd_change_required",
-     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me" },
+     Allowed: new[] { "/api/v1/auth/internal/change-password", "/api/v1/auth/me", "/api/v1/auth/refresh", "/api/v1/auth/internal/login", "/api/v1/auth/logout" },
      Message: "Password change is required before using Segue."),
     (Claim: "mfa_setup_required",
-     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me" },
+     Allowed: new[] { "/api/v1/auth/mfa", "/api/v1/auth/me", "/api/v1/auth/refresh", "/api/v1/auth/internal/login", "/api/v1/auth/logout" },
      Message: "Two-factor authentication setup is required before using Segue."),
 };
 

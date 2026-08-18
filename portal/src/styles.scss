@@ -1210,6 +1210,22 @@ input:-webkit-autofill:active {
   }
 }
 
+// A section blocked on something external (e.g. CPT's AMA license) — still navigable (its page explains why),
+// just visually muted so it doesn't read as an equally-available option next to the working sections.
+.shell-tab--locked {
+  color: var(--color-muted-2);
+
+  &:hover {
+    color: var(--color-muted);
+  }
+
+  &.active {
+    color: var(--color-muted);
+    background: var(--color-side);
+    border-color: var(--color-border);
+  }
+}
+
 .topbar {
   height:        56px;
   background:    var(--color-surface);

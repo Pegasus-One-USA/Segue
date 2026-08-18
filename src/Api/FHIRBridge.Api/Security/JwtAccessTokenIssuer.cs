@@ -48,7 +48,7 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             new("oid", user.ExternalUserId),
             new(ClaimTypes.NameIdentifier, user.ExternalUserId),
             new("uid", user.Id.ToString()),
-            new("pwd_change_required", user.MustChangePassword ? "true" : "false"),
+            new("pwd_change_required", user.RequiresPasswordChange ? "true" : "false"),
             new("mfa_setup_required", user.IsMfaSetupRequired ? "true" : "false"),
             new("scope", "fhirbridge.full_access")
         };

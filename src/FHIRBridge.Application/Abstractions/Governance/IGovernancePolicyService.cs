@@ -14,7 +14,8 @@ public sealed record ResourceGovernanceContext(
     string? ResourceId,
     string Action,
     string? TriggeredBy,
-    string? CorrelationId);
+    string? CorrelationId,
+    Guid? DestinationConfigurationId = null);
 
 public sealed record ResourceGovernanceDecision(
     bool IsAllowed,

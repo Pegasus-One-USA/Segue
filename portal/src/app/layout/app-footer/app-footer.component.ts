@@ -1,5 +1,6 @@
 import { Component, input, inject } from '@angular/core';
 import { BrandingService } from '../../services/branding.service';
+import { AuthStore } from '../../auth/store/auth.store';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -14,6 +15,7 @@ export class AppFooterComponent {
   readonly variant = input<'full' | 'compact'>('full');
 
   protected readonly branding      = inject(BrandingService);
+  protected readonly authStore     = inject(AuthStore);
   protected readonly appVersion    = '1.0';
   protected readonly copyrightYear = new Date().getFullYear();
 

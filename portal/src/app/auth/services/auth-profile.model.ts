@@ -1,0 +1,28 @@
+/**
+ * Mirrors the backend's UserProfileDto. HIPAA #7: the portal builds its User (roles + permissions) from
+ * this profile now, not by decoding the access-token JWT client-side — the token lives in an HttpOnly
+ * cookie the browser never exposes to JS.
+ */
+export interface AuthProfileDto {
+  userId:         string;
+  externalUserId: string;
+  email:          string | null;
+  displayName:    string | null;
+  claimRoles:     string[];
+  permissions?:   string[] | null;
+  requiresPasswordChange?: boolean;
+  requiresMfaSetup?:       boolean;
+}
+
+/** Mirrors the backend LocalLoginResponse with the raw token fields stripped (see AuthController.IssueTokenCookiesAndStrip). */
+export interface LocalLoginResponseDto {
+  requiresMfa:               boolean;
+  mfaChallengeToken?:        string | null;
+  mfaChallengeExpiresOnUtc?: string | null;
+  tokenType:                 string | null;
+  expiresOnUtc:              string | null;
+  requiresPasswordChange:    boolean;
+  profile?:                  AuthProfileDto | null;
+  refreshTokenExpiresOnUtc?: string | null;
+  requiresMfaSetup?:         boolean;
+}

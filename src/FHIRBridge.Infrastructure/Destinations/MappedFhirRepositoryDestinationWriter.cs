@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Infrastructure.Terminology;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -226,6 +227,11 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             resource["id"] = id;
             RewriteNumericReferences(resource);
 
+            // Then strip version labels from stable-code-system codings so a version-strict destination server
+            // (e.g. Aidbox) matches on system alone instead of rejecting a code because its version label doesn't
+            // match the CodeSystem version the server has loaded. Independent of the numeric-id rewrite above.
+            StripVersionFromStableCodings(resource);
+
             return (resourceType, Uri.EscapeDataString(id), resource.ToJsonString(JsonOptions));
         }
 
@@ -343,5 +349,47 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Recursively strips <c>version</c> from any <c>Coding</c> in a <c>coding</c> array whose <c>system</c> is one of
+    /// <see cref="StableCodeSystemVersions.StableCodeSystemUrls"/>, so a destination FHIR server (e.g. Aidbox) matches
+    /// on <c>system</c> alone instead of rejecting a code purely because its version label doesn't match whatever
+    /// CodeSystem version the destination has loaded. Leaves codings on any other system — including CodeSystems
+    /// known to have real cross-version code drift — untouched.
+    /// </summary>
+    private static void StripVersionFromStableCodings(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                if (obj["coding"] is JsonArray codings)
+                {
+                    foreach (var coding in codings.OfType<JsonObject>())
+                    {
+                        var system = coding["system"] is JsonValue systemValue && systemValue.TryGetValue<string>(out var systemText)
+                            ? systemText
+                            : null;
+                        if (system is not null && StableCodeSystemVersions.StableCodeSystemUrls.Contains(system))
+                        {
+                            coding.Remove("version");
+                        }
+                    }
+                }
+
+                foreach (var child in obj)
+                {
+                    StripVersionFromStableCodings(child.Value);
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    StripVersionFromStableCodings(item);
+                }
+
+                break;
+        }
     }
 }

@@ -4,6 +4,14 @@
     <p class="page-sub">Upload the official CMS "Code Descriptions in Tabular Order" release (.zip) to import it into the local terminology database.</p>
   </div>
 
+  <app-terminology-freshness-card
+    [freshness]="freshness()"
+    [checking]="checking()"
+    [downloading]="downloading()"
+    (checkForUpdates)="checkForUpdates()"
+    (downloadAndImport)="downloadAndImport()"
+  />
+
   <section class="settings-card">
     <h2 class="card-title">Import Release</h2>
     <p class="card-sub">Accepts the CMS ICD-10-CM order-file release archive as distributed for the fiscal year.</p>

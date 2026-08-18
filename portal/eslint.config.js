@@ -14,6 +14,9 @@ module.exports = tseslint.config(
     ],
     processor: angular.processInlineTemplates,
     rules: {
+      // HIPAA #16: console.log/debug leftovers have leaked connection secrets and PII in the past — warn/error
+      // remain available for genuine operational logging.
+      "no-console": ["error", { allow: ["warn", "error", "info", "table"] }],
       "@angular-eslint/directive-selector": [
         "error",
         {

@@ -78,6 +78,9 @@ public sealed class UserAccessService : IUserAccessService
             user.ExternalUserId,
             user.Email,
             user.DisplayName,
-            _currentUserService.CurrentUser.Roles));
+            _currentUserService.CurrentUser.Roles,
+            _currentUserService.CurrentUser.Permissions,
+            user.RequiresPasswordChange,
+            user.IsMfaSetupRequired));
     }
 }

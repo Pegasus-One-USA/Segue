@@ -12,12 +12,6 @@ import {
   ResourceTypeSummary,
 } from '../../models/execution-history.model';
 import {
-  buildMockLineageChains,
-  buildMockLineageSummary,
-  buildMockResourceTree,
-  queryMockChains,
-} from './mock-lineage-data';
-import {
   nodeAbbr,
   nodeAccentVar,
 } from '../../../components/node-library/destination-wizard/field-mapping/transform-node-classifier';
@@ -43,12 +37,6 @@ export class FieldLineagePanelComponent implements OnInit {
    *  so the tree itself can toggle a resource type open/closed without MatMenu treating that as "close". */
   private readonly resourceMenuTrigger = viewChild<MatMenuTrigger>('resourceMenuTriggerBtn');
 
-  // Fallback content for a run that genuinely recorded zero field-lineage rows (e.g. "Node Runs: 0" on the
-  // parent detail card) — without this the stat strip, resource tree, and table all render as a wall of
-  // zeros/empty-states. Built once per panel instance; ngOnInit/loadChains below only reach for it when the
-  // real API response is actually empty, never as a silent override of real data.
-  private readonly mockChains = buildMockLineageChains(Date.now());
-
   readonly summary = signal<LineageSummary | null>(null);
   readonly resourceTree = signal<ResourceTypeSummary[]>([]);
   readonly expandedResourceTypes = signal<Set<string>>(new Set());
@@ -68,16 +56,12 @@ export class FieldLineagePanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.lineageSummary(this.runId()).subscribe({
-      next: result => this.summary.set(
-        result.resourcesProcessed === 0 && result.fieldsTransformed === 0
-          ? buildMockLineageSummary(this.mockChains)
-          : result,
-      ),
-      error: () => this.summary.set(buildMockLineageSummary(this.mockChains)),
+      next: result => this.summary.set(result),
+      error: () => this.summary.set(null),
     });
     this.api.lineageResourceTree(this.runId()).subscribe({
-      next: tree => this.resourceTree.set(tree.length > 0 ? tree : buildMockResourceTree(this.mockChains)),
-      error: () => this.resourceTree.set(buildMockResourceTree(this.mockChains)),
+      next: tree => this.resourceTree.set(tree),
+      error: () => this.resourceTree.set([]),
     });
     this.loadChains();
   }
@@ -141,13 +125,11 @@ export class FieldLineagePanelComponent implements OnInit {
 
     this.api.fieldLineage(this.runId(), this.pageIndex() + 1, this.pageSize(), filter).subscribe({
       next: result => {
-        this.chains.set(
-          result.totalCount > 0 ? result : queryMockChains(this.mockChains, filter, this.pageIndex() + 1, this.pageSize()),
-        );
+        this.chains.set(result);
         this.loading.set(false);
       },
       error: () => {
-        this.chains.set(queryMockChains(this.mockChains, filter, this.pageIndex() + 1, this.pageSize()));
+        this.chains.set({ items: [], totalCount: 0, page: 1, pageSize: this.pageSize() });
         this.loading.set(false);
       },
     });

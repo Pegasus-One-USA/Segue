@@ -1,0 +1,42 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">CVX Terminology</h1>
+    <p class="page-sub">CDC's vaccine code set. Upload-only for now — CDC references a REST API, but its exact endpoint needs direct verification before a scheduler is built.</p>
+  </div>
+
+  <div class="callout">
+    <span>⚠️</span>
+    <span>Automatic synchronization is intentionally deferred here until CDC's REST endpoint is confirmed against live docs.</span>
+  </div>
+
+  <section class="settings-card">
+    <h2 class="card-title">Import Release</h2>
+    <p class="card-sub">Accepts the CDC CVX flat-file code-set export.</p>
+
+    <div class="upload-row">
+      <label class="file-input">
+        <input type="file" (change)="onFileSelected($event)" [disabled]="uploading()" />
+        <span>{{ selectedFile()?.name ?? 'Choose CVX file…' }}</span>
+      </label>
+      <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+        {{ uploading() ? 'Uploading…' : 'Import' }}
+      </button>
+    </div>
+
+    @if (uploading()) {
+      <div class="progress-track">
+        <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+      </div>
+      <p class="card-sub">Uploading… {{ uploadProgress() }}%</p>
+    }
+  </section>
+
+  <app-terminology-import-history
+    title="Import History"
+    subtitle="The most recent CVX code-set imports."
+    emptyMessage="No CVX code-set has been imported yet."
+    countColumnLabel="Codes"
+    [history]="history()"
+    [loading]="historyLoading()"
+  />
+</div>

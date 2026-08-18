@@ -1,0 +1,32 @@
+# Copy to terraform.tfvars (gitignored) and fill in real secrets before `terraform apply`.
+# See ../../../README.md for the bootstrap order (ACR must exist and have images pushed before
+# the Container Apps that reference them can be created).
+#
+# sql_sa_password / jwt_signing_key / redis_password are only SEED values: the first apply writes
+# them into the Key Vault this config creates (see the key_vault_name output), and every Container
+# App reads the secret's value out of the Vault from then on, not these variables. Rotate a secret
+# afterwards with `az keyvault secret set` (or the Portal) — a later `terraform apply` with the old
+# value here will NOT overwrite it (lifecycle.ignore_changes on each azurerm_key_vault_secret).
+
+name_prefix         = "fhirbridge"
+resource_group_name = "rg-tusharpuri"   # must already exist: az group create --name rg-tusharpuri --location eastus
+image_tag           = "v1"
+sql_sa_password = "Ch4ngeMe!Str0ng"
+jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
+redis_password  = "replace-with-a-strong-redis-password"
+
+# Optional — internal-only ports for SQL Server / Redis (reached only by the other Container Apps
+# in this environment, never externally). Uncomment to override.
+# sql_port   = 1433
+# redis_port = 6379
+
+# Note: fhirbridge-app / demo-app have no equivalent port variable — Azure Container Apps external
+# HTTP ingress has no client-configurable port; it's always https://<app>.<domain> with no port
+# number in the URL. See the AWS environment if a client-chosen public port is required.
+
+# Custom domains — two-phase (see variables.tf). Phase 1: set domain(s), leave bind false.
+# After DNS CNAME + asuid TXT: set bind_custom_domain_certificates = true and re-apply.
+# fhirbridge_app_custom_domain        = "app.customer.com"
+# demo_app_custom_domain              = "demo.customer.com"
+# bind_custom_domain_certificates     = false
+

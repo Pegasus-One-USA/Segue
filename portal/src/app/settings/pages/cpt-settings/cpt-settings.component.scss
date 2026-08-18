@@ -1,0 +1,11 @@
+:host {
+  display: block;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
+.dash-content { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0; }
+.page-sub    { font-size: 14px; color: var(--color-muted); margin: 0; }

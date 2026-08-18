@@ -12,9 +12,9 @@
 
 .settings-body { display: flex; flex-direction: column; gap: 20px; }
 
-/* ── Cards ────────────────────────────────────────────────────────── */
+/* ── Cards (only the Connection card still lives directly in this page — Synchronization and Import
+   History are now app-terminology-scheduler-card / app-terminology-import-history) ──────────────── */
 .settings-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-modal); padding: 22px 24px; }
-.card-row      { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 0; }
 .card-title    { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
 .card-sub      { font-size: 13px; color: var(--color-muted); margin: 0; }
 
@@ -42,47 +42,3 @@
 }
 .form-field select { cursor: pointer; }
 .field-error { font-size: 12px; color: var(--color-error); margin: 0; }
-
-.toggle-field {
-  display: flex; align-items: center; gap: 8px; cursor: pointer;
-  font-size: 13px; font-weight: 600; color: var(--color-ink);
-  input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
-}
-.toggle-field--inline { align-self: end; padding-bottom: 9px; }
-
-.form-actions { display: flex; gap: 10px; margin-top: 18px; }
-
-.btn-primary {
-  padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
-  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: background var(--transition-base);
-  &:hover:not(:disabled) { background: var(--color-primary-dark); }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-.btn-outline {
-  padding: 9px 18px; border-radius: 9px; background: none;
-  border: 1px solid var(--color-primary); color: var(--color-primary);
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: all var(--transition-base);
-  &:hover:not(:disabled) { background: var(--color-primary-soft); }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-}
-
-.history-table {
-  width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 13.5px;
-
-  th {
-    text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--color-muted);
-    text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--color-border);
-  }
-  td { padding: 10px 10px; color: var(--color-ink); border-bottom: 1px solid var(--color-border); vertical-align: top; }
-  tr:last-child td { border-bottom: none; }
-}
-
-.status-badge {
-  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
-  font-size: 12.5px; font-weight: 600;
-  &--ok   { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &--warn { background: var(--color-warning-soft); color: var(--color-warning-strong); }
-  &--info { background: var(--color-primary-soft); color: var(--color-primary); }
-}

@@ -1,0 +1,69 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">NDC Terminology</h1>
+    <p class="page-sub">National Drug Code Directory, synced from openFDA's public API — no license or required credential.</p>
+  </div>
+
+  @if (loadingConfig()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form">
+      <section class="settings-card">
+        <h2 class="card-title">Connection</h2>
+        <p class="card-sub">openFDA works without a key — providing one only raises your rate limit.</p>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="ndc-apiKey">openFDA API Key <span class="optional">(optional)</span></label>
+            <input id="ndc-apiKey" type="password" formControlName="apiKey" autocomplete="off"
+                   [placeholder]="apiKeySet() ? 'Leave blank to keep current key' : 'Not required — leave blank'" />
+          </div>
+        </div>
+      </section>
+
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="The NDC directory updates daily. Schedule automatic imports, or run one on demand below."
+        [frequencyOptions]="['Daily', 'Weekly']"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </form>
+
+    <section class="settings-card">
+      <h2 class="card-title">Import Release</h2>
+      <p class="card-sub">Accepts an openFDA NDC directory bulk-export archive — a fallback for when auto-sync above is off.</p>
+
+      <div class="upload-row">
+        <label class="file-input">
+          <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading()" />
+          <span>{{ selectedFile()?.name ?? 'Choose export .zip…' }}</span>
+        </label>
+        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+          {{ uploading() ? 'Uploading…' : 'Import' }}
+        </button>
+      </div>
+
+      @if (uploading()) {
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+        </div>
+        <p class="card-sub">Uploading… {{ uploadProgress() }}%</p>
+      }
+    </section>
+
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent NDC directory imports — manual and automatic runs share one history."
+      emptyMessage="No NDC directory export has been imported yet."
+      countColumnLabel="Products"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
+  }
+</div>

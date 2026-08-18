@@ -42,6 +42,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .Include(definition => definition.Nodes)
                 .ThenInclude(node => node.Configuration)
             .Include(definition => definition.Edges)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowDefinition.Id, cancellationToken);
 
         if (existing is not null)
@@ -82,6 +83,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .Include(definition => definition.Nodes)
                 .ThenInclude(node => node.Configuration)
             .Include(definition => definition.Edges)
+            .AsSplitQuery()
             .OrderBy(definition => definition.Name)
             .ToArrayAsync(cancellationToken);
     }
@@ -93,6 +95,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .Include(definition => definition.Nodes)
                 .ThenInclude(node => node.Configuration)
             .Include(definition => definition.Edges)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
     }
 
@@ -102,6 +105,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .Include(definition => definition.Nodes)
                 .ThenInclude(node => node.Configuration)
             .Include(definition => definition.Edges)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
 
         if (existing is null)

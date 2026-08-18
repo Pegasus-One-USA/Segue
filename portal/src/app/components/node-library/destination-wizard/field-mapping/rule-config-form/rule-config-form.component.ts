@@ -17,8 +17,10 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
   return merged;
 }
 
+const CUSTOM_SENTINEL = '__custom__';
+
 /**
- * Renders the right control (dropdown/text/checkbox) per config key a node type reads, instead of a raw
+ * Renders the right control (dropdown/text/checkbox/combo) per config key a node type reads, instead of a raw
  * JSON textarea — driven entirely by the schema TransformationRulesService.getNodeSchemas() returns, so a
  * 21st node type never needs a new form written by hand here.
  */
@@ -38,6 +40,24 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
                   <option [value]="opt">{{ opt }}</option>
                 }
               </select>
+            </div>
+          }
+          @case ('combo') {
+            <div class="config-control">
+              <label [for]="'rcf-' + field.key">{{ field.label }}</label>
+              <select [id]="'rcf-' + field.key" [ngModel]="comboSelectValue(field)" (ngModelChange)="setComboSelection(field, $event)">
+                <option [value]="CUSTOM_SENTINEL">Custom…</option>
+                @for (opt of field.options ?? []; track opt) {
+                  <option [value]="opt">{{ opt }}</option>
+                }
+              </select>
+              @if (isCustom(field)) {
+                <input
+                  [ngModel]="config[field.key] ?? ''"
+                  (ngModelChange)="setValue(field.key, $event)"
+                  [placeholder]="field.placeholder ?? ''"
+                />
+              }
             </div>
           }
           @case ('checkbox') {
@@ -78,6 +98,13 @@ export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
 
+  protected readonly CUSTOM_SENTINEL = CUSTOM_SENTINEL;
+
+  // Once a field is explicitly switched to "Custom…", stay in custom mode even if what's typed happens to
+  // match a preset string momentarily (e.g. while backspacing) — re-evaluated fresh per component instance
+  // (a new step/rule), not persisted, since applyNodeDefaults() already establishes the right starting mode.
+  private readonly forcedCustomKeys = new Set<string>();
+
   /** Checkbox fields always render last, after every text/select field — a lone toggle reads better as a
    *  trailing "also do this" option than sitting wherever the schema happened to declare it. Reordering
    *  the actual array (not a CSS order: override) keeps DOM/tab order in sync with visual order. */
@@ -90,5 +117,27 @@ export class RuleConfigFormComponent {
 
   setValue(key: string, value: string): void {
     this.config[key] = value;
+  }
+
+  /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current
+   *  value isn't one of the field's own presets — including blank, which is why a brand-new field with no
+   *  saved value starts in custom mode rather than silently defaulting to the first preset. */
+  isCustom(field: TransformConfigFieldSchema): boolean {
+    const current = this.config[field.key];
+    if (this.forcedCustomKeys.has(field.key)) return true;
+    return !(current && (field.options ?? []).includes(current));
+  }
+
+  comboSelectValue(field: TransformConfigFieldSchema): string {
+    return this.isCustom(field) ? CUSTOM_SENTINEL : this.config[field.key]!;
+  }
+
+  setComboSelection(field: TransformConfigFieldSchema, value: string): void {
+    if (value === CUSTOM_SENTINEL) {
+      this.forcedCustomKeys.add(field.key);
+      return;
+    }
+    this.forcedCustomKeys.delete(field.key);
+    this.setValue(field.key, value);
   }
 }

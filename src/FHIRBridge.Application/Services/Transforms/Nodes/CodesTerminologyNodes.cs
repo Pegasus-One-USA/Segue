@@ -65,13 +65,29 @@ public sealed class ValueCodeMappingNode : ITransformNode
 /// <summary>8. CodeableConcept / Coding Builder — assembles a coded element from a bare code + config.</summary>
 public sealed class CodeableConceptBuilderNode : ITransformNode
 {
+    // Friendly name -> canonical system URI. If a typed/selected key isn't found here, Execute() below falls
+    // back to using it as the literal system URI verbatim — which silently produces a non-URI garbage value
+    // for anything not in this list (confirmed: this list predates the HCPCS/ICD10PCS/NDC/CVX/UCUM/CPT
+    // terminology work, so those previously fell into exactly that trap even when spelled correctly). The
+    // portal's CodeableConcept Builder field now renders this as a closed dropdown (see
+    // TransformNodeConfigSchemas.CodeableConceptBuilder's "system" field) rather than free text, so a typo
+    // can no longer select a key that isn't here.
     private static readonly IReadOnlyDictionary<string, string> SystemUris = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["LOINC"] = "http://loinc.org",
         ["SNOMED"] = "http://snomed.info/sct",
         ["ICD10"] = "http://hl7.org/fhir/sid/icd-10-cm",
         ["RXNORM"] = "http://www.nlm.nih.gov/research/umls/rxnorm",
-        ["NPI"] = "http://hl7.org/fhir/sid/us-npi"
+        ["NPI"] = "http://hl7.org/fhir/sid/us-npi",
+        // Added alongside the terminology auto-poll work — HCPCS/ICD10PCS use the FHIR-registered "sid" URN
+        // pattern by convention; verify against https://www.hl7.org/fhir/terminologies-systems.html before
+        // treating these as gospel if a downstream consumer ever flags an unrecognized system.
+        ["HCPCS"] = "urn:oid:2.16.840.1.113883.6.285",
+        ["ICD10PCS"] = "http://hl7.org/fhir/sid/icd-10-pcs",
+        ["NDC"] = "http://hl7.org/fhir/sid/ndc",
+        ["CVX"] = "http://hl7.org/fhir/sid/cvx",
+        ["UCUM"] = "http://unitsofmeasure.org",
+        ["CPT"] = "http://www.ama-assn.org/go/cpt",
     };
 
     private readonly ITerminologyLookupService? _terminologyLookupService;

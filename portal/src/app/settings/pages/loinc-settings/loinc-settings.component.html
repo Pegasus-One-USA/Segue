@@ -9,7 +9,7 @@
       <p class="card-sub">Loading…</p>
     </section>
   } @else {
-    <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
+    <div class="settings-body" [formGroup]="form">
       <section class="settings-card">
         <h2 class="card-title">Connection</h2>
         <p class="card-sub">Credentials and endpoints used to authenticate with and download from the official LOINC release service.</p>
@@ -42,110 +42,27 @@
         </div>
       </section>
 
-      <section class="settings-card">
-        <div class="card-row">
-          <div>
-            <h2 class="card-title">Synchronization</h2>
-            <p class="card-sub">Schedule automatic LOINC release imports, or run one on demand below.</p>
-          </div>
-          <label class="toggle-field">
-            <input type="checkbox" formControlName="schedulerEnabled" />
-            <span>Enabled</span>
-          </label>
-        </div>
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="Schedule automatic LOINC release imports, or run one on demand below."
+        [frequencyOptions]="['Monthly', 'Weekly']"
+        [showRetryFields]="true"
+        [showDownloadTimeout]="true"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </div>
 
-        <div class="es-grid">
-          <div class="form-field">
-            <label for="loinc-frequency">Frequency</label>
-            <select id="loinc-frequency" formControlName="frequency">
-              <option>Monthly</option>
-              <option>Weekly</option>
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label for="loinc-executionTime">Execution time</label>
-            <input id="loinc-executionTime" type="time" formControlName="executionTime" />
-          </div>
-
-          <div class="form-field">
-            <label for="loinc-retryCount">Retry count</label>
-            <input id="loinc-retryCount" type="number" min="0" max="10" formControlName="retryCount" />
-            @if (form.controls.retryCount.touched && form.controls.retryCount.invalid) {
-              <p class="field-error">Enter a value between 0 and 10.</p>
-            }
-          </div>
-
-          <div class="form-field">
-            <label for="loinc-retryIntervalSeconds">Retry interval (seconds)</label>
-            <input id="loinc-retryIntervalSeconds" type="number" min="1" max="3600" formControlName="retryIntervalSeconds" />
-            @if (form.controls.retryIntervalSeconds.touched && form.controls.retryIntervalSeconds.invalid) {
-              <p class="field-error">Enter a value between 1 and 3600.</p>
-            }
-          </div>
-
-          <div class="form-field">
-            <label for="loinc-downloadTimeoutSeconds">Download timeout (seconds)</label>
-            <input id="loinc-downloadTimeoutSeconds" type="number" min="30" max="3600" formControlName="downloadTimeoutSeconds" />
-            @if (form.controls.downloadTimeoutSeconds.touched && form.controls.downloadTimeoutSeconds.invalid) {
-              <p class="field-error">Enter a value between 30 and 3600.</p>
-            }
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button class="btn-primary" type="submit" [disabled]="saving() || form.invalid">
-            {{ saving() ? 'Saving…' : 'Save Settings' }}
-          </button>
-          <button class="btn-outline" type="button" [disabled]="syncing()" (click)="synchronize()">
-            {{ syncing() ? 'Synchronizing…' : 'Synchronize Now' }}
-          </button>
-        </div>
-      </section>
-    </form>
-
-    <section class="settings-card">
-      <h2 class="card-title">Import History</h2>
-      <p class="card-sub">The most recent LOINC synchronization runs.</p>
-
-      @if (historyLoading()) {
-        <p class="card-sub">Loading…</p>
-      } @else if (history().length === 0) {
-        <p class="card-sub">LOINC has not been synchronized yet.</p>
-      } @else {
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>Version</th>
-              <th>Started</th>
-              <th>Completed</th>
-              <th>Terms</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (entry of history(); track entry.id) {
-              <tr>
-                <td>{{ entry.version ?? '—' }}</td>
-                <td>{{ entry.startedOnUtc | date: 'short' }}</td>
-                <td>{{ entry.completedOnUtc ? (entry.completedOnUtc | date: 'short') : '—' }}</td>
-                <td>{{ entry.importedConceptCount }}</td>
-                <td>
-                  <span class="status-badge"
-                        [class.status-badge--ok]="entry.status === 'Succeeded'"
-                        [class.status-badge--info]="entry.status === 'Running'"
-                        [class.status-badge--warn]="entry.status === 'Failed'">
-                    {{ entry.status }}
-                  </span>
-                  @if (entry.errorMessage) {
-                    <p class="field-error">{{ entry.errorMessage }}</p>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      }
-    </section>
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent LOINC synchronization runs."
+      emptyMessage="LOINC has not been synchronized yet."
+      countColumnLabel="Terms"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
   }
 </div>
