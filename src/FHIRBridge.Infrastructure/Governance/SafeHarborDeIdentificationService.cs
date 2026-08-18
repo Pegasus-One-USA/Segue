@@ -157,6 +157,8 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         new("Patient", "address.postalCode", DeIdentificationStrategy.GeneralizeZip3),
         new("Patient", "birthDate", DeIdentificationStrategy.GeneralizeDateToYear),
         new("Patient", "identifier.value", DeIdentificationStrategy.Hash),
+        new("Provenance", "agent.who.display", DeIdentificationStrategy.Remove),
+        new("Provenance", "target.display", DeIdentificationStrategy.Remove),
         new("*", "text", DeIdentificationStrategy.Remove)
     ];
 

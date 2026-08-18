@@ -79,7 +79,10 @@ public sealed class SetupService : ISetupService
                 [UnifiedRoles.SuperAdmin],
                 RequirePasswordChange: false,
                 request.FirstName,
-                request.LastName),
+                request.LastName,
+                // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin — hardcoded true, not
+                // caller-controlled like the general create-user/invite paths.
+                RequireMfa: true),
             cancellationToken);
 
         return await _localAuth.LoginAsync(new LocalLoginRequest(request.Email, request.Password), cancellationToken);
@@ -100,6 +103,8 @@ public sealed class SetupService : ISetupService
         // Create the SuperAdmin directly from the external identity: active, no password, SSO-linked.
         var user = new User(identity.Subject, identity.Email, identity.Name);
         user.LinkExternalIdentity(identity.Subject, request.Provider);
+        // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin, same as the local-password path.
+        user.SetMustSetupMfa(true);
 
         var role = await _repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, cancellationToken)
             ?? throw new InvalidOperationException("Setup could not complete. Please contact support.");

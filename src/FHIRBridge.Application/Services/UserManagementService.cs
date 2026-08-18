@@ -79,6 +79,7 @@ public sealed class UserManagementService : IUserManagementService
         var user = new User(LocalExternalId(email), email, request.DisplayName);
         user.UpdateName(request.FirstName, request.LastName);
         user.EnableLocalLogin(_passwordHasher.Hash(request.Password), request.RequirePasswordChange);
+        user.SetMustSetupMfa(request.RequireMfa);
 
         await _repository.AddUserAsync(user, cancellationToken);
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
@@ -147,6 +148,8 @@ public sealed class UserManagementService : IUserManagementService
         var user = new User(LocalExternalId(email), email, null);
         user.UpdateName(request.FirstName, request.LastName);
         user.SetInvited(tokenHash, expiresOnUtc);
+        // HIPAA hardening: MFA is compulsory for every invited user — hardcoded true, not an admin choice.
+        user.SetMustSetupMfa(true);
 
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);

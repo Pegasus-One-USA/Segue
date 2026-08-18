@@ -25329,6 +25329,943 @@
         ],
         "referenceTargetTypes": []
       }
+    ],
+    "Provenance": [
+      {
+        "label": "Activity \u203A Coding \u203A Code",
+        "jsonPath": "$.activity.coding[*].code",
+        "fhirPath": "activity.coding.code",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "activity.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Activity \u203A Coding \u203A Display",
+        "jsonPath": "$.activity.coding[*].display",
+        "fhirPath": "activity.coding.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "activity.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Activity \u203A Coding \u203A System",
+        "jsonPath": "$.activity.coding[*].system",
+        "fhirPath": "activity.coding.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "activity.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Activity \u203A Coding \u203A User Selected",
+        "jsonPath": "$.activity.coding[*].userSelected",
+        "fhirPath": "activity.coding.userSelected",
+        "cardinality": "0..1",
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "activity.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Activity \u203A Coding \u203A Version",
+        "jsonPath": "$.activity.coding[*].version",
+        "fhirPath": "activity.coding.version",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "activity.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Display",
+        "jsonPath": "$.agent[*].onBehalfOf.display",
+        "fhirPath": "agent.onBehalfOf.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Identifier \u203A System",
+        "jsonPath": "$.agent[*].onBehalfOf.identifier.system",
+        "fhirPath": "agent.onBehalfOf.identifier.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Identifier \u203A Use",
+        "jsonPath": "$.agent[*].onBehalfOf.identifier.use",
+        "fhirPath": "agent.onBehalfOf.identifier.use",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Identifier \u203A Value",
+        "jsonPath": "$.agent[*].onBehalfOf.identifier.value",
+        "fhirPath": "agent.onBehalfOf.identifier.value",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Reference",
+        "jsonPath": "$.agent[*].onBehalfOf.reference",
+        "fhirPath": "agent.onBehalfOf.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": [
+          "Practitioner",
+          "PractitionerRole",
+          "RelatedPerson",
+          "Patient",
+          "Device",
+          "Organization"
+        ]
+      },
+      {
+        "label": "Agent \u203A On Behalf Of \u203A Type",
+        "jsonPath": "$.agent[*].onBehalfOf.type",
+        "fhirPath": "agent.onBehalfOf.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Role \u203A Coding \u203A Code",
+        "jsonPath": "$.agent[*].role[*].coding[*].code",
+        "fhirPath": "agent.role.coding.code",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.role",
+          "agent.role.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Role \u203A Coding \u203A Display",
+        "jsonPath": "$.agent[*].role[*].coding[*].display",
+        "fhirPath": "agent.role.coding.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.role",
+          "agent.role.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Role \u203A Coding \u203A System",
+        "jsonPath": "$.agent[*].role[*].coding[*].system",
+        "fhirPath": "agent.role.coding.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.role",
+          "agent.role.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Role \u203A Coding \u203A User Selected",
+        "jsonPath": "$.agent[*].role[*].coding[*].userSelected",
+        "fhirPath": "agent.role.coding.userSelected",
+        "cardinality": "0..1",
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.role",
+          "agent.role.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Role \u203A Coding \u203A Version",
+        "jsonPath": "$.agent[*].role[*].coding[*].version",
+        "fhirPath": "agent.role.coding.version",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.role",
+          "agent.role.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Type \u203A Coding \u203A Code",
+        "jsonPath": "$.agent[*].type.coding[*].code",
+        "fhirPath": "agent.type.coding.code",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.type.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Type \u203A Coding \u203A Display",
+        "jsonPath": "$.agent[*].type.coding[*].display",
+        "fhirPath": "agent.type.coding.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.type.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Type \u203A Coding \u203A System",
+        "jsonPath": "$.agent[*].type.coding[*].system",
+        "fhirPath": "agent.type.coding.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.type.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Type \u203A Coding \u203A User Selected",
+        "jsonPath": "$.agent[*].type.coding[*].userSelected",
+        "fhirPath": "agent.type.coding.userSelected",
+        "cardinality": "0..1",
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.type.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Type \u203A Coding \u203A Version",
+        "jsonPath": "$.agent[*].type.coding[*].version",
+        "fhirPath": "agent.type.coding.version",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent",
+          "agent.type.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Who \u203A Display",
+        "jsonPath": "$.agent[*].who.display",
+        "fhirPath": "agent.who.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Who \u203A Identifier \u203A System",
+        "jsonPath": "$.agent[*].who.identifier.system",
+        "fhirPath": "agent.who.identifier.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Who \u203A Identifier \u203A Use",
+        "jsonPath": "$.agent[*].who.identifier.use",
+        "fhirPath": "agent.who.identifier.use",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Who \u203A Identifier \u203A Value",
+        "jsonPath": "$.agent[*].who.identifier.value",
+        "fhirPath": "agent.who.identifier.value",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Agent \u203A Who \u203A Reference",
+        "jsonPath": "$.agent[*].who.reference",
+        "fhirPath": "agent.who.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": [
+          "Practitioner",
+          "PractitionerRole",
+          "RelatedPerson",
+          "Patient",
+          "Device",
+          "Organization"
+        ]
+      },
+      {
+        "label": "Agent \u203A Who \u203A Type",
+        "jsonPath": "$.agent[*].who.type",
+        "fhirPath": "agent.who.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A On Behalf Of \u203A Display",
+        "jsonPath": "$.entity[*].agent[*].onBehalfOf.display",
+        "fhirPath": "entity.agent.onBehalfOf.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A On Behalf Of \u203A Reference",
+        "jsonPath": "$.entity[*].agent[*].onBehalfOf.reference",
+        "fhirPath": "entity.agent.onBehalfOf.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A On Behalf Of \u203A Type",
+        "jsonPath": "$.entity[*].agent[*].onBehalfOf.type",
+        "fhirPath": "entity.agent.onBehalfOf.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A Who \u203A Display",
+        "jsonPath": "$.entity[*].agent[*].who.display",
+        "fhirPath": "entity.agent.who.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A Who \u203A Reference",
+        "jsonPath": "$.entity[*].agent[*].who.reference",
+        "fhirPath": "entity.agent.who.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Agent \u203A Who \u203A Type",
+        "jsonPath": "$.entity[*].agent[*].who.type",
+        "fhirPath": "entity.agent.who.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity",
+          "entity.agent"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A Role",
+        "jsonPath": "$.entity[*].role",
+        "fhirPath": "entity.role",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A What \u203A Display",
+        "jsonPath": "$.entity[*].what.display",
+        "fhirPath": "entity.what.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A What \u203A Identifier \u203A System",
+        "jsonPath": "$.entity[*].what.identifier.system",
+        "fhirPath": "entity.what.identifier.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A What \u203A Identifier \u203A Use",
+        "jsonPath": "$.entity[*].what.identifier.use",
+        "fhirPath": "entity.what.identifier.use",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A What \u203A Identifier \u203A Value",
+        "jsonPath": "$.entity[*].what.identifier.value",
+        "fhirPath": "entity.what.identifier.value",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Entity \u203A What \u203A Reference",
+        "jsonPath": "$.entity[*].what.reference",
+        "fhirPath": "entity.what.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": [
+          "Resource"
+        ]
+      },
+      {
+        "label": "Entity \u203A What \u203A Type",
+        "jsonPath": "$.entity[*].what.type",
+        "fhirPath": "entity.what.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "entity"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Id",
+        "jsonPath": "$.id",
+        "fhirPath": "id",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Display",
+        "jsonPath": "$.location.display",
+        "fhirPath": "location.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Identifier \u203A Period \u203A End",
+        "jsonPath": "$.location.identifier.period.end",
+        "fhirPath": "location.identifier.period.end",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Identifier \u203A Period \u203A Start",
+        "jsonPath": "$.location.identifier.period.start",
+        "fhirPath": "location.identifier.period.start",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Identifier \u203A System",
+        "jsonPath": "$.location.identifier.system",
+        "fhirPath": "location.identifier.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Identifier \u203A Use",
+        "jsonPath": "$.location.identifier.use",
+        "fhirPath": "location.identifier.use",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Identifier \u203A Value",
+        "jsonPath": "$.location.identifier.value",
+        "fhirPath": "location.identifier.value",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Location \u203A Reference",
+        "jsonPath": "$.location.reference",
+        "fhirPath": "location.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": [
+          "Location"
+        ]
+      },
+      {
+        "label": "Location \u203A Type",
+        "jsonPath": "$.location.type",
+        "fhirPath": "location.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Occurred Date Time",
+        "jsonPath": "$.occurredDateTime",
+        "fhirPath": "occurredDateTime",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Occurred Period \u203A End",
+        "jsonPath": "$.occurredPeriod.end",
+        "fhirPath": "occurredPeriod.end",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Occurred Period \u203A Start",
+        "jsonPath": "$.occurredPeriod.start",
+        "fhirPath": "occurredPeriod.start",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Policy",
+        "jsonPath": "$.policy[*]",
+        "fhirPath": "policy",
+        "cardinality": "0..*",
+        "valueType": "String",
+        "isArray": true,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Reason \u203A Coding \u203A Code",
+        "jsonPath": "$.reason[*].coding[*].code",
+        "fhirPath": "reason.coding.code",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "reason",
+          "reason.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Reason \u203A Coding \u203A Display",
+        "jsonPath": "$.reason[*].coding[*].display",
+        "fhirPath": "reason.coding.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "reason",
+          "reason.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Reason \u203A Coding \u203A System",
+        "jsonPath": "$.reason[*].coding[*].system",
+        "fhirPath": "reason.coding.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "reason",
+          "reason.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Reason \u203A Coding \u203A User Selected",
+        "jsonPath": "$.reason[*].coding[*].userSelected",
+        "fhirPath": "reason.coding.userSelected",
+        "cardinality": "0..1",
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "reason",
+          "reason.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Reason \u203A Coding \u203A Version",
+        "jsonPath": "$.reason[*].coding[*].version",
+        "fhirPath": "reason.coding.version",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "reason",
+          "reason.coding"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Recorded",
+        "jsonPath": "$.recorded",
+        "fhirPath": "recorded",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Data",
+        "jsonPath": "$.signature[*].data",
+        "fhirPath": "signature.data",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Sig Format",
+        "jsonPath": "$.signature[*].sigFormat",
+        "fhirPath": "signature.sigFormat",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Target Format",
+        "jsonPath": "$.signature[*].targetFormat",
+        "fhirPath": "signature.targetFormat",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Type \u203A Code",
+        "jsonPath": "$.signature[*].type[*].code",
+        "fhirPath": "signature.type.code",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature",
+          "signature.type"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Type \u203A Display",
+        "jsonPath": "$.signature[*].type[*].display",
+        "fhirPath": "signature.type.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature",
+          "signature.type"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Type \u203A System",
+        "jsonPath": "$.signature[*].type[*].system",
+        "fhirPath": "signature.type.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature",
+          "signature.type"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Type \u203A User Selected",
+        "jsonPath": "$.signature[*].type[*].userSelected",
+        "fhirPath": "signature.type.userSelected",
+        "cardinality": "0..1",
+        "valueType": "Boolean",
+        "isArray": false,
+        "arrays": [
+          "signature",
+          "signature.type"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A Type \u203A Version",
+        "jsonPath": "$.signature[*].type[*].version",
+        "fhirPath": "signature.type.version",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "signature",
+          "signature.type"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Signature \u203A When",
+        "jsonPath": "$.signature[*].when",
+        "fhirPath": "signature.when",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "signature"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Display",
+        "jsonPath": "$.target[*].display",
+        "fhirPath": "target.display",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Identifier \u203A Period \u203A End",
+        "jsonPath": "$.target[*].identifier.period.end",
+        "fhirPath": "target.identifier.period.end",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Identifier \u203A Period \u203A Start",
+        "jsonPath": "$.target[*].identifier.period.start",
+        "fhirPath": "target.identifier.period.start",
+        "cardinality": "0..1",
+        "valueType": "DateTime",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Identifier \u203A System",
+        "jsonPath": "$.target[*].identifier.system",
+        "fhirPath": "target.identifier.system",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Identifier \u203A Use",
+        "jsonPath": "$.target[*].identifier.use",
+        "fhirPath": "target.identifier.use",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Identifier \u203A Value",
+        "jsonPath": "$.target[*].identifier.value",
+        "fhirPath": "target.identifier.value",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      },
+      {
+        "label": "Target \u203A Reference",
+        "jsonPath": "$.target[*].reference",
+        "fhirPath": "target.reference",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": [
+          "Resource"
+        ]
+      },
+      {
+        "label": "Target \u203A Type",
+        "jsonPath": "$.target[*].type",
+        "fhirPath": "target.type",
+        "cardinality": "0..1",
+        "valueType": "String",
+        "isArray": false,
+        "arrays": [
+          "target"
+        ],
+        "referenceTargetTypes": []
+      }
     ]
   }
 }
