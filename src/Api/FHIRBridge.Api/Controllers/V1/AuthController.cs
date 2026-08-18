@@ -4,6 +4,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Security;
 using ITfoxtec.Identity.Saml2;
 using ITfoxtec.Identity.Saml2.MvcCore;
@@ -29,6 +30,7 @@ public sealed class AuthController : ControllerBase
     private readonly ISamlConfigurationProvider _samlConfigurationProvider;
     private readonly SamlAuthenticationOptions _samlOptions;
     private readonly ILogger<AuthController> _logger;
+    private readonly IGovernanceLogger _governanceLogger;
 
     public AuthController(
         IUserAccessService userAccessService,
@@ -38,7 +40,8 @@ public sealed class AuthController : ControllerBase
         IConfiguration configuration,
         ISamlConfigurationProvider samlConfigurationProvider,
         IOptions<SamlAuthenticationOptions> samlOptions,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IGovernanceLogger governanceLogger)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
@@ -47,6 +50,7 @@ public sealed class AuthController : ControllerBase
         _configuration = configuration;
         _samlConfigurationProvider = samlConfigurationProvider;
         _logger = logger;
+        _governanceLogger = governanceLogger;
         _samlOptions = samlOptions.Value;
     }
 
@@ -196,6 +200,9 @@ public sealed class AuthController : ControllerBase
             binding.ReadSamlResponse(genericRequest, saml2AuthnResponse);
             if (saml2AuthnResponse.Status != Saml2StatusCodes.Success)
             {
+                await _governanceLogger.LogAuthenticationAsync(
+                    new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: $"IdP returned status {saml2AuthnResponse.Status}"),
+                    cancellationToken);
                 return RedirectToPortalError($"saml_status_{saml2AuthnResponse.Status}");
             }
 
@@ -205,6 +212,9 @@ public sealed class AuthController : ControllerBase
             var subject = claims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrWhiteSpace(subject))
             {
+                await _governanceLogger.LogAuthenticationAsync(
+                    new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: "Assertion carried no NameID/subject"),
+                    cancellationToken);
                 return RedirectToPortalError("saml_no_subject");
             }
 
@@ -229,6 +239,11 @@ public sealed class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "SAML ACS: assertion processing failed.");
+            // Same authentication-log surface as every other login path (Governance > Authentication Logs in the
+            // portal) — so a signature/certificate/audience mismatch is visible from the UI, not just server logs.
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: ex.Message),
+                cancellationToken);
             return RedirectToPortalError("saml_failed");
         }
     }
