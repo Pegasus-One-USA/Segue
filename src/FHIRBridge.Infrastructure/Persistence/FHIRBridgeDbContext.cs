@@ -88,6 +88,7 @@ public sealed class FHIRBridgeDbContext : DbContext
 
     // Governance: immutable audit/access/authentication trail + mutable security-event triage.
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<WorkflowAuditLog> WorkflowAuditLogs => Set<WorkflowAuditLog>();
     public DbSet<DataAccessLog> DataAccessLogs => Set<DataAccessLog>();
     public DbSet<AuthenticationLog> AuthenticationLogs => Set<AuthenticationLog>();
     public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();

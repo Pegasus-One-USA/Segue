@@ -331,13 +331,16 @@ public sealed class LocalAuthService : ILocalAuthService
             AccessToken: token.AccessToken,
             TokenType: token.TokenType,
             ExpiresOnUtc: token.ExpiresOnUtc,
-            RequiresPasswordChange: user.MustChangePassword,
+            RequiresPasswordChange: user.RequiresPasswordChange,
             Profile: new UserProfileDto(
                 user.Id,
                 user.ExternalUserId,
                 user.Email,
                 user.DisplayName,
-                roleNames),
+                roleNames,
+                permissionCodes,
+                user.RequiresPasswordChange,
+                user.IsMfaSetupRequired),
             RefreshToken: BuildRawRefreshToken(refreshHash),
             RefreshTokenExpiresOnUtc: refreshExpiry,
             RequiresMfaSetup: user.IsMfaSetupRequired);

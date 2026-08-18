@@ -9,37 +9,28 @@
  * `provider` is sent as a STRING ("Entra" | "Google") — the API uses JsonStringEnumConverter.
  * `token` is the external IdP ID token (Entra id_token / Google credential).
  *
- * On success, `establishSession()` runs the EXACT login success handling AuthService.login uses:
- * decode the JWT, rebuild the User via buildUserFromJwt, store tokens via SessionService, and
- * populate AuthStore. Callers just navigate afterwards.
+ * HIPAA #7: the backend sets the session as HttpOnly cookies directly on these responses (see
+ * AuthController.IssueTokenCookiesAndStrip) — `establishSession()` just rebuilds the User from the
+ * `profile` field via `buildUserFromProfile` and starts the local session marker. Callers navigate
+ * afterwards.
  */
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { TokenService } from './token.service';
 import { SessionService } from './session.service';
 import { AuthStore } from '../store/auth.store';
-import { buildUserFromJwt } from './jwt-user.mapper';
+import { buildUserFromProfile } from './jwt-user.mapper';
+import { LocalLoginResponseDto } from './auth-profile.model';
 import { SsoProvider } from './sso.service';
 
 const API = `${environment.apiBase}/api/v1`;
 
-/** Mirrors the backend LocalLoginResponse. */
-export interface LocalLoginResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresOnUtc: string;
-  requiresPasswordChange: boolean;
-  refreshToken?: string;
-  refreshTokenExpiresOnUtc?: string;
-  profile?: unknown;
-}
+export type LocalLoginResponse = LocalLoginResponseDto;
 
 @Injectable({ providedIn: 'root' })
 export class SsoAuthApiService {
   private readonly http    = inject(HttpClient);
-  private readonly tokens  = inject(TokenService);
   private readonly session = inject(SessionService);
   private readonly store   = inject(AuthStore);
 
@@ -88,15 +79,13 @@ export class SsoAuthApiService {
   }
 
   /**
-   * Runs the exact login success handling: rebuild the user from the JWT claims, store tokens via
-   * SessionService, and populate AuthStore. Mirrors AuthService.login / SetupSuperAdmin success paths.
+   * Runs the exact login success handling: rebuild the user from the profile DTO and start the
+   * local session marker. Mirrors AuthService.login / SetupSuperAdmin success paths.
    */
   private establishSession(res: LocalLoginResponse): void {
-    const payload = this.tokens.decodePayload<Record<string, unknown>>(res.accessToken) ?? {};
-    const user = buildUserFromJwt(payload);
-    user.mustChangePassword = res.requiresPasswordChange ?? false;
+    const user = buildUserFromProfile(res.profile!);
 
     this.store.setUser(user);
-    this.session.start(user.id, res.accessToken, res.refreshToken ?? '', false);
+    this.session.start(user.id, false);
   }
 }

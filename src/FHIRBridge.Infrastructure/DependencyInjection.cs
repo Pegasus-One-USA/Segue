@@ -76,6 +76,16 @@ public static class DependencyInjection
         }
         else
         {
+            // HIPAA #15: fail fast rather than silently carrying cached FHIR tokens/scopes over plaintext Redis
+            // outside Development. StackExchange.Redis's connection-string format uses an "ssl=true" option
+            // rather than a URI scheme, so that's what's checked here — not a "rediss://" prefix.
+            if (!redisConnectionString.Contains("ssl=true", StringComparison.OrdinalIgnoreCase) &&
+                !Messaging.MessagingServiceCollectionExtensions.IsDevelopmentEnvironment())
+            {
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Redis must include 'ssl=true' outside Development — refusing to start with a plaintext Redis connection.");
+            }
+
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
@@ -444,6 +454,8 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceRule, ResourceTypeAccessGovernanceRule>();
         services.AddSingleton<IConsentService, ConfiguredConsentService>();
         services.AddScoped<IGovernanceRule, ConsentGovernanceRule>();
+        // HIPAA #2: de-identification now actually triggers for destinations flagged via RequiresDeIdentification.
+        services.AddScoped<IGovernanceRule, DestinationSensitivityGovernanceRule>();
         services.AddScoped<IGovernancePolicyService, CompositeGovernancePolicyService>();
 
         // G3: real HIPAA Safe Harbor de-identification (overrides the Application pass-through stub).

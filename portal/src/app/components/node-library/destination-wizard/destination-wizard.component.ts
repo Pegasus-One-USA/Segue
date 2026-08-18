@@ -1054,24 +1054,6 @@ export class DestinationWizardComponent implements OnInit {
         this.selectedResources.set(sorted);
         console.table(sorted.map(resource => ({ resource, rank: dependencyRankFor(resource) })));
       }
-      // Leaving Map fields (3) — every resource's mapping is done — log the full, rank-ordered Mapping
-      // JSON across every resource that has at least one mapping, so it's there to copy without needing
-      // the (hidden-from-this-screen) Save mapping button.
-      if (this.step() === 3 && this.canSaveMappingSummary()) {
-        const doc = buildMappingSummaryDocument({
-          sourceVendor: this.sourceVendor().toUpperCase(),
-          destType: this.destType(),
-          destLabel: this.destLabel(),
-          mappingRows: this.mappingRows(),
-          sqlTables: this.sqlTables(),
-          childTableRelationsByTable: this.childTableRelationsByTable(),
-          availableFields: this.availableFieldsFn,
-          sourceConnectionId: this.sourceConnectionId(),
-          destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
-          targetByResource: this.targetByResource(),
-        });
-        console.log(JSON.stringify(doc, null, 2));
-      }
       this.step.update(x => x + 1);
       this._hasProgressed.set(true);
     } else {

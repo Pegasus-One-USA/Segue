@@ -84,36 +84,88 @@ public static class FhirBridgeLogging
 /// <summary>
 /// Masks structured log properties whose name matches a PHI-sensitive set so accidental PHI in log scopes/objects is
 /// never persisted to a sink. Defensive — the audit/lineage paths are already PHI-free; this guards ad-hoc logging.
+/// HIPAA #9: recurses into destructured (<c>{@Foo}</c>) object graphs rather than only top-level properties, and
+/// separately redacts the exception message/stack trace when a log event carries one — those previously reached
+/// sinks entirely unmasked.
 /// </summary>
 public sealed class PhiMaskingEnricher : ILogEventEnricher
 {
     private const string Mask = "***";
+    private const int MaxRecursionDepth = 5;
 
-    private static readonly string[] DefaultMasked =
-    [
-        "ssn", "mrn", "birthDate", "birthdate", "email", "phone", "telecom",
-        "givenName", "familyName", "patientName", "name", "address", "postalCode", "identifierValue"
-    ];
-
-    private readonly HashSet<string> _masked;
+    private readonly IPhiRedactor _redactor;
 
     public PhiMaskingEnricher(IConfiguration configuration)
+        : this(new PhiRedactor(configuration))
     {
-        var configured = configuration["Observability:Phi:MaskedProperties"];
-        var names = string.IsNullOrWhiteSpace(configured)
-            ? DefaultMasked
-            : configured.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        _masked = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public PhiMaskingEnricher(IPhiRedactor redactor)
+    {
+        _redactor = redactor;
     }
 
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
         foreach (var name in logEvent.Properties.Keys.ToList())
         {
-            if (_masked.Contains(name))
+            var masked = MaskValue(name, logEvent.Properties[name], propertyFactory, depth: 0);
+            if (!ReferenceEquals(masked, logEvent.Properties[name]))
             {
-                logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty(name, Mask));
+                logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty(name, masked));
             }
+        }
+
+        if (logEvent.Exception is not null)
+        {
+            var maskedMessage = _redactor.Redact(logEvent.Exception.Message);
+            var maskedDetails = _redactor.Redact(logEvent.Exception.ToString());
+
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("MaskedExceptionMessage", maskedMessage));
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("MaskedExceptionDetails", maskedDetails));
+        }
+
+        // Interpolated values can bypass structured properties entirely (e.g. string-concatenated messages) —
+        // this covers that gap without needing to alter the original message template.
+        var maskedRendered = _redactor.Redact(logEvent.RenderMessage());
+        logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("MaskedRenderedMessage", maskedRendered));
+    }
+
+    private LogEventPropertyValue MaskValue(
+        string name, LogEventPropertyValue value, ILogEventPropertyFactory propertyFactory, int depth)
+    {
+        if (_redactor.IsSensitive(name))
+        {
+            return new ScalarValue(Mask);
+        }
+
+        if (depth >= MaxRecursionDepth)
+        {
+            return value;
+        }
+
+        switch (value)
+        {
+            case StructureValue structure:
+                var maskedProperties = structure.Properties
+                    .Select(p => new LogEventProperty(p.Name, MaskValue(p.Name, p.Value, propertyFactory, depth + 1)))
+                    .ToList();
+                return new StructureValue(maskedProperties, structure.TypeTag);
+
+            case SequenceValue sequence:
+                var maskedElements = sequence.Elements
+                    .Select(e => MaskValue(name, e, propertyFactory, depth + 1))
+                    .ToList();
+                return new SequenceValue(maskedElements);
+
+            case DictionaryValue dictionary:
+                var maskedEntries = dictionary.Elements.Select(kvp =>
+                    new KeyValuePair<ScalarValue, LogEventPropertyValue>(
+                        kvp.Key, MaskValue(kvp.Key.Value?.ToString() ?? name, kvp.Value, propertyFactory, depth + 1)));
+                return new DictionaryValue(maskedEntries);
+
+            default:
+                return value;
         }
     }
 }

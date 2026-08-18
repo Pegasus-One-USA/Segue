@@ -4,7 +4,6 @@ import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../services/auth.service';
-import { TokenService } from '../../services/token.service';
 import { MfaEnrollmentPanelComponent } from '../../components/mfa-enrollment-panel/mfa-enrollment-panel.component';
 
 @Component({
@@ -16,7 +15,6 @@ import { MfaEnrollmentPanelComponent } from '../../components/mfa-enrollment-pan
 })
 export class MfaSetupRequiredComponent {
   private readonly auth   = inject(AuthService);
-  private readonly tokens = inject(TokenService);
   private readonly router = inject(Router);
 
   protected readonly finishing = signal(false);
@@ -27,20 +25,16 @@ export class MfaSetupRequiredComponent {
     this.auth.logout();
   }
 
-  // The user's current access token still carries mfa_setup_required: true (it was minted before
-  // enrollment finished) — mfaSetupGuard would bounce them right back here if we navigated on the
-  // stale token. Refresh to mint a token with the now-current claim, resync the store from it
-  // (mirrors AuthService.initFromToken), then it's safe to leave.
+  // The user's current access-token cookie still carries mfa_setup_required: true (it was minted
+  // before enrollment finished) — mfaSetupGuard would bounce them right back here if we navigated
+  // on the stale claim. Refresh (rotates the cookie via the refresh-token cookie automatically) to
+  // mint one with the now-current claim, resync the store from the returned profile, then it's
+  // safe to leave.
   protected onEnrolled(): void {
     this.finishing.set(true);
-    const refreshToken = this.tokens.getRefreshToken();
-    if (!refreshToken) {
-      this.router.navigate(['/dashboard']);
-      return;
-    }
 
-    this.auth.refreshToken(refreshToken).subscribe({
-      next: () => this.auth.initFromToken().subscribe(() => this.router.navigate(['/dashboard'])),
+    this.auth.refreshToken().subscribe({
+      next: () => this.router.navigate(['/dashboard']),
       error: () => this.router.navigate(['/dashboard']),
     });
   }

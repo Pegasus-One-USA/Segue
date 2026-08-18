@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Session } from '../models/auth-state.model';
 import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
+import { MappingSnapshotService } from '../../components/node-library/destination-wizard/field-mapping/mapping-snapshot.service';
 
 const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 
@@ -22,20 +23,25 @@ export class SessionService {
   private readonly tokens = inject(TokenService);
   private readonly router = inject(Router);
   private readonly zone   = inject(NgZone);
+  private readonly mappingSnapshots = inject(MappingSnapshotService);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
   private activityListenersActive = false;
   private lastTouchAt = 0;
 
   // ─── Start session after login ─────────────────────────────────────────────
-  start(userId: string, token: string, refreshToken: string, rememberMe = false): void {
+  // HIPAA #7: no raw token to carry here anymore — it's an HttpOnly cookie the backend already
+  // set. `Session.token`/`refreshToken` are kept as empty strings purely so existing consumers of
+  // the `Session` shape don't need touching; nothing reads them for authentication anymore.
+  start(userId: string, rememberMe = false): void {
     const expiresAt = new Date(Date.now() + 3600 * 1000);
     const session: Session = {
-      userId, token, refreshToken, expiresAt,
+      userId, token: '', refreshToken: '', expiresAt,
       rememberMe, lastActivity: new Date(),
     };
     this.store.setSession(session);
-    this.tokens.setTokens(token, refreshToken, rememberMe);
+    this.tokens.setRememberMe(rememberMe);
+    this.tokens.markSessionActive();
     this.resetIdleTimer();
     this.startActivityListeners();
   }
@@ -44,6 +50,7 @@ export class SessionService {
   end(): void {
     this.store.clear();
     this.tokens.clearTokens();
+    this.mappingSnapshots.clearAll();
     clearTimeout(this.idleTimer);
     this.stopActivityListeners();
   }
@@ -108,9 +115,12 @@ export class SessionService {
   }
 
   // ─── Restore session from storage ─────────────────────────────────────────
+  // HIPAA #7: there's no client-readable token left to inspect for expiry — hasSession() is a
+  // best-effort local hint (the CSRF cookie's presence); the server's HttpOnly cookie is the real
+  // authority, and a request against an actually-expired session will 401 and route through the
+  // interceptor's refresh-or-logout path same as any other request.
   restoreFromStorage(): boolean {
-    const token = this.tokens.getAccessToken();
-    if (!token || this.tokens.isExpired(token)) {
+    if (!this.tokens.hasSession()) {
       this.tokens.clearTokens();
       return false;
     }

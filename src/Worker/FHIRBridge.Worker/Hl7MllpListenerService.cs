@@ -1,5 +1,8 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
@@ -25,6 +28,7 @@ public sealed class Hl7MllpListenerService : BackgroundService
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly Hl7MllpOptions _options;
     private readonly ILogger<Hl7MllpListenerService> _logger;
+    private X509Certificate2? _serverCertificate;
 
     public Hl7MllpListenerService(
         IServiceScopeFactory serviceScopeFactory,
@@ -43,6 +47,19 @@ public sealed class Hl7MllpListenerService : BackgroundService
             _logger.LogInformation("HL7 v2 MLLP listener is disabled. Set Hl7Mllp:Enabled=true to start it.");
             return;
         }
+
+        // HIPAA #8: TLS is mandatory whenever this listener is enabled — never accept a plaintext connection.
+        if (string.IsNullOrWhiteSpace(_options.CertificatePath))
+        {
+            _logger.LogError(
+                "Hl7Mllp:Enabled is true but Hl7Mllp:CertificatePath is not configured. The MLLP listener will " +
+                "NOT start without TLS — configure a certificate before enabling this feature.");
+            return;
+        }
+
+        _serverCertificate = string.IsNullOrEmpty(_options.CertificatePassword)
+            ? X509CertificateLoader.LoadCertificateFromFile(_options.CertificatePath)
+            : X509CertificateLoader.LoadPkcs12FromFile(_options.CertificatePath, _options.CertificatePassword);
 
         var listener = new TcpListener(IPAddress.Any, _options.Port);
         listener.Start();
@@ -69,8 +86,26 @@ public sealed class Hl7MllpListenerService : BackgroundService
     private async Task HandleConnectionAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
-        await using (var stream = client.GetStream())
+        await using (var sslStream = new SslStream(client.GetStream(), leaveInnerStreamOpen: false))
         {
+            try
+            {
+                await sslStream.AuthenticateAsServerAsync(
+                    new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _serverCertificate,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.None, // let the OS pick the strongest mutually-supported protocol
+                    },
+                    cancellationToken);
+            }
+            catch (Exception exception) when (exception is AuthenticationException or IOException)
+            {
+                _logger.LogWarning(exception, "HL7 v2 MLLP TLS handshake failed; connection rejected.");
+                return;
+            }
+
+            Stream stream = sslStream;
             var buffer = new List<byte>();
             var readBuffer = new byte[4096];
 

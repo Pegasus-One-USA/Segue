@@ -775,7 +775,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     resource.ResourceId,
                     "RouteResourceAccess",
                     triggeredBy,
-                    correlationId),
+                    correlationId,
+                    destination.Id),
                 cancellationToken);
 
             // HIPAA §164.312(b) data-access evidence: every access decision — allowed or denied — is

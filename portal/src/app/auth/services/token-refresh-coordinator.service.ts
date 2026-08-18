@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { finalize, shareReplay } from 'rxjs/operators';
-import { TokenPair } from '../models/user.model';
 
 /**
  * Coalesces concurrent refresh attempts into one in-flight request.
@@ -14,18 +13,22 @@ import { TokenPair } from '../models/user.model';
  * would fail with an invalid/already-used refresh token, logging the user out despite
  * a perfectly healthy session. `shareReplay(1)` makes every caller during the window
  * share the one real HTTP call and its single result.
+ *
+ * HIPAA #7: the refresh call itself no longer takes/returns a raw token (both now live
+ * in HttpOnly cookies) — genericized to `T` (the rebuilt `User`) so the coordinator no
+ * longer needs to know the token shape at all.
  */
 @Injectable({ providedIn: 'root' })
 export class TokenRefreshCoordinator {
-  private inFlight$: Observable<TokenPair> | null = null;
+  private inFlight$: Observable<unknown> | null = null;
 
-  refresh(startRefresh: () => Observable<TokenPair>): Observable<TokenPair> {
+  refresh<T>(startRefresh: () => Observable<T>): Observable<T> {
     if (!this.inFlight$) {
       this.inFlight$ = startRefresh().pipe(
         finalize(() => { this.inFlight$ = null; }),
         shareReplay(1),
       );
     }
-    return this.inFlight$;
+    return this.inFlight$ as Observable<T>;
   }
 }

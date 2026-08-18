@@ -20,8 +20,7 @@ import { PasswordPolicyService } from '../../../auth/services/password-policy.se
 import { PasswordValidation } from '../../../auth/models/password-policy.model';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { SessionService } from '../../../auth/services/session.service';
-import { TokenService } from '../../../auth/services/token.service';
-import { buildUserFromJwt } from '../../../auth/services/jwt-user.mapper';
+import { buildUserFromProfile } from '../../../auth/services/jwt-user.mapper';
 import { SsoButtonsComponent } from '../../../auth/components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../../auth/services/sso-auth-api.service';
 import { SsoResult } from '../../../auth/services/sso.service';
@@ -58,7 +57,6 @@ export class SetupSuperAdminComponent {
   // Login success handling — reuse the exact login pattern (see AuthService.login).
   private readonly store    = inject(AuthStore);
   private readonly session  = inject(SessionService);
-  private readonly tokens   = inject(TokenService);
 
   protected readonly ssoBusy = signal(false);
 
@@ -154,13 +152,13 @@ export class SetupSuperAdminComponent {
       },
     }).subscribe({
       next: (res) => {
-        // Reuse the exact login success handling: store tokens + rebuild user from the JWT.
-        const payload = this.tokens.decodePayload<Record<string, unknown>>(res.accessToken) ?? {};
-        const user = buildUserFromJwt(payload);
+        // Reuse the exact login success handling: rebuild user from the profile DTO. Tokens are
+        // already set as HttpOnly cookies by the backend (see AuthController.IssueTokenCookiesAndStrip).
+        const user = buildUserFromProfile(res.profile!);
         user.mustChangePassword = res.requiresPasswordChange ?? false;
 
         this.store.setUser(user);
-        this.session.start(user.id, res.accessToken, res.refreshToken ?? '', false);
+        this.session.start(user.id, false);
         this.isLoading.set(false);
         this.router.navigate(['/dashboard']);
       },

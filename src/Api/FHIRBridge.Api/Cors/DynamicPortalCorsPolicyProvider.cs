@@ -39,7 +39,11 @@ public sealed class DynamicPortalCorsPolicyProvider : ICorsPolicyProvider
             // for /hubs/run-status fails before the connection ever starts, silently breaking the live push
             // (masked on Dashboard by its own 15s poll fallback, but fully visible on Workflow List, which has no
             // such fallback).
-            .WithHeaders("Authorization", "Content-Type", "Accept", "X-Correlation-Id", "X-Requested-With", "X-SignalR-User-Agent")
+            // X-CSRF-Token is the double-submit CSRF header auth.interceptor.ts echoes back on state-changing
+            // requests once a session cookie exists (HIPAA #7) — without it allowlisted, the preflight for any
+            // such request (logout, change-password, any POST/PUT/PATCH/DELETE) fails before it reaches the
+            // server, surfacing to the user as a generic CORS error.
+            .WithHeaders("Authorization", "Content-Type", "Accept", "X-Correlation-Id", "X-Requested-With", "X-SignalR-User-Agent", "X-CSRF-Token")
             .AllowCredentials()
             .Build();
     }
