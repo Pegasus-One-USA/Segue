@@ -10,5 +10,6 @@ public enum RuntimeSourceType
     Healow = 6,
     MeditechGreenfield = 7,
     NewEHR = 8,
-    NewEHRTwo = 9
+    NewEHRTwo = 9,
+    Athenahealth = 10
 }

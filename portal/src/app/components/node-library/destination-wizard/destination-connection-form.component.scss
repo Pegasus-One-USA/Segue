@@ -2,3 +2,11 @@
   display: flex;
   margin: 8px 0 12px;
 }
+
+/* 'view' mode has no dedicated per-field read-only rendering in the shared destination-forms/ components —
+   this is a lightweight stand-in (the one caller, DestinationConnectionDialogComponent, never actually passes
+   mode="view" today, only 'create'/'edit'). */
+.dcf-readonly {
+  pointer-events: none;
+  opacity: 0.65;
+}

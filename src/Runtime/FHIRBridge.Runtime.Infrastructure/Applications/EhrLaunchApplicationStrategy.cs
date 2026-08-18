@@ -54,11 +54,15 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
     public override Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.DiscardTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.GetGrantedScopeAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);
         RequireAuthorizationEndpoint(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
 
         // The trusted-iss allow-list is mandatory for EHR launch (incoming iss must be validated before redirect).
         // It is validated here once the launch-context configuration is added to the source model (build item 4).

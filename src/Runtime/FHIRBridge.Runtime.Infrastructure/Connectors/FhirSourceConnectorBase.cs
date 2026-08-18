@@ -59,6 +59,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         var scopedSearchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
+        scopedSearchParameters = MergeAdditionalQueryParameters(scopedSearchParameters, source);
 
         // Some default parameters (category, status) list several values for the resource type — Epic (confirmed;
         // likely other EHRs too) doesn't OR multiple comma-joined tokens together in one request the way a single
@@ -96,6 +97,43 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         return mergedResources;
+    }
+
+    public async Task<ResourceEnvelope?> ReadByIdAsync(
+        string resourceType,
+        string id,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(source.BaseUrl))
+        {
+            throw new InvalidOperationException($"{SourceDisplayName} base URL is required.");
+        }
+
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        var requestUrl = $"{source.BaseUrl.TrimEnd('/')}/{resourceType}/{Uri.EscapeDataString(id)}";
+        var readQuery = MergeAdditionalQueryParameters(null, source);
+        if (!string.IsNullOrWhiteSpace(readQuery))
+        {
+            requestUrl = $"{requestUrl}?{readQuery}";
+        }
+
+        _logger.LogInformation("{Source} read request: {RequestUrl}", SourceDisplayName, requestUrl);
+
+        using var response = await SendWithRetryAsync(requestUrl, accessToken, source, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(BuildFailureMessage(requestUrl, response, body));
+        }
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        return FhirResourceParser.ParseResource(json);
     }
 
     private async Task<IReadOnlyList<ResourceEnvelope>> SearchPagesAsync(
@@ -156,6 +194,44 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     protected virtual void ConfigureRequestHeaders(HttpRequestMessage request)
     {
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+json"));
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> NoAdditionalQueryParameters = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Extra query parameters every outbound request (search and read-by-id alike) must carry — e.g. athenahealth's
+    /// mandatory tenant-scoping <c>ah-practice</c> reference. The base adds none; vendor connectors override when
+    /// their FHIR server requires request-level scoping beyond the standard search parameters.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, string> AdditionalQueryParameters(FhirSourceConfiguration source) =>
+        NoAdditionalQueryParameters;
+
+    /// <summary>
+    /// Appends <see cref="AdditionalQueryParameters"/> onto an existing (possibly null) query string, skipping any
+    /// key the caller already supplied. Used by both the search path (merged into the parameters that flow into
+    /// <see cref="BuildSearchUrl"/>) and <see cref="ReadByIdAsync"/> (which otherwise builds no query string at all).
+    /// </summary>
+    private string? MergeAdditionalQueryParameters(string? searchParameters, FhirSourceConfiguration source)
+    {
+        var additional = AdditionalQueryParameters(source);
+        if (additional.Count == 0)
+        {
+            return searchParameters;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        foreach (var (key, value) in additional)
+        {
+            if (ContainsQueryParameter(query, key))
+            {
+                continue;
+            }
+
+            var assignment = $"{key}={value}";
+            query = string.IsNullOrWhiteSpace(query) ? assignment : $"{query}&{assignment}";
+        }
+
+        return string.IsNullOrWhiteSpace(query) ? null : query;
     }
 
     private async Task<HttpResponseMessage> SendWithRetryAsync(
@@ -414,7 +490,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// SearchParameters, PatientSearchCriteria, etc.) is left untouched. Resource types with no entry here are
     /// unaffected — registry lookup, not a switch/if-chain, so adding a new default is a table entry, not a branch.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType =
+    private static readonly IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> EpicDefaultSearchParametersByResourceType =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
             ["Observation"] = ("category", "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity,smartdata,core-characteristics"),
@@ -426,7 +502,17 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             ["MedicationAdministration"] = ("status", "completed,in-progress,stopped"),
         };
 
-    private static string? ApplyDefaultSearchParameters(string resourceType, string? searchParameters)
+    /// <summary>
+    /// Per-resource-type default search parameter, applied only when the caller hasn't already supplied that
+    /// parameter (or <c>code</c>) themselves — registry lookup, not a switch/if-chain, so adding a new default is a
+    /// table entry. The base table encodes Epic's US-Core category/status requirements; vendor connectors with
+    /// different per-resource requirements (e.g. athenahealth's <c>MedicationRequest</c> needing <c>intent=order</c>
+    /// instead) override this property with their own table.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType =>
+        EpicDefaultSearchParametersByResourceType;
+
+    private string? ApplyDefaultSearchParameters(string resourceType, string? searchParameters)
     {
         if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))
         {
@@ -453,7 +539,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// <c>code</c>) themselves — same "don't override caller-supplied criteria" rule <see cref="ApplyDefaultSearchParameters"/>
     /// already follows, just checked here first since the split path bypasses that method entirely.
     /// </summary>
-    private static IReadOnlyList<(string ParameterName, string Value)>? GetDefaultParameterValuesToSplit(
+    private IReadOnlyList<(string ParameterName, string Value)>? GetDefaultParameterValuesToSplit(
         string resourceType, string? searchParameters)
     {
         if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))

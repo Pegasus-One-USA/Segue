@@ -94,6 +94,12 @@ export const NOTIFICATION_SETTINGS_ENDPOINTS = {
   testSend: `${API_V1_BASE}/notification-settings/test-send`,
 };
 
+// ─── Legal content (static files served from Content/legal, see Program.cs) ────
+// Not under /api/v1 — plain static HTML, deploy-replaceable without a rebuild.
+export const LEGAL_ENDPOINTS = {
+  termsAndConditions: `${APP_ORIGIN}/legal/terms-and-conditions.html`,
+};
+
 // ─── Destinations (DestinationSchemaController — api/v1/destinations) ───────────
 export const DESTINATION_ENDPOINTS = {
   list:                `${API_V1_BASE}/destinations`,
@@ -119,6 +125,7 @@ export const MAPPING_PROFILE_ENDPOINTS = {
   byId:      (id: string) => `${API_V1_BASE}/mapping-profiles/${id}`,
   activate:   (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/activate`,
   deactivate: (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/deactivate`,
+  promoteToMaster: (id: string) => `${API_V1_BASE}/mapping-profiles/${id}/promote-to-master`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as DESTINATION_ENDPOINTS.usage: the
   // usage check has to walk every workflow's node config (plus route-level references), which only the
   // Runtime workflow store + IConfigurationRepository together can answer.
@@ -162,6 +169,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   preview: `${API_V1_BASE}/transformation-rules/preview`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
+  effective: `${API_V1_BASE}/transformation-rules/effective`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──
@@ -220,6 +228,7 @@ export const RXNORM_ENDPOINTS = {
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
+  backendAuthScopes: `${API_V1_BASE}/source-discovery/backend-auth-scopes`,
 };
 
 // ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────
@@ -229,6 +238,11 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   list:      `${API_V1_BASE}/workflow-runs`,
   byId:      (id: string) => `${API_V1_BASE}/workflow-runs/${id}/summary`,
   resources: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/resources`,
+  nodeRuns:  (id: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs`,
+  nodeRunPayload: (id: string, nodeRunId: string) => `${API_V1_BASE}/workflow-runs/${id}/node-runs/${nodeRunId}/payload`,
+  fieldLineage: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/field-lineage`,
+  lineageSummary: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/summary`,
+  lineageResourceTree: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/resource-tree`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

@@ -1067,7 +1067,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         SourceSystemType.Cerner => RuntimeSourceType.Cerner,
         SourceSystemType.Allscripts => RuntimeSourceType.Allscripts,
         SourceSystemType.GenericFhir => RuntimeSourceType.GenericFhir,
-        SourceSystemType.Athenahealth => RuntimeSourceType.GenericFhir,
+        SourceSystemType.Athenahealth => RuntimeSourceType.Athenahealth,
         SourceSystemType.Healow => RuntimeSourceType.Healow,
         SourceSystemType.MeditechGreenfield => RuntimeSourceType.MeditechGreenfield,
         _ => RuntimeSourceType.GenericFhir

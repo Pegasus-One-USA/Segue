@@ -115,8 +115,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  visible at the same time), which would otherwise clip the dropdown to almost nothing whenever it
    *  needs to extend below the table's own visible bounds.
    *  Exactly one of top/bottom is set, never both — see toggleActionMenu's flip-upward check for a
-   *  trigger too close to the bottom of the viewport to fit the panel below it. */
-  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; right: number } | null>(null);
+   *  trigger too close to the bottom of the viewport to fit the panel below it. `left` (not `right`) is
+   *  anchored to the trigger's own left edge — the trigger now lives in the first column, so the panel
+   *  opens rightward from it; anchoring by `right` (the old last-column trigger's natural edge) would
+   *  push a first-column panel off the left of the viewport. */
+  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; left: number } | null>(null);
 
   /** Rough panel height (6 items + divider + padding, see .row-menu-item/.row-menu-divider) — just needs
    *  to be in the right ballpark to decide whether the panel fits below the trigger, not pixel-exact. */
@@ -205,13 +208,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     }
 
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const right = window.innerWidth - rect.right;
+    const left = rect.left;
     const spaceBelow = window.innerHeight - rect.bottom;
 
     this.actionMenuPosition.set(
       spaceBelow < WorkflowListComponent.ACTION_MENU_ESTIMATED_HEIGHT
-        ? { bottom: window.innerHeight - rect.top + 6, right }
-        : { top: rect.bottom + 6, right }
+        ? { bottom: window.innerHeight - rect.top + 6, left }
+        : { top: rect.bottom + 6, left }
     );
     this.openActionMenuId.set(workflowId);
   }

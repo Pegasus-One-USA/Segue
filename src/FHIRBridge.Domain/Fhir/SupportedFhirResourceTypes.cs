@@ -19,7 +19,32 @@ public static class SupportedFhirResourceTypes
         "DiagnosticReport",
         "Procedure",
         "ServiceRequest",
-        "Immunization"
+        "Immunization",
+        "Appointment",
+        "Binary",
+        "CarePlan",
+        "CareTeam",
+        "Communication",
+        "CommunicationRequest",
+        "Device",
+        "DocumentReference",
+        "FamilyMemberHistory",
+        "Goal",
+        "ImagingStudy",
+        "Location",
+        "Medication",
+        "MedicationDispense",
+        "MedicationStatement",
+        "Organization",
+        "PractitionerRole",
+        "Provenance",
+        "Questionnaire",
+        "QuestionnaireResponse",
+        "RelatedPerson",
+        "Schedule",
+        "Slot",
+        "Specimen",
+        "Task"
     ];
 
     private static readonly IReadOnlyDictionary<string, string> Normalized =

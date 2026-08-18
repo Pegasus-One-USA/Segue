@@ -111,6 +111,12 @@ export interface MappingResourceEntry {
   processingOrder: MappingProcessingStep[];
   destination: { type: MappingDestType; label: string };
   tables: MappingSummaryTable[];
+  /** The MappingProfile this resource's own Field Mapping node last saved (round-tripped from the node's
+   *  own mappingProfileIds), when known — null on a genuinely first-ever save. The backend always updates
+   *  THIS exact profile rather than searching for "the" profile matching (resourceType, sourceConnectionId,
+   *  destinationId): that triple can be shared by more than one workflow, so a search-based match would
+   *  silently attach to — and overwrite — a different workflow's profile. See MappingImportService. */
+  existingMappingProfileId?: string | null;
 }
 
 export interface MappingSummaryDocument {
@@ -394,12 +400,17 @@ export interface BuildMappingSummaryParams {
    *  FK to Patient — a cross-resource reference, not a table-level relation). Optional and empty by default
    *  so existing callers/tests that never dealt with cross-resource FKs are unaffected. */
   targetByResource?: Record<string, string>;
+  /** This Field Mapping node's own previously-saved profile id per resource type (from the node's
+   *  mappingProfileIds), so each resource entry can tell the backend exactly which profile to update
+   *  instead of letting it search by (resourceType, sourceConnectionId, destinationId) — a triple that can
+   *  be shared by more than one workflow. Optional and empty by default for callers with nothing saved yet. */
+  existingMappingProfileIdByResource?: Record<string, string>;
 }
 
 export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): MappingSummaryDocument {
   const {
     sourceVendor, destType, destLabel, mappingRows, sqlTables, childTableRelationsByTable, availableFields,
-    sourceConnectionId, destinationId, targetByResource = {},
+    sourceConnectionId, destinationId, targetByResource = {}, existingMappingProfileIdByResource = {},
   } = params;
   const generatedAt = new Date().toISOString();
 
@@ -442,6 +453,7 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
       processingOrder: computeProcessingOrder(resolved),
       destination: { type: destType, label: destLabel },
       tables,
+      existingMappingProfileId: existingMappingProfileIdByResource[resource] ?? null,
     };
   });
 

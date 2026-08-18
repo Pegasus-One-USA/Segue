@@ -1,0 +1,107 @@
+{
+  "resourceType": "Device",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "definition": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "udiCarrier": [
+    {
+      "deviceIdentifier": "<String · 0..1>",
+      "issuer": "<Uri · 0..1>",
+      "jurisdiction": "<Uri · 0..1>",
+      "carrierAIDC": "<Base64Binary · 0..1>",
+      "carrierHRF": "<String · 0..1>",
+      "entryType": "<Code · 0..1>"
+    }
+  ],
+  "status": "<Code · 0..1>",
+  "statusReason": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "distinctIdentifier": "<String · 0..1>",
+  "manufacturer": "<String · 0..1>",
+  "manufactureDate": "<DateTime · 0..1>",
+  "expirationDate": "<DateTime · 0..1>",
+  "lotNumber": "<String · 0..1>",
+  "serialNumber": "<String · 0..1>",
+  "deviceName": [
+    {
+      "name": "<String · 1..1 · required>",
+      "type": "<Code · 1..1 · required>"
+    }
+  ],
+  "modelNumber": "<String · 0..1>",
+  "partNumber": "<String · 0..1>",
+  "type": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "patient": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "owner": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "contact": [
+    {
+      "system": "<Code · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "location": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "url": "<Uri · 0..1>",
+  "note": [
+    {
+      "authorString": "<String · 0..1>",
+      "time": "<DateTime · 0..1>",
+      "text": "<Markdown · 1..1 · required>"
+    }
+  ],
+  "safety": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ]
+}

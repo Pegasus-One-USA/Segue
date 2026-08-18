@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
 using FluentValidation;
@@ -60,6 +61,104 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateCsvMetadata(context, metadata);
         }
+        else if (request.DestinationType == DestinationType.BlobStorage)
+        {
+            ValidateBlobMetadata(context, metadata);
+        }
+    }
+
+    /// <summary>
+    /// Azure Blob container naming rules: 3-63 characters, lowercase letters/digits/hyphens only, must start and
+    /// end with a letter or digit, no consecutive hyphens. A name violating this is accepted by this API but
+    /// rejected by Azure itself with an opaque "InvalidResourceName" error at write time — catching it here
+    /// gives the wizard an inline, actionable error instead.
+    /// </summary>
+    private static readonly Regex BlobContainerNameRegex = new(
+        @"^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", RegexOptions.Compiled);
+
+    // Azure blob names: no backslash (not a supported path delimiter — "/" is) and no control characters;
+    // checked separately below is that the pattern must not end with "." or "/". Mirrors
+    // BlobDestinationSettings.ValidatePattern, the writer-level last line of defense for the same rule.
+    private static readonly Regex BlobPatternDisallowedCharacters = new(@"[\\\x00-\x1F\x7F]", RegexOptions.Compiled);
+    private const int MaxBlobPatternLength = 512;
+
+    private static void ValidateBlobMetadata(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        RequireField(context, metadata, "dest_blobAuthMode", "Authentication mode is required.");
+        RequireField(context, metadata, "dest_blobContainer", "Container name is required.");
+        RequirePattern(
+            context,
+            metadata,
+            "dest_blobContainer",
+            BlobContainerNameRegex,
+            "Container name must be 3-63 characters: lowercase letters, numbers, and single hyphens only "
+                + "(no leading, trailing, or double hyphens).");
+
+        var authMode = metadata.GetValueOrDefault("dest_blobAuthMode", "connectionString");
+        switch (authMode)
+        {
+            case "accountKey":
+                RequireField(context, metadata, "dest_blobAccountName", "Account name is required.");
+                break;
+            case "managedIdentity":
+                RequireField(context, metadata, "dest_blobAccountUrl", "Account URL is required.");
+                break;
+            case "servicePrincipal":
+                RequireField(context, metadata, "dest_blobAccountUrl", "Account URL is required.");
+                RequireField(context, metadata, "dest_blobTenantId", "Tenant ID is required.");
+                RequireField(context, metadata, "dest_blobClientId", "Client ID is required.");
+                break;
+        }
+
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFolderPattern", "Folder pattern", allowNestedFolders: true);
+        RequireValidBlobNamingPattern(context, metadata, "dest_blobFileNamePattern", "File name pattern", allowNestedFolders: false);
+    }
+
+    /// <summary>Blank is always valid here — it means "use the selected Record mode's own default" (see
+    /// BlobDestinationSettings.ParseFolderPattern/ParseFileNamePattern) — only a non-blank override is checked
+    /// against what Azure itself allows in a blob name. File name pattern (allowNestedFolders: false) additionally
+    /// forbids "/" anywhere — nesting belongs in Folder pattern; a "/" here would split the record's blob into
+    /// extra folders instead of naming a single file.</summary>
+    private static void RequireValidBlobNamingPattern(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        string fieldLabel,
+        bool allowNestedFolders)
+    {
+        if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (value.Length > MaxBlobPatternLength)
+        {
+            context.AddFailure(key, $"{fieldLabel} is too long — Azure blob names cannot exceed 1024 characters.");
+            return;
+        }
+
+        if (BlobPatternDisallowedCharacters.IsMatch(value))
+        {
+            context.AddFailure(
+                key,
+                $"{fieldLabel} cannot contain a backslash or control characters — use \"/\" for nested folders instead of \"\\\".");
+            return;
+        }
+
+        if (!allowNestedFolders && value.Contains('/'))
+        {
+            context.AddFailure(
+                key,
+                $"{fieldLabel} cannot contain \"/\" — that would split it into extra folders instead of naming a single file. Use Folder pattern for nesting instead.");
+            return;
+        }
+
+        if (value.EndsWith('.') || value.EndsWith('/'))
+        {
+            context.AddFailure(key, $"{fieldLabel} cannot end with \".\" or \"/\" — Azure rejects blob names ending that way.");
+        }
     }
 
     private static void ValidateCsvMetadata(
@@ -100,6 +199,21 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         string message)
     {
         if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            context.AddFailure(key, message);
+        }
+    }
+
+    /// <summary>Skips silently when the field is missing/blank — pair with <see cref="RequireField"/> for
+    /// presence so a missing value doesn't also report as "wrong format".</summary>
+    private static void RequirePattern(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        Regex pattern,
+        string message)
+    {
+        if (metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) && !pattern.IsMatch(value))
         {
             context.AddFailure(key, message);
         }

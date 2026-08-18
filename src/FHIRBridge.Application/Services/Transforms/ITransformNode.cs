@@ -22,4 +22,11 @@ public interface ITransformNode
     TransformNodeType NodeType { get; }
 
     TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret);
+
+    /// <summary>Async counterpart of <see cref="Execute"/> — only overridden by a node whose transformation
+    /// genuinely needs an await (e.g. a DB-backed terminology lookup); every other node gets this for free via
+    /// the default body, so adding one async node never forces the other ~20 to change.</summary>
+    Task<TransformResult> ExecuteAsync(
+        object? value, IReadOnlyDictionary<string, string> config, string? secret, CancellationToken cancellationToken = default)
+        => Task.FromResult(Execute(value, config, secret));
 }

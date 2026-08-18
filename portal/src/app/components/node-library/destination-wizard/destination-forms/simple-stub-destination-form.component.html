@@ -1,0 +1,30 @@
+<form [formGroup]="form" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="form.get('name')!.invalid && form.get('name')!.touched">
+      <label class="dw-label" for="stub-name">Destination name <span class="dw-req">*</span></label>
+      <input id="stub-name" class="dw-input" formControlName="name" />
+      @if (form.get('name')!.invalid && form.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="stub-target">Target</label>
+      <input id="stub-target" class="dw-input" formControlName="target" placeholder="Optional target identifier" />
+    </div>
+
+    @for (f of extraFields; track f.key) {
+      <div class="dw-field">
+        <label class="dw-label" [attr.for]="'stub-' + f.key">{{ f.label }}</label>
+        <input [id]="'stub-' + f.key" class="dw-input" [formControlName]="f.key" [placeholder]="f.placeholder ?? ''" />
+      </div>
+    }
+
+  </div><!-- /dw-grid-2 -->
+</form>
+
+<!-- Additional configuration options for this destination type are coming soon. -->
+<div class="dw-callout dw-callout--info">
+  Additional configuration options for this destination type are coming soon.
+</div>

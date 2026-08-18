@@ -83,9 +83,11 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.CodeableConceptBuilder] = new(TransformNodeType.CodeableConceptBuilder, "CodeableConcept Builder",
             [
                 Text("system", "Code system (e.g. LOINC, SNOMED, ICD10, RXNORM)", placeholder: "LOINC"),
-                Text("display", "Display text (optional)", placeholder: "e.g. Glucose"),
-                Checkbox("includeText", "Include CodeableConcept.text", true),
-                Text("additionalCodings", "Additional codings (JSON array of {system,code,display}, optional)", placeholder: "e.g. [{\"system\":\"SNOMED\",\"code\":\"...\"}]"),
+                Text("display", "Display text (optional — leave blank to resolve from the local terminology DB)", placeholder: "e.g. Glucose"),
+                Checkbox("resolveDisplayFromTerminology", "Look up real display text from the local terminology DB when Display is blank", true),
+                Select("outputShape", "Output shape", ["object", "displayTextOnly"], "object"),
+                Checkbox("includeText", "Include CodeableConcept.text (only when Output shape is \"object\")", true),
+                Text("additionalCodings", "Additional codings (JSON array of {system,code,display}, optional — only when Output shape is \"object\")", placeholder: "e.g. [{\"system\":\"SNOMED\",\"code\":\"...\"}]"),
             ]),
             [TransformNodeType.StatusEnumCoercion] = new(TransformNodeType.StatusEnumCoercion, "Status/Enum Coercion",
             [

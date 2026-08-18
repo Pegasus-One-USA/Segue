@@ -1,0 +1,65 @@
+{
+  "resourceType": "Schedule",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "active": "<boolean · 0..1>",
+  "serviceCategory": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "serviceType": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "specialty": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "actor": [
+    {
+      "reference": "<String · 1..1 · required>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "planningHorizon": {
+    "start": "<DateTime · 0..1>",
+    "end": "<DateTime · 0..1>"
+  },
+  "comment": "<String · 0..1>"
+}

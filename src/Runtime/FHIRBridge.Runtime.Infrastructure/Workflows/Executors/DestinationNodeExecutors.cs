@@ -550,11 +550,14 @@ public sealed class WebhookNotifierNodeExecutor : WorkflowNodeExecutorBase
 
 public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 {
-    // Destination types backed by a real relational schema, where each resource type in a mixed batch normally
-    // targets its OWN table (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a
-    // mixed batch per resource type at write time (see ExecuteAsync) — every other destination type keeps writing
-    // the whole batch in one call, unchanged, since e.g. a CSV/Blob writer already groups multi-resource output
-    // itself (a multi-resource ZIP, say) and splitting the call here would silently break that.
+    // Destination types where each resource type in a mixed batch normally targets its OWN table/collection/blob
+    // (Patient -> dbo.Patient_New, Condition -> dbo.Condition, ...). Only these route a mixed batch per resource
+    // type at write time (see ExecuteAsync) — every other destination type keeps writing the whole batch in one
+    // call, unchanged, since e.g. a CSV writer already groups multi-resource output itself (a multi-resource ZIP)
+    // and splitting the call here would silently break that.
+    // BlobStorage is included here (not just relational/Mongo) because MappedBlobStorageDestinationWriter does
+    // NOT group by resource type internally — without this, a mixed batch reaching a Blob node in one call would
+    // land in a single blob whose metadata falsely claims only one resource type.
     private static readonly HashSet<DestinationType> MultiTableRelationalDestinationTypes =
     [
         DestinationType.SqlServer,
@@ -563,6 +566,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.PostgreSql,
         DestinationType.Snowflake,
         DestinationType.Mongo,
+        DestinationType.BlobStorage,
     ];
 
     private readonly DestinationType _destinationType;
@@ -611,7 +615,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
             workflowName,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            CorrelationId: context.CorrelationId);
 
         int written;
         string? downloadUrl;
@@ -650,7 +655,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
                     ? matched
                     : await ResolveMappingProfileAsync(node, group.Key, groupRecords, cancellationToken);
-                var effectiveProfile = ApplyWriteModeSuffix(profile, writeModeSuffix);
+                // The ";mode=..." suffix convention only means anything to MappedSqlServerDestinationWriter's
+                // ParseDestinationTarget — Blob reads its write mode straight off the destination's own
+                // ConnectionMetadataJson (BlobDestinationSettings.Parse) regardless of grouping, so splicing this
+                // onto its DestinationObject would just corrupt the blob name/folder for no benefit.
+                var effectiveProfile = _destinationType == DestinationType.BlobStorage
+                    ? profile
+                    : ApplyWriteModeSuffix(profile, writeModeSuffix);
                 var groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
                 totalWritten += groupResult.Count;
                 firstDownloadUrl ??= groupResult.DownloadUrl;
@@ -809,15 +820,16 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// <summary>
     /// Resolves the real MappingProfile for one resource-type group of records within this destination write,
     /// when <see cref="CreateMappingProfiles"/>'s node-embedded <c>resourceMappings</c>/legacy config had nothing
-    /// for this resource type. Preferring (in order): the real MappingProfile found by the exact natural key
-    /// (ResourceType, SourceConnectionId, DestinationId) — the SAME key MappingNodeExecutor and
-    /// MappingImportService de-dup on, and the only unambiguous way to identify "the mapping this workflow's own
-    /// source connection actually produces"; a DestinationId + ResourceType-only match for nodes saved before
-    /// sourceConnectionId was stamped onto them (older graphs — this can be ambiguous if more than one profile
-    /// shares a destination + resource type, e.g. a stale one left behind by an earlier/abandoned save, so ties
-    /// break on whichever was modified most recently rather than an arbitrary query order); and finally the
-    /// legacy synthetic profile built straight from whatever "fields" happen to be embedded on the node (kept
-    /// for graphs/tests with none of the above).
+    /// for this resource type. Preferring (in order): <c>mappingProfileIds</c> — the id THIS node itself saved
+    /// for this resource type (see WorkflowEndpoints.cs's Mappings step) — resolving by it can never pick up a
+    /// different workflow's profile; and finally the legacy synthetic profile built straight from whatever
+    /// "fields" happen to be embedded on the node (kept for graphs/tests with neither of the above).
+    /// Deliberately does NOT search MappingProfile by the natural key (ResourceType, SourceConnectionId,
+    /// DestinationId), and does NOT fall back to "whichever profile for this DestinationId+ResourceType was
+    /// modified most recently" — that triple/pair is shared by any workflow built on the same source connection
+    /// + destination + resource type, so either search would silently resolve to (and, once profiles diverge,
+    /// keep flapping onto) a DIFFERENT workflow's profile — the exact "Invalid column name" incident this
+    /// replaces.
     /// </summary>
     private async Task<MappingProfile> ResolveMappingProfileAsync(
         WorkflowNode node,
@@ -825,29 +837,12 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyCollection<MappedDestinationRecord> groupRecords,
         CancellationToken cancellationToken)
     {
-        if (_configurationRepository is not null
-            && Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId))
+        if (_configurationRepository is not null && ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
         {
-            if (Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId))
+            var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
+            if (profile is not null)
             {
-                var exactMatch = await _configurationRepository.FindMappingProfileAsync(
-                    resourceType, sourceConnectionId, destinationId, cancellationToken);
-                if (exactMatch is not null)
-                {
-                    return exactMatch;
-                }
-            }
-
-            var profiles = await _configurationRepository.GetMappingProfilesAsync(cancellationToken);
-            var match = profiles
-                .Where(profile =>
-                    profile.DestinationId == destinationId
-                    && string.Equals(profile.ResourceType, resourceType, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(profile => profile.ModifiedOnUtc ?? profile.CreatedOnUtc)
-                .FirstOrDefault();
-            if (match is not null)
-            {
-                return match;
+                return profile;
             }
         }
 

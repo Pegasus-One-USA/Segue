@@ -1,0 +1,140 @@
+{
+  "resourceType": "Appointment",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "status": "<Code · 1..1 · required>",
+  "cancelationReason": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "serviceCategory": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "serviceType": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "specialty": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "appointmentType": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "reasonCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "reasonReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "priority": "<unsignedInt · 0..1>",
+  "description": "<String · 0..1>",
+  "supportingInformation": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "start": "<Instant · 0..1>",
+  "end": "<Instant · 0..1>",
+  "minutesDuration": "<positiveInt · 0..1>",
+  "slot": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "created": "<DateTime · 0..1>",
+  "comment": "<String · 0..1>",
+  "patientInstruction": "<String · 0..1>",
+  "basedOn": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "participant": [
+    {
+      "type": [
+        {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>"
+            }
+          ]
+        }
+      ],
+      "actor": {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      },
+      "required": "<Code · 0..1>",
+      "status": "<Code · 1..1 · required>",
+      "period": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      }
+    }
+  ]
+}

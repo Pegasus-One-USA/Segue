@@ -43,6 +43,7 @@
           [relation]="relationFor(card.tableName)"
           [isArmed]="!!armedId()"
           [isApproximated]="isApproximatedFn"
+          [schemaAuthoringEnabled]="schemaAuthoringEnabled()"
           [x]="positionForKey(card.tableName, i).x"
           [y]="positionForKey(card.tableName, i).y"
           (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
@@ -83,7 +84,9 @@
     <!-- No real "table" concept for a CSV destination — the create-table modal it opens asks for SQL
          data types (uniqueidentifier, bigint, …) that don't apply to a flat file's columns. -->
     @if (resources()[0]; as primaryResource) {
-      @if (!drawerOpen() && destType() !== 'csv') {
+      <!-- Nothing to offer here at all when there's neither a real probed schema to pick an existing
+           table from, nor authoring rights to create a new one. -->
+      @if (!drawerOpen() && destType() !== 'csv' && (hasSqlTables() || schemaAuthoringEnabled())) {
       <div class="fm-add-table-slot">
         @if (hasSqlTables()) {
           <button
@@ -117,9 +120,11 @@
                 }
               </div>
               <div class="fm-add-table-options">
-                <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, createNewTableOption)">
-                  ✎ Create a new table…
-                </button>
+                @if (schemaAuthoringEnabled()) {
+                  <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, createNewTableOption)">
+                    ✎ Create a new table…
+                  </button>
+                }
                 @if (addTableSearchQuery() && filteredTablesToAdd(primaryResource).length === 0) {
                   <div class="fm-add-table-no-match">No tables match "{{ addTableSearchQuery() }}".</div>
                 }

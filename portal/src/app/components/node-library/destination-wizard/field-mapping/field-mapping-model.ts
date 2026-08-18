@@ -24,7 +24,7 @@ export type PendingSchemaOp =
 /** The wizard's destination family — SQL Server/MySQL/PostgreSQL share the relational (sqlTables/columns)
  *  path, Mongo and CSV don't. Kept as one union (rather than a plain boolean) so summary/snapshot code can
  *  still tell the SQL engines apart where it matters (e.g. destination.type on the wire). */
-export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir';
+export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob';
 
 export interface MappingSourceRef {
   fhirPath: string;

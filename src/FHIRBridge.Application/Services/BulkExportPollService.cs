@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Governance;
@@ -111,11 +113,13 @@ public sealed class BulkExportPollService : IBulkExportPollService
                     var partialFailures = await _bulkExportClient.DownloadPartialFailuresAsync(errorFiles, source, cancellationToken);
                     if (partialFailures.Count > 0)
                     {
-                        skippedResourceTypeReasons = partialFailures
+                        var reasons = partialFailures
                             .Select(failure => failure.Code is { Length: > 0 } code
                                 ? $"{failure.Diagnostics} (OperationOutcome: {failure.Severity ?? "error"}/{code})"
                                 : failure.Diagnostics)
                             .ToList();
+
+                        skippedResourceTypeReasons = FilterToRequestedResourceTypes(reasons, job.RequestedResourceTypesJson);
                     }
                 }
 
@@ -158,5 +162,40 @@ public sealed class BulkExportPollService : IBulkExportPollService
 
                 break;
         }
+    }
+
+    // A Group export scoped to a lone "Patient" resource type omits `_type` entirely to dodge an Epic Interconnect
+    // bug (see BulkExportScopes.ResolveTypeParameter) — the server then attempts every resource type it supports,
+    // most of which the node never asked for and isn't authorized/configured to fetch. Without this filter, every
+    // one of those unrequested rejections surfaces to the caller as a "partial success" failure even though nothing
+    // the workflow actually needed was missing. requestedResourceTypesJson is only set for jobs created after this
+    // filter shipped; older/other-source-path jobs have none, so every reason is kept unfiltered (today's behavior).
+    private static IReadOnlyList<string> FilterToRequestedResourceTypes(
+        IReadOnlyList<string> reasons, string? requestedResourceTypesJson)
+    {
+        if (string.IsNullOrWhiteSpace(requestedResourceTypesJson))
+        {
+            return reasons;
+        }
+
+        List<string>? requestedResourceTypes;
+        try
+        {
+            requestedResourceTypes = JsonSerializer.Deserialize<List<string>>(requestedResourceTypesJson);
+        }
+        catch (JsonException)
+        {
+            return reasons;
+        }
+
+        if (requestedResourceTypes is not { Count: > 0 })
+        {
+            return reasons;
+        }
+
+        return reasons
+            .Where(reason => requestedResourceTypes.Any(type =>
+                Regex.IsMatch(reason, $@"\b{Regex.Escape(type)}\b", RegexOptions.IgnoreCase)))
+            .ToList();
     }
 }

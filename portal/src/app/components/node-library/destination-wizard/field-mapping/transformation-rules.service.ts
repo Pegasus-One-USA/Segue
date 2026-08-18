@@ -43,6 +43,15 @@ export interface TransformationRule {
   /** 'Whole' (default) runs the node once against the value as-is; 'PerItem' runs it once per element when
    *  the mapped value is a real collection. */
   arrayMode: TransformArrayMode;
+  /** Where in the source resource's own JSON this rule's output should be written back, for a FHIR-native
+   *  destination (Aidbox/Medplum/any other FhirRepository-typed config) to receive the transformed value —
+   *  a flat/tabular destination (SQL/Csv/Mongo) always sees the transformed value regardless, via the
+   *  destination field mapping above, so this only matters for FHIR-native destinations. Null (default) means
+   *  "don't patch — that destination keeps seeing the original source coding." Dot-separated path, no leading
+   *  "$.", e.g. "code" or "component[0].valueQuantity" — usually the PARENT of the source field a
+   *  structure-building node (CodeableConceptBuilder, UnitConversion, ReferenceConstruction) reads from,
+   *  since its output replaces a whole element, not the bare leaf value it was fed. */
+  fhirWriteBackJsonPath?: string | null;
 }
 
 export interface SaveTransformationRuleRequest {
@@ -62,6 +71,7 @@ export interface SaveTransformationRuleRequest {
   isEnabled?: boolean;
   onNullDefaultValue?: string | null;
   arrayMode?: TransformArrayMode;
+  fhirWriteBackJsonPath?: string | null;
 }
 
 export interface TransformPreviewRequest {
@@ -129,6 +139,21 @@ export class TransformationRulesService {
     });
     const qs = params.toString();
     return this.http.get<TransformationRule[]>(qs ? `${TRANSFORMATION_RULES_ENDPOINTS.list}?${qs}` : TRANSFORMATION_RULES_ENDPOINTS.list);
+  }
+
+  /** The actual rule(s) currently in effect for one field (real id + full config, not a value trace) — lets
+   *  the wizard's Rules dialog show/clone what's really running instead of starting an override from blank
+   *  schema defaults. Resolves the same Workflow &gt; Field &gt; ResourceType &gt; DestinationType &gt; Global
+   *  chain as preview(). */
+  getEffectiveRules(filter: {
+    destinationType: DestinationType; resourceType: string; destinationField: string;
+    resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
+  }): Observable<TransformationRule[]> {
+    const params = new URLSearchParams();
+    Object.entries(filter).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) params.set(key, String(value));
+    });
+    return this.http.get<TransformationRule[]>(`${TRANSFORMATION_RULES_ENDPOINTS.effective}?${params.toString()}`);
   }
 
   save(request: SaveTransformationRuleRequest): Observable<TransformationRule> {

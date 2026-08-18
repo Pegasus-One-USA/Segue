@@ -1,0 +1,40 @@
+<form [formGroup]="mongoForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched">
+      <label class="dw-label" for="mf-name">Destination name <span class="dw-req">*</span></label>
+      <input id="mf-name" class="dw-input" formControlName="name" placeholder="e.g. MongoDB Production" />
+      @if (mongoForm.get('name')!.invalid && mongoForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
+      <label class="dw-label" for="mf-conn">Connection string <span class="dw-req">*</span></label>
+      <input id="mf-conn" type="password" class="dw-input" formControlName="connectionString"
+        placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
+      @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
+        <span class="dw-error">Connection string is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
+      <label class="dw-label" for="mf-collection">Collection <span class="dw-req">*</span></label>
+      <input id="mf-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+      @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
+        <span class="dw-error">Collection name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="mf-writeMode">Write mode</label>
+      <div class="dw-select-wrap">
+        <select id="mf-writeMode" class="dw-select" formControlName="writeMode">
+          <option value="upsert">Upsert by source id</option>
+          <option value="insert">Insert only</option>
+        </select>
+      </div>
+    </div>
+
+  </div><!-- /dw-grid-2 -->
+</form>

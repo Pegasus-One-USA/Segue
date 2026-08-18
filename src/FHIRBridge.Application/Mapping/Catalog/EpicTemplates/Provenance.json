@@ -1,0 +1,110 @@
+{
+  "resourceType": "Provenance",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "target": [
+    {
+      "reference": "<String · 1..1 · required>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "occurredPeriod": {
+    "start": "<DateTime · 0..1>",
+    "end": "<DateTime · 0..1>"
+  },
+  "occurredDateTime": "<DateTime · 0..1>",
+  "recorded": "<Instant · 1..1 · required>",
+  "policy": [
+    "<Uri · 0..*>"
+  ],
+  "location": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "reason": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "activity": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "agent": [
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ]
+      },
+      "role": [
+        {
+          "coding": [
+            {
+              "system": "<Uri · 0..1>",
+              "code": "<Code · 0..1>",
+              "display": "<String · 0..1>"
+            }
+          ]
+        }
+      ],
+      "who": {
+        "reference": "<String · 1..1 · required>",
+        "display": "<String · 0..1>"
+      },
+      "onBehalfOf": {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "entity": [
+    {
+      "role": "<Code · 1..1 · required>",
+      "what": {
+        "reference": "<String · 1..1 · required>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "signature": [
+    {
+      "type": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>"
+        }
+      ],
+      "when": "<Instant · 1..1 · required>",
+      "who": {
+        "reference": "<String · 1..1 · required>",
+        "display": "<String · 0..1>"
+      },
+      "sigFormat": "<Code · 0..1>",
+      "data": "<Base64Binary · 0..1>"
+    }
+  ]
+}

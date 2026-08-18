@@ -125,18 +125,25 @@ public sealed class MappingNodeExecutorTests
         ((MappedDestinationRecord)batch.Records.Single()).ChildTables.Should().HaveCount(1);
     }
 
+    /// <summary>
+    /// Regression test for a real production bug: resolving a resource type's profile by the (resourceType,
+    /// sourceConnectionId, destinationId) triple let a workflow silently pick up (and overwrite) a DIFFERENT
+    /// workflow's profile whenever both shared the same source connection + destination + resource type. The
+    /// fix: resolve strictly by this node's own mappingProfileId(s) — an id it saved itself — even when
+    /// sourceConnectionId/destinationId are also present on the node; the natural-key search must never run.
+    /// </summary>
     [Fact]
-    public async Task Resolves_the_profile_by_natural_key_even_when_a_stale_mappingProfileId_is_also_present()
+    public async Task Resolves_the_profile_by_this_nodes_own_mappingProfileId_even_when_sourceConnectionId_and_destinationId_are_also_present()
     {
         var sourceConnectionId = Guid.NewGuid();
         var destinationId = Guid.NewGuid();
+        var profileId = Guid.NewGuid();
         var realProfile = new MappingProfile(
             "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
             [new MappingField("Active", "$.active", MappingValueType.Boolean, IsRequired: false, DefaultValue: null, Format: "directField")]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(realProfile);
+        repository.Setup(r => r.GetMappingProfileAsync(profileId, It.IsAny<CancellationToken>())).ReturnsAsync(realProfile);
 
         var executor = new MappingNodeExecutor(
             new FakeJsonMappingEngine(new MappingTestResultDto(new Dictionary<string, object?> { ["Active"] = true }, [])),
@@ -146,9 +153,7 @@ public sealed class MappingNodeExecutorTests
         {
             ["sourceConnectionId"] = sourceConnectionId.ToString(),
             ["destinationId"] = destinationId.ToString(),
-            // Deliberately wrong/stale — a natural-key match must win over this rather than the executor
-            // ever resolving (or falling back to) this id.
-            ["mappingProfileId"] = Guid.NewGuid().ToString(),
+            ["mappingProfileId"] = profileId.ToString(),
         });
         var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
 
@@ -158,9 +163,9 @@ public sealed class MappingNodeExecutorTests
         var record = (MappedDestinationRecord)batch.Records.Single();
         record.Values["Active"].Should().Be(true);
         repository.Verify(
-            r => r.GetMappingProfileAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            r => r.FindMappingProfileAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
             Times.Never,
-            "the natural-key lookup found a profile, so the stale mappingProfileId must never even be looked up");
+            "resolution must never search by the (resourceType, sourceConnectionId, destinationId) triple — more than one workflow can share it");
     }
 
     [Fact]
@@ -204,6 +209,8 @@ public sealed class MappingNodeExecutorTests
     {
         var sourceConnectionId = Guid.NewGuid();
         var destinationId = Guid.NewGuid();
+        var patientProfileId = Guid.NewGuid();
+        var observationProfileId = Guid.NewGuid();
         var patientProfile = new MappingProfile(
             "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
             [
@@ -218,10 +225,8 @@ public sealed class MappingNodeExecutorTests
             ]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(patientProfile);
-        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(observationProfile);
+        repository.Setup(r => r.GetMappingProfileAsync(patientProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(patientProfile);
+        repository.Setup(r => r.GetMappingProfileAsync(observationProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(observationProfile);
 
         var executor = new MappingNodeExecutor(
             new RoutingFakeJsonMappingEngine(),
@@ -231,6 +236,11 @@ public sealed class MappingNodeExecutorTests
         {
             ["sourceConnectionId"] = sourceConnectionId.ToString(),
             ["destinationId"] = destinationId.ToString(),
+            ["mappingProfileIds"] = new Dictionary<string, string>
+            {
+                ["Patient"] = patientProfileId.ToString(),
+                ["Observation"] = observationProfileId.ToString(),
+            },
         });
         var upstream = UpstreamWith(
             new ResourceEnvelope("Patient", "p1", """{"id":"p1","active":true}"""),
@@ -260,25 +270,25 @@ public sealed class MappingNodeExecutorTests
     {
         var sourceConnectionId = Guid.NewGuid();
         var destinationId = Guid.NewGuid();
+        var patientProfileId = Guid.NewGuid();
         var patientProfile = new MappingProfile(
             "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
             [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
 
         var repository = new Mock<IConfigurationRepository>();
-        repository.Setup(r => r.FindMappingProfileAsync("Patient", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(patientProfile);
-        repository.Setup(r => r.FindMappingProfileAsync("Observation", sourceConnectionId, destinationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((MappingProfile?)null);
+        repository.Setup(r => r.GetMappingProfileAsync(patientProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(patientProfile);
 
         var executor = new MappingNodeExecutor(
             new RoutingFakeJsonMappingEngine(),
             mappingMaterializer: null,
             configurationRepository: repository.Object);
-        // Node's own configured resourceType is "Patient" — the Observation envelope must NOT fall back to it.
+        // Node's own configured resourceType is "Patient" — the Observation envelope has no mappingProfileIds
+        // entry at all, and must NOT fall back to Patient's profile.
         var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
         {
             ["sourceConnectionId"] = sourceConnectionId.ToString(),
             ["destinationId"] = destinationId.ToString(),
+            ["mappingProfileIds"] = new Dictionary<string, string> { ["Patient"] = patientProfileId.ToString() },
         });
         var upstream = UpstreamWith(
             new ResourceEnvelope("Patient", "p1", """{"id":"p1"}"""),
@@ -325,6 +335,76 @@ public sealed class MappingNodeExecutorTests
         var record = (MappedDestinationRecord)batch.Records.Single();
         record.ResourceType.Should().Be("Patient");
         record.SourceJson.Should().Be(patientJson, "the Medplum writer persists SourceJson, so it must be carried through");
+    }
+
+    [Fact]
+    public async Task An_unrequested_resource_type_is_dropped_silently_not_reported_as_skipped()
+    {
+        // Reproduces a real production symptom: a Group $export scoped to a lone "Patient" resource type omits
+        // the _type parameter entirely to dodge an Epic bug, so Epic hands back every resource type it supports —
+        // dozens the workflow never configured a mapping for. Only "Patient" appears in mappingProfileIds here,
+        // so Observation must be dropped (nothing tells this node how to map it) WITHOUT being reported in
+        // skippedResourceTypes — it was never part of this workflow, so flagging it reads as a false "partial
+        // success" even though nothing is actually broken.
+        var sourceConnectionId = Guid.NewGuid();
+        var destinationId = Guid.NewGuid();
+        var patientProfileId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", sourceConnectionId, destinationId, "Patient",
+            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfileAsync(patientProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(patientProfile);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["sourceConnectionId"] = sourceConnectionId.ToString(),
+            ["destinationId"] = destinationId.ToString(),
+            ["mappingProfileIds"] = new Dictionary<string, string> { ["Patient"] = patientProfileId.ToString() },
+        });
+        var upstream = UpstreamWith(
+            new ResourceEnvelope("Patient", "p1", """{"id":"p1"}"""),
+            new ResourceEnvelope("Observation", "o1", """{"id":"o1","status":"final"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        output.Metadata.Should().NotBeNull();
+        output.Metadata!["skippedResourceTypes"].Should().BeNull(
+            "Observation was never configured on this node — it's incidental over-fetch, not a missing mapping");
+    }
+
+    [Fact]
+    public async Task A_configured_but_deleted_profile_is_still_reported_as_skipped()
+    {
+        // The opposite of the case above: this resource type DOES have a mappingProfileIds entry, but the
+        // profile it points at no longer resolves (deleted). That's a real misconfiguration the workflow owner
+        // should hear about, so it must still land in skippedResourceTypes.
+        var observationProfileId = Guid.NewGuid();
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfileAsync(observationProfileId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MappingProfile?)null);
+
+        var executor = new MappingNodeExecutor(
+            new RoutingFakeJsonMappingEngine(),
+            mappingMaterializer: null,
+            configurationRepository: repository.Object);
+        // Node's own default resourceType is "Patient" — Observation is a DIFFERENT, explicitly configured
+        // entry (not the node's default), isolating the "has a mappingProfileIds entry but it's unresolvable"
+        // branch from the "matches the node's own configuredResourceType" branch.
+        var node = CreateNode("Patient", "Patient", fields: [], extraConfig: new Dictionary<string, object>
+        {
+            ["mappingProfileIds"] = new Dictionary<string, string> { ["Observation"] = observationProfileId.ToString() },
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Observation", "o1", """{"id":"o1"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        output.Metadata!["skippedResourceTypes"].Should().BeAssignableTo<string[]>()
+            .Which.Should().Contain("Observation");
     }
 
     [Fact]
@@ -485,6 +565,60 @@ public sealed class MappingNodeExecutorTests
         var batch = (MappedRecordBatch)output.Payload!;
         var record = (MappedDestinationRecord)batch.Records.Single();
         record.Values["FamilyName"].Should().Be("ROE", "the resolved StringNormalization rule (case=upper) must run before the value is written");
+    }
+
+    /// <summary>
+    /// End-to-end proof that the real destination type reaches the node automatically — a Unit Conversion
+    /// rule writing into a SQL destination gets just the plain number, never the full FHIR Quantity object,
+    /// even though nothing in the rule's own saved config says "flatten this." The executor infers it from
+    /// the workflow's actual destination.
+    /// </summary>
+    [Fact]
+    public async Task Unit_conversion_writes_a_plain_number_not_a_quantity_object_for_a_sql_destination()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("Value", "$.valueQuantity.value", MappingValueType.Decimal, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Observation", DestinationObject: "Observation"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["Value"] = 38.9m }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Global, TransformNodeType.UnitConversion,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1" }));
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid>(), null, "$.valueQuantity.value", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new UnitConversionNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Observation", "Observation", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Observation", "o1", """{"resourceType":"Observation"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["Value"].Should().Be(102.0m);
     }
 
     /// <summary>

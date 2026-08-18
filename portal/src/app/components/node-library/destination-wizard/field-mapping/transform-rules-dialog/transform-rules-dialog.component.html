@@ -1,4 +1,4 @@
-<div class="dialog-container">
+<div class="dialog-container" [class.dialog-container--maximized]="isMaximized()">
 
   <!-- Header -->
   <div class="dialog-header">
@@ -7,11 +7,36 @@
     </div>
     <div class="dialog-header__text">
       <h2 mat-dialog-title>Transformation Rules</h2>
-      <p>
-        {{ data.resourceType }} &mdash; {{ data.destinationType }}
-        @if (data.sourceSystem) { <span>&mdash; from {{ data.sourceSystem }}</span> }
-      </p>
+      <div class="header-trail">
+        @if (data.sourceSystem) {
+          <span class="header-trail__pill">{{ data.sourceSystem }}</span>
+          <mat-icon class="header-trail__sep">chevron_right</mat-icon>
+        }
+        <span class="header-trail__pill">{{ data.resourceType }}</span>
+        <mat-icon class="header-trail__sep">chevron_right</mat-icon>
+        <span class="header-trail__pill header-trail__pill--dest">{{ data.destinationType }}</span>
+      </div>
     </div>
+    <button
+      type="button"
+      class="dialog-maximize"
+      [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+      [attr.aria-pressed]="isMaximized()"
+      [title]="isMaximized() ? 'Restore' : 'Maximize'"
+      (click)="toggleMaximize()"
+    >
+      @if (isMaximized()) {
+        <svg class="dialog-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      } @else {
+        <svg class="dialog-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      }
+    </button>
     <button mat-icon-button class="dialog-close" (click)="close()">
       <mat-icon>close</mat-icon>
     </button>
@@ -37,11 +62,37 @@
 
               <div class="rule-row__status">
                 @if (row.effectiveScope) {
-                  <span class="scope-chip" [class]="'scope-chip--' + row.effectiveScope.toLowerCase()">
-                    {{ row.effectiveScope }} default
-                  </span>
-                  @if (row.effectiveNodeType) {
-                    <span class="node-chip">{{ row.effectiveNodeType }}</span>
+                  <!-- The actual step chain currently running for this field, in order — each chip is
+                       colored by the same design-spec §14.2 rank palette the pipeline canvas itself uses
+                       for this exact node's category (see nodeAccentVar()), so this reads as "here's the
+                       real pipeline for this field" rather than a generic label. Falls back to the single
+                       resolved node type when there's no field-level chain to enumerate (an inherited
+                       broader-tier default only ever previews its first step). -->
+                  @if (row.steps.length > 0) {
+                    <div class="chain-trail" [matTooltip]="row.steps.length + '-step rule chain'">
+                      @for (s of row.steps; track s.id ?? $index; let isLastStep = $last) {
+                        <span class="chain-chip" [style.--tn-accent]="nodeAccentVar(s.nodeType)" [matTooltip]="nodeLabel(s.nodeType)">{{ nodeAbbr(s.nodeType) }}</span>
+                        @if (!isLastStep) { <mat-icon class="chain-arrow">chevron_right</mat-icon> }
+                      }
+                    </div>
+                  } @else if (row.effectiveNodeType) {
+                    <span class="chain-chip chain-chip--inherited" [style.--tn-accent]="nodeAccentVar(row.effectiveNodeType)" [matTooltip]="nodeLabel(row.effectiveNodeType)">{{ nodeAbbr(row.effectiveNodeType) }}</span>
+                  }
+                  @if (effectiveScopeIsInherited(row)) {
+                    <button
+                      type="button"
+                      class="scope-chip scope-chip--clickable"
+                      [class]="'scope-chip--' + row.effectiveScope.toLowerCase()"
+                      (click)="toggleInheritedView(row)"
+                      matTooltip="Click to view the actual rule"
+                    >
+                      {{ row.effectiveScope }} default
+                      <mat-icon class="scope-chip__caret">{{ row.viewingInherited ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    </button>
+                  } @else {
+                    <span class="scope-chip" [class]="'scope-chip--' + row.effectiveScope.toLowerCase()">
+                      {{ row.effectiveScope }} default
+                    </span>
                   }
                 } @else {
                   <span class="scope-chip scope-chip--none">No rule</span>
@@ -54,9 +105,42 @@
               </button>
             </div>
 
+            @if (row.viewingInherited) {
+              <div class="inherited-view">
+                @if (row.loadingInherited) {
+                  <div class="inherited-view__loading">
+                    <mat-spinner diameter="16"></mat-spinner>
+                    <span>Loading the effective rule…</span>
+                  </div>
+                } @else if (row.inheritedRules && row.inheritedRules.length > 0) {
+                  @for (rule of row.inheritedRules; track rule.id) {
+                    <div class="inherited-rule">
+                      <span class="node-chip">{{ rule.nodeType }}</span>
+                      <div class="inherited-rule__config">
+                        @for (entry of (rule.config | keyvalue); track entry.key) {
+                          <span class="config-pair"><strong>{{ entry.key }}</strong>: {{ entry.value }}</span>
+                        }
+                        @if ((rule.config | keyvalue).length === 0) {
+                          <span class="config-pair config-pair--empty">No configuration</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                  <p class="inherited-view__hint">
+                    This is defined in Settings → Transformation Rules and applies to more than just this field.
+                  </p>
+                  <button mat-stroked-button class="override-btn" (click)="overrideFromInherited(row)">
+                    <mat-icon>content_copy</mat-icon> Override for this field
+                  </button>
+                } @else {
+                  <p class="inherited-view__hint">No rule found.</p>
+                }
+              </div>
+            }
+
             <div class="rule-row__preview">
+              <mat-icon class="preview-prompt-ico" aria-hidden="true">chevron_right</mat-icon>
               <input
-                matInput
                 class="preview-input"
                 placeholder="Sample value to preview…"
                 [(ngModel)]="row.previewSample"
@@ -66,77 +150,95 @@
                 @if (row.previewLoading) {
                   <mat-spinner diameter="16"></mat-spinner>
                 } @else {
-                  Preview
+                  <ng-container><mat-icon>play_arrow</mat-icon> Preview</ng-container>
                 }
               </button>
               @if (row.previewOutput !== null) {
-                <span class="preview-output">→ {{ row.previewOutput }}</span>
+                <span class="preview-output"><mat-icon class="preview-output__ico" aria-hidden="true">arrow_forward</mat-icon>{{ row.previewOutput }}</span>
               }
             </div>
 
             @if (row.editing) {
               <div class="rule-row__editor">
                 @for (step of row.steps; track step.id ?? $index; let stepIndex = $index; let isFirst = $first; let isLast = $last) {
-                  <div class="step-card">
-                    <div class="step-card__order">
-                      <span class="step-number">{{ stepIndex + 1 }}</span>
-                      <div class="step-reorder">
-                        <button mat-icon-button [disabled]="isFirst" (click)="moveStep(row, step, -1)" matTooltip="Run earlier">
-                          <mat-icon>arrow_upward</mat-icon>
-                        </button>
-                        <button mat-icon-button [disabled]="isLast" (click)="moveStep(row, step, 1)" matTooltip="Run later">
-                          <mat-icon>arrow_downward</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-
+                  <div class="step-card" [style.--tn-accent]="nodeAccentVar(step.nodeType)">
                     <div class="step-card__content">
-                      <mat-form-field appearance="outline" class="node-select">
-                        <mat-label>Node type</mat-label>
-                        <mat-select [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
-                          @for (opt of row.applicableNodeTypes; track opt.value) {
-                            <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
-                          }
-                        </mat-select>
-                      </mat-form-field>
+                      <div class="step-card__fields">
+                        <div class="step-card__fields-row step-card__fields-row--node">
+                          <div class="form-field node-select">
+                            <div class="node-select__label-row">
+                              <span class="step-number">{{ stepIndex + 1 }}</span>
+                              <label [for]="'trd-node-type-' + stepIndex">Node type</label>
+                            </div>
+                            <div class="node-select__input-row">
+                              <select [id]="'trd-node-type-' + stepIndex" [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
+                                @for (opt of row.applicableNodeTypes; track opt.value) {
+                                  <option [value]="opt.value">{{ opt.label }}</option>
+                                }
+                              </select>
+                              <div class="step-reorder">
+                                <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(row, step, -1)" matTooltip="Run earlier">
+                                  <mat-icon>arrow_upward</mat-icon>
+                                </button>
+                                <button type="button" class="step-reorder-btn" [disabled]="isLast" (click)="moveStep(row, step, 1)" matTooltip="Run later">
+                                  <mat-icon>arrow_downward</mat-icon>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                      <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                        <!-- A separate row (its own flex-wrap context), not a sibling flex item sharing
+                             .step-card__fields-row--node's row — that's what makes Node type stay alone on
+                             its own line unconditionally, rather than depending on flex-wrap deciding to
+                             break there. -->
+                        <div class="step-card__fields-row step-card__fields-row--config">
+                          <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                        </div>
+                      </div>
 
                       <div class="step-card__advanced">
-                        <mat-form-field appearance="outline" class="config-control">
-                          <mat-label>On missing input</mat-label>
-                          <mat-select [ngModel]="step.onNull" (ngModelChange)="setOnNull(step, $event)">
-                            <mat-option value="Skip">Skip (leave as-is)</mat-option>
-                            <mat-option value="Default">Substitute a default</mat-option>
-                            <mat-option value="Error">Treat as an error</mat-option>
-                          </mat-select>
-                        </mat-form-field>
+                        <div class="form-field config-control">
+                          <label [for]="'trd-on-null-' + stepIndex">On missing input</label>
+                          <select [id]="'trd-on-null-' + stepIndex" [ngModel]="step.onNull" (ngModelChange)="setOnNull(step, $event)">
+                            <option value="Skip">Skip (leave as-is)</option>
+                            <option value="Default">Substitute a default</option>
+                            <option value="Error">Treat as an error</option>
+                          </select>
+                        </div>
                         @if (step.onNull === 'Default') {
-                          <mat-form-field appearance="outline" class="config-control">
-                            <mat-label>Default value</mat-label>
-                            <input matInput [ngModel]="step.onNullDefaultValue" (ngModelChange)="setOnNullDefaultValue(step, $event)" />
-                          </mat-form-field>
+                          <div class="form-field config-control">
+                            <label [for]="'trd-on-null-default-' + stepIndex">Default value</label>
+                            <input [id]="'trd-on-null-default-' + stepIndex" [ngModel]="step.onNullDefaultValue" (ngModelChange)="setOnNullDefaultValue(step, $event)" />
+                          </div>
                         }
-                        <mat-form-field appearance="outline" class="config-control">
-                          <mat-label>On error</mat-label>
-                          <mat-select [ngModel]="step.errorPolicy" (ngModelChange)="setErrorPolicy(step, $event)">
-                            <mat-option value="NullOut">Null out</mat-option>
-                            <mat-option value="PassThrough">Pass through</mat-option>
-                            <mat-option value="Fail">Fail</mat-option>
-                            <mat-option value="RouteToDeadLetter">Route to dead letter</mat-option>
-                          </mat-select>
-                        </mat-form-field>
-                        <mat-form-field appearance="outline" class="config-control">
-                          <mat-label>Array mode</mat-label>
-                          <mat-select [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
-                            <mat-option value="Whole">Whole value</mat-option>
-                            <mat-option value="PerItem">Per item</mat-option>
-                          </mat-select>
-                        </mat-form-field>
+                        <div class="form-field config-control">
+                          <label [for]="'trd-error-policy-' + stepIndex">On error</label>
+                          <select [id]="'trd-error-policy-' + stepIndex" [ngModel]="step.errorPolicy" (ngModelChange)="setErrorPolicy(step, $event)">
+                            <option value="NullOut">Null out</option>
+                            <option value="PassThrough">Pass through</option>
+                            <option value="Fail">Fail</option>
+                            <option value="RouteToDeadLetter">Route to dead letter</option>
+                          </select>
+                        </div>
+                        <div class="form-field config-control">
+                          <label [for]="'trd-array-mode-' + stepIndex">Array mode</label>
+                          <select [id]="'trd-array-mode-' + stepIndex" [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
+                            <option value="Whole">Whole value</option>
+                            <option value="PerItem">Per item</option>
+                          </select>
+                        </div>
+                        <div
+                          class="form-field config-control"
+                          matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from."
+                        >
+                          <label [for]="'trd-fhir-writeback-' + stepIndex">FHIR write-back path (advanced)</label>
+                          <input [id]="'trd-fhir-writeback-' + stepIndex" [ngModel]="step.fhirWriteBackJsonPath" (ngModelChange)="setFhirWriteBackJsonPath(step, $event)" placeholder="e.g. code" />
+                        </div>
                       </div>
 
                       <div class="step-card__actions">
-                        <button mat-button color="warn" [disabled]="step.saving" (click)="removeStep(row, step)">
+                        <button class="btn-text-danger" type="button" [disabled]="step.saving" (click)="removeStep(row, step)">
                           Remove step
                         </button>
                         <button mat-flat-button color="primary" [disabled]="step.saving" (click)="saveStep(row, step)">
@@ -161,11 +263,5 @@
       </div>
     }
   </mat-dialog-content>
-
-  <mat-divider></mat-divider>
-
-  <div class="dialog-actions">
-    <button mat-flat-button color="primary" (click)="close()">Done</button>
-  </div>
 
 </div>

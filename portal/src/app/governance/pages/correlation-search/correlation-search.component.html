@@ -179,11 +179,11 @@
         </section>
       }
 
-      @if (r.errors.length > 0) {
+      @if (visibleErrorRows().length > 0) {
         <section class="result-section">
-          <h3>Errors ({{ r.errors.length }})</h3>
+          <h3>Errors ({{ visibleErrorRows().length }})</h3>
           <table class="mini-table"><tr><th>Time</th><th>Severity</th><th>Exception</th><th>Message</th><th>Reference ID</th><th>Trace</th></tr>
-            @for (x of r.errors; track x.id) {
+            @for (x of visibleErrorRows(); track x.id) {
               <tr>
                 <td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td>
                 <td><span [class]="'severity-badge severity-' + x.severity.toLowerCase()">{{ x.severity }}</span></td>
@@ -191,7 +191,7 @@
                 <td [title]="x.message">{{ x.userFriendlyMessage || x.message }}</td>
                 <td class="mono">
                   @if (x.errorReferenceId) {
-                    <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: x.errorReferenceId }">{{ x.errorReferenceId }}</a>
+                    <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ correlationId: r.correlationId }" title="View every error from this run">{{ x.errorReferenceId }}</a>
                   } @else {
                     —
                   }

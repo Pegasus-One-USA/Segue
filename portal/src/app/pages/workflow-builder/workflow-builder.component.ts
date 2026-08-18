@@ -3,7 +3,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
-import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
 import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
@@ -16,7 +15,6 @@ import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '
 import { environment } from '../../../environments/environment';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
-import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
 import {
   NodeLibraryDialogComponent,
@@ -30,7 +28,6 @@ import {
   standalone: true,
   imports: [
     CanvasComponent,
-    EpicSourceWizardComponent,
     PayloadPreviewComponent,
     NodeLibraryDialogComponent,
   ],
@@ -39,7 +36,6 @@ import {
 })
 export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly store  = inject(PipelineStore);
-  private readonly wiz    = inject(WizardService);
   private readonly toast  = inject(ToastService);
   private readonly appSvc = inject(ApplicabilityService);
   private readonly workflowApi = inject(WorkflowApiService);
@@ -64,7 +60,6 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   // ── other modals ───────────────────────────────────────────────────────────
   protected readonly payloadOpen  = signal(false);
-  protected readonly wizardOpen   = this.wiz.isOpen;
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
   protected readonly workflowName = signal('');
@@ -272,7 +267,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
       const msg = err instanceof Error ? err.message : 'Workflow configuration is invalid.';
       this.workflowStatus.set(msg);
-      this.toast.show('Cannot save workflow', msg);
+      this.toast.error('Cannot save workflow', msg);
       return;
     }
     // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
@@ -325,7 +320,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
           ? Object.values(fieldErrors).flat().join(' ')
           : msg;
         this.workflowStatus.set(detail);
-        this.toast.show('Create-on-save failed', detail);
+        this.toast.error('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });
@@ -453,11 +448,9 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   // ── node library dialog outputs ────────────────────────────────────────────
+  // 'epic' never reaches here — node-library-dialog's addSelected() opens the Epic form
+  // inline and returns before emitting sourceSelected for that id.
   onSourceSelected(id: string): void {
-    if (id === 'epic') {
-      this.wiz.open();
-      return;
-    }
     const src = SOURCES.find(s => s.id === id);
     if (!src) return;
     this.addStubSource(src);
@@ -611,31 +604,29 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   // ── wizard (node-circle click on source or transform node) ──────────────────
-  onOpenWizard(nodeId?: string): void {
-    if (nodeId) {
-      const node = this.store.byId(nodeId);
-      if (node?.kind === 'transform') {
-        const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres') {
-          // Edit destination node — open library in transform mode with parent as origin.
-          const parent = this.store.parentOf(nodeId);
-          this.editingNodeId.set(nodeId);
-          this.libraryMode.set('transform');
-          this.libraryOriginId.set(parent?.id ?? null);
-          this.libraryOpen.set(true);
-        } else {
-          this.toast.show('Nothing to configure', "This module type doesn't have a configuration screen yet.");
-        }
-        return;
+  // canvas.component's openWizard event always emits a real nodeId (see onNodeConfigure),
+  // so the no-nodeId case (formerly opening the legacy epic-source-wizard directly) is unreachable.
+  onOpenWizard(nodeId: string): void {
+    const node = this.store.byId(nodeId);
+    if (node?.kind === 'transform') {
+      const tId = (node as TransformNode).transformId;
+      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-blob') {
+        // Edit destination node — open library in transform mode with parent as origin.
+        const parent = this.store.parentOf(nodeId);
+        this.editingNodeId.set(nodeId);
+        this.libraryMode.set('transform');
+        this.libraryOriginId.set(parent?.id ?? null);
+        this.libraryOpen.set(true);
+      } else {
+        this.toast.show('Nothing to configure', "This module type doesn't have a configuration screen yet.");
       }
-      // Edit Epic source node → open Node Library with Epic form pre-populated.
-      this.editingNodeId.set(nodeId);
-      this.libraryMode.set('source');
-      this.libraryOriginId.set(null);
-      this.libraryOpen.set(true);
-    } else {
-      this.wiz.open();
+      return;
     }
+    // Edit Epic source node → open Node Library with Epic form pre-populated.
+    this.editingNodeId.set(nodeId);
+    this.libraryMode.set('source');
+    this.libraryOriginId.set(null);
+    this.libraryOpen.set(true);
   }
 
   onLibraryClosed(): void {
@@ -649,7 +640,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   onCopyCheckpointUrl(nodeId: string): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) {
-      this.toast.show('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
+      this.toast.warning('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
       return;
     }
 
@@ -657,12 +648,12 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       next: ({ checkpointUrl }) => {
         navigator.clipboard?.writeText(checkpointUrl).then(
           () => this.toast.success('Copied', 'Checkpoint URL copied to clipboard.'),
-          () => this.toast.show('Copy failed', checkpointUrl),
+          () => this.toast.error('Copy failed', checkpointUrl),
         );
       },
       error: err => {
         const msg = err?.error?.error_description ?? err?.error?.error ?? 'Could not generate a checkpoint URL.';
-        this.toast.show('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
+        this.toast.error('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
       },
     });
   }

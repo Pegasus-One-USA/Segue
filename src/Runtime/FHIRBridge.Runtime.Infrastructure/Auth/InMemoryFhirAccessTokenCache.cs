@@ -14,6 +14,7 @@ public sealed class InMemoryFhirAccessTokenCache : IFhirAccessTokenCache
     private static readonly TimeSpan ExpirySkew = TimeSpan.FromMinutes(1);
 
     private static readonly ConcurrentDictionary<string, CachedToken> Cache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, CachedScope> ScopeCache = new(StringComparer.Ordinal);
 
     public Task<string?> GetAsync(string cacheKey, CancellationToken cancellationToken)
     {
@@ -31,5 +32,27 @@ public sealed class InMemoryFhirAccessTokenCache : IFhirAccessTokenCache
         return Task.CompletedTask;
     }
 
+    public Task<string?> GetScopeAsync(string cacheKey, CancellationToken cancellationToken)
+    {
+        if (ScopeCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresOnUtc > DateTimeOffset.UtcNow.Add(ExpirySkew))
+        {
+            return Task.FromResult<string?>(cached.Scope);
+        }
+
+        return Task.FromResult<string?>(null);
+    }
+
+    public Task SetScopeAsync(string cacheKey, string? scope, DateTimeOffset expiresOnUtc, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(scope))
+        {
+            ScopeCache[cacheKey] = new CachedScope(scope, expiresOnUtc);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresOnUtc);
+
+    private sealed record CachedScope(string Scope, DateTimeOffset ExpiresOnUtc);
 }

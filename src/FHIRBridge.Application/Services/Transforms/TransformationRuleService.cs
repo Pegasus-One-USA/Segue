@@ -63,13 +63,16 @@ public sealed class TransformationRuleService : ITransformationRuleService
                 request.OnNull,
                 request.ErrorPolicy,
                 request.OnNullDefaultValue,
-                request.ArrayMode);
+                request.ArrayMode,
+                request.FhirWriteBackJsonPath);
             rule.SetEnabled(request.IsEnabled);
             await _repository.AddAsync(rule, cancellationToken);
             return ToDto(rule);
         }
 
-        existing.Update(configJson, request.Order, request.OnNull, request.ErrorPolicy, request.OnNullDefaultValue, request.ArrayMode);
+        existing.Update(
+            configJson, request.Order, request.OnNull, request.ErrorPolicy,
+            request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath);
         existing.SetEnabled(request.IsEnabled);
         await _repository.UpdateAsync(existing, cancellationToken);
         return ToDto(existing);
@@ -116,10 +119,11 @@ public sealed class TransformationRuleService : ITransformationRuleService
 
             var node = _nodeRegistry.Get(rule.NodeType);
             var config = JsonSerializer.Deserialize<Dictionary<string, string>>(rule.ConfigJson) ?? [];
+            config[ReservedTransformConfigKeys.DestinationType] = request.DestinationType.ToString();
             var secret = rule.NodeType is Domain.Enums.TransformNodeType.HashingMasking or Domain.Enums.TransformNodeType.DateMathAge
                 ? _secretAccessor?.TransformHashingKey
                 : null;
-            var result = TransformNodeApplier.ExecuteWithArrayMode(node, currentValue, config, secret, rule.ArrayMode);
+            var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, rule.ArrayMode, cancellationToken);
 
             steps.Add(new TransformStepTrace(rule.NodeType, rule.Scope, currentValue, result.Value, result.Success, result.Error));
 
@@ -144,6 +148,20 @@ public sealed class TransformationRuleService : ITransformationRuleService
         return new TransformPreviewResult(currentValue, rules[0].Scope, steps);
     }
 
+    public async Task<List<TransformationRuleDto>> GetEffectiveRulesAsync(
+        DestinationType destinationType,
+        string resourceType,
+        string destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem,
+        string? sourceField,
+        CancellationToken cancellationToken = default)
+    {
+        var rules = await _resolver.ResolveAsync(
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+        return rules.Select(ToDto).ToList();
+    }
+
     public IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas() => TransformNodeConfigSchemas.All;
 
     private static TransformationRuleDto ToDto(TransformationRule rule) => new(
@@ -162,5 +180,6 @@ public sealed class TransformationRuleService : ITransformationRuleService
         rule.ErrorPolicy,
         rule.IsEnabled,
         rule.OnNullDefaultValue,
-        rule.ArrayMode);
+        rule.ArrayMode,
+        rule.FhirWriteBackJsonPath);
 }

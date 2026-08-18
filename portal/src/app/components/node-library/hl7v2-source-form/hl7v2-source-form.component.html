@@ -1,0 +1,31 @@
+<div class="hl7-form" [formGroup]="form">
+  <div class="hl7-field">
+    <label class="hl7-label" for="hl7-name">Name</label>
+    <input id="hl7-name" class="hl7-input" type="text" formControlName="name" placeholder="e.g. Lab Feed — HL7 v2" />
+  </div>
+
+  <div class="hl7-field" [class.hl7-field--error]="form.controls.host.touched && form.controls.host.invalid">
+    <label class="hl7-label" for="hl7-host">Host <span class="hl7-req">*</span></label>
+    <input id="hl7-host" class="hl7-input" type="text" formControlName="host" placeholder="e.g. mllp.hospital.local" />
+    @if (form.controls.host.touched && form.controls.host.invalid) {
+      <p class="hl7-error-msg">Host is required.</p>
+    }
+  </div>
+
+  <div class="hl7-field" [class.hl7-field--error]="form.controls.port.touched && form.controls.port.invalid">
+    <label class="hl7-label" for="hl7-port">Port <span class="hl7-req">*</span></label>
+    <input id="hl7-port" class="hl7-input" type="text" inputmode="numeric" formControlName="port" placeholder="2575" />
+    @if (form.controls.port.touched && form.controls.port.invalid) {
+      <p class="hl7-error-msg">Enter a numeric port.</p>
+    }
+    <p class="hl7-hint">Default MLLP port is 2575.</p>
+  </div>
+
+  <div class="hl7-field" [class.hl7-field--error]="form.controls.mllpTimeoutSeconds.touched && form.controls.mllpTimeoutSeconds.invalid">
+    <label class="hl7-label" for="hl7-timeout">MLLP Timeout (seconds) <span class="hl7-req">*</span></label>
+    <input id="hl7-timeout" class="hl7-input" type="text" inputmode="numeric" formControlName="mllpTimeoutSeconds" placeholder="30" />
+    @if (form.controls.mllpTimeoutSeconds.touched && form.controls.mllpTimeoutSeconds.invalid) {
+      <p class="hl7-error-msg">Enter a numeric timeout in seconds.</p>
+    }
+  </div>
+</div>

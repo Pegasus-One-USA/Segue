@@ -15,42 +15,62 @@
             <span class="cell-muted">{{ ex.sourceName ?? ex.sourceSystemType ?? 'Unknown source' }}</span>
           </div>
         </div>
-        <span class="status-badge" [class]="statusClass(ex.status)">{{ ex.status }}</span>
+        <span class="status-badge" [class]="statusClass(ex.status)">
+          <span class="status-dot"></span>{{ ex.status }}
+        </span>
       </div>
 
       <div class="header-stats">
         <div class="stat">
-          <span class="stat-label">Started</span>
-          <span class="stat-value">{{ ex.startedAt | date:'MMM d, y, h:mm:ss a' }}</span>
+          <span class="stat-icon"><mat-icon>schedule</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Started</span>
+            <span class="stat-value">{{ ex.startedAt | date:'MMM d, y, h:mm:ss a' }}</span>
+          </div>
         </div>
         <div class="stat">
-          <span class="stat-label">Duration</span>
-          <span class="stat-value">{{ formatDuration(ex.durationMs) }}</span>
+          <span class="stat-icon"><mat-icon>timer</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Duration</span>
+            <span class="stat-value">{{ formatDuration(ex.durationMs) }}</span>
+          </div>
         </div>
         <div class="stat">
-          <span class="stat-label">Triggered By</span>
-          <span class="stat-value">{{ ex.triggeredBy ?? '—' }} ({{ ex.triggerType ?? 'Manual' }})</span>
+          <span class="stat-icon"><mat-icon>person</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Triggered By</span>
+            <span class="stat-value">{{ ex.triggeredBy ?? '—' }} ({{ ex.triggerType ?? 'Manual' }})</span>
+          </div>
         </div>
         <div class="stat">
-          <span class="stat-label">Node Runs</span>
-          <span class="stat-value">{{ ex.nodeRunCount }}</span>
+          <span class="stat-icon"><mat-icon>hub</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Node Runs</span>
+            <span class="stat-value">{{ ex.nodeRunCount }}</span>
+          </div>
         </div>
         <div class="stat">
-          <span class="stat-label">Workflow Version</span>
-          <span class="stat-value">v{{ ex.workflowDefinitionVersion }}</span>
+          <span class="stat-icon"><mat-icon>sell</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Workflow Version</span>
+            <span class="stat-value">v{{ ex.workflowDefinitionVersion }}</span>
+          </div>
         </div>
         <div class="stat">
-          <span class="stat-label">Correlation ID</span>
-          @if (ex.correlationId) {
-            <span class="stat-value correlation-value">
-              <a class="mono link" [routerLink]="['/governance/correlation-search']" [queryParams]="{ correlationId: ex.correlationId }">{{ ex.correlationId }}</a>
-              <button class="btn-copy" type="button" (click)="copyCorrelationId()" title="Copy Correlation ID">
-                <mat-icon>content_copy</mat-icon>
-              </button>
-            </span>
-          } @else {
-            <span class="stat-value">—</span>
-          }
+          <span class="stat-icon"><mat-icon>link</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Correlation ID</span>
+            @if (ex.correlationId) {
+              <span class="stat-value correlation-value">
+                <a class="mono link" [routerLink]="['/governance/correlation-search']" [queryParams]="{ correlationId: ex.correlationId }">{{ ex.correlationId }}</a>
+                <button class="btn-copy" type="button" (click)="copyCorrelationId()" title="Copy Correlation ID">
+                  <mat-icon>content_copy</mat-icon>
+                </button>
+              </span>
+            } @else {
+              <span class="stat-value">—</span>
+            }
+          </div>
         </div>
       </div>
 
@@ -63,47 +83,106 @@
     </div>
   }
 
+  <div class="lineage-tabs">
+    <button
+      type="button"
+      [class.active]="activeTab() === 'nodeRuns'"
+      (click)="setTab('nodeRuns')"
+    >
+      <mat-icon>bolt</mat-icon>
+      Node runs
+      @if (execution(); as ex) {
+        <span class="tab-count">{{ ex.nodeRunCount }}</span>
+      }
+    </button>
+    <button
+      type="button"
+      [class.active]="activeTab() === 'fieldLineage'"
+      (click)="setTab('fieldLineage')"
+    >
+      <mat-icon>hub</mat-icon>
+      Field lineage
+    </button>
+  </div>
+
+  @if (activeTab() === 'nodeRuns') {
   <div class="table-card">
     <div class="table-meta">
-      <span class="entries-info">What each node fetched, transformed, and wrote for this run</span>
+      <span class="entries-info"><mat-icon>timeline</mat-icon> What each node fetched, transformed, and wrote for this run</span>
+      <button class="btn-link" type="button" (click)="toggleAllExpanded()">
+        <mat-icon>{{ allExpanded() ? 'unfold_less' : 'unfold_more' }}</mat-icon>
+        {{ allExpanded() ? 'Collapse all' : 'Expand all' }}
+      </button>
     </div>
 
     <div class="resource-list">
-      @for (entry of resources().items; track entry.id) {
-        <div class="resource-row">
+      @for (entry of nodeRuns().items; track entry.workflowNodeRunId; let i = $index) {
+        <div class="resource-row" [class]="'resource-row--' + entry.status.toLowerCase()">
           <div
             class="resource-summary"
             role="button"
             tabindex="0"
-            [attr.aria-expanded]="expandedId() === entry.id"
-            (click)="toggleExpanded(entry.id)"
-            (keydown.enter)="toggleExpanded(entry.id)"
-            (keydown.space)="toggleExpanded(entry.id); $event.preventDefault()"
+            [attr.aria-expanded]="isExpanded(entry.workflowNodeRunId)"
+            (click)="toggleExpanded(entry.workflowNodeRunId)"
+            (keydown.enter)="toggleExpanded(entry.workflowNodeRunId)"
+            (keydown.space)="toggleExpanded(entry.workflowNodeRunId); $event.preventDefault()"
           >
-            <span class="cell-primary">{{ entry.nodeType }}</span>
-            <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
-            <span class="cell-muted">{{ entry.itemCount !== null ? entry.itemCount + ' item(s)' : '' }}</span>
-            <span class="cell-muted">{{ entry.recordedAtUtc | date:'MMM d, h:mm:ss a' }}</span>
-            <mat-icon class="chevron">{{ expandedId() === entry.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span class="node-marker" [class]="contractClass(entry.contract)">
+              <mat-icon>{{ contractIcon(entry.contract) }}</mat-icon>
+            </span>
+            <div class="node-summary-main">
+              <div class="node-summary-title">
+                <span class="node-index">{{ i + 1 }}</span>
+                <span class="cell-primary">{{ entry.nodeType }}</span>
+                <span class="status-badge" [class]="statusClass(entry.status)">{{ entry.status }}</span>
+                @if (entry.contract) {
+                  <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>
+                }
+              </div>
+            </div>
+            <span class="cell-muted node-summary-meta">{{ entry.itemCount !== null ? entry.itemCount + ' item(s) · ' : '' }}{{ (entry.completedAt ?? entry.startedAt) | date:'MMM d, h:mm:ss a' }}</span>
+            <mat-icon class="chevron">{{ isExpanded(entry.workflowNodeRunId) ? 'expand_less' : 'expand_more' }}</mat-icon>
           </div>
 
-          @if (expandedId() === entry.id) {
+          @if (isExpanded(entry.workflowNodeRunId)) {
             <div class="resource-detail">
-              <pre>{{ formatJson(entry.payloadJson) }}</pre>
+              <div class="resource-detail__toolbar">
+                <button class="btn-copy" type="button" (click)="copyNodeDetail(entry)" title="Copy">
+                  <mat-icon>content_copy</mat-icon> Copy
+                </button>
+              </div>
+              @if (entry.errorMessage) {
+                <div class="node-error-banner">
+                  <mat-icon>error_outline</mat-icon>
+                  <span>{{ entry.errorMessage }}</span>
+                </div>
+              }
+              @if (isLoadingPayload(entry.workflowNodeRunId)) {
+                <div class="payload-loading">
+                  <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
+                  <span>Loading node output…</span>
+                </div>
+              } @else {
+                @if (payloadJsonFor(entry.workflowNodeRunId); as payloadJson) {
+                  <pre>{{ formatJson(payloadJson) }}</pre>
+                } @else if (!entry.errorMessage) {
+                  <p class="no-output-note">This node completed with no recorded output.</p>
+                }
+              }
             </div>
           }
         </div>
       } @empty {
         <div class="empty-state">
           <mat-icon>bolt</mat-icon>
-          <p>No node output recorded for this run yet.</p>
+          <p>No nodes have started for this run yet.</p>
         </div>
       }
     </div>
 
-    @if (resources().totalCount > pageSize()) {
+    @if (nodeRuns().totalCount > pageSize()) {
       <mat-paginator
-        [length]="resources().totalCount"
+        [length]="nodeRuns().totalCount"
         [pageSize]="pageSize()"
         [pageIndex]="pageIndex()"
         [pageSizeOptions]="[10, 25, 50, 100]"
@@ -113,5 +192,10 @@
       ></mat-paginator>
     }
   </div>
+  }
+
+  @if (activeTab() === 'fieldLineage') {
+    <app-field-lineage-panel [runId]="runId" />
+  }
 
 </div>

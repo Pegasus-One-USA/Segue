@@ -20,13 +20,15 @@ public sealed class BulkExportPollServiceTests
         RuntimeSourceType.Epic, "Epic", "https://fhir.example.com/R4", "https://auth/token", "client-1",
         null, null, []);
 
-    private static BulkExportJob CreateJob(Guid sourceConnectionId, string sourcePath = BulkExportJobSourcePath.WorkflowNode)
+    private static BulkExportJob CreateJob(
+        Guid sourceConnectionId, string sourcePath = BulkExportJobSourcePath.WorkflowNode, string? requestedResourceTypesJson = null)
     {
         var job = new BulkExportJob(
             Guid.NewGuid(), sourcePath, sourceConnectionId, sourceConfigurationId: null,
             exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow,
             workflowRunId: sourcePath == BulkExportJobSourcePath.WorkflowNode ? Guid.NewGuid() : null,
-            workflowNodeId: sourcePath == BulkExportJobSourcePath.WorkflowNode ? Guid.NewGuid() : null);
+            workflowNodeId: sourcePath == BulkExportJobSourcePath.WorkflowNode ? Guid.NewGuid() : null,
+            requestedResourceTypesJson: requestedResourceTypesJson);
         job.MarkKickedOff("https://fhir.example.com/status/1");
         return job;
     }
@@ -177,6 +179,52 @@ public sealed class BulkExportPollServiceTests
         job.Status.Should().Be(BulkExportJobStatus.Completed);
         capturedReasons.Should().ContainSingle()
             .Which.Should().Contain("MedicationAdministration").And.Contain("not-supported");
+    }
+
+    [Fact]
+    public async Task Completed_result_filters_manifest_errors_down_to_the_nodes_actually_requested_resource_types()
+    {
+        // Reproduces the Epic Group-export scenario: the node only requested "Patient", but ResolveTypeParameter
+        // omits _type entirely for a lone-Patient Group export (dodging a different Epic bug), so the server
+        // attempts every resource type it supports and reports each unrequested/unauthorized one as a manifest
+        // error. None of that noise should reach the caller — only reasons naming a type this node actually asked for.
+        var job = CreateJob(Guid.NewGuid(), requestedResourceTypesJson: "[\"Patient\"]");
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        var errorFiles = new[] { new BulkExportFile("OperationOutcome", "https://fhir.example.com/files/error.ndjson") };
+        var resources = new List<ResourceEnvelope> { new("Patient", "p1", "{}", null, null) };
+        var partialFailures = new[]
+        {
+            new BulkExportPartialFailure("information", "invalid", "Unknown parameter: _OUTPUTFORMAT. Parameter has been ignored."),
+            new BulkExportPartialFailure("information", "suppressed", "The following resources are not authorized: claim, imagingstudy."),
+            new BulkExportPartialFailure("information", "suppressed", "Observation"),
+            new BulkExportPartialFailure("information", "suppressed", "Patient export limited by group membership."),
+        };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files, ErrorFiles: errorFiles));
+        client.Setup(c => c.DownloadResultsAsync(files, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(resources);
+        client.Setup(c => c.DownloadPartialFailuresAsync(errorFiles, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(partialFailures);
+
+        IReadOnlyList<string>? capturedReasons = null;
+        orchestrator
+            .Setup(o => o.ResumeAfterBulkExportAsync(
+                job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson, resources,
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, string?, string?, IReadOnlyList<ResourceEnvelope>, IReadOnlyList<string>?, CancellationToken>(
+                (_, _, _, _, _, reasons, _) => capturedReasons = reasons)
+            .ReturnsAsync(new WorkflowRunResult(
+                new WorkflowRun(job.WorkflowRunId!.Value, Guid.NewGuid(), DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        capturedReasons.Should().ContainSingle()
+            .Which.Should().Contain("Patient export limited by group membership");
     }
 
     [Fact]

@@ -155,11 +155,11 @@
                       />
                     }
                     @case ('all') {
-                      <label class="fm-inline-checkbox">
+                      <label class="fm-inline-checkbox" title="Always on for &quot;All records&quot; — the alternative would duplicate this entire destination row once per array item.">
                         <input
                           type="checkbox"
                           [checked]="row.instance?.aggregate === 'csv'"
-                          (change)="onInstanceAggregateChange(row, $any($event.target).checked)"
+                          disabled
                         />
                         combine as one delimited row
                       </label>

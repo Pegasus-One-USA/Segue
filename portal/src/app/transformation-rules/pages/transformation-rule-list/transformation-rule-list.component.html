@@ -10,17 +10,18 @@
     </div>
   } @else {
   <div class="page-header">
-    <div>
+    <div class="page-header__title-row">
       <h1>Transformation Rules</h1>
-      <p>Global, resource-type, and destination-type defaults — applied automatically everywhere they match,
-        without needing to be re-configured per workflow. Field-specific rules are set from the "Rules"
-        button on a mapped column instead.</p>
+      @if (!creatingNew()) {
+        <button mat-flat-button color="primary" (click)="startNewTarget()">
+          <mat-icon>add</mat-icon> New rule target
+        </button>
+      }
     </div>
-    @if (!creatingNew()) {
-      <button mat-flat-button color="primary" (click)="startNewTarget()">
-        <mat-icon>add</mat-icon> New rule target
-      </button>
-    }
+    <p>Global, resource-type, and destination-type defaults — applied automatically everywhere they match,
+      without needing to be re-configured per workflow. A per-column override is set from the "Rules" button
+      on a mapped column instead; a source-field-only rule (matched wherever that field appears, any resource
+      type) is created here too, via "Field" scope.</p>
   </div>
 
   @if (creatingNew()) {
@@ -28,49 +29,51 @@
       <h3>New rule target</h3>
 
       <div class="form-grid">
-        <mat-form-field appearance="outline">
-          <mat-label>Applies to</mat-label>
-          <mat-select [ngModel]="newTarget().scope" (ngModelChange)="setNewTargetScope($event)">
+        <div class="form-field">
+          <label for="ntf-scope">Applies to</label>
+          <select id="ntf-scope" [ngModel]="newTarget().scope" (ngModelChange)="setNewTargetScope($event)">
             @for (opt of scopeOptions; track opt.value) {
-              <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+              <option [value]="opt.value">{{ opt.label }}</option>
             }
-          </mat-select>
-        </mat-form-field>
+          </select>
+        </div>
 
-        <mat-form-field appearance="outline">
-          <mat-label>{{ newTarget().scope === 'ResourceType' ? 'Resource type' : 'Resource type (for field picker)' }}</mat-label>
-          <mat-select [ngModel]="newTarget().resourceType" (ngModelChange)="onResourceTypeChangeForNewTarget($event)">
+        <div class="form-field">
+          <label for="ntf-resourceType">{{ newTarget().scope === 'ResourceType' ? 'Resource type' : 'Resource type (for field picker)' }}</label>
+          <select id="ntf-resourceType" [ngModel]="newTarget().resourceType" (ngModelChange)="onResourceTypeChangeForNewTarget($event)">
             @for (rt of resourceTypeOptions; track rt) {
-              <mat-option [value]="rt">{{ rt }}</mat-option>
+              <option [value]="rt">{{ rt }}</option>
             }
-          </mat-select>
-        </mat-form-field>
+          </select>
+        </div>
 
         @if (newTarget().scope === 'DestinationType') {
-          <mat-form-field appearance="outline">
-            <mat-label>Destination type</mat-label>
-            <mat-select [ngModel]="newTarget().destinationType" (ngModelChange)="setNewTargetDestinationType($event)">
+          <div class="form-field">
+            <label for="ntf-destinationType">Destination type</label>
+            <select id="ntf-destinationType" [ngModel]="newTarget().destinationType" (ngModelChange)="setNewTargetDestinationType($event)">
               @for (dt of destinationTypeOptions; track dt) {
-                <mat-option [value]="dt">{{ dt }}</mat-option>
+                <option [value]="dt">{{ dt }}</option>
               }
-            </mat-select>
-          </mat-form-field>
+            </select>
+          </div>
         }
 
-        <mat-form-field appearance="outline">
-          <mat-label>Source field (optional)</mat-label>
-          <mat-select [ngModel]="newTarget().sourceField" (ngModelChange)="setNewTargetSourceField($event)">
-            <mat-option value="">Any source field</mat-option>
-            @for (f of sourceFieldOptions(); track f.fhirPath) {
-              <mat-option [value]="f.fhirPath">{{ f.label }}</mat-option>
+        <div class="form-field">
+          <label for="ntf-sourceField">{{ newTarget().scope === 'Field' ? 'Source field (required)' : 'Source field (optional)' }}</label>
+          <select id="ntf-sourceField" [ngModel]="newTarget().sourceField" (ngModelChange)="setNewTargetSourceField($event)">
+            @if (newTarget().scope !== 'Field') {
+              <option value="">Any source field</option>
             }
-          </mat-select>
-        </mat-form-field>
+            @for (f of sourceFieldOptions(); track f.fhirPath) {
+              <option [value]="f.fhirPath">{{ f.label }}</option>
+            }
+          </select>
+        </div>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Destination field (optional)</mat-label>
-          <input matInput [ngModel]="newTarget().destinationField" (ngModelChange)="setNewTargetDestinationField($event)" placeholder="Leave blank for every field" />
-        </mat-form-field>
+        <div class="form-field">
+          <label for="ntf-destinationField">Destination field (optional)</label>
+          <input id="ntf-destinationField" [ngModel]="newTarget().destinationField" (ngModelChange)="setNewTargetDestinationField($event)" placeholder="Leave blank for every field" />
+        </div>
       </div>
 
       <div class="form-actions">
@@ -80,22 +83,51 @@
     </div>
   }
 
-  <div class="list-header">
-    <mat-form-field appearance="outline" class="scope-filter">
-      <mat-label>Filter by scope</mat-label>
-      <mat-select [ngModel]="scopeFilter()" (ngModelChange)="scopeFilter.set($event)">
-        <mat-option [value]="''">All</mat-option>
-        @for (opt of scopeOptions; track opt.value) {
-          <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-  </div>
+  @if (!loading() && groups().length > 0) {
+    <div class="list-header">
+      <label class="list-header__label" for="scope-filter-select">
+        <mat-icon class="list-header__ico" aria-hidden="true">filter_alt</mat-icon>
+        Filter by scope
+      </label>
+      <div class="scope-filter-box">
+        <select
+          id="scope-filter-select"
+          [ngModel]="scopeFilter()"
+          (ngModelChange)="scopeFilter.set($event)"
+        >
+          <option value="">All</option>
+          @for (opt of scopeOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
+        <mat-icon class="scope-filter-box__chevron" aria-hidden="true">expand_more</mat-icon>
+      </div>
+    </div>
+  }
 
   @if (loading()) {
-    <p class="empty-state">Loading…</p>
+    <div class="empty-state">
+      <p class="empty-state__body">Loading…</p>
+    </div>
   } @else if (filteredGroups.length === 0) {
-    <p class="empty-state">No rules configured yet.</p>
+    <div class="empty-state">
+      <div class="empty-state__icon"><mat-icon>tune</mat-icon></div>
+      @if (groups().length > 0) {
+        <h3 class="empty-state__title">No rules match this scope</h3>
+        <p class="empty-state__body">Try a different value in "Filter by scope" above, or clear it to see every rule target.</p>
+      } @else {
+        <h3 class="empty-state__title">No rules configured yet</h3>
+        <p class="empty-state__body">
+          Set a global, resource-type, or destination-type default here so it applies automatically everywhere it
+          matches, without needing to be re-configured per workflow.
+        </p>
+        @if (!creatingNew()) {
+          <button mat-flat-button color="primary" class="empty-state__action" (click)="startNewTarget()">
+            <mat-icon>add</mat-icon> New rule target
+          </button>
+        }
+      }
+    </div>
   } @else {
     <div class="groups-list">
       @for (group of filteredGroups; track group.key) {
@@ -119,65 +151,82 @@
             <div class="group-card__steps">
               @for (step of group.steps; track step.id ?? $index; let stepIndex = $index; let isFirst = $first; let isLast = $last) {
                 <div class="step-card">
-                  <div class="step-card__order">
-                    <span class="step-number">{{ stepIndex + 1 }}</span>
-                    <div class="step-reorder">
-                      <button mat-icon-button [disabled]="isFirst" (click)="moveStep(group, step, -1)" matTooltip="Run earlier">
-                        <mat-icon>arrow_upward</mat-icon>
-                      </button>
-                      <button mat-icon-button [disabled]="isLast" (click)="moveStep(group, step, 1)" matTooltip="Run later">
-                        <mat-icon>arrow_downward</mat-icon>
-                      </button>
-                    </div>
-                  </div>
-
                   <div class="step-card__content">
-                    <mat-form-field appearance="outline" class="node-select">
-                      <mat-label>Node type</mat-label>
-                      <mat-select [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
-                        @for (opt of applicableNodeTypesFor(group); track opt.value) {
-                          <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
-                        }
-                      </mat-select>
-                    </mat-form-field>
+                    <div class="step-card__fields">
+                      <div class="step-card__fields-row step-card__fields-row--node">
+                        <div class="form-field node-select">
+                          <div class="node-select__label-row">
+                            <span class="step-number">{{ stepIndex + 1 }}</span>
+                            <label [for]="'node-type-' + stepIndex">Node type</label>
+                          </div>
+                          <div class="node-select__input-row">
+                            <select [id]="'node-type-' + stepIndex" [ngModel]="step.nodeType" (ngModelChange)="onNodeTypeChange(step, $event)">
+                              @for (opt of applicableNodeTypesFor(group); track opt.value) {
+                                <option [value]="opt.value">{{ opt.label }}</option>
+                              }
+                            </select>
+                            <div class="step-reorder">
+                              <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(group, step, -1)" matTooltip="Run earlier">
+                                <mat-icon>arrow_upward</mat-icon>
+                              </button>
+                              <button type="button" class="step-reorder-btn" [disabled]="isLast" (click)="moveStep(group, step, 1)" matTooltip="Run later">
+                                <mat-icon>arrow_downward</mat-icon>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                    <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                      <!-- A separate row (its own flex-wrap context), not a sibling flex item sharing
+                           .step-card__fields-row--node's row — see transform-rules-dialog.component.scss's
+                           identical rule for why this, not a flex-wrap break inside one shared row. -->
+                      <div class="step-card__fields-row step-card__fields-row--config">
+                        <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                      </div>
+                    </div>
 
                     <div class="step-card__advanced">
-                      <mat-form-field appearance="outline" class="config-control">
-                        <mat-label>On missing input</mat-label>
-                        <mat-select [ngModel]="step.onNull" (ngModelChange)="setOnNull(step, $event)">
-                          <mat-option value="Skip">Skip (leave as-is)</mat-option>
-                          <mat-option value="Default">Substitute a default</mat-option>
-                          <mat-option value="Error">Treat as an error</mat-option>
-                        </mat-select>
-                      </mat-form-field>
+                      <div class="form-field config-control">
+                        <label [for]="'on-null-' + stepIndex">On missing input</label>
+                        <select [id]="'on-null-' + stepIndex" [ngModel]="step.onNull" (ngModelChange)="setOnNull(step, $event)">
+                          <option value="Skip">Skip (leave as-is)</option>
+                          <option value="Default">Substitute a default</option>
+                          <option value="Error">Treat as an error</option>
+                        </select>
+                      </div>
                       @if (step.onNull === 'Default') {
-                        <mat-form-field appearance="outline" class="config-control">
-                          <mat-label>Default value</mat-label>
-                          <input matInput [ngModel]="step.onNullDefaultValue" (ngModelChange)="setOnNullDefaultValue(step, $event)" />
-                        </mat-form-field>
+                        <div class="form-field config-control">
+                          <label [for]="'on-null-default-' + stepIndex">Default value</label>
+                          <input [id]="'on-null-default-' + stepIndex" [ngModel]="step.onNullDefaultValue" (ngModelChange)="setOnNullDefaultValue(step, $event)" />
+                        </div>
                       }
-                      <mat-form-field appearance="outline" class="config-control">
-                        <mat-label>On error</mat-label>
-                        <mat-select [ngModel]="step.errorPolicy" (ngModelChange)="setErrorPolicy(step, $event)">
-                          <mat-option value="NullOut">Null out</mat-option>
-                          <mat-option value="PassThrough">Pass through</mat-option>
-                          <mat-option value="Fail">Fail</mat-option>
-                          <mat-option value="RouteToDeadLetter">Route to dead letter</mat-option>
-                        </mat-select>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="config-control">
-                        <mat-label>Array mode</mat-label>
-                        <mat-select [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
-                          <mat-option value="Whole">Whole value</mat-option>
-                          <mat-option value="PerItem">Per item</mat-option>
-                        </mat-select>
-                      </mat-form-field>
+                      <div class="form-field config-control">
+                        <label [for]="'error-policy-' + stepIndex">On error</label>
+                        <select [id]="'error-policy-' + stepIndex" [ngModel]="step.errorPolicy" (ngModelChange)="setErrorPolicy(step, $event)">
+                          <option value="NullOut">Null out</option>
+                          <option value="PassThrough">Pass through</option>
+                          <option value="Fail">Fail</option>
+                          <option value="RouteToDeadLetter">Route to dead letter</option>
+                        </select>
+                      </div>
+                      <div class="form-field config-control">
+                        <label [for]="'array-mode-' + stepIndex">Array mode</label>
+                        <select [id]="'array-mode-' + stepIndex" [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
+                          <option value="Whole">Whole value</option>
+                          <option value="PerItem">Per item</option>
+                        </select>
+                      </div>
+                      <div
+                        class="form-field config-control"
+                        matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from."
+                      >
+                        <label [for]="'fhir-writeback-' + stepIndex">FHIR write-back path (advanced)</label>
+                        <input [id]="'fhir-writeback-' + stepIndex" [ngModel]="step.fhirWriteBackJsonPath" (ngModelChange)="setFhirWriteBackJsonPath(step, $event)" placeholder="e.g. code" />
+                      </div>
                     </div>
 
                     <div class="step-card__actions">
-                      <button mat-button color="warn" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
+                      <button class="btn-text-danger" type="button" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
                       <button mat-flat-button color="primary" [disabled]="step.saving" (click)="saveStep(group, step)">
                         @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { Save step }
                       </button>

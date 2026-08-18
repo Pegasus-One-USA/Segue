@@ -61,4 +61,68 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
                 take));
         }
     }
+
+    /// <summary>This non-durable recorder never sees <c>WorkflowNodeRun</c> rows (status/error live on the
+    /// entity persisted by the SQL-backed store), so it can only ever report the successes it recorded —
+    /// failed/cancelled nodes aren't representable here. Callers that need real per-node status should use the
+    /// SQL-backed recorder (<c>AddWorkflowSqlPersistence</c>).</summary>
+    public Task<WorkflowPagedResult<WorkflowNodeRunHistoryDto>> GetNodeRunHistoryPagedAsync(
+        Guid workflowRunId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var matching = _payloads
+                .Where(entry => entry.WorkflowRunId == workflowRunId)
+                .Select(entry => entry.Dto)
+                .OrderBy(dto => dto.RecordedAtUtc)
+                .ToList();
+
+            var take = Math.Clamp(pageSize, 1, 200);
+            var skip = Math.Max(0, (page - 1) * take);
+
+            var items = matching.Skip(skip).Take(take).Select(dto => new WorkflowNodeRunHistoryDto(
+                dto.WorkflowNodeRunId, dto.NodeType, 0, 0, "Succeeded", null,
+                dto.RecordedAtUtc, dto.RecordedAtUtc, dto.Contract, dto.PayloadJson, dto.ItemCount)).ToList();
+
+            return Task.FromResult(new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, matching.Count, page, take));
+        }
+    }
+
+    /// <summary>Not durable/encrypted here (this recorder never encrypts), so this is just a lookup of the same
+    /// in-memory payload the SQL-backed store would otherwise decrypt on demand.</summary>
+    public Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
+        Guid workflowRunId, Guid workflowNodeRunId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var match = _payloads
+                .Where(entry => entry.WorkflowRunId == workflowRunId && entry.Dto.WorkflowNodeRunId == workflowNodeRunId)
+                .Select(entry => entry.Dto)
+                .OrderBy(dto => dto.RecordedAtUtc)
+                .FirstOrDefault();
+
+            return Task.FromResult(match is null
+                ? null
+                : new WorkflowNodeRunPayloadDetailDto(match.WorkflowNodeRunId, match.Contract, match.PayloadJson, match.ItemCount));
+        }
+    }
+
+    /// <summary>This non-durable recorder never sees <c>FieldLineageEntry</c> rows either (those are written by
+    /// the Worker's lineage-capture consumer straight to SQL, not through this recorder) — always empty here.
+    /// Callers that need real field lineage should use the SQL-backed recorder (<c>AddWorkflowSqlPersistence</c>).</summary>
+    public Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
+        Guid workflowRunId, int page, int pageSize, FieldLineageFilter? filter, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new WorkflowPagedResult<FieldLineageChainDto>([], 0, page, Math.Clamp(pageSize, 1, 200)));
+    }
+
+    public Task<LineageSummaryDto> GetLineageSummaryAsync(Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new LineageSummaryDto(0, 0, 0, 0));
+    }
+
+    public Task<IReadOnlyList<ResourceTypeSummaryDto>> GetLineageResourceTreeAsync(Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<ResourceTypeSummaryDto>>([]);
+    }
 }

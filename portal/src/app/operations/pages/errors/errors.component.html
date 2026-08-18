@@ -27,6 +27,10 @@
     </div>
   </details>
 
+  @if (correlationId()) {
+    <p class="filter-note">Showing every error from run <code class="mono">{{ correlationId() }}</code> — <button class="btn-link" type="button" (click)="reset()">clear</button></p>
+  }
+
   <div class="filter-bar">
     <input
       type="search"

@@ -57,7 +57,11 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
 
         var fieldRules = PreferSourceFieldSpecific(
             PreferSourceSpecific(
-                await _repository.GetFieldScopedAsync(resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                PreferResourceTypeSpecific(
+                    PreferFieldSpecific(
+                        await _repository.GetFieldScopedAsync(resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                        destinationField),
+                    resourceType),
                 sourceSystem),
             sourceField);
         if (fieldRules.Count > 0)
@@ -91,6 +95,16 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
     {
         var fieldSpecific = rules.Where(r => r.DestinationField == destinationField).ToList();
         return fieldSpecific.Count > 0 ? fieldSpecific : rules;
+    }
+
+    /// <summary>Field-tier-only counterpart to <see cref="PreferFieldSpecific"/>'s field-name preference — a
+    /// row naming this exact resource type takes priority over a blanket (ResourceType == null, "any
+    /// resource") row within the Field tier, same "specific beats blanket" pattern.</summary>
+    private static IReadOnlyList<TransformationRule> PreferResourceTypeSpecific(
+        IReadOnlyList<TransformationRule> rules, string resourceType)
+    {
+        var resourceTypeSpecific = rules.Where(r => r.ResourceType == resourceType).ToList();
+        return resourceTypeSpecific.Count > 0 ? resourceTypeSpecific : rules;
     }
 
     /// <summary>Within Field/Workflow tier rows, a row naming this exact source system takes priority over a

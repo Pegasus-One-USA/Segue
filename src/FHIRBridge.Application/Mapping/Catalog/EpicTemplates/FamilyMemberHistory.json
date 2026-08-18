@@ -1,0 +1,178 @@
+{
+  "resourceType": "FamilyMemberHistory",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "instantiatesCanonical": [
+    "<Canonical · 0..*>"
+  ],
+  "instantiatesUri": [
+    "<Uri · 0..*>"
+  ],
+  "status": "<Code · 1..1 · required>",
+  "dataAbsentReason": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "patient": {
+    "reference": "<String · 1..1 · required>",
+    "display": "<String · 0..1>"
+  },
+  "date": "<DateTime · 0..1>",
+  "name": "<String · 0..1>",
+  "relationship": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "sex": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "bornPeriod": {
+    "start": "<DateTime · 0..1>",
+    "end": "<DateTime · 0..1>"
+  },
+  "bornDate": "<Date · 0..1>",
+  "bornString": "<String · 0..1>",
+  "ageAge": {
+    "value": "<Decimal · 0..1>",
+    "unit": "<String · 0..1>",
+    "system": "<Uri · 0..1>",
+    "code": "<Code · 0..1>"
+  },
+  "ageRange": {
+    "low": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>"
+    },
+    "high": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>"
+    }
+  },
+  "ageString": "<String · 0..1>",
+  "estimatedAge": "<boolean · 0..1>",
+  "deceasedBoolean": "<boolean · 0..1>",
+  "deceasedAge": {
+    "value": "<Decimal · 0..1>",
+    "unit": "<String · 0..1>",
+    "system": "<Uri · 0..1>",
+    "code": "<Code · 0..1>"
+  },
+  "deceasedRange": {
+    "low": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>"
+    },
+    "high": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>"
+    }
+  },
+  "deceasedDate": "<Date · 0..1>",
+  "deceasedString": "<String · 0..1>",
+  "reasonCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "reasonReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "note": [
+    {
+      "authorString": "<String · 0..1>",
+      "time": "<DateTime · 0..1>",
+      "text": "<Markdown · 1..1 · required>"
+    }
+  ],
+  "condition": [
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "outcome": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ]
+      },
+      "contributedToDeath": "<boolean · 0..1>",
+      "onsetAge": {
+        "value": "<Decimal · 0..1>",
+        "unit": "<String · 0..1>"
+      },
+      "onsetRange": {
+        "low": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>"
+        },
+        "high": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>"
+        }
+      },
+      "onsetPeriod": {
+        "start": "<DateTime · 0..1>",
+        "end": "<DateTime · 0..1>"
+      },
+      "onsetString": "<String · 0..1>",
+      "note": [
+        {
+          "authorString": "<String · 0..1>",
+          "time": "<DateTime · 0..1>",
+          "text": "<Markdown · 1..1 · required>"
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Runtime.Infrastructure.Applications;
@@ -31,6 +32,11 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
     /// <summary>No-op by default (nothing cached to discard); interactive strategies override to clear their token store entry.</summary>
     public virtual Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    /// <summary>Unknown by default; every concrete strategy overrides to delegate to its own token provider (see
+    /// <see cref="ISourceApplicationStrategy.GetGrantedScopeAsync"/>).</summary>
+    public virtual Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(null);
 
     public SourceApplicationValidationResult Validate(FhirSourceConfiguration source)
     {
@@ -70,6 +76,23 @@ public abstract class SourceApplicationStrategyBase : ISourceApplicationStrategy
         if (string.IsNullOrWhiteSpace(source.TokenEndpoint))
         {
             errors.Add("A token endpoint is required.");
+        }
+    }
+
+    /// <summary>
+    /// athenahealth is multi-tenant and rejects every FHIR request (search, read, and <c>$export</c> alike) with a
+    /// 400 "Could not determine what practice the request was for" unless <c>ah-practice</c> is present — see
+    /// <c>AthenahealthFhirSourceClient.AdditionalQueryParameters</c>, which builds that header from
+    /// <see cref="FhirSourceConfiguration.PracticeId"/>. That requirement previously surfaced only as a runtime HTTP
+    /// failure on the first live call; every application-type strategy (Backend/Standalone/EhrLaunch/Patient) now
+    /// calls this from its own <c>ValidateCore</c> so a source connection missing it fails fast at configuration/save
+    /// time instead. No-op for every other vendor.
+    /// </summary>
+    protected static void RequirePracticeIdForAthenahealth(FhirSourceConfiguration source, List<string> errors)
+    {
+        if (source.SourceType == RuntimeSourceType.Athenahealth && string.IsNullOrWhiteSpace(source.PracticeId))
+        {
+            errors.Add("A practice ID is required for athenahealth source connections (sent as ah-practice on every request).");
         }
     }
 }

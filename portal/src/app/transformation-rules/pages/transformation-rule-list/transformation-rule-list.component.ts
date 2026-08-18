@@ -4,9 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -28,14 +25,17 @@ const DESTINATION_TYPE_OPTIONS: DestinationType[] = [
   'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'Csv', 'Sftp', 'FhirRepository',
 ];
 
-// Only the two broadest scopes are managed here — Field/Workflow rules are always created in context from
-// a specific mapped column's Rules button (TransformRulesDialogComponent), where source/destination are
-// already known; this screen exists precisely because Global/ResourceType/DestinationType rules have no
-// such context to be created from.
+// Global/ResourceType/DestinationType have no natural home inside any one mapping wizard, so they're always
+// created here. 'Field' is a special case: the wizard's Rules button (TransformRulesDialogComponent) creates
+// the common kind — tied to one resource type + one already-mapped column — but a Field rule with NO
+// resource type (matched purely by source field name, e.g. "wherever birthDate shows up") has no wizard
+// context to be created from either, so it's managed here too. Workflow (tied to one pipeline run) still has
+// no UI anywhere.
 const BROAD_SCOPE_OPTIONS: { value: TransformScope; label: string }[] = [
   { value: 'Global', label: 'Global — every destination, every resource' },
   { value: 'ResourceType', label: 'Resource type — any destination' },
   { value: 'DestinationType', label: 'Destination type — any resource' },
+  { value: 'Field', label: 'Field — matched by source field, any resource type' },
 ];
 
 interface RuleStep {
@@ -48,6 +48,7 @@ interface RuleStep {
   onNullDefaultValue: string | null;
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
+  fhirWriteBackJsonPath: string | null;
 }
 
 /** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
@@ -89,8 +90,8 @@ function emptyTargetForm(): NewTargetForm {
   selector: 'app-transformation-rule-list',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatButtonModule, MatIconModule, MatSelectModule, MatInputModule,
-    MatFormFieldModule, MatTooltipModule, MatProgressSpinnerModule, RuleConfigFormComponent,
+    CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatProgressSpinnerModule,
+    RuleConfigFormComponent,
   ],
   templateUrl: './transformation-rule-list.component.html',
   styleUrls: ['./transformation-rule-list.component.scss'],
@@ -146,7 +147,10 @@ export class TransformationRuleListComponent implements OnInit {
     }).subscribe({
       next: ({ schemas, rules }) => {
         this.nodeSchemas = schemas;
-        const flat = rules.flat();
+        // A Field-scoped rule with a resource type set belongs to the wizard's per-column Rules button
+        // (TransformRulesDialogComponent) — this screen only owns the resource-agnostic kind (no resource
+        // type), so the wizard's own rules never show up here to be edited out of their context.
+        const flat = rules.flat().filter(r => r.scope !== 'Field' || !r.resourceType);
         const byKey = new Map<string, RuleTargetGroup>();
         for (const r of flat) {
           const key = groupKey(r);
@@ -161,6 +165,7 @@ export class TransformationRuleListComponent implements OnInit {
           group.steps.push({
             id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false,
             onNull: r.onNull, onNullDefaultValue: r.onNullDefaultValue ?? null, errorPolicy: r.errorPolicy, arrayMode: r.arrayMode,
+            fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
           });
         }
         byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
@@ -214,11 +219,31 @@ export class TransformationRuleListComponent implements OnInit {
       this.toast.error('Destination type is required for a destination-type-scoped rule.');
       return;
     }
+    if (t.scope === 'Field' && !t.sourceField) {
+      this.toast.error('Source field is required for a field-scoped rule — that’s what it matches on instead of a resource type.');
+      return;
+    }
+
+    const key = groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField });
+
+    // A target with this exact (scope, resourceType, destinationType, destinationField, sourceField)
+    // combination already exists — load() groups rows by this same key, so creating another one here
+    // wouldn't add a genuinely separate rule, just a second card that looks identical to this one until
+    // the next reload folds them back into a single group's step list. Open the real one instead of
+    // silently duplicating it.
+    const existing = this.groups().find(g => g.key === key);
+    if (existing) {
+      existing.editing = true;
+      this.groups.set([...this.groups()]);
+      this.creatingNew.set(false);
+      this.toast.info('Target already exists', 'A rule target for this exact scope already exists — use "Add another step" on it instead of creating a duplicate.');
+      return;
+    }
 
     const applicable = t.sourceField ? getApplicableNodeTypes(t.sourceField, null) : ALL_NODE_TYPE_OPTIONS;
     const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
     const group: RuleTargetGroup = {
-      key: groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField }),
+      key,
       scope: t.scope,
       resourceType: t.scope === 'ResourceType' ? t.resourceType.trim() : null,
       destinationType: t.scope === 'DestinationType' ? (t.destinationType || null) : null,
@@ -227,6 +252,7 @@ export class TransformationRuleListComponent implements OnInit {
       steps: [{
         id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false,
         onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+        fhirWriteBackJsonPath: null,
       }],
       editing: true,
     };
@@ -245,6 +271,7 @@ export class TransformationRuleListComponent implements OnInit {
     group.steps.push({
       id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false,
       onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
+      fhirWriteBackJsonPath: null,
     });
     this.groups.set([...this.groups()]);
   }
@@ -275,6 +302,11 @@ export class TransformationRuleListComponent implements OnInit {
     this.groups.set([...this.groups()]);
   }
 
+  setFhirWriteBackJsonPath(step: RuleStep, value: string): void {
+    step.fhirWriteBackJsonPath = value.trim() || null;
+    this.groups.set([...this.groups()]);
+  }
+
   moveStep(group: RuleTargetGroup, step: RuleStep, direction: -1 | 1): void {
     const index = group.steps.indexOf(step);
     const swapWith = index + direction;
@@ -302,6 +334,7 @@ export class TransformationRuleListComponent implements OnInit {
       onNullDefaultValue: step.onNullDefaultValue,
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
+      fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

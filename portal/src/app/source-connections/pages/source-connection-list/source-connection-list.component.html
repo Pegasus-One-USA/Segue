@@ -52,6 +52,13 @@
           </svg>
           Reset
         </button>
+        <!-- Vendor for the new connection — replaces the in-form EHR `<select>` this page used to rely on before
+             that control was removed from the shared engine (see ehr-vendor-source-form.component.ts). -->
+        <select class="type-filter-select" [value]="addVendor()" (change)="addVendor.set($any($event.target).value)">
+          @for (o of createVendorOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
         <button
           class="btn-add"
           type="button"
@@ -259,14 +266,26 @@
 
   </div>
 
-  <!-- The @if must wrap <app-epic-audience-form> directly (not be routed through another component's
+  <!-- The @if must wrap the per-vendor form tag directly (not be routed through another component's
        <ng-content>) — ng-content-projected components are instantiated once by this template and merely
        shown/hidden by whatever @if lives *inside* the wrapping component, so ngOnInit (where the form's
-       prefill happens) would only ever run once, at page load, and never again on a later View/Edit click. -->
+       prefill happens) would only ever run once, at page load, and never again on a later View/Edit click.
+       Which concrete tag renders is driven by currentEntityFormKey() (wiz.ehrType(), mapped through the same
+       registry node-library-dialog.component.ts uses) — a `@switch` rather than NgComponentOutlet for the same
+       reason as there: only self-contained (WizardService-backed) vendor forms are ever entity-mode-capable, and
+       Angular has no template mechanism to bind a dynamically-resolved component's outputs. -->
   @if (wiz.isOpen() && wiz.wizardMode() === 'entity') {
     <div class="sc-modal-backdrop" tabindex="0" (click)="onModalBackdropClick($event)" (keydown.escape)="wiz.close()">
       <div class="sc-modal-panel">
-        <app-epic-audience-form (cancelled)="wiz.close()" />
+        @switch (currentEntityFormKey()) {
+          @case ('epic') { <app-epic-source-form (cancelled)="wiz.close()" /> }
+          @case ('cerner') { <app-cerner-source-form (cancelled)="wiz.close()" /> }
+          @case ('athena') { <app-athenahealth-source-form (cancelled)="wiz.close()" /> }
+          @case ('allscripts') { <app-allscripts-source-form (cancelled)="wiz.close()" /> }
+          @case ('healow') { <app-healow-source-form (cancelled)="wiz.close()" /> }
+          @case ('meditech') { <app-meditech-source-form (cancelled)="wiz.close()" /> }
+          @case ('sample') { <app-sample-source-form (cancelled)="wiz.close()" /> }
+        }
       </div>
     </div>
   }

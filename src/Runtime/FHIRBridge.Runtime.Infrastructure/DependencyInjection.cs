@@ -55,6 +55,9 @@ public static class DependencyInjection
         services.AddHttpClient<EpicInteractiveTokenProvider>().AddMutualTls();
         services.AddHttpClient<MeditechGreenfieldTokenProvider>().AddMutualTls();
         services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls();
+        // Shares Epic's EpicFhirClientOptions (retry/timeout/throttle knobs) — no athenahealth-specific values are
+        // called out in the integration spec, so the same IOptions<EpicFhirClientOptions> singleton applies here too.
+        services.AddHttpClient<AthenahealthFhirSourceClient>().AddMutualTls();
 
         // Application-type axis: each ApplicationType maps to a strategy that owns its grant/launch flow, validation
         // and descriptor. Resolved from the registry (never a switch — enforced by ApplicationTypeDispatchTests).

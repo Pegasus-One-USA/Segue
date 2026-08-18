@@ -5,7 +5,7 @@ export type EpicAudience = 'provider-ehr-launch' | 'provider-standalone' | 'back
 // All four audiences now show a connection form; only the redirect/launch/retrieval
 // shape differs between them.
 //
-// Lives in its own file (rather than epic-audience-form.component.ts) so WizardService can read it too —
+// Lives in its own file (rather than ehr-vendor-source-form.component.ts) so WizardService can read it too —
 // WizardService.save()'s entity-mode branch needs to know whether the selected audience wants an `interactive`
 // or `retrieval` payload without importing the component itself, which would create a circular dependency
 // (the component already injects WizardService).
@@ -37,6 +37,23 @@ export interface AudienceFieldConfig {
   scopePrefix: 'user' | 'patient' | 'system';
   /** Interactive audiences add openid/fhirUser/offline_access/launch to the scope string; Backend System does not. */
   includeInteractiveScopes: boolean;
+}
+
+import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
+
+/**
+ * Audiences hidden (not deleted — a re-enable is a one-line edit) for a given vendor, on top of the vendor-blind
+ * AUDIENCE_FIELD_CONFIG above. Currently only athenahealth: Provider standalone and EHR launch are fully
+ * implemented server-side (SmartAuthorizationCodeTokenProvider is vendor-neutral) but round-trip-unverified —
+ * sandbox provider credentials don't exist yet. Backend and Patient are both verified against the live preview
+ * sandbox and stay enabled.
+ */
+export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
+  Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
+};
+
+export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {
+  return VENDOR_DISABLED_AUDIENCES[vendor]?.includes(audience) ?? false;
 }
 
 export const AUDIENCE_FIELD_CONFIG: Record<EpicAudience, AudienceFieldConfig> = {

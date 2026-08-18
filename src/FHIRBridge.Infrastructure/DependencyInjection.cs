@@ -16,6 +16,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Infrastructure.Caching;
 using FHIRBridge.Infrastructure.Destinations;
+using FHIRBridge.Infrastructure.Destinations.Blob;
 using FHIRBridge.Infrastructure.Destinations.Delivery;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Health;
@@ -89,9 +90,10 @@ public static class DependencyInjection
         // Endpoint health for destinations — registry over switch, one registration per DestinationType this
         // provider covers (see its remarks for which types those are). Registered unconditionally — no DB
         // dependency of its own; EndpointHealthCheckWorker resolves ISecretProvider/destinations lazily.
+        // BlobStorage has its own dedicated provider below (its secret is no longer always a URL to HEAD).
         foreach (var destinationType in new[]
         {
-            Domain.Enums.DestinationType.BlobStorage, Domain.Enums.DestinationType.Csv, Domain.Enums.DestinationType.Excel,
+            Domain.Enums.DestinationType.Csv, Domain.Enums.DestinationType.Excel,
             Domain.Enums.DestinationType.PowerBi, Domain.Enums.DestinationType.Snowflake, Domain.Enums.DestinationType.S3,
             Domain.Enums.DestinationType.Ndjson, Domain.Enums.DestinationType.Parquet, Domain.Enums.DestinationType.Tableau,
             Domain.Enums.DestinationType.Pdf, Domain.Enums.DestinationType.Avro, Domain.Enums.DestinationType.Protobuf,
@@ -101,6 +103,10 @@ public static class DependencyInjection
                 new Destinations.TargetReachabilityDestinationHealthCheckProvider(
                     destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
         }
+
+        services.AddSingleton<BlobContainerClientCache>();
+        services.AddScoped<IBlobContainerClientFactory, BlobContainerClientFactory>();
+        services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider, BlobStorageDestinationHealthCheckProvider>();
 
         // Registered unconditionally (before the in-memory/DB branch below) — it resolves
         // IAllowedCorsOriginRepository lazily through a scope, so it works against either repository.
@@ -270,8 +276,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
+        services.AddHttpClient(nameof(BackendAuthScopeProbeService));
         services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
-        services.AddHttpClient(nameof(MappedBlobStorageDestinationWriter));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
@@ -367,6 +373,9 @@ public static class DependencyInjection
 
         services.AddSingleton<LocalTerminologyLookupService>();
         services.AddScoped<LoincTerminologyLookupService>();
+        services.AddScoped<Icd10TerminologyLookupService>();
+        services.AddScoped<SnomedTerminologyLookupService>();
+        services.AddScoped<RxNormTerminologyLookupService>();
         services.AddScoped<ILoincReleaseClient, LoincReleaseClient>();
         services.AddScoped<ILoincSynchronizationService, LoincSynchronizationService>();
         services.AddScoped<ISnomedImportService, SnomedImportService>();
@@ -496,6 +505,7 @@ public static class DependencyInjection
         services.AddScoped<IEpicSourceConnectionScopeSyncService, EpicSourceConnectionScopeSyncService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();
+        services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
         services.AddHealthChecks()

@@ -1,0 +1,159 @@
+{
+  "resourceType": "DocumentReference",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "masterIdentifier": {
+    "use": "<Code · 0..1>",
+    "system": "<Uri · 0..1>",
+    "value": "<String · 0..1>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "status": "<Code · 1..1 · required>",
+  "docStatus": "<Code · 0..1>",
+  "type": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "subject": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "date": "<Instant · 0..1>",
+  "author": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "authenticator": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "custodian": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "relatesTo": [
+    {
+      "code": "<Code · 1..1 · required>",
+      "target": {
+        "reference": "<String · 1..1 · required>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "description": "<String · 0..1>",
+  "securityLabel": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "content": [
+    {
+      "attachment": {
+        "contentType": "<Code · 0..1>",
+        "language": "<Code · 0..1>",
+        "data": "<Base64Binary · 0..1>",
+        "url": "<Url · 0..1>",
+        "size": "<unsignedInt · 0..1>",
+        "hash": "<Base64Binary · 0..1>",
+        "title": "<String · 0..1>",
+        "creation": "<DateTime · 0..1>"
+      },
+      "format": {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "event": [
+      {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ]
+      }
+    ],
+    "period": {
+      "start": "<DateTime · 0..1>",
+      "end": "<DateTime · 0..1>"
+    },
+    "facilityType": {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    },
+    "practiceSetting": {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    },
+    "sourcePatientInfo": {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    },
+    "related": [
+      {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  }
+}
