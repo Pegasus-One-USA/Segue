@@ -11,6 +11,7 @@ using ITfoxtec.Identity.Saml2.Schemas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Api.Controllers.V1;
@@ -27,6 +28,7 @@ public sealed class AuthController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly ISamlConfigurationProvider _samlConfigurationProvider;
     private readonly SamlAuthenticationOptions _samlOptions;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IUserAccessService userAccessService,
@@ -35,7 +37,8 @@ public sealed class AuthController : ControllerBase
         ISetupService setupService,
         IConfiguration configuration,
         ISamlConfigurationProvider samlConfigurationProvider,
-        IOptions<SamlAuthenticationOptions> samlOptions)
+        IOptions<SamlAuthenticationOptions> samlOptions,
+        ILogger<AuthController> logger)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
@@ -43,6 +46,7 @@ public sealed class AuthController : ControllerBase
         _setupService = setupService;
         _configuration = configuration;
         _samlConfigurationProvider = samlConfigurationProvider;
+        _logger = logger;
         _samlOptions = samlOptions.Value;
     }
 
@@ -182,13 +186,13 @@ public sealed class AuthController : ControllerBase
             return NotFound();
         }
 
-        var config = _samlConfigurationProvider.GetConfiguration();
-        var binding = new Saml2PostBinding();
-        var saml2AuthnResponse = new Saml2AuthnResponse(config);
-        var genericRequest = Request.ToGenericHttpRequest(validate: true);
-
         try
         {
+            var config = _samlConfigurationProvider.GetConfiguration();
+            var binding = new Saml2PostBinding();
+            var saml2AuthnResponse = new Saml2AuthnResponse(config);
+            var genericRequest = Request.ToGenericHttpRequest(validate: true);
+
             binding.ReadSamlResponse(genericRequest, saml2AuthnResponse);
             if (saml2AuthnResponse.Status != Saml2StatusCodes.Success)
             {
@@ -217,12 +221,14 @@ public sealed class AuthController : ControllerBase
             IssueTokenCookiesAndStrip(response);
             return Redirect(_samlOptions.PortalRedirectUrl ?? "/");
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
+            _logger.LogWarning(ex, "SAML ACS: no enabled account matched the asserted identity.");
             return RedirectToPortalError("saml_no_account");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "SAML ACS: assertion processing failed.");
             return RedirectToPortalError("saml_failed");
         }
     }
