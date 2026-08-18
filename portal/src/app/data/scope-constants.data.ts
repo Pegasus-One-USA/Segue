@@ -1,10 +1,11 @@
 // MVP1 resource set — keep in sync with SupportedFhirResourceTypes.All
 // (src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs) minus Immunization, which the backend
-// still supports but MVP1's resource picker deliberately does not surface.
+// still supports but MVP1's resource picker deliberately does not surface. Provenance was added so the
+// source-extraction picker matches the mapping-profile/destination pickers, which already support it.
 export const FHIR_RESOURCES: string[] = [
   'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
   'Condition', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
-  'MedicationRequest', 'MedicationAdministration',
+  'MedicationRequest', 'MedicationAdministration', 'Provenance',
 ];
 
 /** FHIR resource types Epic sources/destinations support — the canonical list surfaced in the Epic

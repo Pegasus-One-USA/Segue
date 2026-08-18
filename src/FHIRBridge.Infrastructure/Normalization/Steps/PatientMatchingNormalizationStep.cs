@@ -150,6 +150,19 @@ public sealed class PatientMatchingNormalizationStep : IResourceNormalizationSte
             }
         }
 
+        // Provenance has no subject/patient field — it links to a patient only indirectly via target[].
+        if (root.TryGetProperty("target", out var targets) && targets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var target in targets.EnumerateArray())
+            {
+                var value = GetString(target, "reference");
+                if (value is not null && value.StartsWith("Patient/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"ref|{value}";
+                }
+            }
+        }
+
         return null;
     }
 

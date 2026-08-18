@@ -28,7 +28,8 @@ public static class PatientCompartmentResourceTypes
         "Procedure",
         "ServiceRequest",
         "DiagnosticReport",
-        "DocumentReference"
+        "DocumentReference",
+        "Provenance"
     ];
 
     private static readonly IReadOnlyDictionary<string, string> Normalized =

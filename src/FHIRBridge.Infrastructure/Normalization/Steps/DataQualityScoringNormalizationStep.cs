@@ -46,6 +46,7 @@ public sealed class DataQualityScoringNormalizationStep : IResourceNormalization
             ["CarePlan"] = ["status", "intent", "subject", "category", "period"],
             ["Goal"] = ["lifecycleStatus", "description", "subject", "target"],
             ["DocumentReference"] = ["status", "type", "subject", "content", "date"],
+            ["Provenance"] = ["target", "recorded", "agent"],
             ["Subscription"] = ["status", "criteria", "channel", "reason"],
             ["Group"] = ["type", "actual", "member", "code"],
             ["MeasureReport"] = ["status", "type", "measure", "subject", "period"],
