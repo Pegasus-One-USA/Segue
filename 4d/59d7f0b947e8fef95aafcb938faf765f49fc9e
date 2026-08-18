@@ -1,0 +1,19 @@
+src/Api/FHIRBridge.Api/Program.cs
+  s_2697baf7a9c6b6::t_75821c4eb1722f 531,534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "4d59d7f0b947e8fef95aafcb938faf765f49fc9e",
+  "prompts": {},
+  "sessions": {
+    "s_2697baf7a9c6b6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "554c2b9f-54cd-4b1e-afff-5c40b0b043f7",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

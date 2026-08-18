@@ -1,0 +1,207 @@
+src/Api/FHIRBridge.Api/Security/FhirBridgeAuthenticationExtensions.cs
+  s_accb86a412bfda::t_5891fd3ce0787f 35-42,193
+  s_accb86a412bfda::t_d21d95e7cdcef0 192,194-207,212-213,215
+src/BuildingBlocks/FHIRBridge.Governance/FHIRBridge.Governance.csproj
+  s_accb86a412bfda::t_0c191e94b75c08 9-14
+src/Api/FHIRBridge.Api/Program.cs
+  s_accb86a412bfda::t_8884ee3d5432be 98-114
+  s_accb86a412bfda::t_7ff4d72a9100b2 482-497,499-511
+  s_accb86a412bfda::t_9c48f300f6f639 498
+src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs
+  s_accb86a412bfda::t_5c3d211de70dc0 87-89,94,96,99-103,105,112-113,115,118-169
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_accb86a412bfda::t_97f11634e2ebc6 70-117,120-125
+  s_accb86a412bfda::t_81e9f048c1226e 3
+  s_accb86a412bfda::t_78695a874e0b39 118-119
+portal/src/app/app.config.ts
+  s_accb86a412bfda::t_5069e49816ef40 40-42,45-51
+  s_accb86a412bfda::t_a4d108f26ab91f 9
+src/FHIRBridge.Infrastructure/Persistence/Configurations/DestinationConfigurationConfig.cs
+  s_accb86a412bfda::t_5f6d05e726ba38 18-19
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_accb86a412bfda::t_b3d03ac831be63 79-88
+  s_accb86a412bfda::t_92de22f809caa0 457-458
+portal/src/app/auth/services/session.service.ts
+  s_accb86a412bfda::t_123cebf6005156 33-36,39,43-44
+  s_accb86a412bfda::t_1bb86a93438087 118-121,123
+  s_accb86a412bfda::t_b940ec4181dc59 53
+  s_accb86a412bfda::t_6a7639d1feef9a 26
+  s_accb86a412bfda::t_5c3812d83a7da0 6
+src/FHIRBridge.Domain/Entities/Governance/WorkflowAuditLog.cs
+  s_accb86a412bfda::t_c0da0ae2d842aa 1-56
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqConnection.cs
+  s_accb86a412bfda::t_64fec95e27b435 39-44
+portal/src/app/auth/services/mock-auth.service.ts
+  s_accb86a412bfda::t_8a651ae054d678 60
+  s_accb86a412bfda::t_b8b8bf4524eee0 78
+  s_accb86a412bfda::t_535f7824b02b2d 119
+  s_accb86a412bfda::t_bcb6e3f27dd7cc 189-191,195-197
+  s_accb86a412bfda::t_5496ff5f31ff03 5
+portal/src/app/auth/services/auth.service.ts
+  s_accb86a412bfda::t_11d2e79f31a26b 101
+  s_accb86a412bfda::t_4a990ea8738f46 3
+  s_accb86a412bfda::t_be4f45bd02d733 170-178,183-185
+  s_accb86a412bfda::t_e00b1153c26f60 198-202,204,207-215
+  s_accb86a412bfda::t_fba2f8181edad1 67
+  s_accb86a412bfda::t_ff7318af2cfb5b 142
+  s_accb86a412bfda::t_21c95479c10402 12,186-187
+portal/eslint.config.js
+  s_accb86a412bfda::t_04c757fb36139f 17-19
+portal/src/app/onboarding/services/app-init.service.ts
+  s_accb86a412bfda::t_50d5cc944176d9 44-48,54
+  s_accb86a412bfda::t_a11bb73d1adf42 15
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_accb86a412bfda::t_d55e83d799277d 78
+  s_accb86a412bfda::t_6e3f5068ce4841 52-64
+src/FHIRBridge.Domain/Entities/DestinationConfiguration.cs
+  s_accb86a412bfda::t_772e62653232ef 45-60
+src/Api/FHIRBridge.Api/Controllers/V1/GeneratedFileDownloadsController.cs
+  s_accb86a412bfda::t_129892b48ceb1a 35-36
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_accb86a412bfda::t_b3217593411a72 51
+src/FHIRBridge.Domain/Entities/User.cs
+  s_accb86a412bfda::t_664238177985c2 81-89
+  s_accb86a412bfda::t_c2c1cdeac49bdc 293
+  s_accb86a412bfda::t_58bcc11176fd71 235-237,244,257
+src/Worker/FHIRBridge.Worker/ExpiredGeneratedFilePurgeJob.cs
+  s_accb86a412bfda::t_9b50139a9b1de8 1-74
+portal/src/app/auth/services/token-refresh-coordinator.service.ts
+  s_accb86a412bfda::t_e8fe0d6d8cc9d4 16-19,23,25,32
+portal/src/app/auth/services/token.service.ts
+  s_accb86a412bfda::t_ce5a34cab15a43 3-9,12-13,25-27,30-33,36-39,42-46,50
+portal/src/app/auth/services/cross-tab-auth-sync.service.ts
+  s_accb86a412bfda::t_8f19b8f710c2a8 4-5,8-14,16-18,23,33,36,43-48
+portal/src/app/auth/pages/mfa-setup-required/mfa-setup-required.component.ts
+  s_accb86a412bfda::t_4b5c2198790307 28-32,36-37
+portal/src/app/auth/services/auth-api.service.ts
+  s_accb86a412bfda::t_b2082d4ed65f57 118
+  s_accb86a412bfda::t_e7fbbf05d37643 3-7,12,15,22,26,56
+  s_accb86a412bfda::t_7047450601edeb 21
+  s_accb86a412bfda::t_ca828cc13b9372 103-104,119-121,125-128
+src/FHIRBridge.Infrastructure/Destinations/GeneratedFileDownloadLinkService.cs
+  s_accb86a412bfda::t_1d77e1a1d3666f 54-57
+  s_accb86a412bfda::t_e2273e29277b27 109-114,116-120
+  s_accb86a412bfda::t_97023753083a85 103-108,121-122
+  s_accb86a412bfda::t_94c56e2485dc78 24,30-31,36
+  s_accb86a412bfda::t_a6c2e95b2ac0fb 115
+src/FHIRBridge.Infrastructure/Messaging/MessagingServiceCollectionExtensions.cs
+  s_accb86a412bfda::t_41b2490ba9a3df 131-143
+  s_accb86a412bfda::t_f5071b396124eb 108-109,112-118
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_accb86a412bfda::t_67db150e76b82a 155-156,161
+  s_accb86a412bfda::t_6a3e1ecf136ed3 157
+  s_accb86a412bfda::t_acfd27f24156cb 23
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_accb86a412bfda::t_cc9b532f6473ea 340
+  s_accb86a412bfda::t_051b4143617711 334
+  s_accb86a412bfda::t_fad517df36fabf 341-343
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/DistributedFhirAccessTokenCache.cs
+  s_accb86a412bfda::t_9ce2a3e88ce054 1,3,12-13,20,22,25-26,29,31-32,46,51,53-54,72,77-95
+src/FHIRBridge.Application/DTOs/UserProfileDto.cs
+  s_accb86a412bfda::t_a8bb21bf3f5e1e 11-13
+  s_accb86a412bfda::t_65e45b4f1d192b 8-10
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowPersistenceServiceCollectionExtensions.cs
+  s_accb86a412bfda::t_1b11a03f903ada 2
+  s_accb86a412bfda::t_6b1613a42a5db5 29-30
+portal/src/app/auth/models/auth-request.model.ts
+  s_accb86a412bfda::t_a2679682215dca 11
+  s_accb86a412bfda::t_0d9030b427b9cb 34
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqTopology.cs
+  s_accb86a412bfda::t_6ce4ddb12d9057 24-30,39-44,50
+src/FHIRBridge.Application/Abstractions/Destinations/IGeneratedFileDownloadLinkService.cs
+  s_accb86a412bfda::t_3477c28e448b8e 17-19
+portal/src/app/auth/services/sso-auth-api.service.ts
+  s_accb86a412bfda::t_b83f574c35f451 12-15,23-24,29
+  s_accb86a412bfda::t_f2fe78b007d58a 82-83,86,89
+portal/src/app/components/node-library/destination-wizard/field-mapping/mapping-snapshot.service.ts
+  s_accb86a412bfda::t_10dc11c367464a 69-70,77-85,90-96,98
+  s_accb86a412bfda::t_46fed7d63ef222 7-14,97,99
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_accb86a412bfda::t_3b8b8abc1de6ef 250
+  s_accb86a412bfda::t_f7f1db34178534 267-273,283
+  s_accb86a412bfda::t_7be36a6aff9425 158
+  s_accb86a412bfda::t_854b0ba3af591c 104
+  s_accb86a412bfda::t_a0c53a988b6388 171
+  s_accb86a412bfda::t_834d626286eb8d 219,221,224-230,232-234,243-244,247-249,251-266,274-282,285-295
+  s_accb86a412bfda::t_3cfd0585d79238 82,284
+  s_accb86a412bfda::t_9716aab892bfa2 64
+  s_accb86a412bfda::t_1c275791baf069 182
+portal/src/app/layout/app-footer/app-footer.component.html
+  s_accb86a412bfda::t_518ac3553a68d1 10-13
+portal/src/app/auth/services/i-auth.service.ts
+  s_accb86a412bfda::t_1a3de0a4da4ac8 2,19-20
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_accb86a412bfda::t_b32593c78e347e 7
+portal/src/app/services/run-status-hub.service.ts
+  s_accb86a412bfda::t_4339154af407c7 55-59
+src/Worker/FHIRBridge.Worker/Hl7MllpListenerService.cs
+  s_accb86a412bfda::t_5d25d7aca2ace5 31,51-62
+  s_accb86a412bfda::t_3d3597297d4d54 2,4-5,63
+  s_accb86a412bfda::t_6bb338d64f637c 89,91-108
+src/FHIRBridge.Application/Abstractions/Governance/IGovernancePolicyService.cs
+  s_accb86a412bfda::t_7ae9ab36a950ec 17-18
+portal/src/app/layout/app-footer/app-footer.component.ts
+  s_accb86a412bfda::t_86dc99c9c36c2e 18
+  s_accb86a412bfda::t_fa656b0427ccb1 3
+src/FHIRBridge.Infrastructure/Governance/DestinationSensitivityGovernanceRule.cs
+  s_accb86a412bfda::t_6b25acde5c2919 1-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818052321_HipaaCookieAuthAndWorkflowAudit.cs
+  s_accb86a412bfda::t_f017e10bf42e40 1-76
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_accb86a412bfda::t_7982347e30d2f7 31-32,37
+  s_accb86a412bfda::t_0f600efe02d2a5 55
+  s_accb86a412bfda::t_379d9acf6b7843 6
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_accb86a412bfda::t_2a074e972cb073 91
+src/FHIRBridge.Infrastructure/Hl7v2/Hl7MllpOptions.cs
+  s_accb86a412bfda::t_f89bdc837fdbca 14-22
+portal/src/app/auth/services/auth-profile.model.ts
+  s_accb86a412bfda::t_fa18e2fb7c0dfb 13-14
+  s_accb86a412bfda::t_1a4aca9bdb3cb5 1-12,15-28
+src/Api/FHIRBridge.Api/Cors/DynamicPortalCorsPolicyProvider.cs
+  s_accb86a412bfda::t_96aa160df606f6 42-46
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_accb86a412bfda::t_66e4df722fb0e0 8
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqOptions.cs
+  s_accb86a412bfda::t_258ab18fe2bdb7 13-14
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  s_accb86a412bfda::t_3b01e7909e74e8 81
+  s_accb86a412bfda::t_ba6e59d63941bb 82-84
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_accb86a412bfda::t_d6fb2c6abb7967 778-779
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_accb86a412bfda::t_aa4b7d1f52ddd8 9-25,29-36,44-57,71,75-76
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_accb86a412bfda::t_1ebda11c22a272 1-2,16,21-22,27
+  s_accb86a412bfda::t_f6495d6f16628f 60-61
+  s_accb86a412bfda::t_734b7fd329a37a 28
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/WorkflowAuditLogConfiguration.cs
+  s_accb86a412bfda::t_0c0b47f152ea05 1-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_accb86a412bfda::t_f017e10bf42e40 274-277,306-310,1343-1400
+src/BuildingBlocks/FHIRBridge.Observability/Logging/IPhiRedactor.cs
+  s_accb86a412bfda::t_6c8c2474aee147 54
+  s_accb86a412bfda::t_659f1b40d7da72 1-37,43,49,51-53,55-59,65-74
+  s_accb86a412bfda::t_81c1371ccb705e 60-64
+  s_accb86a412bfda::t_37590eeee21aeb 38-42,44-48,50
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818052321_HipaaCookieAuthAndWorkflowAudit.Designer.cs
+  s_accb86a412bfda::t_f017e10bf42e40 1-5400
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowAuditRecorder.cs
+  s_accb86a412bfda::t_feb7ea4c1b4f54 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b149735ad82aaa9b9dd88de1680e636ae7692dd7",
+  "prompts": {},
+  "sessions": {
+    "s_accb86a412bfda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9b6ceb5-337d-4157-88c7-1af578f823fb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
