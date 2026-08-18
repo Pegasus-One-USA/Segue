@@ -163,13 +163,16 @@ public sealed class LocalAuthService : ILocalAuthService
         return await FinishSuccessfulLoginAsync(user, cancellationToken);
     }
 
-    /// <summary>Shared tail of a successful local login: records the login and issues a session.</summary>
-    private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(User user, CancellationToken cancellationToken)
+    /// <summary>Shared tail of a successful local/magic-link login: records the login and issues a session.</summary>
+    private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(
+        User user,
+        CancellationToken cancellationToken,
+        string authenticationType = "Local")
     {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
         await _governanceLogger.LogAuthenticationAsync(
-            new AuthenticationEntry("Local", Success: true, user.Email), cancellationToken);
+            new AuthenticationEntry(authenticationType, Success: true, user.Email), cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -247,6 +250,84 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
+    }
+
+    public async Task<MagicLinkResponse> RequestMagicLinkAsync(
+        MagicLinkRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
+        if (user is null || !user.IsLocalLoginEnabled || !user.IsEnabled)
+        {
+            return new MagicLinkResponse(true);
+        }
+
+        var token = GenerateToken();
+        var expiresOnUtc = DateTime.UtcNow.AddMinutes(15);
+        user.SetMagicLinkToken(_passwordHasher.Hash(token), expiresOnUtc);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+
+        await _emailSender.SendAsync(
+            email,
+            "Your Segue sign-in link",
+            BuildMagicLinkEmailBody(user.DisplayName, BuildMagicLink(email, token), expiresOnUtc),
+            cancellationToken);
+
+        return new MagicLinkResponse(true);
+    }
+
+    public async Task<LocalLoginResponse> RedeemMagicLinkAsync(
+        MagicLinkRedeemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
+
+        if (user is not null && user.IsLockedOut(DateTime.UtcNow))
+        {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MagicLink", Success: false, email, "Account is locked out"), cancellationToken);
+            throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
+        }
+
+        var tokenValid = user is not null &&
+                          user.IsEnabled &&
+                          user.IsLocalLoginEnabled &&
+                          !string.IsNullOrWhiteSpace(user.MagicLinkTokenHash) &&
+                          user.MagicLinkTokenExpiresOnUtc is { } expiresOnUtc &&
+                          expiresOnUtc >= DateTime.UtcNow &&
+                          _passwordHasher.Verify(request.Token, user.MagicLinkTokenHash);
+
+        if (!tokenValid)
+        {
+            if (user is not null)
+            {
+                var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+                user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
+                await _repository.UpdateUserAsync(user, cancellationToken);
+            }
+
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MagicLink", Success: false, email, "Invalid or expired sign-in link"), cancellationToken);
+            throw new InvalidOperationException("This sign-in link is invalid or has expired.");
+        }
+
+        user!.ClearMagicLinkToken();
+
+        // Same second-factor branch as password login: the link alone satisfies only the first factor.
+        if (user.MfaEnabled)
+        {
+            var (challengeToken, _) = _accessTokenIssuer.IssueRefreshToken();
+            var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
+            user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
+            await _repository.UpdateUserAsync(user, cancellationToken);
+
+            return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
+        }
+
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        return await FinishSuccessfulLoginAsync(user, cancellationToken, "MagicLink");
     }
 
     public async Task<LocalLoginResponse> RefreshTokenAsync(
@@ -412,6 +493,29 @@ public sealed class LocalAuthService : ILocalAuthService
             <p>We received a request to reset your Segue password. Use the link/token below to continue:</p>
             <p><a href="{resetLinkOrToken}">{resetLinkOrToken}</a></p>
             <p>This reset request expires at {expiresOnUtc:u}. If you did not request a password reset, you can ignore this email.</p>
+            """;
+    }
+
+    private string BuildMagicLink(string email, string token)
+    {
+        var template = _localAuthOptions.MagicLinkUrlTemplate;
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return token;
+        }
+
+        return template
+            .Replace("{token}", Uri.EscapeDataString(token))
+            .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private static string BuildMagicLinkEmailBody(string? displayName, string magicLinkOrToken, DateTime expiresOnUtc)
+    {
+        return $"""
+            <p>Hi {displayName},</p>
+            <p>Use the link below to sign in to Segue:</p>
+            <p><a href="{magicLinkOrToken}">{magicLinkOrToken}</a></p>
+            <p>This sign-in link expires at {expiresOnUtc:u} and can only be used once. If you did not request this, you can ignore this email.</p>
             """;
     }
 

@@ -4,6 +4,7 @@ import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+  MagicLinkRequest, MagicLinkRedeemRequest,
 } from '../models/auth-request.model';
 
 export abstract class IAuthService {
@@ -18,4 +19,8 @@ export abstract class IAuthService {
   abstract getCurrentUser(): Observable<User>;
   /** HIPAA #7: the refresh token lives in an HttpOnly cookie sent automatically — no parameter needed. */
   abstract refreshToken(): Observable<User>;
+  /** Requests a passwordless "sign-in link" email. Always reports success (no user enumeration). */
+  abstract requestMagicLink(req: MagicLinkRequest): Observable<MessageResponse>;
+  /** Redeems a magic-link token — same MFA-challenge-or-session shape as login(). */
+  abstract redeemMagicLink(req: MagicLinkRedeemRequest): Observable<LoginResult>;
 }

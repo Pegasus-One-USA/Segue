@@ -17,6 +17,7 @@ import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ForgotPasswordResponseDto, ResetPasswordRequest, ChangePasswordRequest,
+  MagicLinkRequest, MagicLinkResponseDto, MagicLinkRedeemRequest,
 } from '../models/auth-request.model';
 import { AuthProfileDto, LocalLoginResponseDto } from './auth-profile.model';
 import { buildUserFromProfile } from './jwt-user.mapper';
@@ -109,6 +110,27 @@ export class AuthApiService extends IAuthService {
       })
       .pipe(
         map(() => ({ success: true, message: 'Password changed successfully.' })),
+        catchError(err => throwError(() => err)),
+      );
+  }
+
+  // ─── Magic-link request ─────────────────────────────────────────────────────
+  override requestMagicLink(req: MagicLinkRequest): Observable<MessageResponse> {
+    return this.http.post<MagicLinkResponseDto>(AUTH_ENDPOINTS.magicLinkRequest, { email: req.email }).pipe(
+      map(dto => ({
+        success: dto?.accepted ?? true,
+        message: `If an account exists for ${req.email}, a sign-in link has been sent.`,
+      })),
+      catchError(err => throwError(() => err)),
+    );
+  }
+
+  // ─── Magic-link redeem ──────────────────────────────────────────────────────
+  override redeemMagicLink(req: MagicLinkRedeemRequest): Observable<LoginResult> {
+    return this.http
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.magicLinkRedeem, { email: req.email, token: req.token })
+      .pipe(
+        map(dto => this.mapLoginResult(dto)),
         catchError(err => throwError(() => err)),
       );
   }

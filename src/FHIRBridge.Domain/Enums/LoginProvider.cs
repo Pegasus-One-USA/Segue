@@ -8,5 +8,6 @@ public enum LoginProvider
 {
     Local = 0,
     Entra = 1,
-    Google = 2
+    Google = 2,
+    Saml = 3
 }

@@ -30,6 +30,10 @@ export const AUTH_ENDPOINTS = {
   forgotPassword: `${API_V1_BASE}/auth/internal/forgot-password`,
   resetPassword:  `${API_V1_BASE}/auth/internal/reset-password`,
   changePassword: `${API_V1_BASE}/auth/internal/change-password`,
+  magicLinkRequest: `${API_V1_BASE}/auth/magic-link/request`,
+  magicLinkRedeem:  `${API_V1_BASE}/auth/magic-link/redeem`,
+  // Plain full-page redirect (no XHR) — the browser is sent straight to the IdP, not through HttpClient.
+  samlLogin: `${API_V1_BASE}/auth/saml/login`,
 };
 
 // ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────

@@ -13,6 +13,7 @@ import { Component, inject, input, output, signal } from '@angular/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SsoConfigService } from '../../services/sso-config.service';
 import { SsoService, SsoResult, SsoProvider } from '../../services/sso.service';
+import { AUTH_ENDPOINTS } from '../../../core/api-endpoints';
 
 @Component({
   selector: 'app-sso-buttons',
@@ -37,6 +38,7 @@ export class SsoButtonsComponent {
 
   protected readonly entraEnabled  = this.ssoConfig.entraEnabled;
   protected readonly googleEnabled = this.ssoConfig.googleEnabled;
+  protected readonly samlEnabled   = this.ssoConfig.samlEnabled;
   protected readonly anyEnabled    = () => this.ssoConfig.anyEnabled();
 
   protected readonly busy       = signal<SsoProvider | null>(null);
@@ -64,5 +66,15 @@ export class SsoButtonsComponent {
     } finally {
       this.busy.set(null);
     }
+  }
+
+  /**
+   * SAML has no client-side token to obtain — it's a plain full-page redirect to the IdP, which
+   * eventually POSTs an assertion back to the API's ACS endpoint and redirects into the portal.
+   * Unlike Entra/Google there's no `authenticated`/`failed` round-trip through this component.
+   */
+  protected continueWithSaml(): void {
+    if (this.busy() || this.disabled()) return;
+    window.location.href = AUTH_ENDPOINTS.samlLogin;
   }
 }

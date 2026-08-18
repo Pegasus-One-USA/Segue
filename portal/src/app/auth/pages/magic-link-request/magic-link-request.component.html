@@ -1,0 +1,83 @@
+<!-- auth/pages/magic-link-request/magic-link-request.component.html -->
+<div class="auth-page">
+  <div class="auth-card">
+
+    <app-auth-brand-header />
+
+    @if (sent()) {
+      <div class="success-state">
+        <div class="success-icon-wrap">
+          <mat-icon class="success-icon">mark_email_read</mat-icon>
+        </div>
+        <h1 class="auth-heading">Check your inbox</h1>
+        <p class="auth-sub">
+          We've sent a sign-in link to<br/>
+          <strong>{{ submittedEmail }}</strong>
+        </p>
+        <p class="hint-text">
+          The link expires in 15 minutes and can only be used once. Didn't receive it? Check your spam folder or try again.
+        </p>
+        <button mat-stroked-button class="back-btn" routerLink="/auth/login">
+          <mat-icon>arrow_back</mat-icon>
+          Back to sign in
+        </button>
+      </div>
+
+    } @else {
+
+      <h1 class="auth-heading">Sign in with an email link</h1>
+      <p class="auth-sub">Enter your email address and we'll send you a one-time sign-in link — no password needed.</p>
+
+      @if (error()) {
+        <div class="auth-error" role="alert">
+          <mat-icon class="alert-icon">error_outline</mat-icon>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email address</mat-label>
+          <mat-icon matPrefix class="field-icon">email</mat-icon>
+          <input
+            matInput
+            type="email"
+            formControlName="email"
+            autocomplete="email"
+            placeholder="you@org.com"
+          />
+          @if (fieldError('email', 'required')) {
+            <mat-error>Email address is required</mat-error>
+          } @else if (fieldError('email', 'email')) {
+            <mat-error>Enter a valid email address</mat-error>
+          }
+        </mat-form-field>
+
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          class="submit-btn"
+          [disabled]="loading()"
+        >
+          @if (loading()) {
+            <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
+            <span>Sending…</span>
+          } @else {
+            Send Sign-In Link
+          }
+        </button>
+
+      </form>
+
+      <p class="auth-footer">
+        <a routerLink="/auth/login" class="footer-link">
+          <mat-icon class="back-icon">arrow_back</mat-icon>
+          Back to sign in
+        </a>
+      </p>
+
+    }
+  </div>
+</div>

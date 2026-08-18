@@ -281,6 +281,11 @@ public static class DependencyInjection
         services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
         services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
 
+        // SAML 2.0 SSO (single configured IdP, system-wide — see FHIRBridge.Domain/README.md on why this
+        // isn't per-tenant). Off by default; the ACS endpoint 404s until Authentication:Saml:Enabled is set.
+        services.Configure<SamlAuthenticationOptions>(configuration.GetSection("Authentication:Saml"));
+        services.AddSingleton<ISamlConfigurationProvider, SamlConfigurationProvider>();
+
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();

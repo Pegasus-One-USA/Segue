@@ -1,0 +1,64 @@
+<!-- auth/pages/magic-link-redeem/magic-link-redeem.component.html -->
+<div class="auth-page">
+  <div class="auth-card">
+
+    <app-auth-brand-header />
+
+    @switch (stage()) {
+      @case ('redeeming') {
+        <div class="redeeming-state">
+          <mat-spinner diameter="36" strokeWidth="3"></mat-spinner>
+          <p class="auth-sub">Signing you in…</p>
+        </div>
+      }
+
+      @case ('mfa') {
+        <h1 class="auth-heading">Verify it's you</h1>
+        <p class="auth-sub">Enter the 6-digit code from your authenticator app</p>
+
+        @if (error()) {
+          <div class="auth-error" role="alert">
+            <mat-icon class="alert-icon">error_outline</mat-icon>
+            <span>{{ error() }}</span>
+          </div>
+        }
+
+        <form [formGroup]="mfaForm" (ngSubmit)="submitMfa()" novalidate>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Authentication code</mat-label>
+            <mat-icon matPrefix class="field-icon">shield</mat-icon>
+            <input matInput type="text" inputmode="numeric" autocomplete="one-time-code" formControlName="code" />
+            @if (mfaFieldError('required')) {
+              <mat-error>A code is required</mat-error>
+            } @else if (mfaFieldError('minlength')) {
+              <mat-error>Enter your 6-digit code or a backup code</mat-error>
+            }
+          </mat-form-field>
+
+          <button mat-flat-button color="primary" type="submit" class="submit-btn" [disabled]="isLoading()">
+            @if (isLoading()) {
+              <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
+              <span>Verifying…</span>
+            } @else {
+              <span>Verify</span>
+            }
+          </button>
+        </form>
+      }
+
+      @case ('error') {
+        <div class="success-state">
+          <div class="success-icon-wrap error-icon-wrap">
+            <mat-icon class="success-icon error-icon">link_off</mat-icon>
+          </div>
+          <h1 class="auth-heading">Link invalid or expired</h1>
+          <p class="auth-sub">{{ error() }}</p>
+          <button mat-stroked-button class="back-btn" routerLink="/auth/magic-link">
+            Request a new link
+          </button>
+        </div>
+      }
+    }
+
+  </div>
+</div>

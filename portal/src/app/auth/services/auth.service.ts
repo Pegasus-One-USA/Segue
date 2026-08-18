@@ -14,6 +14,7 @@ import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+  MagicLinkRequest, MagicLinkRedeemRequest,
 } from '../models/auth-request.model';
 import { extractApiErrorMessage } from '../../core/http-error.util';
 
@@ -105,6 +106,35 @@ export class AuthService {
         error: (err) => {
           this.security.recordFailedAttempt(email);
           this.store.setError(extractApiErrorMessage(err, 'Invalid or expired code. Please try again.'));
+          this.store.setLoading(false);
+        },
+      })
+    );
+  }
+
+  // ─── Magic-link request ─────────────────────────────────────────────────────
+  requestMagicLink(req: MagicLinkRequest): Observable<MessageResponse> {
+    return this.api.requestMagicLink(req);
+  }
+
+  // ─── Magic-link redeem ──────────────────────────────────────────────────────
+  // Same shape as login(): may resolve to an MFA challenge (no session yet) or a completed session.
+  redeemMagicLink(req: MagicLinkRedeemRequest): Observable<LoginResult> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.redeemMagicLink(req).pipe(
+      tap({
+        next: (res) => {
+          this.store.setLoading(false);
+          if (res.requiresMfa) return;
+
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.store.setError(extractApiErrorMessage(err, 'This sign-in link is invalid or has expired.'));
           this.store.setLoading(false);
         },
       })

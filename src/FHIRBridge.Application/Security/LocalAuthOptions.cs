@@ -8,6 +8,9 @@ public sealed class LocalAuthOptions
     /// <summary>URL template for invitation emails; supports {token} and {email} placeholders.</summary>
     public string? AcceptInviteUrlTemplate { get; set; }
 
+    /// <summary>URL template for magic-link sign-in emails; supports {token} and {email} placeholders.</summary>
+    public string? MagicLinkUrlTemplate { get; set; }
+
     /// <summary>Account-lockout policy for local password login (brute-force protection).</summary>
     public LockoutOptions Lockout { get; set; } = new();
 }

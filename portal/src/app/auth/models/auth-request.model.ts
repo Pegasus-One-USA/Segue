@@ -59,6 +59,20 @@ export interface ResetPasswordRequest {
   confirmPassword: string;
 }
 
+export interface MagicLinkRequest {
+  email: string;
+}
+
+/** Mirrors the backend's MagicLinkResponse — always accepted, no user enumeration. */
+export interface MagicLinkResponseDto {
+  accepted: boolean;
+}
+
+export interface MagicLinkRedeemRequest {
+  email: string;
+  token: string;
+}
+
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword:     string;
