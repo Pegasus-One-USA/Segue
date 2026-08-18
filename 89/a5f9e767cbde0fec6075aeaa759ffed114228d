@@ -1,0 +1,54 @@
+src/FHIRBridge.Application/DTOs/CreateLocalUserRequest.cs
+  s_accb86a412bfda::t_427938fae94395 10-14
+src/FHIRBridge.Infrastructure/Normalization/Steps/DataQualityScoringNormalizationStep.cs
+  s_3c9fe77da34305::t_e4402fc5805eeb 49
+portal/src/app/data/scope-constants.data.ts
+  s_3c9fe77da34305::t_33a8f6b557b57c 3-4,8
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_accb86a412bfda::t_141672ad5bd7dc 82
+  s_accb86a412bfda::t_0ad1fb11e3b5be 151-152
+src/FHIRBridge.Infrastructure/Normalization/Steps/PatientMatchingNormalizationStep.cs
+  s_3c9fe77da34305::t_d8b1be1ce7ad21 153-165
+src/FHIRBridge.Domain/Fhir/PatientCompartmentResourceTypes.cs
+  s_3c9fe77da34305::t_996916253eed2f 31-32
+tests/FHIRBridge.UnitTests/Normalization/DataQualityScoringNormalizationStepTests.cs
+  s_3c9fe77da34305::t_53b5283b4c09a8 1-52
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_3c9fe77da34305::t_36bfadc2a417eb 1-27,29-37
+  s_3c9fe77da34305::t_e23f99d9da21bd 28
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_accb86a412bfda::t_58ccf670d44beb 70
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_3c9fe77da34305::t_ea9ec45154d535 160-161
+tests/FHIRBridge.UnitTests/Normalization/PatientMatchingNormalizationStepTests.cs
+  s_3c9fe77da34305::t_0311ef04b6c85d 1-62
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_accb86a412bfda::t_56f1cc15b606da 82-85
+  s_accb86a412bfda::t_4bd3d26c7a86f7 106-107
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.json
+  s_3c9fe77da34305::t_1ac853446db5c5 25332-26268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "89a5f9e767cbde0fec6075aeaa759ffed114228d",
+  "prompts": {},
+  "sessions": {
+    "s_3c9fe77da34305": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16595903-42ac-4f1a-9833-795a9b03c112",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_accb86a412bfda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9b6ceb5-337d-4157-88c7-1af578f823fb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
