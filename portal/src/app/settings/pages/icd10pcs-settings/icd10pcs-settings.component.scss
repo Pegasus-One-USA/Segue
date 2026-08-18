@@ -1,0 +1,40 @@
+:host {
+  display: block;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
+.dash-content { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0; }
+.page-sub    { font-size: 14px; color: var(--color-muted); margin: 0; }
+
+.settings-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-modal); padding: 22px 24px; }
+.card-title    { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
+.card-sub      { font-size: 13px; color: var(--color-muted); margin: 0; }
+
+.upload-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+
+.file-input {
+  flex: 1 1 auto; display: flex; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--color-border-input); border-radius: 9px;
+  font-size: 13.5px; color: var(--color-muted); background: var(--color-surface); cursor: pointer;
+  transition: border-color var(--transition-base);
+  &:hover { border-color: var(--color-muted-2); }
+  input[type='file'] { display: none; }
+}
+
+.btn-primary {
+  padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
+  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--transition-base);
+  &:hover:not(:disabled) { background: var(--color-primary-dark); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.progress-track {
+  margin-top: 14px; height: 6px; border-radius: 999px; background: var(--color-border);
+  overflow: hidden;
+}
+.progress-fill { height: 100%; background: var(--color-primary); transition: width 0.2s ease; }

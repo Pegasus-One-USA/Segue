@@ -2416,10 +2416,6 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       } : {}),
     };
 
-    console.log('%c[Epic Configuration] "Add to Pipeline" clicked — node data about to be saved:', 'color:#00A89D;font-weight:700');
-    console.log('formValues (connection basics):', formValuesToSave);
-    console.log('fields (everything else stored on the node):', fieldsToSave);
-
     // Subscribe BEFORE calling save() — it fires synchronously on success/failure once the HTTP call
     // settles, and save() itself doesn't return anything to await. Only close the dialog (via `saved`)
     // once the backend actually confirms success; on failure, surface the real error under App Name

@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
+using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.ValueObjects;
@@ -440,7 +441,15 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     {
         var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
-        var isCompartmentResource = isPatientResource || PatientCompartmentResourceTypes.IsSupported(resourceType);
+        // Device is not a genuine FHIR-spec patient-compartment member (see PatientCompartmentResourceTypes' own
+        // doc comment) — but Epic's own business-rule validator (code 59108, "A patient is required") rejects an
+        // unscoped Device search anyway. Scoped as an Epic-only addition here rather than added to the shared
+        // domain-level list, since that list is also relied on elsewhere for spec-accurate compartment membership.
+        var requiresEpicPatientScopeBeyondCompartment = source.SourceType == RuntimeSourceType.Epic
+            && string.Equals(resourceType, "Device", StringComparison.OrdinalIgnoreCase);
+        var isCompartmentResource = isPatientResource
+            || PatientCompartmentResourceTypes.IsSupported(resourceType)
+            || requiresEpicPatientScopeBeyondCompartment;
 
         if (!isCompartmentResource)
         {

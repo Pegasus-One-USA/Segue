@@ -12,6 +12,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, tap, map, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { AuthProfileDto } from '../../auth/services/auth-profile.model';
 
 const BASE = `${environment.apiBase}/api/v1/auth`;
 
@@ -40,15 +41,17 @@ export interface CreateSuperAdminRequest {
   lastName?: string;
 }
 
-/** Mirrors the backend LocalLoginResponse (same shape the login endpoint returns). */
+/**
+ * Mirrors the backend LocalLoginResponse (same shape the login endpoint returns). HIPAA #7: the raw
+ * token fields are stripped server-side (see AuthController.IssueTokenCookiesAndStrip) — the session
+ * is already set as HttpOnly cookies by the time this response arrives.
+ */
 export interface LocalLoginResponse {
-  accessToken: string;
   tokenType: string;
   expiresOnUtc: string;
   requiresPasswordChange: boolean;
-  refreshToken?: string;
   refreshTokenExpiresOnUtc?: string;
-  profile?: unknown;
+  profile?: AuthProfileDto;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -32,6 +32,14 @@ public static class FhirBridgeAuthenticationExtensions
     /// endpoint still requires a real Authorization header.</summary>
     private const string HubPathPrefix = "/hubs";
 
+    /// <summary>
+    /// HIPAA #7: the portal no longer sends an Authorization header — the access token lives in an HttpOnly
+    /// cookie the browser attaches automatically (including to a hub's WebSocket/SSE handshake, same as any
+    /// other same-origin request). Every JWT bearer scheme's <c>OnMessageReceived</c> falls back to this cookie
+    /// when no header/query token is present, so [Authorize] endpoints keep working unchanged.
+    /// </summary>
+    private const string AccessTokenCookieName = "fhirbridge_access_token";
+
     public static AuthenticationBuilder AddFhirBridgeAuthentication(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -181,15 +189,30 @@ public static class FhirBridgeAuthenticationExtensions
             return;
         }
 
-        if (!context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+        if (context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+        {
+            string? queryToken = context.HttpContext.Request.Query["access_token"];
+            if (!string.IsNullOrWhiteSpace(queryToken))
+            {
+                context.Token = queryToken;
+                return;
+            }
+        }
+
+        ApplyCookieTokenFallback(context);
+    }
+
+    private static void ApplyCookieTokenFallback(MessageReceivedContext context)
+    {
+        if (!string.IsNullOrEmpty(context.Token))
         {
             return;
         }
 
-        string? queryToken = context.HttpContext.Request.Query["access_token"];
-        if (!string.IsNullOrWhiteSpace(queryToken))
+        if (context.HttpContext.Request.Cookies.TryGetValue(AccessTokenCookieName, out var cookieToken) &&
+            !string.IsNullOrWhiteSpace(cookieToken))
         {
-            context.Token = queryToken;
+            context.Token = cookieToken;
         }
     }
 

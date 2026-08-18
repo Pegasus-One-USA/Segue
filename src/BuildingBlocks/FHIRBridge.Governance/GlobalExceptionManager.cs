@@ -1,3 +1,5 @@
+using FHIRBridge.Observability.Logging;
+
 namespace FHIRBridge.Governance;
 
 /// <summary>
@@ -11,15 +13,19 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
     private readonly IGovernanceLogger _governanceLogger;
     private readonly IExceptionClassifier _classifier;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
+    private readonly IPhiRedactor _redactor;
 
     public GlobalExceptionManager(
         IGovernanceLogger governanceLogger,
         IExceptionClassifier classifier,
-        IFailureDiagnosisClassifier? diagnosisClassifier = null)
+        IFailureDiagnosisClassifier? diagnosisClassifier = null,
+        IPhiRedactor? redactor = null)
     {
         _governanceLogger = governanceLogger;
         _classifier = classifier;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
+        // HIPAA #10: same redaction rule set as the Serilog PhiMaskingEnricher — see its remarks.
+        _redactor = redactor ?? new PhiRedactor();
     }
 
     // Bounds retry-on-collision below: a same-day process restart can regenerate a reference id that collides
@@ -51,8 +57,8 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
                     new ErrorEntry(
                         context.Severity,
                         exception.GetType().Name,
-                        exception.Message,
-                        exception.ToString(),
+                        _redactor.Redact(exception.Message) ?? exception.Message,
+                        _redactor.Redact(exception.ToString()) ?? exception.ToString(),
                         context.Module,
                         context.CorrelationId,
                         referenceId,

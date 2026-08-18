@@ -360,13 +360,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // Manually selecting one of these still fetches it (see the per-type branch below), just via a single clean
         // unscoped request instead of the cohort-scoped path every compartment sibling uses.
         //
-        // ReferenceScopedResourceTypes (Practitioner/Organization/Medication) run LAST, after every other selected
-        // type, because their fetch (see FetchByCollectedReferencesAsync) is built from reference ids collected out
-        // of this node's already-fetched resources — those resources have to exist first.
+        // ReferenceScopedResourceTypes (Practitioner/Organization/Medication) and PractitionerScopedSearchResourceTypes
+        // (PractitionerRole) run LAST, after every other selected type, because their fetch (see
+        // FetchByCollectedReferencesAsync / FetchPractitionerRoleByCollectedPractitionersAsync) is built from
+        // reference ids collected out of this node's already-fetched resources — those resources have to exist first.
         var executionOrder = resourceTypes
             .OrderBy(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase)
                 ? 0
-                : ReferenceScopedResourceTypes.Contains(type) ? 2 : 1)
+                : ReferenceScopedResourceTypes.Contains(type) || PractitionerScopedSearchResourceTypes.Contains(type) ? 2 : 1)
             .ToList();
 
         // An explicitly configured System/Group export always resolves to the SAME request shape (GroupId, Since,
@@ -541,7 +542,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                         $"no granted SMART scope authorizes '{type}' for this session (granted: {(effectiveGrantedScopes is { Count: > 0 } ? string.Join(", ", effectiveGrantedScopes) : "none")})");
                 }
 
-                var isCompartmentType = PatientCompartmentResourceTypes.IsSupported(type);
+                // Device is not a genuine FHIR-spec patient-compartment member (see PatientCompartmentResourceTypes'
+                // own doc comment) and is deliberately excluded from that shared, spec-accurate list — but Epic's
+                // own business-rule validator (code 59108, "A patient is required") rejects an unscoped Device
+                // search anyway. Scoped as an Epic-only addition here, rather than added to the shared domain-level
+                // list, since that list is also relied on elsewhere for spec-accurate compartment membership.
+                var isCompartmentType = PatientCompartmentResourceTypes.IsSupported(type)
+                    || (_sourceType == RuntimeSourceType.Epic && string.Equals(type, "Device", StringComparison.OrdinalIgnoreCase));
 
                 page = useBulkExport
                     ? batchedBulkResourcesByType is not null
@@ -551,7 +558,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                                 source, type, isPatientType ? null : cohortPatientIds, context.WorkflowRunId, cancellationToken),
                             source,
                             cancellationToken)
-                    : ReferenceScopedResourceTypes.Contains(type)
+                    : PractitionerScopedSearchResourceTypes.Contains(type)
+                        // Epic rejects both an unscoped and a patient-scoped PractitionerRole search ("An identifier,
+                        // practitioner, organization, location, or specialty parameter is required" — business rule
+                        // 59108) — unlike ReferenceScopedResourceTypes below, a direct GET PractitionerRole/{id}
+                        // isn't an option either, since nothing in the batch embeds a "PractitionerRole/{id}"
+                        // reference (other resources reference the Practitioner itself, not their PractitionerRole).
+                        // Scoped instead by re-searching once per distinct Practitioner id this node's own
+                        // already-fetched resources reference — the same "practitioner" parameter Epic's error
+                        // names as one of the accepted ways to satisfy this rule.
+                        ? await FetchPractitionerRoleByCollectedPractitionersAsync(client, source, resources, context, cancellationToken)
+                        : ReferenceScopedResourceTypes.Contains(type)
                         // Epic rejects both an unscoped and a patient-scoped search for these types (confirmed live:
                         // "Only an _ID search is allowed" for Organization/Medication, "Either name, family, or
                         // identifier is a required parameter" for Practitioner) — the only reliable fetch is a
@@ -1054,14 +1071,98 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
     /// <summary>
     /// Resource types Epic accepts neither an unscoped nor a <c>patient=</c>-scoped search for — confirmed live:
-    /// Organization/Medication/Specimen reject anything but <c>_id=</c> ("Only an _ID search is allowed"),
-    /// Practitioner requires <c>name</c>/<c>family</c>/<c>identifier</c> ("A required element is missing"), and
-    /// Location requires "at least one parameter besides status" (an unscoped/status-only request isn't enough).
-    /// None of those are values this node has on hand for an arbitrary tenant-wide fetch, so these are instead
-    /// resolved by id — see <see cref="FetchByCollectedReferencesAsync"/>.
+    /// Organization/Medication/Specimen/Questionnaire reject anything but <c>_id=</c> ("Only an _ID search is
+    /// allowed" — business rule 59102 for Questionnaire), Practitioner requires <c>name</c>/<c>family</c>/
+    /// <c>identifier</c> ("A required element is missing"), and Location requires "at least one parameter besides
+    /// status" (an unscoped/status-only request isn't enough). None of those are values this node has on hand for
+    /// an arbitrary tenant-wide fetch, so these are instead resolved by id — see
+    /// <see cref="FetchByCollectedReferencesAsync"/>. Questionnaire ids come from
+    /// <c>QuestionnaireResponse.questionnaire</c> references, so a route selecting Questionnaire needs
+    /// QuestionnaireResponse selected alongside it — same requirement as Organization/Medication needing a sibling
+    /// that actually references them.
     /// </summary>
     private static readonly HashSet<string> ReferenceScopedResourceTypes =
-        new(StringComparer.OrdinalIgnoreCase) { "Practitioner", "Organization", "Medication", "Location", "Specimen" };
+        new(StringComparer.OrdinalIgnoreCase) { "Practitioner", "Organization", "Medication", "Location", "Specimen", "Questionnaire" };
+
+    /// <summary>
+    /// Resource types Epic rejects both an unscoped and a <c>patient=</c>-scoped search for, but — unlike
+    /// <see cref="ReferenceScopedResourceTypes"/> — can't be resolved by a direct-by-id read either, since nothing
+    /// in the batch embeds a reference to their own type: <c>PractitionerRole</c> requires "an identifier,
+    /// practitioner, organization, location, or specialty parameter" (business rule 59108), but other resources
+    /// reference the underlying <c>Practitioner</c> directly, never a <c>PractitionerRole/{id}</c>. See
+    /// <see cref="FetchPractitionerRoleByCollectedPractitionersAsync"/>.
+    /// </summary>
+    private static readonly HashSet<string> PractitionerScopedSearchResourceTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "PractitionerRole" };
+
+    /// <summary>
+    /// Fetches PractitionerRole by re-searching once per distinct Practitioner id this node's own already-fetched
+    /// resources reference (e.g. <c>Encounter.participant</c>, <c>DocumentReference.author</c>), scoped by
+    /// <c>practitioner=Practitioner/{id}</c> — one of the parameters Epic's own business-rule error names as
+    /// sufficient. Falls back to a single clean unscoped search (same as
+    /// <see cref="FetchByCollectedReferencesAsync"/>'s fallback) when nothing in the batch references a Practitioner
+    /// at all; Epic will still reject that fallback per the same business rule, same as before this method existed.
+    /// Results are deduped by resource id — the same PractitionerRole can legitimately turn up for more than one
+    /// Practitioner id search (e.g. a role covering several locations, each surfaced via a different encounter).
+    /// </summary>
+    private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> FetchPractitionerRoleByCollectedPractitionersAsync(
+        IFhirSourceClient client,
+        FhirSourceConfiguration source,
+        IReadOnlyList<ResourceEnvelope> alreadyFetched,
+        WorkflowExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var practitionerIds = ExtractReferencedIds(alreadyFetched, "Practitioner");
+        if (practitionerIds.Count == 0)
+        {
+            var cleanSource = source with
+            {
+                SearchParameters = null,
+                PatientIds = null,
+                TargetPatientId = null,
+                PatientSearchCriteria = null,
+            };
+            return await SearchWithPolicyAsync(client, "PractitionerRole", cleanSource, context.WorkflowRunId, cancellationToken);
+        }
+
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
+        foreach (var practitionerId in practitionerIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var scopedSource = source with
+            {
+                SearchParameters = $"practitioner=Practitioner/{practitionerId}",
+                PatientIds = null,
+                TargetPatientId = null,
+                PatientSearchCriteria = null,
+            };
+
+            IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page;
+            try
+            {
+                page = await SearchWithPolicyAsync(client, "PractitionerRole", scopedSource, context.WorkflowRunId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // One Practitioner's PractitionerRole search failing (unauthorized, transient) only drops the
+                // roles tied to that one practitioner, not the whole resource type.
+                continue;
+            }
+
+            foreach (var resource in page)
+            {
+                if (!string.IsNullOrWhiteSpace(resource.ResourceId) && !seenIds.Add(resource.ResourceId))
+                {
+                    continue;
+                }
+
+                results.Add(resource);
+            }
+        }
+
+        return results;
+    }
 
     /// <summary>
     /// Fetches <paramref name="resourceType"/> by reading each id this node's own already-fetched resources
@@ -1134,14 +1235,31 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
+    /// Resource types whose reference back to <see cref="ReferenceScopedResourceTypes"/>/
+    /// <see cref="PractitionerScopedSearchResourceTypes"/> members isn't a standard FHIR <c>Reference</c> datatype
+    /// (<c>{"reference": "Type/id"}</c>) but a bare <c>canonical</c> string property instead — e.g.
+    /// <c>QuestionnaireResponse.questionnaire</c> is typed <c>canonical(Questionnaire)</c> in the R4 spec, so it's
+    /// serialized as a top-level <c>"questionnaire": "..."</c> string with no nested <c>"reference"</c> key at all,
+    /// which <see cref="CollectReferencedIds"/>'s ordinary walk structurally cannot see. Maps the target resource
+    /// type to the exact property name holding its canonical reference.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> CanonicalReferencePropertyByResourceType =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Questionnaire"] = "questionnaire" };
+
+    /// <summary>
     /// Every distinct id referenced as <c>{targetResourceType}/{id}</c> anywhere within <paramref name="resources"/>'
     /// raw JSON — walks the full document tree since the reference can sit at any depth/shape depending on the
-    /// referencing resource type (a flat property, or nested inside an array of backbone elements).
+    /// referencing resource type (a flat property, or nested inside an array of backbone elements). Also matches a
+    /// bare canonical-string reference (see <see cref="CanonicalReferencePropertyByResourceType"/>) when
+    /// <paramref name="targetResourceType"/> has one — matched by the last <c>{targetResourceType}/</c> occurrence
+    /// in the string rather than requiring it to start there, since a canonical value is commonly a full absolute
+    /// URL (e.g. <c>http://tenant.example.org/fhir/Questionnaire/123</c>) rather than a bare relative reference.
     /// </summary>
     private static HashSet<string> ExtractReferencedIds(IReadOnlyList<ResourceEnvelope> resources, string targetResourceType)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var prefix = $"{targetResourceType}/";
+        CanonicalReferencePropertyByResourceType.TryGetValue(targetResourceType, out var canonicalProperty);
 
         foreach (var resource in resources)
         {
@@ -1151,13 +1269,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             }
 
             using var document = System.Text.Json.JsonDocument.Parse(rawJson);
-            CollectReferencedIds(document.RootElement, prefix, ids);
+            CollectReferencedIds(document.RootElement, prefix, canonicalProperty, ids);
         }
 
         return ids;
     }
 
-    private static void CollectReferencedIds(System.Text.Json.JsonElement element, string referencePrefix, HashSet<string> ids)
+    private static void CollectReferencedIds(
+        System.Text.Json.JsonElement element,
+        string referencePrefix,
+        string? canonicalProperty,
+        HashSet<string> ids)
     {
         switch (element.ValueKind)
         {
@@ -1171,16 +1293,40 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     {
                         ids.Add(reference[referencePrefix.Length..]);
                     }
+                    else if (canonicalProperty is not null &&
+                        string.Equals(property.Name, canonicalProperty, StringComparison.Ordinal) &&
+                        property.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                        property.Value.GetString() is { Length: > 0 } canonicalValue)
+                    {
+                        var lastOccurrence = canonicalValue.LastIndexOf(referencePrefix, StringComparison.OrdinalIgnoreCase);
+                        if (lastOccurrence >= 0)
+                        {
+                            // Strip a trailing "|version" if present — canonical references may pin a specific
+                            // version of the target, which a plain GET {Type}/{id} has no use for.
+                            var idStart = lastOccurrence + referencePrefix.Length;
+                            var id = canonicalValue[idStart..];
+                            var versionPipe = id.IndexOf('|');
+                            if (versionPipe >= 0)
+                            {
+                                id = id[..versionPipe];
+                            }
+
+                            if (id.Length > 0)
+                            {
+                                ids.Add(id);
+                            }
+                        }
+                    }
                     else
                     {
-                        CollectReferencedIds(property.Value, referencePrefix, ids);
+                        CollectReferencedIds(property.Value, referencePrefix, canonicalProperty, ids);
                     }
                 }
                 break;
             case System.Text.Json.JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    CollectReferencedIds(item, referencePrefix, ids);
+                    CollectReferencedIds(item, referencePrefix, canonicalProperty, ids);
                 }
                 break;
         }

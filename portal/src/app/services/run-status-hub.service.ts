@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import { Subject } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { TokenService } from '../auth/services/token.service';
 
 /** Matches the backend's RunStatusChangedEvent (Runtime.Application.Workflows) — the payload RunStatusHub
  *  pushes as "RunStatusChanged" whenever a Runtime Plane workflow run starts or reaches a terminal state. */
@@ -28,7 +27,6 @@ export interface RunStatusChangedEvent {
  */
 @Injectable({ providedIn: 'root' })
 export class RunStatusHubService {
-  private readonly tokens = inject(TokenService);
 
   private connection: HubConnection | null = null;
   private readonly events$ = new Subject<RunStatusChangedEvent>();
@@ -54,10 +52,11 @@ export class RunStatusHubService {
 
     this.connection = new HubConnectionBuilder()
       .withUrl(hubUrl, {
-        // The official client only actually needs this for transports that can't set a header (WebSocket/SSE
-        // handshake) — it uses a real Authorization header for the HTTP negotiate call automatically. See the
-        // matching server-side OnMessageReceived fallback in FhirBridgeAuthenticationExtensions.
-        accessTokenFactory: () => this.tokens.getAccessToken() ?? '',
+        // HIPAA #7: the access token lives in an HttpOnly cookie now, unreadable by this client — the browser
+        // attaches it automatically to the negotiate call and the WebSocket/SSE handshake alike (withCredentials
+        // is what makes that happen cross-origin, same as HttpClient's requests). See the matching server-side
+        // cookie fallback in FhirBridgeAuthenticationExtensions.ApplyCookieTokenFallback.
+        withCredentials: true,
       })
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { delay, switchMap } from 'rxjs/operators';
 import { IAuthService } from './i-auth.service';
-import { User, MessageResponse, TokenPair } from '../models/user.model';
+import { User, MessageResponse } from '../models/user.model';
 import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
@@ -20,26 +20,6 @@ const pendingMfaChallenges = new Map<string, string>();
 
 function isAcceptableMockCode(code: string): boolean {
   return /^\d{6}$/.test(code) || code.trim().toUpperCase() === MFA_DEV_BACKUP_CODE;
-}
-
-// ─── Fake JWT helpers ──────────────────────────────────────────────────────────
-function fakeJWT(user: User, expiresIn = 3600): string {
-  const header  = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(JSON.stringify({
-    sub:         user.id,
-    email:       user.email,
-    role:        user.role,
-    roles:       user.roles.map(r => r.name),
-    permissions: user.permissions.map(p => p.name),
-    orgId:       user.orgId,
-    iat:         Math.floor(Date.now() / 1000),
-    exp:         Math.floor(Date.now() / 1000) + expiresIn,
-  }));
-  return `${header}.${payload}.fhirbridge-mock-sig`;
-}
-
-function fakeRefresh(userId: string): string {
-  return `rt_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
 function sanitise(u: User): User {
@@ -77,9 +57,7 @@ export class MockAuthService extends IAuthService {
           return of<LoginResult>({ requiresMfa: true, mfaChallengeToken });
         }
 
-        const accessToken  = fakeJWT(user, req.rememberMe ? 86400 * 30 : 3600);
-        const refreshToken = fakeRefresh(user.id);
-        return of<LoginResult>({ requiresMfa: false, accessToken, refreshToken, expiresIn: 3600, user: sanitise(user) });
+        return of<LoginResult>({ requiresMfa: false, user: sanitise(user) });
       })
     );
   }
@@ -97,9 +75,7 @@ export class MockAuthService extends IAuthService {
           return throwError(() => ({ code: 'MFA_INVALID_CODE', message: 'A valid MFA code is required.' }));
 
         pendingMfaChallenges.delete(challengeToken);
-        const accessToken  = fakeJWT(user, 3600);
-        const refreshToken = fakeRefresh(user.id);
-        return of<LoginResponse>({ requiresMfa: false, accessToken, refreshToken, expiresIn: 3600, user: sanitise(user) });
+        return of<LoginResponse>({ requiresMfa: false, user: sanitise(user) });
       })
     );
   }
@@ -140,9 +116,7 @@ export class MockAuthService extends IAuthService {
         };
 
         MOCK_USERS.push(newUser);
-        const accessToken  = fakeJWT(newUser, 3600);
-        const refreshToken = fakeRefresh(newUser.id);
-        return of<RegisterResponse>({ user: sanitise(newUser), accessToken, refreshToken });
+        return of<RegisterResponse>({ user: sanitise(newUser) });
       })
     );
   }
@@ -212,18 +186,15 @@ export class MockAuthService extends IAuthService {
   }
 
   // ─── Refresh token ─────────────────────────────────────────────────────────
-  override refreshToken(refreshTok: string): Observable<TokenPair> {
+  // HIPAA #7: no client-visible refresh token to key off anymore — mirrors getCurrentUser()'s
+  // "the active mock session" simplification, since mock mode has no real cookie jar to consult.
+  override refreshToken(): Observable<User> {
     return of(null).pipe(
       delay(400),
       switchMap(() => {
-        const userId = refreshTok.split('_')[1];
-        const user   = MOCK_USERS.find(u => u.id === userId);
-        if (!user) return throwError(() => ({ code: 'INVALID_TOKEN', message: 'Invalid refresh token.' }));
-        return of<TokenPair>({
-          accessToken:  fakeJWT(user, 3600),
-          refreshToken: fakeRefresh(user.id),
-          expiresIn:    3600,
-        });
+        const user = MOCK_USERS.find(u => u.status === 'active');
+        if (!user) return throwError(() => ({ code: 'UNAUTHORIZED', message: 'Not authenticated.' }));
+        return of(sanitise(user));
       })
     );
   }

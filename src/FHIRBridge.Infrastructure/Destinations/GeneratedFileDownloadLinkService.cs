@@ -21,16 +21,19 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
     private readonly GeneratedFileDownloadOptions _options;
     private readonly IAppSecretAccessor _secretAccessor;
     private readonly ISystemSettingsCache _settingsCache;
+    private readonly IPhiFieldEncryptor _encryptor;
     private readonly string _rootPath;
 
     public GeneratedFileDownloadLinkService(
         IOptions<GeneratedFileDownloadOptions> options,
         IAppSecretAccessor secretAccessor,
-        ISystemSettingsCache settingsCache)
+        ISystemSettingsCache settingsCache,
+        IPhiFieldEncryptor encryptor)
     {
         _options = options.Value;
         _secretAccessor = secretAccessor;
         _settingsCache = settingsCache;
+        _encryptor = encryptor;
         // A relative RootPath must not be resolved against the process's current working directory — that varies
         // by how the host is launched (console vs IIS vs Windows Service) — so it's anchored to the app's own base
         // directory instead. PhysicalFileResult (used to serve the file back) requires an absolute path.
@@ -48,7 +51,10 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
         var directory = Path.Combine(_rootPath, createdUtc.ToString("yyyy"), createdUtc.ToString("MM"), createdUtc.ToString("dd"));
         Directory.CreateDirectory(directory);
         var physicalPath = Path.Combine(directory, guid.ToString("N") + extension);
-        await File.WriteAllBytesAsync(physicalPath, file.Content, cancellationToken);
+        // HIPAA #6: encrypt at rest — content is base64'd, run through the same AES-GCM encryptor already used
+        // for PHI database columns, then written as UTF-8 ciphertext rather than plaintext bytes.
+        var ciphertext = _encryptor.Encrypt(Convert.ToBase64String(file.Content));
+        await File.WriteAllTextAsync(physicalPath, ciphertext, Encoding.UTF8, cancellationToken);
 
         var payload = new TokenPayload(guid, createdUtc, createdUtc + expiry, file.ContentType, file.FileName);
         var token = Sign(payload);
@@ -92,6 +98,26 @@ public sealed class GeneratedFileDownloadLinkService : IGeneratedFileDownloadLin
 
         return Task.FromResult<GeneratedFileDownloadResolution?>(
             new GeneratedFileDownloadResolution(physicalPath, payload.ContentType, payload.DisplayFileName));
+    }
+
+    /// <summary>
+    /// Decrypts a resolved file's on-disk ciphertext back to raw bytes. Called by the controller immediately
+    /// before streaming the response — content never sits decrypted anywhere but the response body.
+    /// </summary>
+    public async Task<byte[]> ReadDecryptedAsync(string physicalPath, CancellationToken cancellationToken)
+    {
+        var text = await File.ReadAllTextAsync(physicalPath, Encoding.UTF8, cancellationToken);
+
+        try
+        {
+            return Convert.FromBase64String(_encryptor.Decrypt(text));
+        }
+        catch (Exception ex) when (ex is FormatException or CryptographicException or ArgumentException)
+        {
+            // Backward-compatible rollout: files written before encryption-at-rest shipped are still on disk as
+            // plaintext until their existing TTL expires them. Fall back to reading raw bytes for those.
+            return await File.ReadAllBytesAsync(physicalPath, cancellationToken);
+        }
     }
 
     private string Sign(TokenPayload payload)

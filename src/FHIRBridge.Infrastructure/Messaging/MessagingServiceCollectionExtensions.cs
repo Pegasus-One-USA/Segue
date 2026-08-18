@@ -105,8 +105,16 @@ public static class MessagingServiceCollectionExtensions
             VirtualHost = section["VirtualHost"] ?? "/",
             PipelineRunsQueue = section["PipelineRunsQueue"] ?? "pipeline-runs",
             WebhookIngestionQueue = section["WebhookIngestionQueue"] ?? "webhook-ingestion",
-            PrefetchCount = ushort.TryParse(section["PrefetchCount"], out var prefetch) ? prefetch : (ushort)10
+            PrefetchCount = ushort.TryParse(section["PrefetchCount"], out var prefetch) ? prefetch : (ushort)10,
+            UseTls = bool.TryParse(section["UseTls"], out var useTls) && useTls
         };
+
+        // HIPAA #15: fail fast rather than silently carrying PHI over plaintext AMQP outside Development.
+        if (!options.UseTls && !IsDevelopmentEnvironment())
+        {
+            throw new InvalidOperationException(
+                "Messaging:RabbitMq:UseTls must be true outside Development — refusing to start with a plaintext AMQP connection.");
+        }
 
         services.AddSingleton(Options.Create(options));
         services.AddSingleton<RabbitMqConnection>();
@@ -118,6 +126,19 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<IQueueMonitorProvider, RabbitMqQueueMonitorProvider>();
 
         return services;
+    }
+
+    /// <summary>
+    /// No <see cref="IHostEnvironment"/> is threaded through this far into DI registration, so the environment
+    /// name is read directly from the same env vars ASP.NET Core/Generic Host resolve it from at startup.
+    /// </summary>
+    internal static bool IsDevelopmentEnvironment()
+    {
+        var environmentName =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+        return string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IServiceCollection AddInMemoryMessaging(IServiceCollection services)

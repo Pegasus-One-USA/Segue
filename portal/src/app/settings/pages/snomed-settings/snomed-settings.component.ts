@@ -1,35 +1,105 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { HttpEventType } from '@angular/common/http';
-import { DatePipe } from '@angular/common';
+import { ReactiveFormsModule, FormBuilder } from '@angular/forms';
 import { ToastService } from '../../../services/toast.service';
 import { SnomedSettingsService, SnomedImportHistoryEntry } from '../../services/snomed-settings.service';
-
-const POLL_INTERVAL_MS = 3000;
+import { TerminologyImportHistoryComponent } from '../../components/terminology-import-history/terminology-import-history.component';
+import { TerminologySchedulerCardComponent } from '../../components/terminology-scheduler-card/terminology-scheduler-card.component';
+import { TerminologyHistoryPoller } from '../../utils/terminology-history-poller';
 
 @Component({
   selector: 'app-snomed-settings',
   standalone: true,
-  imports: [DatePipe],
+  imports: [ReactiveFormsModule, TerminologyImportHistoryComponent, TerminologySchedulerCardComponent],
   templateUrl: './snomed-settings.component.html',
   styleUrl: './snomed-settings.component.scss',
 })
 export class SnomedSettingsComponent implements OnInit, OnDestroy {
+  private readonly fb = inject(FormBuilder);
   private readonly service = inject(SnomedSettingsService);
   private readonly toast = inject(ToastService);
-  private pollTimer?: ReturnType<typeof setTimeout>;
 
-  protected readonly loading = signal(true);
+  protected readonly loadingConfig = signal(true);
+  protected readonly saving = signal(false);
+  protected readonly syncing = signal(false);
+  protected readonly apiKeySet = signal(false);
+  protected readonly historyLoading = signal(true);
+  protected readonly history = signal<SnomedImportHistoryEntry[]>([]);
+
   protected readonly uploading = signal(false);
   protected readonly uploadProgress = signal(0);
   protected readonly selectedFile = signal<File | null>(null);
-  protected readonly history = signal<SnomedImportHistoryEntry[]>([]);
+
+  protected readonly form = this.fb.nonNullable.group({
+    apiKey: [''],
+    schedulerEnabled: [false],
+    executionTime: ['03:00'],
+    retryCount: [3],
+    retryIntervalSeconds: [60],
+  });
+
+  private readonly poller = new TerminologyHistoryPoller(
+    () => this.service.getHistory(),
+    this.history,
+    this.historyLoading,
+    () => this.toast.error('Failed to load SNOMED CT import history'),
+  );
 
   ngOnInit(): void {
-    this.loadHistory();
+    this.service.get().subscribe({
+      next: (x) => {
+        this.form.patchValue(x);
+        this.apiKeySet.set(x.hasApiKeyConfigured);
+        this.loadingConfig.set(false);
+      },
+      error: () => {
+        this.loadingConfig.set(false);
+        this.toast.error('Failed to load SNOMED CT settings');
+      },
+    });
+    this.poller.load();
   }
 
   ngOnDestroy(): void {
-    clearTimeout(this.pollTimer);
+    this.poller.dispose();
+  }
+
+  protected save(): void {
+    if (this.form.invalid) return;
+    this.saving.set(true);
+    const v = this.form.getRawValue();
+    this.service.update({ ...v, apiKey: v.apiKey.trim() || null }).subscribe({
+      next: (x) => {
+        this.apiKeySet.set(x.hasApiKeyConfigured);
+        this.form.controls.apiKey.setValue('');
+        this.form.markAsPristine();
+        this.saving.set(false);
+        this.toast.success('SNOMED CT settings saved');
+      },
+      error: () => {
+        this.saving.set(false);
+        this.toast.error('Failed to save SNOMED CT settings');
+      },
+    });
+  }
+
+  protected synchronize(): void {
+    if (this.form.dirty) {
+      this.toast.error('Save settings before synchronizing');
+      return;
+    }
+    this.syncing.set(true);
+    this.service.synchronize().subscribe({
+      next: () => {
+        this.syncing.set(false);
+        this.toast.success('SNOMED CT synchronization started in the background — check the history below for progress.');
+        this.poller.load();
+      },
+      error: () => {
+        this.syncing.set(false);
+        this.toast.error('SNOMED CT synchronization failed to start');
+      },
+    });
   }
 
   protected onFileSelected(event: Event): void {
@@ -43,33 +113,20 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
     this.uploading.set(true);
     this.uploadProgress.set(0);
     this.service.importFile(file).subscribe({
-      next: event => {
+      next: (event) => {
         if (event.type === HttpEventType.UploadProgress && event.total) {
           this.uploadProgress.set(Math.round((100 * event.loaded) / event.total));
         } else if (event.type === HttpEventType.Response) {
           this.uploading.set(false);
           this.selectedFile.set(null);
           this.toast.success('SNOMED CT import started in the background — check the history below for progress.');
-          this.loadHistory();
+          this.poller.load();
         }
       },
       error: () => {
         this.uploading.set(false);
         this.toast.error('SNOMED CT upload failed');
       },
-    });
-  }
-
-  private loadHistory(): void {
-    this.loading.set(true);
-    this.service.getHistory().subscribe({
-      next: entries => {
-        this.history.set(entries);
-        this.loading.set(false);
-        clearTimeout(this.pollTimer);
-        if (entries.some(e => e.status === 'Running')) this.pollTimer = setTimeout(() => this.loadHistory(), POLL_INTERVAL_MS);
-      },
-      error: () => { this.loading.set(false); this.toast.error('Failed to load SNOMED CT import history'); },
     });
   }
 }

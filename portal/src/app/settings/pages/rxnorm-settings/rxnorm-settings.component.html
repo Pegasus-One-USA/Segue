@@ -1,72 +1,69 @@
 <div class="dash-content">
   <div class="page-header">
     <h1 class="page-title">RxNorm Terminology</h1>
-    <p class="page-sub">Upload an official RxNorm release (.zip) to import it into the local terminology database.</p>
+    <p class="page-sub">Configure automatic monthly synchronization with the National Library of Medicine, or upload a release manually.</p>
   </div>
 
-  <section class="settings-card">
-    <h2 class="card-title">Import Release</h2>
-    <p class="card-sub">Accepts the RxNorm "Full Monthly Release" archive as distributed by the National Library of Medicine.</p>
-
-    <div class="upload-row">
-      <label class="file-input">
-        <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading()" />
-        <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
-      </label>
-      <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
-        {{ uploading() ? 'Uploading…' : 'Import' }}
-      </button>
-    </div>
-
-    @if (uploading()) {
-      <div class="progress-track">
-        <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
-      </div>
-      <p class="card-sub">Uploading… {{ uploadProgress() }}% — the import itself will continue in the background once the upload completes.</p>
-    }
-  </section>
-
-  <section class="settings-card">
-    <h2 class="card-title">Import History</h2>
-    <p class="card-sub">The most recent RxNorm release imports.</p>
-
-    @if (loading()) {
+  @if (loadingConfig()) {
+    <section class="settings-card">
       <p class="card-sub">Loading…</p>
-    } @else if (history().length === 0) {
-      <p class="card-sub">No RxNorm release has been imported yet.</p>
-    } @else {
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>Version</th>
-            <th>Started</th>
-            <th>Completed</th>
-            <th>Concepts</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (entry of history(); track entry.id) {
-            <tr>
-              <td>{{ entry.version ?? '—' }}</td>
-              <td>{{ entry.startedOnUtc | date: 'short' }}</td>
-              <td>{{ entry.completedOnUtc ? (entry.completedOnUtc | date: 'short') : '—' }}</td>
-              <td>{{ entry.importedConceptCount }}</td>
-              <td>
-                <span class="status-badge"
-                      [class.status-badge--ok]="entry.status === 'Succeeded'"
-                      [class.status-badge--info]="entry.status === 'Running'"
-                      [class.status-badge--warn]="entry.status === 'Failed'">
-                  {{ entry.status }}
-                </span>
-                @if (entry.errorMessage) {
-                  <p class="field-error">{{ entry.errorMessage }}</p>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
-  </section>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form">
+      <section class="settings-card">
+        <h2 class="card-title">Connection</h2>
+        <p class="card-sub">UMLS Terminology Services (UTS) API key, used to check for and download new RxNorm releases automatically. The same key also unlocks SNOMED CT's synchronization.</p>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="rxnorm-apiKey">UTS API Key</label>
+            <input id="rxnorm-apiKey" type="password" formControlName="apiKey" autocomplete="off"
+                   [placeholder]="apiKeySet() ? 'Leave blank to keep current key' : 'UTS API key'" />
+          </div>
+        </div>
+      </section>
+
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="RxNorm releases monthly. Schedule automatic imports, or run one on demand below."
+        [showRetryFields]="true"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </form>
+
+    <section class="settings-card">
+      <h2 class="card-title">Import Release</h2>
+      <p class="card-sub">Accepts the RxNorm "Full Monthly Release" archive as distributed by the National Library of Medicine — a fallback for when auto-sync above is off or unavailable.</p>
+
+      <div class="upload-row">
+        <label class="file-input">
+          <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading()" />
+          <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
+        </label>
+        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+          {{ uploading() ? 'Uploading…' : 'Import' }}
+        </button>
+      </div>
+
+      @if (uploading()) {
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+        </div>
+        <p class="card-sub">Uploading… {{ uploadProgress() }}% — the import itself will continue in the background once the upload completes.</p>
+      }
+    </section>
+
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent RxNorm release imports — manual and automatic runs share one history."
+      emptyMessage="No RxNorm release has been imported yet."
+      countColumnLabel="Concepts"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
+  }
 </div>

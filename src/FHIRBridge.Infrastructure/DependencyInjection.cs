@@ -76,6 +76,16 @@ public static class DependencyInjection
         }
         else
         {
+            // HIPAA #15: fail fast rather than silently carrying cached FHIR tokens/scopes over plaintext Redis
+            // outside Development. StackExchange.Redis's connection-string format uses an "ssl=true" option
+            // rather than a URI scheme, so that's what's checked here — not a "rediss://" prefix.
+            if (!redisConnectionString.Contains("ssl=true", StringComparison.OrdinalIgnoreCase) &&
+                !Messaging.MessagingServiceCollectionExtensions.IsDevelopmentEnvironment())
+            {
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Redis must include 'ssl=true' outside Development — refusing to start with a plaintext Redis connection.");
+            }
+
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
@@ -301,6 +311,10 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(MappedPowerBiDestinationWriter));
         services.AddHttpClient(nameof(FhirTerminologyLookupService));
         services.AddHttpClient(nameof(LoincReleaseClient));
+        services.AddHttpClient(nameof(UtsReleaseClient));
+        services.AddHttpClient(nameof(NdcReleaseClient));
+        services.AddHttpClient(nameof(ReleaseFreshnessChecker));
+        services.AddHttpClient(nameof(UcumReleaseClient));
         services.AddHttpClient(nameof(FhirTerminologyTranslationService));
 
         services.AddSingleton<MappedInMemoryDestinationBuffer>();
@@ -393,6 +407,19 @@ public static class DependencyInjection
         services.AddScoped<ISnomedImportService, SnomedImportService>();
         services.AddScoped<IIcd10ImportService, Icd10ImportService>();
         services.AddScoped<IRxNormImportService, RxNormImportService>();
+        services.AddScoped<IUtsReleaseClient, UtsReleaseClient>();
+        services.AddScoped<IRxNormSynchronizationService, RxNormSynchronizationService>();
+        services.AddScoped<ISnomedSynchronizationService, SnomedSynchronizationService>();
+        services.AddScoped<INdcImportService, NdcImportService>();
+        services.AddScoped<INdcReleaseClient, NdcReleaseClient>();
+        services.AddScoped<INdcSynchronizationService, NdcSynchronizationService>();
+        services.AddScoped<IIcd10PcsImportService, Icd10PcsImportService>();
+        services.AddScoped<IHcpcsImportService, HcpcsImportService>();
+        services.AddScoped<IReleaseFreshnessChecker, ReleaseFreshnessChecker>();
+        services.AddScoped<ICvxImportService, CvxImportService>();
+        services.AddScoped<IUcumImportService, UcumImportService>();
+        services.AddScoped<IUcumReleaseClient, UcumReleaseClient>();
+        services.AddScoped<IUcumSynchronizationService, UcumSynchronizationService>();
         // Runs LOINC/SNOMED/ICD-10/RxNorm imports off the request thread — see TerminologyImportChannel's
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
@@ -447,6 +474,8 @@ public static class DependencyInjection
         services.AddScoped<IGovernanceRule, ResourceTypeAccessGovernanceRule>();
         services.AddSingleton<IConsentService, ConfiguredConsentService>();
         services.AddScoped<IGovernanceRule, ConsentGovernanceRule>();
+        // HIPAA #2: de-identification now actually triggers for destinations flagged via RequiresDeIdentification.
+        services.AddScoped<IGovernanceRule, DestinationSensitivityGovernanceRule>();
         services.AddScoped<IGovernancePolicyService, CompositeGovernancePolicyService>();
 
         // G3: real HIPAA Safe Harbor de-identification (overrides the Application pass-through stub).
@@ -499,6 +528,10 @@ public static class DependencyInjection
 
         services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();
         services.AddScoped<ILoincConfigurationService, LoincConfigurationService>();
+        services.AddScoped<IRxNormConfigurationService, RxNormConfigurationService>();
+        services.AddScoped<ISnomedConfigurationService, SnomedConfigurationService>();
+        services.AddScoped<INdcConfigurationService, NdcConfigurationService>();
+        services.AddScoped<IUcumConfigurationService, UcumConfigurationService>();
         // Needs only IDataProtectionProvider (registered app-wide in Program.cs), not FHIRBridgeDbContext — works
         // the same on both the SQL-backed and InMemory paths above.
         services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();

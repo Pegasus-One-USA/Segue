@@ -8,9 +8,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   requiresMfa?: false;
-  accessToken:  string;
-  refreshToken: string;
-  expiresIn:    number;
+  // HIPAA #7: tokens live in HttpOnly cookies the backend sets directly — never present on this object.
   user:         User;
 }
 
@@ -33,9 +31,7 @@ export interface RegisterRequest {
 }
 
 export interface RegisterResponse {
-  user:         User;
-  accessToken:  string;
-  refreshToken: string;
+  user: User;
 }
 
 export interface ForgotPasswordRequest {

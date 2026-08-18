@@ -30,8 +30,28 @@ public static class TransformNodeConfigSchemas
     private static TransformConfigFieldSchema Select(string key, string label, string[] options, string defaultValue) =>
         new(key, label, "select", options, defaultValue);
 
+    // A dropdown of common/known values that still allows a genuinely custom one — unlike Select, picking
+    // nothing from the list (or the value simply not being one of the presets, e.g. an existing saved rule
+    // with a bespoke system URI) reveals a free-text box instead of forcing the value back to a preset.
+    // Use this instead of Select whenever "not in the list" is a legitimate answer, not just an oversight —
+    // e.g. a rule author's own local/custom code system URI, which a closed dropdown would wrongly block.
+    private static TransformConfigFieldSchema Combo(string key, string label, string[] options, string? placeholder = null) =>
+        new(key, label, "combo", options, null, placeholder);
+
     private static TransformConfigFieldSchema Checkbox(string key, string label, bool defaultValue) =>
         new(key, label, "checkbox", null, defaultValue.ToString());
+
+    // Same canonical URIs as CodeableConceptBuilderNode.SystemUris (kept in sync by hand — these live in
+    // different layers, one a friendly-name lookup table, one a raw dropdown of presets), offered here as
+    // presets for a field that otherwise takes any raw URI, so the common cases don't require typing one out.
+    private static readonly string[] CommonSystemUris =
+    [
+        "http://loinc.org", "http://snomed.info/sct", "http://hl7.org/fhir/sid/icd-10-cm",
+        "http://www.nlm.nih.gov/research/umls/rxnorm", "http://hl7.org/fhir/sid/us-npi",
+        "urn:oid:2.16.840.1.113883.6.285", "http://hl7.org/fhir/sid/icd-10-pcs",
+        "http://hl7.org/fhir/sid/ndc", "http://hl7.org/fhir/sid/cvx",
+        "http://unitsofmeasure.org", "http://www.ama-assn.org/go/cpt",
+    ];
 
     private static readonly IReadOnlyDictionary<TransformNodeType, TransformNodeSchemaDto> Schemas =
         new Dictionary<TransformNodeType, TransformNodeSchemaDto>
@@ -78,11 +98,16 @@ public static class TransformNodeConfigSchemas
                 Checkbox("caseInsensitive", "Case-insensitive match", true),
                 Select("unmatchedPolicy", "When nothing matches", ["null", "passThrough", "error"], "null"),
                 Checkbox("emitCoding", "Emit a full Coding (system+code) instead of just the mapped value", false),
-                Text("codingSystem", "Coding system URI (only when emitCoding is on)", placeholder: "e.g. http://hl7.org/fhir/administrative-gender"),
+                Combo("codingSystem", "Coding system URI (only when emitCoding is on)", CommonSystemUris, placeholder: "e.g. http://hl7.org/fhir/administrative-gender"),
             ]),
             [TransformNodeType.CodeableConceptBuilder] = new(TransformNodeType.CodeableConceptBuilder, "CodeableConcept Builder",
             [
-                Text("system", "Code system (e.g. LOINC, SNOMED, ICD10, RXNORM)", placeholder: "LOINC"),
+                // Closed dropdown, not free text — Nodes/CodesTerminologyNodes.cs's CodeableConceptBuilderNode
+                // resolves this key through a fixed SystemUris dictionary and silently falls back to using
+                // whatever was typed AS the literal system URI when it isn't a recognized key. A typo (or a
+                // correctly-spelled name this dictionary hasn't been taught yet) used to produce a garbage
+                // non-URI system value with no error — a closed list makes that specific failure impossible.
+                Select("system", "Code system", ["LOINC", "SNOMED", "ICD10", "RXNORM", "NPI", "HCPCS", "ICD10PCS", "NDC", "CVX", "UCUM", "CPT"], "LOINC"),
                 Text("display", "Display text (optional — leave blank to resolve from the local terminology DB)", placeholder: "e.g. Glucose"),
                 Checkbox("resolveDisplayFromTerminology", "Look up real display text from the local terminology DB when Display is blank", true),
                 Select("outputShape", "Output shape", ["object", "displayTextOnly"], "object"),

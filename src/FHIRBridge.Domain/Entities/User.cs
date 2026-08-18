@@ -78,6 +78,15 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public DateTime? PasswordExpiresOnUtc { get; private set; }
     public bool MfaEnabled { get; private set; }
 
+    /// <summary>
+    /// HIPAA #12: true if either an admin/self-service reset explicitly requires a change
+    /// (<see cref="MustChangePassword"/>), or the configured rotation period has elapsed
+    /// (<see cref="PasswordExpiresOnUtc"/>). Callers gating login/session behavior should read this, not
+    /// <see cref="MustChangePassword"/> alone, so expiry-driven rotation reuses the same enforced flow.
+    /// </summary>
+    public bool RequiresPasswordChange =>
+        MustChangePassword || (PasswordExpiresOnUtc is { } expiresOnUtc && expiresOnUtc < DateTime.UtcNow);
+
     /// <summary>Base32 TOTP shared secret. Staged during enrollment, active once <see cref="MfaEnabled"/> is true.</summary>
     public string? MfaSecret { get; private set; }
 
@@ -223,12 +232,16 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         MustSetupMfa = required;
     }
 
+    /// <summary>HIPAA #12: rotation period applied whenever a password is (re)set. See policies/09-access-control-and-authentication.md.</summary>
+    public static readonly TimeSpan PasswordRotationPeriod = TimeSpan.FromDays(90);
+
     public void EnableLocalLogin(string passwordHash, bool mustChangePassword)
     {
         PasswordHash = passwordHash;
         IsLocalLoginEnabled = true;
         MustChangePassword = mustChangePassword;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         Status = UserStatus.Active;
         IsEnabled = true;
     }
@@ -241,6 +254,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         PasswordResetTokenHash = null;
         PasswordResetTokenExpiresOnUtc = null;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         FailedLoginCount = 0;
         LockoutEndUtc = null;
     }
@@ -276,6 +290,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         MustChangePassword = false;
         PasswordHash = passwordHash;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         FailedLoginCount = 0;
         LockoutEndUtc = null;
         InvitationTokenHash = null;

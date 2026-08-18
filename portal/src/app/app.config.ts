@@ -6,7 +6,7 @@ import {
 import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { tap } from 'rxjs';
+import { switchMap } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
@@ -37,9 +37,18 @@ function initApp(auth: AuthService, appInit: AppInitService) {
   //  • requiresSetup === false → restore the stored session normally.
   // checkSetup() is self-resilient (defaults requiresSetup=false if the API is unreachable),
   // so the app still boots into the normal login flow when the backend is down.
+  // HIPAA #7: initFromToken() now makes a real GET /auth/me call (the session cookie can't be
+  // decoded client-side anymore) — it MUST be subscribed to, not just constructed and discarded,
+  // or the app boots with no user ever restored. switchMap (not tap) is what actually does that.
   return () =>
     appInit.checkSetup().pipe(
-      tap(requiresSetup => (requiresSetup ? auth.discardSession() : auth.initFromToken())),
+      switchMap(requiresSetup => {
+        if (requiresSetup) {
+          auth.discardSession();
+          return [];
+        }
+        return auth.initFromToken();
+      }),
     );
 }
 

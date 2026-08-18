@@ -205,23 +205,77 @@ export const LOINC_ENDPOINTS = {
 };
 
 // ─── SNOMED CT (SnomedConfigurationController — api/v1/terminology/snomed/configuration) ──
-// Upload-driven import (RF2 Snapshot release .zip) rather than a vendor API pull — no configuration
-// endpoint, just import + history.
+// Auto-syncs via the shared UTS API key (see RXNORM_ENDPOINTS) on top of the original upload-driven import,
+// which stays available as a fallback.
 export const SNOMED_ENDPOINTS = {
+  configuration: `${API_V1_BASE}/terminology/snomed/configuration`,
+  synchronize: `${API_V1_BASE}/terminology/snomed/configuration/synchronize`,
   import: `${API_V1_BASE}/terminology/snomed/configuration/import`,
   history: `${API_V1_BASE}/terminology/snomed/configuration/history`,
 };
 
 // ─── ICD-10-CM (Icd10ConfigurationController — api/v1/terminology/icd10/configuration) ──
-// Upload-driven import (CMS "Code Descriptions in Tabular Order" release .zip) — same pattern as SNOMED.
+// Upload-driven import (CMS "Code Descriptions in Tabular Order" release .zip), plus a lightweight
+// freshness/check-for-updates scrape — CMS/NCHS publish no version-check API, so this can't be a real scheduler.
 export const ICD10_ENDPOINTS = {
   import: `${API_V1_BASE}/terminology/icd10/configuration/import`,
   history: `${API_V1_BASE}/terminology/icd10/configuration/history`,
+  freshness: `${API_V1_BASE}/terminology/icd10/configuration/freshness`,
+  checkForUpdates: `${API_V1_BASE}/terminology/icd10/configuration/check-for-updates`,
+  downloadAndImport: `${API_V1_BASE}/terminology/icd10/configuration/download-and-import`,
+};
+
+// ─── ICD-10-PCS (Icd10PcsConfigurationController — api/v1/terminology/icd10pcs/configuration) ──
+// Net-new; same upload + freshness-check shape as ICD-10-CM (no version-check API exists for this either).
+export const ICD10PCS_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/icd10pcs/configuration/import`,
+  history: `${API_V1_BASE}/terminology/icd10pcs/configuration/history`,
+  freshness: `${API_V1_BASE}/terminology/icd10pcs/configuration/freshness`,
+  checkForUpdates: `${API_V1_BASE}/terminology/icd10pcs/configuration/check-for-updates`,
+  downloadAndImport: `${API_V1_BASE}/terminology/icd10pcs/configuration/download-and-import`,
+};
+
+// ─── HCPCS Level II (HcpcsConfigurationController — api/v1/terminology/hcpcs/configuration) ──
+// Net-new; same upload + freshness-check shape as ICD-10-CM/PCS.
+export const HCPCS_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/hcpcs/configuration/import`,
+  history: `${API_V1_BASE}/terminology/hcpcs/configuration/history`,
+  freshness: `${API_V1_BASE}/terminology/hcpcs/configuration/freshness`,
+  checkForUpdates: `${API_V1_BASE}/terminology/hcpcs/configuration/check-for-updates`,
+  downloadAndImport: `${API_V1_BASE}/terminology/hcpcs/configuration/download-and-import`,
+};
+
+// ─── NDC (NdcConfigurationController — api/v1/terminology/ndc/configuration) ──
+// Net-new; auto-syncs via openFDA's public API (no required credential) — same scheduler shape as RxNorm/SNOMED.
+export const NDC_ENDPOINTS = {
+  configuration: `${API_V1_BASE}/terminology/ndc/configuration`,
+  synchronize: `${API_V1_BASE}/terminology/ndc/configuration/synchronize`,
+  import: `${API_V1_BASE}/terminology/ndc/configuration/import`,
+  history: `${API_V1_BASE}/terminology/ndc/configuration/history`,
+};
+
+// ─── CVX (CvxConfigurationController — api/v1/terminology/cvx/configuration) ──
+// Net-new; upload-only for now — CDC's REST API needs direct verification before a scheduler is built.
+export const CVX_ENDPOINTS = {
+  import: `${API_V1_BASE}/terminology/cvx/configuration/import`,
+  history: `${API_V1_BASE}/terminology/cvx/configuration/history`,
+};
+
+// ─── UCUM (UcumConfigurationController — api/v1/terminology/ucum/configuration) ──
+// Net-new; auto-syncs via the public ucum-org/ucum GitHub repo (no credential needed).
+export const UCUM_ENDPOINTS = {
+  configuration: `${API_V1_BASE}/terminology/ucum/configuration`,
+  synchronize: `${API_V1_BASE}/terminology/ucum/configuration/synchronize`,
+  import: `${API_V1_BASE}/terminology/ucum/configuration/import`,
+  history: `${API_V1_BASE}/terminology/ucum/configuration/history`,
 };
 
 // ─── RxNorm (RxNormConfigurationController — api/v1/terminology/rxnorm/configuration) ──
-// Upload-driven import (RxNorm Full Monthly Release .zip) — same pattern as SNOMED/ICD-10.
+// Auto-syncs monthly via NLM's UTS API (one API key, entered here, also unlocks SNOMED CT above) — the
+// original upload-driven import stays available as a fallback.
 export const RXNORM_ENDPOINTS = {
+  configuration: `${API_V1_BASE}/terminology/rxnorm/configuration`,
+  synchronize: `${API_V1_BASE}/terminology/rxnorm/configuration/synchronize`,
   import: `${API_V1_BASE}/terminology/rxnorm/configuration/import`,
   history: `${API_V1_BASE}/terminology/rxnorm/configuration/history`,
 };

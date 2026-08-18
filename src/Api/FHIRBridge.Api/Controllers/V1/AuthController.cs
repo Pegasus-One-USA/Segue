@@ -61,7 +61,7 @@ public sealed class AuthController : ControllerBase
 
         var response = await _setupService.CreateFirstSuperAdminAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _ssoAuthService.LoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>
@@ -101,7 +101,7 @@ public sealed class AuthController : ControllerBase
 
         var response = await _setupService.CreateFirstSuperAdminViaSsoAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>Public SSO configuration for the portal: which providers are enabled and their client settings.</summary>
@@ -155,7 +155,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.LoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/login/mfa")]
@@ -168,7 +168,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.CompleteMfaLoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/change-password")]
@@ -179,7 +179,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.ChangePasswordAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/forgot-password")]
@@ -216,13 +216,22 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(
-        [FromBody] RefreshTokenRequest request,
+        [FromBody] RefreshTokenRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await _localAuthService.RefreshTokenAsync(request, cancellationToken);
+        // HIPAA #7: the refresh token now lives in an HttpOnly cookie, not the request body — the body param
+        // is kept only so an already-in-flight caller from before this change doesn't 400 on a stale contract.
+        var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? request?.RefreshToken;
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return Unauthorized();
+        }
 
-        return Ok(response);
+        var response = await _localAuthService.RefreshTokenAsync(new RefreshTokenRequest(refreshToken), cancellationToken);
+
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("logout")]
@@ -231,6 +240,57 @@ public sealed class AuthController : ControllerBase
     {
         await _localAuthService.LogoutAsync(cancellationToken);
 
+        ClearTokenCookies();
+
         return NoContent();
     }
+
+    private const string AccessTokenCookieName = "fhirbridge_access_token";
+    private const string RefreshTokenCookieName = "fhirbridge_refresh_token";
+    internal const string CsrfCookieName = "fhirbridge_csrf";
+
+    /// <summary>
+    /// HIPAA #7: moves the issued tokens out of the JSON body into HttpOnly cookies (mitigates XSS-driven token
+    /// theft) and returns the same response with the raw token fields nulled out — everything else (Profile,
+    /// RequiresMfa, etc.) is unchanged so existing frontend code that reads those fields keeps working.
+    /// </summary>
+    private LocalLoginResponse IssueTokenCookiesAndStrip(LocalLoginResponse response)
+    {
+        if (response.AccessToken is not null && response.ExpiresOnUtc is not null)
+        {
+            Response.Cookies.Append(AccessTokenCookieName, response.AccessToken, CookieOptionsFor(response.ExpiresOnUtc.Value));
+        }
+
+        if (response.RefreshToken is not null && response.RefreshTokenExpiresOnUtc is not null)
+        {
+            Response.Cookies.Append(RefreshTokenCookieName, response.RefreshToken, CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value));
+
+            // Double-submit CSRF token: readable by the portal's JS (NOT HttpOnly) so it can echo it back as a
+            // header on state-changing requests — cookie auth alone can't prove the request came from our own
+            // page, since browsers attach cookies to cross-site requests too.
+            var csrfOptions = CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value);
+            csrfOptions.HttpOnly = false;
+            Response.Cookies.Append(CsrfCookieName, Guid.NewGuid().ToString("N"), csrfOptions);
+        }
+
+        return response with { AccessToken = null, RefreshToken = null };
+    }
+
+    private void ClearTokenCookies()
+    {
+        Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(CsrfCookieName, new CookieOptions { Path = "/" });
+    }
+
+    private CookieOptions CookieOptionsFor(DateTime expiresOnUtc) => new()
+    {
+        HttpOnly = true,
+        // Secure is required for SameSite=Strict cookies in modern browsers, but a hardcoded `true` would make
+        // the cookie silently vanish on a plain-HTTP local `dotnet run` — tie it to the actual request scheme.
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresOnUtc, DateTimeKind.Utc)),
+        Path = "/",
+    };
 }

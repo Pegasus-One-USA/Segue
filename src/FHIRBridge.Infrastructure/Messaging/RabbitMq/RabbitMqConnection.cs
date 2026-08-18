@@ -36,7 +36,12 @@ public sealed class RabbitMqConnection : IAsyncDisposable
                 Port = _options.Port,
                 UserName = _options.UserName,
                 Password = _options.Password,
-                VirtualHost = _options.VirtualHost
+                VirtualHost = _options.VirtualHost,
+                Ssl = new SslOption
+                {
+                    Enabled = _options.UseTls,
+                    ServerName = _options.UseTls ? _options.HostName : null
+                }
             };
 
             _connection = await factory.CreateConnectionAsync(cancellationToken);

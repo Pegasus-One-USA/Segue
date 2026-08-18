@@ -4,6 +4,14 @@ import { delay, tap } from 'rxjs/operators';
 import { MappingSnapshot, MappingSnapshotSummary } from './mapping-snapshot.model';
 
 const STORAGE_PREFIX = 'fhirbridge.mappingSnapshot.';
+// HIPAA #17: these snapshots can carry mapped field values while a backend contract doesn't exist yet —
+// bound how long they linger in the browser rather than persisting indefinitely.
+const SNAPSHOT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+interface StoredSnapshot {
+  snapshot: MappingSnapshot;
+  expiresAt: number;
+}
 
 /**
  * Mapping-only persistence for the Map Fields screen, independent of the workflow save/load path.
@@ -58,16 +66,35 @@ export class MappingSnapshotService {
   }
 
   private persistLocal(snapshot: MappingSnapshot): void {
-    try { localStorage.setItem(STORAGE_PREFIX + snapshot.id, JSON.stringify(snapshot)); }
+    const stored: StoredSnapshot = { snapshot, expiresAt: Date.now() + SNAPSHOT_TTL_MS };
+    try { localStorage.setItem(STORAGE_PREFIX + snapshot.id, JSON.stringify(stored)); }
     catch { /* storage unavailable (private mode) — non-fatal */ }
   }
 
   private readLocal(id: string): MappingSnapshot | null {
     try {
       const raw = localStorage.getItem(STORAGE_PREFIX + id);
-      return raw ? JSON.parse(raw) as MappingSnapshot : null;
+      if (!raw) return null;
+
+      const stored = JSON.parse(raw) as StoredSnapshot;
+      if (!stored.expiresAt || stored.expiresAt < Date.now()) {
+        localStorage.removeItem(STORAGE_PREFIX + id);
+        return null;
+      }
+
+      return stored.snapshot;
     } catch {
       return null;
     }
+  }
+
+  /** Called on logout — clears every mapping snapshot for the departing session, expired or not. */
+  clearAll(): void {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(STORAGE_PREFIX)) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
   }
 }

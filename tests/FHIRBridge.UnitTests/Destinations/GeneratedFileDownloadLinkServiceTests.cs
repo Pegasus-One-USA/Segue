@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Security;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -27,11 +28,13 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
             .Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
 
+        var encryptor = new AesGcmPhiFieldEncryptor(new ConfigurationBuilder().Build());
+
         return new(Options.Create(new GeneratedFileDownloadOptions
         {
             RootPath = _rootPath,
             PublicBaseUrl = "http://localhost:5000",
-        }), secretAccessor, settingsCache.Object);
+        }), secretAccessor, settingsCache.Object, encryptor);
     }
 
     private static GeneratedFile SampleFile() => new("Patient_Export.csv", "text/csv", "a,b\n1,2\n"u8.ToArray());
@@ -49,7 +52,7 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
         resolution!.DisplayFileName.Should().Be("Patient_Export.csv");
         resolution.ContentType.Should().Be("text/csv");
         System.IO.File.Exists(resolution.PhysicalPath).Should().BeTrue();
-        (await System.IO.File.ReadAllBytesAsync(resolution.PhysicalPath)).Should().BeEquivalentTo(SampleFile().Content);
+        (await service.ReadDecryptedAsync(resolution.PhysicalPath, CancellationToken.None)).Should().BeEquivalentTo(SampleFile().Content);
     }
 
     [Fact]

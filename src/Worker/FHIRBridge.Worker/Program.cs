@@ -49,6 +49,19 @@ if (string.IsNullOrWhiteSpace(workerKeyRingPath))
 Directory.CreateDirectory(workerKeyRingPath);
 workerDataProtection.PersistKeysToFileSystem(new DirectoryInfo(workerKeyRingPath));
 
+// HIPAA #11 — mirrors the Api host exactly (see its Program.cs comment): wraps, never rotates, and is a no-op
+// without a configured cert so Development/docker-compose startup is unaffected.
+var workerDataProtectionCertPath = builder.Configuration["DataProtection:CertificatePath"];
+if (!string.IsNullOrWhiteSpace(workerDataProtectionCertPath) && !builder.Environment.IsDevelopment())
+{
+    var workerDataProtectionCertPassword = builder.Configuration["DataProtection:CertificatePassword"];
+    var workerDataProtectionCert = string.IsNullOrEmpty(workerDataProtectionCertPassword)
+        ? System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificateFromFile(workerDataProtectionCertPath)
+        : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
+            workerDataProtectionCertPath, workerDataProtectionCertPassword);
+    workerDataProtection.ProtectKeysWithCertificate(workerDataProtectionCert);
+}
+
 // Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here
 // (no ASP.NET Core pipeline in this host), but HttpClient/.NET-runtime/custom-meter instrumentation still applies.
 builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Worker");
@@ -62,6 +75,7 @@ builder.Services
 
 builder.Services.Configure<RuntimeWorkerOptions>(builder.Configuration.GetSection("RuntimeWorker"));
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<ExpiredGeneratedFilePurgeJob>();
 
 // Scheduling migration (2026-07-18): the queue-based path is now the live scheduler by default —
 // ScheduleDispatcherWorker atomically claims due routes (IScheduleEvaluationService.ClaimDueRunsAsync, verified
@@ -93,6 +107,10 @@ builder.Services.AddHostedService<BulkExportPollWorker>();
 builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
 builder.Services.AddHostedService<EndpointHealthCheckWorker>();
 builder.Services.AddHostedService<LoincSynchronizationWorker>();
+builder.Services.AddHostedService<RxNormSynchronizationWorker>();
+builder.Services.AddHostedService<SnomedSynchronizationWorker>();
+builder.Services.AddHostedService<NdcSynchronizationWorker>();
+builder.Services.AddHostedService<UcumSynchronizationWorker>();
 
 // Retention enforcement: was built (RetentionPurgeService/ConfiguredRetentionPolicyService/the purgeable-store
 // registrations in AddFHIRBridgeInfrastructure) but never actually hosted anywhere until now, so it never ran.

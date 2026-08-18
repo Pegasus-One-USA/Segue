@@ -1,0 +1,58 @@
+<section class="settings-card" [formGroup]="form()">
+  <div class="card-row">
+    <div>
+      <h2 class="card-title">{{ title() }}</h2>
+      <p class="card-sub">{{ subtitle() }}</p>
+    </div>
+    <label class="toggle-field">
+      <input type="checkbox" formControlName="schedulerEnabled" />
+      <span>Enabled</span>
+    </label>
+  </div>
+
+  <div class="es-grid">
+    @if (frequencyOptions().length > 0) {
+      <div class="form-field">
+        <label>Frequency</label>
+        <select formControlName="frequency">
+          @for (option of frequencyOptions(); track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </div>
+    }
+
+    <div class="form-field">
+      <label>Execution time</label>
+      <input type="time" formControlName="executionTime" />
+    </div>
+
+    @if (showRetryFields()) {
+      <div class="form-field">
+        <label>Retry count</label>
+        <input type="number" min="0" max="10" formControlName="retryCount" />
+      </div>
+
+      <div class="form-field">
+        <label>Retry interval (seconds)</label>
+        <input type="number" min="1" max="3600" formControlName="retryIntervalSeconds" />
+      </div>
+    }
+
+    @if (showDownloadTimeout()) {
+      <div class="form-field">
+        <label>Download timeout (seconds)</label>
+        <input type="number" min="30" max="3600" formControlName="downloadTimeoutSeconds" />
+      </div>
+    }
+  </div>
+
+  <div class="form-actions">
+    <button class="btn-primary" type="button" [disabled]="saveDisabled()" (click)="save.emit()">
+      {{ saving() ? 'Saving…' : 'Save Settings' }}
+    </button>
+    <button class="btn-outline" type="button" [disabled]="syncing()" (click)="synchronize.emit()">
+      {{ syncing() ? 'Synchronizing…' : 'Synchronize Now' }}
+    </button>
+  </div>
+</section>
