@@ -1,0 +1,27 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_f497a23d1bc09f::t_02086893ae22e9 353-393
+  s_f497a23d1bc09f::t_c51e0a057243d8 230-232
+  s_f497a23d1bc09f::t_6300be1254f9fe 233-234
+  s_f497a23d1bc09f::t_f206c6ac31e4bd 394
+  s_f497a23d1bc09f::t_48174e57276f1f 8
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_f497a23d1bc09f::t_07d10938bc154a 7
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_f497a23d1bc09f::t_07d10938bc154a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "792c06409e7d9006558e1dc6412b1412c92681e1",
+  "prompts": {},
+  "sessions": {
+    "s_f497a23d1bc09f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "342c5994-a1f8-40eb-af9e-42c0d9a53c33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

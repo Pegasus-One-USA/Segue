@@ -1,0 +1,233 @@
+fhir-test-dataset/bundles/hapi-aidbox/admission-bundle.json
+  s_f497a23d1bc09f::t_a4f9b0d279623d 1-1016
+fhir-test-dataset/bundles/hapi-aidbox/all-bundle.json
+  s_f497a23d1bc09f::t_378b0fb70abde6 1-4155
+fhir-test-dataset/bundles/hapi-aidbox/foundation-bundle.json
+  s_f497a23d1bc09f::t_77bc29e97e32ba 1-738
+fhir-test-dataset/bundles/hapi-aidbox/patient-001-bundle.json
+  s_f497a23d1bc09f::t_376121566fbc40 1-1123
+fhir-test-dataset/bundles/hapi-aidbox/patient-002-bundle.json
+  s_f497a23d1bc09f::t_b5e7f46fe4c286 1-439
+fhir-test-dataset/bundles/hapi-aidbox/patient-003-bundle.json
+  s_f497a23d1bc09f::t_8d335f03927075 1-700
+fhir-test-dataset/bundles/hapi-aidbox/patient-004-bundle.json
+  s_f497a23d1bc09f::t_44db2d192cabc6 1-873
+fhir-test-dataset/bundles/hapi-aidbox/patient-005-bundle.json
+  s_f497a23d1bc09f::t_c8d51468100a52 1-312
+fhir-test-dataset/bundles/medplum/foundation-bundle.json
+  s_f497a23d1bc09f::t_410de45b5711f2 1-738
+fhir-test-dataset/bundles/medplum/medplum-all-bundle.json
+  s_f497a23d1bc09f::t_5c4b0f08254f59 1-4155
+fhir-test-dataset/bundles/medplum/patient-001-bundle.json
+  s_f497a23d1bc09f::t_33625b4402c295 1-1429
+fhir-test-dataset/bundles/medplum/patient-002-bundle.json
+  s_f497a23d1bc09f::t_b120b189bc591a 1-645
+fhir-test-dataset/bundles/medplum/patient-003-bundle.json
+  s_f497a23d1bc09f::t_703d500c0fa61e 1-859
+fhir-test-dataset/bundles/medplum/patient-004-bundle.json
+  s_f497a23d1bc09f::t_8462b1481e6ecb 1-1080
+fhir-test-dataset/bundles/medplum/patient-005-bundle.json
+  s_f497a23d1bc09f::t_0e3b405d5ee548 1-371
+fhir-test-dataset/manifest.json
+  s_f497a23d1bc09f::t_6d3bee5f71b95c 1-1713
+fhir-test-dataset/negative/neg-condition-001.json
+  s_f497a23d1bc09f::t_39ad025de121ce 1-48
+fhir-test-dataset/negative/neg-diagnosticreport-001.json
+  s_f497a23d1bc09f::t_9eb74a6e769115 1-41
+fhir-test-dataset/negative/neg-encounter-001.json
+  s_f497a23d1bc09f::t_18c3cc28c01eef 1-50
+fhir-test-dataset/negative/neg-medicationrequest-001.json
+  s_f497a23d1bc09f::t_6693e43fc593fc 1-30
+fhir-test-dataset/negative/neg-observation-001.json
+  s_f497a23d1bc09f::t_b05d0e1c8cce42 1-54
+fhir-test-dataset/negative/negative-bundle.json
+  s_f497a23d1bc09f::t_060bacdfa150cd 1-264
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-001.json
+  s_f497a23d1bc09f::t_671d64b111ef93 1-57
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-002.json
+  s_f497a23d1bc09f::t_22fd5a1166f8bf 1-57
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-003.json
+  s_f497a23d1bc09f::t_e1a31416470c2c 1-57
+fhir-test-dataset/resources/CarePlan/careplan-001.json
+  s_f497a23d1bc09f::t_1837af56d9b1cb 1-40
+fhir-test-dataset/resources/CarePlan/careplan-002.json
+  s_f497a23d1bc09f::t_94618460be83c4 1-36
+fhir-test-dataset/resources/CarePlan/careplan-003.json
+  s_f497a23d1bc09f::t_d34e2788ff74e1 1-40
+fhir-test-dataset/resources/CareTeam/careteam-001.json
+  s_f497a23d1bc09f::t_9b82e6fcf4e4e7 1-68
+fhir-test-dataset/resources/CareTeam/careteam-002.json
+  s_f497a23d1bc09f::t_f31b872977ebaf 1-50
+fhir-test-dataset/resources/CareTeam/careteam-003.json
+  s_f497a23d1bc09f::t_f97bd98f69138a 1-50
+fhir-test-dataset/resources/Condition/condition-001.json
+  s_f497a23d1bc09f::t_b27dc95a9428b3 1-76
+fhir-test-dataset/resources/Condition/condition-002.json
+  s_f497a23d1bc09f::t_3cf4a9eeca32f3 1-72
+fhir-test-dataset/resources/Condition/condition-003.json
+  s_f497a23d1bc09f::t_aab19bbff0f43a 1-76
+fhir-test-dataset/resources/Condition/condition-004.json
+  s_f497a23d1bc09f::t_2ca9afa85a4bd6 1-76
+fhir-test-dataset/resources/Condition/condition-005.json
+  s_f497a23d1bc09f::t_46821c29821ba4 1-76
+fhir-test-dataset/resources/Coverage/coverage-001.json
+  s_f497a23d1bc09f::t_4a0ca4e6ef741b 1-42
+fhir-test-dataset/resources/Coverage/coverage-002.json
+  s_f497a23d1bc09f::t_765c1099facb18 1-42
+fhir-test-dataset/resources/Coverage/coverage-003.json
+  s_f497a23d1bc09f::t_92cdc4baa0fe9d 1-45
+fhir-test-dataset/resources/Device/device-001.json
+  s_f497a23d1bc09f::t_83a00bdfd788dd 1-42
+fhir-test-dataset/resources/Device/device-002.json
+  s_f497a23d1bc09f::t_b42e09745470da 1-42
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-001.json
+  s_f497a23d1bc09f::t_f073ce9de21444 1-69
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-002.json
+  s_f497a23d1bc09f::t_3a3b26f2b05b21 1-65
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-003.json
+  s_f497a23d1bc09f::t_aa6c024daa2236 1-69
+fhir-test-dataset/resources/DocumentReference/documentreference-001.json
+  s_f497a23d1bc09f::t_5ba7aa460e57d3 1-53
+fhir-test-dataset/resources/DocumentReference/documentreference-002.json
+  s_f497a23d1bc09f::t_82d932554f0181 1-53
+fhir-test-dataset/resources/DocumentReference/documentreference-003.json
+  s_f497a23d1bc09f::t_4e2213f597bab6 1-45
+fhir-test-dataset/resources/Encounter/encounter-001.json
+  s_f497a23d1bc09f::t_a70c3055efb29f 1-66
+fhir-test-dataset/resources/Encounter/encounter-002.json
+  s_f497a23d1bc09f::t_03f4a403cc78b8 1-66
+fhir-test-dataset/resources/Encounter/encounter-003.json
+  s_f497a23d1bc09f::t_78ced91709af69 1-66
+fhir-test-dataset/resources/Immunization/immunization-001.json
+  s_f497a23d1bc09f::t_74f6bab2c7387a 1-37
+fhir-test-dataset/resources/Immunization/immunization-002.json
+  s_f497a23d1bc09f::t_06a0b0a48eeeca 1-37
+fhir-test-dataset/resources/Immunization/immunization-003.json
+  s_f497a23d1bc09f::t_6f55ad120efd9e 1-37
+fhir-test-dataset/resources/Location/location-001.json
+  s_f497a23d1bc09f::t_fc6191281dda9d 1-49
+fhir-test-dataset/resources/Location/location-002.json
+  s_f497a23d1bc09f::t_f44094bbdd9120 1-49
+fhir-test-dataset/resources/Medication/medication-001.json
+  s_f497a23d1bc09f::t_ab956ab2adb6ea 1-41
+fhir-test-dataset/resources/Medication/medication-002.json
+  s_f497a23d1bc09f::t_914b2c16f065dd 1-41
+fhir-test-dataset/resources/Medication/medication-003.json
+  s_f497a23d1bc09f::t_c00c694867b743 1-41
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-001.json
+  s_f497a23d1bc09f::t_d609a70d3ce10c 1-44
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-002.json
+  s_f497a23d1bc09f::t_4f29fa72841ca8 1-40
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-003.json
+  s_f497a23d1bc09f::t_c1cc763cd9ab2a 1-44
+fhir-test-dataset/resources/Observation/observation-001.json
+  s_f497a23d1bc09f::t_4af159f55545fc 1-58
+fhir-test-dataset/resources/Observation/observation-002.json
+  s_f497a23d1bc09f::t_2ac12917d42131 1-58
+fhir-test-dataset/resources/Observation/observation-003.json
+  s_f497a23d1bc09f::t_c45c6e33f61b98 1-90
+fhir-test-dataset/resources/Observation/observation-004.json
+  s_f497a23d1bc09f::t_e3d00bbb042fee 1-86
+fhir-test-dataset/resources/Observation/observation-005.json
+  s_f497a23d1bc09f::t_9c38de5bd775b0 1-54
+fhir-test-dataset/resources/Observation/observation-006.json
+  s_f497a23d1bc09f::t_3703e26ec13c72 1-58
+fhir-test-dataset/resources/Observation/observation-007.json
+  s_f497a23d1bc09f::t_b3499f1e3e0f41 1-58
+fhir-test-dataset/resources/Observation/observation-008.json
+  s_f497a23d1bc09f::t_e917a76158ac82 1-58
+fhir-test-dataset/resources/Observation/observation-009.json
+  s_f497a23d1bc09f::t_5cfaed15935236 1-58
+fhir-test-dataset/resources/Observation/observation-010.json
+  s_f497a23d1bc09f::t_227dfbf27235c2 1-54
+fhir-test-dataset/resources/Organization/org-001.json
+  s_f497a23d1bc09f::t_66f1e2b5a6efde 1-52
+fhir-test-dataset/resources/Organization/org-002.json
+  s_f497a23d1bc09f::t_e9bcd052296309 1-41
+fhir-test-dataset/resources/Patient/patient-001.json
+  s_f497a23d1bc09f::t_70c053a2eb20ff 1-55
+fhir-test-dataset/resources/Patient/patient-002.json
+  s_f497a23d1bc09f::t_f3af06074594ff 1-54
+fhir-test-dataset/resources/Patient/patient-003.json
+  s_f497a23d1bc09f::t_21c935463bd4b4 1-54
+fhir-test-dataset/resources/Patient/patient-004.json
+  s_f497a23d1bc09f::t_26d7a8e616a2a5 1-54
+fhir-test-dataset/resources/Patient/patient-005.json
+  s_f497a23d1bc09f::t_65895d3115b2e1 1-54
+fhir-test-dataset/resources/Practitioner/practitioner-001.json
+  s_f497a23d1bc09f::t_8496cad9c0d8cf 1-44
+fhir-test-dataset/resources/Practitioner/practitioner-002.json
+  s_f497a23d1bc09f::t_402369b3843eaa 1-37
+fhir-test-dataset/resources/Practitioner/practitioner-003.json
+  s_f497a23d1bc09f::t_157b7a5c670330 1-37
+fhir-test-dataset/resources/PractitionerRole/practitionerrole-001.json
+  s_f497a23d1bc09f::t_ea77fa401816a0 1-59
+fhir-test-dataset/resources/PractitionerRole/practitionerrole-002.json
+  s_f497a23d1bc09f::t_6dae30efc3cdeb 1-59
+fhir-test-dataset/resources/Procedure/procedure-001.json
+  s_f497a23d1bc09f::t_53f85ab06ca225 1-48
+fhir-test-dataset/resources/Procedure/procedure-002.json
+  s_f497a23d1bc09f::t_b16648b4d0425a 1-48
+fhir-test-dataset/resources/Procedure/procedure-003.json
+  s_f497a23d1bc09f::t_c78ca6c22920a6 1-48
+fhir-test-dataset/resources/RelatedPerson/relatedperson-001.json
+  s_f497a23d1bc09f::t_b974485922c8fe 1-53
+fhir-test-dataset/resources/RelatedPerson/relatedperson-002.json
+  s_f497a23d1bc09f::t_a46352835fca37 1-46
+fhir-test-dataset/resources/ServiceRequest/servicerequest-001.json
+  s_f497a23d1bc09f::t_234e0e741bf9a8 1-45
+fhir-test-dataset/resources/ServiceRequest/servicerequest-002.json
+  s_f497a23d1bc09f::t_7adf13cb42adb3 1-45
+fhir-test-dataset/resources/ServiceRequest/servicerequest-003.json
+  s_f497a23d1bc09f::t_664eaebbceeca2 1-45
+fhir-test-dataset/validation-report.md
+  s_f497a23d1bc09f::t_00222389ee5082 1-324
+fhir-test-dataset/README.md
+  s_995efe0a4dcacd::t_1e992e3283ffbe 1-95
+fhir-test-dataset/aidbox-comparison-checklist.md
+  s_995efe0a4dcacd::t_9bbee9e9df8a59 1-74
+fhir-test-dataset/dependency-order.md
+  s_995efe0a4dcacd::t_764a8400504c45 1-63
+fhir-test-dataset/expected-scenarios.md
+  s_995efe0a4dcacd::t_02912670a87759 1-89
+fhir-test-dataset/generate.js
+  s_995efe0a4dcacd::t_0d65ab5e7f0408 1-964
+fhir-test-dataset/hapi-testing.md
+  s_995efe0a4dcacd::t_c8661668bf0ab4 1-134
+fhir-test-dataset/reference-styles.md
+  s_995efe0a4dcacd::t_e21a7bbc04fcbf 1-45
+fhir-test-dataset/uploader/Program.cs
+  s_f497a23d1bc09f::t_625873c9ec4077 1-520
+fhir-test-dataset/uploader/appsettings.json
+  s_f497a23d1bc09f::t_bee3ff4a685432 1-16
+fhir-test-dataset/uploader/uploader.csproj
+  s_995efe0a4dcacd::t_097d3032832b15 1-19
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f497a23d1bc09f::t_d6f132f72fea09 172-191
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_f497a23d1bc09f::t_a92142836ae447 613
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c0367a7a2e898ac2c452065e9a7c99ed46007f59",
+  "prompts": {},
+  "sessions": {
+    "s_995efe0a4dcacd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-acb44bbcce2943f4f",
+        "model": "unknown"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    },
+    "s_f497a23d1bc09f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "342c5994-a1f8-40eb-af9e-42c0d9a53c33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

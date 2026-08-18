@@ -1,0 +1,131 @@
+poc/Medplum.Poc/Medplum.Poc.csproj
+  s_f497a23d1bc09f::t_642d95ce736a1f 6-7
+  s_f497a23d1bc09f::t_b36d8d67cc45de 1-5,8-19
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_f497a23d1bc09f::t_c691eb1e48b537 203
+  s_f497a23d1bc09f::t_2e1d473d9649ac 221
+  s_f497a23d1bc09f::t_3c062f343420cb 239
+  s_f497a23d1bc09f::t_0e219adbe008b1 46
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f497a23d1bc09f::t_ae00154e92c1c5 1844-1845,1867-1875
+  s_f497a23d1bc09f::t_967d0a759c0b18 964
+  s_f497a23d1bc09f::t_289e3c8333a7a2 1244
+  s_f497a23d1bc09f::t_2677073cb6c64c 1259-1260
+  s_f497a23d1bc09f::t_ba51d5e0187adb 726
+  s_f497a23d1bc09f::t_23d55311a7b856 1645-1655
+  s_f497a23d1bc09f::t_ab12be85524db0 1794-1803
+  s_f497a23d1bc09f::t_67d0ea113e0e66 1395,1398
+  s_f497a23d1bc09f::t_af8719957c5b8e 278-291
+  s_f497a23d1bc09f::t_3ef7221a132d28 1277-1279
+  s_f497a23d1bc09f::t_48c9ffead3824f 1339-1350
+  s_f497a23d1bc09f::t_695714d2894017 696
+  s_f497a23d1bc09f::t_eefe49a814ebe0 873
+  s_f497a23d1bc09f::t_5c3cb183931d31 706-708,716,1876-1877
+  s_f497a23d1bc09f::t_9ac63198a4bbcf 2001
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f497a23d1bc09f::t_9f27116b4cb165 314-315,320-321
+  s_f497a23d1bc09f::t_f7b55bfa3a1068 316-319
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_f497a23d1bc09f::t_d45497d89f24f2 144-154
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_f497a23d1bc09f::t_d1b4945ca8b294 433-435
+  s_f497a23d1bc09f::t_c8bc96a59f1ec1 79
+  s_f497a23d1bc09f::t_080a7089976cde 547-548
+  s_f497a23d1bc09f::t_df096f298cfb7f 163
+  s_f497a23d1bc09f::t_64b0e399016f9a 449-450
+  s_f497a23d1bc09f::t_6c481c1e75d035 340
+  s_f497a23d1bc09f::t_4ccdf0e7f46c1b 263
+  s_f497a23d1bc09f::t_d4bec4160c6630 244
+  s_f497a23d1bc09f::t_f012fc599f55dc 529
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_f497a23d1bc09f::t_50f212afbb0e20 63-64
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  s_f497a23d1bc09f::t_17a71e3b8df3f7 319-320
+  s_f497a23d1bc09f::t_86dd7caa868cb6 42-43,52,54
+  s_f497a23d1bc09f::t_c27087be4cb524 74-77
+  s_f497a23d1bc09f::t_e344b903906b06 169-201,314-318
+  s_f497a23d1bc09f::t_a2848b6e373ee0 202-313
+  s_f497a23d1bc09f::t_4ae3813dd9f879 1-9,11-41,44-51,53,55-73,78-168,321-337,339-344,348-350,353-357
+  s_f497a23d1bc09f::t_47610861986ef1 338,345-347,351-352
+  s_f497a23d1bc09f::t_29cf571b1d682b 10
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_f497a23d1bc09f::t_17a58c73c72625 26
+src/FHIRBridge.Infrastructure/Destinations/MedplumClientCredential.cs
+  s_f497a23d1bc09f::t_9631d8c3e9bdff 1-19
+src/FHIRBridge.Infrastructure/Destinations/IMedplumTokenProvider.cs
+  s_f497a23d1bc09f::t_22f71567b075e2 1-3,8-12,15-17,19-20
+  s_f497a23d1bc09f::t_80dc6b8e3cf0f8 4-7,13-14,18
+src/FHIRBridge.Infrastructure/Destinations/MedplumTokenProvider.cs
+  s_f497a23d1bc09f::t_bbd24c29f7bf3c 4
+  s_f497a23d1bc09f::t_5e545a5fb13f44 130-161
+  s_f497a23d1bc09f::t_6ab9c6001b4434 18,21,26-27,32-33,36,42,50,52,55-56,72
+  s_f497a23d1bc09f::t_d1ec199522265e 96,103
+  s_f497a23d1bc09f::t_79e784fd08e86d 1-3,5-17,19-20,22-25,28-31,34-35,37-41,43-49,51,53-54,57-71,73-95,97-102,104-129,162-163
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_f497a23d1bc09f::t_1d23e7b533e1c2 26-27
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_f497a23d1bc09f::t_c2c49152e2acc6 51
+poc/Medplum.Poc/README.md
+  s_f497a23d1bc09f::t_f512b43cc734d8 1-10,14-19,29-46,50-57,59-74
+  s_f497a23d1bc09f::t_0b16e8b0ec31f6 11-13,20-28
+  s_f497a23d1bc09f::t_0065b1ed78204b 47-49,58
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_f497a23d1bc09f::t_c5fa1eec1eda8f 37
+  s_f497a23d1bc09f::t_3da44081136e7a 48
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_f497a23d1bc09f::t_53acfe13286209 26-27
+portal/src/app/services/phase-config.service.ts
+  s_f497a23d1bc09f::t_d65c39f1d78501 43
+poc/Medplum.Poc/Program.cs
+  s_f497a23d1bc09f::t_20e464540bb689 1-6,8,20-26,29-42,44-48,50-51,62,66-78,80-81,84-87,89-90,93,131-182,185-192,194-195,229-231
+  s_f497a23d1bc09f::t_09fa032a7f0764 7,9-19,27-28,43,49,52-61,63-65,79,82-83,88,91-92,94-130,183-184,193,196-228
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_f497a23d1bc09f::t_413093c60b5e41 27
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_f497a23d1bc09f::t_a89018a33a1d77 71-76
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f497a23d1bc09f::t_e635c0c33c3748 481
+  s_f497a23d1bc09f::t_eed1d9e80c4591 644-660
+  s_f497a23d1bc09f::t_dc7eebb2e31ced 230-300
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_f497a23d1bc09f::t_1a8674c82694b6 466,482-490
+  s_f497a23d1bc09f::t_e4832281e6ed80 364-366,368
+  s_f497a23d1bc09f::t_476e8a03d4d10b 422-439
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_f497a23d1bc09f::t_56ff7b988ab83e 19,21
+portal/src/app/data/transforms.data.ts
+  s_f497a23d1bc09f::t_bca3ddf7268575 24
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  s_f497a23d1bc09f::t_5bc6d21d4f25cd 82-88
+  s_f497a23d1bc09f::t_0a940a37e4dc3d 92-105,118,133-212
+  s_f497a23d1bc09f::t_d02251a100f01a 21-22,24-30
+  s_f497a23d1bc09f::t_545b33af019feb 1-20,23,31-34,36,38-81,89-91,106-115,117,119-132,213-222,400-539
+  s_f497a23d1bc09f::t_959289c6cea7f4 35,37
+  s_f497a23d1bc09f::t_25c184f9f496b1 223-399
+  s_f497a23d1bc09f::t_647ed9c90a8481 116
+src/FHIRBridge.Infrastructure/Destinations/MedplumConnectionMetadata.cs
+  s_f497a23d1bc09f::t_d0ab512165aa12 34-52
+  s_f497a23d1bc09f::t_f74fef023a80cc 53-73
+  s_f497a23d1bc09f::t_d659706e05d2f7 1-33,80-86,88-89,101-104,125,139-156
+  s_f497a23d1bc09f::t_95fe21460f6c8b 74-79,87,90-100,105-124,126-138
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_f497a23d1bc09f::t_4b1d3d974cf76c 45
+docs/backend/15-medplum-integration-plan.md
+  s_f497a23d1bc09f::t_7c77968e0866ed 1-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "218621d9416f3fd18c7ae52080fc525ebbe8d96c",
+  "prompts": {},
+  "sessions": {
+    "s_f497a23d1bc09f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "342c5994-a1f8-40eb-af9e-42c0d9a53c33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
