@@ -60,6 +60,21 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<RxNormConcept> RxNormConcepts => Set<RxNormConcept>();
     public DbSet<RxNormVersion> RxNormVersions => Set<RxNormVersion>();
     public DbSet<RxNormImportHistory> RxNormImportHistory => Set<RxNormImportHistory>();
+    public DbSet<NdcProduct> NdcProducts => Set<NdcProduct>();
+    public DbSet<NdcVersion> NdcVersions => Set<NdcVersion>();
+    public DbSet<NdcImportHistory> NdcImportHistory => Set<NdcImportHistory>();
+    public DbSet<Icd10PcsCode> Icd10PcsCodes => Set<Icd10PcsCode>();
+    public DbSet<Icd10PcsVersion> Icd10PcsVersions => Set<Icd10PcsVersion>();
+    public DbSet<Icd10PcsImportHistory> Icd10PcsImportHistory => Set<Icd10PcsImportHistory>();
+    public DbSet<HcpcsCode> HcpcsCodes => Set<HcpcsCode>();
+    public DbSet<HcpcsVersion> HcpcsVersions => Set<HcpcsVersion>();
+    public DbSet<HcpcsImportHistory> HcpcsImportHistory => Set<HcpcsImportHistory>();
+    public DbSet<CvxCode> CvxCodes => Set<CvxCode>();
+    public DbSet<CvxVersion> CvxVersions => Set<CvxVersion>();
+    public DbSet<CvxImportHistory> CvxImportHistory => Set<CvxImportHistory>();
+    public DbSet<UcumUnit> UcumUnits => Set<UcumUnit>();
+    public DbSet<UcumVersion> UcumVersions => Set<UcumVersion>();
+    public DbSet<UcumImportHistory> UcumImportHistory => Set<UcumImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

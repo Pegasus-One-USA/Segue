@@ -3,13 +3,15 @@ import { HttpEventType } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { ToastService } from '../../../services/toast.service';
 import { Icd10SettingsService, Icd10ImportHistoryEntry } from '../../services/icd10-settings.service';
+import { ReleaseFreshness } from '../../services/icd10pcs-settings.service';
+import { TerminologyFreshnessCardComponent } from '../../components/terminology-freshness-card/terminology-freshness-card.component';
 
 const POLL_INTERVAL_MS = 3000;
 
 @Component({
   selector: 'app-icd10-settings',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, TerminologyFreshnessCardComponent],
   templateUrl: './icd10-settings.component.html',
   styleUrl: './icd10-settings.component.scss',
 })
@@ -24,8 +26,43 @@ export class Icd10SettingsComponent implements OnInit, OnDestroy {
   protected readonly selectedFile = signal<File | null>(null);
   protected readonly history = signal<Icd10ImportHistoryEntry[]>([]);
 
+  protected readonly checking = signal(false);
+  protected readonly downloading = signal(false);
+  protected readonly freshness = signal<ReleaseFreshness | null>(null);
+
   ngOnInit(): void {
+    this.service.getFreshness().subscribe({ next: (f) => this.freshness.set(f) });
     this.loadHistory();
+  }
+
+  protected checkForUpdates(): void {
+    this.checking.set(true);
+    this.service.checkForUpdates().subscribe({
+      next: (f) => {
+        this.checking.set(false);
+        this.freshness.set(f);
+        this.toast.success(f.newerReleaseFound ? 'A newer ICD-10-CM release appears to be available.' : 'No newer ICD-10-CM release found.');
+      },
+      error: () => {
+        this.checking.set(false);
+        this.toast.error('Failed to check for ICD-10-CM updates');
+      },
+    });
+  }
+
+  protected downloadAndImport(): void {
+    this.downloading.set(true);
+    this.service.downloadAndImport().subscribe({
+      next: () => {
+        this.downloading.set(false);
+        this.toast.success('ICD-10-CM download and import started in the background — check the history below for progress.');
+        this.loadHistory();
+      },
+      error: () => {
+        this.downloading.set(false);
+        this.toast.error('ICD-10-CM download and import failed to start');
+      },
+    });
   }
 
   ngOnDestroy(): void {

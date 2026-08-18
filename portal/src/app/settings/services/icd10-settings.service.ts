@@ -3,6 +3,7 @@ import { HttpClient, HttpEvent, HttpRequest } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ICD10_ENDPOINTS } from '../../core/api-endpoints';
 import { ImportStartedResponse } from './snomed-settings.service';
+import { ReleaseFreshness } from './icd10pcs-settings.service';
 
 export interface Icd10ImportHistoryEntry {
   id: string;
@@ -17,6 +18,18 @@ export interface Icd10ImportHistoryEntry {
 @Injectable({ providedIn: 'root' })
 export class Icd10SettingsService {
   private readonly http = inject(HttpClient);
+
+  getFreshness(): Observable<ReleaseFreshness | null> {
+    return this.http.get<ReleaseFreshness | null>(ICD10_ENDPOINTS.freshness);
+  }
+
+  checkForUpdates(): Observable<ReleaseFreshness> {
+    return this.http.post<ReleaseFreshness>(ICD10_ENDPOINTS.checkForUpdates, {});
+  }
+
+  downloadAndImport(): Observable<ImportStartedResponse> {
+    return this.http.post<ImportStartedResponse>(ICD10_ENDPOINTS.downloadAndImport, {});
+  }
 
   importFile(file: File): Observable<HttpEvent<ImportStartedResponse>> {
     const formData = new FormData();

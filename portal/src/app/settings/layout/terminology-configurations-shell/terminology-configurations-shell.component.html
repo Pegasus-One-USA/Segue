@@ -1,6 +1,6 @@
 <nav class="shell-tabs">
   @for (section of sections; track section.route) {
-    <a class="shell-tab" [routerLink]="section.route" routerLinkActive="active">
+    <a class="shell-tab" [class.shell-tab--locked]="section.locked" [routerLink]="section.route" routerLinkActive="active">
       <mat-icon>{{ section.icon }}</mat-icon>
       {{ section.label }}
     </a>

@@ -15,9 +15,50 @@ namespace FHIRBridge.Api.Controllers.V1;
 [Route("api/v1/terminology/icd10/configuration")]
 public sealed class Icd10ConfigurationController : ControllerBase
 {
+    // No version-check API exists for ICD-10-CM — NCHS publishes a static FTP directory listing, not a feed.
+    // That directory also lists POA-exempt-code lists, guideline PDFs, and addenda alongside the actual release
+    // (confirmed live: "icd10cm-Code Descriptions-2026.zip" is the real file; "POAexemptCodesFY26.zip" is not) —
+    // both required keywords must match so the freshness check can't latch onto the wrong file.
+    private const string ListingUrl = "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2026/";
+    private const string SettingsKeyPrefix = "Icd10Cm";
+    private static readonly string[] RequiredKeywords = ["icd10cm", "Code"];
+
+    private readonly IReleaseFreshnessChecker _freshnessChecker;
     private readonly TerminologyImportChannel _importChannel;
     private readonly FHIRBridgeDbContext _db;
-    public Icd10ConfigurationController(TerminologyImportChannel importChannel, FHIRBridgeDbContext db) => (_importChannel, _db) = (importChannel, db);
+    public Icd10ConfigurationController(IReleaseFreshnessChecker freshnessChecker, TerminologyImportChannel importChannel, FHIRBridgeDbContext db) =>
+        (_freshnessChecker, _importChannel, _db) = (freshnessChecker, importChannel, db);
+
+    [HttpGet("freshness")]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View ICD-10-CM release freshness status.")]
+    public async Task<IActionResult> GetFreshness(CancellationToken cancellationToken) => Ok(await _freshnessChecker.GetLastCheckAsync(SettingsKeyPrefix, cancellationToken));
+
+    [HttpPost("check-for-updates")]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Check for a newer ICD-10-CM release.")]
+    public async Task<IActionResult> CheckForUpdates(CancellationToken cancellationToken) => Ok(await _freshnessChecker.CheckAsync(ListingUrl, SettingsKeyPrefix, RequiredKeywords, cancellationToken));
+
+    [HttpPost("download-and-import")]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Download and import the release identified by the last freshness check.")]
+    public async Task<IActionResult> DownloadAndImport(CancellationToken cancellationToken)
+    {
+        string zipPath;
+        try
+        {
+            zipPath = await _freshnessChecker.DownloadLatestAsync(SettingsKeyPrefix, "Icd10", cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+
+        _importChannel.Enqueue(async (services, ct) =>
+        {
+            var importService = services.GetRequiredService<IIcd10ImportService>();
+            await importService.ImportAsync(zipPath, ct);
+        });
+
+        return Accepted(new { message = "ICD-10-CM download and import started in the background. Check import history for progress." });
+    }
 
     [HttpPost("import")]
     [RequestSizeLimit(536_870_912)]

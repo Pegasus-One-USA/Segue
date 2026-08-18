@@ -1,0 +1,56 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">UCUM Terminology</h1>
+    <p class="page-sub">Units of measure, published as an open GitHub repository — no credential needed.</p>
+  </div>
+
+  @if (loadingConfig()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form [formGroup]="form">
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="Poll the ucum-org/ucum GitHub repository for a new release, or run one on demand below."
+        [frequencyOptions]="['Weekly', 'Monthly']"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </form>
+
+    <section class="settings-card">
+      <h2 class="card-title">Import Release</h2>
+      <p class="card-sub">Accepts a <code>ucum-essence.xml</code> file directly — a fallback for when auto-sync above is off.</p>
+
+      <div class="upload-row">
+        <label class="file-input">
+          <input type="file" accept=".xml" (change)="onFileSelected($event)" [disabled]="uploading()" />
+          <span>{{ selectedFile()?.name ?? 'Choose ucum-essence.xml…' }}</span>
+        </label>
+        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+          {{ uploading() ? 'Uploading…' : 'Import' }}
+        </button>
+      </div>
+
+      @if (uploading()) {
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+        </div>
+        <p class="card-sub">Uploading… {{ uploadProgress() }}%</p>
+      }
+    </section>
+
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent UCUM unit-set imports — manual and automatic runs share one history."
+      emptyMessage="No UCUM unit set has been imported yet."
+      countColumnLabel="Units"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
+  }
+</div>

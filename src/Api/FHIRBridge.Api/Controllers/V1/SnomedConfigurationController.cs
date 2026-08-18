@@ -1,6 +1,8 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Terminology;
 using Microsoft.AspNetCore.Authorization;
@@ -15,9 +17,32 @@ namespace FHIRBridge.Api.Controllers.V1;
 [Route("api/v1/terminology/snomed/configuration")]
 public sealed class SnomedConfigurationController : ControllerBase
 {
+    private readonly ISnomedConfigurationService _service;
     private readonly TerminologyImportChannel _importChannel;
     private readonly FHIRBridgeDbContext _db;
-    public SnomedConfigurationController(TerminologyImportChannel importChannel, FHIRBridgeDbContext db) => (_importChannel, _db) = (importChannel, db);
+    public SnomedConfigurationController(ISnomedConfigurationService service, TerminologyImportChannel importChannel, FHIRBridgeDbContext db) =>
+        (_service, _importChannel, _db) = (service, importChannel, db);
+
+    [HttpGet]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View SNOMED CT terminology configuration.")]
+    public async Task<ActionResult<SnomedConfigurationDto>> Get(CancellationToken cancellationToken) => Ok(await _service.GetAsync(cancellationToken));
+
+    [HttpPut]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Update SNOMED CT terminology configuration and credentials.")]
+    public async Task<ActionResult<SnomedConfigurationDto>> Update([FromBody] UpdateSnomedConfigurationRequest request, CancellationToken cancellationToken) => Ok(await _service.UpdateAsync(request, cancellationToken));
+
+    [HttpPost("synchronize")]
+    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Manually synchronize the SNOMED CT release.")]
+    public IActionResult Synchronize()
+    {
+        _importChannel.Enqueue(async (services, ct) =>
+        {
+            var synchronization = services.GetRequiredService<ISnomedSynchronizationService>();
+            await synchronization.SynchronizeAsync(ct);
+        });
+
+        return Accepted(new { message = "SNOMED CT synchronization started in the background. Check import history for progress." });
+    }
 
     [HttpPost("import")]
     [RequestSizeLimit(2_147_483_648)]

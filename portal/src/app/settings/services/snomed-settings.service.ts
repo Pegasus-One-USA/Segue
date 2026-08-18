@@ -9,6 +9,15 @@ export interface ImportStartedResponse {
   message: string;
 }
 
+export interface SnomedConfiguration {
+  hasApiKeyConfigured: boolean;
+  schedulerEnabled: boolean;
+  executionTime: string;
+  retryCount: number;
+  retryIntervalSeconds: number;
+}
+export type UpdateSnomedConfiguration = Omit<SnomedConfiguration, 'hasApiKeyConfigured'> & { apiKey?: string | null };
+
 export interface SnomedImportHistoryEntry {
   id: string;
   version: string | null;
@@ -22,6 +31,19 @@ export interface SnomedImportHistoryEntry {
 @Injectable({ providedIn: 'root' })
 export class SnomedSettingsService {
   private readonly http = inject(HttpClient);
+
+  get(): Observable<SnomedConfiguration> {
+    return this.http.get<SnomedConfiguration>(SNOMED_ENDPOINTS.configuration);
+  }
+
+  update(value: UpdateSnomedConfiguration): Observable<SnomedConfiguration> {
+    return this.http.put<SnomedConfiguration>(SNOMED_ENDPOINTS.configuration, value);
+  }
+
+  // Runs in the background on the server — this only confirms the sync job was queued.
+  synchronize(): Observable<ImportStartedResponse> {
+    return this.http.post<ImportStartedResponse>(SNOMED_ENDPOINTS.synchronize, {});
+  }
 
   importFile(file: File): Observable<HttpEvent<ImportStartedResponse>> {
     const formData = new FormData();
