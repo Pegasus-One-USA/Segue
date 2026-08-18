@@ -1,0 +1,382 @@
+tests/FHIRBridge.UnitTests/Destinations/MappedFhirRepositoryDestinationWriterTests.cs
+  s_c01d5fd68cf230::t_1e21f65cb5204a 1-200
+portal/src/app/settings/pages/cvx-settings/cvx-settings.component.html
+  s_c01d5fd68cf230::t_250fe67a6471bb 1-42
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HcpcsConfigurations.cs
+  s_c01d5fd68cf230::t_fdb83db27c52d3 1-39
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.ts
+  s_c01d5fd68cf230::t_a846931a76ca44 3,6-8,13,18,22-28,32-46,49-60,64-102,116,123
+src/FHIRBridge.Application/Abstractions/Terminology/INdcSynchronizationService.cs
+  s_c01d5fd68cf230::t_fc6f4c2a2ef5b9 1-6
+portal/src/app/settings/pages/cpt-settings/cpt-settings.component.ts
+  s_c01d5fd68cf230::t_b8ad8c328c0a4e 1-16
+portal/src/app/settings/components/terminology-import-history/terminology-import-history.component.ts
+  s_c01d5fd68cf230::t_cf0f17b90440d8 1-33
+portal/src/app/settings/services/icd10pcs-settings.service.ts
+  s_c01d5fd68cf230::t_7ada053280109c 35-38
+  s_c01d5fd68cf230::t_402f92fb38ef6c 1-34,39-49
+portal/src/app/settings/pages/ucum-settings/ucum-settings.component.html
+  s_c01d5fd68cf230::t_c87a4b63e03fe9 1-56
+src/Worker/FHIRBridge.Worker/SnomedSynchronizationWorker.cs
+  s_c01d5fd68cf230::t_9177b8afbb5768 1-48
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.ts
+  s_c01d5fd68cf230::t_21f557028ad57d 9-11,15,20-26
+src/Api/FHIRBridge.Api/Controllers/V1/HcpcsConfigurationController.cs
+  s_c01d5fd68cf230::t_3ec00ce4d45bed 40-62
+  s_c01d5fd68cf230::t_fdf1c9cf937991 1-18,21-22,24-37,39,63-97
+  s_c01d5fd68cf230::t_338016322b5a83 38
+  s_c01d5fd68cf230::t_a320edeb808b3a 19-20,23
+src/FHIRBridge.Infrastructure/Terminology/SnomedSynchronizationService.cs
+  s_c01d5fd68cf230::t_a447112844874e 1-26
+src/FHIRBridge.Application/Abstractions/Terminology/INdcReleaseClient.cs
+  s_c01d5fd68cf230::t_559fed2a2c2ebe 1-12
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150710_AddUcumTerminology.cs
+  s_c01d5fd68cf230::t_8dede89efa14e5 1-22
+portal/src/app/settings/services/hcpcs-settings.service.ts
+  s_c01d5fd68cf230::t_d94971d85f9d0c 1-29,34-44
+  s_c01d5fd68cf230::t_870a11aef6fd2d 30-33
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  s_c01d5fd68cf230::t_f2d732b2719ab3 40-61
+  s_c01d5fd68cf230::t_419f807328d291 19-21,24
+  s_c01d5fd68cf230::t_251a317882163e 38
+  s_c01d5fd68cf230::t_e42b26fbf21d86 18,22-23,25-26,29-37,39
+src/FHIRBridge.Infrastructure/Terminology/RxNormSynchronizationService.cs
+  s_c01d5fd68cf230::t_25f707227c70fa 1-27
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150637_AddHcpcsTerminology.Designer.cs
+  s_c01d5fd68cf230::t_09fcd07937659a 1-5333
+src/FHIRBridge.Infrastructure/Terminology/UcumReleaseClient.cs
+  s_c01d5fd68cf230::t_4f169388c3c766 1-67
+src/FHIRBridge.Infrastructure/Terminology/ReleaseFreshnessChecker.cs
+  s_c01d5fd68cf230::t_d10d4ad2137e14 63-70
+  s_c01d5fd68cf230::t_57279fafbfe30c 96-117
+  s_c01d5fd68cf230::t_31e297da4ad12a 1-17,19-21,23,45,48-49,51-53,59,61-62,118
+  s_c01d5fd68cf230::t_ae6a1db2eddde6 18
+  s_c01d5fd68cf230::t_35e570d6dc86f7 22,24-37,46-47,50,54-58,60,71-95
+  s_c01d5fd68cf230::t_fd8cf776232359 38-44
+src/FHIRBridge.Application/Services/UcumConfigurationService.cs
+  s_c01d5fd68cf230::t_d984f176e52fd3 1-33
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.ts
+  s_c01d5fd68cf230::t_fe97bb24d43d76 5-7,9-15,17-28,41-48,50-66,68-89,91-94,97-104
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.ts
+  s_c01d5fd68cf230::t_618833ac904786 1-38
+src/FHIRBridge.Infrastructure/Terminology/NdcReleaseClient.cs
+  s_c01d5fd68cf230::t_6d9fb6450a7a61 1-87
+portal/src/app/settings/pages/cpt-settings/cpt-settings.component.scss
+  s_c01d5fd68cf230::t_d5ddc3c4bbc491 1-11
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_c01d5fd68cf230::t_d9b9d75e42f0c1 68-74,81-90
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.scss
+  s_c01d5fd68cf230::t_fa62741e3e638e 13-14,19-35
+  s_c01d5fd68cf230::t_297dd89af4740e 36
+src/FHIRBridge.Application/Services/NdcConfigurationService.cs
+  s_c01d5fd68cf230::t_3d63d4ed5f23fe 1-53
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_c01d5fd68cf230::t_89f4f2bf1e7634 292
+  s_c01d5fd68cf230::t_ba9d999936f833 499-500
+  s_c01d5fd68cf230::t_e919e625e1f740 289
+  s_c01d5fd68cf230::t_61dc92e68d766a 501
+  s_c01d5fd68cf230::t_9bf23a2526fdec 390-392
+  s_c01d5fd68cf230::t_4db32cccb8b6d0 290
+  s_c01d5fd68cf230::t_53373a043ec58a 502
+  s_c01d5fd68cf230::t_2b67067ff52182 386-388
+  s_c01d5fd68cf230::t_5b60d8a74db6ca 380-382
+  s_c01d5fd68cf230::t_13abeaaf2b3e24 383-385
+  s_c01d5fd68cf230::t_5793a547ce4ab5 291
+  s_c01d5fd68cf230::t_13aa09ad98758a 389
+src/FHIRBridge.Application/Services/SnomedConfigurationService.cs
+  s_c01d5fd68cf230::t_3b077ba3eb4a00 1-54
+src/FHIRBridge.Domain/Entities/Terminology/HcpcsEntities.cs
+  s_c01d5fd68cf230::t_45bb8b942a47ca 1-74
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  s_c01d5fd68cf230::t_4fd64adf699721 2,5,20,23-45
+src/FHIRBridge.Application/Abstractions/Terminology/IUcumReleaseClient.cs
+  s_c01d5fd68cf230::t_cce916b56d25a7 1-12
+portal/src/app/settings/settings.routes.ts
+  s_c01d5fd68cf230::t_e06011b76bd2dc 137-142
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150602_AddNdcTerminology.Designer.cs
+  s_c01d5fd68cf230::t_3172fdec290753 1-5333
+src/FHIRBridge.Application/DTOs/NdcConfigurationDtos.cs
+  s_c01d5fd68cf230::t_5c2fe3c9f58758 1-16
+src/FHIRBridge.Application/Services/IRxNormConfigurationService.cs
+  s_c01d5fd68cf230::t_0847e47ea4f553 1-9
+portal/src/app/settings/services/ndc-settings.service.ts
+  s_c01d5fd68cf230::t_1af345f9633df8 1-51
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.html
+  s_c01d5fd68cf230::t_4107b5e408abf9 7-9,11,13-14
+  s_c01d5fd68cf230::t_c544dd1b648672 10,12
+portal/src/app/settings/services/rxnorm-settings.service.ts
+  s_c01d5fd68cf230::t_eb134903abec7e 7-15,30-41
+  s_c01d5fd68cf230::t_fa4430788a2ff3 42
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.html
+  s_c01d5fd68cf230::t_7d11c628d2c585 4,7-24,26-36,38-49,52-58,60-68
+portal/src/styles.scss
+  s_c01d5fd68cf230::t_de5443233eb97a 1213-1228
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.ts
+  s_c01d5fd68cf230::t_ff05d51b4c665d 14-18,30,32
+  s_c01d5fd68cf230::t_a5856a7e21ea47 1-13,19-29,31,33
+src/FHIRBridge.Application/Abstractions/Terminology/IHcpcsImportService.cs
+  s_c01d5fd68cf230::t_bae1f1bc29c664 1-11
+src/FHIRBridge.Infrastructure/Terminology/Icd10PcsImportService.cs
+  s_c01d5fd68cf230::t_c2a9571d2862ff 97,99
+  s_c01d5fd68cf230::t_027ac0bf30bb64 1-9,22-24,33-44,49-53,56,69-71,76-77,79-96,98,100-114
+  s_c01d5fd68cf230::t_998795b2a41c77 10-21,25-32,45-48,54-55,57-68
+  s_c01d5fd68cf230::t_308e85928957ad 72-75,78
+src/FHIRBridge.Infrastructure/Terminology/NdcImportService.cs
+  s_c01d5fd68cf230::t_792c8c8bc27d20 1-49,59-60,62-79,81,83-102
+  s_c01d5fd68cf230::t_8ed3b341395a96 50-58,61
+  s_c01d5fd68cf230::t_5d432bb6663d3b 80,82
+src/FHIRBridge.Domain/Entities/Terminology/Icd10PcsEntities.cs
+  s_c01d5fd68cf230::t_0757c66b747af4 1-74
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.scss
+  s_c01d5fd68cf230::t_847a8bf33554ea 15-16
+src/FHIRBridge.Infrastructure/Terminology/HcpcsImportService.cs
+  s_c01d5fd68cf230::t_4d3c5e4953763f 104,106
+  s_c01d5fd68cf230::t_5d1b7effe27792 1-9,27-29,39-50,56-60,63,76-78,83-84,86-103,105,107-121
+  s_c01d5fd68cf230::t_3b40d8982748fe 79-82,85
+  s_c01d5fd68cf230::t_897b50c909c425 10-26,30-38,51-55,61-62,64-75
+src/FHIRBridge.Application/Abstractions/Terminology/IUtsReleaseClient.cs
+  s_c01d5fd68cf230::t_d58471e7248639 1-24
+src/Api/FHIRBridge.Api/Controllers/V1/UcumConfigurationController.cs
+  s_c01d5fd68cf230::t_62fa8ebf5c9bf6 1-80
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_c01d5fd68cf230::t_9a816fd6b64d95 33-40
+  s_c01d5fd68cf230::t_349e03cd1b3543 101,105-110
+  s_c01d5fd68cf230::t_4c2d152a66b19d 44-55
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150602_AddNdcTerminology.cs
+  s_c01d5fd68cf230::t_3172fdec290753 1-485
+src/FHIRBridge.Infrastructure/Terminology/DelimitedTextParser.cs
+  s_c01d5fd68cf230::t_4c7bd257863896 1-14,21-33,35,42-59
+  s_c01d5fd68cf230::t_16fc61f6773434 15-20,34,36-41
+src/FHIRBridge.Application/Abstractions/Terminology/IReleaseFreshnessChecker.cs
+  s_c01d5fd68cf230::t_28f2b012848f56 1-13,33
+  s_c01d5fd68cf230::t_fc7d7a2d167380 25-32
+  s_c01d5fd68cf230::t_9177e9eacce1ed 22-24
+  s_c01d5fd68cf230::t_e100f657d4f800 14-21
+portal/src/app/settings/pages/cvx-settings/cvx-settings.component.scss
+  s_c01d5fd68cf230::t_c8cafe2cee3803 1-46
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_c01d5fd68cf230::t_3a6a8a8f0cb3c1 99
+  s_c01d5fd68cf230::t_bdde55f8354545 96-97
+  s_c01d5fd68cf230::t_e31d8276585419 98
+src/FHIRBridge.Application/Services/ISnomedConfigurationService.cs
+  s_c01d5fd68cf230::t_d8f0fc74514627 1-9
+portal/src/app/settings/pages/ndc-settings/ndc-settings.component.ts
+  s_c01d5fd68cf230::t_eea67ddb6e811b 1-131
+portal/src/app/settings/pages/ucum-settings/ucum-settings.component.ts
+  s_c01d5fd68cf230::t_bc5435f3cd7be1 1-125
+portal/src/app/settings/services/icd10-settings.service.ts
+  s_c01d5fd68cf230::t_0398fa9e7c61b3 6
+  s_c01d5fd68cf230::t_61537f2b9b7573 22-29
+  s_c01d5fd68cf230::t_bf646b4b1b9151 30-33
+src/FHIRBridge.Infrastructure/Terminology/UcumSynchronizationService.cs
+  s_c01d5fd68cf230::t_922e9eae365fb7 1-19
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10PcsConfigurations.cs
+  s_c01d5fd68cf230::t_adb27aa410eb46 1-39
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.scss
+  s_c01d5fd68cf230::t_b115f0a78bf198 1-17,20-25,34-35
+  s_c01d5fd68cf230::t_475e56f9d88c51 18-19,26-33
+portal/src/app/settings/services/cvx-settings.service.ts
+  s_c01d5fd68cf230::t_97c7add5008b9e 1-31
+src/FHIRBridge.Application/DTOs/SnomedConfigurationDtos.cs
+  s_c01d5fd68cf230::t_f08c7bfec44da4 1-17
+src/Worker/FHIRBridge.Worker/NdcSynchronizationWorker.cs
+  s_c01d5fd68cf230::t_cf8aaf31d26a8c 1-48
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.ts
+  s_c01d5fd68cf230::t_54c5c0fd66ef7c 30,49-63
+  s_c01d5fd68cf230::t_05a1764039a06e 6-7,14,29,31-32,34,38-48,64-67
+portal/src/app/settings/components/terminology-import-history/terminology-import-history.component.scss
+  s_c01d5fd68cf230::t_19d47b4c119ee8 1-27
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/UcumConfigurations.cs
+  s_c01d5fd68cf230::t_aa5a4febe048ca 1-39
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.html
+  s_c01d5fd68cf230::t_a2db6c5b5e7cb8 4,7-27,29-39,41-52,55-61,63-71
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_c01d5fd68cf230::t_2716139cb4ec90 63-77
+src/FHIRBridge.Infrastructure/Terminology/UcumImportService.cs
+  s_c01d5fd68cf230::t_ebd3817e1c33c7 71,73
+  s_c01d5fd68cf230::t_a042183cb4b9a3 1-42,48-49,51-70,72,74-88
+  s_c01d5fd68cf230::t_849be30505dd28 43-47,50
+src/FHIRBridge.Domain/Entities/Terminology/UcumEntities.cs
+  s_c01d5fd68cf230::t_d5227bb8e38bec 1-74
+src/FHIRBridge.Application/Services/RxNormConfigurationService.cs
+  s_c01d5fd68cf230::t_062f451325dd0f 1-54
+portal/src/app/core/api-endpoints.ts
+  s_c01d5fd68cf230::t_460d0f2b2332c8 207-208,210-211
+  s_c01d5fd68cf230::t_7dbe5dc5407874 224,234,244
+  s_c01d5fd68cf230::t_166aecbbfe6563 217-218,222-223,225-233,235-243,245-269
+  s_c01d5fd68cf230::t_721dc83232e2dd 273-274,276-277
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/NdcConfigurations.cs
+  s_c01d5fd68cf230::t_bb9a8cd96c2275 1-40
+portal/src/app/settings/pages/ndc-settings/ndc-settings.component.html
+  s_c01d5fd68cf230::t_ee0bfee7210446 1-69
+src/FHIRBridge.Domain/Entities/Terminology/NdcEntities.cs
+  s_c01d5fd68cf230::t_2f604740a2abfd 1-78
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.scss
+  s_c01d5fd68cf230::t_974cb4022b5a1f 13-14,19-35
+  s_c01d5fd68cf230::t_d738fa8db30fb1 36
+src/FHIRBridge.Application/DTOs/UcumConfigurationDtos.cs
+  s_c01d5fd68cf230::t_26eef9c1ba72bf 1-11
+src/FHIRBridge.Application/Services/IUcumConfigurationService.cs
+  s_c01d5fd68cf230::t_1b0f7b77c9bca6 1-9
+src/FHIRBridge.Application/Abstractions/Terminology/IUcumSynchronizationService.cs
+  s_c01d5fd68cf230::t_ff621186ba75aa 1-6
+portal/src/app/settings/pages/hcpcs-settings/hcpcs-settings.component.scss
+  s_c01d5fd68cf230::t_e0ccc29b63eae2 1-40
+src/FHIRBridge.Application/Abstractions/Terminology/IUcumImportService.cs
+  s_c01d5fd68cf230::t_bc131252ac966f 8-10
+  s_c01d5fd68cf230::t_04006ef07a105a 1-7,11
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150654_AddCvxTerminology.Designer.cs
+  s_c01d5fd68cf230::t_5e7847217079f3 1-5333
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/CvxConfigurations.cs
+  s_c01d5fd68cf230::t_78d80c48fe6ca2 1-39
+portal/src/app/settings/pages/ucum-settings/ucum-settings.component.scss
+  s_c01d5fd68cf230::t_0597329c3e18f6 1-40
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.ts
+  s_c01d5fd68cf230::t_4c604d045d8065 3,6-8,13,18,22-28,32-46,49-60,64-102,116,123
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150637_AddHcpcsTerminology.cs
+  s_c01d5fd68cf230::t_09fcd07937659a 1-22
+portal/src/app/settings/pages/hcpcs-settings/hcpcs-settings.component.html
+  s_c01d5fd68cf230::t_a379e26d6da0e2 10,12
+  s_c01d5fd68cf230::t_ed219d3953e308 1-9,11,13-45
+src/Worker/FHIRBridge.Worker/RxNormSynchronizationWorker.cs
+  s_c01d5fd68cf230::t_30bf214d50cd41 1-47
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.html
+  s_c01d5fd68cf230::t_b49e4febdac5bb 19-28
+  s_c01d5fd68cf230::t_5ee390e68dc19a 1-18,29-30
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_c01d5fd68cf230::t_0498f803b6b257 87-89
+portal/src/app/settings/pages/icd10pcs-settings/icd10pcs-settings.component.ts
+  s_c01d5fd68cf230::t_5697c9cd31e26f 1-20,22-60,76-103
+  s_c01d5fd68cf230::t_ac27c825aa7667 21
+  s_c01d5fd68cf230::t_f5db3901d60437 61-75
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowDefinitionStore.cs
+  s_513b8e4699b139::t_9970a67638e155 108
+  s_513b8e4699b139::t_16f060e4a20d74 86
+  s_513b8e4699b139::t_f2dbd55edee745 98
+  s_513b8e4699b139::t_6693cc07e40f08 45
+src/FHIRBridge.Application/Abstractions/Terminology/ISnomedSynchronizationService.cs
+  s_c01d5fd68cf230::t_138fc6c0b21b26 1-6
+portal/src/app/settings/pages/cvx-settings/cvx-settings.component.ts
+  s_c01d5fd68cf230::t_6ec00f2c4a7175 1-68
+src/FHIRBridge.Application/DTOs/RxNormConfigurationDtos.cs
+  s_c01d5fd68cf230::t_deab7478cc1948 1-17
+src/FHIRBridge.Application/Services/UtsCredentialNames.cs
+  s_c01d5fd68cf230::t_faee81c2eaa5ef 1-12
+src/Api/FHIRBridge.Api/Controllers/V1/NdcConfigurationController.cs
+  s_c01d5fd68cf230::t_a1ca5ba3d4770a 1-81
+src/Worker/FHIRBridge.Worker/UcumSynchronizationWorker.cs
+  s_c01d5fd68cf230::t_52575181f7dd86 1-47
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150710_AddUcumTerminology.Designer.cs
+  s_c01d5fd68cf230::t_8dede89efa14e5 1-5333
+src/FHIRBridge.Infrastructure/Terminology/NdcSynchronizationService.cs
+  s_c01d5fd68cf230::t_0495cf9a0b1543 1-19
+portal/src/app/settings/pages/icd10pcs-settings/icd10pcs-settings.component.scss
+  s_c01d5fd68cf230::t_4a25dd31753364 1-40
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.html
+  s_c01d5fd68cf230::t_77989eac81ff19 12,45-57,59-66
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.scss
+  s_c01d5fd68cf230::t_01dd07cd5af93d 1-52
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.html
+  s_c01d5fd68cf230::t_eee23d556aec5a 3
+portal/src/app/settings/services/snomed-settings.service.ts
+  s_c01d5fd68cf230::t_b73f3dd622388d 12-20,35-46
+  s_c01d5fd68cf230::t_af5fd1b148df7d 47
+portal/src/app/settings/pages/hcpcs-settings/hcpcs-settings.component.ts
+  s_c01d5fd68cf230::t_dae522a9d95921 62-76
+  s_c01d5fd68cf230::t_5b50fb60baa517 1-21,23-61,77-104
+  s_c01d5fd68cf230::t_467a9b9aa3a968 22
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150618_AddIcd10PcsTerminology.Designer.cs
+  s_c01d5fd68cf230::t_efdf1cce0272e4 1-5333
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_c01d5fd68cf230::t_3172fdec290753 2443-2663,2676-2756,2759,2778,2781,2797,2816-2852,3186-3299,3624-3733
+portal/src/app/settings/pages/icd10pcs-settings/icd10pcs-settings.component.html
+  s_c01d5fd68cf230::t_005322445e753d 1-9,11,13-45
+  s_c01d5fd68cf230::t_fb1839534797a3 10,12
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150654_AddCvxTerminology.cs
+  s_c01d5fd68cf230::t_5e7847217079f3 1-22
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.html
+  s_c01d5fd68cf230::t_5d06aa464762bf 1-58
+src/FHIRBridge.Application/Abstractions/Terminology/INdcImportService.cs
+  s_c01d5fd68cf230::t_2b8f6f2c2ba856 4
+  s_c01d5fd68cf230::t_b2cbafc76594bd 1-3,5-11
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.ts
+  s_c2cc3f7d72310c::t_57974e1744b2ac 128,132
+  s_c2cc3f7d72310c::t_ecd21ec7756de8 59-60,63-64
+src/FHIRBridge.Infrastructure/Terminology/UsCoreValueSetCatalog.cs
+  s_c01d5fd68cf230::t_eb189f2465e707 91-146
+src/FHIRBridge.Infrastructure/Terminology/UtsReleaseClient.cs
+  s_c01d5fd68cf230::t_1ef51785034533 4
+  s_c01d5fd68cf230::t_ce7b2daf206e86 66
+  s_c01d5fd68cf230::t_1ddaeddbd39c33 1-3,5-65,67-82
+portal/src/app/settings/services/ucum-settings.service.ts
+  s_c01d5fd68cf230::t_3ccc1e237c400b 1-49
+portal/src/app/settings/pages/cpt-settings/cpt-settings.component.html
+  s_c01d5fd68cf230::t_4cb930f98e014d 1-16
+src/FHIRBridge.Infrastructure/Terminology/CvxImportService.cs
+  s_c01d5fd68cf230::t_ffbdebfe7a71e4 43-46,49,68,70
+  s_c01d5fd68cf230::t_642fee5af6e9ad 1-42,47-48,50-67,69,71-85
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_c01d5fd68cf230::t_1bcbcd72772f83 8,128
+  s_c01d5fd68cf230::t_1ba8266ecafca2 76-77,87-127
+src/FHIRBridge.Application/Abstractions/Terminology/ICvxImportService.cs
+  s_c01d5fd68cf230::t_d115ed1a0d32de 1-11
+src/FHIRBridge.Application/Services/INdcConfigurationService.cs
+  s_c01d5fd68cf230::t_e8c43db244dbd9 1-9
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260817150618_AddIcd10PcsTerminology.cs
+  s_c01d5fd68cf230::t_efdf1cce0272e4 1-22
+src/FHIRBridge.Application/Abstractions/Terminology/IRxNormSynchronizationService.cs
+  s_c01d5fd68cf230::t_7b48aec20707ab 1-6
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_c01d5fd68cf230::t_f14e97266d4a04 2,5,20,23-45
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10PcsConfigurationController.cs
+  s_c01d5fd68cf230::t_38d85f1f9e5289 1-18,24-25,27-40,42,66-100
+  s_c01d5fd68cf230::t_75b93253fb8179 41
+  s_c01d5fd68cf230::t_9fddfbeb2a149d 43-65
+  s_c01d5fd68cf230::t_85ff10a59a6a57 19-23,26
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_c01d5fd68cf230::t_ff497013d5f96f 20-21,23,45-62,101-107,121-142
+src/Api/FHIRBridge.Api/Controllers/V1/CvxConfigurationController.cs
+  s_c01d5fd68cf230::t_2eda5be8bb385d 1-62
+portal/src/app/settings/pages/ndc-settings/ndc-settings.component.scss
+  s_c01d5fd68cf230::t_756c36397141d8 1-61
+src/FHIRBridge.Application/Abstractions/Terminology/IIcd10PcsImportService.cs
+  s_c01d5fd68cf230::t_9e6603ecba40a5 1-11
+portal/src/app/settings/utils/terminology-history-poller.ts
+  s_c01d5fd68cf230::t_73efaffd1ed771 1-43
+src/FHIRBridge.Domain/Entities/Terminology/CvxEntities.cs
+  s_c01d5fd68cf230::t_5f37068a218519 1-74
+portal/src/app/settings/components/terminology-import-history/terminology-import-history.component.html
+  s_c01d5fd68cf230::t_3ff653869ed548 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8e48fd6c25280bf7aea5e40494fcbd0b8c3e97f2",
+  "prompts": {},
+  "sessions": {
+    "s_513b8e4699b139": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d65e8d5-dcdf-4503-a296-e6a4ffc51f68",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c01d5fd68cf230": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aee1959c-5a72-4ed5-82f2-c48f8dc029c2",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_c2cc3f7d72310c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28c7295e-5f3f-4238-bf0f-7d009aee1c13",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
