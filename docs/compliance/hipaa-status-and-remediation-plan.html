@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIPAA Compliance — Status, Gaps &amp; Remediation Plan · FHIRBridge</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #edeff2;
+    --border: #dde1e7;
+    --ink: #1b2028;
+    --ink-soft: #454c57;
+    --muted: #6b7280;
+    --accent: #0d6e66;
+    --accent-soft: #e3f1ef;
+    --high: #b3261e;
+    --high-bg: #fbe9e7;
+    --med: #9a5b00;
+    --med-bg: #fdf1dc;
+    --low: #3d5a80;
+    --low-bg: #e8eef5;
+    --good: #1f7a4d;
+    --good-bg: #e5f3ea;
+    --code-bg: #eef0f3;
+    --shadow: 0 1px 2px rgba(20,24,30,0.04), 0 6px 16px rgba(20,24,30,0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171c; --surface: #1b1f26; --surface-2: #21262f; --border: #2c323d;
+      --ink: #e7eaef; --ink-soft: #c3c9d2; --muted: #8b93a1;
+      --accent: #3fb6ac; --accent-soft: #16302d;
+      --high: #ff8983; --high-bg: #3a1c1c;
+      --med: #f2b761; --med-bg: #3a2c12;
+      --low: #93b4dd; --low-bg: #1c2836;
+      --good: #7fd3a3; --good-bg: #16301f;
+      --code-bg: #10141a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171c; --surface: #1b1f26; --surface-2: #21262f; --border: #2c323d;
+    --ink: #e7eaef; --ink-soft: #c3c9d2; --muted: #8b93a1;
+    --accent: #3fb6ac; --accent-soft: #16302d;
+    --high: #ff8983; --high-bg: #3a1c1c;
+    --med: #f2b761; --med-bg: #3a2c12;
+    --low: #93b4dd; --low-bg: #1c2836;
+    --good: #7fd3a3; --good-bg: #16301f;
+    --code-bg: #10141a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 900px; margin: 0 auto; padding: 56px 24px 100px; }
+
+  header.masthead { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 32px; }
+
+  .eyebrow {
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px;
+  }
+
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: clamp(26px, 4vw, 36px);
+    font-weight: 600; line-height: 1.18; margin: 0 0 12px; text-wrap: balance;
+  }
+
+  .dek { font-size: 15.5px; color: var(--ink-soft); max-width: 68ch; margin: 0 0 16px; }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+  .meta-row span b { color: var(--ink-soft); font-weight: 600; }
+
+  nav.jump {
+    display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 22px 0 0;
+    padding: 14px 16px; background: var(--surface-2); border-radius: 10px; border: 1px solid var(--border);
+  }
+  nav.jump a { font-size: 13px; color: var(--ink-soft); text-decoration: none; padding: 3px 9px; border-radius: 6px; }
+  nav.jump a:hover, nav.jump a:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+
+  section { margin: 46px 0; }
+
+  h2 {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    font-size: 23px; font-weight: 600; margin: 0 0 8px; scroll-margin-top: 20px;
+  }
+  h3 {
+    font-size: 15.5px; font-weight: 700; margin: 26px 0 10px; color: var(--ink);
+    scroll-margin-top: 20px;
+  }
+
+  .section-note { font-size: 14px; color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+
+  p { margin: 0 0 12px; font-size: 15px; color: var(--ink-soft); }
+  a { color: var(--accent); }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12.8px; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; color: var(--ink);
+  }
+
+  /* generic tables */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); margin: 14px 0 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.8px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--surface-2); }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; color: var(--muted); width: 30px; }
+  td.sev { width: 90px; }
+
+  .pill { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+  .pill.high { background: var(--high-bg); color: var(--high); }
+  .pill.med { background: var(--med-bg); color: var(--med); }
+  .pill.low { background: var(--low-bg); color: var(--low); }
+  .pill.good { background: var(--good-bg); color: var(--good); }
+  .pill.tag-must { background: var(--accent); color: var(--surface); }
+  .pill.tag-should { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--border); }
+  .pill.tag-optional { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
+
+  /* good list */
+  .good-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .good-list li {
+    display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--ink-soft);
+    background: var(--good-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+  }
+  .good-list li .mark { color: var(--good); font-weight: 700; flex: none; }
+  .good-list li b { color: var(--ink); }
+
+  /* correction cards */
+  .correction {
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--med);
+    border-radius: 10px; padding: 14px 18px; margin: 0 0 12px; box-shadow: var(--shadow);
+  }
+  .correction .claim { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .correction .claim b { color: var(--med); font-weight: 700; }
+
+  /* fix cards */
+  .fixcard {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; margin: 0 0 10px; box-shadow: var(--shadow); scroll-margin-top: 20px;
+  }
+  .fixcard .fixhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .fixcard .fixnum { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .fixcard .fixtitle { font-weight: 600; font-size: 14.5px; color: var(--ink); }
+  .fixcard p { font-size: 13.8px; margin: 4px 0 0; }
+  .fixcard .fixfiles { font-size: 12px; color: var(--muted); font-style: italic; margin: 2px 0 8px; }
+  .fixcard ol { margin: 6px 0 0; padding-left: 20px; }
+  .fixcard ol li { font-size: 13.8px; color: var(--ink-soft); margin: 5px 0; }
+  .fixcard .verify { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 13.2px; }
+  .fixcard .verify b { color: var(--accent); font-weight: 600; }
+
+  .org-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; margin: 0 0 10px; box-shadow: var(--shadow);
+  }
+  .org-item .orghead { font-weight: 700; font-size: 14.5px; color: var(--ink); margin-bottom: 6px; }
+  .org-item ul { margin: 4px 0 0; padding-left: 20px; }
+  .org-item ul li { font-size: 13.8px; color: var(--ink-soft); margin: 5px 0; }
+
+  .org-list { margin: 0; padding-left: 22px; }
+  .org-list li { font-size: 14.5px; color: var(--ink-soft); margin: 8px 0; }
+  .org-list li a { font-weight: 600; }
+
+  footer.disclaimer {
+    margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border);
+    font-size: 12.5px; color: var(--muted); max-width: 70ch;
+  }
+
+  .callout {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; font-size: 14px; color: var(--ink-soft); margin: 0 0 20px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Compliance Program &middot; Technical Safeguards</p>
+  <h1>HIPAA Compliance — Status, Gaps &amp; Remediation Plan</h1>
+  <p class="dek">A ground-truth reconciliation of what FHIRBridge's code actually does against HIPAA Security Rule technical safeguards, what's still pending, and exactly how to close each gap.</p>
+  <div class="meta-row">
+    <span><b>Basis:</b> direct source-code audit, 2026-08-17</span>
+    <span><b>Scope:</b> API, Worker, Runtime, Infrastructure, Portal</span>
+    <span><b>Companion doc:</b> <a href="./hipaa-soc2-control-matrix.md">hipaa-soc2-control-matrix.md</a></span>
+  </div>
+  <nav class="jump">
+    <a href="#requires">What HIPAA requires</a>
+    <a href="#done">Already done</a>
+    <a href="#corrections">Corrections</a>
+    <a href="#pending">Pending</a>
+    <a href="#howto">How to fix</a>
+    <a href="#reverify">Re-verification</a>
+  </nav>
+</header>
+
+<section id="requires">
+  <h2>1. What HIPAA requires, in short</h2>
+  <p>FHIRBridge processes ePHI as a <b>Business Associate</b> of the covered entities (health systems) it integrates with. That triggers the full HIPAA Security Rule regardless of whether data is persisted long-term — transient/pass-through ETL processing still counts as "maintaining or transmitting" PHI. Three safeguard categories apply:</p>
+  <ul>
+    <li><b>Technical safeguards</b> (§164.312) — access control, audit control, integrity, transmission security. Almost all of the engineering work below lives here.</li>
+    <li><b>Administrative safeguards</b> (§164.308) — risk analysis, workforce training, sanction policy, assigned security responsibility. Already scaffolded as templates in <code>policies/</code> and <code>risk-assessment/</code> — these need an owner and leadership sign-off, not code.</li>
+    <li><b>Physical safeguards</b> (§164.310) — facility/device security. Out of scope for this repository entirely; owned by whoever operates the hosting infrastructure.</li>
+  </ul>
+  <p>HIPAA has no certificate. "Compliant" means operating all of the above continuously and being able to prove it — which is why the organizational items matter as much as the code fixes.</p>
+</section>
+
+<section id="done">
+  <h2>2. What we have already done</h2>
+  <p class="section-note">Verified directly in this audit, by reading the actual implementation — not just documentation.</p>
+  <ul class="good-list">
+    <li><span class="mark">✓</span><span><b>RBAC on sensitive endpoints</b> — <code>PipelineRunsController</code>, <code>ConfigurationsController</code>, <code>AppSecretsController</code> all require <code>[Authorize]</code> plus specific permission policies. No unauthenticated PHI path found.</span></li>
+    <li><span class="mark">✓</span><span><b>Unique user identification</b> — no shared/generic service accounts anywhere in the API; every authenticated action maps to a real user identity, stamped into the audit chain.</span></li>
+    <li><span class="mark">✓</span><span><b>Strong password policy</b> — <code>LocalAuthService</code> enforces 12+ characters with mixed character classes.</span></li>
+    <li><span class="mark">✓</span><span><b>Automatic logoff</b> — portal has a real 30-minute idle timeout tied to DOM activity (<code>session.service.ts</code>); API access tokens expire after 60 minutes in production.</span></li>
+    <li><span class="mark">✓</span><span><b>CORS locked down</b> — DB-backed origin allowlist (<code>DynamicPortalCorsPolicyProvider</code>); no <code>AllowAnyOrigin</code> anywhere in the repo.</span></li>
+    <li><span class="mark">✓</span><span><b>Durable, tamper-evident audit log for config changes</b> — <code>AuditLog</code> implements a real SHA-256 hash chain with an append-only DB guard, wired to <code>BulkExportJob</code>, <code>TransformationRule</code>, <code>SchemaMapping</code>, <code>WorkflowDefinition</code>.</span></li>
+    <li><span class="mark">✓</span><span><b>HTTPS enforcement</b> — <code>UseHttpsRedirection</code>/<code>UseHsts</code>/<code>RequireHttpsMetadata</code> correctly gated to non-Development environments.</span></li>
+    <li><span class="mark">✓</span><span><b>Encrypted SFTP delivery</b> — SSH channel (SSH.NET) with credentials pulled from the secret store, not inline.</span></li>
+    <li><span class="mark">✓</span><span><b>Clean tracing</b> — OpenTelemetry instrumentation captures no request/response bodies, headers, or SQL parameter values; only correlation IDs.</span></li>
+    <li><span class="mark">✓</span><span><b>TDE treated correctly as infra-level</b> — a startup health check flags an unencrypted database rather than silently ignoring it.</span></li>
+    <li><span class="mark">✓</span><span><b>Partial encryption-at-rest for tokens</b> — the OAuth authorization-code store already wraps values with <code>IDataProtector</code> before writing to Redis.</span></li>
+    <li><span class="mark">✓</span><span><b>Organizational scaffolding</b> — full HIPAA/SOC 2 policy set, risk register, BAA template, pen-test plan, and SOC 2 readiness assessment already drafted in <code>docs/compliance/</code>.</span></li>
+  </ul>
+</section>
+
+<section id="corrections">
+  <h2>3. Corrections to the existing control matrix</h2>
+  <p class="section-note"><code>hipaa-soc2-control-matrix.md</code> marks a few things "Implemented" that this audit found are either not wired up, or only partially wired up. These should be corrected in that file once fixed here — an auditor relies on that matrix being accurate.</p>
+
+  <div class="correction">
+    <div class="claim">Matrix claims: <b>"Secrets encrypted in Azure Key Vault"</b></div>
+    <p>Key Vault resolution code is real (<code>AzureKeyVaultSecretProvider</code>), but only activates when <code>KeyVault:UseAzureKeyVault=true</code> — <b>not set in any checked-in configuration</b>. By default, destination secrets resolve through <code>DbSecretStore</code>, a Data-Protection-encrypted value in the application database, not an actual vault. Not a plaintext leak, but "Key Vault" is aspirational unless explicitly turned on per deployment.</p>
+  </div>
+
+  <div class="correction">
+    <div class="claim">Matrix claims: <b>"Safe Harbor + k-anonymity de-identification ... before data leaves the trust boundary where applicable"</b></div>
+    <p>The de-identification services are real and functional, but the only two registered governance rules always return <code>requiresDeIdentification: false</code>. <b>De-identification never actually executes today</b>, for any destination. This is the most significant correction — the matrix currently implies a working PHI-minimization control that isn't active.</p>
+  </div>
+
+  <div class="correction">
+    <div class="claim">Matrix claims: <b>"PhiMaskingEnricher masks PHI before logs are written"</b></div>
+    <p>True for the cases it covers, but it only inspects top-level log properties by exact key name — it doesn't recurse into destructured objects (<code>{@Patient}</code>) and never inspects exception messages or stack traces. Separately, <code>GlobalExceptionManager</code> writes raw exception text straight to the <code>ErrorLogs</code> table through a path that bypasses this enricher entirely.</p>
+  </div>
+
+  <div class="correction">
+    <div class="claim">Matrix claims: <b>"DataAccessLog"</b> captures every patient/resource governance decision</div>
+    <p>This audit separately found an <code>AuthorizationLog</code> that is documented and built to record <b>denials only</b>, not successful PHI reads. If <code>DataAccessLog</code> is a distinct table that does cover successful access, reconcile which one is authoritative; if they're the same mechanism, the matrix overstates coverage.</p>
+  </div>
+
+  <div class="correction">
+    <div class="claim">Not mentioned in the matrix at all: <b>Runtime pipeline audit trail</b></div>
+    <p><code>IWorkflowAuditRecorder</code> is currently <code>InMemoryWorkflowAuditRecorder</code> — a plain in-process list that's never persisted. PHI-touching pipeline extraction/transform/output events in the Runtime plane leave no durable audit record, despite the durable hash-chained <code>AuditLog</code> mechanism working well for config entities.</p>
+  </div>
+</section>
+
+<section id="pending">
+  <h2>4. What is pending</h2>
+
+  <div class="callout">
+    <b>On the word "certification":</b> HIPAA has no certificate, seal, or pass/fail exam — "compliant" means operating the required safeguards continuously and being able to prove it to an auditor or OCR investigator. <span class="pill tag-must">Must</span> below means a required implementation specification, or so directly tied to one that skipping it leaves a real gap an investigator would cite. <span class="pill tag-should">Should</span> means an addressable specification or best-practice hardening — a risk-based judgment call is legitimate, but skipping it should be a documented decision, not an oversight. <span class="pill tag-optional">Optional</span> means it's good hygiene but not something HIPAA itself asks for. These are engineering-informed judgment calls, not a legal determination — have compliance counsel confirm the tag on anything you plan to formally document as "addressed, not applicable."
+    <p style="margin:10px 0 0; font-weight:600; color:var(--ink);">13 of 28 items below are tagged Must (8 of 21 technical, 5 of 7 organizational) — those actually block a defensible compliance posture. The rest are real improvements, but skipping them is a risk-acceptance decision, not a compliance failure.</p>
+  </div>
+
+  <h3>4a. Technical gaps (engineering — this repo)</h3>
+  <p class="section-note">Ordered by exposure. Items 1–8 should be closed before any real patient data flows through a production deployment. Each row links to its fix below.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th></th><th>Gap</th><th>Severity</th><th>Cert</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><a href="#fix-1">RSA private key committed to <code>appsettings.Development.json</code></a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">2</td><td><a href="#fix-2">De-identification governance rule never sets <code>requiresDeIdentification: true</code></a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">3</td><td><a href="#fix-3">FHIR access tokens cached in Redis as plaintext</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">4</td><td><a href="#fix-4">Runtime pipeline audit trail is in-memory only</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">5</td><td><a href="#fix-5">Webhook ingestion messages carry full raw FHIR JSON on the queue</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">6</td><td><a href="#fix-6">Generated CSV/PDF exports written unencrypted to disk, no active purge</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">7</td><td><a href="#fix-7">Portal stores JWTs in localStorage/sessionStorage</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">8</td><td><a href="#fix-8">HL7 MLLP listener has no TLS transport option</a></td><td class="sev"><span class="pill high">High</span></td><td><span class="pill tag-must">Must*</span></td></tr>
+      <tr><td class="num">9</td><td><a href="#fix-9">PHI-masking enricher doesn't recurse into nested objects or scan exceptions</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">10</td><td><a href="#fix-10"><code>GlobalExceptionManager</code> bypasses the masking enricher</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">11</td><td><a href="#fix-11">Data Protection key ring stored unprotected on local disk</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">12</td><td><a href="#fix-12">Password rotation field defined but never enforced</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">13</td><td><a href="#fix-13">Authorization log records denials only, not successful PHI access</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">14</td><td><a href="#fix-14">RabbitMQ dead-letter queues have no TTL/max-length</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">15</td><td><a href="#fix-15">Redis/RabbitMQ have no TLS enforced in code</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">16</td><td><a href="#fix-16">Connection secrets and PII logged to the browser console</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td class="num">17</td><td><a href="#fix-17">Field-mapping snapshots persist indefinitely in portal localStorage</a></td><td class="sev"><span class="pill med">Medium</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">18</td><td><a href="#fix-18">Forced password-change claim can be stale for a token's full lifetime</a></td><td class="sev"><span class="pill low">Low</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">19</td><td><a href="#fix-19">Development token lifetime extended to 8 hours</a></td><td class="sev"><span class="pill low">Low</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">20</td><td><a href="#fix-20">Auth interceptor attaches bearer token without a scheme check</a></td><td class="sev"><span class="pill low">Low</span></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td class="num">21</td><td><a href="#fix-21">Footer discloses build/version tag on the public login page</a></td><td class="sev"><span class="pill low">Low</span></td><td><span class="pill tag-optional">Optional</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="section-note">* Must before the MLLP listener is ever enabled — it's unregistered/inert today, so there's no live exposure yet.</p>
+  <p class="section-note"><b>Why #2 and #7 are Should, not Must:</b> de-identification is a risk-reduction technique, not a named Required specification — as long as identified data reaching a destination is access-controlled, encrypted in transit, and covered by a BAA, sending it identified isn't itself a violation (though the control matrix should stop implying it's active today). Portal token storage is a real hardening improvement against XSS, but many organizations run identity systems on <code>localStorage</code> under compensating controls — a documented risk-acceptance is defensible here in a way it isn't for a committed private key or a plaintext token cache.</p>
+
+  <h3>4b. Organizational items (already scaffolded — need ownership, not authoring)</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Item</th><th>Where the template already lives</th><th>Cert</th></tr></thead>
+    <tbody>
+      <tr><td>Assign Security Official &amp; Privacy Official</td><td><code>policies/02-assigned-security-responsibility.md</code></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td>Adopt the full policy set via leadership</td><td><code>policies/</code> (15 documents)</td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td>Complete and ratify the risk analysis</td><td><code>risk-assessment/</code></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td>Execute BAAs with Azure and every subprocessor</td><td><code>baa/</code>, tracked in <code>baa/baa-tracking-checklist.md</code></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td>Implement and test backup/DR</td><td><code>backup-disaster-recovery.md</code></td><td><span class="pill tag-must">Must</span></td></tr>
+      <tr><td>Engage a firm for penetration testing</td><td><code>pen-test/</code></td><td><span class="pill tag-should">Should</span></td></tr>
+      <tr><td>SOC 2 readiness → Type I → Type II</td><td><code>soc2/</code></td><td><span class="pill tag-optional">Optional</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="section-note">Penetration testing satisfies the Required "Evaluation" standard (§164.308(a)(8)), but the standard doesn't name pen testing specifically — any periodic technical evaluation can satisfy it. SOC 2 is a separate, voluntary attestation framework, not a HIPAA requirement at all.</p>
+  <p class="section-note">These follow the sequencing already laid out in the program README's roadmap — listed here for completeness against "what's pending," not as new work.</p>
+</section>
+
+<section id="howto">
+  <h2>5. How to do each pending item</h2>
+
+  <h3>Technical fixes</h3>
+
+  <div class="fixcard" id="fix-1">
+    <div class="fixhead"><span class="fixnum">1</span><span class="fixtitle">Committed private key</span><span class="pill high">High</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">Files: <code>src/Api/FHIRBridge.Api/appsettings.Development.json</code>, <code>src/Worker/FHIRBridge.Worker/appsettings.Development.json</code></div>
+    <ol>
+      <li>Treat this as a live secret exposure, not a normal bug — open an incident, don't just fix-forward silently.</li>
+      <li>Rotate the key pair with Epic (generate a new key, register the new public key/JWKS with Epic's App Orchard config, deprecate the old one on their side).</li>
+      <li>Purge the old key from git history with <code>git filter-repo --path src/Api/FHIRBridge.Api/appsettings.Development.json --invert-paths</code> (or BFG Repo-Cleaner) — a plain new commit isn't enough, the key stays readable in history.</li>
+      <li>Force-push the cleaned history only after coordinating with every branch owner; if too disruptive, rotating the key at Epic is the load-bearing fix and history-scrubbing can follow separately.</li>
+      <li>Replace the checked-in value with a placeholder and load the real key from user-secrets locally (<code>dotnet user-secrets set</code>) or Key Vault in shared environments.</li>
+      <li>Add a secret-scanning pre-commit hook (<code>gitleaks protect --staged</code>) and a CI job (<code>gitleaks detect</code>) so a future commit can't reintroduce a key silently.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> <code>git log -p -- '*appsettings.Development.json'</code> no longer shows the private key in any commit reachable from <code>main</code>.</div>
+  </div>
+
+  <div class="fixcard" id="fix-2">
+    <div class="fixhead"><span class="fixnum">2</span><span class="fixtitle">De-identification never triggers</span><span class="pill high">High</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">Files: <code>src/FHIRBridge.Application/Services/*GovernanceRule.cs</code>, <code>ConfiguredPipelineService.cs:839</code>, <code>DestinationConfiguration</code> entity</div>
+    <ol>
+      <li>This is a policy decision first — decide with compliance which destination types/tenants require de-identification (e.g. analytics/BI exports vs. clinical write-back destinations that need identified data to function).</li>
+      <li>Add a <code>RequiresDeIdentification</code> (and optionally <code>DeIdentificationMethod</code>: SafeHarbor/KAnonymity) flag to the <code>DestinationConfiguration</code> aggregate, with an EF Core migration.</li>
+      <li>Expose the flag in the portal's destination-configuration wizard so tenant admins can set it per destination.</li>
+      <li>Implement a new <code>IGovernanceRule</code> (e.g. <code>DestinationSensitivityGovernanceRule</code>) that reads this flag and returns <code>requiresDeIdentification: true</code> when set — register it alongside <code>ResourceTypeAccessGovernanceRule</code>/<code>ConsentGovernanceRule</code>.</li>
+      <li>Confirm <code>ConfiguredPipelineService</code> correctly routes to <code>SafeHarborDeIdentificationService</code>/<code>KAnonymityDeIdentificationService</code> when the flag is true — both already work, they just need a caller.</li>
+      <li>Add an integration test asserting a flagged destination never receives an identified field (name, MRN, DOB down to the day, etc.).</li>
+      <li>Get compliance sign-off on the chosen method per destination before relying on it in production.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> trigger a pipeline run against a de-identification-flagged destination in a test tenant and inspect the delivered payload for absence of direct identifiers.</div>
+  </div>
+
+  <div class="fixcard" id="fix-3">
+    <div class="fixhead"><span class="fixnum">3</span><span class="fixtitle">Plaintext tokens in Redis</span><span class="pill high">High</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">File: <code>DistributedFhirAccessTokenCache.cs:23-42</code> · pattern to copy: <code>DistributedFhirAuthorizationCodeTokenStore.cs:25-33</code></div>
+    <ol>
+      <li>Inject <code>IDataProtector</code> (dedicated purpose string, e.g. <code>"FhirAccessTokenCache.v1"</code>) into <code>DistributedFhirAccessTokenCache</code>.</li>
+      <li>Wrap the token/scope payload with <code>Protect(...)</code> before <code>IDistributedCache.SetAsync</code>, and <code>Unprotect(...)</code> after <code>GetAsync</code>.</li>
+      <li>Handle <code>CryptographicException</code> on unprotect as a cache miss (re-authenticate), consistent with how <code>AppSecretProvisioner</code> already self-heals on key-ring rotation.</li>
+      <li>Add a unit test confirming the raw bytes written to the underlying cache mock never contain the plaintext token string.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> <code>redis-cli GET &lt;key&gt;</code> against a dev Redis instance shows ciphertext, not a readable JWT.</div>
+  </div>
+
+  <div class="fixcard" id="fix-4">
+    <div class="fixhead"><span class="fixnum">4</span><span class="fixtitle">In-memory workflow audit</span><span class="pill high">High</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">Files: <code>WorkflowServiceCollectionExtensions.cs:19</code>, <code>Audit/InMemoryWorkflowAuditRecorder.cs</code> · reuse pattern: <code>AuditLog</code>/<code>AuditingSaveChangesInterceptor</code></div>
+    <ol>
+      <li>Design a <code>WorkflowAuditEntry</code> table (actor, workflow run ID, node/step, action, resource type, timestamp, correlation ID — no PHI payload) mirroring the existing <code>AuditLog</code> hash-chain shape.</li>
+      <li>Add the EF Core migration and register the entity as an <code>IAppendOnlyEntity</code> so the existing guard applies for free.</li>
+      <li>Implement <code>DbWorkflowAuditRecorder : IWorkflowAuditRecorder</code> that writes through this table instead of an in-memory list.</li>
+      <li>Swap the DI registration in <code>WorkflowServiceCollectionExtensions.cs</code> from the in-memory implementation to the new durable one.</li>
+      <li>Surface these entries in the existing <code>GET /api/v1/governance/reports/hipaa-audit</code> evidence report alongside config-change audit rows.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> run a workflow, restart the API process, confirm the audit rows for that run are still queryable.</div>
+  </div>
+
+  <div class="fixcard" id="fix-5">
+    <div class="fixhead"><span class="fixnum">5</span><span class="fixtitle">Raw PHI on the message queue</span><span class="pill high">High</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">Files: <code>WebhookIngestionCommand.cs:9</code>, <code>RabbitMqPublisher.cs:25</code>, <code>AzureServiceBusDispatchers.cs:35-38</code>, <code>RabbitMqTopology.cs</code></div>
+    <ol>
+      <li>Confirm (don't assume) every environment's RabbitMQ connection uses <code>amqps://</code> and every Service Bus connection uses its default TLS transport — see fix #15.</li>
+      <li>Lock down RabbitMQ vhost permissions so only the ingestion publisher and its consumer can read the <code>webhook-ingestion</code> queue.</li>
+      <li>Apply the DLQ retention fix (#14) to this queue specifically, since it's the one confirmed to carry raw PHI.</li>
+      <li>Record the message broker as a subprocessor in <code>baa/subprocessor-register.md</code> if it's hosted by a third party.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> attempt to connect to the queue with a credential outside the ingestion service's identity and confirm it's denied.</div>
+  </div>
+
+  <div class="fixcard" id="fix-6">
+    <div class="fixhead"><span class="fixnum">6</span><span class="fixtitle">Unencrypted generated files</span><span class="pill high">High</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">Files: <code>GeneratedFileDownloadLinkService.cs:42-51/78-85</code>, consumers: <code>MappedCsvDestinationWriter.cs</code>, <code>DownloadUrlDeliveryStrategy.cs</code></div>
+    <ol>
+      <li>Encrypt file bytes with AES-GCM using a key sourced from Key Vault or the existing Data Protection key ring before writing to disk.</li>
+      <li>Decrypt on read in <code>TryResolveAsync</code>, immediately before streaming the file back to the requester.</li>
+      <li>Add a <code>BackgroundService</code> (e.g. <code>ExpiredGeneratedFilePurgeJob</code>) that scans the storage folder on a timer and deletes anything past its expiry, instead of relying on next-access cleanup.</li>
+      <li>Register the new job in the existing <code>IPurgeableStore</code> list (<code>DependencyInjection.cs:201-226</code>) so it's covered by existing operational monitoring.</li>
+      <li>Add an integration test: create a file, force expiry, run the purge job, assert the file is gone.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> inspect the storage folder directly and confirm ciphertext contents, and that no file older than its TTL survives after the purge job runs.</div>
+  </div>
+
+  <div class="fixcard" id="fix-7">
+    <div class="fixhead"><span class="fixnum">7</span><span class="fixtitle">Portal token storage</span><span class="pill high">High</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">Files: <code>portal/src/app/auth/services/token.service.ts</code>, <code>AuthController</code>, <code>auth.interceptor.ts</code></div>
+    <ol>
+      <li>Update the API's login/refresh endpoints to set tokens via <code>Set-Cookie</code> with <code>HttpOnly; Secure; SameSite=Strict</code> instead of returning them in the JSON body.</li>
+      <li>Update Angular <code>HttpClient</code> calls to send <code>withCredentials: true</code>; remove manual <code>Authorization</code> header attachment from <code>auth.interceptor.ts</code> for cookie-backed requests.</li>
+      <li>Add CSRF protection (double-submit cookie or synchronizer token) for state-changing requests, since cookie auth reintroduces CSRF risk.</li>
+      <li>Update <code>token.service.ts</code> to stop reading/writing <code>localStorage</code>/<code>sessionStorage</code> for the tokens themselves.</li>
+      <li>Update logout to call a server endpoint that clears the cookie (<code>Set-Cookie</code> with <code>Max-Age=0</code>), not just a client-side storage clear.</li>
+      <li><code>AllowCredentials()</code> is already enabled in CORS (see §2), so this change is compatible with the current policy.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> after login, dev tools → Application → Storage shows no JWT in <code>localStorage</code>/<code>sessionStorage</code>; the cookie is flagged <code>HttpOnly</code>.</div>
+  </div>
+
+  <div class="fixcard" id="fix-8">
+    <div class="fixhead"><span class="fixnum">8</span><span class="fixtitle">MLLP listener has no TLS</span><span class="pill high">High</span><span class="pill tag-must">Must*</span></div>
+    <div class="fixfiles">File: <code>Worker/Hl7MllpListenerService.cs</code> · config: <code>Hl7MllpOptions</code></div>
+    <ol>
+      <li>Add certificate configuration to <code>Hl7MllpOptions</code> (certificate path/thumbprint, or Key Vault reference).</li>
+      <li>Wrap the accepted <code>TcpClient</code>'s stream in an <code>SslStream</code> and call <code>AuthenticateAsServerAsync</code> before handing the stream to the existing MLLP frame parser.</li>
+      <li>Optionally support mutual TLS (client certificate validation) if the sending EHR/interface engine supports it.</li>
+      <li>Add an integration test with a self-signed test certificate confirming a plaintext connection is rejected.</li>
+      <li>Land this fix <em>before</em> anyone enables <code>Hl7MllpOptions.Enabled</code> in a real config — don't ship it as a follow-up after the feature goes live.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> a plaintext TCP client is refused; a TLS-wrapped client completes the handshake and exchanges a test HL7 message.</div>
+  </div>
+
+  <div class="fixcard" id="fix-9">
+    <div class="fixhead"><span class="fixnum">9</span><span class="fixtitle">PHI-masking enricher gaps</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs:88-119</code></div>
+    <ol>
+      <li>Extend the property-walking logic to recurse into <code>StructureValue</code> properties (Serilog's representation of <code>{@Foo}</code> destructured objects), not just top-level properties.</li>
+      <li>Add exception scanning: when <code>LogEvent.Exception</code> is non-null, run the same masking logic against <code>Exception.Message</code> and <code>Exception.ToString()</code> before the event reaches any sink.</li>
+      <li>Consider scanning the rendered message text (<code>LogEvent.RenderMessage()</code>) for interpolated values that bypassed structured properties entirely.</li>
+      <li>Add unit tests: a destructured object with a nested <code>Ssn</code> field, and an exception whose message embeds a fake MRN — both should come out masked.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> new unit tests pass; <code>_logger.LogError(ex, "failed for {@Patient}", patientWithSsn)</code> produces a masked value in the log output.</div>
+  </div>
+
+  <div class="fixcard" id="fix-10">
+    <div class="fixhead"><span class="fixnum">10</span><span class="fixtitle"><code>GlobalExceptionManager</code> bypasses masking</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs:50-69</code></div>
+    <ol>
+      <li>Extract the masking logic from the Serilog enricher into a shared <code>IPhiRedactor</code> service both the enricher and this class can call, avoiding two rule sets drifting apart.</li>
+      <li>Call <code>IPhiRedactor.Redact(...)</code> on <code>exception.Message</code>/<code>.ToString()</code> before persisting to <code>ErrorLogs</code> in <code>IGovernanceLogger.LogErrorAsync</code>.</li>
+      <li>Add a unit test asserting a fake-identifier exception message is redacted in the persisted row.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> trigger an exception with a known fake PHI value and confirm the <code>ErrorLogs</code> row shows the redacted form.</div>
+  </div>
+
+  <div class="fixcard" id="fix-11">
+    <div class="fixhead"><span class="fixnum">11</span><span class="fixtitle">Unprotected Data Protection key ring</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">Files: Api <code>Program.cs:97</code>, Worker <code>Program.cs:50</code> · config: <code>DataProtection:KeyRingPath</code></div>
+    <ol>
+      <li>Provision an X.509 certificate for key encryption (self-signed for dev/test, a real or Key Vault-managed cert for staging/production).</li>
+      <li>Chain <code>.ProtectKeysWithCertificate(cert)</code> onto <code>AddDataProtection()</code>, or switch to <code>.ProtectKeysWithAzureKeyVault(...)</code> for a fully managed option.</li>
+      <li>For multi-instance deployments, pair this with shared persistence (<code>PersistKeysToAzureBlobStorage</code>) instead of local filesystem.</li>
+      <li>Keep the existing <code>AppSecretProvisioner</code> self-heal behavior as the fallback if a key ever can't be decrypted.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> the persisted key XML is encrypted, not plain text; a second instance sharing the store can decrypt tokens issued by the first.</div>
+  </div>
+
+  <div class="fixcard" id="fix-12">
+    <div class="fixhead"><span class="fixnum">12</span><span class="fixtitle">Password rotation not enforced</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: password-change-required gate middleware in <code>Program.cs</code> (~475-500) · entity: <code>User.PasswordExpiresOnUtc</code></div>
+    <ol>
+      <li>Decide the actual rotation policy (e.g. 90 days) and record it in <code>policies/09-access-control-and-authentication.md</code>.</li>
+      <li>In the existing gate middleware, add a check for <code>PasswordExpiresOnUtc &lt; DateTime.UtcNow</code> and require a password change when true.</li>
+      <li>Add a scheduled job or login-time check warning users before expiry.</li>
+      <li>If rotation isn't actually a policy goal (NIST 800-63B favors breach-triggered resets over mandatory rotation), explicitly decide that and remove the dead field instead of leaving misleading unused state.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> set a test user's expiry to a past date and confirm their next request redirects to the password-change flow.</div>
+  </div>
+
+  <div class="fixcard" id="fix-13">
+    <div class="fixhead"><span class="fixnum">13</span><span class="fixtitle">Authorization log records denials only</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>AuthorizationLog.cs</code> · related: possible <code>DataAccessLog</code> (see §3)</div>
+    <ol>
+      <li>First reconcile with the control matrix's <code>DataAccessLog</code> reference — confirm whether it already exists and covers successful access, or is aspirational.</li>
+      <li>If it doesn't exist, add a lightweight positive-access record (actor, resource type/ID, action=Read, timestamp — no PHI payload) at the same enforcement point as the denial log.</li>
+      <li>Be deliberate about volume — log at the resource-access level, not per-field, on high-traffic endpoints.</li>
+      <li>Add a retention/purge policy consistent with <code>policies/13-data-retention-and-disposal.md</code>.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> a successful PHI read produces a queryable row with actor + resource ID + timestamp, no patient data embedded.</div>
+  </div>
+
+  <div class="fixcard" id="fix-14">
+    <div class="fixhead"><span class="fixnum">14</span><span class="fixtitle">RabbitMQ DLQs have no retention</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>RabbitMqTopology.cs:28-52</code></div>
+    <ol>
+      <li>Add <code>x-message-ttl</code> (e.g. 30 days, aligned with your incident-response SLA) and <code>x-max-length</code> to the <code>.dlq</code> declaration.</li>
+      <li>Add monitoring/alerting on DLQ depth so messages get triaged before they age out.</li>
+      <li>Confirm the Azure Service Bus DLQ retention policy (Bicep, external to this repo) matches the same intent.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> publish a message designed to fail, confirm it lands in the DLQ, and confirm the TTL/max-length via the management UI or <code>rabbitmqctl list_queues</code>.</div>
+  </div>
+
+  <div class="fixcard" id="fix-15">
+    <div class="fixhead"><span class="fixnum">15</span><span class="fixtitle">No enforced TLS to Redis/RabbitMQ in code</span><span class="pill med">Medium</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">File: <code>DependencyInjection.cs:71-83</code> (Redis), connection-string configuration generally</div>
+    <ol>
+      <li>Add a fail-fast startup check rejecting a Redis connection string without <code>ssl=true</code>/<code>rediss://</code> when the environment isn't Development.</li>
+      <li>Do the same for RabbitMQ — require <code>amqps://</code> outside Development.</li>
+      <li>Update the production configuration template/deployment docs to make this the default expectation.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> starting the API in a Production-flagged environment with a plain <code>redis://</code> string fails startup with a clear error.</div>
+  </div>
+
+  <div class="fixcard" id="fix-16">
+    <div class="fixhead"><span class="fixnum">16</span><span class="fixtitle">Console-logged secrets/PII in the portal</span><span class="pill med">Medium</span><span class="pill tag-must">Must</span></div>
+    <div class="fixfiles">Files: <code>ehr-vendor-source-form.component.ts:2237-2239</code>, <code>destination-wizard.component.ts:971</code>, <code>email-notification.service.ts:50,81</code>, <code>account-security.service.ts:100</code></div>
+    <ol>
+      <li>Delete each of these <code>console.log</code>/<code>JSON.stringify</code> calls — none are load-bearing, they're leftover debugging output.</li>
+      <li>Grep the rest of the portal for similar patterns to catch any not covered by this audit's sample.</li>
+      <li>Add an ESLint <code>no-console</code> rule (allowing <code>warn</code>/<code>error</code> only if needed) enforced in CI to prevent regressions.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> run the Epic connector and mapping/destination wizards with dev tools open — no secrets, schemas, or PII in the console.</div>
+  </div>
+
+  <div class="fixcard" id="fix-17">
+    <div class="fixhead"><span class="fixnum">17</span><span class="fixtitle">localStorage mapping snapshots persist indefinitely</span><span class="pill med">Medium</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>mapping-snapshot.service.ts:6,61-68</code></div>
+    <ol>
+      <li>Add an <code>expiresAt</code> timestamp when writing a snapshot; treat an expired entry as absent on read.</li>
+      <li>Clear all <code>fhirbridge.mappingSnapshot.*</code> keys explicitly in the logout flow.</li>
+      <li>As a faster interim mitigation, consider moving to <code>sessionStorage</code> while the backend-persistence version of this feature is built.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> log out, inspect <code>localStorage</code>, confirm no mapping-snapshot keys remain.</div>
+  </div>
+
+  <div class="fixcard" id="fix-18">
+    <div class="fixhead"><span class="fixnum">18</span><span class="fixtitle">Stale password-change claim</span><span class="pill low">Low</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">Files: gate middleware in <code>Program.cs</code>, <code>JwtAccessTokenIssuer.cs:51</code></div>
+    <ol>
+      <li>Only address if your threat model cares about the gap between a forced reset and the user's next token refresh.</li>
+      <li>Option A: shorten the access token lifetime so the exposure window shrinks on its own.</li>
+      <li>Option B: check <code>MustChangePassword</code>/<code>MfaSetupRequired</code> against the database per request, with a short-lived cache to avoid a full per-request query cost.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> force a password reset on an active session and confirm the change is required well before natural token expiry.</div>
+  </div>
+
+  <div class="fixcard" id="fix-19">
+    <div class="fixhead"><span class="fixnum">19</span><span class="fixtitle">8-hour dev token lifetime</span><span class="pill low">Low</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>appsettings.Development.json</code></div>
+    <ol>
+      <li>No code change needed.</li>
+      <li>Add a line to deployment/runbook docs stating the Development configuration must never be used for an internet-facing environment.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> CI/CD pipelines only ever apply <code>appsettings.json</code>/<code>appsettings.Production.json</code> to real environments.</div>
+  </div>
+
+  <div class="fixcard" id="fix-20">
+    <div class="fixhead"><span class="fixnum">20</span><span class="fixtitle">Auth interceptor has no scheme check</span><span class="pill low">Low</span><span class="pill tag-should">Should</span></div>
+    <div class="fixfiles">File: <code>portal/src/app/auth/interceptors/auth.interceptor.ts</code></div>
+    <ol>
+      <li>Guard the interceptor: skip attaching the Authorization header (and log a warning) if the outgoing URL isn't <code>https://</code> (allow localhost for dev).</li>
+      <li>Alternatively, assert at bootstrap that <code>environment.apiBaseUrl</code> is HTTPS in any non-local build.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> point a local build at a misconfigured <code>http://</code> API URL and confirm the token isn't sent.</div>
+  </div>
+
+  <div class="fixcard" id="fix-21">
+    <div class="fixhead"><span class="fixnum">21</span><span class="fixtitle">Version disclosure on login page</span><span class="pill low">Low</span><span class="pill tag-optional">Optional</span></div>
+    <div class="fixfiles">File: <code>portal/src/app/layout/app-footer/app-footer.component.ts</code></div>
+    <ol>
+      <li>Optional. Wrap the precise build/version string in <code>*ngIf="isAuthenticated"</code> so it only shows inside the authenticated shell.</li>
+      <li>Keep branding/support links on the public footer; drop just the version tag.</li>
+    </ol>
+    <div class="verify"><b>Verify:</b> view page source on the logged-out login page — no build/image tag present.</div>
+  </div>
+
+  <h3>Organizational items</h3>
+  <p>Each of these already has a drafted template in <code>docs/compliance/</code> with <code>[ORGANIZATION TO COMPLETE]</code> / <code>[TO ASSIGN]</code> markers at every point requiring a human decision or signature — engineering cannot complete these alone.</p>
+
+  <div class="org-item">
+    <div class="orghead">1. Assign owners for the Security Official and Privacy Official roles <span class="pill tag-must">Must</span></div>
+    <ul>
+      <li>Open <code>policies/02-assigned-security-responsibility.md</code> and fill in real names/titles — can be the same person at a small org, but the role must be named.</li>
+      <li>Get written acknowledgment that the named person accepts the responsibility — auditors ask for evidence of this, not just a document naming a role.</li>
+      <li>Nothing else on this list is real until this step is done, since every other policy references "the Security Official" as approver/owner.</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">2. Walk through and approve the 15 policy documents in <code>policies/</code> <span class="pill tag-must">Must</span></div>
+    <ul>
+      <li>Assign one reviewer per document (or one for all 15 at a small org) with a deadline per the roadmap's 1–3 week window.</li>
+      <li>Replace every <code>[ORGANIZATION TO COMPLETE]</code>/<code>[TO ASSIGN]</code> placeholder with real values.</li>
+      <li>Route through leadership for formal, dated approval — an unapproved draft doesn't count as an adopted policy for audit purposes.</li>
+      <li>Set a recurring annual review reminder per policy.</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">3. Run the risk-assessment workshop <span class="pill tag-must">Must</span></div>
+    <ul>
+      <li>Schedule a working session with engineering + security leads; use <code>risk-assessment/asset-inventory.md</code> as the agenda skeleton against the current Azure resource list.</li>
+      <li>Work through <code>risk-assessment/threat-vulnerability-register.md</code> entry by entry, scoring likelihood/impact — don't accept defaults without discussion.</li>
+      <li>Fold in this audit's findings (§4a) as new register entries where not already captured.</li>
+      <li>Assign an owner and target date per item in <code>risk-assessment/risk-treatment-plan.md</code>; track to closure.</li>
+      <li>Repeat annually, or on any material architecture change.</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">4. Get BAAs signed <span class="pill tag-must">Must</span></div>
+    <ul>
+      <li>Enumerate every Azure service in use (App Service/Container Apps, SQL Database, Key Vault, Redis Cache, Service Bus, Blob Storage, Entra ID) and confirm each is on Microsoft's HIPAA-covered-services list.</li>
+      <li>Execute the Microsoft/Azure BAA if not already in place.</li>
+      <li>For every downstream subprocessor in <code>baa/subprocessor-register.md</code>, request and countersign their BAA; track signed/renewal dates.</li>
+      <li>Use <code>baa/baa-template.md</code> for outbound BAAs with your customers; route through legal before signature.</li>
+      <li>Treat an unsigned BAA as a hard blocker on sending that party production PHI, not a paperwork formality.</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">5. Implement and test backup/DR <span class="pill tag-must">Must</span></div>
+    <ul>
+      <li>Implement each mechanism in <code>backup-disaster-recovery.md</code> in real infrastructure (Azure Backup vault, automated SQL jobs, documented RPO/RTO).</li>
+      <li>Actually run a restore test to a scratch environment and record the result and date — an untested plan doesn't satisfy the contingency-plan requirement.</li>
+      <li>Schedule recurring restore tests (e.g. quarterly).</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">6. Engage a penetration-testing firm <span class="pill tag-should">Should</span></div>
+    <ul>
+      <li>Shortlist and select a firm with healthcare/HIPAA testing experience via <code>pen-test/rfp-vendor-selection.md</code>.</li>
+      <li>Sign <code>pen-test/scope-and-rules-of-engagement.md</code>, scoped to a synthetic-data staging environment — never production PHI.</li>
+      <li>Prioritize <code>pen-test/test-plan-checklist.md</code> toward areas this audit flagged (token handling, queue access, de-identification bypass) so the test validates fixes rather than duplicating this review.</li>
+      <li>Track every finding to closure in <code>pen-test/remediation-tracker.md</code>.</li>
+    </ul>
+  </div>
+
+  <div class="org-item">
+    <div class="orghead">7. Pursue SOC 2 <span class="pill tag-optional">Optional</span></div>
+    <ul>
+      <li>Only start after items 1–6 are operating — SOC 2 needs evidence of controls operating, not just designed.</li>
+      <li>Close gaps in <code>soc2/readiness-assessment.md</code>.</li>
+      <li>Engage a licensed CPA firm via <code>soc2/auditor-rfp-and-selection.md</code>.</li>
+      <li>Complete a Type I first, then run the Type II observation window (typically 6–12 months).</li>
+      <li>Keep <code>soc2/evidence-matrix.md</code> updated incrementally through the window rather than reconstructing evidence retroactively.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="reverify">
+  <h2>6. Re-verification</h2>
+  <div class="callout">
+    Once the technical fixes in §5 land, re-run a targeted audit against items 1–21 above and update both this document and <code>hipaa-soc2-control-matrix.md</code> to reflect the corrected status — don't let the matrix drift back out of sync with the code.
+  </div>
+</section>
+
+<footer class="disclaimer">
+  This document reflects an engineering-level, static code review of the repository as of 2026-08-17. It is not a legal compliance certification, a substitute for a formal HIPAA risk assessment, or a penetration test. Findings should be validated against your actual deployment configuration, and any de-identification or BAA-related decisions should be confirmed with compliance counsel before relying on them.
+</footer>
+
+</div>
+</body>
+</html>
