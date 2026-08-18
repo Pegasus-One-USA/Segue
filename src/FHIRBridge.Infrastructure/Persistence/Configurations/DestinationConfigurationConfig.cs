@@ -15,8 +15,7 @@ public sealed class DestinationConfigurationConfig : IEntityTypeConfiguration<De
         builder.Property(x => x.DestinationType).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.Target).HasMaxLength(500);
         builder.Property(x => x.IsEnabled).IsRequired();
-        builder.Property(x => x.RequiresDeIdentification).IsRequired().HasDefaultValue(false);
-        builder.Property(x => x.DeIdentificationMethod).HasMaxLength(50);
+        builder.Property(x => x.DeIdentificationProfileId);
 
         builder.OwnsOne(x => x.SecretReference, secret =>
         {

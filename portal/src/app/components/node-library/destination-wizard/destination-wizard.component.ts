@@ -11,7 +11,8 @@ import { AddTransformEvent } from '../node-library-dialog.component';
 import { DestinationSchemaService, DestinationTable, DestinationColumn, DestinationProbeRequest } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
-import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { CreateDestinationConfigurationRequest, DestinationConfigurationDto, DestinationType, DeIdentificationProfileDto } from '../../../destination-connections/models/destination-configuration.model';
+import { DeIdentificationProfileService } from '../../../destination-connections/services/deidentification-profile.service';
 import { newSecretName } from '../../../destination-connections/utils/destination-connection-secret.util';
 import { DestinationConfigFormComponent } from '../../shared/config-form/config-form.contract';
 import { DESTINATION_FORM_REGISTRY } from './destination-forms/destination-form.registry';
@@ -149,6 +150,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly catalogSvc = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
   private readonly destinationConfigSvc = inject(DestinationConfigurationService);
+  private readonly deIdentificationProfileSvc = inject(DeIdentificationProfileService);
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
   private readonly mappingProfileImportSvc = inject(MappingProfileImportService);
@@ -734,6 +736,47 @@ export class DestinationWizardComponent implements OnInit {
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
 
+  // Cross-cutting concern independent of destination type, so it lives at the wizard level rather than in
+  // any one DESTINATION_FORM_REGISTRY form component — see provisionDestinationConnection()'s four request
+  // branches and Step 4's review summary.
+  readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
+  readonly selectedDeIdentificationProfileId = signal<string | null>(null);
+  readonly newProfileName = signal('');
+  readonly creatingProfile = signal(false);
+  readonly selectedDeIdentificationProfileName = computed(() => {
+    const id = this.selectedDeIdentificationProfileId();
+    return id ? (this.deIdentificationProfiles().find(p => p.id === id)?.name ?? 'None') : 'None';
+  });
+
+  private loadDeIdentificationProfiles(): void {
+    this.deIdentificationProfileSvc.list().subscribe({
+      next: profiles => this.deIdentificationProfiles.set(profiles),
+      error: () => this.deIdentificationProfiles.set([]),
+    });
+  }
+
+  createDeIdentificationProfile(): void {
+    const name = this.newProfileName().trim();
+    if (!name) {
+      return;
+    }
+
+    this.creatingProfile.set(true);
+    this.deIdentificationProfileSvc.create({ name }).subscribe({
+      next: profile => {
+        this.deIdentificationProfiles.update(existing => [...existing, profile]);
+        this.selectedDeIdentificationProfileId.set(profile.id);
+        this.newProfileName.set('');
+        this.creatingProfile.set(false);
+      },
+      error: err => {
+        this.creatingProfile.set(false);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the profile.';
+        this.toast.show('Profile not created', typeof msg === 'string' ? msg : 'Failed to create the profile.');
+      },
+    });
+  }
+
   // Set from the edited node's own fields when a prior build already provisioned a real
   // DestinationConfiguration for it (see workflow-builder.component.ts's stampBuildResultIds) — distinct
   // from selectedExistingId, which only reflects a manual "use an existing connection" pick in Step 1.
@@ -1004,6 +1047,7 @@ export class DestinationWizardComponent implements OnInit {
   ngOnInit(): void {
     this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
+    this.loadDeIdentificationProfiles();
     const edit = this.editNode();
     if (edit) {
       this._populateFromNode(edit);
@@ -1483,6 +1527,7 @@ export class DestinationWizardComponent implements OnInit {
   clearExistingConnection(): void {
     this.connectionMode.set('new');
     this.selectedExistingId.set(null);
+    this.selectedDeIdentificationProfileId.set(null);
     this._existingBaseline = null;
     const form = this.activeForm();
     form?.reset();
@@ -1545,6 +1590,10 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find(o => o.id === id);
     if (!selected) return;
+
+    // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
+    // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
+    this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
 
     const metadata = this._parseConnectionMetadata(selected.connectionMetadataJson);
     // dest_name always falls back to the saved record's own name (metadata's dest_name is only ever absent
@@ -1853,6 +1902,16 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
+    // Restore the de-identification profile picker from the real DestinationConfiguration row — the canvas
+    // node's own fields don't carry it (it's a destination-level attribute, not a mapping/config one), so
+    // without this, re-saving an edited node would silently clear whatever profile was assigned.
+    const destinationId = f['destinationId'];
+    if (destinationId) {
+      this.destinationConfigSvc.getById(destinationId).subscribe({
+        next: dto => this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null),
+        error: () => this.selectedDeIdentificationProfileId.set(null),
+      });
+    }
     // Queued rather than applied directly — this runs from ngOnInit, before the Step 1 form component (the
     // outlet's child) has necessarily been created; the effect in the constructor flushes it onto the form
     // the moment it exists. dest_auth's 'managed-identity' fallback (vs. patchFrom's own 'sql-auth' fallback,
@@ -1987,6 +2046,7 @@ export class DestinationWizardComponent implements OnInit {
     const isBlob = this.isBlob();
     const name = metadata.fields['dest_name'] || (isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     const secretName = newSecretName(name);
+    const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
           name,
@@ -1996,6 +2056,7 @@ export class DestinationWizardComponent implements OnInit {
           target: null,
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId,
         }
       : isMongo
       ? {
@@ -2006,6 +2067,7 @@ export class DestinationWizardComponent implements OnInit {
           target: metadata.fields['dest_collection'] || null,
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId,
         }
       : isBlob
       ? {
@@ -2018,6 +2080,7 @@ export class DestinationWizardComponent implements OnInit {
           // secret" rule into metadata.secret — no extra auth-mode check needed here.
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId,
         }
       : isMedplum
       ? {
@@ -2051,6 +2114,7 @@ export class DestinationWizardComponent implements OnInit {
           target: metadata.fields['dest_filePattern'] || null,
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId,
         };
 
     const existingId = this.resolvedDestinationId();

@@ -30,8 +30,30 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         TransformErrorPolicy errorPolicy = TransformErrorPolicy.NullOut,
         string? onNullDefaultValue = null,
         TransformArrayMode arrayMode = TransformArrayMode.Whole,
-        string? fhirWriteBackJsonPath = null)
+        string? fhirWriteBackJsonPath = null,
+        TransformExecutionPhase executionPhase = TransformExecutionPhase.PostMapping,
+        Guid? deIdentificationProfileId = null)
     {
+        if (executionPhase == TransformExecutionPhase.PreMapping)
+        {
+            if (scope is not (TransformScope.Global or TransformScope.ResourceType))
+            {
+                throw new ArgumentException(
+                    "Pre-mapping rules are only valid at Global or ResourceType scope.", nameof(executionPhase));
+            }
+
+            if (deIdentificationProfileId is null)
+            {
+                throw new ArgumentException(
+                    "Pre-mapping rules must belong to a de-identification profile.", nameof(deIdentificationProfileId));
+            }
+        }
+        else if (deIdentificationProfileId is not null)
+        {
+            throw new ArgumentException(
+                "A de-identification profile only applies to pre-mapping rules.", nameof(deIdentificationProfileId));
+        }
+
         Id = Guid.NewGuid();
         Scope = scope;
         NodeType = nodeType;
@@ -48,6 +70,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         OnNullDefaultValue = onNullDefaultValue;
         ArrayMode = arrayMode;
         FhirWriteBackJsonPath = fhirWriteBackJsonPath;
+        ExecutionPhase = executionPhase;
+        DeIdentificationProfileId = deIdentificationProfileId;
         IsEnabled = true;
     }
 
@@ -98,6 +122,14 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
     /// whole CodeableConcept belongs at "code", not back into the bare code string leaf. Dot-separated segments,
     /// optional "[n]" array index per segment (no leading "$."), e.g. "code" or "component[0].valueQuantity".</summary>
     public string? FhirWriteBackJsonPath { get; private set; }
+
+    /// <summary>Whether this rule runs after mapping (default, per-destination-field) or before mapping
+    /// (raw source JSON, by <see cref="SourceField"/> path). See <see cref="TransformExecutionPhase"/>.</summary>
+    public TransformExecutionPhase ExecutionPhase { get; private set; } = TransformExecutionPhase.PostMapping;
+
+    /// <summary>Which <see cref="DeIdentificationProfile"/> this rule belongs to — only set (and required)
+    /// when <see cref="ExecutionPhase"/> is <see cref="TransformExecutionPhase.PreMapping"/>.</summary>
+    public Guid? DeIdentificationProfileId { get; private set; }
 
     public bool IsEnabled { get; private set; } = true;
 

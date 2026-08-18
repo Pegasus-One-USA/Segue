@@ -64,7 +64,9 @@ public sealed class TransformationRuleService : ITransformationRuleService
                 request.ErrorPolicy,
                 request.OnNullDefaultValue,
                 request.ArrayMode,
-                request.FhirWriteBackJsonPath);
+                request.FhirWriteBackJsonPath,
+                request.ExecutionPhase,
+                request.DeIdentificationProfileId);
             rule.SetEnabled(request.IsEnabled);
             await _repository.AddAsync(rule, cancellationToken);
             return ToDto(rule);
@@ -181,5 +183,7 @@ public sealed class TransformationRuleService : ITransformationRuleService
         rule.IsEnabled,
         rule.OnNullDefaultValue,
         rule.ArrayMode,
-        rule.FhirWriteBackJsonPath);
+        rule.FhirWriteBackJsonPath,
+        rule.ExecutionPhase,
+        rule.DeIdentificationProfileId);
 }

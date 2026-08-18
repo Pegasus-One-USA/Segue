@@ -36,7 +36,7 @@ const CUSTOM_SENTINEL = '__custom__';
             <div class="config-control">
               <label [for]="'rcf-' + field.key">{{ field.label }}</label>
               <select [id]="'rcf-' + field.key" [ngModel]="config[field.key] ?? field.defaultValue" (ngModelChange)="setValue(field.key, $event)">
-                @for (opt of field.options ?? []; track opt) {
+                @for (opt of optionsFor(field); track opt) {
                   <option [value]="opt">{{ opt }}</option>
                 }
               </select>
@@ -97,6 +97,15 @@ const CUSTOM_SENTINEL = '__custom__';
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+  // Lets a pre-mapping (de-identification) HashingMasking rule offer its wider strategy vocabulary
+  // (remove/generalizeDateToYear/generalizeZip3, matching SafeHarborDeIdentificationService) without
+  // changing the shared post-mapping schema's own hash/mask/redact options. Keyed by config field key
+  // (currently only "mode" needs this); absent keys fall back to the schema's own options.
+  @Input() optionOverrides: Record<string, string[]> = {};
+
+  optionsFor(field: TransformConfigFieldSchema): string[] {
+    return this.optionOverrides[field.key] ?? field.options ?? [];
+  }
 
   protected readonly CUSTOM_SENTINEL = CUSTOM_SENTINEL;
 

@@ -98,6 +98,43 @@
         </div>
       }
 
+      <!-- Cross-cutting — applies regardless of destination type, so it lives outside the per-type form
+           component. Read-only when reusing an existing connection as-is (nothing to save it through in
+           that mode — see selectExisting()/provisionDestinationConnection()). -->
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-deid-profile">De-identification profile</label>
+        <div class="dw-existing-connection-row">
+          <div class="dw-select-wrap">
+            <select
+              id="dw-deid-profile"
+              class="dw-select"
+              [disabled]="connectionMode() === 'existing'"
+              [value]="selectedDeIdentificationProfileId() ?? ''"
+              (change)="selectedDeIdentificationProfileId.set($any($event.target).value || null)"
+            >
+              <option value="">None</option>
+              @for (p of deIdentificationProfiles(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        @if (connectionMode() !== 'existing') {
+          <div class="dw-existing-connection-row" style="margin-top: 8px;">
+            <input
+              type="text"
+              class="dw-select"
+              placeholder="New profile name…"
+              [value]="newProfileName()"
+              (input)="newProfileName.set($any($event.target).value)"
+            />
+            <button type="button" class="dw-clear-btn" title="Create a new de-identification profile"
+                    [disabled]="!newProfileName().trim() || creatingProfile()"
+                    (click)="createDeIdentificationProfile()">+ New</button>
+          </div>
+          <span class="dw-hint">Resources routed to this destination are redacted per the selected profile's rules before delivery. Manage a profile's rules on the Transformation Rules screen.</span>
+        }
+      </div>
     }
 
     <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
@@ -323,6 +360,10 @@
         <div class="dw-review-card">
           <span class="dw-review-key">Destination type</span>
           <span class="dw-review-val">{{ destLabel() }}</span>
+        </div>
+        <div class="dw-review-card">
+          <span class="dw-review-key">De-identification</span>
+          <span class="dw-review-val">{{ selectedDeIdentificationProfileName() }}</span>
         </div>
         @if (isSql()) {
           <div class="dw-review-card">

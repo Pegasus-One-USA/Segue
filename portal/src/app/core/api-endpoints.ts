@@ -118,6 +118,13 @@ export const DESTINATION_ENDPOINTS = {
   alterColumn:   `${API_V1_BASE}/destinations/schema/alter-column`,
 };
 
+// ─── De-identification profiles (DeIdentificationProfilesController — api/v1/deidentification/profiles) ──
+export const DEIDENTIFICATION_ENDPOINTS = {
+  list:    `${API_V1_BASE}/deidentification/profiles`,
+  create:  `${API_V1_BASE}/deidentification/profiles`,
+  preview: (profileId: string) => `${API_V1_BASE}/deidentification/profiles/${profileId}/preview`,
+};
+
 // ─── Mapping Profiles (ConfigurationsController / ConfigurationCatalogController — api/v1/mapping-profiles) ──
 export const MAPPING_PROFILE_ENDPOINTS = {
   list:      `${API_V1_BASE}/mapping-profiles`,

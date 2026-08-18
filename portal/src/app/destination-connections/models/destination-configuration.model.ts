@@ -46,6 +46,8 @@ export interface DestinationConfigurationDto {
   createdBy?: string | null;
   modifiedOnUtc?: string | null;
   modifiedBy?: string | null;
+  /** Which DeIdentificationProfile applies to this destination — null means no de-identification. */
+  deIdentificationProfileId?: string | null;
 }
 
 export interface CreateDestinationConfigurationRequest {
@@ -58,6 +60,20 @@ export interface CreateDestinationConfigurationRequest {
   inlineSecret?: string | null;
   /** Non-secret connection fields as a JSON string — see DestinationConfigurationDto.connectionMetadataJson. */
   connectionMetadataJson?: string | null;
+  /** Which DeIdentificationProfile applies to this destination — null/omitted means no de-identification. */
+  deIdentificationProfileId?: string | null;
+}
+
+/** A named, reusable group of pre-mapping de-identification rules — see DeIdentificationProfile (backend). */
+export interface DeIdentificationProfileDto {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface CreateDeIdentificationProfileRequest {
+  name: string;
+  description?: string | null;
 }
 
 export interface PagedResult<T> {
