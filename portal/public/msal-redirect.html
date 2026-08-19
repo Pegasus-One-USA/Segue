@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Signing in…</title>
+</head>
+<body>
+  <!--
+    Dedicated MSAL popup redirect target — deliberately NOT part of the Angular app.
+
+    MSAL's loginPopup() opens a popup, navigates it to Microsoft's sign-in page, and then — once
+    Microsoft redirects the popup back here — the PARENT window's MSAL client detects the popup's
+    URL matches the configured redirectUri and closes it itself. Nothing on this page needs to run
+    any code for that to work.
+
+    Using the app's own root (window.location.origin) as the redirect URI instead of this static
+    page caused a real bug: the popup would land back on the SPA's root, Angular would bootstrap,
+    and its own auth guard (unauthenticated at that point, since MSAL hadn't processed the response
+    yet) would redirect the popup to /auth/login before MSAL's parent-window polling caught the
+    redirect — leaving the popup stuck showing the login page instead of closing. This page has no
+    routing, no guards, and nothing that can navigate away, so that race can't happen.
+  -->
+  Completing sign-in…
+</body>
+</html>

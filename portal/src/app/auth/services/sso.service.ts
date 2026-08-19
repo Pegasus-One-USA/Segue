@@ -51,7 +51,11 @@ export class SsoService {
       auth: {
         clientId,
         authority,
-        redirectUri: window.location.origin,
+        // A dedicated static page (portal/public/msal-redirect.html), not the SPA's own root — using
+        // window.location.origin here raced the app's own auth guard against MSAL's popup-completion
+        // detection: the popup would land back on the bootstrapping Angular app, get redirected to
+        // /auth/login by the guard (no session yet), and get stuck there instead of MSAL closing it.
+        redirectUri: `${window.location.origin}/msal-redirect.html`,
       },
       cache: {
         cacheLocation: 'sessionStorage',
