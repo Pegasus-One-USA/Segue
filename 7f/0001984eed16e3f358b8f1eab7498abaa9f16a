@@ -1,0 +1,106 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_f497a23d1bc09f::t_065e40f1706251 158-197
+  s_f497a23d1bc09f::t_5e35cf85a8977e 218-229
+  s_f497a23d1bc09f::t_c418dda01e564d 238-346
+  s_f497a23d1bc09f::t_a93d189f3b02b9 58-66
+  s_f497a23d1bc09f::t_666f183ff96739 49-57,70-88,91-96,142-154
+  s_f497a23d1bc09f::t_9b934ecefecf69 97-141
+  s_f497a23d1bc09f::t_0e3f67fb67cb4e 41-46,155-157
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_f497a23d1bc09f::t_26e3979ee374a6 512-518
+  s_f497a23d1bc09f::t_67bcf8b0dc64a2 443-456
+  s_f497a23d1bc09f::t_f222fde553f104 483
+  s_f497a23d1bc09f::t_7f9d73561506d9 367-369,371
+  s_f497a23d1bc09f::t_c7aa5ee22db819 502-505
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f497a23d1bc09f::t_c2bfc00866d2fb 1286-1287
+  s_f497a23d1bc09f::t_128042af07638c 1306-1308
+  s_f497a23d1bc09f::t_7b84668ef8ea6e 1269
+  s_f497a23d1bc09f::t_b58cf87815ee1c 989
+  s_f497a23d1bc09f::t_8cccc52d87d975 1380-1385
+  s_f497a23d1bc09f::t_8de2c7be02eb9d 897
+  s_f497a23d1bc09f::t_d8e787388c6c49 1691-1695
+  s_f497a23d1bc09f::t_bfaa51bed3d157 292-298
+  s_f497a23d1bc09f::t_b407d087e8658a 1889-1890
+  s_f497a23d1bc09f::t_a79f47c88018d2 2059
+  s_f497a23d1bc09f::t_65f25d6f54df0e 1844-1847
+  s_f497a23d1bc09f::t_657103312b4c00 764-767
+  s_f497a23d1bc09f::t_46864a098102c5 1923-1934
+  s_f497a23d1bc09f::t_7a52c1dbe6bd5a 1433
+  s_f497a23d1bc09f::t_8090b2084e8a2b 746
+  s_f497a23d1bc09f::t_db6111a2cf989f 712
+  s_f497a23d1bc09f::t_85ea58f3f9d45b 299-306
+  s_f497a23d1bc09f::t_2cebe9a557ba7c 725-727,736
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_f497a23d1bc09f::t_447d2fffa363a6 27
+portal/src/app/services/phase-config.service.ts
+  s_f497a23d1bc09f::t_522cd8f6ae27d2 49
+  s_f497a23d1bc09f::t_711c888cbd7b8c 44
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_f497a23d1bc09f::t_cbdc40539fe1d5 38
+  s_f497a23d1bc09f::t_2defaa37fba0fd 106-128
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  s_f497a23d1bc09f::t_e02f24b7d32757 101,103-104,109,111-118
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_f497a23d1bc09f::t_d94a8a23ac851d 19,21
+src/FHIRBridge.Infrastructure/Destinations/MedplumConnectionMetadata.cs
+  s_f497a23d1bc09f::t_7b26f172097bb0 18-26
+  s_f497a23d1bc09f::t_cd7909fe9b8d9a 119
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_f497a23d1bc09f::t_664b0ed290afa9 75-77
+  s_f497a23d1bc09f::t_6807e8eb5664fa 79-83
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_f497a23d1bc09f::t_69e5aa3e0288e7 340
+  s_f497a23d1bc09f::t_c753fca2be5668 244
+  s_f497a23d1bc09f::t_6e762294d6d1e4 547-548
+  s_f497a23d1bc09f::t_93fb5997b21e5f 163
+  s_f497a23d1bc09f::t_a654dbf1663f2f 263
+  s_f497a23d1bc09f::t_84fadddfc9e4d4 433-435
+  s_f497a23d1bc09f::t_3156b1b73ea46f 449-450
+  s_f497a23d1bc09f::t_7d00dca5fd3183 529
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_f497a23d1bc09f::t_05dc4ba4aa58c4 288-290,293-300
+  s_f497a23d1bc09f::t_b3acc2a3717dc9 511
+  s_f497a23d1bc09f::t_6e9141c33fafc6 691-699
+  s_f497a23d1bc09f::t_c71a0e595d8819 308-330
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_f497a23d1bc09f::t_4b04e6faa766dc 272-305
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_f497a23d1bc09f::t_28f98e999c0432 294-329
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_f497a23d1bc09f::t_06007a20b995c1 96-102
+  s_f497a23d1bc09f::t_81719e0e2240ee 201
+  s_f497a23d1bc09f::t_9fd7452b9361ca 135-148
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_f497a23d1bc09f::t_c4f81689fa7d0b 204
+  s_f497a23d1bc09f::t_c313ded519551e 223
+  s_f497a23d1bc09f::t_cb071576c9dc8c 242
+  s_f497a23d1bc09f::t_732e20047272fa 47
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  s_f497a23d1bc09f::t_a3cae8c2136e45 96-117
+  s_f497a23d1bc09f::t_9b33e9b55a4da3 68-73,77,484,610
+  s_f497a23d1bc09f::t_86a1d7ca105f0e 301-310
+  s_f497a23d1bc09f::t_bf68b221f64206 296-297,299-300,311-314
+  s_f497a23d1bc09f::t_d4e33f10a8aca5 606-609
+  s_f497a23d1bc09f::t_bf6398f0cb2930 228-233
+  s_f497a23d1bc09f::t_72ca5f3171f63f 472-483,485,492-495
+  s_f497a23d1bc09f::t_aa8d0c430a8b88 486,488-489
+  s_f497a23d1bc09f::t_64ce801b726c42 611-622
+  s_f497a23d1bc09f::t_9839dcee1f1280 554-562
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7f0001984eed16e3f358b8f1eab7498abaa9f16a",
+  "prompts": {},
+  "sessions": {
+    "s_f497a23d1bc09f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "342c5994-a1f8-40eb-af9e-42c0d9a53c33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

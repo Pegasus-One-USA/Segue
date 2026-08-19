@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_729615e62b8174::t_bfc304f317f71e 945
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a407d3b59d3cb2de1dc45a0819090249a143e99f",
+  "prompts": {},
+  "sessions": {
+    "s_729615e62b8174": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d03f42c-0ad4-462e-8947-225940dd4773",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

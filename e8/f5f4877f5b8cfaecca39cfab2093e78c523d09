@@ -1,0 +1,152 @@
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_3c9fe77da34305::t_af3b05fc84dacd 14-18
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_3c9fe77da34305::t_d9c3bbe47b9753 392
+  s_3c9fe77da34305::t_81a92b539f98f5 445
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  s_3c9fe77da34305::t_170ff41822827f 30,37-38
+  s_3c9fe77da34305::t_a3fcacca5ce4ba 28-29
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_3c9fe77da34305::t_98744d3456487a 170-172,179-189,192-229
+  s_3c9fe77da34305::t_6c8f249a243f74 62,73-108,230
+  s_3c9fe77da34305::t_d998e90fe53cd5 265-269
+src/FHIRBridge.Domain/Enums/TransformExecutionPhase.cs
+  s_3c9fe77da34305::t_8b994a264367fd 1-15
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_3c9fe77da34305::t_997de2160dddd9 144-145
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_3c9fe77da34305::t_883c1bcea011f3 186-188
+  s_3c9fe77da34305::t_8c2891f5bc4c99 67-69
+src/FHIRBridge.Application/Abstractions/Governance/IGovernancePolicyService.cs
+  s_3c9fe77da34305::t_75b13106415098 22,24-27
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_3c9fe77da34305::t_b9b776f380beed 2-4,7,13-15,19-53,58-61,68-90
+src/FHIRBridge.Domain/Entities/DeIdentificationProfile.cs
+  s_3c9fe77da34305::t_56bd69086d7c87 13-21,26-29,31
+  s_3c9fe77da34305::t_cf1c6c02c47352 1-12,22-25,30,32-46
+src/FHIRBridge.Infrastructure/Persistence/DeIdentificationProfileSeeder.cs
+  s_3c9fe77da34305::t_6d0300d3195dd7 1-33,36-70
+  s_3c9fe77da34305::t_0fc4483708b045 34-35
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_3c9fe77da34305::t_61479e82610c55 4
+  s_3c9fe77da34305::t_66cbbd10b8219e 44-51
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_3c9fe77da34305::t_c0a9dc1d0e3764 33-38
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_3c9fe77da34305::t_b9b776f380beed 6,13-17,21,25,28,32,34-38,47,52,55-56,58,60,62-64,67,70-89,96,102,108,115,129,140-148,170-173,175,177-184,188,190-200,210-211
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818151609_AddDeIdentificationProfiles.Designer.cs
+  s_3c9fe77da34305::t_6aa02c46fd3e66 1-5462
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_3c9fe77da34305::t_c42b9109ddf804 147
+  s_3c9fe77da34305::t_a73a4f23c473c8 148-154
+  s_3c9fe77da34305::t_61a00386e36e57 189-190
+  s_3c9fe77da34305::t_1debbf983c0644 237-238
+src/FHIRBridge.Application/Services/DefaultGovernancePolicyService.cs
+  s_3c9fe77da34305::t_afeed2620f22a6 19
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_3c9fe77da34305::t_521d4d0fd96f84 1-12
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  s_3c9fe77da34305::t_e2829955ee709b 33-35,37-56,73-74
+  s_3c9fe77da34305::t_7693264dfc6f5b 126-133
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_3c9fe77da34305::t_7e30f4fc920c94 240-246
+src/FHIRBridge.Application/Abstractions/Governance/IGovernanceRule.cs
+  s_3c9fe77da34305::t_b359a6cfd0e836 17,21-22,25
+portal/src/app/destination-connections/services/deidentification-profile.service.ts
+  s_3c9fe77da34305::t_1942b4a429faea 1-36
+src/FHIRBridge.Domain/Entities/DestinationConfiguration.cs
+  s_3c9fe77da34305::t_b9c3bfc0844645 46-49,51,53,55
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_3c9fe77da34305::t_d12fe78427ee12 60-61,82-83
+  s_3c9fe77da34305::t_14a9f73ece2b7c 9-13
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_3c9fe77da34305::t_5292c3e8b2880d 370-371,373-378,384,386-387,389
+  s_3c9fe77da34305::t_d3f11a354fb689 128,133-212
+  s_3c9fe77da34305::t_10a3f26066cc0b 477-478
+  s_3c9fe77da34305::t_9ade9736f7f262 228
+  s_3c9fe77da34305::t_d2faf20be0bfb2 268-270
+  s_3c9fe77da34305::t_5dbcf51bea2458 335-348,350-354
+  s_3c9fe77da34305::t_40750269c971a2 69-70,73-77,80-88,97-98,102-105
+  s_3c9fe77da34305::t_3db01793c159f4 11-12,16,25-29
+  s_3c9fe77da34305::t_86b21c312ea986 406-409,411
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_3c9fe77da34305::t_a47c952f56d02e 25
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_3c9fe77da34305::t_baf0b0be3fe886 345-348
+  s_3c9fe77da34305::t_42375809270a4a 101-137
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_3c9fe77da34305::t_1866e37957c1f2 72-82
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_3c9fe77da34305::t_3f6b1b06c46b8c 48-49
+  s_3c9fe77da34305::t_003f197eaed9cd 62-75
+src/Api/FHIRBridge.Api/Controllers/V1/DeIdentificationProfilesController.cs
+  s_3c9fe77da34305::t_38dd1ffae216ae 1-54
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_3c9fe77da34305::t_299f9dbe8620aa 840,847-848
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_3c9fe77da34305::t_4ae8adf260bb80 459,463-464,466
+  s_3c9fe77da34305::t_52e108470a2ddf 210
+  s_3c9fe77da34305::t_843c646ef233da 211
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_3c9fe77da34305::t_fe283c1abb0811 1-17
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_3c9fe77da34305::t_0c705f66631a95 22-24,44-48
+src/FHIRBridge.Application/DTOs/DeIdentificationProfileDtos.cs
+  s_3c9fe77da34305::t_d539c92fb123de 1-12
+src/FHIRBridge.Infrastructure/Persistence/Configurations/DeIdentificationProfileConfiguration.cs
+  s_3c9fe77da34305::t_8b76c1c3633730 1-19
+src/FHIRBridge.Application/DTOs/CreateDestinationConfigurationRequest.cs
+  s_3c9fe77da34305::t_7b65bd00688737 18-20
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_3c9fe77da34305::t_614fe0b1f811c4 1-27
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818151609_AddDeIdentificationProfiles.cs
+  s_3c9fe77da34305::t_6aa02c46fd3e66 1-112
+src/Api/FHIRBridge.Api/Program.cs
+  s_3c9fe77da34305::t_3f34af46af11c3 616-621
+src/FHIRBridge.Infrastructure/Persistence/Configurations/DestinationConfigurationConfig.cs
+  s_3c9fe77da34305::t_def7818aeb2bdc 18
+portal/src/app/core/api-endpoints.ts
+  s_3c9fe77da34305::t_d79a9d7c5fb626 121-127
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_3c9fe77da34305::t_8ca6cc44bcbe7d 735-741,746-775
+  s_3c9fe77da34305::t_c23cf8a4f44e04 2027,2037,2048,2061,2071
+  s_3c9fe77da34305::t_5b8130e2281e1a 153
+  s_3c9fe77da34305::t_03d9b3b9789d7e 14-15
+  s_3c9fe77da34305::t_bbb4e19d848c66 1036
+  s_3c9fe77da34305::t_9245c93e84c9d0 1885-1894
+  s_3c9fe77da34305::t_b6c7b4bad86675 742-745
+  s_3c9fe77da34305::t_ffdabaec0c45c4 1574-1577
+  s_3c9fe77da34305::t_1a98329816dcee 1514
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_3c9fe77da34305::t_9bdac7f12cefc9 1-73
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_3c9fe77da34305::t_c6c72293953bcd 39
+  s_3c9fe77da34305::t_e6323a40c15207 100-108
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_3c9fe77da34305::t_6959ec50940155 3880,3969
+  s_3c9fe77da34305::t_6aa02c46fd3e66 253-308,330-331,3878-3879,3900-3906,3968
+src/FHIRBridge.Infrastructure/Governance/DestinationSensitivityGovernanceRule.cs
+  s_3c9fe77da34305::t_b9b776f380beed 8-10,32,35,38
+src/FHIRBridge.Infrastructure/Governance/CompositeGovernancePolicyService.cs
+  s_3c9fe77da34305::t_2e674cc214e9cf 36,42,52,60
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileSeeder.cs
+  s_3c9fe77da34305::t_f0f34da2c3e50b 1-9
+src/FHIRBridge.Application/DTOs/DestinationConfigurationDto.cs
+  s_3c9fe77da34305::t_beb1d75975948b 19-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "e8f5f4877f5b8cfaecca39cfab2093e78c523d09",
+  "prompts": {},
+  "sessions": {
+    "s_3c9fe77da34305": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16595903-42ac-4f1a-9833-795a9b03c112",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

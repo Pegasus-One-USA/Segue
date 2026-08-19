@@ -1,0 +1,425 @@
+src/FHIRBridge.Application/DTOs/DeIdentificationProfileDtos.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-12
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-73
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 19,21
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_729615e62b8174::t_3fb540eec8e79e 230
+  s_729615e62b8174::t_d8c7da9fae75cd 62,73-108,170-172,179-189,192-229,265-269
+fhir-test-dataset/resources/Condition/condition-004.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-76
+portal/src/app/components/node-library/destination-wizard/destination-forms/medplum-destination-form.component.ts
+  s_729615e62b8174::t_3fb540eec8e79e 1-168
+src/FHIRBridge.Infrastructure/Persistence/DeIdentificationProfileSeeder.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-70
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 26-27,49-50,63-76
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 105-117
+fhir-test-dataset/bundles/medplum/patient-001-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-1429
+fhir-test-dataset/resources/CarePlan/careplan-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-40
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 17,49
+fhir-test-dataset/aidbox-comparison-checklist.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-74
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-40
+fhir-test-dataset/resources/PractitionerRole/practitionerrole-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-59
+fhir-test-dataset/bundles/hapi-aidbox/patient-002-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-439
+fhir-test-dataset/resources/Practitioner/practitioner-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-37
+fhir-test-dataset/generate.js
+  s_729615e62b8174::t_3fb540eec8e79e 1-964
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 67-69,186-188
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_729615e62b8174::t_3fb540eec8e79e 80,87-88,145-148,172,181
+  s_729615e62b8174::t_d8c7da9fae75cd 6,13-17,21,25,28,32,34-38,47,52,55-56,58,60,62-64,67,70-79,81-86,89,96,102,108,115,129,140-144,170-171,173,175,177-180,182-184,188,190-200,210-211
+portal/src/app/components/node-library/destination-wizard/destination-forms/fhir-repository-destination-form.component.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 14-17,19
+fhir-test-dataset/resources/Condition/condition-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-76
+portal/src/app/data/transforms.data.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 24
+fhir-test-dataset/bundles/hapi-aidbox/patient-001-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-1123
+poc/Medplum.Poc/Medplum.Poc.csproj
+  s_729615e62b8174::t_3fb540eec8e79e 1-19
+src/FHIRBridge.Application/Abstractions/Governance/IGovernanceRule.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 17,21-22,25
+fhir-test-dataset/resources/Encounter/encounter-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-66
+fhir-test-dataset/resources/Medication/medication-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-41
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-69
+fhir-test-dataset/resources/Patient/patient-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-55
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-69
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_729615e62b8174::t_d8c7da9fae75cd 240-246
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 14-18
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 126,133,179,184-187
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 28-30,37-38
+fhir-test-dataset/resources/Condition/condition-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-76
+fhir-test-dataset/uploader/appsettings.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-16
+poc/Medplum.Poc/Program.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-231
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_729615e62b8174::t_aed45afa4a2ee2 46,49
+  s_729615e62b8174::t_d8c7da9fae75cd 210,230,250
+fhir-test-dataset/bundles/medplum/patient-004-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-1080
+src/FHIRBridge.Infrastructure/Destinations/MedplumConnectionMetadata.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-166
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 304-339
+fhir-test-dataset/bundles/hapi-aidbox/all-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-4155
+fhir-test-dataset/bundles/medplum/medplum-all-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-4155
+src/FHIRBridge.Infrastructure/Destinations/MedplumTokenProvider.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-163
+fhir-test-dataset/dependency-order.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-63
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818151609_AddDeIdentificationProfiles.Designer.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-5462
+fhir-test-dataset/resources/Practitioner/practitioner-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-44
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 469,1512-1552,1577,1989,2152-2153,2705,2730-2736,2781-2784,3312-3313,3317-3322,3592,3606
+  s_729615e62b8174::t_e7429f8ae22785 3575,3584-3590
+  s_729615e62b8174::t_08f1644e9758fb 1594-1600,1624-1630
+  s_729615e62b8174::t_451b6fbe2b983b 3824-3830
+  s_729615e62b8174::t_f87c8daa42f4e1 617-621
+  s_729615e62b8174::t_4a465ef9bf40f1 640-643
+  s_729615e62b8174::t_3fb540eec8e79e 3323
+  s_729615e62b8174::t_b6684db1b6dcfe 3314-3316
+  s_729615e62b8174::t_f98951b4293042 45,47
+  s_729615e62b8174::t_8351d4761e6dd5 3617,3619,3622,3625-3627,3630,3632,3635,3638-3642,3645,3647-3669
+fhir-test-dataset/resources/Observation/observation-009.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+fhir-test-dataset/bundles/hapi-aidbox/admission-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-1016
+fhir-test-dataset/negative/neg-medicationrequest-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-30
+fhir-test-dataset/resources/Device/device-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-42
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 39,100-108
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_729615e62b8174::t_413caf15bae471 107-111,116-117,120-122,125
+  s_729615e62b8174::t_3fb540eec8e79e 583-584,948-957,959-962,973-1081
+  s_729615e62b8174::t_cc15e13a598d07 943-944,946
+  s_729615e62b8174::t_d8c7da9fae75cd 527-582,947
+  s_729615e62b8174::t_005549e109efd6 945
+  s_729615e62b8174::t_469f44f0114bdc 250,252-272,274
+  s_729615e62b8174::t_03f3ae55f7a490 167-176,181,183-203,205,210-212
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-623
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_729615e62b8174::t_d8c7da9fae75cd 41
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 96,205,309,334,410,505-507,527,633,651-652
+  s_729615e62b8174::t_bb0e897c576e5f 528
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 26-27
+fhir-test-dataset/bundles/hapi-aidbox/patient-003-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-700
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 63-64
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 144-154
+fhir-test-dataset/bundles/hapi-aidbox/foundation-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-738
+fhir-test-dataset/uploader/Program.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-520
+src/FHIRBridge.Application/DTOs/CreateDestinationConfigurationRequest.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 18-20
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 147-154,189-190,237-238
+src/FHIRBridge.Domain/Entities/DestinationConfiguration.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 46-49,51,53,55
+fhir-test-dataset/expected-scenarios.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-89
+fhir-test-dataset/resources/Procedure/procedure-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-48
+fhir-test-dataset/negative/neg-observation-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+fhir-test-dataset/resources/Device/device-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-42
+portal/src/app/core/api-endpoints.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 122-128
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileSeeder.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-9
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 9-13,60-61,82-83
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 33-38
+src/FHIRBridge.Application/Security/SystemRoleDefaultPermissions.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 40,43
+fhir-test-dataset/negative/neg-encounter-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-50
+fhir-test-dataset/resources/Organization/org-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-41
+src/FHIRBridge.Infrastructure/Destinations/MedplumClientCredential.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-19
+src/FHIRBridge.Infrastructure/Governance/CompositeGovernancePolicyService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 36,42,52,60
+src/FHIRBridge.Application/DTOs/DestinationConfigurationDto.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 19-20
+fhir-test-dataset/reference-styles.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+fhir-test-dataset/resources/Procedure/procedure-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-48
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 51
+fhir-test-dataset/resources/Encounter/encounter-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-66
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 4,44-49
+  s_729615e62b8174::t_3fb540eec8e79e 50-51
+fhir-test-dataset/validation-report.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-324
+src/FHIRBridge.Application/Abstractions/Governance/IGovernancePolicyService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 22,24-27
+fhir-test-dataset/resources/Condition/condition-005.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-76
+fhir-test-dataset/resources/Coverage/coverage-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-42
+fhir-test-dataset/resources/Practitioner/practitioner-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-37
+fhir-test-dataset/resources/CareTeam/careteam-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-50
+fhir-test-dataset/resources/Observation/observation-005.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 189-195,228-241,307
+src/FHIRBridge.Infrastructure/Persistence/Configurations/DeIdentificationProfileConfiguration.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-19
+src/Api/FHIRBridge.Api/Program.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 616-621
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  s_729615e62b8174::t_3fb540eec8e79e 133
+  s_729615e62b8174::t_d8c7da9fae75cd 33-35,37-56,73-74,126-132
+src/FHIRBridge.Domain/Enums/TransformExecutionPhase.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-15
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 840,847-848
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_729615e62b8174::t_9b602c202d2a30 623
+fhir-test-dataset/negative/negative-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-264
+fhir-test-dataset/resources/Location/location-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-49
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 72-82
+fhir-test-dataset/bundles/medplum/patient-005-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-371
+src/Api/FHIRBridge.Api/Controllers/V1/DeIdentificationProfilesController.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+fhir-test-dataset/resources/Condition/condition-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-72
+fhir-test-dataset/resources/ServiceRequest/servicerequest-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+fhir-test-dataset/bundles/medplum/foundation-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-738
+fhir-test-dataset/resources/Patient/patient-005.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 27
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 26
+src/FHIRBridge.Domain/Entities/DeIdentificationProfile.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-46
+fhir-test-dataset/resources/Immunization/immunization-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-37
+fhir-test-dataset/resources/Patient/patient-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_729615e62b8174::t_3fb540eec8e79e 131-132
+  s_729615e62b8174::t_d8c7da9fae75cd 37-38,110-130
+  s_729615e62b8174::t_96df1d51cf1bed 52
+fhir-test-dataset/resources/CarePlan/careplan-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-36
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-12
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 392,445
+fhir-test-dataset/resources/DiagnosticReport/diagnosticreport-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-65
+src/FHIRBridge.Infrastructure/Persistence/Configurations/DestinationConfigurationConfig.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 18
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-27
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 25
+fhir-test-dataset/resources/RelatedPerson/relatedperson-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-53
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_729615e62b8174::t_3fb540eec8e79e 21,90
+  s_729615e62b8174::t_d8c7da9fae75cd 2-4,7,13-15,19-20,22-53,58-61,68-89
+fhir-test-dataset/resources/ServiceRequest/servicerequest-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+fhir-test-dataset/hapi-testing.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-134
+fhir-test-dataset/resources/RelatedPerson/relatedperson-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-46
+fhir-test-dataset/resources/Observation/observation-004.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-86
+fhir-test-dataset/resources/Patient/patient-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+fhir-test-dataset/bundles/medplum/patient-003-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-859
+fhir-test-dataset/resources/Observation/observation-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+fhir-test-dataset/resources/CarePlan/careplan-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-40
+fhir-test-dataset/resources/Patient/patient-004.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+fhir-test-dataset/resources/DocumentReference/documentreference-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 450-452,454,460,514-531,598,614-626
+fhir-test-dataset/resources/Observation/observation-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+fhir-test-dataset/resources/PractitionerRole/practitionerrole-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-59
+fhir-test-dataset/bundles/hapi-aidbox/patient-005-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-312
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 144-145
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-44
+fhir-test-dataset/resources/Organization/org-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-52
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 45
+src/FHIRBridge.Application/Services/DefaultGovernancePolicyService.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 19
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-57
+fhir-test-dataset/resources/Immunization/immunization-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-37
+fhir-test-dataset/resources/ServiceRequest/servicerequest-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+fhir-test-dataset/resources/Encounter/encounter-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-66
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-57
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_729615e62b8174::t_3fb540eec8e79e 348
+  s_729615e62b8174::t_d8c7da9fae75cd 11-12,16,25-29,69-70,73-77,80-88,97-98,102-105,128,133-212,228,268-270,335-347,350-354,370-371,373-378,384,386-387,389,406-409,411,477-478
+fhir-test-dataset/bundles/hapi-aidbox/patient-004-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-873
+fhir-test-dataset/resources/Medication/medication-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-41
+fhir-test-dataset/resources/MedicationRequest/medicationrequest-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-44
+fhir-test-dataset/resources/Observation/observation-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-90
+fhir-test-dataset/resources/Observation/observation-007.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 399,407
+src/FHIRBridge.Infrastructure/Destinations/IMedplumTokenProvider.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-20
+fhir-test-dataset/resources/Procedure/procedure-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-48
+fhir-test-dataset/resources/DocumentReference/documentreference-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-53
+fhir-test-dataset/resources/Observation/observation-006.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+fhir-test-dataset/negative/neg-condition-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-48
+fhir-test-dataset/manifest.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-1713
+fhir-test-dataset/README.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-95
+fhir-test-dataset/resources/AllergyIntolerance/allergyintolerance-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-57
+fhir-test-dataset/resources/Coverage/coverage-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-42
+fhir-test-dataset/resources/Medication/medication-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-41
+fhir-test-dataset/resources/Observation/observation-008.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-58
+poc/Medplum.Poc/README.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-74
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_729615e62b8174::t_39077e3ef3b26a 852-868
+  s_729615e62b8174::t_3fb540eec8e79e 817
+  s_729615e62b8174::t_f834d0237becf7 659-673,676
+  s_729615e62b8174::t_d0a799347391db 228
+  s_729615e62b8174::t_d8c7da9fae75cd 229-265,674-675,684,814-816
+portal/src/app/services/phase-config.service.ts
+  s_729615e62b8174::t_d8c7da9fae75cd 44
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-366
+fhir-test-dataset/negative/neg-diagnosticreport-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-41
+src/FHIRBridge.Infrastructure/Governance/DestinationSensitivityGovernanceRule.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 8-10,32,35,38
+fhir-test-dataset/bundles/medplum/patient-002-bundle.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-645
+fhir-test-dataset/resources/Coverage/coverage-003.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-45
+fhir-test-dataset/resources/DocumentReference/documentreference-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-53
+fhir-test-dataset/resources/Location/location-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-49
+fhir-test-dataset/resources/CareTeam/careteam-001.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-68
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 220-221,351-358,487,491-492,494
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_729615e62b8174::t_3fb540eec8e79e 3880,3969
+  s_729615e62b8174::t_d8c7da9fae75cd 253-308,330-331,3878-3879,3900-3906,3968
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818151609_AddDeIdentificationProfiles.cs
+  s_729615e62b8174::t_3fb540eec8e79e 1-112
+fhir-test-dataset/resources/Immunization/immunization-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-37
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 287-320
+docs/backend/15-medplum-integration-plan.md
+  s_729615e62b8174::t_3fb540eec8e79e 1-262
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_729615e62b8174::t_d8c7da9fae75cd 22-24,44-48
+fhir-test-dataset/resources/CareTeam/careteam-002.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-50
+fhir-test-dataset/uploader/uploader.csproj
+  s_729615e62b8174::t_3fb540eec8e79e 1-19
+fhir-test-dataset/resources/Observation/observation-010.json
+  s_729615e62b8174::t_3fb540eec8e79e 1-54
+portal/src/app/destination-connections/services/deidentification-profile.service.ts
+  s_729615e62b8174::t_3fb540eec8e79e 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "655987aefd611aa280a663e1b7b151b2785329f8",
+  "prompts": {},
+  "sessions": {
+    "s_729615e62b8174": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d03f42c-0ad4-462e-8947-225940dd4773",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
