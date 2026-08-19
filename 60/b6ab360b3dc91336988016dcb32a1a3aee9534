@@ -1,0 +1,26 @@
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_f280bde22eabb8::t_87ae2caa73e278 179,184-187
+  s_f280bde22eabb8::t_882ceedab1b056 126,133
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_f280bde22eabb8::t_43db317c0ca324 399,407
+src/FHIRBridge.Application/Security/SystemRoleDefaultPermissions.cs
+  s_f280bde22eabb8::t_62bec9edb1ee69 40,43
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_f280bde22eabb8::t_d9b2ce63b77e98 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "60b6ab360b3dc91336988016dcb32a1a3aee9534",
+  "prompts": {},
+  "sessions": {
+    "s_f280bde22eabb8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c8d156a5-61aa-4325-b16c-83b287693d93",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
