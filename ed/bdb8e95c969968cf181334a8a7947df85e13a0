@@ -1,0 +1,274 @@
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_e4f33bc5f787da::t_cd37685b29f92e 100-101
+  s_e4f33bc5f787da::t_e981948f374f20 112-127
+  s_e4f33bc5f787da::t_7be3795bfa3192 128
+  s_e4f33bc5f787da::t_37c1736faef369 43-45
+  s_e4f33bc5f787da::t_afa012b16855c4 1-3,12-14,20-27,34-41,102-111,129-201,208-211
+  s_e4f33bc5f787da::t_63e21b4cf14d9b 4-6,9-11
+  s_e4f33bc5f787da::t_a8b0f8fc9a59f0 15-19
+  s_e4f33bc5f787da::t_6eee69080c9f29 28-33
+  s_e4f33bc5f787da::t_4ba707ac594ae0 42
+  s_e4f33bc5f787da::t_4721e0f89a937b 46-48,97-99
+  s_e4f33bc5f787da::t_267d58aa49cb77 202-207
+  s_50c987f1d763d9::t_ac7a5c74aa0450 7-8,49-96
+portal/src/app/components/canvas/canvas.component.ts
+  s_e4f33bc5f787da::t_d419df2254ed07 214-216
+  s_e4f33bc5f787da::t_9c2f877914c866 159
+  s_e4f33bc5f787da::t_462a304f00b63d 186
+  s_e4f33bc5f787da::t_06e86d86a46894 235
+  s_e4f33bc5f787da::t_3a7f1f58fe05c3 44-46
+  s_e4f33bc5f787da::t_46f8726db770db 248,254
+  s_e4f33bc5f787da::t_a3a948228e9c6b 285
+  s_e4f33bc5f787da::t_e631fa9ac3c265 47-49
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  s_e4f33bc5f787da::t_74af8866659bd1 4-12,14-22
+portal/src/app/settings/settings.routes.ts
+  s_e4f33bc5f787da::t_3f2405d23f2a90 167-169,246-256
+  s_e4f33bc5f787da::t_72d079a1152a89 100-101
+  s_50c987f1d763d9::t_7d0526315a0d8c 203-207
+  s_e4f33bc5f787da::t_6fccdaa3d42c96 55,58,76,85,94,257
+  s_e4f33bc5f787da::t_41942f3898254d 5-8
+  s_e4f33bc5f787da::t_8f42c45d6d846a 9-11
+  s_e4f33bc5f787da::t_c89e1c77f75bf2 52-54
+  s_e4f33bc5f787da::t_8d390faefaaf8e 102-104
+  s_e4f33bc5f787da::t_738863d08b7498 170
+  s_50c987f1d763d9::t_3caeb37c655390 200-202
+  s_e4f33bc5f787da::t_8a3146675cccfe 243-245
+  s_50c987f1d763d9::t_423a767ea3ac34 12-21,42,105-112,125-132,134-135,143-144,151,159,172-173,179-199,214-225,228-240
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_e4f33bc5f787da::t_10e06222a6a859 46
+  s_e4f33bc5f787da::t_41d08c2cd974f6 100
+  s_e4f33bc5f787da::t_ee58a60c1e883d 73
+  s_e4f33bc5f787da::t_657b0eb9a69be2 86-87
+  s_e4f33bc5f787da::t_7ffbe188b8305b 113
+  s_e4f33bc5f787da::t_79dfa249b574bc 66
+src/Api/FHIRBridge.Api/Security/ControllerAuthorizationExtensions.cs
+  s_e4f33bc5f787da::t_d52b3bd4c3870a 1,16-50,62-63,74,80-81
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_e4f33bc5f787da::t_a1b23abaf1e768 89,93-96,240,248-249,251-252,254
+  s_e4f33bc5f787da::t_ba91396a289342 21
+  s_e4f33bc5f787da::t_b540712e74ec70 99,102-107,109-111,114-117,119,127-129,165,210-211,214-217,220-221,233,241-242,247,250,253,255-256,259
+  s_e4f33bc5f787da::t_3f356c6e839612 97-98
+  s_e4f33bc5f787da::t_6734b518e4151f 100-101
+  s_e4f33bc5f787da::t_331ee35c211d4f 162-164
+  s_e4f33bc5f787da::t_3403060be03ba0 166
+  s_e4f33bc5f787da::t_cd6f2567ec325f 23-25,27-31,35-39,81-82,135-139,144-149,154,156-161
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_e4f33bc5f787da::t_3ae82fc44781be 495-498,509-516
+  s_e4f33bc5f787da::t_a60749bcd8b57b 631
+  s_e4f33bc5f787da::t_803dc3f4b0f444 3,261-262,499-500,517
+  s_e4f33bc5f787da::t_05c41b4a0865cf 201
+  s_e4f33bc5f787da::t_be0c50dd4a5f7d 47,57-69
+  s_e4f33bc5f787da::t_c0d5401a53ddd9 258-260
+  s_e4f33bc5f787da::t_363e3b6fa44127 461-467,469,476,485-490,492,505
+  s_e4f33bc5f787da::t_54bf2e773e38c1 70
+  s_e4f33bc5f787da::t_1098ae941de8fe 263
+  s_e4f33bc5f787da::t_87318c4055f063 518
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_e4f33bc5f787da::t_682e0dc11e012b 2
+  s_e4f33bc5f787da::t_0fcaad5c05c58a 44-49,52-54
+  s_e4f33bc5f787da::t_038a5acbd7c92d 50-51
+portal/src/app/models/transform.model.ts
+  s_e4f33bc5f787da::t_fb10288b1b68cd 8-15
+portal/src/app/user-management/user-management.routes.ts
+  s_e4f33bc5f787da::t_4a4c5ae1295dab 20-23,25-26
+  s_e4f33bc5f787da::t_305847cc25a513 3
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_e4f33bc5f787da::t_68c7aa264363e9 40-43,46-51,56-57
+  s_e4f33bc5f787da::t_672abb5aa7f153 27-33
+  s_e4f33bc5f787da::t_795f242c77ed86 37-38
+  s_e4f33bc5f787da::t_ffe3dc6edb637e 39
+  s_e4f33bc5f787da::t_1cdfa2d745e85c 44-45
+  s_e4f33bc5f787da::t_8db34ad3417803 52-55
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_e4f33bc5f787da::t_df96fb44ecf3ab 153
+  s_e4f33bc5f787da::t_469ee3eca4202d 100
+  s_e4f33bc5f787da::t_c6a4c1fdf4b0c2 48
+  s_e4f33bc5f787da::t_fe5f8083fdf687 33,38-39,44
+  s_e4f33bc5f787da::t_083eeaaf421bba 206
+  s_e4f33bc5f787da::t_edb5968e7c4fe3 1,20-24,26
+  s_e4f33bc5f787da::t_21aa907110eac8 66
+  s_e4f33bc5f787da::t_b7a5b1600415d7 94-98,101,108-116
+  s_e4f33bc5f787da::t_f2c8656646aa13 129
+  s_e4f33bc5f787da::t_47fb9051aaa6bf 162
+  s_e4f33bc5f787da::t_85248473df6ff3 180
+  s_e4f33bc5f787da::t_83139637587049 117
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_e4f33bc5f787da::t_a1842fe57c0712 177-180,195,210-211,258
+  s_e4f33bc5f787da::t_ea3a22bd10481a 184-185
+  s_e4f33bc5f787da::t_87e79884045369 246-254
+  s_e4f33bc5f787da::t_86d2517d3f8f3b 52,55-56,59,62
+  s_e4f33bc5f787da::t_71e530ece002a0 181-182,194
+  s_e4f33bc5f787da::t_35e583ad8d92cd 3,25,32,38,48-50,61,68
+  s_e4f33bc5f787da::t_a710c0613d7e71 51
+  s_e4f33bc5f787da::t_95f90ae7eddc18 53-54
+  s_e4f33bc5f787da::t_de3550a91db746 57-58
+  s_e4f33bc5f787da::t_df24dd7a61f2e9 183
+  s_e4f33bc5f787da::t_9543d474efc8cc 196
+  s_e4f33bc5f787da::t_670d0ec28ac4e4 212
+  s_e4f33bc5f787da::t_4d84db8c4ca3b8 255-257
+  s_e4f33bc5f787da::t_9c5ac3c8a30c2b 259
+  s_e4f33bc5f787da::t_fbf15ef4f2c942 187-188,203,222,237-238,267,279,295,310,325,352
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_e4f33bc5f787da::t_d7ca51ffd3a495 105-106,109-111,113,116,118-167,169,171-173
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  s_e4f33bc5f787da::t_cc071f92813355 5-10,12-13
+  s_e4f33bc5f787da::t_4865a62189d650 14-15
+portal/src/app/components/canvas/canvas.component.html
+  s_e4f33bc5f787da::t_62c86a3b91df3e 75-90,92,95-100,103
+  s_e4f33bc5f787da::t_233b9cc386423c 24,37,50,94
+  s_e4f33bc5f787da::t_d3f4c22eb26b13 136-138
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_e4f33bc5f787da::t_89fa1eb0601492 332-338,340,346,349-350,428,433
+  s_e4f33bc5f787da::t_636973afedf7cc 467-469,474-479
+  s_e4f33bc5f787da::t_c26d6888421446 331
+  s_e4f33bc5f787da::t_8877d90c242dc9 279-282,286,353-354,356-358,368,372,374,378,383-391,397,404-420,426
+portal/src/app/data/sources.data.ts
+  s_e4f33bc5f787da::t_f73c8092f68bcd 4-12
+src/FHIRBridge.Infrastructure/Persistence/EfUserAccessRepository.cs
+  s_e4f33bc5f787da::t_b829a0b3ca788b 209,226
+  s_e4f33bc5f787da::t_c7a221bdc31881 202-207,221-224
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_e4f33bc5f787da::t_875685976c4dfd 50,71
+portal/src/app/app.routes.ts
+  s_e4f33bc5f787da::t_6bbdd188a52aad 142-143,146-147
+  s_e4f33bc5f787da::t_eacd2ab37267fb 43-49
+  s_e4f33bc5f787da::t_31cdff18377699 74-75
+  s_e4f33bc5f787da::t_7e52ff80057e3a 56-59,62-63
+portal/src/app/models/source.model.ts
+  s_e4f33bc5f787da::t_ce7e0753c8849a 8-15
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  s_e4f33bc5f787da::t_f5bfa5432654ec 23
+portal/src/app/settings/guards/settings-landing.guard.ts
+  s_e4f33bc5f787da::t_e348239c476950 1-14,19,22-24,27-46
+  s_e4f33bc5f787da::t_0a65feb353c0e7 15-18
+  s_e4f33bc5f787da::t_000bf3b3150671 20-21
+  s_e4f33bc5f787da::t_1b5d08b356f409 25-26
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_e4f33bc5f787da::t_dc35bd4e190646 22-25,27-35,38-39
+  s_50c987f1d763d9::t_1cf5c238fa36e8 20-21,36-37
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_e4f33bc5f787da::t_cb90cb9aae56b6 4-12,14-22
+src/Api/FHIRBridge.Api/Controllers/V1/LoincConfigurationController.cs
+  s_e4f33bc5f787da::t_875685976c4dfd 27,31,35,48
+src/Api/FHIRBridge.Api/Program.cs
+  s_e4f33bc5f787da::t_97b6822a5f3445 666-669
+  s_e4f33bc5f787da::t_9e11093ceaf183 766-775,777
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_e4f33bc5f787da::t_e609baf14d6428 1,4,10-14,17-18,24-28,40,43-50
+  s_e4f33bc5f787da::t_34b40a1d7a75d3 19
+  s_e4f33bc5f787da::t_4c4baa20b736ff 21-23
+  s_e4f33bc5f787da::t_250a92de965f3e 29
+  s_e4f33bc5f787da::t_7c5e9f439af525 41-42
+  s_e4f33bc5f787da::t_aaeb4a0068643c 51
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.html
+  s_e4f33bc5f787da::t_f901ee180db62c 2
+portal/src/app/data/transforms.data.ts
+  s_e4f33bc5f787da::t_ee1fddf18766ab 32
+  s_e4f33bc5f787da::t_b8432502d5d2c4 12-16
+  s_e4f33bc5f787da::t_4a2a5a23026d53 21
+  s_e4f33bc5f787da::t_c198933ee29218 25
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_e4f33bc5f787da::t_ba739d4162dade 674
+  s_50c987f1d763d9::t_c07605a7cf52e2 675-679,687-692
+  s_e4f33bc5f787da::t_bc7a1446e1366b 10
+  s_e4f33bc5f787da::t_b6627d4d6f0637 375-383,386
+  s_e4f33bc5f787da::t_a6992b2d69cef5 9
+  s_e4f33bc5f787da::t_f958eaf578ae35 595-601,603-607
+  s_e4f33bc5f787da::t_ba7ac1fbd3ff75 153
+  s_e4f33bc5f787da::t_e6b5d2fec97a2b 408
+  s_e4f33bc5f787da::t_b78eedf02123ae 409-411
+  s_e4f33bc5f787da::t_b6d0e0dee4e04a 670-673,680-685,693-699,701
+  s_e4f33bc5f787da::t_18fc06bafa83e0 152
+  s_e4f33bc5f787da::t_1707616e613bae 374,384-385,387
+  s_e4f33bc5f787da::t_10ecd9579f8cae 412
+  s_e4f33bc5f787da::t_04ace027aa5312 608-610
+  s_50c987f1d763d9::t_d9238905e59ada 611,686,721
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_e4f33bc5f787da::t_24f97385729a96 9-13
+  s_e4f33bc5f787da::t_3ffa65d18f2e63 65-92
+  s_e4f33bc5f787da::t_46cb0a4f6954f9 114-127
+  s_e4f33bc5f787da::t_3c12bac4985e47 129-145
+  s_e4f33bc5f787da::t_74c33c92d60b8c 147-153
+  s_e4f33bc5f787da::t_38134382948f3b 64
+  s_e4f33bc5f787da::t_9ee0235c6f62ca 93-95,111-113
+  s_e4f33bc5f787da::t_8b5232453f3b16 128
+  s_e4f33bc5f787da::t_53b3d82804f84d 146
+  s_e4f33bc5f787da::t_5ab7ab512151bf 96-110
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  s_e4f33bc5f787da::t_875685976c4dfd 87
+  s_e4f33bc5f787da::t_855483305eb307 66
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_e4f33bc5f787da::t_716fb7a68a3b20 53-61
+  s_e4f33bc5f787da::t_6415a651a9e1e0 471
+  s_e4f33bc5f787da::t_d5eff8964998bc 367
+  s_e4f33bc5f787da::t_6b5e5ba00bbdfa 15
+  s_e4f33bc5f787da::t_81831046fc087e 356,559
+  s_e4f33bc5f787da::t_af0d1f6bd88fd8 523,555-557
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.html
+  s_e4f33bc5f787da::t_35ed8f815a501e 2
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.ts
+  s_e4f33bc5f787da::t_36ad3a30b91876 14-16
+  s_e4f33bc5f787da::t_492c1a97e959a3 17-18
+  s_e4f33bc5f787da::t_5a34d21e1401cf 21-23
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.ts
+  s_e4f33bc5f787da::t_64a5ae0bfc1d0b 1,4,43,47-48,50
+  s_50c987f1d763d9::t_971897b9c50d3f 13-17,21-24
+  s_50c987f1d763d9::t_f64dd9848e4786 44-46,49
+  s_e4f33bc5f787da::t_95737db4dd169c 41-42
+  s_e4f33bc5f787da::t_7cf83d0f565ff4 51
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_e4f33bc5f787da::t_b01f8b8a088143 217-218,220-228
+  s_e4f33bc5f787da::t_b0cd444eefa4db 14-19
+  s_e4f33bc5f787da::t_8bfcb6ef15da84 167-168,171-181
+  s_e4f33bc5f787da::t_11e66b42792bf6 196-205
+  s_e4f33bc5f787da::t_2a87f1c1b0d753 162-165,276,308
+src/Api/FHIRBridge.Api/Controllers/V1/SourceConnectionsController.cs
+  s_e4f33bc5f787da::t_f6a2f9051c2da6 77,83-93,98,103-110
+  s_e4f33bc5f787da::t_dff2ee5e1e06b5 6,20,29,33-34,38
+  s_e4f33bc5f787da::t_8826cdaa8360f4 18-19
+  s_e4f33bc5f787da::t_5675566cb77f69 111
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  s_e4f33bc5f787da::t_875685976c4dfd 50,71
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_e4f33bc5f787da::t_e9da8a47a6142e 89
+  s_e4f33bc5f787da::t_4d83b0f42ef9f2 73-80
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_e4f33bc5f787da::t_9d3a6e533fc613 4,15
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEndpointsController.cs
+  s_e4f33bc5f787da::t_389a3f84b8443c 1,17,29,38,48,57,67
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  s_e4f33bc5f787da::t_64da5f1760668d 19-20
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_e4f33bc5f787da::t_d2f60cfc0b6531 17-18
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_e4f33bc5f787da::t_c5111d29710905 53-54
+src/Api/FHIRBridge.Api/Rbac/DynamicSourceSystemPermissionAttribute.cs
+  s_e4f33bc5f787da::t_dcd1236c0e9cba 18-22
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_e4f33bc5f787da::t_0af7f8fc0902b4 3,23,56-58,67-68,81-82,85-96,137-149,174-183,406-416,424-425,427-428,432-434,579-582,737-738,746-747,749-751,762-763,781-782,815-827,839-848,958-962,978-979,990-992,1001-1037,1092-1096,1124-1125,1322-1324,1333-1334,1421-1424,1447-1449,1608-1611,1627-1628,1681-1683
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "edbdb8e95c969968cf181334a8a7947df85e13a0",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
