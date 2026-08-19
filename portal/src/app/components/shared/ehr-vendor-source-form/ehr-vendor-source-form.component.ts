@@ -24,6 +24,21 @@ import { SourceConfigFormComponent } from '../config-form/config-form.contract';
 
 export type { EpicAudience };
 
+/** EHR/vendor selector options — values must be exact SourceSystemType enum member names (see
+ *  src/FHIRBridge.Domain/Enums/SourceSystemType.cs), since the backend deserializes this field as a string enum.
+ *  NewEHR / NewEHRTwo are internal placeholder enum members with no real vendor identity and are omitted. */
+export const EHR_OPTIONS: { value: EhrVendor; label: string }[] = [
+  { value: 'Epic',               label: 'Epic' },
+  { value: 'Cerner',             label: 'Oracle Health (Cerner)' },
+  { value: 'Athenahealth',       label: 'Athenahealth' },
+  { value: 'MeditechGreenfield', label: 'Meditech' },
+  { value: 'Healow',             label: 'eClinicalWorks (Healow)' },
+  { value: 'Allscripts',         label: 'Allscripts' },
+  { value: 'GenericFhir',        label: 'Generic FHIR' },
+  { value: 'Hl7v2',              label: 'HL7 v2' },
+  { value: 'Sample',             label: 'Sample' },
+];
+
 // MVP1 resource set — keep in sync with portal/src/app/data/scope-constants.data.ts's FHIR_RESOURCES.
 const FHIR_RESOURCES = [
   'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
@@ -464,19 +479,36 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
   // snapshotting immediately would make those auto-detected values look like user edits on every single clone.
   private _awaitingBaselineSnapshot = false;
 
-  // Resource Type list: always the platform's curated MVP1 set (FHIR_RESOURCES), regardless of what Discover
-  // returns — the backend's /metadata probe reflects everything the endpoint's CapabilityStatement supports
-  // (often 50+ types, filtered only by read-interaction support), not what this pipeline can actually process.
+  // Resource Type list: the platform's full canonical set (SUPPORTED_RESOURCE_TYPES — kept in sync with the
+  // backend's SupportedFhirResourceTypes.All), regardless of what Discover returns — the backend's /metadata
+  // probe reflects everything the endpoint's CapabilityStatement supports (often 50+ types, filtered only by
+  // read-interaction support), not what this platform can actually process. Previously capped at an 11-type
+  // MVP1 subset because non-MVP1 types lacked mapping templates for the SQL/relational destination path — that
+  // rationale doesn't apply to a FHIR-repository "passthrough" destination (e.g. Aidbox), which sends raw FHIR
+  // JSON as-is with no mapping-template dependency at all, so the cap was blocking resource types (Organization,
+  // Location, ...) that already work fine end-to-end.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
   protected get resources(): string[] {
-    return FHIR_RESOURCES;
+    return SUPPORTED_RESOURCE_TYPES;
   }
   protected isResourceSupported(r: string): boolean { return SUPPORTED_RESOURCE_TYPES.includes(r); }
 
   /** Of `resources`, only the subset this pipeline actually supports today — drives "Select all" and the
-   *  selected-count display in the retrieval-method resource grids so both are scoped to what's selectable
-   *  rather than the full (curated, but not necessarily all pipeline-supported) FHIR_RESOURCES list. */
+   *  selected-count display in the retrieval-method resource grids. Trivially equal to `resources` now that
+   *  both are SUPPORTED_RESOURCE_TYPES; kept as a defensive filter in case the two ever diverge again. */
   protected readonly selectableResources = computed(() => this.resources.filter(r => this.isResourceSupported(r)));
+
+  // Backend System only: Epic's real granted-scope check (see grantedScopes below) is the authoritative signal
+  // for "can this app actually use this resource type" — /metadata discovery only tells you what the SERVER
+  // generally supports, not what THIS client is authorized for. Informational only: never disables a checkbox
+  // (a scope can be widened later in Epic's app registration without anything changing on this end), just
+  // annotates each row so a resource that will 401/403 at runtime doesn't look identical to one that won't.
+  protected isResourceGranted(r: string): boolean {
+    return this.grantedScopes().some(scope => scope.toLowerCase().includes(`/${r.toLowerCase()}.`));
+  }
+  protected get grantedScopesChecked(): boolean {
+    return this.grantedScopesStatus() === 'done';
+  }
 
   /** Editing an existing source: resource types are locked (identity-defining) — shown prepopulated but disabled. */
   protected get isEditing(): boolean { return this.wiz.isEditing(); }
@@ -1399,10 +1431,10 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     if (prevShowsResources && !nextShowsResources) {
       this.form.patchValue({ resources: [] });
     }
-    // Switching the other way: default to every MVP1-supported resource type's scope, same as the initial
+    // Switching the other way: default to every supported resource type's scope, same as the initial
     // load — there's no visible picker for the user to fill this in themselves anymore.
     if (!prevShowsResources && nextShowsResources) {
-      this.form.patchValue({ resources: [...FHIR_RESOURCES] });
+      this.form.patchValue({ resources: [...SUPPORTED_RESOURCE_TYPES] });
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
@@ -1508,7 +1540,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     if (!key) return;
     const control = this.form.controls[key];
     if (control.value.length > 0) return;
-    control.setValue([...FHIR_RESOURCES]);
+    control.setValue([...SUPPORTED_RESOURCE_TYPES]);
   }
 
   /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
@@ -1878,14 +1910,15 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
       launchUrl: dto.interactive?.launchUrl || this.form.controls.launchUrl.value,
       callbackUrl: dto.interactive?.redirectUris?.[0] ?? this.form.controls.callbackUrl.value,
       // Unlike launchUrl/callbackUrl above (whose FormBuilder-literal initial value is already a real, usable
-      // default), `resources`' own literal initial is `[]` — it only becomes FHIR_RESOURCES via an explicit
-      // ngOnInit-time setValue for new/non-editing sources. Since form.reset() (just above, at the top of this
-      // method) wipes that back to `[]`, falling back to `this.form.controls.resources.value` here would silently
-      // leave a required field required-and-empty on every clone whose DTO has no persisted resourceTypes (e.g.
-      // Provider Standalone connections, which never persist a resource-type selection server-side) — exactly the
-      // "Add to Pipeline stays disabled" bug this fallback exists to prevent. FHIR_RESOURCES directly is the same
-      // fallback already used a few lines below for the per-method retrieval resource-type control.
-      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES],
+      // default), `resources`' own literal initial is `[]` — it only becomes SUPPORTED_RESOURCE_TYPES via an
+      // explicit ngOnInit-time setValue for new/non-editing sources. Since form.reset() (just above, at the top
+      // of this method) wipes that back to `[]`, falling back to `this.form.controls.resources.value` here would
+      // silently leave a required field required-and-empty on every clone whose DTO has no persisted
+      // resourceTypes (e.g. Provider Standalone connections, which never persist a resource-type selection
+      // server-side) — exactly the "Add to Pipeline stays disabled" bug this fallback exists to prevent.
+      // SUPPORTED_RESOURCE_TYPES directly is the same fallback already used a few lines below for the
+      // per-method retrieval resource-type control.
+      resources: retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...SUPPORTED_RESOURCE_TYPES],
       retrievalMethod: resolvedRetrievalMethod,
       searchCriteria: retrieval?.searchCriteria ?? '',
       incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
@@ -1921,7 +1954,7 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     // for the case where the field is one of the retrieval methods' own hidden controls and this clone had no
     // retrieval data at all).
     this.form.get(retrievalResourceKey)?.setValue(
-      retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...FHIR_RESOURCES]
+      retrieval?.resourceTypes?.length ? [...retrieval.resourceTypes] : [...SUPPORTED_RESOURCE_TYPES]
     );
 
     // Cloned key material still deserves the "already configured, confirm before replacing" guard — clicking

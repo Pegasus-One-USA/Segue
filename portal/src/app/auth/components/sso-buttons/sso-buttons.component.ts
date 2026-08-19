@@ -13,6 +13,7 @@ import { Component, inject, input, output, signal } from '@angular/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SsoConfigService } from '../../services/sso-config.service';
 import { SsoService, SsoResult, SsoProvider } from '../../services/sso.service';
+import { AUTH_ENDPOINTS } from '../../../core/api-endpoints';
 
 @Component({
   selector: 'app-sso-buttons',
@@ -37,6 +38,7 @@ export class SsoButtonsComponent {
 
   protected readonly entraEnabled  = this.ssoConfig.entraEnabled;
   protected readonly googleEnabled = this.ssoConfig.googleEnabled;
+  protected readonly samlEnabled   = this.ssoConfig.samlEnabled;
   protected readonly anyEnabled    = () => this.ssoConfig.anyEnabled();
 
   protected readonly busy       = signal<SsoProvider | null>(null);
@@ -52,10 +54,15 @@ export class SsoButtonsComponent {
     this.localError.set('');
     this.busy.set(provider);
     try {
-      const result: SsoResult =
-        provider === 'Entra'
-          ? await this.sso.signInWithEntra()
-          : await this.sso.signInWithGoogle();
+      if (provider === 'Entra') {
+        // loginRedirect navigates the whole tab away — there's no token to emit here. The
+        // response is picked up by SsoService.handleRedirectResponse() on the next app boot,
+        // after the browser returns from Microsoft (see app.config.ts).
+        await this.sso.signInWithEntra();
+        return;
+      }
+
+      const result: SsoResult = await this.sso.signInWithGoogle();
       this.authenticated.emit(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Single sign-on failed. Please try again.';
@@ -64,5 +71,15 @@ export class SsoButtonsComponent {
     } finally {
       this.busy.set(null);
     }
+  }
+
+  /**
+   * SAML has no client-side token to obtain — it's a plain full-page redirect to the IdP, which
+   * eventually POSTs an assertion back to the API's ACS endpoint and redirects into the portal.
+   * Unlike Entra/Google there's no `authenticated`/`failed` round-trip through this component.
+   */
+  protected continueWithSaml(): void {
+    if (this.busy() || this.disabled()) return;
+    window.location.href = AUTH_ENDPOINTS.samlLogin;
   }
 }

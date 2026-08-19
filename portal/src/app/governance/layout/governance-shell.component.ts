@@ -5,17 +5,18 @@ import { AuthStore } from '../../auth/store/auth.store';
 import { LOGS_COMPLIANCE_TABS } from '../../core/logs-compliance-nav';
 
 // This shell also hosts routes beyond the ones surfaced in the shared "Logs & Compliance" tab strip
-// (LOGS_COMPLIANCE_TABS, imported below) — audit-logs and correlation-search etc. resolve as this
-// shell's own children per app.routes.ts, while authentication-logs, smart-launch-logs, oauth-logs,
+// (LOGS_COMPLIANCE_TABS, imported below) — audit-logs, authentication-logs, and correlation-search etc.
+// resolve as this shell's own children per app.routes.ts, while smart-launch-logs, oauth-logs,
 // authorization-logs, data-access-logs, security-events, retention-policies, archive, log-settings,
 // alerts, and alert-rules stay reachable by URL with no menu entry. OAuth is a pure filtered subset of
 // Authentication Logs (same table, AuthenticationType starting with "OAuth"), carrying no data the
 // Authentication Logs page doesn't already have. Archive is hidden per user direction — its restore
 // action is a 501 stub, so surfacing it invites a "why doesn't restore work" support ticket before
 // that's implemented. Retention Policies and Log Settings are hidden per user direction too, as are
-// Alerts, Alert Rules, and Data Access Logs. Authentication Logs, SMART Launch Logs, Authorization
-// Logs, and Security Events are hidden per user direction as well, since every one of them is fully
-// searchable by Correlation ID via the Correlation Search tab.
+// Alerts, Alert Rules, and Data Access Logs. SMART Launch Logs, Authorization Logs, and Security Events
+// stay hidden as well, since every one of them is fully searchable by Correlation ID via the Correlation
+// Search tab — Authentication Logs was re-added to the visible tabs since SSO troubleshooting needs to
+// browse recent attempts chronologically, without already knowing a correlation ID.
 
 @Component({
   selector: 'app-governance-shell',

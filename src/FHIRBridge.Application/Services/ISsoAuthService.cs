@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 
 namespace FHIRBridge.Application.Services;
@@ -14,4 +15,12 @@ public interface ISsoAuthService
     /// <see cref="UnauthorizedAccessException"/> when no enabled matching user exists.
     /// </summary>
     Task<LocalLoginResponse> LoginAsync(SsoLoginRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Same user-resolution/link/session-issue/audit-log tail as <see cref="LoginAsync"/>, for callers that
+    /// already validated the external identity themselves outside the <c>token → IExternalTokenValidator</c>
+    /// shape — currently the SAML ACS endpoint, which validates the assertion signature via the SAML binding
+    /// against an HTTP request rather than a standalone bearer token.
+    /// </summary>
+    Task<LocalLoginResponse> LoginWithIdentityAsync(ExternalIdentity identity, CancellationToken cancellationToken);
 }

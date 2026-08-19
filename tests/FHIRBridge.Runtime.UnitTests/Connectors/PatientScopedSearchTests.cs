@@ -134,18 +134,20 @@ public sealed class PatientScopedSearchTests
     }
 
     [Fact]
-    public async Task Practitioner_search_honors_request_time_criteria()
+    public async Task Practitioner_search_ignores_request_time_criteria_like_every_other_non_compartment_type()
     {
-        // Practitioner is outside the patient compartment (never patient-scoped), but a caller can still scope the
-        // fetch by id/name via request-time PatientSearchCriteria — the BackendSystem "Import Practitioner" flow.
+        // Practitioner is outside the patient compartment (never patient-scoped) — it used to be a narrow, one-off
+        // exception honoring request-time PatientSearchCriteria, but nothing in the codebase actually relied on
+        // that (no caller ever sets PatientSearchCriteria specifically to search Practitioner). SourceNodeExecutors
+        // clears PatientSearchCriteria before fetching a non-compartment type directly anyway, so this connector-
+        // level test still applies: Practitioner behaves like every other non-compartment type at this layer.
         var source = Source with { PatientSearchCriteria = "_id=ePractA,ePractB" };
         var handler = new CapturingHandler();
         var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
 
         await client.SearchAsync("Practitioner", source, CancellationToken.None);
 
-        handler.RequestUri.Should().Contain("/Practitioner?").And.Contain("_id=ePractA,ePractB");
-        handler.RequestUri.Should().NotContain("patient=");
+        handler.RequestUri.Should().Contain("/Practitioner?").And.NotContain("_id=ePractA,ePractB");
     }
 
     [Fact]

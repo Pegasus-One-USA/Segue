@@ -17,29 +17,36 @@ import { environment } from '../../../environments/environment';
 interface SsoConfigResponse {
   entra?: { enabled?: boolean; authority?: string | null; clientId?: string | null };
   google?: { enabled?: boolean; clientId?: string | null };
+  saml?: { enabled?: boolean };
+  magicLink?: { enabled?: boolean };
 }
 
 @Injectable({ providedIn: 'root' })
 export class SsoConfigService {
   private readonly http = inject(HttpClient);
 
-  private readonly _entraEnabled    = signal(false);
-  private readonly _entraAuthority  = signal<string | null>(null);
-  private readonly _entraClientId   = signal<string | null>(null);
-  private readonly _googleEnabled   = signal(false);
-  private readonly _googleClientId  = signal<string | null>(null);
-  private readonly _loaded          = signal(false);
+  private readonly _entraEnabled     = signal(false);
+  private readonly _entraAuthority   = signal<string | null>(null);
+  private readonly _entraClientId    = signal<string | null>(null);
+  private readonly _googleEnabled    = signal(false);
+  private readonly _googleClientId   = signal<string | null>(null);
+  private readonly _samlEnabled      = signal(false);
+  private readonly _magicLinkEnabled = signal(false);
+  private readonly _loaded           = signal(false);
 
-  readonly entraEnabled   = this._entraEnabled.asReadonly();
-  readonly entraAuthority = this._entraAuthority.asReadonly();
-  readonly entraClientId  = this._entraClientId.asReadonly();
-  readonly googleEnabled  = this._googleEnabled.asReadonly();
-  readonly googleClientId = this._googleClientId.asReadonly();
-  readonly loaded         = this._loaded.asReadonly();
+  readonly entraEnabled     = this._entraEnabled.asReadonly();
+  readonly entraAuthority   = this._entraAuthority.asReadonly();
+  readonly entraClientId    = this._entraClientId.asReadonly();
+  readonly googleEnabled    = this._googleEnabled.asReadonly();
+  readonly googleClientId   = this._googleClientId.asReadonly();
+  /** SAML is a plain full-page redirect (no client-side SDK/token) — only whether to show the button matters. */
+  readonly samlEnabled      = this._samlEnabled.asReadonly();
+  readonly magicLinkEnabled = this._magicLinkEnabled.asReadonly();
+  readonly loaded           = this._loaded.asReadonly();
 
-  /** True when at least one provider is enabled — components use this to decide whether to show SSO UI. */
+  /** True when at least one SSO provider is enabled — components use this to decide whether to show SSO UI. */
   anyEnabled(): boolean {
-    return this._entraEnabled() || this._googleEnabled();
+    return this._entraEnabled() || this._googleEnabled() || this._samlEnabled();
   }
 
   private inflight?: Promise<void>;
@@ -68,11 +75,16 @@ export class SsoConfigService {
         const googleUsable = !!google.enabled && !!google.clientId;
         this._googleEnabled.set(googleUsable);
         this._googleClientId.set(google.clientId ?? null);
+
+        this._samlEnabled.set(!!cfg?.saml?.enabled);
+        this._magicLinkEnabled.set(!!cfg?.magicLink?.enabled);
       })
       .catch(() => {
         // Resilient default: unreachable / not configured → no SSO.
         this._entraEnabled.set(false);
         this._googleEnabled.set(false);
+        this._samlEnabled.set(false);
+        this._magicLinkEnabled.set(false);
       })
       .finally(() => {
         this._loaded.set(true);

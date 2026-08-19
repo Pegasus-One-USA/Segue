@@ -4054,6 +4054,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("MagicLinkTokenExpiresOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MagicLinkTokenHash")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("MfaBackupCodeHashes")
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");

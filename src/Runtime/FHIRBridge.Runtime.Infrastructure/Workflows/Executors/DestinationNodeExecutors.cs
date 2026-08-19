@@ -157,8 +157,10 @@ public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecu
     public FhirRepositoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, sourceClientFactory, sourceConnectionResolver)
     {
     }
 }
@@ -569,11 +571,29 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.BlobStorage,
     ];
 
+    // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs
+    // constructors) — duplicated here rather than shared, since this is the one place outside those constructors
+    // that needs to go the other direction (given a source NODE found by graph walk, which client type to build).
+    private static readonly Dictionary<string, FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType> SourceNodeTypeByNodeType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [WorkflowNodeTypes.EpicSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic,
+            [WorkflowNodeTypes.CernerSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Cerner,
+            [WorkflowNodeTypes.EClinicalWorksSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Healow,
+            [WorkflowNodeTypes.AthenahealthSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,
+            [WorkflowNodeTypes.AllscriptsSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Allscripts,
+            [WorkflowNodeTypes.MeditechSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.MeditechGreenfield,
+            [WorkflowNodeTypes.GenericFhirSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,
+            [WorkflowNodeTypes.SampleSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Sample,
+        };
+
     private readonly DestinationType _destinationType;
     private readonly IConfiguredDestinationWriterFactory? _writerFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IGovernanceLogger? _governanceLogger;
     private readonly IConfigurationRepository? _configurationRepository;
+    private readonly FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? _sourceClientFactory;
+    private readonly FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? _sourceConnectionResolver;
 
     protected DestinationNodeExecutor(
         string nodeType,
@@ -581,7 +601,9 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         IConfiguredDestinationWriterFactory? writerFactory,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
+        IConfigurationRepository? configurationRepository = null,
+        FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
     {
         _destinationType = destinationType;
@@ -589,6 +611,80 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         _workflowDefinitionStore = workflowDefinitionStore;
         _governanceLogger = governanceLogger;
         _configurationRepository = configurationRepository;
+        _sourceClientFactory = sourceClientFactory;
+        _sourceConnectionResolver = sourceConnectionResolver;
+    }
+
+    /// <summary>
+    /// Builds <see cref="PipelineWriteContext.FetchMissingReferenceAsync"/> for <c>MappedFhirRepositoryDestinationWriter</c>'s
+    /// opt-in <c>dest_autoFetchMissingReferences</c> — closes over the exact one source node feeding this destination
+    /// in the workflow graph. Deliberately returns null (the writer falls back to today's blocking behavior,
+    /// unchanged) when: no source-side dependencies were injected for this destination type (every destination type
+    /// other than FhirRepository never passes them — see the constructor); the graph has zero or more than one
+    /// upstream source node (never guess which one to use); that source node's own type isn't one this executor
+    /// knows how to build a client for; or its <c>sourceConnectionId</c> doesn't parse. Ambiguity anywhere in this
+    /// resolution intentionally falls back to null rather than picking arbitrarily.
+    /// </summary>
+    private async Task<Func<string, string, CancellationToken, Task<string?>>?> ResolveFetchMissingReferenceDelegateAsync(
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (_sourceClientFactory is null || _sourceConnectionResolver is null || _workflowDefinitionStore is null)
+        {
+            return null;
+        }
+
+        var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
+        if (definition is null)
+        {
+            return null;
+        }
+
+        // Walk edges backward from this destination node to find every upstream node reachable from it.
+        var upstream = new HashSet<Guid>();
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(node.Id);
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in definition.Edges.Where(e => e.ToNodeId == current))
+            {
+                if (upstream.Add(edge.FromNodeId))
+                {
+                    frontier.Enqueue(edge.FromNodeId);
+                }
+            }
+        }
+
+        var sourceNodes = definition.Nodes
+            .Where(candidate => upstream.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Source)
+            .ToList();
+
+        if (sourceNodes.Count != 1 || !SourceNodeTypeByNodeType.TryGetValue(sourceNodes[0].NodeType, out var sourceType))
+        {
+            return null;
+        }
+
+        var sourceConnectionIdRaw = ReadStringConfiguration(sourceNodes[0], "sourceConnectionId");
+        if (!Guid.TryParse(sourceConnectionIdRaw, out var sourceConnectionId))
+        {
+            return null;
+        }
+
+        var client = _sourceClientFactory.Create(sourceType);
+        var resolver = _sourceConnectionResolver;
+
+        return async (resourceType, id, ct) =>
+        {
+            var source = await resolver.ResolveAsync(sourceConnectionId, null, null, ct);
+            if (source is null)
+            {
+                return null;
+            }
+
+            var envelope = await client.ReadByIdAsync(resourceType, id, source, ct);
+            return envelope?.RawJson;
+        };
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -598,6 +694,25 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
+        if (records.Length == 0 && _destinationType == DestinationType.FhirRepository)
+        {
+            // FhirRepositoryDestination is exempt from the graph's upstream-Mapping-node requirement (see
+            // WorkflowGraphValidator.DestinationRequiresMappedRecords), so when it's wired directly to a
+            // source/transform node instead of a Mapping node, its input arrives as a raw ResourceBatch
+            // rather than a MappedRecordBatch. Convert each resource envelope straight into a passthrough
+            // record — the same shape the Part-1 MappingNodeExecutor passthrough branch already produces
+            // for the (now superseded) synthetic-node case.
+            records = PassThroughNodeExecutor.ReadResourceEnvelopes(inputs)
+                .Select(resource => new MappedDestinationRecord(
+                    context.WorkflowRunId,
+                    resource.ResourceType,
+                    resource.ResourceType,
+                    resource.ResourceId,
+                    new Dictionary<string, object?>(),
+                    Convert.ToString(resource.Payload) ?? "{}"))
+                .ToArray();
+        }
+
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
 
@@ -612,11 +727,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // RouteName drives both the email {{RouteName}} template placeholder and (for CSV) the multi-resource ZIP
         // filename — the workflow's own name is far more useful here than the generic node type string.
         var workflowName = await ResolveWorkflowNameAsync(node, cancellationToken) ?? node.NodeType;
+        var fetchMissingReferenceAsync = await ResolveFetchMissingReferenceDelegateAsync(node, cancellationToken);
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
             workflowName,
             DateTimeOffset.UtcNow,
-            CorrelationId: context.CorrelationId);
+            CorrelationId: context.CorrelationId,
+            FetchMissingReferenceAsync: fetchMissingReferenceAsync);
 
         int written;
         string? downloadUrl;
@@ -775,6 +892,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)
     {
         var target = ReadStringConfiguration(node, "target");
+        if (string.IsNullOrWhiteSpace(target) && node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination)
+        {
+            // The destination wizard only stamps a top-level "target" field onto the node when reusing an
+            // EXISTING destination connection (destination-wizard.component.ts, selectExisting() branch) — a
+            // freshly-created FHIR destination never gets one, even though its persisted DestinationConfigurations
+            // row does (via WorkflowBuildAssemblerService.buildDestination()). Fall back to dest_baseUrl, the same
+            // raw field BuildConnectionMetadataJson below already reads, so a graph-driven run of a freshly-created
+            // FHIR destination doesn't throw "Target must be set" from MappedFhirRepositoryDestinationWriter.
+            target = ReadStringConfiguration(node, "dest_baseUrl");
+        }
+
         // Rebuild the secret reference the projection embedded (vault + name only). The writer resolves the actual
         // connection secret via ISecretProvider, so a graph-driven run can write to a secret-backed destination.
         var keyVaultName = ReadStringConfiguration(node, "secretKeyVaultName") ?? string.Empty;
@@ -812,6 +940,22 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             {
                 metadata[property.Name] = property.Value.Clone();
             }
+        }
+
+        // The canvas node's own field is dest_authType, in the wizard's internal vocabulary ('oauth2'/'basic'/
+        // 'bearer') — it's never renamed to the backend's dest_fhirAuthType/'clientCredentials' vocabulary at this
+        // layer; that bridge only happens in WorkflowBuildAssemblerService.buildConnectionMetadata(), which builds
+        // the SEPARATE, persisted DestinationConfiguration row. A graph-driven run reconstructs its own
+        // DestinationConfiguration straight from these raw node fields (see CreateDestinationConfiguration above)
+        // and never reads that persisted row, so FhirRepositoryAuthResolver would never see dest_fhirAuthType at
+        // all — silently resolving to "none" and sending an unauthenticated request that Aidbox rejects with 401.
+        // Mirror the same key+value bridge here, scoped to this node type only.
+        if (node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination
+            && metadata.TryGetValue("dest_authType", out var fhirAuthType)
+            && fhirAuthType.ValueKind == JsonValueKind.String)
+        {
+            var bridgedValue = fhirAuthType.GetString() == "oauth2" ? "clientCredentials" : fhirAuthType.GetString();
+            metadata["dest_fhirAuthType"] = JsonSerializer.SerializeToElement(bridgedValue);
         }
 
         return metadata.Count == 0 ? null : JsonSerializer.Serialize(metadata, JsonOptions);

@@ -54,6 +54,21 @@
           <span>{{ verb() }} with Google</span>
         </button>
       }
+
+      @if (samlEnabled()) {
+        <button
+          type="button"
+          class="sso-btn"
+          (click)="continueWithSaml()"
+          [disabled]="disabled() || busy() !== null"
+          aria-label="Continue with your organization's single sign-on"
+        >
+          <svg class="sso-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4Zm0 2.2 7 3.1v4.7c0 4.4-3 8.6-7 9.8-4-1.2-7-5.4-7-9.8V6.3l7-3.1Z"/>
+          </svg>
+          <span>{{ verb() }} with organization SSO</span>
+        </button>
+      }
     </div>
   </div>
 }

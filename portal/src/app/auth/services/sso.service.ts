@@ -3,11 +3,21 @@
  *
  * The returned `{ provider, token }` is handed to the backend SSO endpoints (see SsoAuthApiService),
  * where `token` is the raw IdP ID token:
- *   - Entra:  the `idToken` from an MSAL loginPopup result.
+ *   - Entra:  the `idToken` from MSAL's redirect response.
  *   - Google: the `credential` (JWT) from a GIS credential response.
  *
  * Each provider is initialised lazily and only when SsoConfigService reports it enabled. MSAL is
  * built from the config authority + clientId; GIS is loaded dynamically from Google's CDN.
+ *
+ * Entra uses `loginRedirect`, not `loginPopup`: a popup relies on the *opener* window detecting
+ * when the popup navigates back to the redirect URI, via a direct `window.opener`/window-handle
+ * reference. Real-world testing found `window.opener` comes back `null` once the popup leaves for
+ * Microsoft's cross-origin login page — the browser severs that reference (a widely-reported MSAL
+ * popup limitation, not something this app's own headers cause) — leaving the popup stuck on the
+ * redirect page forever with no error surfaced anywhere. `loginRedirect` sidesteps the whole
+ * problem: the single tab navigates to Microsoft and back, no cross-window reference needed at
+ * all. `handleRedirectResponse()` is called once on every app boot (via APP_INITIALIZER, see
+ * app.config.ts) to pick up the response after that return trip.
  */
 import { Injectable, inject } from '@angular/core';
 import {
@@ -51,6 +61,10 @@ export class SsoService {
       auth: {
         clientId,
         authority,
+        // The app's own root — for redirect flow (unlike the popup flow this replaced) the browser
+        // tab itself lands here after Microsoft authenticates, and handleRedirectResponse() (called
+        // from app.config.ts's APP_INITIALIZER, before the router's own initial navigation runs)
+        // picks up the response.
         redirectUri: window.location.origin,
       },
       cache: {
@@ -62,16 +76,31 @@ export class SsoService {
     return instance;
   }
 
-  async signInWithEntra(): Promise<SsoResult> {
+  /** Navigates the browser to Microsoft's sign-in page. Does not return a result directly — the
+   *  page navigates away, and the response is picked up by handleRedirectResponse() on the next
+   *  app boot, after the browser returns to redirectUri. */
+  async signInWithEntra(): Promise<void> {
     const instance = await this.getMsal();
-    const result: AuthenticationResult = await instance.loginPopup({
+    await instance.loginRedirect({
       scopes: ['openid', 'email', 'profile'],
       prompt: 'select_account',
     });
-    if (!result?.idToken) {
-      throw new Error('Microsoft sign-in did not return an identity token.');
+  }
+
+  /**
+   * Call once on every app boot (see app.config.ts). Resolves to a result only when this boot is
+   * the browser returning from an Entra loginRedirect; resolves to `null` on a normal boot, or if
+   * Entra isn't enabled/configured — never throws, so it's safe to call unconditionally at startup.
+   */
+  async handleRedirectResponse(): Promise<SsoResult | null> {
+    try {
+      const instance = await this.getMsal();
+      const result: AuthenticationResult | null = await instance.handleRedirectPromise();
+      if (!result?.idToken) return null;
+      return { provider: 'Entra', token: result.idToken };
+    } catch {
+      return null;
     }
-    return { provider: 'Entra', token: result.idToken };
   }
 
   // ─── Google Identity Services (GIS) ───────────────────────────────────────
