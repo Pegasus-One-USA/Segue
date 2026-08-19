@@ -33,6 +33,39 @@ public sealed class HealowAuthorizationCodeTokenProvider : SmartAuthorizationCod
     // for why the token exchange itself needs no corresponding change.
     protected override bool IncludePkce => false;
 
+    /// <summary>
+    /// eCW's authorize endpoint rejects a SMART v2 granular scope suffix (<c>patient/Patient.rs</c>) with
+    /// <c>invalid_scope</c> — confirmed against a live authorize attempt. Rewrites every resource scope's suffix
+    /// to v1's coarse <c>.read</c> regardless of the SourceConnection's own configured/detected scope version, so
+    /// an existing eCW connection saved with v2 scopes doesn't need to be re-saved by an admin to work. Non-resource
+    /// scopes (<c>openid</c>, <c>fhirUser</c>, <c>offline_access</c>, <c>launch/patient</c>, ...) have no dot suffix
+    /// and pass through unchanged.
+    /// </summary>
+    protected override string NormalizeScope(string resolvedScope)
+    {
+        var scopes = resolvedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < scopes.Length; i++)
+        {
+            var scope = scopes[i];
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.LastIndexOf('.');
+            if (dotIndex < 0)
+            {
+                continue;
+            }
+
+            scopes[i] = $"{scope[..(slashIndex + 1 + dotIndex)]}.read";
+        }
+
+        return string.Join(' ', scopes);
+    }
+
     protected override IReadOnlyDictionary<string, string> AdditionalAuthorizationParameters(FhirSourceConfiguration source)
     {
         var practiceCode = ExtractPracticeCode(source.BaseUrl);

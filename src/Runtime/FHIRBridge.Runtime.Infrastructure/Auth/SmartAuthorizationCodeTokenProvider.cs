@@ -71,6 +71,15 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// </summary>
     protected virtual bool IncludePkce => true;
 
+    /// <summary>
+    /// Post-processes the fully-resolved scope string right before it's sent on the authorize request — the base
+    /// returns it unchanged. eClinicalWorks' authorize endpoint rejects SMART v2 granular scope suffixes
+    /// (<c>.rs</c>) with <c>invalid_scope</c> regardless of what scope version the SourceConnection itself was
+    /// configured/detected with (see <see cref="HealowAuthorizationCodeTokenProvider"/>'s override, which rewrites
+    /// every resource scope's suffix to v1's coarse <c>.read</c>) — every other vendor is unaffected.
+    /// </summary>
+    protected virtual string NormalizeScope(string resolvedScope) => resolvedScope;
+
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(source.ClientId))
@@ -222,7 +231,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
         var codeVerifier = Pkce.CreateCodeVerifier();
         var isEhrLaunch = launch is not null;
-        var resolvedScope = ResolveScopes(source, isEhrLaunch);
+        var resolvedScope = NormalizeScope(ResolveScopes(source, isEhrLaunch));
         _logger.LogInformation(
             "[Step 4/6] {Provider} BuildAuthorizationRequest: sourceConnectionId={SourceConnectionId} " +
             "applicationType={ApplicationType} hasCallerId={HasCallerId} inputScopes=[{InputScopes}] " +

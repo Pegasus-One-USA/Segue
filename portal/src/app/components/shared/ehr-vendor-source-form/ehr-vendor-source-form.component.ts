@@ -1053,10 +1053,12 @@ export class EhrVendorSourceFormComponent implements OnInit, HasUnsavedChanges, 
     // system/{Type}.rs), which is correct for Epic. athenahealth's Backend System app registrations verified
     // against the live preview sandbox are provisioned with v1 coarse scopes only (system/{Type}.read) — sending
     // v2 scopes gets rejected by the token endpoint with "Invalid Scope: One or more scopes are not configured
-    // for the authorization server resource." detectScopeVersion (real evidence from a successful Discover call)
-    // still wins if it ever fires — this is only a default for when it hasn't.
+    // for the authorization server resource." eClinicalWorks (Healow) has the same v1-only requirement — confirmed
+    // against a live authorize attempt, which eCW rejected with invalid_scope for a v2 (.rs) resource scope.
+    // detectScopeVersion (real evidence from a successful Discover call) still wins if it ever fires for either
+    // vendor — this is only a default for when it hasn't.
     effect(() => {
-      if (this.vendor() === 'Athenahealth' && !this.scopeVersionAuto()) {
+      if ((this.vendor() === 'Athenahealth' || this.vendor() === 'Healow') && !this.scopeVersionAuto()) {
         this.form.controls.scopeVersion.setValue('v1');
       }
     });
