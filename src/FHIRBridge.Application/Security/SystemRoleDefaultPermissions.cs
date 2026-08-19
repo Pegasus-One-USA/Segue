@@ -37,8 +37,10 @@ public static class SystemRoleDefaultPermissions
             [SeededSecurityIds.OperationsRoleId] =
             [
                 Id(PermissionGroupCode.Configuration, PermissionActionCode.Write),
+                Id(PermissionGroupCode.Configuration, PermissionActionCode.View),
                 Id(PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
                 Id(PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
+                Id(PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.Create),
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.Edit),
                 Id(PermissionGroupCode.Workflow, PermissionActionCode.Delete),

@@ -396,6 +396,7 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public async Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) =>
         await _db.ResourcePipelineRoutes
             .Include(x => x.ResourceMappings)
+            .AsSplitQuery()
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.Id)
             .ToListAsync(ct);
@@ -403,6 +404,7 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public async Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) =>
         await _db.ResourcePipelineRoutes
             .Include(x => x.ResourceMappings)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
     public async Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct)
