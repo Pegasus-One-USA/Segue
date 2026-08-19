@@ -61,9 +61,44 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateCsvMetadata(context, metadata);
         }
+        else if (request.DestinationType == DestinationType.FhirRepository)
+        {
+            ValidateFhirRepositoryMetadata(request, context, metadata);
+        }
         else if (request.DestinationType == DestinationType.BlobStorage)
         {
             ValidateBlobMetadata(context, metadata);
+        }
+    }
+
+    private static readonly string[] SupportedFhirAuthTypes = ["none", "bearer", "basic", "clientCredentials"];
+
+    private static void ValidateFhirRepositoryMetadata(
+        CreateDestinationConfigurationRequest request,
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var authType = metadata.GetValueOrDefault("dest_fhirAuthType", "none");
+
+        if (!SupportedFhirAuthTypes.Contains(authType, StringComparer.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fhirAuthType",
+                $"Unsupported FHIR auth type '{authType}'. Supported values: none, bearer, basic, clientCredentials.");
+            return;
+        }
+
+        if (string.Equals(authType, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            // Matches today's (absence of) validation for FhirRepository exactly — no new required fields.
+            return;
+        }
+
+        // Auth is opt-in: once enabled, Target must carry the plain FHIR base URL, because the secret is
+        // repurposed to hold auth material instead (see FhirRepositoryAuthResolver in FHIRBridge.Infrastructure).
+        if (string.IsNullOrWhiteSpace(request.Target))
+        {
+            context.AddFailure("Target", "Target (FHIR base URL) is required when dest_fhirAuthType is not 'none'.");
         }
     }
 

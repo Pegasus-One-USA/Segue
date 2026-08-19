@@ -1,3 +1,115 @@
 <div [class.dcf-readonly]="isReadOnly()">
-  <ng-container [ngComponentOutlet]="formType()" />
+  @if (isFhir()) {
+    <form [formGroup]="fhirForm" class="dw-form" autocomplete="off">
+      <div class="dw-grid-3">
+
+        <div class="dw-field" [class.dw-field--error]="fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched">
+          <label class="dw-label" for="dcf-fhir-name">Destination name <span class="dw-req">*</span></label>
+          <input id="dcf-fhir-name" class="dw-input" formControlName="name" placeholder="e.g. Aidbox Production" />
+          @if (fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched) {
+            <span class="dw-error">Destination name is required.</span>
+          }
+        </div>
+
+        <div class="dw-field" [class.dw-field--error]="fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched">
+          <label class="dw-label" for="dcf-fhir-baseUrl">Base URL <span class="dw-req">*</span></label>
+          <input id="dcf-fhir-baseUrl" class="dw-input" formControlName="baseUrl" placeholder="https://tenant.aidbox.app/fhir" />
+          @if (fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched) {
+            <span class="dw-error">Base URL is required.</span>
+          }
+        </div>
+
+        <div class="dw-field">
+          <label class="dw-label" for="dcf-fhir-project">Aidbox Project</label>
+          <input id="dcf-fhir-project" class="dw-input" formControlName="project" placeholder="e.g. tenant-acme" />
+        </div>
+
+        <div class="dw-field">
+          <label class="dw-label" for="dcf-fhir-auth">Authentication <span class="dw-req">*</span></label>
+          <div class="dw-select-wrap">
+            <select id="dcf-fhir-auth" class="dw-select" formControlName="authType">
+              <option value="oauth2">OAuth2 Client Credentials</option>
+              <option value="basic">Basic Username / Password</option>
+              <option value="bearer">Static Bearer Token</option>
+            </select>
+          </div>
+        </div>
+
+        @if (fhirForm.get('authType')!.value === 'oauth2') {
+          <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched">
+            <label class="dw-label" for="dcf-fhir-clientId">Client ID <span class="dw-req">*</span></label>
+            <input id="dcf-fhir-clientId" class="dw-input" formControlName="clientId" autocomplete="off" />
+            @if (fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched) {
+              <span class="dw-error">Client ID is required.</span>
+            }
+          </div>
+          <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
+            <label class="dw-label" for="dcf-fhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+            <input id="dcf-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+            @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
+              <span class="dw-error">Client secret is required.</span>
+            }
+          </div>
+        }
+
+        @if (fhirForm.get('authType')!.value === 'basic') {
+          <div class="dw-field" [class.dw-field--error]="fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched">
+            <label class="dw-label" for="dcf-fhir-username">Username <span class="dw-req">*</span></label>
+            <input id="dcf-fhir-username" class="dw-input" formControlName="username" autocomplete="off" />
+            @if (fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched) {
+              <span class="dw-error">Username is required.</span>
+            }
+          </div>
+          <div class="dw-field" [class.dw-field--error]="fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched">
+            <label class="dw-label" for="dcf-fhir-password">Password <span class="dw-req">*</span></label>
+            <input id="dcf-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+            @if (fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched) {
+              <span class="dw-error">Password is required.</span>
+            }
+          </div>
+        }
+
+        @if (fhirForm.get('authType')!.value === 'bearer') {
+          <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched">
+            <label class="dw-label" for="dcf-fhir-bearerToken">Bearer token <span class="dw-req">*</span></label>
+            <input id="dcf-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password" />
+            @if (fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched) {
+              <span class="dw-error">Bearer token is required.</span>
+            }
+          </div>
+        }
+
+        <div class="dw-field">
+          <label class="dw-label" for="dcf-fhir-writeMode">Write mode</label>
+          <div class="dw-select-wrap">
+            <select id="dcf-fhir-writeMode" class="dw-select" formControlName="writeMode">
+              <option value="upsert">Upsert by resource id (PUT)</option>
+              <option value="upsertBundle">Upsert by resource id (Bundle)</option>
+              <option value="upsertTransaction">Upsert by resource id (Transaction)</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+    </form>
+
+    @if (canTestConnection()) {
+      <div class="dcf-actions">
+        <button type="button" class="dw-btn" [disabled]="probeState() === 'testing' || fhirForm.invalid" (click)="testConnection()">
+          {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+        </button>
+      </div>
+    }
+    @if (probeState() === 'testing') {
+      <div class="dw-callout dw-callout--info">Testing connection…</div>
+    }
+    @if (probeState() === 'error') {
+      <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+    }
+    @if (probeState() === 'ok') {
+      <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
+    }
+  } @else {
+    <ng-container [ngComponentOutlet]="formType()" />
+  }
 </div>

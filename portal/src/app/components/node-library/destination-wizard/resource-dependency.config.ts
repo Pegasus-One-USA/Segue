@@ -12,18 +12,54 @@ export interface ResourceDependencyRule {
 
 const NO_DEPENDENCIES: ResourceDependencyRule = { required: [], recommended: [] };
 
+// Covers the platform's "compartment" types (see backend PatientCompartmentResourceTypes.All) plus Practitioner,
+// Organization, and Medication. Manual selection is what actually controls fetching on the backend
+// (SourceNodeExecutors) — these `recommended` entries are deliberately hints only (never `required`/auto-locked):
+// forcing a companion resource on the user would narrow their control the same way an earlier auto-reference-
+// resolution fix did before it was reverted at the user's request (see SourceNodeExecutorDestinationRestrictionTests
+// .Non_compartment_type_referenced_by_a_selected_resource_is_excluded_when_not_itself_selected). An unchecked type
+// referenced by a checked one is still genuinely left out and can leave a dangling reference at the destination —
+// surfaced as a precise per-record block by MappedFhirRepositoryDestinationWriter's reference-resolution logic, not
+// prevented here; these hints exist to help a user avoid reaching that block in the first place. Practitioner/
+// Organization/Medication are resolved by id when selected (see backend FetchByCollectedReferencesAsync), which is
+// why they're hinted here. Location and Specimen (Encounter.location and Observation.specimen/basedOn respectively)
+// were confirmed as real, commonly-populated cross-references via live Epic + Aidbox testing and are hinted below
+// too. Device, Questionnaire, Schedule, and Slot were reviewed and found to have no patient-relevant cross-reference
+// worth hinting from any resource currently in this map — their entries below are a deliberate "reviewed, nothing to
+// add" marker, not an oversight.
 export const RESOURCE_DEPENDENCIES: Record<string, ResourceDependencyRule> = {
-  Patient:                  { required: [],                          recommended: [] },
+  Patient:                  { required: [],                          recommended: ['Practitioner', 'Organization'] },
   Practitioner:             { required: [],                          recommended: [] },
-  Encounter:                { required: ['Patient'],                 recommended: ['Practitioner'] },
-  Observation:              { required: ['Patient'],                 recommended: ['Encounter', 'Practitioner'] },
+  Organization:             { required: [],                          recommended: [] },
+  Medication:               { required: [],                          recommended: [] },
+  Location:                 { required: [],                          recommended: ['Organization'] },
+  Specimen:                 { required: ['Patient'],                 recommended: ['Practitioner'] },
+  Device:                   { required: [],                          recommended: [] },
+  Questionnaire:            { required: [],                          recommended: [] },
+  Schedule:                 { required: [],                          recommended: [] },
+  Slot:                     { required: [],                          recommended: [] },
+  Encounter:                { required: ['Patient'],                 recommended: ['Practitioner', 'Organization', 'Location'] },
+  Observation:              { required: ['Patient'],                 recommended: ['Encounter', 'Practitioner', 'ServiceRequest', 'Specimen'] },
   Condition:                { required: ['Patient'],                 recommended: ['Encounter'] },
   Procedure:                { required: ['Patient'],                 recommended: ['Encounter', 'Practitioner'] },
   DiagnosticReport:         { required: ['Patient', 'Observation'],   recommended: ['Encounter'] },
-  MedicationRequest:        { required: ['Patient'],                 recommended: ['Practitioner', 'Encounter'] },
-  MedicationAdministration: { required: ['Patient', 'MedicationRequest'], recommended: ['Encounter'] },
+  MedicationRequest:        { required: ['Patient'],                 recommended: ['Practitioner', 'Encounter', 'Medication'] },
+  MedicationAdministration: { required: ['Patient', 'MedicationRequest'], recommended: ['Encounter', 'Medication'] },
   ServiceRequest:           { required: ['Patient'],                 recommended: ['Practitioner', 'Encounter'] },
   AllergyIntolerance:       { required: ['Patient'],                 recommended: [] },
+  Immunization:             { required: ['Patient'],                 recommended: ['Encounter'] },
+  Appointment:              { required: ['Patient'],                 recommended: ['Practitioner'] },
+  CarePlan:                 { required: ['Patient'],                 recommended: ['Encounter', 'CareTeam'] },
+  CareTeam:                 { required: ['Patient'],                 recommended: ['Practitioner'] },
+  Communication:            { required: ['Patient'],                 recommended: ['Encounter', 'Practitioner'] },
+  CommunicationRequest:     { required: ['Patient'],                 recommended: ['Encounter', 'Practitioner'] },
+  FamilyMemberHistory:      { required: ['Patient'],                 recommended: [] },
+  ImagingStudy:             { required: ['Patient'],                 recommended: ['Encounter'] },
+  MedicationDispense:       { required: ['Patient'],                 recommended: ['MedicationRequest', 'Medication'] },
+  MedicationStatement:      { required: ['Patient'],                 recommended: ['MedicationRequest', 'Medication'] },
+  QuestionnaireResponse:    { required: ['Patient'],                 recommended: ['Encounter'] },
+  RelatedPerson:            { required: ['Patient'],                 recommended: [] },
+  Task:                     { required: [],                          recommended: ['Patient', 'Encounter'] },
 };
 
 function ruleFor(resource: string): ResourceDependencyRule {

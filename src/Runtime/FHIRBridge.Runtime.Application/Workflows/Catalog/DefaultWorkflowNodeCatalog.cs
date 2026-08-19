@@ -46,8 +46,9 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.MedplumDestination),
         Destination(WorkflowNodeTypes.FhirRepositoryDestination),
         Destination(WorkflowNodeTypes.BlobDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FHIR + Blob destinations are exposed in the palette.
-        // The writers below remain registered in ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository + Blob
+        // destinations are exposed in the palette. The writers below remain registered in
+        // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
         // Destination(WorkflowNodeTypes.PowerBiDestination),
@@ -170,7 +171,13 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeCategory.Destination,
             70,
             [],
-            [WorkflowDataContract.MappedRecordBatch],
+            // FhirRepositoryDestination additionally accepts raw/normalized resources directly (no Mapping node
+            // required) — it's spec-owned, so passthrough writes a resource unchanged rather than mapping fields
+            // into destination columns. Every other destination type is unaffected: MappedRecordBatch remains
+            // their only accepted input, so WorkflowGraphValidator's Mapping-node requirement still applies to them.
+            nodeType == WorkflowNodeTypes.FhirRepositoryDestination
+                ? [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.MappedRecordBatch]
+                : [WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.DestinationWriteResult,
             nodeType,
             DisplayNameFor(nodeType),
@@ -221,7 +228,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
             WorkflowNodeTypes.MedplumDestination => "Medplum (FHIR)",
-            WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository",
+            WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
             WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
@@ -241,7 +248,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
             WorkflowNodeTypes.MedplumDestination => "Write FHIR resources to a Medplum FHIR R4 store (idempotent upsert).",
-            WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a generic FHIR R4 server (e.g. HAPI) via REST PUT.",
+            WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
             WorkflowNodeTypes.BlobDestination => "Write mapped records to Azure Blob Storage.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",

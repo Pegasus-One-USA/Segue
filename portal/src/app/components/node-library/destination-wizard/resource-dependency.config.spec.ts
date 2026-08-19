@@ -38,11 +38,28 @@ describe('requiredClosureFor', () => {
 
 describe('recommendedFor', () => {
   it('returns the authored recommendations as-is (not transitively expanded)', () => {
-    expect(recommendedFor('Observation')).toEqual(['Encounter', 'Practitioner']);
+    expect(recommendedFor('Observation')).toEqual(['Encounter', 'Practitioner', 'ServiceRequest', 'Specimen']);
   });
 
   it('returns an empty list for a resource with no recommendations', () => {
     expect(recommendedFor('AllergyIntolerance')).toEqual([]);
+  });
+
+  it('recommends Location alongside Encounter (Encounter.location) — confirmed via live Epic + Aidbox testing', () => {
+    expect(recommendedFor('Encounter')).toContain('Location');
+  });
+
+  it('recommends ServiceRequest and Specimen alongside Observation (Observation.basedOn / .specimen)', () => {
+    expect(recommendedFor('Observation')).toContain('ServiceRequest');
+    expect(recommendedFor('Observation')).toContain('Specimen');
+  });
+
+  it('recommends Organization alongside Location (Location.managingOrganization)', () => {
+    expect(recommendedFor('Location')).toEqual(['Organization']);
+  });
+
+  it('recommends Practitioner alongside Specimen (Specimen.collection.collector)', () => {
+    expect(recommendedFor('Specimen')).toEqual(['Practitioner']);
   });
 });
 
