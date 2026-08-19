@@ -1,5 +1,6 @@
-/** Matches the API's SsoConfigurationsDto shape exactly (see SsoConfigurationsDto.cs). SAML/magic-link
- *  fields are live and editable; samlMetadataUrl/samlAcsUrl and entraEnabled/googleEnabled are read-only. */
+/** Matches the API's SsoConfigurationsDto shape exactly (see SsoConfigurationsDto.cs). SAML, magic-link,
+ *  and Entra's login-flow fields (enabled/instance/tenantId/clientId) are live and editable — samlMetadataUrl/
+ *  samlAcsUrl are computed/read-only, and googleEnabled is read-only status. */
 export interface SsoConfigurationsModel {
   samlEnabled: boolean;
   serviceProviderEntityId: string;
@@ -12,6 +13,9 @@ export interface SsoConfigurationsModel {
   samlMetadataUrl: string;
   samlAcsUrl: string;
   entraEnabled: boolean;
+  entraInstance: string;
+  entraTenantId: string;
+  entraClientId: string;
   googleEnabled: boolean;
 }
 
@@ -25,4 +29,8 @@ export interface UpdateSsoConfigurationsRequest {
   portalRedirectUrl: string;
   portalErrorRedirectUrl: string;
   magicLinkEnabled: boolean;
+  entraEnabled: boolean;
+  entraInstance: string;
+  entraTenantId: string;
+  entraClientId: string;
 }

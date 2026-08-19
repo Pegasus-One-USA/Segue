@@ -23,7 +23,13 @@ public sealed class SsoConfigurationsServiceTests
         PortalErrorRedirectUrl = "https://fhirbridge.example.org/auth/login",
     };
     private readonly LocalAuthOptions _localAuthOptions = new();
-    private readonly EntraAuthenticationOptions _entraOptions = new() { Enabled = true };
+    private readonly EntraAuthenticationOptions _entraOptions = new()
+    {
+        Enabled = true,
+        Instance = "https://login.microsoftonline.com/",
+        TenantId = "tenant-123",
+        ClientId = "client-456",
+    };
     private readonly GoogleAuthenticationOptions _googleOptions = new() { Enabled = false };
 
     private SsoConfigurationsService Service()
@@ -58,6 +64,9 @@ public sealed class SsoConfigurationsServiceTests
         dto.PortalErrorRedirectUrl.Should().Be(_samlOptions.PortalErrorRedirectUrl);
         dto.MagicLinkEnabled.Should().BeFalse();
         dto.EntraEnabled.Should().BeTrue();
+        dto.EntraInstance.Should().Be(_entraOptions.Instance);
+        dto.EntraTenantId.Should().Be(_entraOptions.TenantId);
+        dto.EntraClientId.Should().Be(_entraOptions.ClientId);
         dto.GoogleEnabled.Should().BeFalse();
     }
 
@@ -77,7 +86,11 @@ public sealed class SsoConfigurationsServiceTests
             IdentityProviderCertificate: "new-cert-base64",
             PortalRedirectUrl: "https://segue.example.org/dashboard",
             PortalErrorRedirectUrl: "https://segue.example.org/auth/login",
-            MagicLinkEnabled: true);
+            MagicLinkEnabled: true,
+            EntraEnabled: true,
+            EntraInstance: "https://login.microsoftonline.com/",
+            EntraTenantId: "new-tenant-id",
+            EntraClientId: "new-client-id");
 
         await Service().UpdateAsync(request, CancellationToken.None);
 
@@ -97,5 +110,13 @@ public sealed class SsoConfigurationsServiceTests
             "Authentication:Saml:PortalErrorRedirectUrl", request.PortalErrorRedirectUrl, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
         _systemSettingsService.Verify(x => x.SetAsync(
             "LocalAuth:MagicLink:Enabled", "True", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _systemSettingsService.Verify(x => x.SetAsync(
+            "Authentication:Entra:Enabled", "True", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _systemSettingsService.Verify(x => x.SetAsync(
+            "Authentication:Entra:Instance", request.EntraInstance, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _systemSettingsService.Verify(x => x.SetAsync(
+            "Authentication:Entra:TenantId", request.EntraTenantId, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _systemSettingsService.Verify(x => x.SetAsync(
+            "Authentication:Entra:ClientId", request.EntraClientId, It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }

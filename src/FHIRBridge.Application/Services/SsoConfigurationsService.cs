@@ -15,12 +15,16 @@ public sealed class SsoConfigurationsService : ISsoConfigurationsService
     private const string PortalRedirectUrlKey = "Authentication:Saml:PortalRedirectUrl";
     private const string PortalErrorRedirectUrlKey = "Authentication:Saml:PortalErrorRedirectUrl";
     private const string MagicLinkEnabledKey = "LocalAuth:MagicLink:Enabled";
+    private const string EntraEnabledKey = "Authentication:Entra:Enabled";
+    private const string EntraInstanceKey = "Authentication:Entra:Instance";
+    private const string EntraTenantIdKey = "Authentication:Entra:TenantId";
+    private const string EntraClientIdKey = "Authentication:Entra:ClientId";
 
     private readonly ISystemSettingsCache _settingsCache;
     private readonly ISystemSettingsService _systemSettingsService;
     private readonly SamlAuthenticationOptions _samlFallback;
     private readonly LocalAuthOptions _localAuthFallback;
-    private readonly EntraAuthenticationOptions _entra;
+    private readonly EntraAuthenticationOptions _entraFallback;
     private readonly GoogleAuthenticationOptions _google;
 
     public SsoConfigurationsService(
@@ -35,7 +39,7 @@ public sealed class SsoConfigurationsService : ISsoConfigurationsService
         _systemSettingsService = systemSettingsService;
         _samlFallback = samlOptions.Value;
         _localAuthFallback = localAuthOptions.Value;
-        _entra = entraOptions.Value;
+        _entraFallback = entraOptions.Value;
         _google = googleOptions.Value;
     }
 
@@ -57,6 +61,14 @@ public sealed class SsoConfigurationsService : ISsoConfigurationsService
         var magicLinkEnabled = await _settingsCache.GetBoolAsync(
             MagicLinkEnabledKey, _localAuthFallback.MagicLink.Enabled, cancellationToken);
 
+        var entraEnabled = await _settingsCache.GetBoolAsync(EntraEnabledKey, _entraFallback.Enabled, cancellationToken);
+        var entraInstance = await _settingsCache.GetStringAsync(
+            EntraInstanceKey, _entraFallback.Instance ?? "https://login.microsoftonline.com/", cancellationToken);
+        var entraTenantId = await _settingsCache.GetStringAsync(
+            EntraTenantIdKey, _entraFallback.TenantId ?? string.Empty, cancellationToken);
+        var entraClientId = await _settingsCache.GetStringAsync(
+            EntraClientIdKey, _entraFallback.ClientId ?? string.Empty, cancellationToken);
+
         return new SsoConfigurationsDto(
             samlEnabled,
             serviceProviderEntityId,
@@ -68,7 +80,10 @@ public sealed class SsoConfigurationsService : ISsoConfigurationsService
             magicLinkEnabled,
             SamlMetadataUrl: string.Empty, // computed by the controller, which has the request's own scheme/host
             SamlAcsUrl: string.Empty,
-            EntraEnabled: _entra.Enabled,
+            entraEnabled,
+            entraInstance,
+            entraTenantId,
+            entraClientId,
             GoogleEnabled: _google.Enabled);
     }
 
@@ -97,6 +112,19 @@ public sealed class SsoConfigurationsService : ISsoConfigurationsService
         await _systemSettingsService.SetAsync(
             MagicLinkEnabledKey, request.MagicLinkEnabled.ToString(),
             "Passwordless email sign-in link on/off — SSO Configurations screen.", cancellationToken);
+
+        await _systemSettingsService.SetAsync(
+            EntraEnabledKey, request.EntraEnabled.ToString(),
+            "Microsoft Entra ID \"Continue with Microsoft\" login on/off — SSO Configurations screen.", cancellationToken);
+        await _systemSettingsService.SetAsync(
+            EntraInstanceKey, request.EntraInstance ?? string.Empty,
+            "Entra login instance URL — SSO Configurations screen.", cancellationToken);
+        await _systemSettingsService.SetAsync(
+            EntraTenantIdKey, request.EntraTenantId ?? string.Empty,
+            "Entra directory (tenant) id — SSO Configurations screen.", cancellationToken);
+        await _systemSettingsService.SetAsync(
+            EntraClientIdKey, request.EntraClientId ?? string.Empty,
+            "Entra application (client) id — SSO Configurations screen.", cancellationToken);
 
         return await GetAsync(cancellationToken);
     }

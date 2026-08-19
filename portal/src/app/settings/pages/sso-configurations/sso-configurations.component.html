@@ -84,6 +84,36 @@
         </div>
       </section>
 
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">Microsoft Entra ID</h2>
+            <p class="card-sub">"Continue with Microsoft" login. Applies to sign-in only — a separate, legacy path that accepts a raw Entra token directly as an API request still needs a restart to pick up changes, if it's ever used.</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="entraEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="sso-entra-instance">Instance</label>
+            <input id="sso-entra-instance" type="text" formControlName="entraInstance" placeholder="https://login.microsoftonline.com/" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-entra-tenant">Directory (Tenant) ID</label>
+            <input id="sso-entra-tenant" type="text" formControlName="entraTenantId" placeholder="From the App Registration's Overview page" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-entra-client">Application (Client) ID</label>
+            <input id="sso-entra-client" type="text" formControlName="entraClientId" placeholder="From the App Registration's Overview page" />
+          </div>
+        </div>
+      </section>
+
       <div class="form-actions">
         <button type="submit" class="btn-primary" [disabled]="saving()">
           {{ saving() ? 'Saving…' : 'Save SSO Configurations' }}
@@ -94,16 +124,9 @@
     <section class="settings-card">
       <h2 class="card-title">Other Identity Providers</h2>
       <p class="card-sub">
-        Microsoft Entra ID and Google are configured separately in the deployment's appsettings — changing
-        either still requires a config edit and a service restart, since they're wired into the
-        authentication pipeline at startup.
+        Google is configured separately in the deployment's appsettings — changing it still requires a
+        config edit and a service restart, since it's wired into the authentication pipeline at startup.
       </p>
-      <div class="status-row">
-        <span class="status-label">Microsoft Entra ID</span>
-        <span class="badge" [class.badge--on]="entraEnabled()" [class.badge--off]="!entraEnabled()">
-          {{ entraEnabled() ? 'Enabled' : 'Disabled' }}
-        </span>
-      </div>
       <div class="status-row">
         <span class="status-label">Google</span>
         <span class="badge" [class.badge--on]="googleEnabled()" [class.badge--off]="!googleEnabled()">

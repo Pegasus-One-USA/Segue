@@ -22,11 +22,10 @@ export class SsoConfigurationsComponent implements OnInit, HasUnsavedChanges {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
 
-  // Read-only — computed by the API from the request's own scheme/host, and status for the two
-  // providers that still require an appsettings edit + restart to change (see form-actions note).
+  // Read-only — computed by the API from the request's own scheme/host, and status for the one
+  // provider that still requires an appsettings edit + restart to change (see form-actions note).
   protected readonly samlMetadataUrl = signal('');
   protected readonly samlAcsUrl = signal('');
-  protected readonly entraEnabled = signal(false);
   protected readonly googleEnabled = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
@@ -38,6 +37,10 @@ export class SsoConfigurationsComponent implements OnInit, HasUnsavedChanges {
     portalRedirectUrl:           [''],
     portalErrorRedirectUrl:      [''],
     magicLinkEnabled:            [false],
+    entraEnabled:                [false],
+    entraInstance:               [''],
+    entraTenantId:                [''],
+    entraClientId:               [''],
   });
 
   constructor() {
@@ -59,10 +62,13 @@ export class SsoConfigurationsComponent implements OnInit, HasUnsavedChanges {
           portalRedirectUrl:           settings.portalRedirectUrl,
           portalErrorRedirectUrl:      settings.portalErrorRedirectUrl,
           magicLinkEnabled:            settings.magicLinkEnabled,
+          entraEnabled:                settings.entraEnabled,
+          entraInstance:               settings.entraInstance,
+          entraTenantId:               settings.entraTenantId,
+          entraClientId:               settings.entraClientId,
         }, { emitEvent: false });
         this.samlMetadataUrl.set(settings.samlMetadataUrl);
         this.samlAcsUrl.set(settings.samlAcsUrl);
-        this.entraEnabled.set(settings.entraEnabled);
         this.googleEnabled.set(settings.googleEnabled);
         this.form.markAsPristine();
         this.loading.set(false);
@@ -88,6 +94,10 @@ export class SsoConfigurationsComponent implements OnInit, HasUnsavedChanges {
       portalRedirectUrl:           v.portalRedirectUrl.trim(),
       portalErrorRedirectUrl:      v.portalErrorRedirectUrl.trim(),
       magicLinkEnabled:            v.magicLinkEnabled,
+      entraEnabled:                v.entraEnabled,
+      entraInstance:               v.entraInstance.trim(),
+      entraTenantId:               v.entraTenantId.trim(),
+      entraClientId:               v.entraClientId.trim(),
     }).subscribe({
       next: (saved) => {
         this.samlMetadataUrl.set(saved.samlMetadataUrl);

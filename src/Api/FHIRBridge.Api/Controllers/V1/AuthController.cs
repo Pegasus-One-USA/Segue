@@ -34,6 +34,10 @@ public sealed class AuthController : ControllerBase
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ISystemSettingsCache _settingsCache;
 
+    private const string EntraEnabledKey = "Authentication:Entra:Enabled";
+    private const string EntraInstanceKey = "Authentication:Entra:Instance";
+    private const string EntraTenantIdKey = "Authentication:Entra:TenantId";
+    private const string EntraClientIdKey = "Authentication:Entra:ClientId";
     private const string SamlEnabledKey = "Authentication:Saml:Enabled";
     private const string ServiceProviderEntityIdKey = "Authentication:Saml:ServiceProviderEntityId";
     private const string PortalRedirectUrlKey = "Authentication:Saml:PortalRedirectUrl";
@@ -143,12 +147,14 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(SsoConfigDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSsoConfig(CancellationToken cancellationToken)
     {
-        var entra = _configuration.GetSection("Authentication:Entra");
+        var entraOptions = _configuration.GetSection("Authentication:Entra");
         var google = _configuration.GetSection("Authentication:Google");
 
-        var entraEnabled = entra.GetValue<bool>("Enabled");
-        var instance = (entra["Instance"] ?? "https://login.microsoftonline.com/").TrimEnd('/');
-        var tenantId = entra["TenantId"];
+        var entraEnabled = await _settingsCache.GetBoolAsync(EntraEnabledKey, entraOptions.GetValue<bool>("Enabled"), cancellationToken);
+        var instance = (await _settingsCache.GetStringAsync(
+            EntraInstanceKey, entraOptions["Instance"] ?? "https://login.microsoftonline.com/", cancellationToken)).TrimEnd('/');
+        var tenantId = await _settingsCache.GetStringAsync(EntraTenantIdKey, entraOptions["TenantId"] ?? string.Empty, cancellationToken);
+        var entraClientId = await _settingsCache.GetStringAsync(EntraClientIdKey, entraOptions["ClientId"] ?? string.Empty, cancellationToken);
         var authority = entraEnabled && !string.IsNullOrWhiteSpace(tenantId)
             ? $"{instance}/{tenantId}"
             : null;
@@ -158,7 +164,7 @@ public sealed class AuthController : ControllerBase
             MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
 
         var dto = new SsoConfigDto(
-            new SsoEntraConfigDto(entraEnabled, authority, entra["ClientId"]),
+            new SsoEntraConfigDto(entraEnabled, authority, entraClientId),
             new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]),
             new SsoSamlConfigDto(samlEnabled),
             new SsoMagicLinkConfigDto(magicLinkEnabled));
