@@ -1,7 +1,7 @@
 <div class="dash-content">
   <div class="page-header">
     <h1 class="page-title">SSO Configurations</h1>
-    <p class="page-sub">Configure SAML 2.0 single sign-on and passwordless email sign-in. Changes here take effect immediately — no restart needed.</p>
+    <p class="page-sub">Configure SAML 2.0 single sign-on and Microsoft Entra ID login. Changes here take effect immediately — no restart needed.</p>
   </div>
 
   @if (loading()) {
@@ -71,18 +71,9 @@
         </div>
       </section>
 
-      <section class="settings-card">
-        <div class="card-row">
-          <div>
-            <h2 class="card-title">Passwordless Email Sign-In</h2>
-            <p class="card-sub">Lets a user request a one-time sign-in link by email instead of a password.</p>
-          </div>
-          <label class="toggle-field">
-            <input type="checkbox" formControlName="magicLinkEnabled" />
-            <span>Enabled</span>
-          </label>
-        </div>
-      </section>
+      <!-- Passwordless Email Sign-In hidden for now — SMTP + MagicLinkUrlTemplate aren't ready on
+           every deployment yet. magicLinkEnabled still round-trips via the form so an existing
+           saved value isn't clobbered by a save made while this card is hidden. -->
 
       <section class="settings-card">
         <div class="card-row">
@@ -121,18 +112,7 @@
       </div>
     </form>
 
-    <section class="settings-card">
-      <h2 class="card-title">Other Identity Providers</h2>
-      <p class="card-sub">
-        Google is configured separately in the deployment's appsettings — changing it still requires a
-        config edit and a service restart, since it's wired into the authentication pipeline at startup.
-      </p>
-      <div class="status-row">
-        <span class="status-label">Google</span>
-        <span class="badge" [class.badge--on]="googleEnabled()" [class.badge--off]="!googleEnabled()">
-          {{ googleEnabled() ? 'Enabled' : 'Disabled' }}
-        </span>
-      </div>
-    </section>
+    <!-- "Other Identity Providers" (Google read-only status) hidden for now, alongside the
+         Passwordless Email Sign-In card above. -->
   }
 </div>
