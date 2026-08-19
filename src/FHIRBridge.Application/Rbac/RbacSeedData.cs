@@ -123,12 +123,14 @@ public static class RbacSeedData
     [
         // Original platform permissions.
         new("Manage source, destination, mapping, webhook, and route configuration.", PermissionGroupCode.Configuration, PermissionActionCode.Write),
+        new("View terminology, notification, and other platform configuration.", PermissionGroupCode.Configuration, PermissionActionCode.View),
         new("Execute configured pipeline routes.", PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
         new("Test source system connectivity.", PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
         new(
             "Add or edit a source connection for a vendor with no dedicated permission group of its own.",
             PermissionGroupCode.SourceConnections,
             PermissionActionCode.Edit),
+        new("Create a new source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
         new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
         new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
 
@@ -174,11 +176,15 @@ public static class RbacSeedData
         new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
         new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),
 
-        // Governance module permission.
+        // Governance module permissions.
         new(
             "View the governance audit trail, authentication logs, data access logs, and security events.",
             PermissionGroupCode.Governance,
             PermissionActionCode.Read),
+        new(
+            "Resolve/reopen captured errors and manage alert rules.",
+            PermissionGroupCode.Governance,
+            PermissionActionCode.Write),
     ];
 
     /// <summary>

@@ -19,7 +19,9 @@ public sealed record TransformationRuleDto(
     bool IsEnabled,
     string? OnNullDefaultValue = null,
     TransformArrayMode ArrayMode = TransformArrayMode.Whole,
-    string? FhirWriteBackJsonPath = null);
+    string? FhirWriteBackJsonPath = null,
+    TransformExecutionPhase ExecutionPhase = TransformExecutionPhase.PostMapping,
+    Guid? DeIdentificationProfileId = null);
 
 /// <summary><see cref="Id"/> null creates a new rule; supplying an existing id updates it in place.</summary>
 public sealed record SaveTransformationRuleRequest(
@@ -39,7 +41,11 @@ public sealed record SaveTransformationRuleRequest(
     bool IsEnabled = true,
     string? OnNullDefaultValue = null,
     TransformArrayMode ArrayMode = TransformArrayMode.Whole,
-    string? FhirWriteBackJsonPath = null);
+    string? FhirWriteBackJsonPath = null,
+    // Pre-mapping rules (raw FHIR path, no destination field) are only valid at Global/ResourceType scope and
+    // must carry a DeIdentificationProfileId — enforced in the TransformationRule constructor.
+    TransformExecutionPhase ExecutionPhase = TransformExecutionPhase.PostMapping,
+    Guid? DeIdentificationProfileId = null);
 
 /// <summary>Resolve-and-apply a sample value through whatever rule chain is currently in effect for one field —
 /// backs both the wizard's "auto-applied on add" behavior and the Rules modal's live preview.

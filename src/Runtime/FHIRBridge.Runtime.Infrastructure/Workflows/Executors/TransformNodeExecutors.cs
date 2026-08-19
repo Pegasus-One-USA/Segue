@@ -186,6 +186,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // the transform-rule resolver itself never sees them.
         var (destinationType, destinationName) = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
         var (sourceSystem, sourceConnectionName) = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
+
+        // Whole-resource FHIR destinations (Medplum, FHIR repository) persist the source resource itself
+        // (MappedDestinationRecord.SourceJson), not a set of mapped relational columns — so they legitimately have
+        // NO field mappings, and the "needs at least one mapped Value" gates below (which exist to avoid writing
+        // bogus empty rows into a relational table) would otherwise drop every resource, silently landing zero
+        // records. For these destinations we always emit one carrier record per resource, carrying SourceJson.
+        var wholeResourceFhir = destinationType is DestinationType.Medplum or DestinationType.FhirRepository;
         // Caches each field's resolved rule chain for the lifetime of this ExecuteAsync call — the same
         // (resourceType, destinationField, sourceField) combination recurs once per record in the batch, and
         // re-querying the resolver/repository for every single record would be wasted round trips for a rule
@@ -218,6 +225,20 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
             if (fields is null)
             {
+                // A whole-resource FHIR destination writes the source resource verbatim and needs no MappingProfile,
+                // so emit a carrier record (SourceJson only) per resource rather than skipping the type.
+                if (wholeResourceFhir)
+                {
+                    foreach (var resource in group)
+                    {
+                        records.Add(new MappedDestinationRecord(
+                            context.WorkflowRunId, resource.ResourceType, resourceType, resource.ResourceId,
+                            new Dictionary<string, object?>(), Convert.ToString(resource.Payload) ?? "{}"));
+                    }
+
+                    continue;
+                }
+
                 // No profile exists for this resource type — nothing tells us how to map it, so skip it rather
                 // than guess; guessing (reusing a different resource type's fields) is exactly the
                 // silent-corruption bug this method guards against.
@@ -283,7 +304,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // empty Values) because the writer captures the child rows' FK value off THAT row's own write
                 // (OUTPUT INSERTED) — dropping it would silently lose the child data instead of just writing an
                 // extra near-empty row.
-                if (mapped.Values.Count > 0 || childTables is not null)
+                if (mapped.Values.Count > 0 || childTables is not null || wholeResourceFhir)
                 {
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
                     foreach (var parentRow in dataset?.ParentRows ?? [mapped.Values])

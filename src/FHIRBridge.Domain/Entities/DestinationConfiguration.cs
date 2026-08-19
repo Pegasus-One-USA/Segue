@@ -43,19 +43,16 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>, IHasA
     public bool IsEnabled { get; private set; }
 
     /// <summary>
-    /// HIPAA #2: when true, resources routed to this destination are run through <see cref="DeIdentificationMethod"/>
-    /// (Safe Harbor / k-anonymity) before delivery. Defaults false — identical behavior to before this flag existed —
-    /// so no existing destination changes behavior until a tenant admin explicitly opts it in.
+    /// HIPAA #2: when set, resources routed to this destination are run through this <see cref="DeIdentificationProfile"/>'s
+    /// pre-mapping rules before delivery. Null (the default) is identical behavior to before profiles existed — no
+    /// existing destination changes behavior until a tenant admin explicitly assigns a profile. Different destinations
+    /// can point at different profiles, so redaction depth is not one-size-fits-all for a tenant.
     /// </summary>
-    public bool RequiresDeIdentification { get; private set; }
+    public Guid? DeIdentificationProfileId { get; private set; }
 
-    /// <summary>The de-identification method to apply when <see cref="RequiresDeIdentification"/> is true.</summary>
-    public string? DeIdentificationMethod { get; private set; }
-
-    public void SetDeIdentificationRequirement(bool requiresDeIdentification, string? deIdentificationMethod)
+    public void SetDeIdentificationProfile(Guid? deIdentificationProfileId)
     {
-        RequiresDeIdentification = requiresDeIdentification;
-        DeIdentificationMethod = requiresDeIdentification ? deIdentificationMethod : null;
+        DeIdentificationProfileId = deIdentificationProfileId;
     }
 
     public void Update(

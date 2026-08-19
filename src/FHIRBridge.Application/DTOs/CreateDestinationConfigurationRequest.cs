@@ -15,4 +15,6 @@ public sealed record CreateDestinationConfigurationRequest(
     // Non-secret connection fields (server/database/schema/... for SQL; folder/delimiter/... for CSV/SFTP) as a flat
     // JSON object — see DestinationConfiguration.ConnectionMetadataJson. On update, null preserves whatever metadata
     // is already saved (ConfigurationService.UpdateDestinationConfigurationAsync only overwrites when non-null).
-    string? ConnectionMetadataJson = null);
+    string? ConnectionMetadataJson = null,
+    // Which DeIdentificationProfile applies to this destination — null means no de-identification.
+    Guid? DeIdentificationProfileId = null);

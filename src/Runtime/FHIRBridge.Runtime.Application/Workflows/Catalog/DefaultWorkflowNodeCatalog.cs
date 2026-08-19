@@ -43,9 +43,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.MySqlDestination),
         Destination(WorkflowNodeTypes.MongoDestination),
         Destination(WorkflowNodeTypes.PostgreSqlDestination),
+        Destination(WorkflowNodeTypes.MedplumDestination),
         Destination(WorkflowNodeTypes.FhirRepositoryDestination),
         Destination(WorkflowNodeTypes.BlobDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + FhirRepository + Blob
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository + Blob
         // destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
@@ -206,6 +207,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "dest-mysql",
             WorkflowNodeTypes.MongoDestination => "dest-mongo",
             WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
+            WorkflowNodeTypes.MedplumDestination => "dest-medplum",
             WorkflowNodeTypes.FhirRepositoryDestination => "dest-fhir",
             WorkflowNodeTypes.BlobDestination => "dest-blob",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
@@ -225,6 +227,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "MySQL",
             WorkflowNodeTypes.MongoDestination => "MongoDB",
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
+            WorkflowNodeTypes.MedplumDestination => "Medplum (FHIR)",
             WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
             WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
@@ -244,6 +247,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.MySqlDestination => "Write mapped records to MySQL.",
             WorkflowNodeTypes.MongoDestination => "Write mapped records to MongoDB.",
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
+            WorkflowNodeTypes.MedplumDestination => "Write FHIR resources to a Medplum FHIR R4 store (idempotent upsert).",
             WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
             WorkflowNodeTypes.BlobDestination => "Write mapped records to Azure Blob Storage.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",

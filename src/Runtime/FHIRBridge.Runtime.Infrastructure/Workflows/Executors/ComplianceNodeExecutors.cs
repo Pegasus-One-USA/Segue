@@ -144,6 +144,14 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
         // DeIdentifiedBatch output contract. Defaults to true so existing behaviour is unchanged. The route→graph
         // projection sets it false so a launch mirrors the route path (which de-identifies only when governance asks).
         var deIdentifyEnabled = ReadBoolConfiguration(node, "deIdentify") ?? true;
+        // Which DeIdentificationProfile this node's rules come from — unlike the route/governance path, a
+        // canvas node has no destination to resolve a profile from. There's no config UI for this yet, so an
+        // unset value falls back to the seeded default profile (FHIRBridge.Domain.Entities.DeIdentificationProfile.
+        // DefaultProfileId) rather than silently skipping redaction — this node always redacted unconditionally
+        // before profiles existed, and PHI passing through unredacted by default would be a real regression.
+        var resolvedProfileId = Guid.TryParse(ReadStringConfiguration(node, "profileId"), out var profileId) && profileId != Guid.Empty
+            ? profileId
+            : FHIRBridge.Domain.Entities.DeIdentificationProfile.DefaultProfileId;
 
         if (!deIdentifyEnabled || (_deIdentificationService is null && _dataSetDeIdentificationService is null))
         {
@@ -178,7 +186,8 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                             resource.ResourceType,
                             resource.ResourceId,
                             Convert.ToString(resource.Payload) ?? "{}",
-                            []),
+                            [],
+                            resolvedProfileId),
                         cancellationToken);
 
                 deIdentifiedResources.Add(resource with { Payload = sourceJson });
@@ -225,7 +234,8 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                         record.ResourceType,
                         record.SourceResourceId,
                         record.SourceJson ?? "{}",
-                        []),
+                        [],
+                        resolvedProfileId),
                     cancellationToken);
 
                 deIdentified.Add(record with { SourceJson = sourceJson });

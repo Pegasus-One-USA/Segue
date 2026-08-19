@@ -104,20 +104,25 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         System.Net.Http.Headers.AuthenticationHeaderValue? authHeader;
         if (string.Equals(authType, "none", StringComparison.OrdinalIgnoreCase))
         {
-            // Exactly today's behavior — unchanged for every existing FhirRepository row.
-            baseUrl = (destination.Target ?? await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken)).TrimEnd('/');
+            // Exactly today's behavior — unchanged for every existing FhirRepository row — plus a fallback to the
+            // dest_fhirBaseUrl/fhirBaseUrl connection-metadata key (see ResolveBaseUrl) for the workflow-graph run
+            // path, where the destination is reconstructed from node config with Target left null.
+            baseUrl = (ResolveBaseUrl(destination)
+                ?? await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken)).TrimEnd('/');
             authHeader = null;
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(destination.Target))
+            var resolvedBaseUrl = ResolveBaseUrl(destination);
+            if (string.IsNullOrWhiteSpace(resolvedBaseUrl))
             {
                 throw new InvalidOperationException(
-                    "FHIR repository destinations with dest_fhirAuthType other than 'none' must set Target to the FHIR " +
-                    "base URL — the secret is reserved for auth credentials, not the URL.");
+                    "FHIR repository destinations with dest_fhirAuthType other than 'none' must set Target (or the " +
+                    "dest_fhirBaseUrl/fhirBaseUrl connection metadata key) to the FHIR base URL — the secret is " +
+                    "reserved for auth credentials, not the URL.");
             }
 
-            baseUrl = destination.Target.TrimEnd('/');
+            baseUrl = resolvedBaseUrl.TrimEnd('/');
             authHeader = await FhirRepositoryAuthResolver.ResolveAsync(
                 destination.ConnectionMetadataJson, destination.SecretReference, _secretProvider, _tokenProvider, cancellationToken);
         }
@@ -159,30 +164,52 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
         if (!isBundleFamily)
         {
-            // Exactly today's behavior — byte-for-byte — when dest_fhirWriteMode is absent or anything other than
-            // "bundle"/"transaction". One PUT per writable record; a failure throws and fails the whole route, as
-            // before. Records with a confirmed-missing reference were already excluded from `records` above and
-            // never reach here.
+            // Isolate per-record failures instead of aborting the whole batch on the first non-2xx: a single
+            // resource a validating server (e.g. HAPI, Aidbox) rejects — a bad reference, an unsupported element, a
+            // profile-validation error — must not discard the hundreds of resources that would otherwise write
+            // cleanly. Failed records are reported via DestinationWriteResult.RecordErrors, which the runtime
+            // executor surfaces as PartialSuccess (mirrors MappedSqlServerDestinationWriter /
+            // MappedMedplumDestinationWriter). Records with a confirmed-missing reference were already excluded from
+            // `records` above and never reach here.
+            var individualErrors = new List<string>(referenceErrors);
+            var individualWrittenIds = new List<string?>();
+
             foreach (var record in records)
             {
                 var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
                 var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
-                using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+                try
                 {
-                    Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
-                };
-                if (authHeader is not null)
-                {
-                    request.Headers.Authorization = authHeader;
-                }
+                    using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+                    {
+                        Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
+                    };
+                    if (authHeader is not null)
+                    {
+                        request.Headers.Authorization = authHeader;
+                    }
 
-                using var response = await httpClient.SendAsync(request, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                    using var response = await httpClient.SendAsync(request, cancellationToken);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        individualWrittenIds.Add(record.SourceResourceId);
+                    }
+                    else
+                    {
+                        var detail = await ReadResponseDetailAsync(response, cancellationToken);
+                        individualErrors.Add($"{resourceType}/{resourceId}: HTTP {(int)response.StatusCode} {detail}");
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    individualErrors.Add($"{resourceType}/{resourceId}: {ex.Message}");
+                }
             }
 
             return new DestinationWriteResult(
-                records.Count,
-                RecordErrors: referenceErrors.Count > 0 ? referenceErrors : null);
+                individualWrittenIds.Count,
+                RecordErrors: individualErrors.Count > 0 ? individualErrors : null,
+                WrittenResourceIds: individualWrittenIds.Count > 0 || individualErrors.Count > 0 ? individualWrittenIds : null);
         }
 
         // Bundle mode: split into records with real FHIR JSON (bundleable) and the non-FHIR fallback flow
@@ -220,18 +247,32 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         {
             var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
             var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
-            using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+            try
             {
-                Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
-            };
-            if (authHeader is not null)
-            {
-                request.Headers.Authorization = authHeader;
-            }
+                using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+                {
+                    Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
+                };
+                if (authHeader is not null)
+                {
+                    request.Headers.Authorization = authHeader;
+                }
 
-            using var response = await httpClient.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            writtenResourceIds.Add(record.SourceResourceId);
+                using var response = await httpClient.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    writtenResourceIds.Add(record.SourceResourceId);
+                }
+                else
+                {
+                    var detail = await ReadResponseDetailAsync(response, cancellationToken);
+                    recordErrors.Add($"{resourceType}/{resourceId}: HTTP {(int)response.StatusCode} {detail}");
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                recordErrors.Add($"{resourceType}/{resourceId}: {ex.Message}");
+            }
         }
 
         return new DestinationWriteResult(
@@ -481,6 +522,64 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         }
 
         return (writable, errors);
+    }
+
+    /// <summary>Reads a failed response body (typically a FHIR <c>OperationOutcome</c>) as a short diagnostic string.</summary>
+    private static async Task<string> ReadResponseDetailAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            body = body.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return body.Length > 500 ? body[..500] + "…" : body;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return response.ReasonPhrase ?? "(no response body)";
+        }
+    }
+
+    /// <summary>
+    /// The FHIR base URL: the destination's <see cref="DestinationConfiguration.Target"/> when set (configured-pipeline
+    /// path), else the <c>dest_fhirBaseUrl</c>/<c>fhirBaseUrl</c> key on <see cref="DestinationConfiguration.ConnectionMetadataJson"/>
+    /// (workflow-graph run path, where Target is reconstructed empty). Returns null when neither is present.
+    /// </summary>
+    private static string? ResolveBaseUrl(DestinationConfiguration destination)
+    {
+        if (!string.IsNullOrWhiteSpace(destination.Target))
+        {
+            return destination.Target;
+        }
+
+        if (string.IsNullOrWhiteSpace(destination.ConnectionMetadataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(destination.ConnectionMetadataJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            foreach (var key in new[] { "dest_fhirBaseUrl", "fhirBaseUrl" })
+            {
+                if (doc.RootElement.TryGetProperty(key, out var element)
+                    && element.ValueKind == JsonValueKind.String
+                    && element.GetString() is { Length: > 0 } value)
+                {
+                    return value;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed metadata → treat as absent; the secret fallback / a clear downstream failure takes over.
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -841,7 +940,26 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     {
         if (TryParseFhirResource(record, resolvedResourceCache, out var resourceType, out var resource))
         {
+            // ParseFhirResource (behind TryParseFhirResource's cache, above) already guarantees `id` is non-null —
+            // either the resource's own id, record.SourceResourceId, or a freshly minted GUID — and already
+            // stripped stable-coding versions, so neither needs repeating here. What's still needed at write time:
+            // namespace a purely-numeric logical id so a server that reserves numeric ids for its own assignment
+            // (HAPI's default client-id strategy: "clients may only assign IDs which contain at least one
+            // non-numeric character", HAPI-0960) will accept the client-supplied PUT. The rewrite is a pure,
+            // deterministic function of the id, and RewriteNumericReferences applies the identical transform to
+            // every "Type/{numericId}" reference in the resource — so a Patient's managingOrganization still points
+            // at the (also-namespaced) Organization that was written for it. Alphanumeric ids (most Patients) are
+            // left untouched, so they upsert in place rather than forking a duplicate under a new id.
+            // NOTE: this namespacing happens only at write time, after reference resolution/ordering/existence
+            // checks (which key off the resource's original, un-namespaced id) have already run — a purely-numeric
+            // id is namespaced identically wherever it's used, so existing consumers stay internally consistent,
+            // but a future direct id-based lookup against the destination for a namespaced id would need to know
+            // to check for the "fb-" prefix.
             var id = resource["id"]!.GetValue<string>();
+            id = SafenNumericId(id);
+            resource["id"] = id;
+            RewriteNumericReferences(resource);
+
             return (resourceType, Uri.EscapeDataString(id), resource.ToJsonString(JsonOptions));
         }
 
@@ -850,6 +968,115 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             ? Guid.NewGuid().ToString("N")
             : Uri.EscapeDataString(record.SourceResourceId);
         return (record.ResourceType, fallbackId, MappedDestinationSerialization.ToJson(record));
+    }
+
+    private const string NumericIdNamespacePrefix = "fb-";
+
+    /// <summary>Prefixes a purely-numeric logical id so a client may PUT-create it on a numeric-id-reserving server; leaves any id already containing a non-digit unchanged.</summary>
+    private static string SafenNumericId(string id) =>
+        IsAllDigits(id) ? NumericIdNamespacePrefix + id : id;
+
+    /// <summary>
+    /// Recursively rewrites every relative <c>"reference": "Type/{numericId}"</c> in the resource to
+    /// <c>"Type/fb-{numericId}"</c>, matching <see cref="SafenNumericId"/> applied to the referenced resource's own
+    /// id. Contained (<c>#</c>), logical (<c>urn:</c>), and absolute (<c>scheme://</c>) references — and references
+    /// whose id already contains a non-digit — are left untouched.
+    /// </summary>
+    private static void RewriteNumericReferences(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var property in obj.ToList())
+                {
+                    if (property.Key == "reference"
+                        && property.Value is JsonValue value
+                        && value.TryGetValue<string>(out var reference)
+                        && SafenReference(reference) is { } rewritten
+                        && !string.Equals(rewritten, reference, StringComparison.Ordinal))
+                    {
+                        obj[property.Key] = rewritten;
+                    }
+                    else
+                    {
+                        RewriteNumericReferences(property.Value);
+                    }
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    RewriteNumericReferences(item);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>Returns the namespaced form of a relative <c>Type/{numericId}</c> reference, or the reference unchanged when it isn't one.</summary>
+    private static string SafenReference(string reference)
+    {
+        if (string.IsNullOrEmpty(reference)
+            || reference[0] == '#'
+            || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase)
+            || reference.Contains("://", StringComparison.Ordinal))
+        {
+            return reference;
+        }
+
+        var slash = reference.IndexOf('/');
+        if (slash <= 0 || slash == reference.Length - 1)
+        {
+            return reference;
+        }
+
+        var resourceType = reference[..slash];
+        var rest = reference[(slash + 1)..];
+        // A relative reference can carry a version: Type/id/_history/vid — namespace only the id segment.
+        var idEnd = rest.IndexOf('/');
+        var id = idEnd < 0 ? rest : rest[..idEnd];
+        var tail = idEnd < 0 ? string.Empty : rest[idEnd..];
+
+        return IsAllLetters(resourceType) && IsAllDigits(id)
+            ? $"{resourceType}/{NumericIdNamespacePrefix}{id}{tail}"
+            : reference;
+    }
+
+    private static bool IsAllDigits(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            if (c is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAllLetters(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            if (!char.IsLetter(c))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

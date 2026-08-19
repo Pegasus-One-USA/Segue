@@ -1,0 +1,42 @@
+{
+  "resourceType": "Device",
+  "id": "device-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:device",
+      "value": "DEVICE-001"
+    }
+  ],
+  "status": "active",
+  "manufacturer": "Acme MedTech",
+  "deviceName": [
+    {
+      "name": "Acme GlucoTrack Meter",
+      "type": "user-friendly-name"
+    }
+  ],
+  "type": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "337414009",
+        "display": "Blood glucose meter"
+      }
+    ],
+    "text": "Blood glucose meter"
+  },
+  "patient": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  }
+}

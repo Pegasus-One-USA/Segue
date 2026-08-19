@@ -447,14 +447,17 @@ export class WorkflowBuildAssemblerService {
     const isMongo =
       node.nodeType.includes('Mongo') ||
       (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isMedplum =
+      node.nodeType.includes('Medplum') ||
+      (fields['__transformId'] ?? '') === 'dest-medplum';
     const isFhir =
-      node.nodeType.includes('Fhir') ||
+      node.nodeType.includes('FhirRepository') ||
       (fields['__transformId'] ?? '') === 'dest-fhir';
     const isBlob =
       node.nodeType.includes('Blob') ||
       (fields['__transformId'] ?? '') === 'dest-blob';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -505,6 +508,24 @@ export class WorkflowBuildAssemblerService {
             ? null
             : fields['dest_connectionString'] || '',
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'mongo'),
+      };
+    }
+
+    if (isMedplum) {
+      return {
+        name,
+        destinationType: 'Medplum',
+        keyVaultName,
+        secretName,
+        // The FHIR base URL is the destination target; the client secret / PEM private key is treated as the
+        // whole opaque secret (see destination-wizard.component.ts's medplumForm) — same "don't touch an
+        // already-provisioned secret unless the user actually typed a new one" guard the SQL/SFTP/Mongo branches use.
+        target: fields['dest_medplumBaseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !fields['dest_medplumSecret']
+            ? null
+            : fields['dest_medplumSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'medplum'),
       };
     }
 
@@ -574,7 +595,7 @@ export class WorkflowBuildAssemblerService {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'fhir' | 'blob',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob',
   ): string {
     const keys =
       kind === 'sql'
@@ -590,6 +611,19 @@ export class WorkflowBuildAssemblerService {
           ]
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          : kind === 'medplum'
+          ? [
+              'dest_name',
+              // Carried in metadata as a fallback for Target: the workflow-graph / bulk-export-resume run path
+              // reconstructs the destination from node config and can leave Target empty, so the FHIR base URL must
+              // also live here for the Medplum writer to resolve it. See MedplumConnectionMetadata.BaseUrl.
+              'dest_medplumBaseUrl',
+              'dest_medplumClientId',
+              'dest_medplumAuthMethod',
+              'dest_medplumWriteMode',
+              'dest_medplumBatchSize',
+              'dest_medplumIdentifierSystem',
+            ]
           : kind === 'fhir'
             ? [
                 'dest_name',

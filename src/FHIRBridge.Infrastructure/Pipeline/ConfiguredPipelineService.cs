@@ -837,14 +837,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     cancellationToken);
             }
 
-            if (governanceDecision.RequiresDeIdentification)
+            if (governanceDecision.DeIdentificationProfileId is { } deIdentificationProfileId)
             {
                 governedJson = await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
                         resourceType,
                         resource.ResourceId,
                         governedJson,
-                        governanceDecision.AppliedPolicies),
+                        governanceDecision.AppliedPolicies,
+                        deIdentificationProfileId),
                     cancellationToken);
             }
 

@@ -41,6 +41,7 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-mysql',
     'dest-mongo',
     'dest-postgres',
+    'dest-medplum',
     'dest-fhir',
     'dest-blob',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',

@@ -1,0 +1,37 @@
+{
+  "resourceType": "Practitioner",
+  "id": "practitioner-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:practitioner",
+      "value": "PRACTITIONER-003"
+    },
+    {
+      "system": "http://hl7.org/fhir/sid/us-npi",
+      "value": "1679576722"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "family": "Tanaka",
+      "given": [
+        "Yuki"
+      ],
+      "prefix": [
+        "Dr"
+      ]
+    }
+  ],
+  "gender": "female"
+}

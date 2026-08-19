@@ -1,0 +1,48 @@
+{
+  "resourceType": "Procedure",
+  "id": "procedure-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:procedure",
+      "value": "PROCEDURE-001"
+    }
+  ],
+  "status": "completed",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.ama-assn.org/go/cpt",
+        "code": "71046",
+        "display": "Radiologic examination, chest; 2 views"
+      }
+    ],
+    "text": "Radiologic examination, chest; 2 views"
+  },
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-003",
+    "display": "encounter-003"
+  },
+  "performedDateTime": "2026-05-01T22:40:00Z",
+  "performer": [
+    {
+      "actor": {
+        "reference": "Practitioner/practitioner-002",
+        "display": "Dr Daniel Okafor"
+      }
+    }
+  ]
+}

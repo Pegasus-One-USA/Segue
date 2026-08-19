@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { DESTINATION_ENDPOINTS } from '../../core/api-endpoints';
 import {
   CreateDestinationConfigurationRequest,
@@ -38,6 +39,14 @@ export class DestinationConfigurationService {
 
   create(request: CreateDestinationConfigurationRequest): Observable<DestinationConfigurationDto> {
     return this.http.post<DestinationConfigurationDto>(DESTINATION_ENDPOINTS.list, request);
+  }
+
+  /** No single-destination GET on the backend — ConfigurationCatalogController.ListDestinations returns the
+   *  full unpaged list, so this is a client-side lookup rather than an extra server round-trip. Used only to
+   *  restore the de-identification profile picker when editing an already-provisioned destination node. */
+  getById(id: string): Observable<DestinationConfigurationDto | undefined> {
+    return this.http.get<DestinationConfigurationDto[]>(DESTINATION_ENDPOINTS.list)
+      .pipe(map(items => items.find(item => item.id === id)));
   }
 
   update(id: string, request: CreateDestinationConfigurationRequest): Observable<DestinationConfigurationDto> {

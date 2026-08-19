@@ -1,0 +1,264 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Observation/neg-observation-001",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "neg-observation-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "NEG-OBSERVATION-001"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2339-0",
+              "display": "Glucose [Mass/volume] in Blood"
+            }
+          ],
+          "text": "Glucose [Mass/volume] in Blood"
+        },
+        "subject": {
+          "reference": "Patient/patient-999-missing",
+          "display": "MISSING patient"
+        },
+        "valueQuantity": {
+          "value": 150,
+          "unit": "mg/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "mg/dL"
+        },
+        "effectiveDateTime": "2026-05-04T09:10:00Z"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/neg-observation-001"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Condition/neg-condition-001",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "neg-condition-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "NEG-CONDITION-001"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "44054006",
+              "display": "Type 2 diabetes mellitus"
+            }
+          ],
+          "text": "Type 2 diabetes mellitus"
+        },
+        "subject": {
+          "reference": "Patient/patient-001",
+          "display": "James Whitfield"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-999-missing",
+          "display": "MISSING encounter"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Condition/neg-condition-001"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/DiagnosticReport/neg-diagnosticreport-001",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "neg-diagnosticreport-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "NEG-DIAGNOSTICREPORT-001"
+          }
+        ],
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "24323-8",
+              "display": "Comprehensive metabolic panel"
+            }
+          ],
+          "text": "Comprehensive metabolic panel"
+        },
+        "subject": {
+          "reference": "Patient/patient-001",
+          "display": "James Whitfield"
+        },
+        "result": [
+          {
+            "reference": "Observation/observation-999-missing",
+            "display": "MISSING observation"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/neg-diagnosticreport-001"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/MedicationRequest/neg-medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "neg-medicationrequest-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "NEG-MEDICATIONREQUEST-001"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "Medication/medication-999-missing",
+          "display": "MISSING medication"
+        },
+        "subject": {
+          "reference": "Patient/patient-001",
+          "display": "James Whitfield"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "MedicationRequest/neg-medicationrequest-001"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Encounter/neg-encounter-001",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "neg-encounter-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "NEG-ENCOUNTER-001"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/patient-001",
+          "display": "James Whitfield"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "Practitioner/practitioner-999-missing",
+              "display": "MISSING practitioner"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/neg-encounter-001"
+      }
+    }
+  ]
+}

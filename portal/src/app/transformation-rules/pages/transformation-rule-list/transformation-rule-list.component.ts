@@ -8,11 +8,12 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { ToastService } from '../../../services/toast.service';
-import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { DestinationType, DeIdentificationProfileDto } from '../../../destination-connections/models/destination-configuration.model';
+import { DeIdentificationProfileService } from '../../../destination-connections/services/deidentification-profile.service';
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformScope, TransformNodeSchema,
-  NullPolicy, TransformErrorPolicy, TransformArrayMode,
+  NullPolicy, TransformErrorPolicy, TransformArrayMode, TransformExecutionPhase,
 } from '../../../components/node-library/destination-wizard/field-mapping/transformation-rules.service';
 import {
   ALL_NODE_TYPE_OPTIONS, getApplicableNodeTypes,
@@ -20,6 +21,11 @@ import {
 import {
   RuleConfigFormComponent, applyNodeDefaults,
 } from '../../../components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component';
+
+// Pre-mapping HashingMasking rules walk raw source JSON by path (see SafeHarborDeIdentificationService) and
+// so support strategies a post-mapping scalar transform can't (removing a property outright, generalizing a
+// date/ZIP) alongside the existing hash/mask/redact vocabulary.
+const PRE_MAPPING_HASHING_MASKING_MODES = ['hash', 'mask', 'redact', 'remove', 'generalizeDateToYear', 'generalizeZip3'];
 
 const DESTINATION_TYPE_OPTIONS: DestinationType[] = [
   'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'Csv', 'Sftp', 'FhirRepository',
@@ -60,12 +66,26 @@ interface RuleTargetGroup {
   destinationType: DestinationType | null;
   destinationField: string | null;
   sourceField: string | null;
+  executionPhase: TransformExecutionPhase;
+  deIdentificationProfileId: string | null;
   steps: RuleStep[];
   editing: boolean;
+  previewOpen?: boolean;
+  previewResourceType?: string;
+  previewSampleJson?: string;
+  previewResultJson?: string | null;
+  previewRunning?: boolean;
 }
 
-function groupKey(r: { scope: TransformScope; resourceType?: string | null; destinationType?: DestinationType | null; destinationField?: string | null; sourceField?: string | null }): string {
-  return [r.scope, r.resourceType ?? '', r.destinationType ?? '', r.destinationField ?? '', r.sourceField ?? ''].join('|');
+function groupKey(r: {
+  scope: TransformScope; resourceType?: string | null; destinationType?: DestinationType | null;
+  destinationField?: string | null; sourceField?: string | null; executionPhase?: TransformExecutionPhase;
+  deIdentificationProfileId?: string | null;
+}): string {
+  return [
+    r.scope, r.resourceType ?? '', r.destinationType ?? '', r.destinationField ?? '', r.sourceField ?? '',
+    r.executionPhase ?? 'PostMapping', r.deIdentificationProfileId ?? '',
+  ].join('|');
 }
 
 interface NewTargetForm {
@@ -74,10 +94,15 @@ interface NewTargetForm {
   destinationType: DestinationType | '';
   destinationField: string;
   sourceField: string;
+  executionPhase: TransformExecutionPhase;
+  deIdentificationProfileId: string;
 }
 
 function emptyTargetForm(): NewTargetForm {
-  return { scope: 'Global', resourceType: '', destinationType: '', destinationField: '', sourceField: '' };
+  return {
+    scope: 'Global', resourceType: '', destinationType: '', destinationField: '', sourceField: '',
+    executionPhase: 'PostMapping', deIdentificationProfileId: '',
+  };
 }
 
 /**
@@ -100,10 +125,91 @@ export class TransformationRuleListComponent implements OnInit {
   private readonly rulesService = inject(TransformationRulesService);
   private readonly catalogService = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
+  private readonly deIdentificationProfileSvc = inject(DeIdentificationProfileService);
 
   readonly scopeOptions = BROAD_SCOPE_OPTIONS;
   readonly destinationTypeOptions = DESTINATION_TYPE_OPTIONS;
   readonly resourceTypeOptions = ['Patient', 'Observation', 'Encounter', 'Condition', 'Practitioner'];
+  readonly preMappingHashingMaskingModes = PRE_MAPPING_HASHING_MASKING_MODES;
+
+  readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
+  readonly newProfileName = signal('');
+  readonly creatingProfile = signal(false);
+
+  private loadDeIdentificationProfiles(): void {
+    this.deIdentificationProfileSvc.list().subscribe({
+      next: profiles => this.deIdentificationProfiles.set(profiles),
+      error: () => this.deIdentificationProfiles.set([]),
+    });
+  }
+
+  profileName(id: string | null): string {
+    if (!id) return 'None';
+    return this.deIdentificationProfiles().find(p => p.id === id)?.name ?? 'None';
+  }
+
+  createDeIdentificationProfileForNewTarget(): void {
+    const name = this.newProfileName().trim();
+    if (!name) return;
+    this.creatingProfile.set(true);
+    this.deIdentificationProfileSvc.create({ name }).subscribe({
+      next: profile => {
+        this.deIdentificationProfiles.update(existing => [...existing, profile]);
+        this.newTarget.set({ ...this.newTarget(), deIdentificationProfileId: profile.id });
+        this.newProfileName.set('');
+        this.creatingProfile.set(false);
+      },
+      error: err => {
+        this.creatingProfile.set(false);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the profile.';
+        this.toast.error(typeof msg === 'string' ? msg : 'Failed to create the profile.');
+      },
+    });
+  }
+
+  setNewTargetExecutionPhase(phase: TransformExecutionPhase): void {
+    this.newTarget.set({ ...this.newTarget(), executionPhase: phase, deIdentificationProfileId: phase === 'PreMapping' ? this.newTarget().deIdentificationProfileId : '' });
+  }
+
+  setNewTargetDeIdentificationProfileId(id: string): void {
+    this.newTarget.set({ ...this.newTarget(), deIdentificationProfileId: id });
+  }
+
+  togglePreview(group: RuleTargetGroup): void {
+    group.previewOpen = !group.previewOpen;
+    if (group.previewOpen && group.previewResourceType === undefined) {
+      group.previewResourceType = group.resourceType ?? '';
+      group.previewSampleJson = '';
+      group.previewResultJson = null;
+    }
+    this.groups.set([...this.groups()]);
+  }
+
+  runPreview(group: RuleTargetGroup): void {
+    const profileId = group.deIdentificationProfileId;
+    const resourceType = (group.previewResourceType ?? '').trim();
+    const sampleJson = group.previewSampleJson ?? '';
+    if (!profileId || !resourceType || !sampleJson.trim()) {
+      this.toast.error('Resource type and a sample resource are both required to preview.');
+      return;
+    }
+
+    group.previewRunning = true;
+    this.groups.set([...this.groups()]);
+    this.deIdentificationProfileSvc.preview(profileId, resourceType, sampleJson).subscribe({
+      next: result => {
+        group.previewRunning = false;
+        group.previewResultJson = result.redactedJson;
+        this.groups.set([...this.groups()]);
+      },
+      error: err => {
+        group.previewRunning = false;
+        this.groups.set([...this.groups()]);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Preview failed.';
+        this.toast.error(typeof msg === 'string' ? msg : 'Preview failed.');
+      },
+    });
+  }
 
   readonly loading = signal(true);
   // Defense-in-depth: the nav tab that links here is already hidden while the feature flag reads hidden
@@ -119,6 +225,7 @@ export class TransformationRuleListComponent implements OnInit {
   private nodeSchemas: TransformNodeSchema[] = [];
 
   ngOnInit(): void {
+    this.loadDeIdentificationProfiles();
     this.rulesService.isHidden().subscribe(hidden => {
       this.disabled.set(hidden);
       if (hidden) {
@@ -158,7 +265,9 @@ export class TransformationRuleListComponent implements OnInit {
           if (!group) {
             group = {
               key, scope: r.scope, resourceType: r.resourceType ?? null, destinationType: r.destinationType ?? null,
-              destinationField: r.destinationField ?? null, sourceField: r.sourceField ?? null, steps: [], editing: false,
+              destinationField: r.destinationField ?? null, sourceField: r.sourceField ?? null,
+              executionPhase: r.executionPhase ?? 'PostMapping', deIdentificationProfileId: r.deIdentificationProfileId ?? null,
+              steps: [], editing: false,
             };
             byKey.set(key, group);
           }
@@ -223,8 +332,26 @@ export class TransformationRuleListComponent implements OnInit {
       this.toast.error('Source field is required for a field-scoped rule — that’s what it matches on instead of a resource type.');
       return;
     }
+    if (t.executionPhase === 'PreMapping') {
+      if (t.scope !== 'Global' && t.scope !== 'ResourceType') {
+        this.toast.error('Before-mapping (de-identification) rules are only valid at Global or Resource type scope.');
+        return;
+      }
+      if (!t.sourceField.trim()) {
+        this.toast.error('A source FHIR path (e.g. "agent.who.display") is required for a before-mapping rule.');
+        return;
+      }
+      if (!t.deIdentificationProfileId) {
+        this.toast.error('A de-identification profile is required for a before-mapping rule.');
+        return;
+      }
+    }
 
-    const key = groupKey({ scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null, destinationField: t.destinationField, sourceField: t.sourceField });
+    const key = groupKey({
+      scope: t.scope, resourceType: t.resourceType, destinationType: t.destinationType || null,
+      destinationField: t.destinationField, sourceField: t.sourceField,
+      executionPhase: t.executionPhase, deIdentificationProfileId: t.deIdentificationProfileId || null,
+    });
 
     // A target with this exact (scope, resourceType, destinationType, destinationField, sourceField)
     // combination already exists — load() groups rows by this same key, so creating another one here
@@ -240,17 +367,26 @@ export class TransformationRuleListComponent implements OnInit {
       return;
     }
 
+    // Pre-mapping rules always use HashingMasking — it's the only node type with a schema offering the
+    // remove/hash/mask/redact/generalize vocabulary SafeHarborDeIdentificationService interprets.
     const applicable = t.sourceField ? getApplicableNodeTypes(t.sourceField, null) : ALL_NODE_TYPE_OPTIONS;
-    const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    const nodeType: TransformNodeType = t.executionPhase === 'PreMapping'
+      ? 'HashingMasking'
+      : applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    const initialConfig = t.executionPhase === 'PreMapping'
+      ? { mode: 'remove' }
+      : applyNodeDefaults(this.schemaFor(nodeType), {});
     const group: RuleTargetGroup = {
       key,
       scope: t.scope,
       resourceType: t.scope === 'ResourceType' ? t.resourceType.trim() : null,
       destinationType: t.scope === 'DestinationType' ? (t.destinationType || null) : null,
-      destinationField: t.destinationField.trim() || null,
+      destinationField: t.executionPhase === 'PreMapping' ? null : (t.destinationField.trim() || null),
       sourceField: t.sourceField || null,
+      executionPhase: t.executionPhase,
+      deIdentificationProfileId: t.executionPhase === 'PreMapping' ? t.deIdentificationProfileId || null : null,
       steps: [{
-        id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: 0, saving: false,
+        id: null, nodeType, config: initialConfig, order: 0, saving: false,
         onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
         fhirWriteBackJsonPath: null,
       }],
@@ -267,9 +403,12 @@ export class TransformationRuleListComponent implements OnInit {
 
   addStep(group: RuleTargetGroup): void {
     const applicable = this.applicableNodeTypesFor(group);
-    const nodeType = applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    const nodeType: TransformNodeType = group.executionPhase === 'PreMapping'
+      ? 'HashingMasking'
+      : applicable[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
+    const config = group.executionPhase === 'PreMapping' ? { mode: 'remove' } : applyNodeDefaults(this.schemaFor(nodeType), {});
     group.steps.push({
-      id: null, nodeType, config: applyNodeDefaults(this.schemaFor(nodeType), {}), order: group.steps.length, saving: false,
+      id: null, nodeType, config, order: group.steps.length, saving: false,
       onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
       fhirWriteBackJsonPath: null,
     });
@@ -335,6 +474,8 @@ export class TransformationRuleListComponent implements OnInit {
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
       fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
+      executionPhase: group.executionPhase,
+      deIdentificationProfileId: group.deIdentificationProfileId,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

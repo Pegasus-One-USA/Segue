@@ -1,0 +1,42 @@
+{
+  "resourceType": "Device",
+  "id": "device-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:device",
+      "value": "DEVICE-002"
+    }
+  ],
+  "status": "active",
+  "manufacturer": "Acme MedTech",
+  "deviceName": [
+    {
+      "name": "Acme OxySense Pulse Oximeter",
+      "type": "user-friendly-name"
+    }
+  ],
+  "type": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "448703006",
+        "display": "Pulse oximeter"
+      }
+    ],
+    "text": "Pulse oximeter"
+  },
+  "patient": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  }
+}

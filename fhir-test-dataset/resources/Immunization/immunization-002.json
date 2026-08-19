@@ -1,0 +1,37 @@
+{
+  "resourceType": "Immunization",
+  "id": "immunization-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:immunization",
+      "value": "IMMUNIZATION-002"
+    }
+  ],
+  "status": "completed",
+  "vaccineCode": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/sid/cvx",
+        "code": "115",
+        "display": "Tdap"
+      }
+    ],
+    "text": "Tdap"
+  },
+  "patient": {
+    "reference": "Patient/patient-005",
+    "display": "Grace Chen"
+  },
+  "occurrenceDateTime": "2024-08-12",
+  "primarySource": true
+}

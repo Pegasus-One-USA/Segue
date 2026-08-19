@@ -1,0 +1,55 @@
+{
+  "resourceType": "Patient",
+  "id": "patient-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:patient",
+      "value": "PATIENT-001"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Whitfield",
+      "given": [
+        "James",
+        "A"
+      ]
+    }
+  ],
+  "gender": "male",
+  "birthDate": "1968-03-12",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-1001",
+      "use": "home"
+    }
+  ],
+  "address": [
+    {
+      "line": [
+        "1 Elm St"
+      ],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02120",
+      "country": "US"
+    }
+  ],
+  "managingOrganization": {
+    "reference": "Organization/org-001",
+    "display": "Segue General Hospital"
+  }
+}

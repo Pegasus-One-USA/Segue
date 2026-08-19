@@ -1,0 +1,44 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "medicationrequest-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:medicationrequest",
+      "value": "MEDICATIONREQUEST-003"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "medicationReference": {
+    "reference": "Medication/medication-003",
+    "display": "Amoxicillin 500 MG"
+  },
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "requester": {
+    "reference": "Practitioner/practitioner-002",
+    "display": "Dr Daniel Okafor"
+  },
+  "authoredOn": "2026-05-01T23:10:00Z",
+  "dosageInstruction": [
+    {
+      "text": "Take 1 capsule by mouth three times daily for 10 days"
+    }
+  ],
+  "encounter": {
+    "reference": "Encounter/encounter-003",
+    "display": "encounter-003"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "resourceType": "CarePlan",
+  "id": "careplan-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:careplan",
+      "value": "CAREPLAN-001"
+    }
+  ],
+  "status": "active",
+  "intent": "plan",
+  "title": "Type 2 Diabetes management plan",
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "addresses": [
+    {
+      "reference": "Condition/condition-001",
+      "display": "condition-001"
+    }
+  ],
+  "period": {
+    "start": "2026-05-04"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-001",
+    "display": "encounter-001"
+  }
+}

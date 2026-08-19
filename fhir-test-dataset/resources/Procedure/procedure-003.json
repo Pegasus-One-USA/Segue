@@ -1,0 +1,48 @@
+{
+  "resourceType": "Procedure",
+  "id": "procedure-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:procedure",
+      "value": "PROCEDURE-003"
+    }
+  ],
+  "status": "completed",
+  "code": {
+    "coding": [
+      {
+        "system": "http://www.ama-assn.org/go/cpt",
+        "code": "93000",
+        "display": "Electrocardiogram, complete"
+      }
+    ],
+    "text": "Electrocardiogram, complete"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-001",
+    "display": "encounter-001"
+  },
+  "performedDateTime": "2026-05-04T09:30:00Z",
+  "performer": [
+    {
+      "actor": {
+        "reference": "Practitioner/practitioner-001",
+        "display": "Dr Sarah Reynolds"
+      }
+    }
+  ]
+}

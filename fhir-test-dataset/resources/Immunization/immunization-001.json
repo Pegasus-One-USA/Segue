@@ -1,0 +1,37 @@
+{
+  "resourceType": "Immunization",
+  "id": "immunization-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:immunization",
+      "value": "IMMUNIZATION-001"
+    }
+  ],
+  "status": "completed",
+  "vaccineCode": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/sid/cvx",
+        "code": "140",
+        "display": "Influenza, seasonal, injectable, preservative free"
+      }
+    ],
+    "text": "Influenza, seasonal, injectable, preservative free"
+  },
+  "patient": {
+    "reference": "Patient/patient-005",
+    "display": "Grace Chen"
+  },
+  "occurrenceDateTime": "2025-10-05",
+  "primarySource": true
+}
