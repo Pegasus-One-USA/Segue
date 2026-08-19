@@ -61,6 +61,10 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public string? PasswordResetTokenHash { get; private set; }
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
 
+    /// <summary>Hash of the short-lived, single-use passwordless "magic link" sign-in token.</summary>
+    public string? MagicLinkTokenHash { get; private set; }
+    public DateTime? MagicLinkTokenExpiresOnUtc { get; private set; }
+
     /// <summary>Account status: Active, Inactive, or Invited.</summary>
     public UserStatus Status { get; private set; }
 
@@ -269,6 +273,20 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     {
         PasswordResetTokenHash = null;
         PasswordResetTokenExpiresOnUtc = null;
+    }
+
+    /// <summary>Stores the hash of a newly requested magic-link sign-in token.</summary>
+    public void SetMagicLinkToken(string tokenHash, DateTime expiresOnUtc)
+    {
+        MagicLinkTokenHash = tokenHash;
+        MagicLinkTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Clears the magic-link token once it has been consumed or should no longer be usable.</summary>
+    public void ClearMagicLinkToken()
+    {
+        MagicLinkTokenHash = null;
+        MagicLinkTokenExpiresOnUtc = null;
     }
 
     /// <summary>Marks the user as invited, storing the hashed invitation token.</summary>

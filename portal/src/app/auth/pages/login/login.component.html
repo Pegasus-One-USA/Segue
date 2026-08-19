@@ -230,6 +230,14 @@
           (authenticated)="onSsoAuthenticated($event)"
           (failed)="onSsoFailed($event)"
         />
+
+        @if (magicLinkEnabled()) {
+          <p class="auth-footer">
+            <a routerLink="/auth/magic-link" class="forgot-link">
+              Sign in with an email link instead
+            </a>
+          </p>
+        }
       }
     </div>
   </div>

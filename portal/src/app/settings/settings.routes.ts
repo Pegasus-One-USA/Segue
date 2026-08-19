@@ -143,6 +143,14 @@ export const SETTINGS_ROUTES: Routes = [
               { path: '', redirectTo: 'loinc', pathMatch: 'full' },
             ],
           },
+          {
+            path: 'sso-configurations',
+            canDeactivate: [unsavedChangesGuard],
+            loadComponent: () =>
+              import('./pages/sso-configurations/sso-configurations.component').then(
+                m => m.SsoConfigurationsComponent
+              ),
+          },
           { path: '', redirectTo: 'email', pathMatch: 'full' },
         ],
       },

@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageReference Include="ITfoxtec.Identity.Saml2" Version="4.20.1" />
+    <PackageReference Include="ITfoxtec.Identity.Saml2.MvcCore" Version="4.20.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.10" />
     <PackageReference Include="Microsoft.Identity.Web" Version="4.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">

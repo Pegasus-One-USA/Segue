@@ -137,6 +137,10 @@ public static class DependencyInjection
         services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 
+        // "SSO Configurations" admin screen — reads/writes SAML + magic-link fields as SystemSetting
+        // rows via the two services registered just above, so saves take effect without a restart.
+        services.AddScoped<ISsoConfigurationsService, SsoConfigurationsService>();
+
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
@@ -292,6 +296,11 @@ public static class DependencyInjection
         services.AddSingleton<IProviderTokenValidator, EntraTokenValidator>();
         services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
         services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
+
+        // SAML 2.0 SSO (single configured IdP, system-wide — see FHIRBridge.Domain/README.md on why this
+        // isn't per-tenant). Off by default; the ACS endpoint 404s until Authentication:Saml:Enabled is set.
+        services.Configure<SamlAuthenticationOptions>(configuration.GetSection("Authentication:Saml"));
+        services.AddSingleton<ISamlConfigurationProvider, SamlConfigurationProvider>();
 
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
