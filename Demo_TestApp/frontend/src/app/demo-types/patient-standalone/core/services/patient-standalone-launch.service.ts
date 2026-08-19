@@ -105,8 +105,9 @@ export interface EpicSessionStatusResponse {
  *  buttons — formerly the hardcoded CSV_EXPORT_WORKFLOW_ID/CSV_EMAIL_EXPORT_WORKFLOW_ID constants in
  *  standalone-launch.config.ts, now admin-configurable via WorkflowSettingsEntity.PatientCsvExportWorkflowId/
  *  PatientCsvEmailExportWorkflowId. athenaWorkflowId/athenaBaseUrl/athenaEhrEndpointId back the athenahealth side of
- *  this screen's Epic/athenahealth vendor toggle (see launch-standalone-patient.ts) — connect/list step only, no
- *  detail/CSV-export counterpart. */
+ *  this screen's Epic/athenahealth/eCW vendor toggle (see launch-standalone-patient.ts) — connect/list step only,
+ *  no detail/CSV-export counterpart. ecwWorkflowId/ecwBaseUrl/ecwEhrEndpointId are the same shape for the eCW side
+ *  of that same toggle. */
 export interface PatientStandaloneSettingsResponse {
   workflowId: string;
   detailWorkflowId: string;
@@ -116,6 +117,9 @@ export interface PatientStandaloneSettingsResponse {
   athenaWorkflowId: string;
   athenaBaseUrl: string;
   athenaEhrEndpointId: string;
+  ecwWorkflowId: string;
+  ecwBaseUrl: string;
+  ecwEhrEndpointId: string;
 }
 
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user

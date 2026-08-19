@@ -5,8 +5,10 @@ import { SourceConfigFormComponent } from '../../shared/config-form/config-form.
 /**
  * Thin, independently-editable wrapper around the shared EhrVendorSourceFormComponent engine, fixed to the Healow
  * vendor. Forwards every input/output the engine exposes unchanged — the only thing this file owns is "which
- * vendor" (see the `[vendor]="'Healow'"` binding in the template). Registered in source-form.registry.ts under the
- * `healow` key from sources.data.ts.
+ * vendor" (see the `[vendor]="'Healow'"` binding in the template) and its display brand name (`vendorLabel`,
+ * 'eCW' — eClinicalWorks markets this product as eCW; 'Healow' is only the backend SourceSystemType enum member
+ * name and must stay as-is for backend matching). Registered in source-form.registry.ts under the `healow` key
+ * from sources.data.ts.
  */
 @Component({
   selector: 'app-healow-source-form',

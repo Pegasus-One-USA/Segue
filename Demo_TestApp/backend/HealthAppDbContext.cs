@@ -138,6 +138,17 @@ public sealed class WorkflowSettingsEntity
     public string AthenaPatientBaseUrl { get; set; } = string.Empty;
     public string AthenaEhrEndpointId { get; set; } = string.Empty;
 
+    // eClinicalWorks (eCW) variant of the Patient_Standalone list/connect flow — same shape as the athenahealth
+    // fields above (a separate workflow id/base URL pair, never PatientWorkflowId/PatientBaseUrl, since eCW
+    // requires its own SourceConnection: Healow vendor, practice_code, patient-only audience). Also has no
+    // detail/CSV-export/CSV-email-export counterpart, for the same reason athenahealth doesn't. EcwEhrEndpointId is
+    // required for the same reason AthenaEhrEndpointId is: eCW's Patient audience currently targets one fixed
+    // practice (no per-hospital directory), so instead of a picker, an admin pastes the id of a pre-seeded
+    // EhrEndpoint row (type MyChart) whose FHIR base URL is the eCW practice's endpoint.
+    public string EcwPatientWorkflowId { get; set; } = string.Empty;
+    public string EcwPatientBaseUrl { get; set; } = string.Empty;
+    public string EcwEhrEndpointId { get; set; } = string.Empty;
+
     // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
     // Patient List" and "Patient Detail" are deliberately separate workflows (see
     // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
@@ -492,6 +503,9 @@ public sealed class HealthAppDbContext : DbContext
             AthenaPatientWorkflowId = string.Empty,
             AthenaPatientBaseUrl = string.Empty,
             AthenaEhrEndpointId = string.Empty,
+            EcwPatientWorkflowId = string.Empty,
+            EcwPatientBaseUrl = string.Empty,
+            EcwEhrEndpointId = string.Empty,
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty,
             // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).

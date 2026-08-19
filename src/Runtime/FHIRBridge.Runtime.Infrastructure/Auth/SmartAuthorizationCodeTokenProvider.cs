@@ -51,6 +51,26 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// <summary>Human-readable provider name used in messages, audit actions, and the token-store key prefix.</summary>
     protected virtual string ProviderName => "SMART";
 
+    private static readonly IReadOnlyDictionary<string, string> NoAdditionalAuthorizationParameters = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Extra authorize-request query parameters this vendor's authorization server requires beyond the standard
+    /// SMART App Launch set (response_type/client_id/redirect_uri/scope/state/code_challenge/
+    /// code_challenge_method/aud/launch) — e.g. eClinicalWorks' mandatory <c>practice_code</c> identifying which
+    /// practice's patient portal to authenticate against (see <see cref="HealowAuthorizationCodeTokenProvider"/>).
+    /// The base adds none; vendor subclasses override when their authorization server requires extra
+    /// request-level scoping beyond the standard set.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, string> AdditionalAuthorizationParameters(FhirSourceConfiguration source) =>
+        NoAdditionalAuthorizationParameters;
+
+    /// <summary>
+    /// Whether the authorize request should carry PKCE's <c>code_challenge</c>/<c>code_challenge_method</c> — true
+    /// for every vendor except eClinicalWorks (see <see cref="HealowAuthorizationCodeTokenProvider"/>), whose live
+    /// authorize endpoint was confirmed (via a real captured request) to omit them entirely.
+    /// </summary>
+    protected virtual bool IncludePkce => true;
+
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(source.ClientId))
@@ -216,8 +236,16 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         query["redirect_uri"] = redirectUri;
         query["scope"] = resolvedScope;
         query["state"] = state;
-        query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
-        query["code_challenge_method"] = "S256";
+
+        // PKCE (RFC 7636) — every vendor except eClinicalWorks, whose live authorize endpoint has been confirmed to
+        // reject/ignore it entirely (see IncludePkce). The code_verifier is still generated and returned above
+        // either way: ExchangeAuthorizationCodeAsync always sends it on the token POST, which a server that never
+        // received a code_challenge simply has nothing to validate it against.
+        if (IncludePkce)
+        {
+            query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
+            query["code_challenge_method"] = "S256";
+        }
 
         // Epic (and SMART generally) require the authorize request's audience to equal the FHIR base URL — omitting it
         // is the most common cause of a rejected launch.
@@ -230,6 +258,13 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         if (!string.IsNullOrWhiteSpace(launch))
         {
             query["launch"] = launch;
+        }
+
+        // Vendor-specific extras beyond the standard SMART set (e.g. eClinicalWorks' mandatory practice_code) —
+        // the base sends none; see AdditionalAuthorizationParameters.
+        foreach (var (key, value) in AdditionalAuthorizationParameters(source))
+        {
+            query[key] = value;
         }
 
         var separator = source.AuthorizationEndpoint!.Contains('?') ? "&" : "?";
@@ -325,17 +360,25 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             }
 
             string? practitionerId = null;
+            string? patientFromIdToken = null;
             if (!string.IsNullOrWhiteSpace(token.IdToken))
             {
-                var fhirUser = await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
+                var (fhirUser, idTokenPatient) = await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
                 practitionerId = ExtractPractitionerId(fhirUser);
+                patientFromIdToken = idTokenPatient ?? ExtractPatientId(fhirUser);
             }
 
-            // token.Patient is a FHIR resource id, not logged in full elsewhere in this line — only its presence is
-            // logged (never the value) to avoid writing patient identifiers into the log stream.
+            // Some SMART-on-FHIR EHRs don't surface `patient` at the top level of the token response for a Patient-
+            // context app — only inside the id_token's own claims (either a bare `patient` claim, or the `fhirUser`
+            // reference itself pointing at a Patient rather than a Practitioner). Only ever used when the top-level
+            // field is absent, so this has no effect on a vendor (Epic, athenahealth) that already returns it there.
+            var resolvedPatient = !string.IsNullOrWhiteSpace(token.Patient) ? token.Patient : patientFromIdToken;
+
+            // resolvedPatient is a FHIR resource id, not logged in full elsewhere in this line — only its presence
+            // is logged (never the value) to avoid writing patient identifiers into the log stream.
             _logger.LogInformation(
                 "[Step 6/6] {Provider} {Action} succeeded: grantedScope=\"{GrantedScope}\" hasPatientContext={HasPatientContext} expiresInSeconds={ExpiresInSeconds}",
-                ProviderName, action, token.Scope, !string.IsNullOrWhiteSpace(token.Patient), token.ExpiresInSeconds);
+                ProviderName, action, token.Scope, !string.IsNullOrWhiteSpace(resolvedPatient), token.ExpiresInSeconds);
 
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;
             var stored = new StoredOAuthToken(
@@ -343,7 +386,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 string.IsNullOrWhiteSpace(token.RefreshToken) ? fallbackRefreshToken : token.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
                 token.Scope,
-                token.Patient,
+                resolvedPatient,
                 source.TokenEndpoint,
                 // By the time this runs, source.BaseUrl already carries whichever URL the caller actually issued
                 // this session against (the connection's own, or a resolved hospital/organization EhrEndpoint
@@ -360,7 +403,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // source.TargetPatientId was set to look the stored token up in the first place). This is what lets a
             // second, separately-triggered workflow ask for THIS patient's session explicitly and get it even after
             // a different patient has since logged in against the same source connection and overwritten "default".
-            var resolvedPatientId = token.Patient ?? source.TargetPatientId;
+            var resolvedPatientId = resolvedPatient ?? source.TargetPatientId;
             if (!string.IsNullOrWhiteSpace(resolvedPatientId))
             {
                 await SaveUnderBothKeysAsync(source, resolvedPatientId, stored, cancellationToken);
@@ -370,9 +413,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             return new SmartAuthorizationCodeExchangeResult(
                 token.AccessToken!,
                 token.Scope,
-                !string.IsNullOrWhiteSpace(token.Patient),
+                !string.IsNullOrWhiteSpace(resolvedPatient),
                 HashKey(BuildStoreKey(source, null)),
-                PatientId: token.Patient,
+                PatientId: resolvedPatient,
                 PractitionerId: practitionerId);
         }
     }
@@ -423,10 +466,11 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     /// <summary>
     /// Validates the id_token's signature/issuer/audience/lifetime and returns its <c>fhirUser</c> claim (a
-    /// SMART-standard reference such as <c>Practitioner/123</c> or an absolute URL ending in one), or null when the
-    /// claim is absent.
+    /// SMART-standard reference such as <c>Practitioner/123</c> or an absolute URL ending in one, or null when the
+    /// claim is absent) alongside its own <c>patient</c> claim, when present — the fallback source for a Patient-
+    /// context app whose token response doesn't surface <c>patient</c> at the top level (see the caller).
     /// </summary>
-    private async Task<string?> ValidateIdTokenAsync(
+    private async Task<(string? FhirUser, string? Patient)> ValidateIdTokenAsync(
         FhirSourceConfiguration source,
         string idToken,
         CancellationToken cancellationToken)
@@ -462,7 +506,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             ClockSkew = TimeSpan.FromMinutes(2)
         }, out _);
 
-        return principal.FindFirst("fhirUser")?.Value;
+        return (principal.FindFirst("fhirUser")?.Value, principal.FindFirst("patient")?.Value);
     }
 
     // Parses a SMART fhirUser reference (relative "Practitioner/123" or absolute ".../Practitioner/123") into the
@@ -477,6 +521,22 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
         var segments = fhirUserReference.TrimEnd('/').Split('/');
         return segments.Length >= 2 && string.Equals(segments[^2], "Practitioner", StringComparison.Ordinal)
+            ? segments[^1]
+            : null;
+    }
+
+    // Same shape as ExtractPractitionerId, but for a patient-facing app whose fhirUser reference points at the
+    // Patient itself (e.g. a Patient Standalone launch with no separate top-level or id_token `patient` claim) —
+    // the last-resort fallback ValidateIdTokenAsync's caller tries after the id_token's own `patient` claim.
+    private static string? ExtractPatientId(string? fhirUserReference)
+    {
+        if (string.IsNullOrWhiteSpace(fhirUserReference))
+        {
+            return null;
+        }
+
+        var segments = fhirUserReference.TrimEnd('/').Split('/');
+        return segments.Length >= 2 && string.Equals(segments[^2], "Patient", StringComparison.Ordinal)
             ? segments[^1]
             : null;
     }

@@ -96,7 +96,7 @@ export class SourceConnectionListComponent implements OnInit {
     { value: 'Athenahealth',        label: 'Athenahealth' },
     { value: 'Allscripts',          label: 'Allscripts' },
     { value: 'Hl7v2',               label: 'HL7v2' },
-    { value: 'Healow',              label: 'Healow' },
+    { value: 'Healow',              label: 'eCW (Healow)' },
     { value: 'MeditechGreenfield',  label: 'MEDITECH Greenfield' },
     { value: 'NewEHR',              label: 'NewEHR' },
     { value: 'NewEHRTwo',           label: 'NewEHR Two' },
