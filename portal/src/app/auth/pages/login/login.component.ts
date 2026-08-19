@@ -58,6 +58,14 @@ export class LoginComponent {
 
   constructor() {
     void this.ssoConfig.load();
+
+    // Surfaces a failed Entra loginRedirect completion (see app.config.ts's APP_INITIALIZER) —
+    // that failure happens before this page is even mounted, so a query param is how it gets here,
+    // the same pattern the SAML ACS redirect already uses for its own failures.
+    const ssoError = this.route.snapshot.queryParamMap.get('error');
+    if (ssoError === 'sso_failed') {
+      this.toast.error('No matching account found for this identity. Ask an administrator for an invitation.');
+    }
   }
 
   protected readonly ssoBusy = signal(false);

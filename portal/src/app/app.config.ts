@@ -3,10 +3,10 @@ import {
   provideZoneChangeDetection,
   APP_INITIALIZER,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withRouterConfig, Router } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { switchMap } from 'rxjs';
+import { switchMap, firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
@@ -17,6 +17,8 @@ import { AuthApiService } from './auth/services/auth-api.service';
 import { ApiUserService } from './auth/services/api-user.service';
 import { AuthService } from './auth/services/auth.service';
 import { AppInitService } from './onboarding/services/app-init.service';
+import { SsoService } from './auth/services/sso.service';
+import { SsoAuthApiService } from './auth/services/sso-auth-api.service';
 import { IRoleService } from './user-management/services/i-role.service';
 import { ApiRoleService } from './user-management/services/api-role.service';
 import { IEhrEndpointService } from './ehr-endpoints/services/i-ehr-endpoint.service';
@@ -30,7 +32,32 @@ import { ApiSystemSettingsService } from './system-settings/services/api-system-
 import { IAppSecretsService } from './system-security/services/i-app-secrets.service';
 import { ApiAppSecretsService } from './system-security/services/api-app-secrets.service';
 
-function initApp(auth: AuthService, appInit: AppInitService) {
+function initApp(
+  auth: AuthService,
+  appInit: AppInitService,
+  sso: SsoService,
+  ssoAuthApi: SsoAuthApiService,
+  router: Router,
+) {
+  // Runs on EVERY app boot, including the one where the browser has just come back from Entra's
+  // loginRedirect (see sso.service.ts) — handleRedirectResponse() resolves to null on a normal
+  // boot, so this only branches when there's an actual response to process. Checked first, before
+  // the usual setup/session-restore path below, since a fresh SSO login makes that path moot.
+  async function completeEntraRedirectIfReturning(): Promise<boolean> {
+    const redirectResult = await sso.handleRedirectResponse();
+    if (!redirectResult) return false;
+
+    try {
+      await firstValueFrom(ssoAuthApi.ssoLogin(redirectResult.provider, redirectResult.token));
+      void router.navigateByUrl('/dashboard');
+    } catch {
+      // Same "no matching account" possibility as any other SSO path — surfaced as a query param
+      // since the login page isn't mounted yet at this point in the boot sequence to show a toast.
+      void router.navigateByUrl('/auth/login?error=sso_failed');
+    }
+    return true;
+  }
+
   // Resolve the first-run setup flag FIRST, then decide what to do with any stored session:
   //  • requiresSetup === true  → the backend has no users, so a lingering JWT is stale: discard it
   //    (otherwise authGuard would trust the old token and skip the first-run /setup screen).
@@ -40,16 +67,22 @@ function initApp(auth: AuthService, appInit: AppInitService) {
   // HIPAA #7: initFromToken() now makes a real GET /auth/me call (the session cookie can't be
   // decoded client-side anymore) — it MUST be subscribed to, not just constructed and discarded,
   // or the app boots with no user ever restored. switchMap (not tap) is what actually does that.
-  return () =>
-    appInit.checkSetup().pipe(
-      switchMap(requiresSetup => {
-        if (requiresSetup) {
-          auth.discardSession();
-          return [];
-        }
-        return auth.initFromToken();
-      }),
+  return async () => {
+    const handledViaSso = await completeEntraRedirectIfReturning();
+    if (handledViaSso) return;
+
+    await firstValueFrom(
+      appInit.checkSetup().pipe(
+        switchMap(requiresSetup => {
+          if (requiresSetup) {
+            auth.discardSession();
+            return [];
+          }
+          return auth.initFromToken();
+        }),
+      ),
     );
+  };
 }
 
 export const appConfig: ApplicationConfig = {
@@ -87,7 +120,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initApp,
-      deps: [AuthService, AppInitService],
+      deps: [AuthService, AppInitService, SsoService, SsoAuthApiService, Router],
       multi: true,
     },
   ],

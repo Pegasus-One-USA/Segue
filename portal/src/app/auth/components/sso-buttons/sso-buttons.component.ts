@@ -54,10 +54,15 @@ export class SsoButtonsComponent {
     this.localError.set('');
     this.busy.set(provider);
     try {
-      const result: SsoResult =
-        provider === 'Entra'
-          ? await this.sso.signInWithEntra()
-          : await this.sso.signInWithGoogle();
+      if (provider === 'Entra') {
+        // loginRedirect navigates the whole tab away — there's no token to emit here. The
+        // response is picked up by SsoService.handleRedirectResponse() on the next app boot,
+        // after the browser returns from Microsoft (see app.config.ts).
+        await this.sso.signInWithEntra();
+        return;
+      }
+
+      const result: SsoResult = await this.sso.signInWithGoogle();
       this.authenticated.emit(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Single sign-on failed. Please try again.';
