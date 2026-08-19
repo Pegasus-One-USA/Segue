@@ -33,13 +33,13 @@ public sealed class CompositeGovernancePolicyService : IGovernancePolicyService
         CancellationToken cancellationToken)
     {
         var appliedPolicies = new List<string>(BaselinePolicies);
-        var requiresDeIdentification = false;
+        Guid? deIdentificationProfileId = null;
 
         foreach (var rule in _rules)
         {
             var result = await rule.EvaluateAsync(context, cancellationToken);
             appliedPolicies.Add(result.PolicyName);
-            requiresDeIdentification |= result.RequiresDeIdentification;
+            deIdentificationProfileId ??= result.DeIdentificationProfileId;
 
             if (!result.IsAllowed)
             {
@@ -49,7 +49,7 @@ public sealed class CompositeGovernancePolicyService : IGovernancePolicyService
 
                 return new ResourceGovernanceDecision(
                     IsAllowed: false,
-                    RequiresDeIdentification: requiresDeIdentification,
+                    DeIdentificationProfileId: deIdentificationProfileId,
                     DenialReason: result.DenialReason,
                     AppliedPolicies: appliedPolicies);
             }
@@ -57,7 +57,7 @@ public sealed class CompositeGovernancePolicyService : IGovernancePolicyService
 
         return new ResourceGovernanceDecision(
             IsAllowed: true,
-            RequiresDeIdentification: requiresDeIdentification,
+            DeIdentificationProfileId: deIdentificationProfileId,
             DenialReason: null,
             AppliedPolicies: appliedPolicies);
     }

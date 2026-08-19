@@ -1,0 +1,859 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:30ef37f9-8dc8-4dbb-87a1-77e9500e203b",
+      "resource": {
+        "resourceType": "CareTeam",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careteam",
+            "value": "CARETEAM-002"
+          }
+        ],
+        "status": "active",
+        "name": "Care team for Maria Delgado",
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "participant": [
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "practitioner-003"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CareTeam",
+        "ifNoneExist": "identifier=urn:segue:test:careteam|CARETEAM-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+      "resource": {
+        "resourceType": "Encounter",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "ENCOUNTER-002"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "Dr Yuki Tanaka"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-05-04T09:00:00Z",
+          "end": "2026-05-04T09:45:00Z"
+        },
+        "serviceProvider": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "location": [
+          {
+            "location": {
+              "reference": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+              "display": "Clinic/Ward"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Encounter",
+        "ifNoneExist": "identifier=urn:segue:test:encounter|ENCOUNTER-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+      "resource": {
+        "resourceType": "Location",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:location",
+            "value": "LOCATION-001"
+          }
+        ],
+        "status": "active",
+        "name": "Segue General - Outpatient Clinic",
+        "mode": "instance",
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "OF",
+                "display": "Outpatient Facility"
+              }
+            ],
+            "text": "Outpatient Facility"
+          }
+        ],
+        "physicalType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/location-physical-type",
+              "code": "bu",
+              "display": "Building"
+            }
+          ],
+          "text": "Building"
+        },
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Location",
+        "ifNoneExist": "identifier=urn:segue:test:location|LOCATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-001"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "Healthcare Provider"
+              }
+            ],
+            "text": "Healthcare Provider"
+          }
+        ],
+        "name": "Segue General Hospital",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0100",
+            "use": "work"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "100 Health Way"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02115",
+            "country": "US"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+      "resource": {
+        "resourceType": "Practitioner",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitioner",
+            "value": "PRACTITIONER-003"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1679576722"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "family": "Tanaka",
+            "given": [
+              "Yuki"
+            ],
+            "prefix": [
+              "Dr"
+            ]
+          }
+        ],
+        "gender": "female"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner",
+        "ifNoneExist": "identifier=urn:segue:test:practitioner|PRACTITIONER-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-003"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Delgado",
+            "given": [
+              "Maria"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1959-07-08",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1003",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a1e4bbe2-4ded-41dd-85a7-5427c456e9fd",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:servicerequest",
+            "value": "SERVICEREQUEST-002"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "36643-5",
+              "display": "Chest X-ray"
+            }
+          ],
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "requester": {
+          "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+          "display": "Dr Yuki Tanaka"
+        },
+        "authoredOn": "2026-05-04T09:20:00Z"
+      },
+      "request": {
+        "method": "POST",
+        "url": "ServiceRequest",
+        "ifNoneExist": "identifier=urn:segue:test:servicerequest|SERVICEREQUEST-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e5f9db16-2d1e-4847-8025-9af1e92ebfab",
+      "resource": {
+        "resourceType": "CarePlan",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-003"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "COPD management plan",
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "addresses": [
+          {
+            "reference": "urn:uuid:5346619d-58d0-4179-8288-b292e8562113",
+            "display": "condition-003"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CarePlan",
+        "ifNoneExist": "identifier=urn:segue:test:careplan|CAREPLAN-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:5346619d-58d0-4179-8288-b292e8562113",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-003"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "13645005",
+              "display": "Chronic obstructive pulmonary disease"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "J44.9",
+              "display": "COPD, unspecified"
+            }
+          ],
+          "text": "Chronic obstructive pulmonary disease"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "onsetDateTime": "2018-10-10",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4c72646b-82fa-41d9-8036-734276fa8bfa",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:allergyintolerance",
+            "value": "ALLERGYINTOLERANCE-002"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "type": "allergy",
+        "criticality": "high",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "91935009",
+              "display": "Allergy to peanuts"
+            }
+          ],
+          "text": "Allergy to peanuts"
+        },
+        "patient": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "recordedDate": "2022-01-05"
+      },
+      "request": {
+        "method": "POST",
+        "url": "AllergyIntolerance",
+        "ifNoneExist": "identifier=urn:segue:test:allergyintolerance|ALLERGYINTOLERANCE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8393e20d-cf82-4343-84a7-959680e3b856",
+      "resource": {
+        "resourceType": "Procedure",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:procedure",
+            "value": "PROCEDURE-002"
+          }
+        ],
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "94010",
+              "display": "Spirometry"
+            }
+          ],
+          "text": "Spirometry"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "performedDateTime": "2026-05-02T10:45:00Z",
+        "performer": [
+          {
+            "actor": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "Dr Yuki Tanaka"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure",
+        "ifNoneExist": "identifier=urn:segue:test:procedure|PROCEDURE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:62924e15-978d-461f-8e1a-8dac2388276b",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "DIAGNOSTICREPORT-002"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "RAD",
+                "display": "Radiology"
+              }
+            ],
+            "text": "Radiology"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "36643-5",
+              "display": "Chest X-ray"
+            }
+          ],
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "effectiveDateTime": "2026-05-02T12:00:00Z",
+        "issued": "2026-05-02T12:00:00Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+            "display": "Segue General Hospital"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:f9259b98-606d-4e7b-83c3-9c570387188b",
+            "display": "observation-006"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DiagnosticReport",
+        "ifNoneExist": "identifier=urn:segue:test:diagnosticreport|DIAGNOSTICREPORT-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:f9259b98-606d-4e7b-83c3-9c570387188b",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-006"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2708-6",
+              "display": "Oxygen saturation in Arterial blood"
+            }
+          ],
+          "text": "Oxygen saturation in Arterial blood"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "effectiveDateTime": "2026-05-02T10:30:00Z",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "valueQuantity": {
+          "value": 91,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-006"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e838a5e8-eef4-42a4-8b2d-c264933c7c4b",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-007"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "9279-1",
+              "display": "Respiratory rate"
+            }
+          ],
+          "text": "Respiratory rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "effectiveDateTime": "2026-05-02T10:30:00Z",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "valueQuantity": {
+          "value": 24,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-007"
+      }
+    }
+  ]
+}

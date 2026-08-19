@@ -613,6 +613,12 @@ static void BootstrapDatabase(WebApplication app)
     // edits a row. Insert-only; never overwrites a row an admin has since customized.
     var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
     systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    // One-time: create the "HIPAA Safe Harbor — Default" de-identification profile + its rules, ported from
+    // the platform's original hardcoded rule list. Insert-only; never touches a profile an admin has since
+    // created or edited.
+    var deIdentificationProfileSeeder = scope.ServiceProvider.GetService<IDeIdentificationProfileSeeder>();
+    deIdentificationProfileSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Generates and persists the JWT signing key / download-link signing secret the first time an install has

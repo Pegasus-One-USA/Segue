@@ -1,0 +1,49 @@
+{
+  "resourceType": "Location",
+  "id": "location-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:location",
+      "value": "LOCATION-001"
+    }
+  ],
+  "status": "active",
+  "name": "Segue General - Outpatient Clinic",
+  "mode": "instance",
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+          "code": "OF",
+          "display": "Outpatient Facility"
+        }
+      ],
+      "text": "Outpatient Facility"
+    }
+  ],
+  "physicalType": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/location-physical-type",
+        "code": "bu",
+        "display": "Building"
+      }
+    ],
+    "text": "Building"
+  },
+  "managingOrganization": {
+    "reference": "Organization/org-001",
+    "display": "Segue General Hospital"
+  }
+}

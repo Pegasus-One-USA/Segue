@@ -389,6 +389,7 @@ public sealed class ConfigurationService : IConfigurationService
             secretReference,
             request.Target,
             request.ConnectionMetadataJson);
+        destinationConfiguration.SetDeIdentificationProfile(request.DeIdentificationProfileId);
 
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
 
@@ -441,6 +442,7 @@ public sealed class ConfigurationService : IConfigurationService
             secretReference,
             request.Target,
             request.ConnectionMetadataJson ?? destinationConfiguration.ConnectionMetadataJson);
+        destinationConfiguration.SetDeIdentificationProfile(request.DeIdentificationProfileId);
 
         // Mapped immediately after Update(), before SaveChangesAsync — see the identical comment in
         // UpdateSourceConnectionAsync: Update() reassigns a brand-new owned SecretReference instance, and EF

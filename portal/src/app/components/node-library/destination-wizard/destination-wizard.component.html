@@ -225,6 +225,44 @@
           <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
         }
       }
+
+      <!-- Cross-cutting — applies regardless of destination type, so it lives outside the per-type form
+           component. Read-only when reusing an existing connection as-is (nothing to save it through in
+           that mode — see selectExisting()/provisionDestinationConnection()). -->
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-deid-profile">De-identification profile</label>
+        <div class="dw-existing-connection-row">
+          <div class="dw-select-wrap">
+            <select
+              id="dw-deid-profile"
+              class="dw-select"
+              [disabled]="connectionMode() === 'existing'"
+              [value]="selectedDeIdentificationProfileId() ?? ''"
+              (change)="selectedDeIdentificationProfileId.set($any($event.target).value || null)"
+            >
+              <option value="">None</option>
+              @for (p of deIdentificationProfiles(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        @if (connectionMode() !== 'existing') {
+          <div class="dw-existing-connection-row" style="margin-top: 8px;">
+            <input
+              type="text"
+              class="dw-select"
+              placeholder="New profile name…"
+              [value]="newProfileName()"
+              (input)="newProfileName.set($any($event.target).value)"
+            />
+            <button type="button" class="dw-clear-btn" title="Create a new de-identification profile"
+                    [disabled]="!newProfileName().trim() || creatingProfile()"
+                    (click)="createDeIdentificationProfile()">+ New</button>
+          </div>
+          <span class="dw-hint">Resources routed to this destination are redacted per the selected profile's rules before delivery. Manage a profile's rules on the Transformation Rules screen.</span>
+        }
+      </div>
     }
 
     <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
@@ -618,6 +656,25 @@
           </div>
         }
       }
+    } @else if (isStepActive(3) && isMedplum()) {
+      <!-- ── Columnless FHIR server (Medplum): the whole normalized resource is written as-is (runtime
+           wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to map
+           field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
+           Aidbox above, Medplum has no per-field customize option. ── -->
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">Map fields</span>
+        <span class="dw-section-hint">Choose how FHIR resources are written to {{ destLabel() }}.</span>
+      </div>
+      <div class="dw-resources">
+        <div class="dw-resource-card selected">
+          <div class="dw-rc-check">●</div>
+          <div class="dw-rc-body">
+            <strong class="dw-rc-name">Send FHIR resources as-is · RECOMMENDED</strong>
+            <span class="dw-rc-scope">Writes the normalized resource unchanged — no mapping to configure.</span>
+          </div>
+        </div>
+      </div>
     } @else if (isStepActive(3)) {
       @if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
@@ -625,7 +682,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -755,6 +812,10 @@
           <span class="dw-review-key">Destination type</span>
           <span class="dw-review-val">{{ destLabel() }}</span>
         </div>
+        <div class="dw-review-card">
+          <span class="dw-review-key">De-identification</span>
+          <span class="dw-review-val">{{ selectedDeIdentificationProfileName() }}</span>
+        </div>
         @if (isSql()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -789,6 +850,23 @@
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
           </div>
+        } @else if (isMedplum()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_medplumBaseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth method</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumAuthMethod'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumWriteMode'] }}</span>
+          </div>
         } @else if (isFhir()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -817,6 +895,7 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Field handling</span>
             <span class="dw-review-val">{{ fhirMapMode() === 'customize' ? ('Custom mapping (' + totalFhirRuleCount() + ' rule' + (totalFhirRuleCount() === 1 ? '' : 's') + ')') : 'Passthrough — no mapping' }}</span>
+
           </div>
         } @else if (isBlob()) {
           <div class="dw-review-card">

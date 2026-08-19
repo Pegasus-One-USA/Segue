@@ -14,13 +14,13 @@ public interface IGovernanceRule
 
 public sealed record GovernanceRuleResult(
     bool IsAllowed,
-    bool RequiresDeIdentification,
+    Guid? DeIdentificationProfileId,
     string? DenialReason,
     string PolicyName)
 {
-    public static GovernanceRuleResult Allow(string policyName, bool requiresDeIdentification = false)
-        => new(true, requiresDeIdentification, null, policyName);
+    public static GovernanceRuleResult Allow(string policyName, Guid? deIdentificationProfileId = null)
+        => new(true, deIdentificationProfileId, null, policyName);
 
     public static GovernanceRuleResult Deny(string policyName, string reason)
-        => new(false, false, reason, policyName);
+        => new(false, null, reason, policyName);
 }

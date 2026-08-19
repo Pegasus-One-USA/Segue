@@ -1,0 +1,41 @@
+{
+  "resourceType": "Organization",
+  "id": "org-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:organization",
+      "value": "ORG-002"
+    }
+  ],
+  "active": true,
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+          "code": "pay",
+          "display": "Payer"
+        }
+      ],
+      "text": "Payer"
+    }
+  ],
+  "name": "BlueShield Health Plan",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-0200",
+      "use": "work"
+    }
+  ]
+}

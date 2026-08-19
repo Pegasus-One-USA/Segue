@@ -1,0 +1,53 @@
+{
+  "resourceType": "DocumentReference",
+  "id": "documentreference-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:documentreference",
+      "value": "DOCUMENTREFERENCE-002"
+    }
+  ],
+  "status": "current",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "18842-5",
+        "display": "Discharge summary"
+      }
+    ],
+    "text": "Discharge summary"
+  },
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "date": "2026-05-04T12:00:00Z",
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+        "title": "Discharge summary"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/encounter-003",
+        "display": "encounter-003"
+      }
+    ]
+  }
+}

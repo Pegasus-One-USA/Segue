@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// HIPAA #2: reads the per-destination <c>RequiresDeIdentification</c> flag and requires de-identification when
-/// set. Never denies access on its own — this rule only ever contributes a de-identification requirement, so it
-/// changes behavior only for destinations a tenant admin has explicitly opted in.
+/// HIPAA #2: reads the per-destination <c>DeIdentificationProfileId</c> and requires de-identification under
+/// that profile when set. Never denies access on its own — this rule only ever contributes a profile id, so
+/// it changes behavior only for destinations a tenant admin has explicitly assigned a profile to.
 /// </summary>
 public sealed class DestinationSensitivityGovernanceRule : IGovernanceRule
 {
@@ -29,12 +29,12 @@ public sealed class DestinationSensitivityGovernanceRule : IGovernanceRule
             return GovernanceRuleResult.Allow(PolicyName);
         }
 
-        var requiresDeIdentification = await _dbContext.DestinationConfigurations
+        var deIdentificationProfileId = await _dbContext.DestinationConfigurations
             .AsNoTracking()
             .Where(x => x.Id == destinationId)
-            .Select(x => x.RequiresDeIdentification)
+            .Select(x => x.DeIdentificationProfileId)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return GovernanceRuleResult.Allow(PolicyName, requiresDeIdentification);
+        return GovernanceRuleResult.Allow(PolicyName, deIdentificationProfileId);
     }
 }

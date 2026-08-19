@@ -6,6 +6,11 @@ import { DestinationType } from '../../../../destination-connections/models/dest
 
 export type TransformScope = 'Global' | 'DestinationType' | 'ResourceType' | 'Field' | 'Workflow';
 
+/** PostMapping (default) — the rule sees a value already assigned to a destination field/column.
+ *  PreMapping — the rule walks the raw source resource JSON by SourceField path, before any field mapping;
+ *  only valid at Global/ResourceType scope, and only when tagged with a DeIdentificationProfileId. */
+export type TransformExecutionPhase = 'PostMapping' | 'PreMapping';
+
 /** The 20 field-level FHIR-aware transform nodes — FHIRBridge_Top20_Transformations.pdf v1.0. */
 export type TransformNodeType =
   | 'DateTimeFormat' | 'NumberCast' | 'BooleanConversion' | 'UnitConversion' | 'QuantityRangeAssembly'
@@ -52,6 +57,8 @@ export interface TransformationRule {
    *  structure-building node (CodeableConceptBuilder, UnitConversion, ReferenceConstruction) reads from,
    *  since its output replaces a whole element, not the bare leaf value it was fed. */
   fhirWriteBackJsonPath?: string | null;
+  executionPhase?: TransformExecutionPhase;
+  deIdentificationProfileId?: string | null;
 }
 
 export interface SaveTransformationRuleRequest {
@@ -72,6 +79,8 @@ export interface SaveTransformationRuleRequest {
   onNullDefaultValue?: string | null;
   arrayMode?: TransformArrayMode;
   fhirWriteBackJsonPath?: string | null;
+  executionPhase?: TransformExecutionPhase;
+  deIdentificationProfileId?: string | null;
 }
 
 export interface TransformPreviewRequest {

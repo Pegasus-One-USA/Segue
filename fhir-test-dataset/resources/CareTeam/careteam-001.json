@@ -1,0 +1,68 @@
+{
+  "resourceType": "CareTeam",
+  "id": "careteam-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:careteam",
+      "value": "CARETEAM-001"
+    }
+  ],
+  "status": "active",
+  "name": "Care team for James Whitfield",
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "participant": [
+    {
+      "role": [
+        {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "158965000",
+              "display": "Medical practitioner"
+            }
+          ],
+          "text": "Medical practitioner"
+        }
+      ],
+      "member": {
+        "reference": "Practitioner/practitioner-001",
+        "display": "practitioner-001"
+      }
+    },
+    {
+      "role": [
+        {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "158965000",
+              "display": "Medical practitioner"
+            }
+          ],
+          "text": "Medical practitioner"
+        }
+      ],
+      "member": {
+        "reference": "Practitioner/practitioner-002",
+        "display": "practitioner-002"
+      }
+    }
+  ],
+  "encounter": {
+    "reference": "Encounter/encounter-001",
+    "display": "encounter-001"
+  }
+}

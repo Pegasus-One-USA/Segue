@@ -69,6 +69,17 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 (x.DestinationField == null || x.DestinationField == destinationField))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<TransformationRule>> GetPreMappingRulesAsync(
+        Guid deIdentificationProfileId, string resourceType, CancellationToken cancellationToken) =>
+        await _db.TransformationRules
+            .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PreMapping &&
+                x.DeIdentificationProfileId == deIdentificationProfileId &&
+                (x.Scope == TransformScope.Global ||
+                 (x.Scope == TransformScope.ResourceType && x.ResourceType == resourceType)))
+            .OrderBy(x => x.Order)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<TransformationRule>> ListAsync(
         TransformScope? scope, DestinationType? destinationType, string? resourceType, string? destinationField,
         Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField, CancellationToken cancellationToken) =>

@@ -1,0 +1,645 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:9a297360-5bac-425c-8f89-80659dfed541",
+      "resource": {
+        "resourceType": "CarePlan",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-002"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "Hypertension management plan",
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "addresses": [
+          {
+            "reference": "urn:uuid:d877167a-dd4d-41fa-810a-f97a1592de43",
+            "display": "condition-002"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CarePlan",
+        "ifNoneExist": "identifier=urn:segue:test:careplan|CAREPLAN-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d877167a-dd4d-41fa-810a-f97a1592de43",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-002"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "Essential (primary) hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "onsetDateTime": "2020-06-15"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-002"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Nguyen",
+            "given": [
+              "Linda"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1972-11-30",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1002",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-001"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "Healthcare Provider"
+              }
+            ],
+            "text": "Healthcare Provider"
+          }
+        ],
+        "name": "Segue General Hospital",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0100",
+            "use": "work"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "100 Health Way"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02115",
+            "country": "US"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:cf1d27bd-7887-4cc4-887d-0bac256383fe",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-002"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:c6881d9c-e625-4eb3-84ae-947aa48dba4d",
+          "display": "Lisinopril 10 MG"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "requester": {
+          "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+          "display": "Dr Sarah Reynolds"
+        },
+        "authoredOn": "2026-04-20T14:15:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 tablet by mouth once daily"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationRequest",
+        "ifNoneExist": "identifier=urn:segue:test:medicationrequest|MEDICATIONREQUEST-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+      "resource": {
+        "resourceType": "Practitioner",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitioner",
+            "value": "PRACTITIONER-001"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1234567893"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "family": "Reynolds",
+            "given": [
+              "Sarah"
+            ],
+            "prefix": [
+              "Dr"
+            ]
+          }
+        ],
+        "gender": "female",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0111",
+            "use": "work"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner",
+        "ifNoneExist": "identifier=urn:segue:test:practitioner|PRACTITIONER-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:c6881d9c-e625-4eb3-84ae-947aa48dba4d",
+      "resource": {
+        "resourceType": "Medication",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medication",
+            "value": "MEDICATION-002"
+          }
+        ],
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "314076",
+              "display": "Lisinopril 10 MG Oral Tablet"
+            }
+          ],
+          "text": "Lisinopril 10 MG Oral Tablet"
+        },
+        "form": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "385055001",
+              "display": "Tablet"
+            }
+          ],
+          "text": "Tablet"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Medication",
+        "ifNoneExist": "identifier=urn:segue:test:medication|MEDICATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:95d3a802-236a-4660-8fb6-bedcd5170aad",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-005"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "valueQuantity": {
+          "value": 82,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-005"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d2ea3353-9853-425b-829a-9e0a7b05c3d1",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-004"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ],
+              "text": "Systolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 158,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ],
+              "text": "Diastolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 96,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-004"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:16429118-afba-4f90-8dca-005f2702ece6",
+      "resource": {
+        "resourceType": "Coverage",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-002"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "payor": [
+          {
+            "reference": "urn:uuid:0695e56a-f5ca-4b3e-8220-5c4f9856371b",
+            "display": "BlueShield Health Plan"
+          }
+        ],
+        "subscriberId": "BS-0002",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Coverage",
+        "ifNoneExist": "identifier=urn:segue:test:coverage|COVERAGE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:0695e56a-f5ca-4b3e-8220-5c4f9856371b",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-002"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "pay",
+                "display": "Payer"
+              }
+            ],
+            "text": "Payer"
+          }
+        ],
+        "name": "BlueShield Health Plan",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0200",
+            "use": "work"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-002"
+      }
+    }
+  ]
+}

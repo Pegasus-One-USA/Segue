@@ -1,0 +1,873 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Patient/patient-004",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-004",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-004"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Brooks",
+            "given": [
+              "Robert"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1945-01-22",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1004",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "Organization/org-001",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/patient-004"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/RelatedPerson/relatedperson-002",
+      "resource": {
+        "resourceType": "RelatedPerson",
+        "id": "relatedperson-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:relatedperson",
+            "value": "RELATEDPERSON-002"
+          }
+        ],
+        "active": true,
+        "patient": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "relationship": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "DAUC",
+                "display": "Daughter"
+              }
+            ],
+            "text": "Daughter"
+          }
+        ],
+        "name": [
+          {
+            "family": "Brooks",
+            "given": [
+              "Emily"
+            ]
+          }
+        ],
+        "gender": "female"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "RelatedPerson/relatedperson-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Coverage/coverage-003",
+      "resource": {
+        "resourceType": "Coverage",
+        "id": "coverage-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-003"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "payor": [
+          {
+            "identifier": {
+              "system": "urn:segue:test:organization",
+              "value": "ORG-002"
+            },
+            "display": "BlueShield Health Plan (by identifier)"
+          }
+        ],
+        "subscriberId": "BS-0004",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Coverage/coverage-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Encounter/encounter-003",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "ENCOUNTER-003"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "Practitioner/practitioner-002",
+              "display": "Dr Daniel Okafor"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-05-04T09:00:00Z",
+          "end": "2026-05-04T09:45:00Z"
+        },
+        "serviceProvider": {
+          "reference": "Organization/org-001",
+          "display": "Segue General Hospital"
+        },
+        "location": [
+          {
+            "location": {
+              "reference": "Location/location-002",
+              "display": "Clinic/Ward"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Encounter/encounter-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Condition/condition-004",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-004",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-004"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "233604007",
+              "display": "Pneumonia"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "J18.9",
+              "display": "Pneumonia, unspecified organism"
+            }
+          ],
+          "text": "Pneumonia"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "onsetDateTime": "2026-05-01",
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Condition/condition-004"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Observation/observation-008",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-008",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-008"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8310-5",
+              "display": "Body temperature"
+            }
+          ],
+          "text": "Body temperature"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "effectiveDateTime": "2026-05-01T22:15:00Z",
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        },
+        "valueQuantity": {
+          "value": 38.7,
+          "unit": "Cel",
+          "system": "http://unitsofmeasure.org",
+          "code": "Cel"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/observation-008"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Observation/observation-009",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-009",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-009"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "effectiveDateTime": "2026-05-01T22:15:00Z",
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        },
+        "valueQuantity": {
+          "value": 104,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/observation-009"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/DiagnosticReport/diagnosticreport-003",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "diagnosticreport-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "DIAGNOSTICREPORT-003"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "LAB",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "58410-2",
+              "display": "Complete blood count (hemogram) panel - Blood by Automated count"
+            }
+          ],
+          "text": "Complete blood count (hemogram) panel - Blood by Automated count"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        },
+        "effectiveDateTime": "2026-05-01T23:00:00Z",
+        "issued": "2026-05-01T23:00:00Z",
+        "performer": [
+          {
+            "reference": "Organization/org-001",
+            "display": "Segue General Hospital"
+          }
+        ],
+        "result": [
+          {
+            "reference": "Observation/observation-008",
+            "display": "observation-008"
+          },
+          {
+            "reference": "Observation/observation-009",
+            "display": "observation-009"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/diagnosticreport-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Procedure/procedure-001",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "procedure-001",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:procedure",
+            "value": "PROCEDURE-001"
+          }
+        ],
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "71046",
+              "display": "Radiologic examination, chest; 2 views"
+            }
+          ],
+          "text": "Radiologic examination, chest; 2 views"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        },
+        "performedDateTime": "2026-05-01T22:40:00Z",
+        "performer": [
+          {
+            "actor": {
+              "reference": "Practitioner/practitioner-002",
+              "display": "Dr Daniel Okafor"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Procedure/procedure-001"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/MedicationRequest/medicationrequest-003",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-003"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "Medication/medication-003",
+          "display": "Amoxicillin 500 MG"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "requester": {
+          "reference": "Practitioner/practitioner-002",
+          "display": "Dr Daniel Okafor"
+        },
+        "authoredOn": "2026-05-01T23:10:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 capsule by mouth three times daily for 10 days"
+          }
+        ],
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "MedicationRequest/medicationrequest-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/AllergyIntolerance/allergyintolerance-003",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergyintolerance-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:allergyintolerance",
+            "value": "ALLERGYINTOLERANCE-003"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "type": "allergy",
+        "criticality": "low",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "294530006",
+              "display": "Allergy to sulfonamide"
+            }
+          ],
+          "text": "Allergy to sulfonamide"
+        },
+        "patient": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "recordedDate": "2022-01-05"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "AllergyIntolerance/allergyintolerance-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/ServiceRequest/servicerequest-003",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "servicerequest-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:servicerequest",
+            "value": "SERVICEREQUEST-003"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "600-7",
+              "display": "Bacteria identified in Blood by Culture"
+            }
+          ],
+          "text": "Bacteria identified in Blood by Culture"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        },
+        "requester": {
+          "reference": "Practitioner/practitioner-002",
+          "display": "Dr Daniel Okafor"
+        },
+        "authoredOn": "2026-05-04T09:20:00Z"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/servicerequest-003"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/DocumentReference/documentreference-002",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "id": "documentreference-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:documentreference",
+            "value": "DOCUMENTREFERENCE-002"
+          }
+        ],
+        "status": "current",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "18842-5",
+              "display": "Discharge summary"
+            }
+          ],
+          "text": "Discharge summary"
+        },
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "date": "2026-05-04T12:00:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+              "title": "Discharge summary"
+            }
+          }
+        ],
+        "context": {
+          "encounter": [
+            {
+              "reference": "Encounter/encounter-003",
+              "display": "encounter-003"
+            }
+          ]
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DocumentReference/documentreference-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/CareTeam/careteam-003",
+      "resource": {
+        "resourceType": "CareTeam",
+        "id": "careteam-003",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careteam",
+            "value": "CARETEAM-003"
+          }
+        ],
+        "status": "active",
+        "name": "Care team for Robert Brooks",
+        "subject": {
+          "reference": "Patient/patient-004",
+          "display": "Robert Brooks"
+        },
+        "participant": [
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "Practitioner/practitioner-002",
+              "display": "practitioner-002"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "Encounter/encounter-003",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "CareTeam/careteam-003"
+      }
+    }
+  ]
+}

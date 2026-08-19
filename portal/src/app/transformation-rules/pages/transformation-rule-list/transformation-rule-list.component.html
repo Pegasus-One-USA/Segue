@@ -59,7 +59,7 @@
         }
 
         <div class="form-field">
-          <label for="ntf-sourceField">{{ newTarget().scope === 'Field' ? 'Source field (required)' : 'Source field (optional)' }}</label>
+          <label for="ntf-sourceField">{{ newTarget().scope === 'Field' || newTarget().executionPhase === 'PreMapping' ? 'Source field (required)' : 'Source field (optional)' }}</label>
           <select id="ntf-sourceField" [ngModel]="newTarget().sourceField" (ngModelChange)="setNewTargetSourceField($event)">
             @if (newTarget().scope !== 'Field') {
               <option value="">Any source field</option>
@@ -70,10 +70,42 @@
           </select>
         </div>
 
-        <div class="form-field">
-          <label for="ntf-destinationField">Destination field (optional)</label>
-          <input id="ntf-destinationField" [ngModel]="newTarget().destinationField" (ngModelChange)="setNewTargetDestinationField($event)" placeholder="Leave blank for every field" />
-        </div>
+        @if (newTarget().executionPhase !== 'PreMapping') {
+          <div class="form-field">
+            <label for="ntf-destinationField">Destination field (optional)</label>
+            <input id="ntf-destinationField" [ngModel]="newTarget().destinationField" (ngModelChange)="setNewTargetDestinationField($event)" placeholder="Leave blank for every field" />
+          </div>
+        }
+
+        @if (newTarget().scope === 'Global' || newTarget().scope === 'ResourceType') {
+          <div class="form-field">
+            <label for="ntf-phase">When does this apply?</label>
+            <select id="ntf-phase" [ngModel]="newTarget().executionPhase" (ngModelChange)="setNewTargetExecutionPhase($event)">
+              <option value="PostMapping">After mapping (per destination field)</option>
+              <option value="PreMapping">Before mapping (raw FHIR path — de-identification)</option>
+            </select>
+          </div>
+        }
+
+        @if (newTarget().executionPhase === 'PreMapping') {
+          <div class="form-field">
+            <label for="ntf-profile">De-identification profile</label>
+            <select id="ntf-profile" [ngModel]="newTarget().deIdentificationProfileId" (ngModelChange)="setNewTargetDeIdentificationProfileId($event)">
+              <option value="">Choose a profile…</option>
+              @for (p of deIdentificationProfiles(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+            <div class="form-actions" style="margin-top: 8px;">
+              <input
+                [ngModel]="newProfileName()"
+                (ngModelChange)="newProfileName.set($event)"
+                placeholder="New profile name…"
+              />
+              <button mat-stroked-button type="button" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="createDeIdentificationProfileForNewTarget()">+ New profile</button>
+            </div>
+          </div>
+        }
       </div>
 
       <div class="form-actions">
@@ -135,17 +167,66 @@
           <div class="group-card__header">
             <div class="group-card__target">
               <span class="scope-chip" [class]="'scope-chip--' + group.scope.toLowerCase()">{{ group.scope }}</span>
+              @if (group.executionPhase === 'PreMapping') {
+                <span class="tag" matTooltip="Redacts the raw FHIR resource before mapping, for destinations assigned this profile">Before mapping · {{ profileName(group.deIdentificationProfileId) }}</span>
+              }
               <span class="target-label">
                 {{ group.resourceType || group.destinationType || 'Everyone' }}
                 @if (group.destinationField) { <span class="tag">→ {{ group.destinationField }}</span> }
                 @if (group.sourceField) { <span class="tag">← {{ group.sourceField }}</span> }
               </span>
             </div>
-            <button mat-stroked-button (click)="toggleEdit(group)">
-              <mat-icon>{{ group.editing ? 'expand_less' : 'edit' }}</mat-icon>
-              {{ group.steps.length }} step{{ group.steps.length === 1 ? '' : 's' }}
-            </button>
+            <div class="group-card__actions">
+              @if (group.executionPhase === 'PreMapping') {
+                <button mat-stroked-button type="button" (click)="togglePreview(group)">
+                  <mat-icon>visibility</mat-icon> Preview
+                </button>
+              }
+              <button mat-stroked-button (click)="toggleEdit(group)">
+                <mat-icon>{{ group.editing ? 'expand_less' : 'edit' }}</mat-icon>
+                {{ group.steps.length }} step{{ group.steps.length === 1 ? '' : 's' }}
+              </button>
+            </div>
           </div>
+
+          @if (group.previewOpen) {
+            <div class="form-card" style="margin: 0 16px 16px;">
+              <h3>Preview</h3>
+              <p>Paste a sample FHIR resource to see exactly what this profile's rules would change — nothing here is saved or sent to any destination.</p>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label [for]="'preview-resource-type-' + group.key">Resource type</label>
+                  <input
+                    [id]="'preview-resource-type-' + group.key"
+                    [ngModel]="group.previewResourceType"
+                    (ngModelChange)="group.previewResourceType = $event"
+                    placeholder="e.g. Provenance"
+                  />
+                </div>
+              </div>
+              <div class="form-field">
+                <label [for]="'preview-sample-' + group.key">Sample resource (JSON)</label>
+                <textarea
+                  [id]="'preview-sample-' + group.key"
+                  rows="8"
+                  [ngModel]="group.previewSampleJson"
+                  (ngModelChange)="group.previewSampleJson = $event"
+                  placeholder='{"resourceType": "Provenance", ...}'
+                ></textarea>
+              </div>
+              <div class="form-actions">
+                <button mat-flat-button color="primary" [disabled]="group.previewRunning" (click)="runPreview(group)">
+                  @if (group.previewRunning) { <mat-spinner diameter="16"></mat-spinner> } @else { Preview }
+                </button>
+              </div>
+              @if (group.previewResultJson) {
+                <div class="form-field">
+                  <label>Result</label>
+                  <textarea rows="8" readonly [ngModel]="group.previewResultJson"></textarea>
+                </div>
+              }
+            </div>
+          }
 
           @if (group.editing) {
             <div class="group-card__steps">
@@ -181,7 +262,11 @@
                            .step-card__fields-row--node's row — see transform-rules-dialog.component.scss's
                            identical rule for why this, not a flex-wrap break inside one shared row. -->
                       <div class="step-card__fields-row step-card__fields-row--config">
-                        <app-rule-config-form [schema]="schemaFor(step.nodeType)" [config]="step.config"></app-rule-config-form>
+                        <app-rule-config-form
+                          [schema]="schemaFor(step.nodeType)"
+                          [config]="step.config"
+                          [optionOverrides]="group.executionPhase === 'PreMapping' && step.nodeType === 'HashingMasking' ? { mode: preMappingHashingMaskingModes } : {}"
+                        ></app-rule-config-form>
                       </div>
                     </div>
 

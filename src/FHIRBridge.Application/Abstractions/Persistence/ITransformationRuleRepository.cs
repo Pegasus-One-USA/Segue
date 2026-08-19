@@ -30,6 +30,12 @@ public interface ITransformationRuleRepository
     Task<IReadOnlyList<TransformationRule>> GetGlobalScopedAsync(
         string? destinationField, CancellationToken cancellationToken);
 
+    /// <summary>Pre-mapping (raw-JSON, by <c>SourceField</c> path) rules belonging to one de-identification
+    /// profile — Global-scoped rows apply regardless of resource type, ResourceType-scoped rows apply only to
+    /// the given type. Used by <c>SafeHarborDeIdentificationService</c>, not the post-mapping resolver.</summary>
+    Task<IReadOnlyList<TransformationRule>> GetPreMappingRulesAsync(
+        Guid deIdentificationProfileId, string resourceType, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<TransformationRule>> ListAsync(
         TransformScope? scope, DestinationType? destinationType, string? resourceType, string? destinationField,
         Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField, CancellationToken cancellationToken);

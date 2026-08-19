@@ -1,0 +1,41 @@
+{
+  "resourceType": "DiagnosticReport",
+  "id": "neg-diagnosticreport-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:diagnosticreport",
+      "value": "NEG-DIAGNOSTICREPORT-001"
+    }
+  ],
+  "status": "final",
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "24323-8",
+        "display": "Comprehensive metabolic panel"
+      }
+    ],
+    "text": "Comprehensive metabolic panel"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "James Whitfield"
+  },
+  "result": [
+    {
+      "reference": "Observation/observation-999-missing",
+      "display": "MISSING observation"
+    }
+  ]
+}

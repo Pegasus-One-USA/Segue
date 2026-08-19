@@ -11,8 +11,12 @@ import { WizardDestinationFormApi } from './destination-form-api';
   templateUrl: './simple-stub-destination-form.component.html',
 })
 export class FhirRepositoryDestinationFormComponent implements WizardDestinationFormApi {
+  // Key is `fhirBaseUrl` (not `baseUrl`) so getFullConfig()/getMetadata() emit `dest_fhirBaseUrl` — the key
+  // the whole pipeline expects for a FhirRepository destination (see workflow-build-assembler.service.ts's
+  // isFhir branch, destination-connection-secret.util.ts's fhir metadata keys, and the wizard's
+  // provisionDestinationConnection isFhir branch, all of which read `dest_fhirBaseUrl`).
   private readonly engine = new SimpleStubFormEngine(inject(FormBuilder), 'FHIR Repository Destination', [
-    { key: 'baseUrl', label: 'FHIR base URL', placeholder: 'https://fhir.example.com/r4' },
+    { key: 'fhirBaseUrl', label: 'FHIR base URL', placeholder: 'https://fhir.example.com/r4' },
   ]);
   readonly form = this.engine.form;
   readonly extraFields = this.engine.extraFields;

@@ -1,0 +1,57 @@
+{
+  "resourceType": "AllergyIntolerance",
+  "id": "allergyintolerance-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:allergyintolerance",
+      "value": "ALLERGYINTOLERANCE-003"
+    }
+  ],
+  "clinicalStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+        "code": "active",
+        "display": "Active"
+      }
+    ],
+    "text": "Active"
+  },
+  "verificationStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+        "code": "confirmed",
+        "display": "Confirmed"
+      }
+    ],
+    "text": "Confirmed"
+  },
+  "type": "allergy",
+  "criticality": "low",
+  "code": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "294530006",
+        "display": "Allergy to sulfonamide"
+      }
+    ],
+    "text": "Allergy to sulfonamide"
+  },
+  "patient": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "recordedDate": "2022-01-05"
+}

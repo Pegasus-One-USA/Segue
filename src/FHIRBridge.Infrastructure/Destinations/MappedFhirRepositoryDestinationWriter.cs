@@ -852,6 +852,115 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         return (record.ResourceType, fallbackId, MappedDestinationSerialization.ToJson(record));
     }
 
+    private const string NumericIdNamespacePrefix = "fb-";
+
+    /// <summary>Prefixes a purely-numeric logical id so a client may PUT-create it on a numeric-id-reserving server; leaves any id already containing a non-digit unchanged.</summary>
+    private static string SafenNumericId(string id) =>
+        IsAllDigits(id) ? NumericIdNamespacePrefix + id : id;
+
+    /// <summary>
+    /// Recursively rewrites every relative <c>"reference": "Type/{numericId}"</c> in the resource to
+    /// <c>"Type/fb-{numericId}"</c>, matching <see cref="SafenNumericId"/> applied to the referenced resource's own
+    /// id. Contained (<c>#</c>), logical (<c>urn:</c>), and absolute (<c>scheme://</c>) references — and references
+    /// whose id already contains a non-digit — are left untouched.
+    /// </summary>
+    private static void RewriteNumericReferences(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var property in obj.ToList())
+                {
+                    if (property.Key == "reference"
+                        && property.Value is JsonValue value
+                        && value.TryGetValue<string>(out var reference)
+                        && SafenReference(reference) is { } rewritten
+                        && !string.Equals(rewritten, reference, StringComparison.Ordinal))
+                    {
+                        obj[property.Key] = rewritten;
+                    }
+                    else
+                    {
+                        RewriteNumericReferences(property.Value);
+                    }
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    RewriteNumericReferences(item);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>Returns the namespaced form of a relative <c>Type/{numericId}</c> reference, or the reference unchanged when it isn't one.</summary>
+    private static string SafenReference(string reference)
+    {
+        if (string.IsNullOrEmpty(reference)
+            || reference[0] == '#'
+            || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase)
+            || reference.Contains("://", StringComparison.Ordinal))
+        {
+            return reference;
+        }
+
+        var slash = reference.IndexOf('/');
+        if (slash <= 0 || slash == reference.Length - 1)
+        {
+            return reference;
+        }
+
+        var resourceType = reference[..slash];
+        var rest = reference[(slash + 1)..];
+        // A relative reference can carry a version: Type/id/_history/vid — namespace only the id segment.
+        var idEnd = rest.IndexOf('/');
+        var id = idEnd < 0 ? rest : rest[..idEnd];
+        var tail = idEnd < 0 ? string.Empty : rest[idEnd..];
+
+        return IsAllLetters(resourceType) && IsAllDigits(id)
+            ? $"{resourceType}/{NumericIdNamespacePrefix}{id}{tail}"
+            : reference;
+    }
+
+    private static bool IsAllDigits(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            if (c is < '0' or > '9')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAllLetters(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            if (!char.IsLetter(c))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// Shared by <see cref="BuildFhirResource"/>, the bundle-mode split, and reference resolution: parses
     /// <see cref="MappedDestinationRecord.SourceJson"/> as a FHIR resource and reconciles its <c>id</c> to a stable

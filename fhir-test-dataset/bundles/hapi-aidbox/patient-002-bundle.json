@@ -1,0 +1,439 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Patient/patient-002",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-002"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Nguyen",
+            "given": [
+              "Linda"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1972-11-30",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1002",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "Organization/org-001",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/patient-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Coverage/coverage-002",
+      "resource": {
+        "resourceType": "Coverage",
+        "id": "coverage-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-002"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "payor": [
+          {
+            "reference": "Organization/org-002",
+            "display": "BlueShield Health Plan"
+          }
+        ],
+        "subscriberId": "BS-0002",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Coverage/coverage-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Condition/condition-002",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-002"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "Essential (primary) hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "onsetDateTime": "2020-06-15"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Condition/condition-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Observation/observation-004",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-004",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-004"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ],
+              "text": "Systolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 158,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ],
+              "text": "Diastolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 96,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/observation-004"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/Observation/observation-005",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-005",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-005"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "valueQuantity": {
+          "value": 82,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Observation/observation-005"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/MedicationRequest/medicationrequest-002",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-002"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "Medication/medication-002",
+          "display": "Lisinopril 10 MG"
+        },
+        "subject": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "requester": {
+          "reference": "Practitioner/practitioner-001",
+          "display": "Dr Sarah Reynolds"
+        },
+        "authoredOn": "2026-04-20T14:15:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 tablet by mouth once daily"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "MedicationRequest/medicationrequest-002"
+      }
+    },
+    {
+      "fullUrl": "https://segue.pegasusone.com:7011/fhir/CarePlan/careplan-002",
+      "resource": {
+        "resourceType": "CarePlan",
+        "id": "careplan-002",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-002"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "Hypertension management plan",
+        "subject": {
+          "reference": "Patient/patient-002",
+          "display": "Linda Nguyen"
+        },
+        "addresses": [
+          {
+            "reference": "Condition/condition-002",
+            "display": "condition-002"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "CarePlan/careplan-002"
+      }
+    }
+  ]
+}

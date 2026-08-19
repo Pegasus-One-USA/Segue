@@ -1,0 +1,54 @@
+{
+  "resourceType": "Patient",
+  "id": "patient-005",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:patient",
+      "value": "PATIENT-005"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "official",
+      "family": "Chen",
+      "given": [
+        "Grace"
+      ]
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1990-05-17",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-1005",
+      "use": "home"
+    }
+  ],
+  "address": [
+    {
+      "line": [
+        "1 Elm St"
+      ],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02120",
+      "country": "US"
+    }
+  ],
+  "managingOrganization": {
+    "reference": "Organization/org-001",
+    "display": "Segue General Hospital"
+  }
+}

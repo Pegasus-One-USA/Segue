@@ -1,0 +1,4155 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-001"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "prov",
+                "display": "Healthcare Provider"
+              }
+            ],
+            "text": "Healthcare Provider"
+          }
+        ],
+        "name": "Segue General Hospital",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0100",
+            "use": "work"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "100 Health Way"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02115",
+            "country": "US"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:0695e56a-f5ca-4b3e-8220-5c4f9856371b",
+      "resource": {
+        "resourceType": "Organization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:organization",
+            "value": "ORG-002"
+          }
+        ],
+        "active": true,
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                "code": "pay",
+                "display": "Payer"
+              }
+            ],
+            "text": "Payer"
+          }
+        ],
+        "name": "BlueShield Health Plan",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0200",
+            "use": "work"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Organization",
+        "ifNoneExist": "identifier=urn:segue:test:organization|ORG-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+      "resource": {
+        "resourceType": "Location",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:location",
+            "value": "LOCATION-001"
+          }
+        ],
+        "status": "active",
+        "name": "Segue General - Outpatient Clinic",
+        "mode": "instance",
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "OF",
+                "display": "Outpatient Facility"
+              }
+            ],
+            "text": "Outpatient Facility"
+          }
+        ],
+        "physicalType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/location-physical-type",
+              "code": "bu",
+              "display": "Building"
+            }
+          ],
+          "text": "Building"
+        },
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Location",
+        "ifNoneExist": "identifier=urn:segue:test:location|LOCATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:2c639f17-e9aa-4229-8f7f-76c234310702",
+      "resource": {
+        "resourceType": "Location",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:location",
+            "value": "LOCATION-002"
+          }
+        ],
+        "status": "active",
+        "name": "Segue General - Inpatient Ward 3",
+        "mode": "instance",
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "HOSP",
+                "display": "Hospital"
+              }
+            ],
+            "text": "Hospital"
+          }
+        ],
+        "physicalType": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/location-physical-type",
+              "code": "wa",
+              "display": "Ward"
+            }
+          ],
+          "text": "Ward"
+        },
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Location",
+        "ifNoneExist": "identifier=urn:segue:test:location|LOCATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+      "resource": {
+        "resourceType": "Practitioner",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitioner",
+            "value": "PRACTITIONER-001"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1234567893"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "family": "Reynolds",
+            "given": [
+              "Sarah"
+            ],
+            "prefix": [
+              "Dr"
+            ]
+          }
+        ],
+        "gender": "female",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-0111",
+            "use": "work"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner",
+        "ifNoneExist": "identifier=urn:segue:test:practitioner|PRACTITIONER-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+      "resource": {
+        "resourceType": "Practitioner",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitioner",
+            "value": "PRACTITIONER-002"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1245319599"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "family": "Okafor",
+            "given": [
+              "Daniel"
+            ],
+            "prefix": [
+              "Dr"
+            ]
+          }
+        ],
+        "gender": "male"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner",
+        "ifNoneExist": "identifier=urn:segue:test:practitioner|PRACTITIONER-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+      "resource": {
+        "resourceType": "Practitioner",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitioner",
+            "value": "PRACTITIONER-003"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-npi",
+            "value": "1679576722"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "family": "Tanaka",
+            "given": [
+              "Yuki"
+            ],
+            "prefix": [
+              "Dr"
+            ]
+          }
+        ],
+        "gender": "female"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Practitioner",
+        "ifNoneExist": "identifier=urn:segue:test:practitioner|PRACTITIONER-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ff08c1d6-47c9-4de9-8d0c-639176315c0a",
+      "resource": {
+        "resourceType": "PractitionerRole",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitionerrole",
+            "value": "PRACTITIONERROLE-001"
+          }
+        ],
+        "active": true,
+        "practitioner": {
+          "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+          "display": "Dr Sarah Reynolds"
+        },
+        "organization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "code": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/practitioner-role",
+                "code": "doctor",
+                "display": "Doctor"
+              }
+            ],
+            "text": "Doctor"
+          }
+        ],
+        "specialty": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "419192003",
+                "display": "Internal medicine"
+              }
+            ],
+            "text": "Internal medicine"
+          }
+        ],
+        "location": [
+          {
+            "reference": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+            "display": "Outpatient Clinic"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "PractitionerRole",
+        "ifNoneExist": "identifier=urn:segue:test:practitionerrole|PRACTITIONERROLE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:1c20a217-ac7f-4386-8b81-05d9762e20e8",
+      "resource": {
+        "resourceType": "PractitionerRole",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:practitionerrole",
+            "value": "PRACTITIONERROLE-002"
+          }
+        ],
+        "active": true,
+        "practitioner": {
+          "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+          "display": "Dr Yuki Tanaka"
+        },
+        "organization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "code": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/practitioner-role",
+                "code": "doctor",
+                "display": "Doctor"
+              }
+            ],
+            "text": "Doctor"
+          }
+        ],
+        "specialty": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "418112009",
+                "display": "Pulmonary medicine"
+              }
+            ],
+            "text": "Pulmonary medicine"
+          }
+        ],
+        "location": [
+          {
+            "reference": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+            "display": "Outpatient Clinic"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "PractitionerRole",
+        "ifNoneExist": "identifier=urn:segue:test:practitionerrole|PRACTITIONERROLE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:af07976f-0d86-4260-8794-71a244dcb5c8",
+      "resource": {
+        "resourceType": "Medication",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medication",
+            "value": "MEDICATION-001"
+          }
+        ],
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "860975",
+              "display": "Metformin hydrochloride 500 MG Oral Tablet"
+            }
+          ],
+          "text": "Metformin hydrochloride 500 MG Oral Tablet"
+        },
+        "form": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "385055001",
+              "display": "Tablet"
+            }
+          ],
+          "text": "Tablet"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Medication",
+        "ifNoneExist": "identifier=urn:segue:test:medication|MEDICATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:c6881d9c-e625-4eb3-84ae-947aa48dba4d",
+      "resource": {
+        "resourceType": "Medication",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medication",
+            "value": "MEDICATION-002"
+          }
+        ],
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "314076",
+              "display": "Lisinopril 10 MG Oral Tablet"
+            }
+          ],
+          "text": "Lisinopril 10 MG Oral Tablet"
+        },
+        "form": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "385055001",
+              "display": "Tablet"
+            }
+          ],
+          "text": "Tablet"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Medication",
+        "ifNoneExist": "identifier=urn:segue:test:medication|MEDICATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:14acfa11-d2e8-4452-8188-ff7dab186091",
+      "resource": {
+        "resourceType": "Medication",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medication",
+            "value": "MEDICATION-003"
+          }
+        ],
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "308191",
+              "display": "Amoxicillin 500 MG Oral Capsule"
+            }
+          ],
+          "text": "Amoxicillin 500 MG Oral Capsule"
+        },
+        "form": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "385049006",
+              "display": "Capsule"
+            }
+          ],
+          "text": "Capsule"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Medication",
+        "ifNoneExist": "identifier=urn:segue:test:medication|MEDICATION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3adad9d5-4169-4a6c-8ee0-88e5fe00b870",
+      "resource": {
+        "resourceType": "Device",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:device",
+            "value": "DEVICE-001"
+          }
+        ],
+        "status": "active",
+        "manufacturer": "Acme MedTech",
+        "deviceName": [
+          {
+            "name": "Acme GlucoTrack Meter",
+            "type": "user-friendly-name"
+          }
+        ],
+        "type": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "337414009",
+              "display": "Blood glucose meter"
+            }
+          ],
+          "text": "Blood glucose meter"
+        },
+        "patient": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Device",
+        "ifNoneExist": "identifier=urn:segue:test:device|DEVICE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:31c5d6df-607c-4238-8e40-823e2a4795cc",
+      "resource": {
+        "resourceType": "Device",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:device",
+            "value": "DEVICE-002"
+          }
+        ],
+        "status": "active",
+        "manufacturer": "Acme MedTech",
+        "deviceName": [
+          {
+            "name": "Acme OxySense Pulse Oximeter",
+            "type": "user-friendly-name"
+          }
+        ],
+        "type": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "448703006",
+              "display": "Pulse oximeter"
+            }
+          ],
+          "text": "Pulse oximeter"
+        },
+        "patient": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Device",
+        "ifNoneExist": "identifier=urn:segue:test:device|DEVICE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-001"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Whitfield",
+            "given": [
+              "James",
+              "A"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1968-03-12",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1001",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-002"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Nguyen",
+            "given": [
+              "Linda"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1972-11-30",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1002",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-003"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Delgado",
+            "given": [
+              "Maria"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1959-07-08",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1003",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-004"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Brooks",
+            "given": [
+              "Robert"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1945-01-22",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1004",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-004"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+      "resource": {
+        "resourceType": "Patient",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:patient",
+            "value": "PATIENT-005"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Chen",
+            "given": [
+              "Grace"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1990-05-17",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1005",
+            "use": "home"
+          }
+        ],
+        "address": [
+          {
+            "line": [
+              "1 Elm St"
+            ],
+            "city": "Boston",
+            "state": "MA",
+            "postalCode": "02120",
+            "country": "US"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient",
+        "ifNoneExist": "identifier=urn:segue:test:patient|PATIENT-005"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:af5baa08-342e-43f8-8af4-3e44f588f4a2",
+      "resource": {
+        "resourceType": "RelatedPerson",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:relatedperson",
+            "value": "RELATEDPERSON-001"
+          }
+        ],
+        "active": true,
+        "patient": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "relationship": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "SPS",
+                "display": "Spouse"
+              }
+            ],
+            "text": "Spouse"
+          }
+        ],
+        "name": [
+          {
+            "family": "Whitfield",
+            "given": [
+              "Karen"
+            ]
+          }
+        ],
+        "gender": "female",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+1-555-1991",
+            "use": "home"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "RelatedPerson",
+        "ifNoneExist": "identifier=urn:segue:test:relatedperson|RELATEDPERSON-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:b745d148-365a-4827-8ba8-6fb74c15c01b",
+      "resource": {
+        "resourceType": "RelatedPerson",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:relatedperson",
+            "value": "RELATEDPERSON-002"
+          }
+        ],
+        "active": true,
+        "patient": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "relationship": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+                "code": "DAUC",
+                "display": "Daughter"
+              }
+            ],
+            "text": "Daughter"
+          }
+        ],
+        "name": [
+          {
+            "family": "Brooks",
+            "given": [
+              "Emily"
+            ]
+          }
+        ],
+        "gender": "female"
+      },
+      "request": {
+        "method": "POST",
+        "url": "RelatedPerson",
+        "ifNoneExist": "identifier=urn:segue:test:relatedperson|RELATEDPERSON-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:c4211dc4-9161-4f4f-8152-ab01e85302e0",
+      "resource": {
+        "resourceType": "Coverage",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-001"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "payor": [
+          {
+            "reference": "urn:uuid:0695e56a-f5ca-4b3e-8220-5c4f9856371b",
+            "display": "BlueShield Health Plan"
+          }
+        ],
+        "subscriberId": "BS-0001",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Coverage",
+        "ifNoneExist": "identifier=urn:segue:test:coverage|COVERAGE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:16429118-afba-4f90-8dca-005f2702ece6",
+      "resource": {
+        "resourceType": "Coverage",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-002"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "payor": [
+          {
+            "reference": "urn:uuid:0695e56a-f5ca-4b3e-8220-5c4f9856371b",
+            "display": "BlueShield Health Plan"
+          }
+        ],
+        "subscriberId": "BS-0002",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Coverage",
+        "ifNoneExist": "identifier=urn:segue:test:coverage|COVERAGE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a9b282d6-c2a8-476a-86ed-cfb26087ac2b",
+      "resource": {
+        "resourceType": "Coverage",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:coverage",
+            "value": "COVERAGE-003"
+          }
+        ],
+        "status": "active",
+        "beneficiary": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "payor": [
+          {
+            "identifier": {
+              "system": "urn:segue:test:organization",
+              "value": "ORG-002"
+            },
+            "display": "BlueShield Health Plan (by identifier)"
+          }
+        ],
+        "subscriberId": "BS-0004",
+        "relationship": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/subscriber-relationship",
+              "code": "self",
+              "display": "Self"
+            }
+          ],
+          "text": "Self"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Coverage",
+        "ifNoneExist": "identifier=urn:segue:test:coverage|COVERAGE-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+      "resource": {
+        "resourceType": "Encounter",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "ENCOUNTER-001"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+              "display": "Dr Sarah Reynolds"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-05-04T09:00:00Z",
+          "end": "2026-05-04T09:45:00Z"
+        },
+        "serviceProvider": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "location": [
+          {
+            "location": {
+              "reference": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+              "display": "Clinic/Ward"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Encounter",
+        "ifNoneExist": "identifier=urn:segue:test:encounter|ENCOUNTER-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+      "resource": {
+        "resourceType": "Encounter",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "ENCOUNTER-002"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "Dr Yuki Tanaka"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-05-04T09:00:00Z",
+          "end": "2026-05-04T09:45:00Z"
+        },
+        "serviceProvider": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "location": [
+          {
+            "location": {
+              "reference": "urn:uuid:6dff11d0-69e2-4380-8e89-d569f5e6199a",
+              "display": "Clinic/Ward"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Encounter",
+        "ifNoneExist": "identifier=urn:segue:test:encounter|ENCOUNTER-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+      "resource": {
+        "resourceType": "Encounter",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:encounter",
+            "value": "ENCOUNTER-003"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND",
+                    "display": "attender"
+                  }
+                ],
+                "text": "attender"
+              }
+            ],
+            "individual": {
+              "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+              "display": "Dr Daniel Okafor"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-05-04T09:00:00Z",
+          "end": "2026-05-04T09:45:00Z"
+        },
+        "serviceProvider": {
+          "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+          "display": "Segue General Hospital"
+        },
+        "location": [
+          {
+            "location": {
+              "reference": "urn:uuid:2c639f17-e9aa-4229-8f7f-76c234310702",
+              "display": "Clinic/Ward"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Encounter",
+        "ifNoneExist": "identifier=urn:segue:test:encounter|ENCOUNTER-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:383b7a4e-0064-46a8-802b-dba77cc961f5",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-001"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "44054006",
+              "display": "Type 2 diabetes mellitus"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E11.9",
+              "display": "Type 2 diabetes mellitus without complications"
+            }
+          ],
+          "text": "Type 2 diabetes mellitus"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "onsetDateTime": "2019-02-01",
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d877167a-dd4d-41fa-810a-f97a1592de43",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-002"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "Essential (primary) hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "onsetDateTime": "2020-06-15"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:5346619d-58d0-4179-8288-b292e8562113",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-003"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "13645005",
+              "display": "Chronic obstructive pulmonary disease"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "J44.9",
+              "display": "COPD, unspecified"
+            }
+          ],
+          "text": "Chronic obstructive pulmonary disease"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "onsetDateTime": "2018-10-10",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:9a19765d-7900-422c-80f6-f1174b961dd7",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-004"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "233604007",
+              "display": "Pneumonia"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "J18.9",
+              "display": "Pneumonia, unspecified organism"
+            }
+          ],
+          "text": "Pneumonia"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "onsetDateTime": "2026-05-01",
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-004"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:68f8facd-d4c6-4513-8239-3754338c8b91",
+      "resource": {
+        "resourceType": "Condition",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:condition",
+            "value": "CONDITION-005"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ],
+            "text": "Problem List Item"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "59621000",
+              "display": "Essential hypertension"
+            },
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "Essential (primary) hypertension"
+            }
+          ],
+          "text": "Essential hypertension"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "onsetDateTime": "2021-03-20",
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Condition",
+        "ifNoneExist": "identifier=urn:segue:test:condition|CONDITION-005"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4f226918-cb91-4b2e-8fe1-fb530439a4bd",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-001"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2339-0",
+              "display": "Glucose [Mass/volume] in Blood"
+            }
+          ],
+          "text": "Glucose [Mass/volume] in Blood"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "effectiveDateTime": "2026-05-04T09:10:00Z",
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        },
+        "valueQuantity": {
+          "value": 148,
+          "unit": "mg/dL",
+          "system": "http://unitsofmeasure.org",
+          "code": "mg/dL"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:259872b3-c36f-4c07-8560-cf6fd10b221b",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-002"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4",
+              "display": "Hemoglobin A1c/Hemoglobin.total in Blood"
+            }
+          ],
+          "text": "Hemoglobin A1c/Hemoglobin.total in Blood"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "effectiveDateTime": "2026-05-04T09:10:00Z",
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        },
+        "valueQuantity": {
+          "value": 7.8,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a940a017-3633-4ef7-890a-dcc7dc001830",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-003"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "effectiveDateTime": "2026-05-04T09:12:00Z",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ],
+              "text": "Systolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 142,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ],
+              "text": "Diastolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 88,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d2ea3353-9853-425b-829a-9e0a7b05c3d1",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-004"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood pressure panel with all children optional"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ],
+              "text": "Systolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 158,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ],
+              "text": "Diastolic blood pressure"
+            },
+            "valueQuantity": {
+              "value": 96,
+              "unit": "mmHg",
+              "system": "http://unitsofmeasure.org",
+              "code": "mm[Hg]"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-004"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:95d3a802-236a-4660-8fb6-bedcd5170aad",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-005"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "effectiveDateTime": "2026-04-20T14:00:00Z",
+        "valueQuantity": {
+          "value": 82,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-005"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:f9259b98-606d-4e7b-83c3-9c570387188b",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-006"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2708-6",
+              "display": "Oxygen saturation in Arterial blood"
+            }
+          ],
+          "text": "Oxygen saturation in Arterial blood"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "effectiveDateTime": "2026-05-02T10:30:00Z",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "valueQuantity": {
+          "value": 91,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-006"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e838a5e8-eef4-42a4-8b2d-c264933c7c4b",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-007"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "9279-1",
+              "display": "Respiratory rate"
+            }
+          ],
+          "text": "Respiratory rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "effectiveDateTime": "2026-05-02T10:30:00Z",
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "valueQuantity": {
+          "value": 24,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-007"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:b82a6435-8840-4906-8ddd-e95de3681ed6",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-008"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8310-5",
+              "display": "Body temperature"
+            }
+          ],
+          "text": "Body temperature"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "effectiveDateTime": "2026-05-01T22:15:00Z",
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        },
+        "valueQuantity": {
+          "value": 38.7,
+          "unit": "Cel",
+          "system": "http://unitsofmeasure.org",
+          "code": "Cel"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-008"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:09505829-a573-488c-8ca1-92975c99c154",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-009"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "effectiveDateTime": "2026-05-01T22:15:00Z",
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        },
+        "valueQuantity": {
+          "value": 104,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-009"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3a3f300a-25b7-46ee-890b-98b7b9c075e9",
+      "resource": {
+        "resourceType": "Observation",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:observation",
+            "value": "OBSERVATION-010"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ],
+            "text": "Vital Signs"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "39156-5",
+              "display": "Body mass index (BMI) [Ratio]"
+            }
+          ],
+          "text": "Body mass index (BMI) [Ratio]"
+        },
+        "subject": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "effectiveDateTime": "2026-03-11T08:00:00Z",
+        "valueQuantity": {
+          "value": 22.4,
+          "unit": "kg/m2",
+          "system": "http://unitsofmeasure.org",
+          "code": "kg/m2"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation",
+        "ifNoneExist": "identifier=urn:segue:test:observation|OBSERVATION-010"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:6bc06e26-ae21-487d-842c-57fab6f6d1b9",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "DIAGNOSTICREPORT-001"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "LAB",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "24323-8",
+              "display": "Comprehensive metabolic 2000 panel - Serum or Plasma"
+            }
+          ],
+          "text": "Comprehensive metabolic 2000 panel - Serum or Plasma"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        },
+        "effectiveDateTime": "2026-05-04T11:00:00Z",
+        "issued": "2026-05-04T11:00:00Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+            "display": "Segue General Hospital"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:4f226918-cb91-4b2e-8fe1-fb530439a4bd",
+            "display": "observation-001"
+          },
+          {
+            "reference": "urn:uuid:259872b3-c36f-4c07-8560-cf6fd10b221b",
+            "display": "observation-002"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DiagnosticReport",
+        "ifNoneExist": "identifier=urn:segue:test:diagnosticreport|DIAGNOSTICREPORT-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:62924e15-978d-461f-8e1a-8dac2388276b",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "DIAGNOSTICREPORT-002"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "RAD",
+                "display": "Radiology"
+              }
+            ],
+            "text": "Radiology"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "36643-5",
+              "display": "Chest X-ray"
+            }
+          ],
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "effectiveDateTime": "2026-05-02T12:00:00Z",
+        "issued": "2026-05-02T12:00:00Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+            "display": "Segue General Hospital"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:f9259b98-606d-4e7b-83c3-9c570387188b",
+            "display": "observation-006"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DiagnosticReport",
+        "ifNoneExist": "identifier=urn:segue:test:diagnosticreport|DIAGNOSTICREPORT-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:b5038f4b-af4b-4b61-836d-8f2ea5fe4e62",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:diagnosticreport",
+            "value": "DIAGNOSTICREPORT-003"
+          }
+        ],
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "LAB",
+                "display": "Laboratory"
+              }
+            ],
+            "text": "Laboratory"
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "58410-2",
+              "display": "Complete blood count (hemogram) panel - Blood by Automated count"
+            }
+          ],
+          "text": "Complete blood count (hemogram) panel - Blood by Automated count"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        },
+        "effectiveDateTime": "2026-05-01T23:00:00Z",
+        "issued": "2026-05-01T23:00:00Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:8902c535-e825-4d52-8678-eaa16bed6ae1",
+            "display": "Segue General Hospital"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:b82a6435-8840-4906-8ddd-e95de3681ed6",
+            "display": "observation-008"
+          },
+          {
+            "reference": "urn:uuid:09505829-a573-488c-8ca1-92975c99c154",
+            "display": "observation-009"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DiagnosticReport",
+        "ifNoneExist": "identifier=urn:segue:test:diagnosticreport|DIAGNOSTICREPORT-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:20437cbd-bcb7-4134-852e-1f980bcb94d1",
+      "resource": {
+        "resourceType": "Procedure",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:procedure",
+            "value": "PROCEDURE-001"
+          }
+        ],
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "71046",
+              "display": "Radiologic examination, chest; 2 views"
+            }
+          ],
+          "text": "Radiologic examination, chest; 2 views"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        },
+        "performedDateTime": "2026-05-01T22:40:00Z",
+        "performer": [
+          {
+            "actor": {
+              "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+              "display": "Dr Daniel Okafor"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure",
+        "ifNoneExist": "identifier=urn:segue:test:procedure|PROCEDURE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8393e20d-cf82-4343-84a7-959680e3b856",
+      "resource": {
+        "resourceType": "Procedure",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:procedure",
+            "value": "PROCEDURE-002"
+          }
+        ],
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "94010",
+              "display": "Spirometry"
+            }
+          ],
+          "text": "Spirometry"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "performedDateTime": "2026-05-02T10:45:00Z",
+        "performer": [
+          {
+            "actor": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "Dr Yuki Tanaka"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure",
+        "ifNoneExist": "identifier=urn:segue:test:procedure|PROCEDURE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:0cb311d4-a6e1-46f1-8af4-764ade4330c1",
+      "resource": {
+        "resourceType": "Procedure",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:procedure",
+            "value": "PROCEDURE-003"
+          }
+        ],
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.ama-assn.org/go/cpt",
+              "code": "93000",
+              "display": "Electrocardiogram, complete"
+            }
+          ],
+          "text": "Electrocardiogram, complete"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        },
+        "performedDateTime": "2026-05-04T09:30:00Z",
+        "performer": [
+          {
+            "actor": {
+              "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+              "display": "Dr Sarah Reynolds"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure",
+        "ifNoneExist": "identifier=urn:segue:test:procedure|PROCEDURE-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:2b5476ba-760b-404b-8cd5-a2783059f298",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-001"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:af07976f-0d86-4260-8794-71a244dcb5c8",
+          "display": "Metformin 500 MG"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "requester": {
+          "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+          "display": "Dr Sarah Reynolds"
+        },
+        "authoredOn": "2026-05-04T09:35:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 tablet by mouth twice daily with meals"
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationRequest",
+        "ifNoneExist": "identifier=urn:segue:test:medicationrequest|MEDICATIONREQUEST-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:cf1d27bd-7887-4cc4-887d-0bac256383fe",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-002"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:c6881d9c-e625-4eb3-84ae-947aa48dba4d",
+          "display": "Lisinopril 10 MG"
+        },
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "requester": {
+          "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+          "display": "Dr Sarah Reynolds"
+        },
+        "authoredOn": "2026-04-20T14:15:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 tablet by mouth once daily"
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationRequest",
+        "ifNoneExist": "identifier=urn:segue:test:medicationrequest|MEDICATIONREQUEST-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:16a28eea-790f-4d51-83fc-527d2dd6e1e5",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:medicationrequest",
+            "value": "MEDICATIONREQUEST-003"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:14acfa11-d2e8-4452-8188-ff7dab186091",
+          "display": "Amoxicillin 500 MG"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "requester": {
+          "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+          "display": "Dr Daniel Okafor"
+        },
+        "authoredOn": "2026-05-01T23:10:00Z",
+        "dosageInstruction": [
+          {
+            "text": "Take 1 capsule by mouth three times daily for 10 days"
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationRequest",
+        "ifNoneExist": "identifier=urn:segue:test:medicationrequest|MEDICATIONREQUEST-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fa3d90b0-333c-4e76-8418-731aeec1daba",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:allergyintolerance",
+            "value": "ALLERGYINTOLERANCE-001"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "type": "allergy",
+        "criticality": "high",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "91936005",
+              "display": "Allergy to penicillin"
+            }
+          ],
+          "text": "Allergy to penicillin"
+        },
+        "patient": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "recordedDate": "2022-01-05"
+      },
+      "request": {
+        "method": "POST",
+        "url": "AllergyIntolerance",
+        "ifNoneExist": "identifier=urn:segue:test:allergyintolerance|ALLERGYINTOLERANCE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4c72646b-82fa-41d9-8036-734276fa8bfa",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:allergyintolerance",
+            "value": "ALLERGYINTOLERANCE-002"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "type": "allergy",
+        "criticality": "high",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "91935009",
+              "display": "Allergy to peanuts"
+            }
+          ],
+          "text": "Allergy to peanuts"
+        },
+        "patient": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "recordedDate": "2022-01-05"
+      },
+      "request": {
+        "method": "POST",
+        "url": "AllergyIntolerance",
+        "ifNoneExist": "identifier=urn:segue:test:allergyintolerance|ALLERGYINTOLERANCE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:843a0038-8b38-4d30-8c72-ea3a984b14ae",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:allergyintolerance",
+            "value": "ALLERGYINTOLERANCE-003"
+          }
+        ],
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Active"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ],
+          "text": "Confirmed"
+        },
+        "type": "allergy",
+        "criticality": "low",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "294530006",
+              "display": "Allergy to sulfonamide"
+            }
+          ],
+          "text": "Allergy to sulfonamide"
+        },
+        "patient": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "recordedDate": "2022-01-05"
+      },
+      "request": {
+        "method": "POST",
+        "url": "AllergyIntolerance",
+        "ifNoneExist": "identifier=urn:segue:test:allergyintolerance|ALLERGYINTOLERANCE-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:048ed704-3bd0-453e-8315-f27ef9d39e64",
+      "resource": {
+        "resourceType": "CarePlan",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-001"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "Type 2 Diabetes management plan",
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "addresses": [
+          {
+            "reference": "urn:uuid:383b7a4e-0064-46a8-802b-dba77cc961f5",
+            "display": "condition-001"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        },
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CarePlan",
+        "ifNoneExist": "identifier=urn:segue:test:careplan|CAREPLAN-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:9a297360-5bac-425c-8f89-80659dfed541",
+      "resource": {
+        "resourceType": "CarePlan",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-002"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "Hypertension management plan",
+        "subject": {
+          "reference": "urn:uuid:6092ee0e-b4b1-47f6-8e14-5b896bfe5486",
+          "display": "Linda Nguyen"
+        },
+        "addresses": [
+          {
+            "reference": "urn:uuid:d877167a-dd4d-41fa-810a-f97a1592de43",
+            "display": "condition-002"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CarePlan",
+        "ifNoneExist": "identifier=urn:segue:test:careplan|CAREPLAN-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e5f9db16-2d1e-4847-8025-9af1e92ebfab",
+      "resource": {
+        "resourceType": "CarePlan",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careplan",
+            "value": "CAREPLAN-003"
+          }
+        ],
+        "status": "active",
+        "intent": "plan",
+        "title": "COPD management plan",
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "addresses": [
+          {
+            "reference": "urn:uuid:5346619d-58d0-4179-8288-b292e8562113",
+            "display": "condition-003"
+          }
+        ],
+        "period": {
+          "start": "2026-05-04"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CarePlan",
+        "ifNoneExist": "identifier=urn:segue:test:careplan|CAREPLAN-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:fc38ae44-2550-4cd2-838b-3f500a379f3f",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:servicerequest",
+            "value": "SERVICEREQUEST-001"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4",
+              "display": "Hemoglobin A1c measurement"
+            }
+          ],
+          "text": "Hemoglobin A1c measurement"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        },
+        "requester": {
+          "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+          "display": "Dr Sarah Reynolds"
+        },
+        "authoredOn": "2026-05-04T09:20:00Z"
+      },
+      "request": {
+        "method": "POST",
+        "url": "ServiceRequest",
+        "ifNoneExist": "identifier=urn:segue:test:servicerequest|SERVICEREQUEST-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a1e4bbe2-4ded-41dd-85a7-5427c456e9fd",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:servicerequest",
+            "value": "SERVICEREQUEST-002"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "36643-5",
+              "display": "Chest X-ray"
+            }
+          ],
+          "text": "Chest X-ray"
+        },
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        },
+        "requester": {
+          "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+          "display": "Dr Yuki Tanaka"
+        },
+        "authoredOn": "2026-05-04T09:20:00Z"
+      },
+      "request": {
+        "method": "POST",
+        "url": "ServiceRequest",
+        "ifNoneExist": "identifier=urn:segue:test:servicerequest|SERVICEREQUEST-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:efb76132-ad25-45c9-8c4f-bdde962b0b52",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:servicerequest",
+            "value": "SERVICEREQUEST-003"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "600-7",
+              "display": "Bacteria identified in Blood by Culture"
+            }
+          ],
+          "text": "Bacteria identified in Blood by Culture"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        },
+        "requester": {
+          "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+          "display": "Dr Daniel Okafor"
+        },
+        "authoredOn": "2026-05-04T09:20:00Z"
+      },
+      "request": {
+        "method": "POST",
+        "url": "ServiceRequest",
+        "ifNoneExist": "identifier=urn:segue:test:servicerequest|SERVICEREQUEST-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:5aab6ed8-3002-473b-8440-aa03f9c985ed",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-001"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "140",
+              "display": "Influenza, seasonal, injectable, preservative free"
+            }
+          ],
+          "text": "Influenza, seasonal, injectable, preservative free"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2025-10-05",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:03919b5e-4161-4fc5-840c-43c976516a88",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-002"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "115",
+              "display": "Tdap"
+            }
+          ],
+          "text": "Tdap"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2024-08-12",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:44fe9e10-2b13-449a-8e73-6494162c0de1",
+      "resource": {
+        "resourceType": "Immunization",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:immunization",
+            "value": "IMMUNIZATION-003"
+          }
+        ],
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "133",
+              "display": "Pneumococcal conjugate PCV13"
+            }
+          ],
+          "text": "Pneumococcal conjugate PCV13"
+        },
+        "patient": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "occurrenceDateTime": "2025-11-01",
+        "primarySource": true
+      },
+      "request": {
+        "method": "POST",
+        "url": "Immunization",
+        "ifNoneExist": "identifier=urn:segue:test:immunization|IMMUNIZATION-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4070eb6e-cffb-4dba-81a0-9a91f2d2e30e",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:documentreference",
+            "value": "DOCUMENTREFERENCE-001"
+          }
+        ],
+        "status": "current",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11506-3",
+              "display": "Progress note"
+            }
+          ],
+          "text": "Progress note"
+        },
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "date": "2026-05-04T12:00:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+              "title": "Progress note"
+            }
+          }
+        ],
+        "context": {
+          "encounter": [
+            {
+              "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+              "display": "encounter-001"
+            }
+          ]
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "DocumentReference",
+        "ifNoneExist": "identifier=urn:segue:test:documentreference|DOCUMENTREFERENCE-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8003d2f1-c70a-4096-8c58-2dd5e5e69240",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:documentreference",
+            "value": "DOCUMENTREFERENCE-002"
+          }
+        ],
+        "status": "current",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "18842-5",
+              "display": "Discharge summary"
+            }
+          ],
+          "text": "Discharge summary"
+        },
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "date": "2026-05-04T12:00:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+              "title": "Discharge summary"
+            }
+          }
+        ],
+        "context": {
+          "encounter": [
+            {
+              "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+              "display": "encounter-003"
+            }
+          ]
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "DocumentReference",
+        "ifNoneExist": "identifier=urn:segue:test:documentreference|DOCUMENTREFERENCE-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:78793b35-eeec-4b19-8b9b-69bd43433eb9",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:documentreference",
+            "value": "DOCUMENTREFERENCE-003"
+          }
+        ],
+        "status": "current",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34133-9",
+              "display": "Summary of episode note"
+            }
+          ],
+          "text": "Summary of episode note"
+        },
+        "subject": {
+          "reference": "urn:uuid:26218797-7161-4308-8b3a-907aa039b628",
+          "display": "Grace Chen"
+        },
+        "date": "2026-05-04T12:00:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain",
+              "data": "Q2xpbmljYWwgbm90ZSAtIHN5bnRoZXRpYyB0ZXN0IGRhdGEu",
+              "title": "Summary of episode note"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "DocumentReference",
+        "ifNoneExist": "identifier=urn:segue:test:documentreference|DOCUMENTREFERENCE-003"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:58a9020c-7454-4c9e-819f-2391ce90dc17",
+      "resource": {
+        "resourceType": "CareTeam",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careteam",
+            "value": "CARETEAM-001"
+          }
+        ],
+        "status": "active",
+        "name": "Care team for James Whitfield",
+        "subject": {
+          "reference": "urn:uuid:8f17f94a-88c3-40c8-81e2-0d579c9fd1ce",
+          "display": "James Whitfield"
+        },
+        "participant": [
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "urn:uuid:68227c5a-f93d-40e9-81aa-3ef9abece0d3",
+              "display": "practitioner-001"
+            }
+          },
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+              "display": "practitioner-002"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:5bed8eaa-287d-4cd2-8b8a-825771a60fb9",
+          "display": "encounter-001"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CareTeam",
+        "ifNoneExist": "identifier=urn:segue:test:careteam|CARETEAM-001"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:30ef37f9-8dc8-4dbb-87a1-77e9500e203b",
+      "resource": {
+        "resourceType": "CareTeam",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careteam",
+            "value": "CARETEAM-002"
+          }
+        ],
+        "status": "active",
+        "name": "Care team for Maria Delgado",
+        "subject": {
+          "reference": "urn:uuid:f08957ec-9f17-4666-82db-8299859de6b2",
+          "display": "Maria Delgado"
+        },
+        "participant": [
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "urn:uuid:e81060a0-6c92-4593-80b1-34b15fdaf00e",
+              "display": "practitioner-003"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:ecc005c1-334e-473c-8614-b0da1bc00d45",
+          "display": "encounter-002"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CareTeam",
+        "ifNoneExist": "identifier=urn:segue:test:careteam|CARETEAM-002"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4219df24-cf85-4a3f-8e5c-74389fb6b4e7",
+      "resource": {
+        "resourceType": "CareTeam",
+        "meta": {
+          "source": "urn:segue:test-dataset",
+          "tag": [
+            {
+              "system": "urn:segue:test:dataset",
+              "code": "synthetic",
+              "display": "Synthetic test data"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "system": "urn:segue:test:careteam",
+            "value": "CARETEAM-003"
+          }
+        ],
+        "status": "active",
+        "name": "Care team for Robert Brooks",
+        "subject": {
+          "reference": "urn:uuid:6c04ad08-dd41-4b27-8f2c-75fe4c0626c2",
+          "display": "Robert Brooks"
+        },
+        "participant": [
+          {
+            "role": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "158965000",
+                    "display": "Medical practitioner"
+                  }
+                ],
+                "text": "Medical practitioner"
+              }
+            ],
+            "member": {
+              "reference": "urn:uuid:9c384896-f41b-4bd7-806c-2ac7564f030b",
+              "display": "practitioner-002"
+            }
+          }
+        ],
+        "encounter": {
+          "reference": "urn:uuid:acbfcc58-8b7a-4ae4-8a4a-87b9cb764c66",
+          "display": "encounter-003"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "CareTeam",
+        "ifNoneExist": "identifier=urn:segue:test:careteam|CARETEAM-003"
+      }
+    }
+  ]
+}

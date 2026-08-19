@@ -22,6 +22,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<MappingProfile> MappingProfiles => Set<MappingProfile>();
     public DbSet<SchemaMapping> SchemaMappings => Set<SchemaMapping>();
     public DbSet<TransformationRule> TransformationRules => Set<TransformationRule>();
+    public DbSet<DeIdentificationProfile> DeIdentificationProfiles => Set<DeIdentificationProfile>();
     public DbSet<ResourcePipelineRoute> ResourcePipelineRoutes => Set<ResourcePipelineRoute>();
     public DbSet<SourceCapabilityProfile> SourceCapabilityProfiles => Set<SourceCapabilityProfile>();
     public DbSet<ConfiguredPipelineRunRecord> ConfiguredPipelineRuns => Set<ConfiguredPipelineRunRecord>();

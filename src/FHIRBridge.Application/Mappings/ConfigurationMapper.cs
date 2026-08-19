@@ -141,7 +141,8 @@ public static class ConfigurationMapper
             destinationConfiguration.CreatedOnUtc,
             destinationConfiguration.CreatedBy,
             destinationConfiguration.ModifiedOnUtc,
-            destinationConfiguration.ModifiedBy);
+            destinationConfiguration.ModifiedBy,
+            destinationConfiguration.DeIdentificationProfileId);
     }
 
     public static MappingProfileDto ToDto(MappingProfile mappingProfile)

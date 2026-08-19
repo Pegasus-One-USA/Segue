@@ -25,11 +25,16 @@ public sealed class TransformationRuleConfiguration : IEntityTypeConfiguration<T
         builder.Property(x => x.OnNullDefaultValue).HasMaxLength(500);
         builder.Property(x => x.ArrayMode).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.FhirWriteBackJsonPath).HasMaxLength(500);
+        builder.Property(x => x.ExecutionPhase).HasConversion<string>().HasMaxLength(20).IsRequired()
+            .HasDefaultValue(FHIRBridge.Domain.Enums.TransformExecutionPhase.PostMapping);
+        builder.Property(x => x.DeIdentificationProfileId);
         builder.Property(x => x.IsEnabled).IsRequired();
 
         // Speeds up the resolver's per-tier lookups (GetFieldScopedAsync/GetResourceTypeScopedAsync/etc.).
         builder.HasIndex(x => new { x.Scope, x.ResourceType, x.DestinationField, x.SourceSystem, x.SourceField });
         builder.HasIndex(x => new { x.Scope, x.DestinationType, x.DestinationField });
         builder.HasIndex(x => new { x.Scope, x.ResourcePipelineRouteId, x.ResourceType, x.DestinationField, x.SourceSystem, x.SourceField });
+        // Speeds up SafeHarborDeIdentificationService's pre-mapping lookup by profile + resource type.
+        builder.HasIndex(x => new { x.ExecutionPhase, x.DeIdentificationProfileId, x.ResourceType });
     }
 }

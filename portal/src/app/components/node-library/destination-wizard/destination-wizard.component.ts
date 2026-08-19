@@ -42,7 +42,9 @@ import {
   CreateDestinationConfigurationRequest,
   DestinationConfigurationDto,
   DestinationType,
+  DeIdentificationProfileDto,
 } from '../../../destination-connections/models/destination-configuration.model';
+import { DeIdentificationProfileService } from '../../../destination-connections/services/deidentification-profile.service';
 import {
   buildFhirSecretBlob,
   newSecretName,
@@ -464,6 +466,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly destinationConfigSvc = inject(
     DestinationConfigurationService,
   );
+  private readonly deIdentificationProfileSvc = inject(DeIdentificationProfileService);
   private readonly mappingSnapshotSvc = inject(MappingSnapshotService);
   private readonly mappingSummarySvc = inject(MappingSummaryService);
   private readonly mappingProfileImportSvc = inject(
@@ -611,6 +614,12 @@ export class DestinationWizardComponent implements OnInit {
         return 'Csv';
       case 'blob':
         return 'BlobStorage';
+      case 'medplum':
+        return 'Medplum';
+      // 'fhir' (Aidbox) deliberately has no case here — it's never registry-routed (see isFhir()'s doc
+      // comment on the already-shipped, live-verified hand-rolled Aidbox form/wizard steps). Falling through
+      // to the default is harmless because activeFormType()/activeForm() are never consulted for 'fhir' —
+      // every call site branches on isFhir() first.
       default:
         return 'SqlServer';
     }
@@ -629,7 +638,10 @@ export class DestinationWizardComponent implements OnInit {
    *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
    *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    if (this.isSql() || this.isMongo()) return {};
+    // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
+    // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
+    // see registryKey()), so it isn't listed here.
+    if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
     return {
       reusingExisting:
         this.connectionMode() === 'existing' && !this.hasExistingChanged(),
@@ -1498,6 +1510,47 @@ export class DestinationWizardComponent implements OnInit {
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
 
+  // Cross-cutting concern independent of destination type, so it lives at the wizard level rather than in
+  // any one DESTINATION_FORM_REGISTRY form component — see provisionDestinationConnection()'s four request
+  // branches and Step 4's review summary.
+  readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
+  readonly selectedDeIdentificationProfileId = signal<string | null>(null);
+  readonly newProfileName = signal('');
+  readonly creatingProfile = signal(false);
+  readonly selectedDeIdentificationProfileName = computed(() => {
+    const id = this.selectedDeIdentificationProfileId();
+    return id ? (this.deIdentificationProfiles().find(p => p.id === id)?.name ?? 'None') : 'None';
+  });
+
+  private loadDeIdentificationProfiles(): void {
+    this.deIdentificationProfileSvc.list().subscribe({
+      next: profiles => this.deIdentificationProfiles.set(profiles),
+      error: () => this.deIdentificationProfiles.set([]),
+    });
+  }
+
+  createDeIdentificationProfile(): void {
+    const name = this.newProfileName().trim();
+    if (!name) {
+      return;
+    }
+
+    this.creatingProfile.set(true);
+    this.deIdentificationProfileSvc.create({ name }).subscribe({
+      next: profile => {
+        this.deIdentificationProfiles.update(existing => [...existing, profile]);
+        this.selectedDeIdentificationProfileId.set(profile.id);
+        this.newProfileName.set('');
+        this.creatingProfile.set(false);
+      },
+      error: err => {
+        this.creatingProfile.set(false);
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to create the profile.';
+        this.toast.show('Profile not created', typeof msg === 'string' ? msg : 'Failed to create the profile.');
+      },
+    });
+  }
+
   // Set from the edited node's own fields when a prior build already provisioned a real
   // DestinationConfiguration for it (see workflow-builder.component.ts's stampBuildResultIds) — distinct
   // from selectedExistingId, which only reflects a manual "use an existing connection" pick in Step 1.
@@ -1522,6 +1575,7 @@ export class DestinationWizardComponent implements OnInit {
   ];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
+  private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
 
@@ -1538,6 +1592,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
+  // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
+  // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
+  readonly isMedplum = computed(() => this.destType() === 'medplum');
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
@@ -1563,11 +1620,13 @@ export class DestinationWizardComponent implements OnInit {
           ? 'PostgreSQL'
           : this.destType() === 'mongo'
             ? 'MongoDB'
-            : this.destType() === 'fhir'
-              ? 'Aidbox'
-              : this.destType() === 'blob'
-                ? 'Azure Blob Storage'
-                : 'CSV',
+            : this.destType() === 'medplum'
+              ? 'Medplum'
+              : this.destType() === 'fhir'
+                ? 'Aidbox'
+                : this.destType() === 'blob'
+                  ? 'Azure Blob Storage'
+                  : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -1926,6 +1985,7 @@ export class DestinationWizardComponent implements OnInit {
       .isHidden()
       .subscribe((hidden) => this.rulesHidden.set(hidden));
     this.refreshSnapshotList();
+    this.loadDeIdentificationProfiles();
     const edit = this.editNode();
     if (edit) {
       this._populateFromNode(edit);
@@ -2088,6 +2148,8 @@ export class DestinationWizardComponent implements OnInit {
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
   private resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
+    if (this.isMedplum()) return 'Medplum';
+    if (this.isFhir()) return 'FhirRepository';
     if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
@@ -2639,6 +2701,7 @@ export class DestinationWizardComponent implements OnInit {
   clearExistingConnection(): void {
     this.connectionMode.set('new');
     this.selectedExistingId.set(null);
+    this.selectedDeIdentificationProfileId.set(null);
     this._existingBaseline = null;
     const form = this.activeForm();
     form?.reset();
@@ -2663,11 +2726,13 @@ export class DestinationWizardComponent implements OnInit {
             ? DestinationWizardComponent.SQL_TYPES
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
-              : this.isFhir()
-                ? DestinationWizardComponent.FHIR_TYPES
-                : this.isBlob()
-                  ? DestinationWizardComponent.BLOB_TYPES
-                  : DestinationWizardComponent.CSV_TYPES;
+              : this.isMedplum()
+                ? DestinationWizardComponent.MEDPLUM_TYPES
+                : this.isFhir()
+                  ? DestinationWizardComponent.FHIR_TYPES
+                  : this.isBlob()
+                    ? DestinationWizardComponent.BLOB_TYPES
+                    : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -2711,6 +2776,10 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find((o) => o.id === id);
     if (!selected) return;
+
+    // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
+    // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
+    this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
 
     const metadata = this._parseConnectionMetadata(
       selected.connectionMetadataJson,
@@ -3193,6 +3262,17 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
+    // Restore the de-identification profile picker from the real DestinationConfiguration row — the canvas
+    // node's own fields don't carry it (it's a destination-level attribute, not a mapping/config one), so
+    // without this, re-saving an edited node would silently clear whatever profile was assigned. Applies to
+    // every destination type uniformly, including the hand-rolled FHIR/Aidbox branch below.
+    const destinationId = f['destinationId'];
+    if (destinationId) {
+      this.destinationConfigSvc.getById(destinationId).subscribe({
+        next: dto => this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null),
+        error: () => this.selectedDeIdentificationProfileId.set(null),
+      });
+    }
     if (this.isFhir()) {
       this.fhirForm.patchValue({
         name: f['dest_name'] || 'Aidbox Production',
@@ -3490,6 +3570,7 @@ export class DestinationWizardComponent implements OnInit {
 
     const isSql = this.isSql();
     const isMongo = this.isMongo();
+    const isMedplum = this.isMedplum();
     const isFhir = this.isFhir();
     const isBlob = this.isBlob();
     const name =
@@ -3498,12 +3579,15 @@ export class DestinationWizardComponent implements OnInit {
         ? 'SQL Destination'
         : isMongo
           ? 'MongoDB Destination'
-          : isFhir
-            ? 'Aidbox Destination'
-            : isBlob
-              ? 'Azure Blob Destination'
-              : 'File Destination');
+          : isMedplum
+            ? 'Medplum Destination'
+            : isFhir
+              ? 'Aidbox Destination'
+              : isBlob
+                ? 'Azure Blob Destination'
+                : 'File Destination');
     const secretName = newSecretName(name);
+    const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
       ? {
           name,
@@ -3517,6 +3601,7 @@ export class DestinationWizardComponent implements OnInit {
           target: null,
           inlineSecret: metadata.secret ?? '',
           connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId,
         }
       : isMongo
         ? {
@@ -3527,40 +3612,57 @@ export class DestinationWizardComponent implements OnInit {
             target: metadata.fields['dest_collection'] || null,
             inlineSecret: metadata.secret ?? '',
             connectionMetadataJson: JSON.stringify(metadata.fields),
+            deIdentificationProfileId,
           }
-        : isFhir
+        : isMedplum
           ? {
               name,
-              destinationType: 'FhirRepository',
+              destinationType: 'Medplum',
               keyVaultName: 'workflow-secrets',
               secretName,
-              // The FHIR base URL doubles as the destination's target, mirroring how the CSV branch below uses its
-              // file pattern — it's what a later "select existing" repopulates baseUrl from.
-              target: metadata.fields['dest_baseUrl'] || null,
+              // FHIR base URL is the target; the client secret / PEM key is the whole opaque inlineSecret — the
+              // Step 1 form's getMetadata() already assembled both (fields + secret), same as every other family.
+              target: metadata.fields['dest_medplumBaseUrl'] || null,
               inlineSecret: metadata.secret ?? '',
               connectionMetadataJson: JSON.stringify(metadata.fields),
+              deIdentificationProfileId,
             }
-          : isBlob
+          : isFhir
             ? {
                 name,
-                destinationType: 'BlobStorage',
+                destinationType: 'FhirRepository',
                 keyVaultName: 'workflow-secrets',
                 secretName,
-                target: metadata.fields['dest_blobContainer'] || null,
-                // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
-                // secret" rule into metadata.secret — no extra auth-mode check needed here.
+                // The FHIR base URL doubles as the destination's target, mirroring how the CSV branch below uses its
+                // file pattern — it's what a later "select existing" repopulates baseUrl from.
+                target: metadata.fields['dest_baseUrl'] || null,
                 inlineSecret: metadata.secret ?? '',
                 connectionMetadataJson: JSON.stringify(metadata.fields),
+                deIdentificationProfileId,
               }
-            : {
-                name,
-                destinationType: 'Csv',
-                keyVaultName: 'workflow-secrets',
-                secretName,
-                target: metadata.fields['dest_filePattern'] || null,
-                inlineSecret: metadata.secret ?? '',
-                connectionMetadataJson: JSON.stringify(metadata.fields),
-              };
+            : isBlob
+              ? {
+                  name,
+                  destinationType: 'BlobStorage',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  target: metadata.fields['dest_blobContainer'] || null,
+                  // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
+                  // secret" rule into metadata.secret — no extra auth-mode check needed here.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : {
+                  name,
+                  destinationType: 'Csv',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  target: metadata.fields['dest_filePattern'] || null,
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                };
 
     const existingId = this.resolvedDestinationId();
     this.provisioningDestination.set(true);
@@ -3715,11 +3817,13 @@ export class DestinationWizardComponent implements OnInit {
                 ? 'dest-postgres'
                 : type === 'mongo'
                   ? 'dest-mongo'
-                  : type === 'fhir'
-                    ? 'dest-fhir'
-                    : type === 'blob'
-                      ? 'dest-blob'
-                      : 'dest-csv',
+                  : type === 'medplum'
+                    ? 'dest-medplum'
+                    : type === 'fhir'
+                      ? 'dest-fhir'
+                      : type === 'blob'
+                        ? 'dest-blob'
+                        : 'dest-csv',
         status: 'enabled',
         config,
       });
