@@ -47,7 +47,7 @@ public sealed class RxNormConfigurationController : ControllerBase
     [HttpPost("import")]
     [RequestSizeLimit(2_147_483_648)]
     [RequestFormLimits(MultipartBodyLengthLimit = 2_147_483_648)]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Import an RxNorm release archive.")]
+    [StandardPermission(PermissionGroupCode.RxNorm, PermissionActionCode.Write, description: "Import an RxNorm release archive.")]
     public async Task<IActionResult> Import(IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0) return BadRequest("An RxNorm release .zip file is required.");
@@ -68,7 +68,7 @@ public sealed class RxNormConfigurationController : ControllerBase
     }
 
     [HttpGet("history")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View RxNorm import history.")]
+    [StandardPermission(PermissionGroupCode.RxNorm, PermissionActionCode.View, description: "View RxNorm import history.")]
     public async Task<ActionResult<IReadOnlyList<RxNormImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
     {
         var history = await _db.RxNormImportHistory

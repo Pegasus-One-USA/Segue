@@ -41,6 +41,12 @@ export class CanvasComponent {
   /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
   readonly workflowSaved = input<boolean>(false);
 
+  /** True when the current role lacks the permission to mutate THIS workflow (workflow.create for a
+   *  brand-new one, workflow.edit for an existing one — see WorkflowBuilderComponent.canMutate). Hides
+   *  every canvas action that would change the graph (add/delete/paste/checkpoint-toggle); viewing and
+   *  panning/zooming/opening a node's config to look at it stay available either way. */
+  readonly readOnly = input<boolean>(false);
+
   // ── computed view helpers ─────────────────────────────────────────────────
   protected readonly nodes    = this.store.nodes;
   protected readonly edges    = this.store.edges;
@@ -150,6 +156,7 @@ export class CanvasComponent {
   protected readonly pendingDeleteId = signal<string | null>(null);
 
   onNodeDelete(nodeId: string): void {
+    if (this.readOnly()) return;
     this.pendingDeleteId.set(nodeId);
   }
 
@@ -176,6 +183,7 @@ export class CanvasComponent {
 
   // ── add transform picker ──────────────────────────────────────────────────
   onAddNext(nodeId: string): void {
+    if (this.readOnly()) return;
     this.openTransformPicker.emit(nodeId);
   }
 
@@ -203,6 +211,9 @@ export class CanvasComponent {
     const nodeEl = el.closest('[data-node-id]') as HTMLElement | null;
     if (nodeEl?.dataset['nodeId']) {
       this.ctxMenu.set({ type: 'node', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y, nodeId: nodeEl.dataset['nodeId'] });
+    } else if (this.readOnly()) {
+      // Empty-canvas menu has nothing but "Add module"/"Paste", both mutating — skip opening it
+      // rather than popping up an empty menu.
     } else {
       this.ctxMenu.set({ type: 'canvas', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y });
     }
@@ -221,6 +232,7 @@ export class CanvasComponent {
   }
 
   ctxPaste(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const node = this.clipboard();
     const menu = this.ctxMenu();
     if (!node || !menu) return;
@@ -233,11 +245,13 @@ export class CanvasComponent {
   }
 
   ctxAddModule(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     this.openSourcePicker.emit();
     this.ctxMenu.set(null);
   }
 
   ctxDelete(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const id = this.ctxMenu()?.nodeId;
     if (id) this.onNodeDelete(id);
     this.ctxMenu.set(null);
@@ -268,6 +282,7 @@ export class CanvasComponent {
   }
 
   ctxToggleCheckpoint(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     if (!id || !node) { this.ctxMenu.set(null); return; }

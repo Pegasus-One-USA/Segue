@@ -70,12 +70,14 @@
         </svg>
         <span>Clear canvas</span>
       </button>
-      <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">
-        <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
-        </svg>
-        <span>Save</span>
-      </button>
+      @if (canMutate()) {
+        <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">
+          <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+          </svg>
+          <span>Save</span>
+        </button>
+      }
     </div>
   </div>
 </header>
@@ -84,6 +86,7 @@
 <div class="builder-canvas-area">
   <app-canvas
     [workflowSaved]="!!currentWorkflowId()"
+    [readOnly]="!canMutate()"
     (openWizard)="onOpenWizard($event)"
     (openTransformPicker)="onOpenTransformPicker($event)"
     (openSourcePicker)="onOpenSourcePicker()"

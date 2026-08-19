@@ -276,12 +276,14 @@
   gap: 20px;
 }
 
-// ─── Permission grid: one .permission-category (table) per Permission Category ─
-.permission-category {
+// ─── Permission matrix — one flat table per section (Access Control / Workflows / Settings / ─
+// Logs & Compliance), each row a real permission group, each column a real action. No nesting,
+// no tree connectors, no per-row dependency — a plain enterprise RBAC row/column grid.
+.permission-section {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  // Bordered "card within a card" so each category reads as a distinct block.
+  // Bordered "card within a card" so each section reads as a distinct block.
   background: var(--color-side);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-base);
@@ -326,29 +328,34 @@
   }
 }
 
-.permission-grid {
+// A section can scroll horizontally on its own (a wide table, e.g. Access Control's 7 action
+// columns) without ever forcing the whole page to scroll sideways.
+.permission-matrix-scroll {
+  overflow-x: auto;
+  border-radius: var(--radius-base);
+}
+
+.permission-matrix {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
-  overflow: hidden;
   border-radius: var(--radius-base);
 
   // Compact rows: tighter padding + smaller text than a typical data table.
   th, td {
-    padding: 2px 10px;
+    padding: 7px 14px;
     text-align: left;
     font-size: 12.5px;
-    line-height: 1.2;
+    line-height: 1.3;
+    white-space: nowrap;
   }
 
-  // Action/all-column cells hold nothing but a checkbox — collapse their padding further so
-  // the checkbox's own box is what determines row height, not extra cell padding around it.
-  &__cell {
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
-  // Header row — tinted so it reads as a distinct band above the data rows.
+  // Sticky header — stays pinned to the top of this section's own scroll container as its rows
+  // scroll underneath, so the column meaning is never ambiguous on a long permission list.
   thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -358,19 +365,28 @@
     border-bottom: 1px solid var(--color-border);
   }
 
-  &__group-col, &__group-name {
+  &__node-col, &__node-name {
     white-space: nowrap;
   }
 
-  // First column (Permission Group) — tinted the same as the header so the row's identity
+  // First column (the row's own name) — tinted the same as the header so the row's identity
   // reads as a distinct band down the left edge of the table.
-  &__group-col, &__group-name {
+  &__node-col, &__node-name {
     background: var(--color-primary-soft);
   }
 
-  &__group-name {
+  &__node-name {
     font-weight: 600;
     color: var(--color-primary-dark);
+  }
+
+  &__note {
+    display: block;
+    margin-top: 1px;
+    font-size: 10.5px;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--color-muted);
   }
 
   &__action-col, &__cell {
@@ -378,11 +394,28 @@
   }
 
   // Trailing "All" column (per-row select-all) — its own tint so it reads as a structural
-  // column, distinct from both the action checkboxes and the group-name column.
+  // column, distinct from both the action checkboxes and the node-name column.
   &__all-col, &__cell--all {
     text-align: center;
     border-left: 1px solid var(--color-border);
     background: var(--color-bg);
+  }
+
+  &__locked {
+    text-align: left;
+    color: var(--color-muted);
+  }
+
+  &__lock {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 2px 8px;
   }
 
   tbody tr {
@@ -390,14 +423,14 @@
 
     &:last-child { border-bottom: none; }
 
-    // Zebra striping on the action cells only — the group-name and "All" columns keep their
+    // Zebra striping on the action cells only — the node-name and "All" columns keep their
     // own fixed tint (above) so the stripe doesn't wash out that coloring.
-    &:nth-child(even) td.permission-grid__cell:not(.permission-grid__cell--all) {
+    &:nth-child(even) td.permission-matrix__cell:not(.permission-matrix__cell--all) {
       background: var(--color-bg);
     }
 
     // Hover wins over the stripe.
-    &:hover td.permission-grid__cell:not(.permission-grid__cell--all) {
+    &:hover td.permission-matrix__cell:not(.permission-matrix__cell--all) {
       background: var(--color-primary-soft);
     }
   }
@@ -431,11 +464,19 @@
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
+// Sticky to the bottom of the scrolling viewport so Save Permissions stays reachable without
+// scrolling all the way down past a long permission tree — same page, same buttons, just
+// pinned once the natural page flow would otherwise carry them out of view.
 .page-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding-top: 4px;
+  padding: 12px 4px;
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  z-index: 1;
 }
 
 .btn-cancel {

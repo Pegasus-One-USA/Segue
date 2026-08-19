@@ -102,62 +102,75 @@
         </div>
 
         <div class="permissions-list">
-          @for (cat of permissionGrid(); track cat.id) {
-            <div class="permission-category">
+          @for (section of permissionGrid(); track section.id) {
+            <div class="permission-section">
               <button
                 type="button"
-                class="permission-category__header"
-                [attr.aria-expanded]="!isCategoryCollapsed(cat.id)"
-                (click)="toggleCategoryCollapsed(cat.id)"
+                class="permission-section__header"
+                [attr.aria-expanded]="!isSectionCollapsed(section.id)"
+                (click)="toggleSectionCollapsed(section.id)"
               >
-                <mat-icon class="permission-category__chevron" [class.permission-category__chevron--collapsed]="isCategoryCollapsed(cat.id)">
+                <mat-icon class="permission-section__chevron" [class.permission-section__chevron--collapsed]="isSectionCollapsed(section.id)">
                   expand_more
                 </mat-icon>
-                <h3 class="permission-category__title">{{ cat.displayName }}</h3>
+                <h3 class="permission-section__title">{{ section.label }}</h3>
               </button>
-              @if (!isCategoryCollapsed(cat.id)) {
-              <table class="permission-grid">
-                <thead>
-                  <tr>
-                    <th class="permission-grid__group-col">Group</th>
-                    @for (action of cat.actions; track action) {
-                      <th class="permission-grid__action-col">{{ action }}</th>
-                    }
-                    <th class="permission-grid__all-col">All</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of cat.rows; track row.id) {
-                    <tr>
-                      <td class="permission-grid__group-name">{{ row.displayName }}</td>
-                      @for (action of cat.actions; track action) {
-                        <td class="permission-grid__cell">
-                          @if (row.cells.get(action); as perm) {
-                            <mat-checkbox
-                              [attr.aria-label]="perm.displayName"
-                              [matTooltip]="perm.description"
-                              matTooltipPosition="above"
-                              [checked]="isChecked(perm.id)"
-                              [disabled]="isSystemRole()"
-                              (change)="togglePermission(perm.id)"
-                            ></mat-checkbox>
+              @if (!isSectionCollapsed(section.id)) {
+                <div class="permission-matrix-scroll">
+                  <table class="permission-matrix">
+                    <thead>
+                      <tr>
+                        <th class="permission-matrix__node-col">Node</th>
+                        @for (action of section.actions; track action) {
+                          <th class="permission-matrix__action-col">{{ action }}</th>
+                        }
+                        <th class="permission-matrix__all-col">All</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of section.rows; track row.id) {
+                        <tr>
+                          <td class="permission-matrix__node-name">
+                            {{ row.label }}
+                            @if (row.note) {
+                              <span class="permission-matrix__note">{{ row.note }}</span>
+                            }
+                          </td>
+                          @if (row.superAdminOnly) {
+                            <td class="permission-matrix__locked" [attr.colspan]="section.actions.length + 1">
+                              <span class="permission-matrix__lock">🔒 SuperAdmin only</span>
+                            </td>
+                          } @else {
+                            @for (action of section.actions; track action) {
+                              <td class="permission-matrix__cell">
+                                @if (row.cells.get(action); as perm) {
+                                  <mat-checkbox
+                                    [attr.aria-label]="perm.displayName"
+                                    [matTooltip]="perm.description"
+                                    matTooltipPosition="above"
+                                    [checked]="isChecked(perm.id)"
+                                    [disabled]="isSystemRole()"
+                                    (change)="togglePermission(perm.id)"
+                                  ></mat-checkbox>
+                                }
+                              </td>
+                            }
+                            <td class="permission-matrix__cell permission-matrix__cell--all">
+                              <mat-checkbox
+                                class="select-all-checkbox select-all-checkbox--sm"
+                                [attr.aria-label]="'Select all ' + row.label + ' permissions'"
+                                [checked]="isRowChecked(row)"
+                                [indeterminate]="isRowIndeterminate(row)"
+                                [disabled]="isSystemRole()"
+                                (change)="toggleRow(row, $event.checked)"
+                              ></mat-checkbox>
+                            </td>
                           }
-                        </td>
+                        </tr>
                       }
-                      <td class="permission-grid__cell permission-grid__cell--all">
-                        <mat-checkbox
-                          class="select-all-checkbox select-all-checkbox--sm"
-                          [attr.aria-label]="'Select all ' + row.displayName + ' permissions'"
-                          [checked]="isRowChecked(row)"
-                          [indeterminate]="isRowIndeterminate(row)"
-                          [disabled]="isSystemRole()"
-                          (change)="toggleRow(row, $event.checked)"
-                        ></mat-checkbox>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
               }
             </div>
           } @empty {

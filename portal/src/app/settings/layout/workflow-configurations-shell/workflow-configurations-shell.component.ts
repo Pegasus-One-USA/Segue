@@ -11,13 +11,16 @@ interface WorkflowConfigurationSection {
   permissions: string[];
 }
 
-// Same per-section permission split the three tabs had standalone — Source Connections only needs
-// sourceconnections.view, so a source-only user still sees that section even without configuration.write.
+// Same per-section permission split the four tabs had standalone — each has its own dedicated View
+// permission (Destination Connections/Mapping Profiles/Transformation Rules moved off the generic
+// configuration.write in an earlier pass; this list had never been updated to match, so e.g. a
+// Mapping-Profiles-only role could reach the route via settings.routes.ts's own OR-list but never
+// see the tab here to click on).
 const WORKFLOW_CONFIGURATION_SECTIONS: WorkflowConfigurationSection[] = [
   { label: 'Source Connections', route: 'source-connections', icon: 'input', permissions: ['sourceconnections.view'] },
-  { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['configuration.write'] },
-  { label: 'Mapping Profiles', route: 'mapping-profiles', icon: 'swap_horiz', permissions: ['configuration.write'] },
-  { label: 'Transformation Rules', route: 'transformation-rules', icon: 'tune', permissions: ['configuration.write'] },
+  { label: 'Destination Connections', route: 'destination-connections', icon: 'output', permissions: ['destinationconnections.view'] },
+  { label: 'Mapping Profiles', route: 'mapping-profiles', icon: 'swap_horiz', permissions: ['mappingprofiles.view'] },
+  { label: 'Transformation Rules', route: 'transformation-rules', icon: 'tune', permissions: ['transformationrules.view'] },
 ];
 
 @Component({

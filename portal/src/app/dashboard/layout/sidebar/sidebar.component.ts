@@ -24,16 +24,37 @@ interface NavSection {
 type NavEntry = NavItem | NavSection;
 
 const NAV_ENTRIES: NavEntry[] = [
+  // Dashboard is a mandatory platform entry point, not an RBAC-controlled permission — every
+  // authenticated role can see it regardless of workflow.view (no `permissions` = visible to
+  // everyone logged in, per navEntries' filter below). Its stat tiles/"Recent Workflows" widget
+  // still call the same /workflow-runs[/stats] endpoints Workflows itself uses (see
+  // WorkflowEndpoints.cs), which stay workflow.view-gated — a role without it still reaches this
+  // page, just sees those specific widgets come back empty rather than erroring (see
+  // dashboard.component.ts/pipeline-run.service.ts's permission-aware error handling).
   { type: 'item', icon: '⊞',  label: 'Dashboard',        route: '/dashboard' },
   { type: 'item', icon: '🔐', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
   { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
-  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows' },
-  { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history' },
-  // Settings hub — Branding/EHR Endpoints/Source & Destination Connections/Allowed Origins/System
-  // Security now live as tabs under here (settings-shell.component.ts). Visible to anyone who
-  // could reach at least one of those tabs before consolidation — SuperAdmin-only tabs are gated
-  // again inside the shell itself, so this entry doesn't need `superAdminOnly` of its own.
-  { type: 'item', icon: '⚙',  label: 'Settings',         route: '/settings', permissions: ['configuration.write', 'sourceconnections.view'] },
+  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows', permissions: ['workflow.view'] },
+  { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history', permissions: ['workflow.view'] },
+  // Settings hub — Branding/EHR Endpoints/Source & Destination Connections/Mapping Profiles/
+  // Transformation Rules/Allowed Origins/System Settings (Email + Terminology Codes' four
+  // independent systems) now live as tabs under here (settings-shell.component.ts). Visible to
+  // anyone who could reach at least one of those tabs — every OR-list here must stay in sync with
+  // settings.routes.ts's own per-tab permissions, or a tab someone can actually open becomes
+  // unreachable because the sidebar link itself never appears (see settings-shell.component.ts's
+  // SETTINGS_TABS/system-settings-shell.component.ts's SYSTEM_SETTINGS_SECTIONS for the same list,
+  // duplicated at each layer for the same reason the sidebar and route guards are always kept in
+  // sync elsewhere). SuperAdmin-only tabs (Allowed Origins, System Settings -> General/Security) are
+  // gated again inside the shells themselves, so this entry doesn't need `superAdminOnly` of its own.
+  {
+    type: 'item', icon: '⚙', label: 'Settings', route: '/settings',
+    permissions: [
+      'configuration.view', 'configuration.write',
+      'sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view',
+      'ehrendpoints.view',
+      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+    ],
+  },
 
   // Logs & Compliance hub — merges the former separate Operations and Governance sidebar entries
   // into one, per user direction, since only a handful of tabs remain visible across both shells

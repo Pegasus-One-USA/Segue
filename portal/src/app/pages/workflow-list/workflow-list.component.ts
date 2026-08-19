@@ -12,6 +12,7 @@ import {
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
+import { PermissionService } from '../../auth/services/permission.service';
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -49,6 +50,15 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly permissions = inject(PermissionService);
+
+  // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
+  // are what actually gate each action-specific button/menu-item below, kept independent of one another
+  // and of the source/destination-type permissions (which are unrelated — see sources/transforms filters).
+  protected readonly canCreate = computed(() => this.permissions.hasPermission('workflow.create'));
+  protected readonly canEdit   = computed(() => this.permissions.hasPermission('workflow.edit'));
+  protected readonly canDelete = computed(() => this.permissions.hasPermission('workflow.delete'));
+  protected readonly canRun    = computed(() => this.permissions.hasPermission('workflow.run'));
 
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
@@ -343,6 +353,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
   onNewWorkflow(): void {
+    if (!this.canCreate()) return;
     this.router.navigate(['/workflow-builder']);
   }
 
@@ -353,7 +364,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  below is kept as-is (still the API's supported synchronous mode) rather than deleted outright — it's simply
    *  unreached from this screen now that mode always defaults from an explicit 'async' call. */
   onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
-    if (this.busyId()) return;
+    if (this.busyId() || !this.canRun()) return;
 
     if (row.action === 'Launch') {
       this.busyId.set(row.workflowId);
@@ -457,7 +468,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */
   onToggleEnabled(row: WorkflowSummary): void {
-    if (this.rowBusyId()) return;
+    if (this.rowBusyId() || !this.canEdit()) return;
     this.rowBusyId.set(row.workflowId);
     const enabling = row.status === 'Disabled';
     const call = enabling ? this.api.activate(row.workflowId) : this.api.deactivate(row.workflowId);
@@ -509,6 +520,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   askDelete(row: WorkflowSummary): void {
+    if (!this.canDelete()) return;
     this.confirmDelete.set(row);
   }
 
@@ -540,8 +552,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.copy(row.workflowId, 'Workflow ID');
   }
 
-  /** Opens the duplicate-workflow modal, pre-filling a "<name> (copy)" suggestion. */
+  /** Opens the duplicate-workflow modal, pre-filling a "<name> (copy)" suggestion. Duplicating produces a
+   *  brand-new workflow (+ cloned source/destination rows) — create semantics, same as the backend's own
+   *  POST /workflows/{id}/copy gate. */
   askCopyWorkflow(row: WorkflowSummary): void {
+    if (!this.canCreate()) return;
     this.copyName.set(`${row.name} (copy)`);
     this.confirmCopy.set(row);
   }

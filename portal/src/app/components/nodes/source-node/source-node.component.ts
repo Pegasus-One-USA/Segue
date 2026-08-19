@@ -14,6 +14,8 @@ export interface PortConnectStart { nodeId: string; fromX: number; fromY: number
 })
 export class SourceNodeComponent {
   readonly node = input.required<CanvasNode>();
+  /** Hides the delete/add-next buttons — set by canvas.component from the builder's canMutate(). */
+  readonly readOnly = input(false);
 
   readonly configure = output<string>();
   readonly delete    = output<string>();

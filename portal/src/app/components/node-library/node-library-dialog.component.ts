@@ -6,6 +6,8 @@ import { ApplicabilityService } from '../../services/applicability.service';
 import { PhaseConfigService } from '../../services/phase-config.service';
 import { WizardService } from '../../services/wizard.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
+import { PermissionService } from '../../auth/services/permission.service';
+import { ToastService } from '../../services/toast.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
@@ -147,6 +149,8 @@ export class NodeLibraryDialogComponent {
   private readonly appSvc   = inject(ApplicabilityService);
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly graphMapper = inject(WorkflowGraphMapperService);
+  private readonly permissions = inject(PermissionService);
+  private readonly toast = inject(ToastService);
   readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
@@ -367,8 +371,20 @@ export class NodeLibraryDialogComponent {
     const pm = this.pickerModel();
     const byRank = new Map<number, LibraryItem[]>();
 
-    // Rank 0 — Sources (filtered by phase config: only enabled sources shown)
-    const visibleSources = SOURCES.filter(s => this.phaseCfg.isSourceEnabled(s.id));
+    // Rank 0 — Sources (filtered by phase config: only enabled sources shown; and by RBAC — a source
+    // with a dedicated permission group the current role lacks View for is excluded from the library
+    // entirely, same as a phase-hidden source, rather than shown disabled. Tile visibility is
+    // specifically the vendor's own View permission — separate from Create (gates actually adding a
+    // new node, see onSourceSelected) and Edit (gates modifying an existing one) — a role could hold
+    // View without Create/Edit and still see the tile, just be unable to complete adding/editing it.
+    // This is a presentation-only filter: the backend re-validates the exact same permissions
+    // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
+    // removing a node from view here is not a security control — it's purely so a user never sees, or
+    // can search up, a type their role can't use.
+    const visibleSources = SOURCES.filter(s =>
+      this.phaseCfg.isSourceEnabled(s.id) &&
+      (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
+    );
     byRank.set(0, visibleSources.map(s => ({
       id:       s.id,
       rank:     0,
@@ -389,6 +405,11 @@ export class NodeLibraryDialogComponent {
       if (this.phaseCfg.isRankHidden(t.rank)) return;
       // Hide items not enabled in this phase (don't show as disabled)
       if (!this.phaseCfg.isTransformEnabled(t.id)) return;
+      // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
+      // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
+      // the matching comment on the Sources filter above for why this is presentation-only, not a
+      // security control, and for the View/Create/Edit distinction.
+      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';
@@ -571,7 +592,23 @@ export class NodeLibraryDialogComponent {
   /** Opens the registered form for `key` (a sources.data.ts id) — self-contained vendor forms restore through
    *  WizardService.open()/editingFields() exactly as EpicAudienceFormComponent always did; headless forms
    *  (generic-fhir, hl7v2) restore through their own `initialFields` input, seeded from `editNodeOrId`'s fields. */
+  // The single choke point every source vendor's form opens through, self-contained (Epic, Cerner,
+  // Athenahealth, Allscripts, Healow, Meditech, Sample — each mutates PipelineStore directly, never
+  // emitting sourceSelected/transformSelected) or headless (Generic FHIR, HL7 v2, Sample — routed
+  // back through onHeadlessSourceFormSave() below). Gating here, rather than in each of those forms
+  // individually, is what makes View/Create/Edit enforcement apply uniformly across all nine vendors:
+  // an editNodeOrId present means this reopens an EXISTING node's config (Edit); absent means it's
+  // about to add a brand-new one (Create).
   openSourceForm(key: string, editNodeOrId?: CanvasNode | string | null): void {
+    const prefix = SOURCES.find(s => s.id === key)?.permissionPrefix;
+    if (prefix) {
+      const action = editNodeOrId ? 'edit' : 'create';
+      if (!this.permissions.hasPermission(`${prefix}.${action}`)) {
+        this.toast.error('Not permitted', `You don't have permission to ${action} this source.`);
+        return;
+      }
+    }
+
     this.sourceFormError.set(null);
     if (SELF_CONTAINED_SOURCE_FORM_KEYS.has(key)) {
       const nodeId = typeof editNodeOrId === 'string' ? editNodeOrId : editNodeOrId?.id;
@@ -630,7 +667,38 @@ export class NodeLibraryDialogComponent {
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
+  // The wizard's own 'sql' type covers both SQL Server and Azure SQL (the specific DestinationType
+  // is only chosen inside the wizard itself, not at this outer selection) — checked as an OR of
+  // both permission prefixes here as a best-effort UI filter; the backend's own per-spec check in
+  // WorkflowEndpoints.cs (which sees the actual chosen DestinationType once the form is submitted)
+  // is what actually enforces the precise one.
+  //
+  // 'medplum' and 'fhir' have no backend permission group yet (no PermissionGroupCode.Medplum /
+  // .FhirRepository member exists) — left ungated (empty prefix list) rather than inventing a
+  // permission code with nothing behind it. Revisit once real RBAC coverage lands for them.
+  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): string[] {
+    switch (type) {
+      case 'sql':      return ['sqlserver', 'azuresql'];
+      case 'csv':      return ['csv'];
+      case 'mysql':    return ['mysql'];
+      case 'mongo':    return ['mongo'];
+      case 'postgres': return ['postgresql'];
+      case 'blob':     return ['blobstorage'];
+      case 'medplum':  return [];
+      case 'fhir':     return [];
+    }
+  }
+
+  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob', action: 'create' | 'edit'): boolean {
+    const prefixes = this.destWizardPermissionPrefixes(type);
+    if (!prefixes.length) return true;
+    if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
+    this.toast.error('Not permitted', `You don't have permission to ${action} this destination.`);
+    return false;
+  }
+
   private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): void {
+    if (!this.canOpenDestWizard(type, 'create')) return;
     const pm = this.pickerModel();
     if (!pm) return;
     this.destWizardType.set(type);
@@ -650,6 +718,7 @@ export class NodeLibraryDialogComponent {
     const tId = (node as TransformNode).transformId;
     const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' =
       tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : 'csv';
+    if (!this.canOpenDestWizard(type, 'edit')) return;
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

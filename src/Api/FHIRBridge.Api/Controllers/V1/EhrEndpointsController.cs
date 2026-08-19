@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -13,7 +14,7 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// vendor with no directory seeder yet.
 /// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+[Authorize]
 [Route("api/v1/ehr-endpoints")]
 public sealed class EhrEndpointsController : ControllerBase
 {
@@ -25,6 +26,7 @@ public sealed class EhrEndpointsController : ControllerBase
     }
 
     [HttpGet]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.View, description: "View the EHR endpoint directory.")]
     [ProducesResponseType(typeof(IReadOnlyList<EhrEndpointDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
@@ -33,6 +35,7 @@ public sealed class EhrEndpointsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.View, description: "View the EHR endpoint directory.")]
     [ProducesResponseType(typeof(EhrEndpointDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
@@ -42,6 +45,7 @@ public sealed class EhrEndpointsController : ControllerBase
     }
 
     [HttpPost]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.Create, description: "Add an EHR endpoint.")]
     [ProducesResponseType(typeof(EhrEndpointDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] CreateEhrEndpointRequest request, CancellationToken cancellationToken)
     {
@@ -50,6 +54,7 @@ public sealed class EhrEndpointsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.Edit, description: "Edit an EHR endpoint.")]
     [ProducesResponseType(typeof(EhrEndpointDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] CreateEhrEndpointRequest request, CancellationToken cancellationToken)
@@ -59,6 +64,7 @@ public sealed class EhrEndpointsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.Delete, description: "Delete an EHR endpoint.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

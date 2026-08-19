@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FHIRBridge.Application.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,41 @@ namespace FHIRBridge.Api.Security;
 public static class ControllerAuthorizationExtensions
 {
     /// <summary>
+    /// The actual permission-check core, independent of <see cref="ControllerBase"/> — usable from a plain
+    /// <see cref="ClaimsPrincipal"/>/<see cref="IAuthorizationService"/> pair, e.g. from a Minimal API endpoint
+    /// (see <c>WorkflowEndpoints</c>) that has no controller instance to hang <c>Forbid()</c> off of. The
+    /// <see cref="ControllerBase"/>-bound overloads below both delegate to this so the two call sites can never
+    /// resolve a permission differently.
+    /// </summary>
+    public static async Task<bool> HasPermissionAsync(
+        IAuthorizationService authorizationService,
+        ClaimsPrincipal user,
+        PermissionGroupCode group,
+        PermissionActionCode action)
+    {
+        var code = PermissionTaxonomy.BuildPermissionCode(group, action);
+        var result = await authorizationService.AuthorizeAsync(user, AuthorizationPolicies.HasPermission(code));
+        return result.Succeeded;
+    }
+
+    /// <summary>
+    /// Same check as the <see cref="PermissionGroupCode"/> overload, but resolves the group from a
+    /// vendor/source-or-destination-type enum value (e.g. a request's <c>SourceSystemType</c> or
+    /// <c>DestinationType</c>) via <see cref="SourceSystemPermissionGroups.GroupFor"/> first — the exact same
+    /// way <see cref="PermissionCatalog"/> resolved the permission at startup, so the two can never disagree
+    /// about which group a given enum value belongs to.
+    /// </summary>
+    public static Task<bool> HasPermissionAsync(
+        IAuthorizationService authorizationService,
+        ClaimsPrincipal user,
+        Enum sourceOrDestinationTypeValue,
+        PermissionActionCode action)
+    {
+        var group = SourceSystemPermissionGroups.GroupFor(sourceOrDestinationTypeValue);
+        return HasPermissionAsync(authorizationService, user, group, action);
+    }
+
+    /// <summary>
     /// Checks whether the current user has the permission built from <paramref name="group"/> and
     /// <paramref name="action"/>. Returns <c>null</c> when authorized; otherwise the 403 result the
     /// caller should return immediately (<c>if (denied is not null) return denied;</c>).
@@ -23,12 +59,8 @@ public static class ControllerAuthorizationExtensions
         PermissionGroupCode group,
         PermissionActionCode action)
     {
-        var code = PermissionTaxonomy.BuildPermissionCode(group, action);
-        var result = await authorizationService.AuthorizeAsync(
-            controller.User,
-            AuthorizationPolicies.HasPermission(code));
-
-        return result.Succeeded ? null : controller.Forbid();
+        var allowed = await HasPermissionAsync(authorizationService, controller.User, group, action);
+        return allowed ? null : controller.Forbid();
     }
 
     /// <summary>
@@ -39,13 +71,13 @@ public static class ControllerAuthorizationExtensions
     /// exact same way <see cref="PermissionCatalog"/> resolved the permission at startup, so the two
     /// can never disagree about which group a given enum value belongs to.
     /// </summary>
-    public static Task<IActionResult?> AuthorizePermissionAsync(
+    public static async Task<IActionResult?> AuthorizePermissionAsync(
         this ControllerBase controller,
         IAuthorizationService authorizationService,
         Enum sourceSystemValue,
         PermissionActionCode action)
     {
-        var group = SourceSystemPermissionGroups.GroupFor(sourceSystemValue);
-        return controller.AuthorizePermissionAsync(authorizationService, group, action);
+        var allowed = await HasPermissionAsync(authorizationService, controller.User, sourceSystemValue, action);
+        return allowed ? null : controller.Forbid();
     }
 }
