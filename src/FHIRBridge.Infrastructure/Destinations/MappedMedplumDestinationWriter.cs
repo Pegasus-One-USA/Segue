@@ -16,8 +16,10 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// FHIR JSON (<see cref="MappedDestinationRecord.SourceJson"/>) is persisted as-is. Writes are made <b>idempotent</b>
 /// via conditional update — <c>PUT {base}/{ResourceType}?identifier={system}|{value}</c> — keyed on the resource's
 /// business identifier (see <see cref="MedplumConnectionMetadata.IdentifierSystem"/>): 0 matches creates, 1 updates,
-/// so re-running a pipeline never duplicates. When a record has no usable identifier it falls back to a logical-id
-/// <c>PUT {base}/{ResourceType}/{id}</c> (update-or-create). Auth is OAuth2 <c>client_credentials</c> via
+/// so re-running a pipeline never duplicates. When a record carries no usable identifier a synthetic one is stamped
+/// from the source id and conditional-updated by it. Types that have <b>no</b> <c>identifier</c> search parameter in
+/// FHIR R4 (Provenance, AuditEvent, …) can't be conditional-updated at all, so they upsert by a deterministic v5
+/// logical id derived from the source key — <c>PUT {base}/{ResourceType}/{uuid}</c>. Auth is OAuth2 <c>client_credentials</c> via
 /// <see cref="IMedplumTokenProvider"/> (client_secret or private_key_jwt); the writer is rate-limit aware and backs
 /// off on HTTP 429.
 ///
@@ -40,6 +42,18 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
     {
         WriteIndented = false
     };
+
+    // FHIR R4 resource types that define NO `identifier` element or search parameter, so an identifier-based
+    // conditional update is impossible — Medplum rejects `PUT {type}?identifier=…` with 400 "Unknown search
+    // parameter: identifier". These are upserted by a deterministic logical id instead (see BuildUpsert).
+    private static readonly HashSet<string> IdentifierlessResourceTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Provenance", "AuditEvent", "Binary", "Bundle", "Parameters"
+    };
+
+    // Fixed namespace for deriving stable v5 (name-based) UUIDs for identifier-less resources. Value is arbitrary but
+    // MUST stay constant — changing it re-maps every source id to a new logical id and would duplicate on re-run.
+    private static readonly Guid DeterministicIdNamespace = new("8b2f0b3e-3f4a-4c1d-9a7e-2c6d5f9b0a11");
 
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -443,9 +457,16 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         response.Headers.RetryAfter?.Delta is { } delta && delta > TimeSpan.Zero ? delta : DefaultPollInterval;
 
     /// <summary>
-    /// Produces the (resourceType, upsert URL path, body) for one record. Prefers a conditional update keyed on a
-    /// business identifier (idempotent, no id remapping); falls back to logical-id update-or-create when the resource
-    /// carries no usable identifier.
+    /// Produces the (resourceType, upsert URL path, body) for one record, choosing an idempotency strategy by type:
+    /// <list type="number">
+    ///   <item>Types with no <c>identifier</c> search parameter (<see cref="IdentifierlessResourceTypes"/>, e.g.
+    ///   Provenance) can't be conditional-updated by identifier — Medplum 400s "Unknown search parameter: identifier".
+    ///   They upsert by a <b>deterministic v5 logical id</b> derived from the source system + type + id
+    ///   (<c>PUT {type}/{uuid}</c>); Medplum accepts a client-supplied UUID on update-as-create and re-runs map to the
+    ///   same id.</item>
+    ///   <item>Otherwise a conditional update keyed on a business identifier (idempotent, no id remapping).</item>
+    ///   <item>Otherwise a synthetic identifier stamped from the source id, then conditional-updated by it.</item>
+    /// </list>
     /// </summary>
     private static (string ResourceType, string UpsertPath, string Body) BuildUpsert(
         MappedDestinationRecord record, string? preferredSystem)
@@ -456,6 +477,24 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         {
             throw new InvalidOperationException(
                 $"Medplum destination needs FHIR JSON (SourceJson) for '{record.ResourceType}'; none was present.");
+        }
+
+        if (IdentifierlessResourceTypes.Contains(resourceType))
+        {
+            // No identifier search parameter exists for this type, so conditional-update-by-identifier can't work.
+            // Derive a stable logical id from the source key (system + type + source id) and PUT {type}/{uuid}. The
+            // same source id always yields the same UUID, so re-running the pipeline updates in place instead of
+            // duplicating. FHIR update semantics require the body id to match the URL id, so stamp it on.
+            var keySystem = string.IsNullOrWhiteSpace(preferredSystem) ? "urn:fhirbridge:source-id" : preferredSystem!;
+            var keyValue = string.IsNullOrWhiteSpace(record.SourceResourceId)
+                ? resource["id"]?.GetValue<string>()
+                : record.SourceResourceId;
+            var logicalId = string.IsNullOrWhiteSpace(keyValue)
+                ? Guid.NewGuid().ToString() // no stable source key: fall back to a fresh id (not idempotent, but valid)
+                : CreateNameBasedUuid(DeterministicIdNamespace, $"{keySystem}|{resourceType}|{keyValue}").ToString();
+
+            resource["id"] = logicalId;
+            return (resourceType, $"{resourceType}/{logicalId}", resource.ToJsonString(JsonOptions));
         }
 
         if (TrySelectIdentifier(resource, preferredSystem, out var system, out var value))
@@ -535,6 +574,39 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         system = chosen["system"]?.GetValue<string>() ?? string.Empty;
         value = chosen["value"]!.GetValue<string>();
         return true;
+    }
+
+    /// <summary>
+    /// Builds an RFC 4122 §4.3 name-based (version 5, SHA-1) UUID from a namespace and name. Deterministic: the same
+    /// inputs always produce the same GUID, which is what makes identifier-less resources idempotent across re-runs.
+    /// </summary>
+    private static Guid CreateNameBasedUuid(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapGuidByteOrder(namespaceBytes); // .NET stores the first three fields little-endian; RFC hashes big-endian.
+
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var toHash = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, toHash, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, toHash, namespaceBytes.Length, nameBytes.Length);
+
+        var hash = System.Security.Cryptography.SHA1.HashData(toHash);
+
+        var uuid = new byte[16];
+        Array.Copy(hash, 0, uuid, 0, 16);
+        uuid[6] = (byte)((uuid[6] & 0x0F) | 0x50); // version 5
+        uuid[8] = (byte)((uuid[8] & 0x3F) | 0x80); // RFC 4122 variant
+
+        SwapGuidByteOrder(uuid); // back to .NET little-endian field order
+        return new Guid(uuid);
+    }
+
+    private static void SwapGuidByteOrder(byte[] guid)
+    {
+        (guid[0], guid[3]) = (guid[3], guid[0]);
+        (guid[1], guid[2]) = (guid[2], guid[1]);
+        (guid[4], guid[5]) = (guid[5], guid[4]);
+        (guid[6], guid[7]) = (guid[7], guid[6]);
     }
 
     private async Task SendWithRateLimitRetryAsync(
