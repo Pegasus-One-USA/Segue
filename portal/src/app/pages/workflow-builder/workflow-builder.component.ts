@@ -278,13 +278,38 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     const hasSpecs = (request.sources?.length ?? 0) > 0
       || (request.destinations?.length ?? 0) > 0
       || (request.mappings?.length ?? 0) > 0;
-    if (hasSpecs) {
+    // Belt-and-suspenders: assemble() already includes any unresolved source/destination in hasSpecs, but the
+    // plain design save (saveWorkflow → PUT /workflows/{id}) never provisions secrets at all — it just serializes
+    // whatever's on the canvas as-is. If a node is still carrying a raw, unresolved secret for any reason (e.g. a
+    // future gap in assemble()'s own detection), routing it to the plain save would silently persist the secret
+    // in plaintext node config while leaving the backing connection's Key Vault reference untouched. Never let
+    // that happen — force the provisioning path whenever an unresolved secret is present, regardless of hasSpecs.
+    if (hasSpecs || this.hasUnresolvedSecrets()) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
     }
 
     // No wizard-drawn specs → plain design save.
     this.saveWorkflow(name, existingId, isLaunch);
+  }
+
+  /** True if any canvas node holds a freshly typed secret (source Client Secret, destination password/secret/
+   *  token/connection-string) whose backing connection hasn't been resolved/provisioned yet. See onSave(). */
+  private hasUnresolvedSecrets(): boolean {
+    const destSecretKeys = [
+      'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
+      'dest_blobSecret', 'dest_medplumSecret',
+    ];
+    return this.store.nodes().some(node => {
+      const fields = node.fields ?? {};
+      if (fields['sourceConnectionResolved'] !== 'true' && (fields['Client Secret'] ?? '').trim()) {
+        return true;
+      }
+      if (fields['destinationResolved'] !== 'true' && destSecretKeys.some(key => (fields[key] ?? '').trim())) {
+        return true;
+      }
+      return false;
+    });
   }
 
   private buildWorkflow(request: WorkflowBuildRequest): void {

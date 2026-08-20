@@ -414,6 +414,27 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
         var errors = new List<string>();
 
+        // A 401/403 auto-fetch failure means the source connection's OAuth token doesn't cover the referenced
+        // resource type at all — every record excluded for that reason will keep failing on every future run until
+        // the connection's scopes are widened, unlike a transient network blip or a genuine 404. Buried as one
+        // clause inside the per-record "references X, Y, Z... — record was not written" sentence below, this is easy
+        // to miss; surfaced here as its own leading, actionable line instead.
+        var scopeFailureTypes = fetchFailureReasons
+            .Where(kv => IsLikelyAuthOrScopeFailure(kv.Value))
+            .Select(kv => kv.Key.Type)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (scopeFailureTypes.Count > 0)
+        {
+            errors.Add(
+                $"AUTO-FETCH SCOPE ERROR: the source connection's OAuth token was denied access while auto-fetching " +
+                $"referenced {string.Join(", ", scopeFailureTypes)} resource(s) (401/403). This connection's scopes " +
+                "don't cover the referenced resource type(s) — add the missing resource type(s) to the source " +
+                "connection's scopes (or, if this destination's mapping already covers them, re-save the workflow so " +
+                "scope-sync can widen it automatically), then re-run.");
+        }
+
         // Fixed-point exclusion: a record referencing something confirmed-missing is excluded and its OWN identity
         // is added to confirmedMissing, so anything that in turn referenced it is caught on the next pass — this is
         // what makes an unresolvable nested reference (e.g. a fetched Encounter's own missing Practitioner) also
@@ -482,6 +503,18 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
         return (writable, errors);
     }
+
+    // The fetch delegate's failure reason is an exception message (see TryFetchRecordForReferenceAsync below), not a
+    // structured status code — matched textually against what the FHIR source connectors actually put in theirs
+    // (e.g. "... request returned 403 (Forbidden) ..." / "... returned 401 ...") to tell an auth/scope rejection
+    // apart from a transient network error or a genuine 404.
+    private static bool IsLikelyAuthOrScopeFailure(string reason) =>
+        reason.Contains("401", StringComparison.Ordinal)
+        || reason.Contains("403", StringComparison.Ordinal)
+        || reason.Contains("Forbidden", StringComparison.OrdinalIgnoreCase)
+        || reason.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase)
+        || reason.Contains("invalid scope", StringComparison.OrdinalIgnoreCase)
+        || reason.Contains("invalid_scope", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// One <c>GET {Type}/{id}</c> attempt against whatever source EHR fed this run, via
