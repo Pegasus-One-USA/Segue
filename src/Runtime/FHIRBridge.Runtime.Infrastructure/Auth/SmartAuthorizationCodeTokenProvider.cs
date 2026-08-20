@@ -235,7 +235,13 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         query["response_type"] = "code";
         query["client_id"] = source.ClientId!;
         query["redirect_uri"] = redirectUri;
-        query["state"] = state;
+        // TEMPORARY DIAGNOSTIC (Healow/eCW only) — sent blank on request to isolate whether eCW's invalid_scope
+        // rejection is somehow tied to the state value itself, rather than the scope/practice_code/client
+        // registration. The OAuth callback still decrypts `state` server-side to look up the pending authorization
+        // (PKCE verifier, workflow/route id, redirect URI) — sending it blank breaks that round trip, so a real
+        // sign-in cannot complete while this is in place. Revert to `query["state"] = state;` unconditionally once
+        // the diagnosis is done.
+        query["state"] = isHealow ? string.Empty : state;
         query["scope"] = resolvedScope;
 
         // PKCE (RFC 7636) — every vendor except eClinicalWorks, whose live authorize endpoint has been confirmed to
