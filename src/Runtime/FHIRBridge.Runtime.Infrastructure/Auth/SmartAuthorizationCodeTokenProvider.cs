@@ -52,22 +52,6 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
     /// <summary>Human-readable provider name used in messages, audit actions, and the token-store key prefix.</summary>
     protected virtual string ProviderName => "SMART";
 
-    /// <summary>
-    /// Whether the authorize request should carry PKCE's <c>code_challenge</c>/<c>code_challenge_method</c> — true
-    /// for every vendor except eClinicalWorks (see <see cref="HealowAuthorizationCodeTokenProvider"/>), whose live
-    /// authorize endpoint was confirmed (via a real captured request) to omit them entirely.
-    /// </summary>
-    protected virtual bool IncludePkce => true;
-
-    /// <summary>
-    /// Post-processes the fully-resolved scope string right before it's sent on the authorize request — the base
-    /// returns it unchanged. eClinicalWorks' authorize endpoint rejects SMART v2 granular scope suffixes
-    /// (<c>.rs</c>) with <c>invalid_scope</c> regardless of what scope version the SourceConnection itself was
-    /// configured/detected with (see <see cref="HealowAuthorizationCodeTokenProvider"/>'s override, which rewrites
-    /// every resource scope's suffix to v1's coarse <c>.read</c>) — every other vendor is unaffected.
-    /// </summary>
-    protected virtual string NormalizeScope(string resolvedScope) => resolvedScope;
-
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(source.ClientId))
@@ -219,7 +203,27 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
         var codeVerifier = Pkce.CreateCodeVerifier();
         var isEhrLaunch = launch is not null;
-        var resolvedScope = NormalizeScope(ResolveScopes(source, isEhrLaunch));
+
+        // eClinicalWorks (Healow) deviates from the standard SMART authorize request in three confirmed ways (all
+        // against a live authorize attempt): no PKCE, no v2 granular resource scopes, and a mandatory practice_code
+        // parameter. Every ApplicationType strategy (Patient/Standalone/EhrLaunch) delegates to THIS one vendor-
+        // neutral provider regardless of vendor (see PatientApplicationStrategy etc.), so all three must be checked
+        // here directly via source.SourceType rather than as virtual hooks a vendor subclass would override — a
+        // vendor subclass (e.g. HealowAuthorizationCodeTokenProvider) is never actually instantiated for those
+        // strategies.
+        var isHealow = source.SourceType == RuntimeSourceType.Healow;
+
+        var resolvedScope = ResolveScopes(source, isEhrLaunch);
+        if (isHealow)
+        {
+            // eCW's authorize endpoint rejects a SMART v2 granular scope suffix (patient/Patient.rs) with
+            // invalid_scope. Rewrite every resource scope's suffix to v1's coarse ".read" regardless of the
+            // SourceConnection's own configured/detected/persisted scope version, so an existing eCW connection
+            // saved with v2 scopes doesn't need to be re-saved by an admin to work. Non-resource scopes (openid,
+            // fhirUser, offline_access, launch/patient, ...) have no dot suffix and pass through unchanged.
+            resolvedScope = NormalizeHealowScope(resolvedScope);
+        }
+
         _logger.LogInformation(
             "[Step 4/6] {Provider} BuildAuthorizationRequest: sourceConnectionId={SourceConnectionId} " +
             "applicationType={ApplicationType} hasCallerId={HasCallerId} inputScopes=[{InputScopes}] " +
@@ -231,17 +235,32 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         query["response_type"] = "code";
         query["client_id"] = source.ClientId!;
         query["redirect_uri"] = redirectUri;
-        query["scope"] = resolvedScope;
         query["state"] = state;
+        query["scope"] = resolvedScope;
 
         // PKCE (RFC 7636) — every vendor except eClinicalWorks, whose live authorize endpoint has been confirmed to
-        // reject/ignore it entirely (see IncludePkce). The code_verifier is still generated and returned above
-        // either way: ExchangeAuthorizationCodeAsync always sends it on the token POST, which a server that never
-        // received a code_challenge simply has nothing to validate it against.
-        if (IncludePkce)
+        // reject/ignore it entirely. The code_verifier is still generated and returned above either way:
+        // ExchangeAuthorizationCodeAsync always sends it on the token POST, which a server that never received a
+        // code_challenge simply has nothing to validate it against.
+        if (!isHealow)
         {
             query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
             query["code_challenge_method"] = "S256";
+        }
+
+        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against a live authorize
+        // request. Derived from source.BaseUrl's last path segment, which by this point already reflects a
+        // resolved EhrEndpoint's own FhirBaseUrl when one applies (see
+        // InteractiveSourceAuthorizationService.StartStandaloneCoreAsync's `baseUrl = ehrEndpoint?.FhirBaseUrl ??
+        // sourceConnection.BaseUrl`) — eCW deploys its FHIR API per-practice as /fhir/r4/{practiceCode}, so no
+        // separate config field is needed.
+        if (isHealow)
+        {
+            var practiceCode = ExtractHealowPracticeCode(source.BaseUrl);
+            if (!string.IsNullOrWhiteSpace(practiceCode))
+            {
+                query["practice_code"] = practiceCode;
+            }
         }
 
         // Epic (and SMART generally) require the authorize request's audience to equal the FHIR base URL — omitting it
@@ -257,27 +276,37 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             query["launch"] = launch;
         }
 
-        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against a live authorize
-        // request. Every ApplicationType strategy (Patient/Standalone/EhrLaunch) delegates to THIS one vendor-
-        // neutral provider regardless of vendor (see PatientApplicationStrategy etc.), so this must be checked
-        // here directly rather than as a virtual hook a vendor subclass would override — that subclass is never
-        // actually instantiated for those strategies. Derived from source.BaseUrl's last path segment, which by
-        // this point already reflects a resolved EhrEndpoint's own FhirBaseUrl when one applies (see
-        // InteractiveSourceAuthorizationService.StartStandaloneCoreAsync's `baseUrl = ehrEndpoint?.FhirBaseUrl ??
-        // sourceConnection.BaseUrl`) — eCW deploys its FHIR API per-practice as /fhir/r4/{practiceCode}, so no
-        // separate config field is needed.
-        if (source.SourceType == RuntimeSourceType.Healow)
-        {
-            var practiceCode = ExtractHealowPracticeCode(source.BaseUrl);
-            if (!string.IsNullOrWhiteSpace(practiceCode))
-            {
-                query["practice_code"] = practiceCode;
-            }
-        }
-
         var separator = source.AuthorizationEndpoint!.Contains('?') ? "&" : "?";
         var authorizationUrl = $"{source.AuthorizationEndpoint}{separator}{query}";
         return new SmartAuthorizationRequest(authorizationUrl, codeVerifier, state);
+    }
+
+    // See the eCW-specific block in BuildAuthorizationRequest above. Rewrites every "prefix/Type.<version-suffix>"
+    // resource scope to "prefix/Type.read"; scopes with no dot suffix (openid, fhirUser, launch/patient, ...) pass
+    // through unchanged.
+    private static string NormalizeHealowScope(string resolvedScope)
+    {
+        var scopes = resolvedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < scopes.Length; i++)
+        {
+            var scope = scopes[i];
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.LastIndexOf('.');
+            if (dotIndex < 0)
+            {
+                continue;
+            }
+
+            scopes[i] = $"{scope[..(slashIndex + 1 + dotIndex)]}.read";
+        }
+
+        return string.Join(' ', scopes);
     }
 
     // See the practice_code block in BuildAuthorizationRequest above. Null when the base URL isn't
