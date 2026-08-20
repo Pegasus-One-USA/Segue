@@ -13,8 +13,9 @@ import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
 import { PermissionService } from '../../auth/services/permission.service';
 import { sourceFormKeyForNode } from '../node-library/source-node-vendor.util';
-import { SOURCES } from '../../data/sources.data';
-import { TRANSFORMS } from '../../data/transforms.data';
+import { NodeCatalogService } from '../../services/node-catalog.service';
+import { actionCode } from '../../models/node-catalog.model';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../../data/node-catalog-legacy-ids';
 
 @Component({
   selector: 'app-canvas',
@@ -35,6 +36,11 @@ export class CanvasComponent {
   protected readonly toast       = inject(ToastService);
   protected readonly appSvc      = inject(ApplicabilityService);
   private readonly permissions   = inject(PermissionService);
+  private readonly nodeCatalog   = inject(NodeCatalogService);
+
+  constructor() {
+    this.nodeCatalog.ensureLoaded();
+  }
 
   // ── events upward ─────────────────────────────────────────────────────────
   readonly openWizard          = output<string>();
@@ -181,7 +187,7 @@ export class CanvasComponent {
     this.pendingDeleteId.set(nodeId);
   }
 
-  /** Resolves the node's vendor (via source-node-vendor.util.ts for a source node, TRANSFORMS lookup for
+  /** Resolves the node's vendor (via source-node-vendor.util.ts for a source node, the Node Catalog for
    *  a destination node) and checks its `.delete` permission. Merge nodes and any node whose vendor can't
    *  be resolved have no vendor-level delete gate — always deletable once past readOnly(), same as before
    *  this check existed. Kept public (not private) so the template can also use it to HIDE the Delete
@@ -191,14 +197,18 @@ export class CanvasComponent {
     const node = this.store.byId(nodeId);
     if (!node) return true;
 
-    const prefix = node.kind === 'transform'
-      ? TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.permissionPrefix
-      : node.kind === undefined
-        ? SOURCES.find(s => s.id === sourceFormKeyForNode(node))?.permissionPrefix
-        : undefined;
-    if (!prefix) return true;
+    let entry;
+    if (node.kind === 'transform') {
+      const type = DESTINATION_ID_TO_TYPE[(node as TransformNode).transformId];
+      entry = type ? this.nodeCatalog.find('Destination', type) : undefined;
+    } else if (node.kind === undefined) {
+      const type = SOURCE_ID_TO_TYPE[sourceFormKeyForNode(node)];
+      entry = type ? this.nodeCatalog.find('Source', type) : undefined;
+    }
+    if (!entry) return true;
 
-    return this.permissions.hasPermission(`${prefix}.delete`);
+    const code = actionCode(entry, 'Delete');
+    return !code || this.permissions.hasPermission(code);
   }
 
   confirmDelete(): void {

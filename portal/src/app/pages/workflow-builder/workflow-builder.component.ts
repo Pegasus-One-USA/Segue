@@ -9,9 +9,10 @@ import { ApplicabilityService } from '../../services/applicability.service';
 import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
-import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
-import { Source } from '../../models/source.model';
+import { NodeCatalogService } from '../../services/node-catalog.service';
+import { NodeCatalogEntry, actionCode } from '../../models/node-catalog.model';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../../data/node-catalog-legacy-ids';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
 import { environment } from '../../../environments/environment';
 
@@ -46,9 +47,11 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly router = inject(Router);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly nodeCatalog = inject(NodeCatalogService);
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+    this.nodeCatalog.ensureLoaded();
   }
 
   // ── page state ─────────────────────────────────────────────────────────────
@@ -494,12 +497,14 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   // nothing that led here was itself blocked.
   onSourceSelected(id: string): void {
     if (!this.canMutate()) return;
-    const src = SOURCES.find(s => s.id === id);
+    const type = SOURCE_ID_TO_TYPE[id];
+    const src = type ? this.nodeCatalog.find('Source', type) : undefined;
     if (!src) return;
     // Always adds a brand-new stub node (see addStubSource) — this path never edits an existing one,
     // so it's always the vendor's Create permission, never Edit.
-    if (src.permissionPrefix && !this.permissions.hasPermission(`${src.permissionPrefix}.create`)) {
-      this.toast.error('Not permitted', `You don't have permission to add a new ${src.name} source.`);
+    const code = actionCode(src, 'Create');
+    if (code && !this.permissions.hasPermission(code)) {
+      this.toast.error('Not permitted', `You don't have permission to add a new ${src.displayName} source.`);
       return;
     }
     this.addStubSource(src);
@@ -507,15 +512,25 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   onTransformSelected(e: AddTransformEvent): void {
     if (!this.canMutate()) return;
-    const t = TRANSFORMS.find(x => x.id === e.transformId);
-    if (!t) return;
+
+    // Destination-TYPE rows resolve through the canonical Node Catalog; every other transform (a
+    // pipeline step with no SourceSystemType/DestinationType backing) still comes from TRANSFORMS,
+    // unaffected by the Node Catalog consolidation.
+    const destType = DESTINATION_ID_TO_TYPE[e.transformId];
+    const destEntry = destType ? this.nodeCatalog.find('Destination', destType) : undefined;
+    const t = destEntry ? undefined : TRANSFORMS.find(x => x.id === e.transformId);
+    if (!destEntry && !t) return;
+    const name = destEntry?.displayName ?? t!.name;
 
     // Same View/Create/Edit split as onSourceSelected — editNodeId present means this is the dest
     // wizard's edit flow (Edit), absent means it's adding a brand-new destination node (Create).
-    if (t.permissionPrefix) {
-      const requiredAction = e.editNodeId ? 'edit' : 'create';
-      if (!this.permissions.hasPermission(`${t.permissionPrefix}.${requiredAction}`)) {
-        this.toast.error('Not permitted', `You don't have permission to ${requiredAction} a ${t.name} destination.`);
+    // 'medplum'/'fhir' now resolve to their own dedicated fhirrepository.*/medplum.* permissions —
+    // never sourceconnections.*, an unrelated Settings-screen permission.
+    if (destEntry) {
+      const requiredAction: 'Edit' | 'Create' = e.editNodeId ? 'Edit' : 'Create';
+      const code = actionCode(destEntry, requiredAction);
+      if (code && !this.permissions.hasPermission(code)) {
+        this.toast.error('Not permitted', `You don't have permission to ${requiredAction.toLowerCase()} a ${name} destination.`);
         return;
       }
     }
@@ -526,9 +541,9 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     if (e.editNodeId) {
       const previousFields = this.store.byId(e.editNodeId)?.fields ?? {};
       this.store.updateNode(e.editNodeId, {
-        fields: { ...previousFields, '__name': t.name, ...(e.config ?? {}) },
+        fields: { ...previousFields, '__name': name, ...(e.config ?? {}) },
       });
-      this.toast.show('Updated', `${t.name} configuration updated.`);
+      this.toast.show('Updated', `${name} configuration updated.`);
       return;
     }
 
@@ -543,13 +558,13 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       statusAtAdd: e.status,
       x:           attachNode.x + 300,
       y:           attachNode.y + siblings * 170,
-      fields:      { '__name': t.name, ...(e.config ?? {}) },
+      fields:      { '__name': name, ...(e.config ?? {}) },
     };
     this.store.addNode(node);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: attachNode.id, to: node.id });
     this.toast.show(
       'Step added',
-      e.status === 'caveat' ? `${t.name} added with caveat.` : `${t.name} added.`,
+      e.status === 'caveat' ? `${name} added with caveat.` : `${name} added.`,
     );
   }
 
@@ -841,7 +856,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     this.pollMinutes.set(15);
   }
 
-  private addStubSource(s: Source): void {
+  private addStubSource(s: NodeCatalogEntry): void {
     const count = this.store.nodes().filter(n => !n.kind).length;
     const node: SourceNode = {
       id:             this.store.nextNodeId(),
@@ -849,18 +864,18 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       x:              360 + count * 70,
       y:              300 + count * 60,
       connected:      true,
-      abbr:           s.abbr,
-      color:          s.color,
-      connectorLabel: s.name,
+      abbr:           s.icon ?? 'SRC',
+      color:          s.color ?? '#5b6573',
+      connectorLabel: s.displayName,
       fields: {
-        '__name':         s.name,
-        'App context':    s.context,
+        '__name':         s.displayName,
+        'App context':    s.category ?? '',
         'Ingestion mode': 'search',
-        'Connector':      s.name,
+        'Connector':      s.displayName,
       },
     };
     this.store.addNode(node);
-    this.toast.show('Source added', `${s.name} added to the canvas.`);
+    this.toast.show('Source added', `${s.displayName} added to the canvas.`);
   }
 
   private _nodeDisplayName(n: CanvasNode): string {

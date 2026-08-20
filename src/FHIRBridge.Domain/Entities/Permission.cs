@@ -1,3 +1,4 @@
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
@@ -8,7 +9,7 @@ public sealed class Permission : AuditableChildEntity<Guid>, IHasAuditDisplayNam
     {
     }
 
-    public Permission(Guid id, string name, string displayName, string description, Guid? groupId = null, bool isSystem = true, bool isVisible = true, bool isActive = true, string? instances = null)
+    public Permission(Guid id, string name, string displayName, string description, Guid? groupId = null, bool isSystem = true, bool isVisible = true, bool isActive = true, string? instances = null, PermissionSource source = PermissionSource.Code)
     {
         Id = id;
         Name = name;
@@ -19,6 +20,7 @@ public sealed class Permission : AuditableChildEntity<Guid>, IHasAuditDisplayNam
         IsVisible = isVisible;
         IsActive = isActive;
         Instances = instances;
+        Source = source;
     }
 
     /// <summary>Wire-format code (e.g. "user.invite") used for authorization policies; never shown to users.</summary>
@@ -49,6 +51,12 @@ public sealed class Permission : AuditableChildEntity<Guid>, IHasAuditDisplayNam
     /// permission was never discovered via an attribute (e.g. seeded but not yet enforced anywhere).</summary>
     public string? Instances { get; private set; }
 
+    /// <summary>Where this row's existence is owned/governed from — see <see cref="PermissionSource"/>'s own
+    /// doc comment. Never consulted by runtime authorization (<c>PermissionAuthorizationHandler</c>); only
+    /// the boot-time sync in <c>Program.SyncDiscoveredPermissionsAsync</c> reads this, to decide whether a
+    /// permission no longer backed by code is safe to auto-deactivate.</summary>
+    public PermissionSource Source { get; private set; }
+
     public void UpdateDisplayName(string displayName)
     {
         DisplayName = displayName;
@@ -77,6 +85,17 @@ public sealed class Permission : AuditableChildEntity<Guid>, IHasAuditDisplayNam
     public void Deactivate()
     {
         IsActive = false;
+    }
+
+    /// <summary>
+    /// Promotes this row to code-governed — called when code starts declaring/discovering a permission that
+    /// previously only existed via a hand-authored migration (<see cref="PermissionSource.Migration"/>). A
+    /// one-way transition: once code is responsible for a permission, it stays responsible, including for
+    /// eventually deactivating it if the declaration/discovery is later removed.
+    /// </summary>
+    public void MarkAsCodeManaged()
+    {
+        Source = PermissionSource.Code;
     }
 
     /// <summary>Re-parents this permission under a different <see cref="PermissionGroup"/>. The permission keeps

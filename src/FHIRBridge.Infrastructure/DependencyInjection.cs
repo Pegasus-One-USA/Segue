@@ -167,6 +167,14 @@ public static class DependencyInjection
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
 
+            // Same fallback actor source as the EF branch below (Worker/migrations/anything without an
+            // HTTP context) — HttpContextCurrentUserService now depends on this unconditionally, so the
+            // in-memory path needs it registered too, not just the "real database" branch. Its absence
+            // here previously broke every authenticated/authorized request against this DI configuration
+            // (e.g. the whole Api.IntegrationTests suite's "Testing" environment, which always takes this
+            // branch) with a DI resolution failure, unrelated to whatever endpoint was being tested.
+            services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
+
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
 

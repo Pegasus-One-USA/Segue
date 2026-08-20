@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Rbac.NodeCatalog;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 
@@ -80,6 +81,16 @@ public sealed class RoleManagementService : IRoleManagementService
             .Where(c => c.IsVisible && groupsByCategoryId.ContainsKey(c.Id))
             .Select(c => new PermissionCatalogCategoryDto(c.Id, c.Name, c.DisplayName, groupsByCategoryId[c.Id]))
             .ToArray();
+    }
+
+    // The single canonical Node Catalog — built over the exact same data GetPermissionCatalogAsync
+    // already returns (so the two can never disagree about which permissions a node has), plus the
+    // NodeCatalogMetadata registry for display/rollout metadata. See NodeCatalogBuilder's own doc
+    // comment for why this reuse is safe and deliberate.
+    public async Task<IReadOnlyList<NodeCatalogEntryDto>> GetNodeCatalogAsync(CancellationToken cancellationToken)
+    {
+        var permissionCatalog = await GetPermissionCatalogAsync(cancellationToken);
+        return NodeCatalogBuilder.Build(permissionCatalog);
     }
 
     public async Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(

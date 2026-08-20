@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -33,6 +34,14 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
         builder.Property(x => x.IsVisible).IsRequired();
 
         builder.Property(x => x.IsActive).IsRequired();
+
+        // Defaulted to Code (0) so every pre-existing row (seeded or discovered, all of it code-governed
+        // today) is retroactively and correctly Code the moment this column is added — see
+        // PermissionSource's own doc comment for why this is what makes the deactivation-safety fix
+        // backward compatible with zero behavior change for anything that already exists.
+        builder.Property(x => x.Source)
+            .IsRequired()
+            .HasDefaultValue(PermissionSource.Code);
 
         // Same scaling problem as Description above: comma-joined "ClassName.MethodName" for every occurrence
         // of a shared permission code (governance.read is now used by 30+ endpoints) outgrew 1000 chars —

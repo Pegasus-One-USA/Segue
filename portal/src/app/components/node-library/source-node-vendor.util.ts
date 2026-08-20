@@ -19,10 +19,17 @@ export function sourceFormKeyForNode(node: CanvasNode): string {
   return mapped ?? 'epic';
 }
 
+/** Hl7v2SourceFormComponent.getFields() writes 'Connector': 'HL7 v2 / MLLP' — a human display string, not the
+ *  bare 'Hl7v2' enum-name literal EHR_VENDOR_TO_SOURCE_FORM_KEY's other vendors use — so detecting it can't go
+ *  through that map; regex on the display string is the only option. Exported so WorkflowBuildAssemblerService
+ *  can recognize (and explicitly reject, rather than silently mis-persist) an Hl7v2 node the exact same way this
+ *  file already does, instead of a second, possibly-drifting copy of the pattern. */
+export const HL7V2_CONNECTOR_PATTERN = /hl7\s*v?\s*2|mllp/i;
+
 function isGenericFhirNode(node: CanvasNode): boolean {
   return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
 }
 
 function isHl7v2Node(node: CanvasNode): boolean {
-  return isSourceNode(node) && /hl7\s*v?\s*2|mllp/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
+  return isSourceNode(node) && HL7V2_CONNECTOR_PATTERN.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
 }

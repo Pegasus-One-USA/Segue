@@ -1,8 +1,7 @@
 import { Injectable, inject, computed, isDevMode } from '@angular/core';
 import { AuthStore } from '../store/auth.store';
 import { PermissionMode } from '../models/permission-check.model';
-import { SOURCES } from '../../data/sources.data';
-import { TRANSFORMS } from '../../data/transforms.data';
+import { NodeCatalogService } from '../../services/node-catalog.service';
 
 /**
  * Centralized, fast permission evaluation. This is the ONLY place in the app that
@@ -18,6 +17,15 @@ import { TRANSFORMS } from '../../data/transforms.data';
 @Injectable({ providedIn: 'root' })
 export class PermissionService {
   private readonly authStore = inject(AuthStore);
+  // Deliberately does NOT call nodeCatalog.ensureLoaded() here, even though this service is the
+  // most convenient place to trigger it as early as possible: AuthService (injected by every HTTP
+  // request via authInterceptor) itself injects PermissionService, so firing an HTTP call from
+  // PermissionService's own constructor re-enters the DI graph mid-construction and Angular throws
+  // NG0200 (circular dependency). The catalog is instead triggered from component-level constructors
+  // that aren't part of that cycle (node-library-dialog, workflow-builder, canvas.component,
+  // workflow-graph-mapper.service) — see hasWorkflowModuleAccess()'s own comment for why the small
+  // startup race this leaves is acceptable.
+  private readonly nodeCatalog = inject(NodeCatalogService);
 
   /** O(1)-lookup index, rebuilt only when the authenticated user identity actually changes
    *  (login / logout / token refresh) — not on every check, not on every change-detection tick. */
@@ -29,21 +37,21 @@ export class PermissionService {
   /** Read-only view for debugging / an admin "what can I do" panel. Never used for lookups. */
   readonly permissions = computed<readonly string[]>(() => Array.from(this.permissionSet()));
 
-  /** Every permission-code prefix that represents a workflow "node" (a source vendor or destination
-   *  type usable inside a workflow) rather than the Workflow module itself — derived from the same
-   *  `permissionPrefix` fields sources.data.ts/transforms.data.ts already declare for Node Library tile
-   *  gating, not a second hand-maintained list (per the "don't duplicate the node-prefix list" rule this
-   *  screen was built against). Deliberate, sole exception to this service's "doesn't know what
-   *  permission codes exist" rule above — "is this code a workflow node" is a structural question about
-   *  the app's own catalog, not a specific vendor identity baked into permission-evaluation logic. */
-  private readonly workflowNodePermissionCodes: readonly string[] = (() => {
-    const prefixes = [
-      ...SOURCES.map(s => s.permissionPrefix),
-      ...TRANSFORMS.map(t => t.permissionPrefix),
-    ].filter((p): p is string => !!p);
-    const actions = ['view', 'create', 'edit', 'delete', 'execute'];
-    return prefixes.flatMap(prefix => actions.map(action => `${prefix}.${action}`));
-  })();
+  /** Every permission code that represents a workflow "node" (a source vendor or destination type
+   *  usable inside a workflow) rather than the Workflow module itself — derived from the canonical
+   *  Node Catalog's own `actions` list (not a hand-maintained prefix list). Deliberate, sole
+   *  exception to this service's "doesn't know what permission codes exist" rule above — "is this
+   *  code a workflow node" is a structural question about the app's own catalog, not a specific
+   *  vendor identity baked into permission-evaluation logic.
+   *
+   *  Reactive to the catalog's own (async) load: empty until NodeCatalogService.ensureLoaded()
+   *  resolves. In practice this is a non-issue for the one caller below — every role granted any
+   *  node permission through Role Permissions also gets `workflow.view` in the same save (see
+   *  permission-matrix-dependencies.ts's node.view -> workflow.view rule), so hasWorkflowModuleAccess()
+   *  almost always short-circuits on the literal `workflow.view` check before this ever matters. */
+  private readonly workflowNodePermissionCodes = computed<readonly string[]>(() =>
+    this.nodeCatalog.entries().flatMap(e => e.actions.map(a => a.code))
+  );
 
   /**
    * True when the current user can reach the Workflow module at all — either they hold the literal
@@ -55,7 +63,7 @@ export class PermissionService {
    * nor any workflow.create/edit/delete/run — those all stay fully independent.
    */
   hasWorkflowModuleAccess(): boolean {
-    return this.hasPermission('workflow.view') || this.hasAny(this.workflowNodePermissionCodes);
+    return this.hasPermission('workflow.view') || this.hasAny(this.workflowNodePermissionCodes());
   }
 
   /** Always true today: permissions are decoded synchronously from the JWT before the app

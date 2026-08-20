@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { PipelineStore } from './pipeline.store';
 import { WorkflowGraphMapperService } from './workflow-graph-mapper.service';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { EHR_VENDOR_TO_SOURCE_FORM_KEY } from '../components/node-library/source-form.registry';
+import { HL7V2_CONNECTOR_PATTERN } from '../components/node-library/source-node-vendor.util';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
@@ -277,7 +279,34 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
-    // Epic (best-effort from the Epic source wizard fields).
+    // HL7 v2 / MLLP (Hl7v2SourceFormComponent) — deliberately NOT built into a CreateSourceConnectionRequest.
+    // SourceConnection's shape (BaseUrl + OAuth/JWT SourceAuthenticationConfiguration) has no host/port/MLLP
+    // fields at all: Hl7v2SourceFormComponent.getFields() emits Host/Port/'MLLP timeout (seconds)', never
+    // 'FHIR base URL'/'Client ID'/Scopes. Falling through to the Epic-shaped branch below (the old behavior)
+    // would silently persist sourceSystemType: 'Epic' with an empty baseUrl and fabricated SmartBackendServices
+    // auth, discarding Host/Port/timeout entirely — a wrong vendor masquerading as a successful save. Throwing
+    // here instead is caught by workflow-builder.component.ts's existing assemble() try/catch (the same
+    // established pattern already used for other up-front configuration gaps, e.g. Upsert with no id-mapped key
+    // column) and surfaced as a toast, so the failure is explicit rather than a silent misclassification.
+    if (HL7V2_CONNECTOR_PATTERN.test(connector)) {
+      throw new Error(
+        'HL7 v2 / MLLP sources cannot be saved from the Workflow Builder yet. Remove this node before saving.',
+      );
+    }
+
+    // Epic, Cerner, Allscripts, Healow, MeditechGreenfield (EhrVendorSourceFormComponent) — all four non-Epic
+    // vendors here are field-shape-identical to Epic: buildFieldsToSave() writes the exact same keys for every
+    // one of them, varying only the 'Connector' value itself (see that method's own doc comment). sourceSystemType
+    // must therefore be the actual selected vendor, not a hardcoded 'Epic' — EHR_VENDOR_TO_SOURCE_FORM_KEY's keys
+    // are the one authoritative set of real, form-backed SourceSystemType names (the same map SOURCE_FORM_REGISTRY
+    // and sourceFormKeyForNode() already use); a recognized one is used verbatim below, and only a genuinely
+    // unrecognized/legacy connector (e.g. any source node saved before the 'Connector' field existed) falls back
+    // to 'Epic', preserving that one prior behavior exactly. NewEHR/NewEHRTwo are deliberately NOT in this map
+    // (no real form exists for either — see EHR_VENDOR_TO_SOURCE_FORM_KEY's own construction in
+    // source-form.registry.ts) so a connector value of 'NewEHR'/'NewEHRTwo' cannot match here either; it too
+    // falls to the 'Epic' default below, unchanged from today's behavior for any other unrecognized value.
+    const sourceSystemType = connector in EHR_VENDOR_TO_SOURCE_FORM_KEY ? connector : 'Epic';
+
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const discoveredScopes = (fields['Discovered scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
@@ -302,8 +331,8 @@ export class WorkflowBuildAssemblerService {
           };
 
     return {
-      name: fields['__name'] || 'Epic',
-      sourceSystemType: 'Epic',
+      name: fields['__name'] || sourceSystemType,
+      sourceSystemType,
       baseUrl: fields['FHIR base URL'] || '',
       authentication: {
         authenticationType:
@@ -313,7 +342,10 @@ export class WorkflowBuildAssemblerService {
         scopes,
         keyId: fields['JWT kid'] || null,
         // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
-        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
+        // required by ConfigurationService.ValidateEpicSourceConnection for Epic specifically; Cerner/Allscripts/
+        // Healow/MeditechGreenfield have no vendor-specific backend validation at all (see ConfigurationService.
+        // ValidateSourceConnectionRequestAsync — only Epic gets a dedicated branch), so this same field shape is
+        // accepted as-is for them too.
         privateKeyKeyVaultName: fields['Key vault reference'] || null,
         privateKeySecretName: fields['Secret Name'] || null,
         discoveredScopes: discoveredScopes.length ? discoveredScopes : null,

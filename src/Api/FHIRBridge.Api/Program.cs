@@ -15,6 +15,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
@@ -481,6 +482,11 @@ BootstrapDatabase(app);
 ProvisionAppSecrets(app);
 SyncDiscoveredPermissions(app);
 
+// Fails the boot immediately if a SourceSystemType/DestinationType value has no NodeCatalogMetadata
+// entry, rather than letting GET /api/v1/permissions/node-catalog silently produce an incomplete node
+// (or throw) the first time some client happens to ask. See NodeCatalogMetadata's own doc comment.
+FHIRBridge.Application.Rbac.NodeCatalog.NodeCatalogMetadata.ValidateCompleteness();
+
 // Serves the Angular portal's production build when it's been copied into wwwroot (see deploy/windows) —
 // a no-op in local dev, where wwwroot doesn't exist and the portal runs separately via `ng serve`.
 app.UseDefaultFiles();
@@ -679,20 +685,16 @@ static async Task SyncDiscoveredPermissionsAsync(
     // keeps the rollout of a new source/destination-type permission non-breaking.
     var allRoles = await repository.GetRolesAsync(CancellationToken.None);
 
-    // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
+    // 1. Deactivate a non-seeded, code-governed permission that's active but no longer discovered in code.
+    // PermissionSyncPolicy.ShouldDeactivateOrphan is what protects a PermissionSource.Migration row (one
+    // intentionally introduced via a hand-authored migration ahead of any endpoint enforcing it) from being
+    // swept up here just because it was never expected to be code-discovered in the first place.
     foreach (var existingPermission in existingPermissions)
     {
-        if (!existingPermission.IsActive)
-        {
-            continue;
-        }
+        var isSeedDeclared = seedDeclaredPermissionIds.Contains(existingPermission.Id);
+        var isDiscovered = discoveredPermissionsById.ContainsKey(existingPermission.Id);
 
-        if (seedDeclaredPermissionIds.Contains(existingPermission.Id))
-        {
-            continue;
-        }
-
-        if (!discoveredPermissionsById.ContainsKey(existingPermission.Id))
+        if (PermissionSyncPolicy.ShouldDeactivateOrphan(existingPermission.IsActive, existingPermission.Source, isSeedDeclared, isDiscovered))
         {
             existingPermission.Deactivate();
             await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
@@ -745,6 +747,16 @@ static async Task SyncDiscoveredPermissionsAsync(
                 changed = true;
             }
 
+            // Ownership handoff: being discovered this boot is proof code now accounts for this permission,
+            // even if it started out as a hand-authored PermissionSource.Migration row (see PermissionSource's
+            // own doc comment) — promote it so a later removal of this same attribute correctly deactivates
+            // it instead of leaving it permanently exempt.
+            if (existingPermission.Source != PermissionSource.Code)
+            {
+                existingPermission.MarkAsCodeManaged();
+                changed = true;
+            }
+
             if (changed)
             {
                 await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
@@ -763,7 +775,8 @@ static async Task SyncDiscoveredPermissionsAsync(
             description,
             groupId,
             isSystem: false,
-            instances: discoveredPermission.Instances);
+            instances: discoveredPermission.Instances,
+            source: PermissionSource.Code);
 
         await repository.AddPermissionAsync(newPermission, CancellationToken.None);
 

@@ -1,11 +1,11 @@
 // user-management/pages/role-permissions/permission-matrix.config.ts
 //
-// Hand-authored presentation layout for the Role Permissions screen — a flat row/column matrix,
-// grouped into the same sections as the app's real menus (Access Control, Workflows, Settings,
-// Logs & Compliance) but with NO tree nesting and NO cross-row dependencies: every checkbox here
-// controls exactly one existing permission code, independently. Introduces no new permission,
-// group, or backend concept — every `code` below is a wire code (`group.action`) that already
-// exists in the catalog returned by GET /api/v1/roles/permission-catalog.
+// Presentation layout for the Role Permissions screen — a flat row/column matrix, grouped into the
+// same sections as the app's real menus (Access Control, Workflows, Settings, Logs & Compliance)
+// but with NO tree nesting and NO cross-row dependencies: every checkbox here controls exactly one
+// existing permission code, independently. Introduces no new permission, group, or backend concept
+// — every `code` below is a wire code (`group.action`) that already exists in the catalog returned
+// by GET /api/v1/permissions/catalog.
 //
 // Deliberately has no "requires" concept at all (unlike the hierarchical tree UI this replaces):
 // inspection of the backend (WorkflowEndpoints.cs's per-vendor checks, the terminology
@@ -13,6 +13,23 @@
 // — epic.edit and workflow.view are checked as two unrelated permissions, not a dependent pair.
 // The old auto-check/cascade behavior was a frontend-only convenience, not a security rule, so
 // removing it doesn't loosen anything the backend enforces.
+//
+// ── Canonical-Node-Catalog-driven Workflow Nodes ────────────────────────────────────────────────
+// Every other section below is hand-authored and stays that way on purpose (see the module doc
+// comment further down for why — several of these rows encode a real editorial decision, like
+// splitting one backend permission group across two UI rows, that no generic rule could safely
+// reconstruct). The Workflow Nodes section is different: every row there maps 1:1 onto exactly one
+// backend PermissionGroupCode, with actions that are exactly that group's own permissions — nothing
+// hand-picked, nothing split. So its ROWS and COLUMNS are both built at runtime from the canonical
+// Node Catalog (GET /api/v1/permissions/node-catalog — see buildMatrixSections below), the SAME
+// catalog the Workflow Builder Node Library reads from, instead of being listed here or derived
+// separately from the generic /permissions/catalog response. Adding `epic.archive` (a new action)
+// makes an ARCHIVE column appear on the Epic row automatically. Adding a new PermissionGroupCode
+// member for a brand-new vendor makes an entire new row appear automatically. Neither requires
+// touching this file. Legacy `.read`/`.assign` actions are already excluded server-side (see
+// NodeCatalogBuilder), so this file no longer needs its own exclusion list.
+
+import { NodeCatalogEntry } from '../../../models/node-catalog.model';
 
 export interface MatrixAction {
   /** Column header this action renders under — shared across every row in the same section, so
@@ -49,28 +66,11 @@ export interface MatrixSection {
   note?: string;
 }
 
-// Every source vendor / destination type node has its own full View/Create/Edit/Delete/Execute
-// set — five independent permissions, no dependency between them (checking View does not imply
-// Create, etc.), matching the same five actions the Workflow row itself exposes above. `prefix`
-// is the node's own PermissionGroupCode name lowercased (e.g. 'epic', 'sqlserver').
-const vendor = (id: string, label: string, prefix: string): MatrixRow => ({
-  id, label,
-  actions: [
-    { label: 'View', code: `${prefix}.view` },
-    { label: 'Create', code: `${prefix}.create` },
-    { label: 'Edit', code: `${prefix}.edit` },
-    // {prefix}.delete does double duty by design, not by accident — it gates BOTH removing this
-    // vendor's node from a workflow canvas (WorkflowEndpoints.cs's /workflows/build node-removal
-    // check, added alongside workflow.edit — see canvas.component.ts's canDeleteNode()) AND deleting
-    // the vendor's stored Source/Destination Connection in Settings (SourceConnectionsController.cs/
-    // ConfigurationsController.cs, alongside sourceconnections.delete/destinationconnections.delete).
-    // Both are "can this role delete Epic-related things," just at two different scopes, and this is
-    // the only place in this whole screen either half is independently assignable.
-    { label: 'Delete', code: `${prefix}.delete`, tooltipOverride: 'Allows removing this node type from a workflow. Also required (alongside Source/Destination Connections → Delete) to delete this vendor’s stored connection in Settings.' },
-    { label: 'Execute', code: `${prefix}.execute` },
-  ],
-});
-
+// Every source vendor / destination type node has its own full set of independent actions — no
+// dependency between them (checking View does not imply Create, etc.), matching the same actions
+// the Workflow row itself exposes above. Only used for the two hand-authored sections below that
+// still enumerate their own actions literally (Access Control, Settings) — the Workflow Nodes
+// section itself no longer uses this; see buildWorkflowNodesSection.
 const terminologySystem = (id: string, label: string, codePrefix: string): MatrixRow => ({
   id, label,
   actions: [
@@ -79,7 +79,11 @@ const terminologySystem = (id: string, label: string, codePrefix: string): Matri
   ],
 });
 
-export const MATRIX_SECTIONS: MatrixSection[] = [
+// Every section except Workflow Nodes — real editorial layout that a generic rule can't safely
+// reconstruct from the catalog (e.g. Branding/Email below deliberately expose two *different*
+// subsets of the same Configuration group's actions; Execution History deliberately aliases
+// Workflow's own View permission under a second row/label). Preserved exactly as before.
+const STATIC_SECTIONS: MatrixSection[] = [
   {
     id: 'access-control',
     label: 'Access Control',
@@ -133,35 +137,8 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       { id: 'execution-history', label: 'Execution History', note: "Uses Workflow's View permission", actions: [{ label: 'View', code: 'workflow.view' }] },
     ],
   },
-  // Workflow nodes — the sources and destinations usable INSIDE a workflow. Holding ANY permission
-  // on ANY row here is, by itself, sufficient for Workflow module access (see the section above) —
-  // that's an effective-access rule evaluated at request/render time, not a dependency stored here
-  // or cascaded when a checkbox changes. Every row's five actions stay fully independent of every
-  // other row and of the Workflow module row above.
-  {
-    id: 'workflow-nodes',
-    label: 'Workflow Nodes',
-    note: 'Delete = permission to remove this node type from a workflow. Removing an Epic node, for example, requires both Workflow → Edit and Epic → Delete. This same Epic → Delete permission is also required (alongside Source Connections → Delete) to delete the stored Epic connection itself in Settings.',
-    rows: [
-      vendor('epic', 'Epic', 'epic'),
-      vendor('athenahealth', 'Athenahealth', 'athenahealth'),
-      vendor('cerner', 'Cerner', 'cerner'),
-      vendor('allscripts', 'Allscripts', 'allscripts'),
-      vendor('healow', 'Healow', 'healow'),
-      vendor('meditech', 'Meditech', 'meditechgreenfield'),
-      vendor('genericfhir', 'Generic FHIR', 'genericfhir'),
-      vendor('hl7v2', 'HL7 v2', 'hl7v2'),
-      vendor('sample', 'Sample', 'sample'),
-      vendor('sqlserver', 'SQL Server', 'sqlserver'),
-      vendor('azuresql', 'Azure SQL', 'azuresql'),
-      vendor('mysql', 'MySQL', 'mysql'),
-      vendor('postgresql', 'PostgreSQL', 'postgresql'),
-      vendor('mongo', 'MongoDB', 'mongo'),
-      vendor('csv', 'CSV', 'csv'),
-      vendor('sftp', 'SFTP', 'sftp'),
-      vendor('blobstorage', 'Azure Blob Storage', 'blobstorage'),
-    ],
-  },
+  // 'workflow-nodes' is inserted here at runtime by buildMatrixSections — see this file's module
+  // doc comment for why it's catalog-driven instead of listed alongside these sections.
   {
     id: 'settings',
     label: 'Settings',
@@ -231,14 +208,86 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
   },
 ];
 
-// ─── Pure helpers over the static config — no catalog/selection state involved ────────────────
+// Delete's tooltip means something more specific than its catalog description for every node row —
+// see the section-level `note` below for the full explanation. The only per-action override this
+// screen needs; every other action falls back to the catalog's own permission description exactly
+// as before (see role-permissions.component.html's cell.tooltipOverride ?? cell.perm.description).
+const NODE_DELETE_TOOLTIP_OVERRIDE =
+  'Allows removing this node type from a workflow. Also required (alongside Source/Destination Connections → Delete) to delete this vendor’s stored connection in Settings.';
 
-/** Every distinct permission code the matrix can toggle — scopes "select all"/the toolbar's
- *  "X of Y selected" count to exactly what this screen manages. A handful of existing permissions
- *  with no menu home (Pipeline.Execute, Report.View, Payload.View, the unused per-vendor Read/
- *  Assign/Execute actions on Epic/Athenahealth/Cerner) are intentionally excluded — this screen
- *  never adds or removes them, so a role's existing grant of any of those passes through save
- *  untouched. */
-export const ALL_MATRIX_CODES: string[] = [...new Set(
-  MATRIX_SECTIONS.flatMap(section => section.rows.flatMap(row => row.actions?.map(a => a.code) ?? []))
-)];
+// Preserves today's curated row order (Epic first, then the other EHR vendors, then the relational/
+// NoSQL/file destination types) instead of falling back to alphabetical for every existing row. A
+// group not listed here (a brand-new vendor, e.g. NewEHR) isn't hidden — it just sorts after every
+// listed one, alphabetically among any other unlisted groups. This is display-order polish only:
+// it never affects which rows appear, only what order they appear in — the one thing about "no
+// Angular change needed to display a new node" this file still can't get from the catalog alone,
+// since there's no ordering field in PermissionGroup/PermissionCategory (see the RBAC investigation
+// this was scoped from for why one wasn't added).
+const PREFERRED_NODE_ORDER = [
+  'Epic', 'Athenahealth', 'Cerner', 'Allscripts', 'Healow', 'MeditechGreenfield', 'GenericFhir',
+  'Hl7v2', 'Sample', 'SqlServer', 'AzureSql', 'MySql', 'PostgreSql', 'Mongo', 'Csv', 'Sftp', 'BlobStorage',
+  'FhirRepository', 'Medplum',
+];
+
+function nodeRowOrderKey(groupName: string): [number, string] {
+  const index = PREFERRED_NODE_ORDER.indexOf(groupName);
+  return [index === -1 ? PREFERRED_NODE_ORDER.length : index, groupName];
+}
+
+/** Builds the Workflow Nodes section from the canonical Node Catalog — only entries with a
+ *  dedicated permission group are rows (an ungated type has nothing to grant/toggle); rollout
+ *  status is intentionally NOT a filter here — a role can be granted a not-yet-rolled-out node's
+ *  permissions ahead of launch, same as before this consolidation. See this file's module doc
+ *  comment for the full rationale. Returns a section with zero rows (never omitted entirely) if the
+ *  catalog hasn't loaded yet, so the section header/note still render consistently. */
+function buildWorkflowNodesSection(nodeCatalog: readonly NodeCatalogEntry[]): MatrixSection {
+  const rows: MatrixRow[] = nodeCatalog
+    .filter((entry): entry is NodeCatalogEntry & { permissionGroup: string } => entry.permissionGroup !== null)
+    .slice()
+    .sort((a, b) => {
+      const [ai, an] = nodeRowOrderKey(a.permissionGroup);
+      const [bi, bn] = nodeRowOrderKey(b.permissionGroup);
+      return ai !== bi ? ai - bi : an.localeCompare(bn);
+    })
+    .map(entry => ({
+      id: entry.permissionGroup.toLowerCase(),
+      label: entry.displayName,
+      actions: entry.actions.map(a => ({
+        label: a.action,
+        code: a.code,
+        tooltipOverride: a.action.toLowerCase() === 'delete' ? NODE_DELETE_TOOLTIP_OVERRIDE : undefined,
+      })),
+    }));
+
+  return {
+    id: 'workflow-nodes',
+    label: 'Workflow Nodes',
+    note: 'Delete = permission to remove this node type from a workflow. Removing an Epic node, for example, requires both Workflow → Edit and Epic → Delete. This same Epic → Delete permission is also required (alongside Source Connections → Delete) to delete the stored Epic connection itself in Settings.',
+    rows,
+  };
+}
+
+/** The full section list for a given moment's live Node Catalog — every hand-authored section from
+ *  STATIC_SECTIONS, unchanged, plus the dynamically-built Workflow Nodes section inserted at the
+ *  same position it's always occupied (right after the Workflow module section), so the screen's
+ *  overall layout is pixel-identical to before for anyone not looking at the node rows themselves. */
+export function buildMatrixSections(nodeCatalog: readonly NodeCatalogEntry[]): MatrixSection[] {
+  const sections = [...STATIC_SECTIONS];
+  const insertAt = sections.findIndex(s => s.id === 'workflow-module') + 1;
+  sections.splice(insertAt, 0, buildWorkflowNodesSection(nodeCatalog));
+  return sections;
+}
+
+// ─── Pure helpers over a built section list — no catalog/selection state involved ────────────────
+
+/** Every distinct permission code a given section list can toggle — scopes "select all"/the
+ *  toolbar's "X of Y selected" count to exactly what this screen manages. A handful of existing
+ *  permissions with no menu home (Pipeline.Execute, Report.View, Payload.View, the unused
+ *  per-vendor Read/Assign/Execute actions on Epic/Athenahealth/Cerner) are intentionally excluded —
+ *  this screen never adds or removes them, so a role's existing grant of any of those passes
+ *  through save untouched. */
+export function allMatrixCodes(sections: MatrixSection[]): string[] {
+  return [...new Set(
+    sections.flatMap(section => section.rows.flatMap(row => row.actions?.map(a => a.code) ?? []))
+  )];
+}

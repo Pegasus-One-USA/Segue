@@ -12,7 +12,6 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// those fields before any source connection exists. Post-create discovery stays on <see cref="SourceCapabilitiesController"/>.
 /// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
 [Route("api/v1/source-discovery")]
 public sealed class SourceDiscoveryController : ControllerBase
 {
@@ -27,7 +26,14 @@ public sealed class SourceDiscoveryController : ControllerBase
         _backendAuthScopeProbeService = backendAuthScopeProbeService;
     }
 
+    // Deliberately just [Authorize] (any authenticated user), NOT UnifiedAdmin — this is pre-create
+    // discovery for the source-connection wizard's "Discover" action, called before any vendor/source
+    // connection exists (so there's no persisted SourceSystemType yet to check a per-vendor permission
+    // against — see this class's own doc comment). Any authenticated role configuring ANY vendor's
+    // source connection needs this; the actual create/edit RBAC is unchanged and still enforced
+    // separately, once the vendor is known, at ConfigurationsController's real create/update endpoints.
     [HttpPost("probe")]
+    [Authorize]
     [ProducesResponseType(typeof(SourceDiscoveryProbeResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Probe(
@@ -76,7 +82,13 @@ public sealed class SourceDiscoveryController : ControllerBase
     /// scopes Epic actually granted the app — the wizard's Discover action calls this to show what the app is really
     /// allowed to do, as opposed to the scopes the server merely advertises support for.
     /// </summary>
+    // Preserves this action's exact prior behavior (it inherited the class-level UnifiedAdmin policy
+    // before this change) — out of scope for this fix, unchanged on purpose. Note for a follow-up:
+    // per this method's own doc comment it's "the wizard's Discover action" too, called from the same
+    // non-admin-accessible flow as Probe above, so it may have the identical regression — deliberately
+    // left as-is here pending its own explicit decision.
     [HttpPost("backend-auth-scopes")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(BackendAuthScopesResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BackendAuthScopes(

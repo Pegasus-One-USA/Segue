@@ -67,8 +67,10 @@ export const ROLES_ENDPOINTS = {
 };
 
 export const PERMISSIONS_ENDPOINTS = {
-  list:    `${API_V1_BASE}/permissions`,
-  catalog: `${API_V1_BASE}/permissions/catalog`,
+  list:        `${API_V1_BASE}/permissions`,
+  catalog:     `${API_V1_BASE}/permissions/catalog`,
+  // The canonical Node Catalog — additive; `catalog` above is untouched. See node-catalog.model.ts.
+  nodeCatalog: `${API_V1_BASE}/permissions/node-catalog`,
 };
 
 // ─── EHR Endpoints (EhrEndpointsController — api/v1/ehr-endpoints) ─────────────

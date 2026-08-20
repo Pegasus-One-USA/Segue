@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { TRANSFORMS } from '../data/transforms.data';
-import { SOURCES } from '../data/sources.data';
+import { NodeCatalogService } from './node-catalog.service';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../data/node-catalog-legacy-ids';
+import { sourceFormKeyForNode } from '../components/node-library/source-node-vendor.util';
 import { CanvasEdge } from '../models/edge.model';
 import { CanvasNode, SourceNode, TransformNode } from '../models/node.model';
 import { PipelineStore } from './pipeline.store';
@@ -56,6 +58,11 @@ const SECRET_FIELD_KEYS = new Set([
 export class WorkflowGraphMapperService {
   private readonly store = inject(PipelineStore);
   private readonly workflowApi = inject(WorkflowApiService);
+  private readonly nodeCatalog = inject(NodeCatalogService);
+
+  constructor() {
+    this.nodeCatalog.ensureLoaded();
+  }
 
   toRequest(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
@@ -164,7 +171,7 @@ export class WorkflowGraphMapperService {
     const transformId = this.transformIdForNode(node);
     const item = this.catalogForTransform(transformId, catalog);
     const fallbackRank = node.kind === 'transform'
-      ? TRANSFORMS.find(transform => transform.id === node.transformId)?.rank ?? 60
+      ? (this._destCatalogEntry(node.transformId) ? 7 : TRANSFORMS.find(transform => transform.id === node.transformId)?.rank ?? 60)
       : 0;
 
     return {
@@ -220,15 +227,16 @@ export class WorkflowGraphMapperService {
     const name = config['__name'] ?? node.displayName ?? item?.displayName ?? transformId;
 
     if (this.isSourceCategory(node.category)) {
-      const source = SOURCES.find(candidate => candidate.id === transformId);
+      const sourceType = SOURCE_ID_TO_TYPE[transformId];
+      const source = sourceType ? this.nodeCatalog.find('Source', sourceType) : undefined;
       return {
         id: node.id,
         kind: undefined,
         x: node.positionX,
         y: node.positionY,
         connected: true,
-        abbr: source?.abbr ?? name.slice(0, 2).toUpperCase(),
-        color: source?.color,
+        abbr: source?.icon ?? name.slice(0, 2).toUpperCase(),
+        color: source?.color ?? undefined,
         connectorLabel: name,
         fields: { ...config, __name: name },
         checkpointUrlEnabled: !!node.checkpointUrlEnabled,
@@ -256,10 +264,15 @@ export class WorkflowGraphMapperService {
   private transformIdForNode(node: CanvasNode): string {
     if (node.kind === 'transform') return node.transformId;
     if (node.kind === 'merge') return 'merge';
-    const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
-    if (/sample/i.test(connector)) return 'sample';
-    if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
-    return 'epic';
+    // Canonical resolution, not a display-name guess: sourceFormKeyForNode() is the exact same
+    // resolver canvas.component.ts's node-delete permission gate and the Node Library's edit-reopen
+    // flow already use, so a source node's vendor is never derived two different ways. It reads the
+    // 'Connector' value every vendor form's own getFields() writes (via EHR_VENDOR_TO_SOURCE_FORM_KEY)
+    // — covering all nine source types, not just sample/generic-fhir — and only falls back to 'epic'
+    // for a node saved before the Connector field existed, preserving prior behavior for that one
+    // legacy case exactly. Previously this duplicated a narrower 2-pattern regex here that silently
+    // mislabeled Cerner/Athenahealth/Allscripts/Healow/Meditech/HL7v2 source nodes as 'epic' on save.
+    return sourceFormKeyForNode(node);
   }
 
   private transformIdFromNodeType(nodeType: string): string {
@@ -271,10 +284,17 @@ export class WorkflowGraphMapperService {
     if (node.fields['__name']) return node.fields['__name'];
     if (item?.displayName) return item.displayName;
     if (node.kind === 'transform') {
-      return TRANSFORMS.find(transform => transform.id === node.transformId)?.name ?? node.transformId;
+      return this._destCatalogEntry(node.transformId)?.displayName
+        ?? TRANSFORMS.find(transform => transform.id === node.transformId)?.name
+        ?? node.transformId;
     }
     if (node.kind === 'merge') return node.fields['__name'] ?? 'Merge';
     return node.connectorLabel ?? 'Epic';
+  }
+
+  private _destCatalogEntry(transformId: string) {
+    const type = DESTINATION_ID_TO_TYPE[transformId];
+    return type ? this.nodeCatalog.find('Destination', type) : undefined;
   }
 
   private redactSecrets(fields: Record<string, string>): Record<string, string> {

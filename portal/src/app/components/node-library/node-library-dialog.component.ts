@@ -8,8 +8,10 @@ import { WizardService } from '../../services/wizard.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { ToastService } from '../../services/toast.service';
-import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
+import { NodeCatalogService } from '../../services/node-catalog.service';
+import { NodeCatalogEntry, actionCode } from '../../models/node-catalog.model';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../../data/node-catalog-legacy-ids';
 import { RANK_LABEL } from '../../models/transform.model';
 import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../models/node.model';
 import { MergeNodeOption } from '../../models/wizard-state.model';
@@ -75,6 +77,9 @@ interface LibraryCategory {
   items: LibraryItem[];
 }
 
+// Destination-TYPE rows (dest-sqlserver, dest-fhir, ...) no longer have entries here — their
+// abbr/color now come from the Node Catalog (NodeCatalogEntry.icon/color). Only pipeline-step rows
+// (no SourceSystemType/DestinationType backing, outside this consolidation) remain.
 const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'fhir-validation':  { abbr: 'VAL', color: '#10B981' },
   'normalize':        { abbr: 'NRM', color: '#3B82F6' },
@@ -84,29 +89,6 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'deid-safeharbor':  { abbr: 'DEI', color: '#EF4444' },
   'deid-kanon':       { abbr: 'KAN', color: '#EF4444' },
   'field-mapping':    { abbr: 'MAP', color: '#6366F1' },
-  'dest-sqlserver':   { abbr: 'SQL', color: '#CC2927' },
-  'dest-azuresql':    { abbr: 'AZS', color: '#0078D4' },
-  'dest-postgres':    { abbr: 'PG',  color: '#336791' },
-  'dest-mysql':       { abbr: 'MY',  color: '#4479A1' },
-  'dest-mongo':       { abbr: 'MDB', color: '#47A248' },
-  'dest-snowflake':   { abbr: 'SNW', color: '#29B5E8' },
-  'dest-powerbi':     { abbr: 'PBI', color: '#F2C811' },
-  'dest-tableau':     { abbr: 'TAB', color: '#E97627' },
-  'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
-  'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
-  'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
-  'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
-  'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
-  'dest-csv':         { abbr: 'CSV', color: '#374151' },
-  'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
-  'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },
-  'dest-parquet':     { abbr: 'PAR', color: '#64748B' },
-  'dest-avro':        { abbr: 'AVR', color: '#64748B' },
-  'dest-protobuf':    { abbr: 'PRT', color: '#64748B' },
-  'dest-pdf':         { abbr: 'PDF', color: '#DC2626' },
-  'dest-sftp':        { abbr: 'FTP', color: '#475569' },
-  'dest-restapi':     { abbr: 'API', color: '#475569' },
-  'dest-inmemory':    { abbr: 'MEM', color: '#94A3B8' },
   'audit-lineage':    { abbr: 'AUD', color: '#0EA5E9' },
   'hedis':            { abbr: 'HDI', color: '#D946EF' },
   'anomaly':          { abbr: 'ANO', color: '#D946EF' },
@@ -152,6 +134,7 @@ export class NodeLibraryDialogComponent {
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly permissions = inject(PermissionService);
   private readonly toast = inject(ToastService);
+  private readonly nodeCatalog = inject(NodeCatalogService);
   readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
@@ -170,8 +153,9 @@ export class NodeLibraryDialogComponent {
   readonly showHidden    = signal(false);
 
   // ── inline source-config form state ───────────────────────────────────────
-  /** SOURCES catalog id (see ../../data/sources.data.ts) of the currently-open inline source form, or null when
-   *  none is open — the single piece of state SOURCE_FORM_REGISTRY is keyed off of. Replaces the old
+  /** Canvas source id (see ../../data/node-catalog-legacy-ids.ts's SOURCE_ID_TO_TYPE) of the
+   *  currently-open inline source form, or null when none is open — the single piece of state
+   *  SOURCE_FORM_REGISTRY is keyed off of. Replaces the old
    *  showEpicForm/showGenericFhirForm boolean pair; adding a new source type never means a new boolean here. */
   readonly openSourceFormType = signal<string | null>(null);
   readonly currentSourceFormComponent = computed(() => {
@@ -181,8 +165,10 @@ export class NodeLibraryDialogComponent {
   /** Display name for the "headless" form title (see the template) — selectedItem()/selectedId() are never set
    *  for a registered source (selectItem() opens its form immediately instead), so this reads sources.data.ts
    *  directly off openSourceFormType() rather than relying on that unrelated signal. */
-  readonly sourceFormTitle = computed(() =>
-    SOURCES.find(s => s.id === this.openSourceFormType())?.name ?? 'Source');
+  readonly sourceFormTitle = computed(() => {
+    const id = this.openSourceFormType();
+    return (id && this._sourceCatalogEntry(id)?.displayName) ?? 'Source';
+  });
   /** True for the WizardService-backed vendor forms (Epic/Cerner/.../Sample) — see SELF_CONTAINED_SOURCE_FORM_KEYS. */
   readonly isSelfContainedSourceForm = computed(() => {
     const type = this.openSourceFormType();
@@ -329,6 +315,10 @@ export class NodeLibraryDialogComponent {
   );
 
   constructor() {
+    // Idempotent — safe even though every open of this dialog re-runs the constructor's own
+    // instance, since NodeCatalogService itself only ever fetches once per session.
+    this.nodeCatalog.ensureLoaded();
+
     // When the dialog opens with an editNodeId, jump straight into the right form.
     effect(() => {
       const id = this.editNodeId();
@@ -382,27 +372,26 @@ export class NodeLibraryDialogComponent {
     const pm = this.pickerModel();
     const byRank = new Map<number, LibraryItem[]>();
 
-    // Rank 0 — Sources (filtered by phase config: only enabled sources shown; and by RBAC — a source
-    // with a dedicated permission group the current role lacks View for is excluded from the library
-    // entirely, same as a phase-hidden source, rather than shown disabled. Tile visibility is
-    // specifically the vendor's own View permission — separate from Create (gates actually adding a
-    // new node, see onSourceSelected) and Edit (gates modifying an existing one) — a role could hold
+    // Rank 0 — Sources, from the canonical Node Catalog: visible iff Implemented (a real, working
+    // wizard + save path exists — not a phase/rollout flag) AND (ungated OR the role holds this
+    // vendor's own View permission) — the exact rule the Node Catalog consolidation specified.
+    // Replaces PhaseConfigService.isSourceEnabled + the old permissionPrefix string. Tile visibility
+    // is specifically View — separate from Create (see onSourceSelected) and Edit — a role could hold
     // View without Create/Edit and still see the tile, just be unable to complete adding/editing it.
-    // This is a presentation-only filter: the backend re-validates the exact same permissions
-    // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
-    // removing a node from view here is not a security control — it's purely so a user never sees, or
-    // can search up, a type their role can't use.
-    const visibleSources = SOURCES.filter(s =>
-      this.phaseCfg.isSourceEnabled(s.id) &&
-      (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
-    );
-    byRank.set(0, visibleSources.map(s => ({
-      id:       s.id,
+    // Presentation-only: the backend re-validates independently at save time (WorkflowEndpoints.cs)
+    // regardless of what this dialog ever showed.
+    const visibleSources = Object.keys(SOURCE_ID_TO_TYPE)
+      .map(id => ({ id, entry: this._sourceCatalogEntry(id) }))
+      .filter((x): x is { id: string; entry: NodeCatalogEntry } => !!x.entry)
+      .filter(({ entry }) => entry.implemented && this._canView(entry));
+
+    byRank.set(0, visibleSources.map(({ id, entry }) => ({
+      id,
       rank:     0,
-      name:     s.name,
-      sub:      s.sub,
-      abbr:     s.abbr,
-      color:    s.color,
+      name:     entry.displayName,
+      sub:      entry.subtitle ?? '',
+      abbr:     entry.icon ?? id.slice(0, 3).toUpperCase(),
+      color:    entry.color ?? '#5b6573',
       category: null,
       isSource: true,
       status:   (m === 'source' ? 'enabled' : 'disabled') as ItemStatus,
@@ -412,37 +401,24 @@ export class NodeLibraryDialogComponent {
     const pickerMap = new Map(pm?.items.map(i => [i.id, i]) ?? []);
 
     TRANSFORMS.forEach(t => {
+      // Destination-TYPE rows are handled below, from the Node Catalog, not here — this loop is only
+      // for pipeline steps (no SourceSystemType/DestinationType backing). Defensive: correct whether
+      // or not transforms.data.ts still happens to contain a destination-type row.
+      if (t.id in DESTINATION_ID_TO_TYPE) return;
+
       // Skip entire rank categories hidden by phase config
       if (this.phaseCfg.isRankHidden(t.rank)) return;
       // Hide items not enabled in this phase (don't show as disabled)
       if (!this.phaseCfg.isTransformEnabled(t.id)) return;
-      // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
-      // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
-      // the matching comment on the Sources filter above for why this is presentation-only, not a
-      // security control, and for the View/Create/Edit distinction.
-      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';
       let reason: string | null = null;
 
       if (m === 'transform') {
-        // Phase config: if not enabled, keep disabled regardless of pipeline state
-        if (!this.phaseCfg.isTransformEnabled(t.id)) {
-          status = 'disabled';
-          reason = 'Not available in this phase';
-        } else {
-          const pi = pickerMap.get(t.id);
-          status = pi ? (pi.status as ItemStatus) : 'disabled';
-          reason = pi?.reason ?? null;
-        }
-
-        // Lock the other destination type while mid-way through configuring one —
-        // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum') && this.destTypeLocked()) {
-          status = 'disabled';
-          reason = 'Finish or go back to Configure before switching destination type.';
-        }
+        const pi = pickerMap.get(t.id);
+        status = pi ? (pi.status as ItemStatus) : 'disabled';
+        reason = pi?.reason ?? null;
       }
 
       const item: LibraryItem = {
@@ -456,6 +432,57 @@ export class NodeLibraryDialogComponent {
       if (!byRank.has(t.rank)) byRank.set(t.rank, []);
       byRank.get(t.rank)!.push(item);
     });
+
+    // Rank 7 — Destination types, from the canonical Node Catalog (same rule as sources above).
+    // Replaces PhaseConfigService.isTransformEnabled + the old permissionPrefix string (including the
+    // former 'sourceconnections' substitute for Aidbox/Medplum, which now have their own dedicated
+    // fhirrepository.*/medplum.* permissions).
+    const destinationRank = 7;
+    if (!this.phaseCfg.isRankHidden(destinationRank)) {
+      const visibleDestinations = Object.keys(DESTINATION_ID_TO_TYPE)
+        .map(id => ({ id, entry: this._destCatalogEntry(id) }))
+        .filter((x): x is { id: string; entry: NodeCatalogEntry } => !!x.entry)
+        .filter(({ entry }) => entry.implemented && this._canView(entry));
+
+      const destItems: LibraryItem[] = visibleDestinations.map(({ id, entry }) => {
+        let status: ItemStatus = 'disabled';
+        let reason: string | null = null;
+
+        if (m === 'transform') {
+          // Selectable iff the role holds this destination's own Create permission — from the Node
+          // Catalog's own permissionGroup/actions, never pickerMap/ApplicabilityService. pickerMap
+          // can never contain a dest-* entry: it's sourced from ApplicabilityService.pickerModel(),
+          // which is built purely from TRANSFORMS (transforms.data.ts), and that file's dest-* rows
+          // were intentionally removed by the Node Catalog consolidation — the Node Catalog is now
+          // the sole source of a destination node's existence/identity/permissions. View was already
+          // checked above (the filter that produced visibleDestinations); this is the separate Create
+          // check, matching the same View/Create split every source vendor tile already uses.
+          // ApplicabilityService itself is untouched and still governs pipeline-step tiles (rank 1-9)
+          // in the loop above — this block never reads pickerMap/pi at all.
+          const canCreate = this._canCreate(entry);
+          status = canCreate ? 'enabled' : 'disabled';
+          reason = canCreate ? null : `You don't have permission to add this destination.`;
+
+          // Lock the other destination type while mid-way through configuring one — switching would
+          // silently discard the in-progress form.
+          if (this.destTypeLocked()) {
+            status = 'disabled';
+            reason = 'Finish or go back to Configure before switching destination type.';
+          }
+        }
+
+        return {
+          id, rank: destinationRank,
+          name: entry.displayName, sub: entry.subtitle ?? '',
+          abbr: entry.icon ?? id.slice(0, 3).toUpperCase(), color: entry.color ?? '#64748B',
+          category: entry.category, isSource: false, status, reason, group: null,
+        };
+      });
+
+      if (destItems.length > 0) {
+        byRank.set(destinationRank, [...(byRank.get(destinationRank) ?? []), ...destItems]);
+      }
+    }
 
     // Merge option (transform mode only)
     if (m === 'transform' && pm?.mergeOpt) {
@@ -582,6 +609,36 @@ export class NodeLibraryDialogComponent {
     return sourceFormKeyForNode(node);
   }
 
+  // ── Node Catalog lookups — bridges the pre-existing canvas id space (SOURCE_ID_TO_TYPE/
+  // DESTINATION_ID_TO_TYPE) to the canonical (kind, type) the backend catalog is keyed by. See
+  // node-catalog-legacy-ids.ts's own doc comment for why this bridge exists at all. ─────────────
+  private _sourceCatalogEntry(sourceId: string): NodeCatalogEntry | undefined {
+    const type = SOURCE_ID_TO_TYPE[sourceId];
+    return type ? this.nodeCatalog.find('Source', type) : undefined;
+  }
+
+  private _destCatalogEntry(destId: string): NodeCatalogEntry | undefined {
+    const type = DESTINATION_ID_TO_TYPE[destId];
+    return type ? this.nodeCatalog.find('Destination', type) : undefined;
+  }
+
+  /** True when a node is visible per its own View permission — an ungated node (no permission
+   *  group, so no View action at all) is always visible. Rollout/phase gating is checked
+   *  separately by the caller (allCategories) — this only ever answers the RBAC half. */
+  private _canView(entry: NodeCatalogEntry): boolean {
+    const code = actionCode(entry, 'View');
+    return !code || this.permissions.hasPermission(code);
+  }
+
+  /** True when a node is addable per its own Create permission — an ungated node (no permission
+   *  group, so no Create action at all) is always addable. Mirrors _canView's shape exactly; the
+   *  Node Catalog's own permissionGroup/actions are the sole source, never pickerMap/
+   *  ApplicabilityService (see the destination-rank block in allCategories for why). */
+  private _canCreate(entry: NodeCatalogEntry): boolean {
+    const code = actionCode(entry, 'Create');
+    return !code || this.permissions.hasPermission(code);
+  }
+
   /** Opens the registered form for `key` (a sources.data.ts id) — self-contained vendor forms restore through
    *  WizardService.open()/editingFields() exactly as EpicAudienceFormComponent always did; headless forms
    *  (generic-fhir, hl7v2) restore through their own `initialFields` input, seeded from `editNodeOrId`'s fields. */
@@ -593,11 +650,12 @@ export class NodeLibraryDialogComponent {
   // an editNodeOrId present means this reopens an EXISTING node's config (Edit); absent means it's
   // about to add a brand-new one (Create).
   openSourceForm(key: string, editNodeOrId?: CanvasNode | string | null): void {
-    const prefix = SOURCES.find(s => s.id === key)?.permissionPrefix;
-    if (prefix) {
-      const action = editNodeOrId ? 'edit' : 'create';
-      if (!this.permissions.hasPermission(`${prefix}.${action}`)) {
-        this.toast.error('Not permitted', `You don't have permission to ${action} this source.`);
+    const entry = this._sourceCatalogEntry(key);
+    if (entry) {
+      const action: 'Edit' | 'Create' = editNodeOrId ? 'Edit' : 'Create';
+      const code = actionCode(entry, action);
+      if (code && !this.permissions.hasPermission(code)) {
+        this.toast.error('Not permitted', `You don't have permission to ${action.toLowerCase()} this source.`);
         return;
       }
     }
@@ -641,16 +699,17 @@ export class NodeLibraryDialogComponent {
     if (editNode) {
       this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
     } else {
-      const meta = SOURCES.find(s => s.id === this.openSourceFormType());
+      const openType = this.openSourceFormType();
+      const meta = openType ? this._sourceCatalogEntry(openType) : undefined;
       const node: SourceNode = {
         id: this.store.nextNodeId(),
         kind: undefined,
         x: 360,
         y: 300,
         connected: true,
-        abbr: meta?.abbr ?? 'SRC',
+        abbr: meta?.icon ?? 'SRC',
         color: meta?.color ?? '#5b6573',
-        connectorLabel: meta?.name,
+        connectorLabel: meta?.displayName,
         fields,
       };
       this.store.addNode(node);
@@ -661,36 +720,39 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard ────────────────────────────────────────────────────
   // The wizard's own 'sql' type covers both SQL Server and Azure SQL (the specific DestinationType
-  // is only chosen inside the wizard itself, not at this outer selection) — checked as an OR of
-  // both permission prefixes here as a best-effort UI filter; the backend's own per-spec check in
+  // is only chosen inside the wizard itself, not at this outer selection) — checked as an OR across
+  // both catalog types here as a best-effort UI filter; the backend's own per-spec check in
   // WorkflowEndpoints.cs (which sees the actual chosen DestinationType once the form is submitted)
   // is what actually enforces the precise one.
   //
-  // 'medplum' and 'fhir' have no DEDICATED backend permission group (no PermissionGroupCode.Medplum /
-  // .FhirRepository member exists) — but that doesn't mean they're unenforced: SourceSystemPermissionGroups
-  // .GroupFor(DestinationType.Medplum / .FhirRepository) falls back to the generic SourceConnections group
-  // (no same-named PermissionGroupCode member => fallback, per that method's own doc comment), and
-  // ControllerAuthorizationExtensions.HasPermissionAsync uses that exact resolution when a real
-  // create/edit/delete request for either of these DestinationType values comes in. So the backend already
-  // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
-  // prefix list) is closing a UI/backend mismatch, not inventing a new code.
-  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): string[] {
+  // 'medplum' and 'fhir' now resolve to their own dedicated fhirrepository.*/medplum.* permissions
+  // (PermissionGroupCode.FhirRepository/.Medplum) — never sourceconnections.*, which is an unrelated
+  // Settings-screen permission and was never actually enforced server-side for these two types.
+  private destWizardCatalogTypes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): string[] {
     switch (type) {
-      case 'sql':      return ['sqlserver', 'azuresql'];
-      case 'csv':      return ['csv'];
-      case 'mysql':    return ['mysql'];
-      case 'mongo':    return ['mongo'];
-      case 'postgres': return ['postgresql'];
-      case 'blob':     return ['blobstorage'];
-      case 'medplum':  return ['sourceconnections'];
-      case 'fhir':     return ['sourceconnections'];
+      case 'sql':      return ['SqlServer', 'AzureSql'];
+      case 'csv':      return ['Csv'];
+      case 'mysql':    return ['MySql'];
+      case 'mongo':    return ['Mongo'];
+      case 'postgres': return ['PostgreSql'];
+      case 'blob':     return ['BlobStorage'];
+      case 'medplum':  return ['Medplum'];
+      case 'fhir':     return ['FhirRepository'];
     }
   }
 
   private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob', action: 'create' | 'edit'): boolean {
-    const prefixes = this.destWizardPermissionPrefixes(type);
-    if (!prefixes.length) return true;
-    if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
+    const entries = this.destWizardCatalogTypes(type)
+      .map(t => this.nodeCatalog.find('Destination', t))
+      .filter((e): e is NodeCatalogEntry => !!e);
+    if (!entries.length) return true; // catalog not loaded yet — presentation-only, backend re-validates
+
+    const actionLabel: 'Create' | 'Edit' = action === 'create' ? 'Create' : 'Edit';
+    const allowed = entries.some(e => {
+      const code = actionCode(e, actionLabel);
+      return !code || this.permissions.hasPermission(code);
+    });
+    if (allowed) return true;
     this.toast.error('Not permitted', `You don't have permission to ${action} this destination.`);
     return false;
   }

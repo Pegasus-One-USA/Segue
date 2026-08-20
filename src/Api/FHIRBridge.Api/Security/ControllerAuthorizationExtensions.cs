@@ -37,6 +37,13 @@ public static class ControllerAuthorizationExtensions
     /// <c>DestinationType</c>) via <see cref="SourceSystemPermissionGroups.GroupFor"/> first — the exact same
     /// way <see cref="PermissionCatalog"/> resolved the permission at startup, so the two can never disagree
     /// about which group a given enum value belongs to.
+    ///
+    /// A value with no dedicated group (e.g. a destination type outside the curated set with its own
+    /// View/Create/Edit/Delete/Execute permissions) has never had any permission of its own —
+    /// <see cref="SourceSystemPermissionGroups.AllGroupsFor"/> deliberately never discovers/registers one
+    /// for the generic fallback group, so probing it here would ask the authorization service for a
+    /// policy that doesn't exist and throw "No policy found", not merely deny access. Such a value is
+    /// therefore treated as ungated (allowed) — exactly the behavior it had before any RBAC existed for it.
     /// </summary>
     public static Task<bool> HasPermissionAsync(
         IAuthorizationService authorizationService,
@@ -44,7 +51,11 @@ public static class ControllerAuthorizationExtensions
         Enum sourceOrDestinationTypeValue,
         PermissionActionCode action)
     {
-        var group = SourceSystemPermissionGroups.GroupFor(sourceOrDestinationTypeValue);
+        if (!SourceSystemPermissionGroups.TryGroupFor(sourceOrDestinationTypeValue, out var group))
+        {
+            return Task.FromResult(true);
+        }
+
         return HasPermissionAsync(authorizationService, user, group, action);
     }
 

@@ -69,10 +69,15 @@ public enum PermissionGroupCode
     [PermissionGroup("30000000-0000-0000-0000-000000000016", PermissionCategoryCode.Pipelines, "Healow")]
     Healow = 16,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000017", PermissionCategoryCode.Pipelines, "MeditechGreenfield")]
+    // DisplayName is "Meditech" (not the enum member's own "MeditechGreenfield") — display names are
+    // free to differ from the member name and re-sync on their own (RbacBootstrapper/
+    // SyncDiscoveredPermissionsAsync both already re-sync DisplayName whenever it drifts, no migration
+    // needed), whereas the member NAME must stay "MeditechGreenfield" to keep resolving
+    // SourceSystemType.MeditechGreenfield by name (see SourceSystemPermissionGroups).
+    [PermissionGroup("30000000-0000-0000-0000-000000000017", PermissionCategoryCode.Pipelines, "Meditech")]
     MeditechGreenfield = 17,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000018", PermissionCategoryCode.Pipelines, "GenericFhir")]
+    [PermissionGroup("30000000-0000-0000-0000-000000000018", PermissionCategoryCode.Pipelines, "Generic FHIR")]
     GenericFhir = 18,
 
     [PermissionGroup("30000000-0000-0000-0000-000000000019", PermissionCategoryCode.Pipelines, "Hl7v2")]
@@ -88,16 +93,19 @@ public enum PermissionGroupCode
     // types with a real form reachable from the Node Library canvas today; the other DestinationType
     // values are inert stub forms only reachable from the Settings admin page and stay on the generic
     // Configuration.Write permission.
-    [PermissionGroup("30000000-0000-0000-0000-000000000021", PermissionCategoryCode.Pipelines, "SqlServer")]
+    // Display names below are the polished, spaced/cased forms ("SQL Server", not the enum member's own
+    // "SqlServer") — see the Meditech/GenericFhir comment above for why the member NAME must still match
+    // DestinationType.SqlServer/.AzureSql/.MySql/.PostgreSql exactly while DisplayName is free to differ.
+    [PermissionGroup("30000000-0000-0000-0000-000000000021", PermissionCategoryCode.Pipelines, "SQL Server")]
     SqlServer = 21,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000022", PermissionCategoryCode.Pipelines, "AzureSql")]
+    [PermissionGroup("30000000-0000-0000-0000-000000000022", PermissionCategoryCode.Pipelines, "Azure SQL")]
     AzureSql = 22,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000023", PermissionCategoryCode.Pipelines, "MySql")]
+    [PermissionGroup("30000000-0000-0000-0000-000000000023", PermissionCategoryCode.Pipelines, "MySQL")]
     MySql = 23,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000024", PermissionCategoryCode.Pipelines, "PostgreSql")]
+    [PermissionGroup("30000000-0000-0000-0000-000000000024", PermissionCategoryCode.Pipelines, "PostgreSQL")]
     PostgreSql = 24,
 
     [PermissionGroup("30000000-0000-0000-0000-000000000025", PermissionCategoryCode.Pipelines, "Mongo")]
@@ -151,4 +159,15 @@ public enum PermissionGroupCode
     // blobstorage.view/create/edit/delete/execute; no new attribute declarations are needed anywhere.
     [PermissionGroup("30000000-0000-0000-0000-000000000037", PermissionCategoryCode.Pipelines, "Blob Storage")]
     BlobStorage = 37,
+
+    // Dedicated group for DestinationType.FhirRepository — the Node Library displays this type as
+    // "Aidbox" (its real-world target product), but the enum/permission-code identity stays
+    // "FhirRepository" to match the domain type exactly. Replaces the earlier `sourceconnections.*`
+    // substitute a frontend-only edit had wired up for this type — that permission means "can reach
+    // the Settings admin screen," an unrelated concern, and was never actually enforced server-side.
+    [PermissionGroup("30000000-0000-0000-0000-000000000038", PermissionCategoryCode.Pipelines, "Aidbox")]
+    FhirRepository = 38,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000039", PermissionCategoryCode.Pipelines, "Medplum")]
+    Medplum = 39,
 }

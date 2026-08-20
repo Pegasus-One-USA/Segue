@@ -12,6 +12,9 @@ public interface IRoleManagementService
 
     Task<IReadOnlyList<PermissionCatalogCategoryDto>> GetPermissionCatalogAsync(CancellationToken cancellationToken);
 
+    /// <summary>The canonical Node Catalog — see NodeCatalogBuilder/NodeCatalogMetadata.</summary>
+    Task<IReadOnlyList<NodeCatalogEntryDto>> GetNodeCatalogAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken);
 
     Task<RoleDto> CreateRoleAsync(CreateRoleRequest request, CancellationToken cancellationToken);

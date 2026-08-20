@@ -20,24 +20,39 @@
 // Workflow → Edit disappear once NEITHER needs it anymore (unless an admin explicitly granted it in
 // its own right) — see role-permissions.component.ts's togglePermission/toggleRow/toggleAll.
 //
-// Derived generically from MATRIX_SECTIONS's own 'workflow-nodes' section — adding a new vendor row
-// there (e.g. a future NewEHR) makes it participate in this dependency system automatically, with no
-// change needed here.
+// Node prefixes (which vendor/destination-type codes this applies to) are derived generically from
+// the CATALOG-BUILT 'workflow-nodes' section (permission-matrix.config.ts's buildMatrixSections) via
+// computeNodePrefixes below — never a hand-maintained list here. A new vendor row (e.g. a future
+// NewEHR) participates in this dependency system the moment it has any permission in the catalog,
+// with no change needed to this file. What a node action REQUIRES (WORKFLOW_ACTION_FOR_NODE_ACTION)
+// stays a hand-maintained, code-defined rule on purpose — see its own comment below for why this one
+// piece deliberately isn't inferred from data.
 
-import { MATRIX_SECTIONS } from './permission-matrix.config';
+import { MatrixSection } from './permission-matrix.config';
 
-/** Every vendor/destination-type prefix the Workflow Nodes table manages (e.g. 'epic', 'sqlserver')
- *  — read straight off the matrix config's own rows/actions, never hand-maintained here. */
-const NODE_PREFIXES: ReadonlySet<string> = new Set(
-  (MATRIX_SECTIONS.find(s => s.id === 'workflow-nodes')?.rows ?? [])
-    .flatMap(row => row.actions ?? [])
-    .map(action => action.code.split('.')[0])
-);
+/** Every vendor/destination-type prefix the Workflow Nodes table currently manages (e.g. 'epic',
+ *  'sqlserver') — read off the CURRENT catalog-built sections' own rows/actions, recomputed every
+ *  time the catalog changes, never hand-maintained. */
+export function computeNodePrefixes(sections: readonly MatrixSection[]): ReadonlySet<string> {
+  const workflowNodes = sections.find(s => s.id === 'workflow-nodes');
+  return new Set(
+    (workflowNodes?.rows ?? [])
+      .flatMap(row => row.actions ?? [])
+      .map(action => action.code.split('.')[0])
+  );
+}
 
 /** A node action's name doesn't always match the Workflow row's own action name for the same
  *  concept — Workflow's fifth action is `workflow.run` (labeled "Execute" in the UI, per
  *  permission-matrix.config.ts), while every node's own fifth action is literally `{prefix}.execute`.
- *  Every other action name matches verbatim. */
+ *  Every other action name matches verbatim.
+ *
+ *  Deliberately NOT inferred from the catalog/action names — this table encodes a real business rule
+ *  (which module-level permission a node action is meaningless without), not a naming coincidence.
+ *  A brand-new action the catalog introduces (e.g. `epic.archive`) simply has no entry here yet, which
+ *  is the correct, safe default: requiredParentCodes returns [] for it below, so it participates in
+ *  the matrix (renders, toggles, saves) without implying any parent until someone deliberately adds a
+ *  rule for it — exactly the same way a new vendor's existing five actions already do. */
 const WORKFLOW_ACTION_FOR_NODE_ACTION: Readonly<Record<string, string>> = {
   view: 'view',
   create: 'create',
@@ -53,13 +68,14 @@ const WORKFLOW_ACTION_FOR_NODE_ACTION: Readonly<Record<string, string>> = {
  *    node.delete  → workflow.delete + workflow.view
  *    node.execute → workflow.run    + workflow.view
  *  Returns [] for any code that isn't one of the Workflow Nodes table's own actions (role.*, user.*,
- *  mappingprofiles.*, the workflow.* codes themselves, ...) — those have no such relationship. */
-export function requiredParentCodes(code: string): readonly string[] {
+ *  mappingprofiles.*, the workflow.* codes themselves, an action with no entry in
+ *  WORKFLOW_ACTION_FOR_NODE_ACTION yet, ...) — those have no such relationship. */
+export function requiredParentCodes(code: string, nodePrefixes: ReadonlySet<string>): readonly string[] {
   const dot = code.indexOf('.');
   if (dot < 0) return [];
   const prefix = code.slice(0, dot);
   const action = code.slice(dot + 1);
-  if (!NODE_PREFIXES.has(prefix)) return [];
+  if (!nodePrefixes.has(prefix)) return [];
 
   const workflowAction = WORKFLOW_ACTION_FOR_NODE_ACTION[action];
   if (!workflowAction) return [];
@@ -71,19 +87,19 @@ export function requiredParentCodes(code: string): readonly string[] {
 /** Explicit ∪ transitive closure of required parents — the displayed/saved set. Recursive rather
  *  than a fixed two-level walk so a future third layer (if one's ever added) resolves correctly
  *  without changing this function. */
-export function computeEffectiveCodes(explicit: ReadonlySet<string>): Set<string> {
+export function computeEffectiveCodes(explicit: ReadonlySet<string>, nodePrefixes: ReadonlySet<string>): Set<string> {
   const effective = new Set<string>();
   for (const code of explicit) {
-    addWithParents(code, effective);
+    addWithParents(code, effective, nodePrefixes);
   }
   return effective;
 }
 
-function addWithParents(code: string, set: Set<string>): void {
+function addWithParents(code: string, set: Set<string>, nodePrefixes: ReadonlySet<string>): void {
   if (set.has(code)) return;
   set.add(code);
-  for (const parent of requiredParentCodes(code)) {
-    addWithParents(parent, set);
+  for (const parent of requiredParentCodes(code, nodePrefixes)) {
+    addWithParents(parent, set, nodePrefixes);
   }
 }
 
@@ -105,17 +121,23 @@ export function toggleExplicitCode(
   code: string,
   checked: boolean,
   allCodes: readonly string[],
+  nodePrefixes: ReadonlySet<string>,
 ): Set<string> {
   const next = new Set(explicit);
   if (checked) {
     next.add(code);
   } else {
-    removeExplicitAndDependents(code, next, allCodes);
+    removeExplicitAndDependents(code, next, allCodes, nodePrefixes);
   }
   return next;
 }
 
-function removeExplicitAndDependents(code: string, explicit: Set<string>, allCodes: readonly string[]): void {
+function removeExplicitAndDependents(
+  code: string,
+  explicit: Set<string>,
+  allCodes: readonly string[],
+  nodePrefixes: ReadonlySet<string>,
+): void {
   // Deliberately unconditional (no "already absent, nothing to do" early return) — `code` may be
   // displayed as checked purely via implication without ever having been in `explicit` itself; the
   // cascade below still needs to run in that case. Safe from infinite recursion / reprocessing: the
@@ -125,8 +147,8 @@ function removeExplicitAndDependents(code: string, explicit: Set<string>, allCod
   // code this same call has already removed.
   explicit.delete(code);
   for (const dependent of allCodes) {
-    if (explicit.has(dependent) && requiredParentCodes(dependent).includes(code)) {
-      removeExplicitAndDependents(dependent, explicit, allCodes);
+    if (explicit.has(dependent) && requiredParentCodes(dependent, nodePrefixes).includes(code)) {
+      removeExplicitAndDependents(dependent, explicit, allCodes, nodePrefixes);
     }
   }
 }
