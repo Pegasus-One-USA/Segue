@@ -51,7 +51,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
 // the in-memory store to build the encrypted inlineSecret instead.
 const SECRET_FIELD_KEYS = new Set([
   'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
-  'dest_blobSecret', 'dest_medplumSecret',
+  'dest_blobSecret', 'dest_medplumSecret', 'Client Secret',
 ]);
 
 @Injectable({ providedIn: 'root' })
