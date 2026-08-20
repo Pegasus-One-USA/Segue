@@ -143,6 +143,33 @@ public sealed class MappedMedplumDestinationWriterTests
     }
 
     [Fact]
+    public async Task Identifierless_type_falls_back_to_POST_create_when_PUT_returns_404()
+    {
+        // Hosted Medplum won't update-as-create a client-assigned id: PUT /Provenance/{uuid} to a non-existent id
+        // 404s. The writer must then POST /Provenance to create it, and count the record as written.
+        var (writer, handler) = CreateWriter(req =>
+            new HttpResponseMessage(req.Method == HttpMethod.Post ? HttpStatusCode.Created : HttpStatusCode.NotFound));
+        var resource = """{"resourceType":"Provenance","id":"epic-1","recorded":"2024-01-01T00:00:00Z"}""";
+
+        var result = await writer.WriteAsync(
+            Destination(ClientMetadata),
+            new MappingProfile("Provenance → Medplum", "Provenance", Guid.NewGuid(), Guid.NewGuid(), "Provenance", []),
+            [new MappedDestinationRecord(Guid.NewGuid(), "Provenance", "Provenance", "epic-1", new Dictionary<string, object?>(), SourceJson: resource)],
+            Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        result.RecordErrors.Should().BeNull();
+        handler.FhirRequests.Should().HaveCount(2);
+        var put = handler.FhirRequests[0];
+        var post = handler.FhirRequests[1];
+        put.Method.Should().Be(HttpMethod.Put);
+        put.Url.Should().Contain("/Provenance/");                 // logical-id PUT first
+        post.Method.Should().Be(HttpMethod.Post);
+        post.Url.Should().Be($"{BaseUrl}/Provenance");            // create at the type collection
+        post.Body.Should().NotContain("\"id\"");                  // server owns id on create
+    }
+
+    [Fact]
     public async Task Identifierless_upsert_id_is_stable_across_runs()
     {
         // Idempotency guarantee: the same source id maps to the same logical id every run, so re-running updates
