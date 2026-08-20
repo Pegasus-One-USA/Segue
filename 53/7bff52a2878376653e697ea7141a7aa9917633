@@ -1,0 +1,28 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  s_4eef1c0f046975::t_de6a6e28d364cb 19-22
+  s_4eef1c0f046975::t_43167e4f39d212 460-469,482-497
+  s_4eef1c0f046975::t_1b04e8f183b223 579-611
+  s_4eef1c0f046975::t_157c52888ef146 46-57,498-499
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  s_4eef1c0f046975::t_c04ce314c07269 121-166
+poc/Medplum.Poc/Program.cs
+  s_4eef1c0f046975::t_8184cd561dc9a9 139-236
+  s_4eef1c0f046975::t_badaf305962af5 28
+  s_4eef1c0f046975::t_aa53f4e5c2098f 54-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "537bff52a2878376653e697ea7141a7aa9917633",
+  "prompts": {},
+  "sessions": {
+    "s_4eef1c0f046975": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37954b15-385c-4352-b879-ce187b1c8467",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_bd198b4e731c8b::t_83c01c1a41316a 842-851
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_bd198b4e731c8b::t_b70398d711b04f 9
+  s_bd198b4e731c8b::t_615d372e7a939a 260-269,271-275
+  s_bd198b4e731c8b::t_e2fa50c536232e 283-295
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_bd198b4e731c8b::t_adb50bc0c54080 374-382
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/HealowAuthorizationCodeTokenProvider.cs
+  s_bd198b4e731c8b::t_ba54ec94dfe7af 7-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "457b0d3a6fa0e9df37a56d4b2d3a3474283d5cbe",
+  "prompts": {},
+  "sessions": {
+    "s_bd198b4e731c8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7fccef9-9485-4af5-a07c-66edfcdb06ab",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
