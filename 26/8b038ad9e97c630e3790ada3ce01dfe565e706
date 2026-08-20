@@ -1,0 +1,24 @@
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_ab5e5a25fe15ae::t_0697016f0f715d 282-290
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_ab5e5a25fe15ae::t_003fcd887b587f 21
+  s_ab5e5a25fe15ae::t_94cd998b85cf8b 171
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_ab5e5a25fe15ae::t_51bbd343334c77 262-269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "268b038ad9e97c630e3790ada3ce01dfe565e706",
+  "prompts": {},
+  "sessions": {
+    "s_ab5e5a25fe15ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3d8d0ea-4903-4204-af6e-9c51b90f5397",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

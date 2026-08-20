@@ -1,0 +1,19 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_ab5e5a25fe15ae::t_97c01b97266010 551,561-577
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f0e21a330af38949ea813b0d776135ccdf71fe86",
+  "prompts": {},
+  "sessions": {
+    "s_ab5e5a25fe15ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3d8d0ea-4903-4204-af6e-9c51b90f5397",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

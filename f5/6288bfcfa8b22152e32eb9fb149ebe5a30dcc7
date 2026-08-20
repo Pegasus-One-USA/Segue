@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_bd198b4e731c8b::t_9e2bda141ae6cb 71-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f56288bfcfa8b22152e32eb9fb149ebe5a30dcc7",
+  "prompts": {},
+  "sessions": {
+    "s_bd198b4e731c8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7fccef9-9485-4af5-a07c-66edfcdb06ab",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
