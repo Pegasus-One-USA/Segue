@@ -19,6 +19,18 @@ import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ToastService } from '../../../services/toast.service';
 import { ALL_MATRIX_CODES, MATRIX_SECTIONS, MatrixRow, MatrixSection } from './permission-matrix.config';
+import { computeEffectiveCodes, toggleExplicitCode } from './permission-matrix-dependencies';
+import { AuthService } from '../../../auth/services/auth.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+
+// A resolved permission plus, where the static config set one, a tooltip that should replace the
+// catalog's own perm.description on this specific checkbox — see MatrixAction.tooltipOverride.
+interface GridCell {
+  perm: Permission;
+  tooltipOverride?: string;
+}
 
 // One row of a section's table, resolved against the live catalog — `cells` holds only the
 // actions that actually resolved to a real Permission (an action whose code doesn't exist in this
@@ -28,13 +40,14 @@ interface GridRow {
   label: string;
   superAdminOnly: boolean;
   note?: string;
-  cells: Map<string, Permission>;
+  cells: Map<string, GridCell>;
   permissionIds: string[];
 }
 
 interface GridSection {
   id: string;
   label: string;
+  note?: string;
   actions: string[];
   rows: GridRow[];
 }
@@ -51,6 +64,7 @@ interface GridSection {
     MatCheckboxModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './role-permissions.component.html',
   styleUrls: ['./role-permissions.component.scss'],
@@ -59,10 +73,25 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   // Bound from the `:id` route segment via withComponentInputBinding().
   @Input() id!: string;
 
-  private readonly svc    = inject(IRoleService);
-  private readonly router = inject(Router);
-  private readonly toast  = inject(ToastService);
+  private readonly svc         = inject(IRoleService);
+  private readonly router      = inject(Router);
+  private readonly toast       = inject(ToastService);
+  private readonly authService = inject(AuthService);
+  private readonly actionGuard = inject(PermissionActionGuard);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+
+  // ─── Permission gating ──────────────────────────────────────────────────────
+  // The route (`user-management.routes.ts`) requires only role.view to open this screen at all — a
+  // view-only role can see the current grants, but every mutation (checkbox toggle, row/global "All",
+  // Save) additionally requires role.edit, checked here since the route guard can't distinguish
+  // "viewing" from "editing" within the same URL.
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
+
+  canEditPermissions(): boolean {
+    return this.authService.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.Role, PermissionAction.Edit));
+  }
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
@@ -75,14 +104,46 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   readonly roles        = signal<Role[]>([]);
   readonly role         = signal<Role | null>(null);
   readonly catalog      = signal<PermissionCategory[]>([]);
-  readonly selectedIds  = signal<Set<string>>(new Set());
   readonly searchQuery  = signal('');
+
+  // ─── Two-layer permission model ──────────────────────────────────────────────
+  // EXPLICIT — codes (not ids) the admin has directly toggled on that exact row/action, scoped to
+  // what this matrix manages (ALL_MATRIX_CODES). The ONLY thing togglePermission/toggleRow/toggleAll
+  // mutate. Loading a role treats its full stored permission set as the new explicit baseline (the
+  // database has no column to record "this one was only ever implied" — see
+  // permission-matrix-dependencies.ts's module doc comment for why that's fine: effective state
+  // still round-trips exactly through a save+reload even though the explicit/implied distinction
+  // itself doesn't survive one).
+  readonly explicitCodes = signal<Set<string>>(new Set());
+
+  // EFFECTIVE — explicit ∪ transitive closure of required parents (permission-matrix-dependencies.ts).
+  // Never its own signal; always derived, so it can never drift out of sync with explicitCodes.
+  private readonly effectiveCodes = computed<Set<string>>(() => computeEffectiveCodes(this.explicitCodes()));
+
+  // Permission ids for whatever this role holds OUTSIDE this matrix's scope (see `allPermissions`'s
+  // own scoping comment) — captured once per load/save, never mutated by this screen, passed through
+  // on the next save untouched.
+  private outOfScopeIds = new Set<string>();
+
+  // The full id set this screen displays as checked and would save — effectiveCodes translated to
+  // ids, plus whatever's outside this matrix's scope. Every existing display method (isChecked,
+  // isRowChecked, isAllChecked, ...) and save() read this exactly as before; none of them needed to
+  // change for the two-layer model, because they never cared how the set was produced.
+  readonly selectedIds = computed<Set<string>>(() => {
+    const byCode = this.permissionByCode();
+    const ids = new Set(this.outOfScopeIds);
+    for (const code of this.effectiveCodes()) {
+      const perm = byCode.get(code);
+      if (perm) ids.add(perm.id);
+    }
+    return ids;
+  });
 
   // Sections are expanded by default; ids in this set render collapsed (header only).
   readonly collapsedSectionIds = signal<Set<string>>(new Set());
 
-  // Snapshot of the role's permissions as last loaded/saved from the DB — Reset restores this.
-  private originalSelectedIds = new Set<string>();
+  // Snapshot of explicitCodes as last loaded/saved from the DB — Reset restores this.
+  private originalExplicitCodes = new Set<string>();
 
   readonly isSystemRole = computed(() => !!this.role()?.isSystemRole);
 
@@ -96,6 +157,14 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     return map;
   });
 
+  // id -> code, the reverse of permissionByCode — every checkbox in the template only ever hands
+  // toggle methods a permission id (see GridCell), but the dependency engine below reasons in codes.
+  private readonly codeById = computed(() => {
+    const map = new Map<string, string>();
+    for (const p of this.allPermissionsFlat()) map.set(p.id, p.name);
+    return map;
+  });
+
   // Resolves the static MATRIX_SECTIONS layout against the live catalog — every action whose code
   // doesn't exist in this deployment yet is silently dropped from `cells` (defensive; every code
   // referenced here is a real, already-seeded/discovered permission as of this screen's last
@@ -105,10 +174,10 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
 
     return MATRIX_SECTIONS.map((section: MatrixSection) => {
       const rows: GridRow[] = section.rows.map((row: MatrixRow) => {
-        const cells = new Map<string, Permission>();
+        const cells = new Map<string, GridCell>();
         for (const action of row.actions ?? []) {
           const perm = byCode.get(action.code);
-          if (perm) cells.set(action.label, perm);
+          if (perm) cells.set(action.label, { perm, tooltipOverride: action.tooltipOverride });
         }
         return {
           id: row.id,
@@ -116,7 +185,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
           superAdminOnly: !!row.superAdminOnly,
           note: row.note,
           cells,
-          permissionIds: [...cells.values()].map(p => p.id),
+          permissionIds: [...cells.values()].map(c => c.perm.id),
         };
       });
 
@@ -126,6 +195,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
       return {
         id: section.id,
         label: section.label,
+        note: section.note,
         actions: [...actions].sort((a, b) => a.localeCompare(b)),
         rows,
       };
@@ -147,8 +217,8 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
           ? section.rows
           : section.rows.filter(row => {
               if (row.label.toLowerCase().includes(q)) return true;
-              return [...row.cells.values()].some(p =>
-                p.displayName.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
+              return [...row.cells.values()].some(c =>
+                c.perm.displayName.toLowerCase().includes(q) || (c.perm.description ?? '').toLowerCase().includes(q)
               );
             });
         return { ...section, rows };
@@ -187,8 +257,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
 
         const current = roles.find(r => r.id === this.id) ?? null;
         this.role.set(current);
-        this.originalSelectedIds = new Set(current?.permissions.map(p => p.id) ?? []);
-        this.selectedIds.set(new Set(this.originalSelectedIds));
+        this.applyLoadedPermissions(current?.permissions ?? []);
         this.loading.set(false);
       },
       error: () => {
@@ -196,6 +265,22 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
         this.errorMessage.set('Failed to load role permissions.');
       },
     });
+  }
+
+  // Splits a role's full stored permission list into this screen's two tracked pieces: the
+  // explicit codes this matrix manages (the new explicit baseline — see explicitCodes's own doc
+  // comment for why "everything stored" is treated as "everything explicit" on every load), and the
+  // ids for anything outside this matrix's scope (passed through untouched on the next save). Shared
+  // by loadData and save()'s success handler so both stay in sync with exactly the same rule.
+  private applyLoadedPermissions(permissions: Permission[]): void {
+    const explicit = new Set<string>();
+    const outOfScope = new Set<string>();
+    for (const p of permissions) {
+      if (ALL_MATRIX_CODES.includes(p.name)) explicit.add(p.name); else outOfScope.add(p.id);
+    }
+    this.outOfScopeIds = outOfScope;
+    this.explicitCodes.set(explicit);
+    this.originalExplicitCodes = new Set(explicit);
   }
 
   onSearch(value: string): void {
@@ -217,18 +302,25 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     this.collapsedSectionIds.set(next);
   }
 
-  // ─── Single checkbox — every action controls exactly one permission id, independently. No
-  // dependency/cascade of any kind: checking or unchecking one permission never touches another. ─
+  // ─── Single checkbox ──────────────────────────────────────────────────────
   isChecked(permissionId: string): boolean {
     return this.selectedIds().has(permissionId);
   }
 
   togglePermission(permissionId: string): void {
-    if (this.isSystemRole()) return;
-    const next = new Set(this.selectedIds());
-    if (next.has(permissionId)) next.delete(permissionId); else next.add(permissionId);
-    this.selectedIds.set(next);
+    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    const code = this.codeById().get(permissionId);
+    if (!code) return;
+    const checked = !this.selectedIds().has(permissionId);
+    this.explicitCodes.set(toggleExplicitCode(this.explicitCodes(), code, checked, ALL_MATRIX_CODES));
   }
+
+  // ─── Dependency engine bridge ───────────────────────────────────────────────
+  // Node actions (epic.edit, sqlserver.create, ...) imply the matching Workflow-module action plus
+  // workflow.view — see permission-matrix-dependencies.ts for the exact rule and why it's a UI/save
+  // consistency concern only, never a substitute for the backend's own independent authorization.
+  // toggleExplicitCode mutates only explicitCodes (in code-space); effectiveCodes/selectedIds are
+  // always re-derived from it, so nothing here ever writes a permission id directly.
 
   // ─── Tri-state select-all — whole matrix ──────────────────────────────────
   isAllChecked(): boolean {
@@ -243,17 +335,17 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   }
 
   toggleAll(checked: boolean): void {
-    if (this.isSystemRole()) return;
-    const matrixIds = new Set(this.allPermissions().map(p => p.id));
-    if (checked) {
-      const next = new Set(this.selectedIds());
-      for (const id of matrixIds) next.add(id);
-      this.selectedIds.set(next);
-    } else {
-      // Only clear what this matrix manages — anything outside its scope (see `allPermissions`)
-      // is left exactly as-is, never silently dropped by a "select none" click.
-      this.selectedIds.set(new Set([...this.selectedIds()].filter(id => !matrixIds.has(id))));
+    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    // Routed through toggleExplicitCode per code (not a raw bulk add/clear) so this stays consistent
+    // with the dependency engine — in practice a select-all/none across every code in scope always
+    // ends in the same end state regardless (every parent is either already included, or already
+    // being cleared alongside everything else), but going through one primitive avoids maintaining a
+    // second, subtly-different mutation path.
+    let next = this.explicitCodes();
+    for (const code of ALL_MATRIX_CODES) {
+      next = toggleExplicitCode(next, code, checked, ALL_MATRIX_CODES);
     }
+    this.explicitCodes.set(next);
   }
 
   // ─── Tri-state select-all — single row ────────────────────────────────────
@@ -267,34 +359,43 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   }
 
   toggleRow(row: GridRow, checked: boolean): void {
-    if (this.isSystemRole()) return;
-    const next = new Set(this.selectedIds());
-    for (const id of row.permissionIds) {
-      if (checked) next.add(id); else next.delete(id);
+    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    // Per-code, not a raw bulk add/clear — this is what makes row-level "ALL" correctly cascade too:
+    // checking Epic's ALL runs each of Epic's 5 actions through toggleExplicitCode, which is what
+    // pulls in the matching Workflow action for every one of them (see permission-matrix-dependencies.ts).
+    let next = this.explicitCodes();
+    for (const cell of row.cells.values()) {
+      next = toggleExplicitCode(next, cell.perm.name, checked, ALL_MATRIX_CODES);
     }
-    this.selectedIds.set(next);
+    this.explicitCodes.set(next);
   }
 
   // ─── Reset — discard local edits back to the last-loaded/saved DB state ──
   isDirty(): boolean {
-    const current = this.selectedIds();
-    if (current.size !== this.originalSelectedIds.size) return true;
-    for (const id of current) {
-      if (!this.originalSelectedIds.has(id)) return true;
+    const current = this.explicitCodes();
+    if (current.size !== this.originalExplicitCodes.size) return true;
+    for (const code of current) {
+      if (!this.originalExplicitCodes.has(code)) return true;
     }
     return false;
   }
 
   reset(): void {
-    this.selectedIds.set(new Set(this.originalSelectedIds));
+    this.explicitCodes.set(new Set(this.originalExplicitCodes));
   }
 
   save(): void {
     const role = this.role();
     if (!role || this.isSystemRole()) return;
+    // The Save button is hidden entirely without role.edit (see the template) — this re-check guards
+    // against a permission change landing in another tab while this screen is still open, and against
+    // direct invocation, not against a normally-reachable gap.
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Edit), 'You do not have permission to modify role permissions.')) return;
 
     this.saving.set(true);
     this.errorMessage.set(null);
+    // Effective ids, not explicit — the required parent permissions must actually be persisted in
+    // PermissionAllocations, since the database has nowhere to record "this one is only implied."
     const permissionIds = [...this.selectedIds()];
 
     // updateRole replaces the full permission set, so name/description are resent unchanged —
@@ -307,8 +408,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
       next: updated => {
         this.saving.set(false);
         this.role.set(updated);
-        this.originalSelectedIds = new Set(updated.permissions.map(p => p.id));
-        this.selectedIds.set(new Set(this.originalSelectedIds));
+        this.applyLoadedPermissions(updated.permissions);
         this.roles.update(list => list.map(r => (r.id === updated.id ? updated : r)));
         this.toast.success(`Permissions updated for "${updated.displayName}".`);
       },

@@ -22,6 +22,7 @@
           [attr.data-node-id]="node.id"
           [node]="node"
           [readOnly]="readOnly()"
+          [canDelete]="canDeleteNode(node.id)"
           (configure)="onNodeConfigure($event)"
           (addNext)="onAddNext($event)"
           (delete)="onNodeDelete($event)"
@@ -35,6 +36,7 @@
           [attr.data-node-id]="node.id"
           [node]="node"
           [readOnly]="readOnly()"
+          [canDelete]="canDeleteNode(node.id)"
           (configure)="onNodeConfigure($event)"
           (addNext)="onAddNext($event)"
           (delete)="onNodeDelete($event)"
@@ -92,7 +94,7 @@
               <button class="ctx-item" (click)="ctxToggleCheckpoint()">Enable checkpoint</button>
             }
           }
-          @if (!ctxNodeIsFieldMapping()) {
+          @if (!ctxNodeIsFieldMapping() && ctxNodeCanDelete()) {
             <div class="ctx-sep"></div>
             <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
               <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>

@@ -326,6 +326,13 @@
     border-radius: var(--radius-pill);
     margin: 0;
   }
+
+  &__note {
+    margin: -2px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
 }
 
 // A section can scroll horizontally on its own (a wide table, e.g. Access Control's 7 action

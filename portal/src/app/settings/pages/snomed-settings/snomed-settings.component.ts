@@ -6,6 +6,8 @@ import { SnomedSettingsService, SnomedImportHistoryEntry } from '../../services/
 import { TerminologyImportHistoryComponent } from '../../components/terminology-import-history/terminology-import-history.component';
 import { TerminologySchedulerCardComponent } from '../../components/terminology-scheduler-card/terminology-scheduler-card.component';
 import { TerminologyHistoryPoller } from '../../utils/terminology-history-poller';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 @Component({
   selector: 'app-snomed-settings',
@@ -18,6 +20,12 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(SnomedSettingsService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  /** This route allows snomedct.view OR snomedct.write to enter — a view-only role must still see
+   *  current settings/history, but Save/Synchronize/Import need the write check this flag provides. */
+  protected readonly canWrite = this.permissions.hasPermission('snomedct.write');
 
   protected readonly loadingConfig = signal(true);
   protected readonly saving = signal(false);
@@ -50,6 +58,7 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
       next: (x) => {
         this.form.patchValue(x);
         this.apiKeySet.set(x.hasApiKeyConfigured);
+        if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
         this.loadingConfig.set(false);
       },
       error: () => {
@@ -65,6 +74,7 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected save(): void {
+    if (!this.actionGuard.ensure('snomedct.write', 'You do not have permission to modify SNOMED CT settings.')) return;
     if (this.form.invalid) return;
     this.saving.set(true);
     const v = this.form.getRawValue();
@@ -84,6 +94,7 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected synchronize(): void {
+    if (!this.actionGuard.ensure('snomedct.write', 'You do not have permission to synchronize SNOMED CT.')) return;
     if (this.form.dirty) {
       this.toast.error('Save settings before synchronizing');
       return;
@@ -110,6 +121,7 @@ export class SnomedSettingsComponent implements OnInit, OnDestroy {
   protected import(): void {
     const file = this.selectedFile();
     if (!file) return;
+    if (!this.actionGuard.ensure('snomedct.write', 'You do not have permission to import SNOMED CT.')) return;
     this.uploading.set(true);
     this.uploadProgress.set(0);
     this.service.importFile(file).subscribe({

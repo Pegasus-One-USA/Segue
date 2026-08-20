@@ -28,8 +28,15 @@ export const USER_MANAGEMENT_ROUTES: Routes = [
       import('./pages/role-list/role-list.component').then(m => m.RoleListComponent),
   },
   {
+    // Was `authGuard` only, inheriting just the parent /user-management route's `user.view` — meaning
+    // a role with user.view but no role.view could open this screen directly by URL even though the
+    // Roles list itself (one route up) already requires role.view. Guarding role.view here closes that
+    // gap, matching the 'roles' route above. This only gates VIEWING the matrix — the mutating controls
+    // inside it (Save, checkboxes) additionally require role.edit, enforced by the component itself, so
+    // a role.view-only user can still open this route and see the read-only grid.
     path: 'roles/:id/permissions',
-    canActivate: [authGuard],
+    canActivate: [permissionGuard],
+    data: { permissions: ['role.view'] },
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./pages/role-permissions/role-permissions.component').then(m => m.RolePermissionsComponent),

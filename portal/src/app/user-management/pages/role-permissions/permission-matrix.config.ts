@@ -20,6 +20,11 @@ export interface MatrixAction {
    *  like 'Import' or 'Edit' for the same underlying code). */
   label: string;
   code: string;
+  /** Overrides the checkbox's tooltip (normally the live catalog's own `perm.description`) — for a
+   *  code whose real backend meaning needs more disambiguation than its description already gives
+   *  in THIS specific table's context. Currently only used for the Workflow Nodes section's Delete
+   *  column — see the section-level `note` on that section for why. */
+  tooltipOverride?: string;
 }
 
 export interface MatrixRow {
@@ -38,6 +43,10 @@ export interface MatrixSection {
   id: string;
   label: string;
   rows: MatrixRow[];
+  /** Persistent, always-visible clarification rendered under this section's header — for a section
+   *  where a column's plain name (e.g. "Delete") could otherwise be misread in a way that matters.
+   *  Currently only set on `workflow-nodes` — see that section's own comment for the exact ambiguity. */
+  note?: string;
 }
 
 // Every source vendor / destination type node has its own full View/Create/Edit/Delete/Execute
@@ -50,7 +59,14 @@ const vendor = (id: string, label: string, prefix: string): MatrixRow => ({
     { label: 'View', code: `${prefix}.view` },
     { label: 'Create', code: `${prefix}.create` },
     { label: 'Edit', code: `${prefix}.edit` },
-    { label: 'Delete', code: `${prefix}.delete` },
+    // {prefix}.delete does double duty by design, not by accident — it gates BOTH removing this
+    // vendor's node from a workflow canvas (WorkflowEndpoints.cs's /workflows/build node-removal
+    // check, added alongside workflow.edit — see canvas.component.ts's canDeleteNode()) AND deleting
+    // the vendor's stored Source/Destination Connection in Settings (SourceConnectionsController.cs/
+    // ConfigurationsController.cs, alongside sourceconnections.delete/destinationconnections.delete).
+    // Both are "can this role delete Epic-related things," just at two different scopes, and this is
+    // the only place in this whole screen either half is independently assignable.
+    { label: 'Delete', code: `${prefix}.delete`, tooltipOverride: 'Allows removing this node type from a workflow. Also required (alongside Source/Destination Connections → Delete) to delete this vendor’s stored connection in Settings.' },
     { label: 'Execute', code: `${prefix}.execute` },
   ],
 });
@@ -92,9 +108,14 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       },
     ],
   },
+  // Workflow is the parent/module — kept as its own section, deliberately separate from the node
+  // table below. It is NOT another selectable "node" alongside Epic/SQL Server/etc.: a node
+  // permission implies module ACCESS (see PermissionService.hasWorkflowModuleAccess /
+  // WorkflowModuleAccessAuthorizationHandler), but never the reverse, and never any of the CRUD
+  // actions below — those stay gated on their own literal code, independent of every node row.
   {
-    id: 'workflows',
-    label: 'Workflows',
+    id: 'workflow-module',
+    label: 'Workflow',
     rows: [
       // Dashboard is intentionally NOT a row here (or anywhere in this matrix) — it's a mandatory
       // platform entry point every authenticated role can reach, not an RBAC-controlled permission.
@@ -109,6 +130,19 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
           { label: 'Execute', code: 'workflow.run' },
         ],
       },
+      { id: 'execution-history', label: 'Execution History', note: "Uses Workflow's View permission", actions: [{ label: 'View', code: 'workflow.view' }] },
+    ],
+  },
+  // Workflow nodes — the sources and destinations usable INSIDE a workflow. Holding ANY permission
+  // on ANY row here is, by itself, sufficient for Workflow module access (see the section above) —
+  // that's an effective-access rule evaluated at request/render time, not a dependency stored here
+  // or cascaded when a checkbox changes. Every row's five actions stay fully independent of every
+  // other row and of the Workflow module row above.
+  {
+    id: 'workflow-nodes',
+    label: 'Workflow Nodes',
+    note: 'Delete = permission to remove this node type from a workflow. Removing an Epic node, for example, requires both Workflow → Edit and Epic → Delete. This same Epic → Delete permission is also required (alongside Source Connections → Delete) to delete the stored Epic connection itself in Settings.',
+    rows: [
       vendor('epic', 'Epic', 'epic'),
       vendor('athenahealth', 'Athenahealth', 'athenahealth'),
       vendor('cerner', 'Cerner', 'cerner'),
@@ -126,7 +160,6 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('csv', 'CSV', 'csv'),
       vendor('sftp', 'SFTP', 'sftp'),
       vendor('blobstorage', 'Azure Blob Storage', 'blobstorage'),
-      { id: 'execution-history', label: 'Execution History', note: "Uses Workflow's View permission", actions: [{ label: 'View', code: 'workflow.view' }] },
     ],
   },
   {

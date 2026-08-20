@@ -38,6 +38,10 @@ import {
   TriState,
 } from './tri-state-toggle.component';
 import { ToastService } from '../../../services/toast.service';
+import { AuthService } from '../../../auth/services/auth.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction as PermCode, permissionCode } from '../../../auth/models/permission.constants';
 
 // One row of a category table — a Permission Group. Mirrors role-permissions.component's grid:
 // `cells` holds only the actions that actually have a Permission for this group; an action with
@@ -75,6 +79,7 @@ function capitalize(value: string): string {
     MatTooltipModule,
     MatProgressSpinnerModule,
     TriStateToggleComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './user-permission-overrides.component.html',
   styleUrls: ['./user-permission-overrides.component.scss'],
@@ -96,6 +101,19 @@ export class UserPermissionOverridesComponent
   private readonly roleService = inject(IRoleService);
   private readonly dialog = inject(MatDialog);
   private readonly toast = inject(ToastService);
+  private readonly authService = inject(AuthService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating — direct overrides are a form of editing the user, so they're gated on
+  // the same user.edit code as the rest of this user's mutating actions (Edit/Reset Password/2FA
+  // toggle in the parent user-detail component). ────────────────────────────────────────────────
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermCode;
+  protected readonly permissionCode = permissionCode;
+
+  canEdit(): boolean {
+    return this.authService.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermCode.Edit));
+  }
 
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -246,6 +264,7 @@ export class UserPermissionOverridesComponent
   }
 
   setCellGranted(permissionId: string, granted: boolean): void {
+    if (!this.canEdit()) return;
     const map = new Map(this.overrides());
     if (granted) map.set(permissionId, true);
     else map.delete(permissionId);
@@ -262,6 +281,7 @@ export class UserPermissionOverridesComponent
   }
 
   setRowState(row: GridRow, next: TriState): void {
+    if (!this.canEdit()) return;
     const map = new Map(this.overrides());
     for (const id of row.permissionIds) {
       if (next === 'inherit') map.delete(id);
@@ -286,6 +306,7 @@ export class UserPermissionOverridesComponent
   }
 
   setGlobalState(next: TriState): void {
+    if (!this.canEdit()) return;
     const map = new Map(this.overrides());
     for (const id of this.allPermissionIds()) {
       if (next === 'inherit') map.delete(id);
@@ -322,6 +343,7 @@ export class UserPermissionOverridesComponent
   }
 
   save(): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermCode.Edit), 'You do not have permission to edit users.')) return;
     this.saving.set(true);
     this.errorMessage.set(null);
 
@@ -352,6 +374,7 @@ export class UserPermissionOverridesComponent
 
   // ─── "Inherit from role" master switch ─────────────────────────────────────
   onInheritFromRoleToggle(change: MatCheckboxChange): void {
+    if (!this.canEdit()) return;
     if (change.checked) {
       this.confirmClearOverrides();
     } else {

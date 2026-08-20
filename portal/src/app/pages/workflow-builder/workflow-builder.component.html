@@ -64,12 +64,14 @@
     </div>
 
     <div class="dock__actions">
-      <button class="builder-btn builder-btn--danger" type="button" (click)="confirmReset.set(true)">
-        <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
-        </svg>
-        <span>Clear canvas</span>
-      </button>
+      @if (canMutate()) {
+        <button class="builder-btn builder-btn--danger" type="button" (click)="confirmReset.set(true)">
+          <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+          </svg>
+          <span>Clear canvas</span>
+        </button>
+      }
       @if (canMutate()) {
         <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">
           <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

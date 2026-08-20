@@ -146,6 +146,7 @@ builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -195,6 +196,16 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new SuperAdminOnlyRequirement());
+    });
+
+    // View-level Workflow module access: workflow.view OR any workflow-node permission (see
+    // WorkflowModuleAccessAuthorizationHandler). Used only on the view-level workflow endpoints —
+    // build/copy/run/delete keep their own literal workflow.create/edit/delete/run policy below,
+    // unaffected by this one.
+    options.AddPolicy(AuthorizationPolicies.WorkflowModuleAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new WorkflowModuleAccessRequirement());
     });
 
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions

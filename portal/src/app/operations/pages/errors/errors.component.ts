@@ -6,6 +6,8 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { ToastService } from '../../../services/toast.service';
 import { OperationsApiService } from '../../services/operations-api.service';
 import { ErrorLogEntry, ErrorLogSearch, PagedResult } from '../../models/operations.model';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 
 /** Fallback only, for rows captured before the backend started computing `diagnosisAction`
  *  (docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §8) — categories a customer can typically resolve themselves.
@@ -18,7 +20,7 @@ const SELF_FIXABLE_CATEGORIES = new Set([
 @Component({
   selector: 'app-errors',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule, RouterLink],
+  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule, RouterLink, HideWithoutPermissionDirective],
   templateUrl: './errors.component.html',
   styleUrl: './errors.component.scss',
 })
@@ -26,6 +28,7 @@ export class ErrorsComponent implements OnInit {
   private readonly api = inject(OperationsApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   readonly loading = signal(false);
   readonly result = signal<PagedResult<ErrorLogEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
@@ -84,11 +87,13 @@ export class ErrorsComponent implements OnInit {
 
   resolve(entry: ErrorLogEntry): void {
     if (!entry.errorReferenceId) { return; }
+    if (!this.actionGuard.ensure('governance.write', 'You do not have permission to resolve errors.')) return;
     this.api.resolveError(entry.errorReferenceId).subscribe({ next: () => this.load() });
   }
 
   reopen(entry: ErrorLogEntry): void {
     if (!entry.errorReferenceId) { return; }
+    if (!this.actionGuard.ensure('governance.write', 'You do not have permission to reopen errors.')) return;
     this.api.reopenError(entry.errorReferenceId).subscribe({ next: () => this.load() });
   }
 

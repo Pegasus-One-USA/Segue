@@ -10,6 +10,7 @@ import { PipelineTableComponent } from '../../components/pipeline-table/pipeline
 import { ExecutionHistoryApiService } from '../../../execution-history/services/execution-history-api.service';
 import { WorkflowRunStatusCounts } from '../../../execution-history/models/execution-history.model';
 import { RunStatusHubService } from '../../../services/run-status-hub.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 
 const EMPTY_RUN_STATUS_COUNTS: WorkflowRunStatusCounts = {
   pending: 0,
@@ -46,6 +47,14 @@ export class DashboardComponent {
   private readonly executionHistoryApi = inject(ExecutionHistoryApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly runStatusHub = inject(RunStatusHubService);
+  private readonly permissions  = inject(PermissionService);
+
+  // Mirrors WorkflowListComponent's canCreate() — its identical "+ New Workflow" button is already
+  // gated on workflow.create; this entry point must not offer a dead end to a role that can't
+  // actually create one.
+  canCreateWorkflow(): boolean {
+    return this.permissions.hasPermission('workflow.create');
+  }
 
   protected readonly runs          = this.runSvc.runs;
   protected readonly lastRefreshed = this.dashSvc.lastRefreshed;

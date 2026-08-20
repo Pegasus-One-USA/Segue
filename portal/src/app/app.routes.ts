@@ -60,7 +60,9 @@ export const routes: Routes = [
       {
         path: 'workflow-builder',
         canActivate: [permissionGuard],
-        data: { permissions: ['workflow.view'] },
+        // Module access (workflow.view OR any workflow-node permission), not a plain workflow.view
+        // check — see permission.guard.ts / PermissionService.hasWorkflowModuleAccess.
+        data: { workflowModuleAccess: true },
         canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./pages/workflow-builder/workflow-builder.component').then(
@@ -72,7 +74,7 @@ export const routes: Routes = [
       {
         path: 'workflows',
         canActivate: [permissionGuard],
-        data: { permissions: ['workflow.view'] },
+        data: { workflowModuleAccess: true },
         loadComponent: () =>
           import('./pages/workflow-list/workflow-list.component').then(
             m => m.WorkflowListComponent

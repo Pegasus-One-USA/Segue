@@ -11,9 +11,8 @@
       <button
         mat-button
         class="btn-add-user"
+        *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Invite)"
         (click)="openInviteDialog()"
-        [appDisableWithoutPermission]="permissionCode(PermissionGroup.User, PermissionAction.Invite)"
-        appDisableWithoutPermissionReason="You need the Invite Users permission to add new users."
       >
         <mat-icon>person_add</mat-icon>
         Invite User

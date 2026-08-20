@@ -180,18 +180,20 @@
                         </button>
                       }
 
-                      <button
-                        type="button"
-                        class="row-menu-item"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        [title]="w.isPubliclyLaunchable
-                          ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
-                          : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
-                        (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
-                        {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
-                      </button>
+                      @if (canEdit()) {
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          [title]="w.isPubliclyLaunchable
+                            ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
+                            : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
+                          (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
+                          {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
+                        </button>
+                      }
 
                       @if (canCreate()) {
                         <button

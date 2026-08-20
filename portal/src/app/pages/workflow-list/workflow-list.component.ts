@@ -493,7 +493,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  GetPublicWorkflowStandaloneUrl) — the only gate letting a third-party app's own hospital picker mint a
    *  working Epic-login link for it without a FHIRBridge admin session. */
   onTogglePublicLaunch(row: WorkflowSummary): void {
-    if (this.rowBusyId()) return;
+    if (this.rowBusyId() || !this.canEdit()) return;
     this.rowBusyId.set(row.workflowId);
     const enabling = !row.isPubliclyLaunchable;
     const call = enabling ? this.api.enablePublicLaunch(row.workflowId) : this.api.disablePublicLaunch(row.workflowId);

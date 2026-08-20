@@ -15,6 +15,7 @@ import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../model
 import { MergeNodeOption } from '../../models/wizard-state.model';
 import { SourceConfigFormComponent } from '../shared/config-form/config-form.contract';
 import { SOURCE_FORM_REGISTRY, EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from './source-form.registry';
+import { sourceFormKeyForNode } from './source-node-vendor.util';
 import { EpicSourceFormComponent } from './epic-source-form/epic-source-form.component';
 import { CernerSourceFormComponent } from './cerner-source-form/cerner-source-form.component';
 import { AthenahealthSourceFormComponent } from './athenahealth-source-form/athenahealth-source-form.component';
@@ -337,6 +338,12 @@ export class NodeLibraryDialogComponent {
           const tId = (node as TransformNode).transformId;
           if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-medplum' || tId === 'dest-fhir' || tId === 'dest-blob') {
             untracked(() => this._openDestWizardEdit(node));
+            // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
+            // without setting showDestWizard() true if the permission check failed — stopping there would
+            // otherwise leave the whole dialog open on the empty "Select a node from the left" placeholder,
+            // with nothing left to select from. Close it so the visible result is just the toast, not a
+            // stranded dialog that opened only to immediately reject the one node it was opened for.
+            if (!untracked(() => this.showDestWizard())) { untracked(() => this._close()); }
           }
           return;
         }
@@ -344,6 +351,10 @@ export class NodeLibraryDialogComponent {
         // recognizable vendor marker — e.g. every canvas node created before per-vendor forms existed).
         const key = node && isSourceNode(node) ? this._sourceFormKeyForNode(node) : 'epic';
         untracked(() => this.openSourceForm(key, node ?? id));
+        // Same reasoning as the destination branch above — openSourceForm() only sets
+        // openSourceFormType() on success; if its permission check failed, close the dialog instead of
+        // leaving it stranded on the empty picker with the toast as the only sign anything happened.
+        if (!untracked(() => this.openSourceFormType())) { untracked(() => this._close()); }
       }
     });
   }
@@ -565,28 +576,10 @@ export class NodeLibraryDialogComponent {
 
   // ── inline source-config form (registry-driven — Epic, other EHR vendors, Generic FHIR, HL7v2, Sample) ────────
   /** Best-effort vendor/source-type detection for an existing canvas node, used when re-opening its form for
-   *  editing (see the constructor's effect above). Reads the same 'Connector' field value every source form's
-   *  own getFields() now writes (see EhrVendorSourceFormComponent.buildFieldsToSave); a node saved before that
-   *  field existed (any pre-refactor Epic node) falls back to 'epic', preserving prior behavior exactly. */
-  private _isGenericFhirNode(node: CanvasNode): boolean {
-    return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
-  }
-
-  private _isHl7v2Node(node: CanvasNode): boolean {
-    return isSourceNode(node) && /hl7\s*v?\s*2|mllp/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
-  }
-
+   *  editing (see the constructor's effect above) — now shared with canvas.component.ts's node-delete
+   *  permission gate via source-node-vendor.util.ts, so the two never resolve a node's vendor differently. */
   private _sourceFormKeyForNode(node: CanvasNode): string {
-    if (this._isGenericFhirNode(node)) return 'generic-fhir';
-    if (this._isHl7v2Node(node)) return 'hl7v2';
-    // 'Connector' on a self-contained vendor node is the raw EhrVendor value (e.g. 'Cerner') — map it back to the
-    // matching sources.data.ts id via the same table SourceConnectionListComponent uses for entity-mode rows.
-    // Falls back to 'epic' both for a node with no 'Connector' at all (any canvas node saved before this refactor
-    // introduced that field) and for an unrecognized value — matching the pre-refactor "anything that isn't
-    // Generic FHIR must be Epic" assumption exactly.
-    const connector = node.fields['Connector'];
-    const mapped = connector ? EHR_VENDOR_TO_SOURCE_FORM_KEY[connector] : undefined;
-    return mapped ?? 'epic';
+    return sourceFormKeyForNode(node);
   }
 
   /** Opens the registered form for `key` (a sources.data.ts id) — self-contained vendor forms restore through
@@ -673,9 +666,14 @@ export class NodeLibraryDialogComponent {
   // WorkflowEndpoints.cs (which sees the actual chosen DestinationType once the form is submitted)
   // is what actually enforces the precise one.
   //
-  // 'medplum' and 'fhir' have no backend permission group yet (no PermissionGroupCode.Medplum /
-  // .FhirRepository member exists) — left ungated (empty prefix list) rather than inventing a
-  // permission code with nothing behind it. Revisit once real RBAC coverage lands for them.
+  // 'medplum' and 'fhir' have no DEDICATED backend permission group (no PermissionGroupCode.Medplum /
+  // .FhirRepository member exists) — but that doesn't mean they're unenforced: SourceSystemPermissionGroups
+  // .GroupFor(DestinationType.Medplum / .FhirRepository) falls back to the generic SourceConnections group
+  // (no same-named PermissionGroupCode member => fallback, per that method's own doc comment), and
+  // ControllerAuthorizationExtensions.HasPermissionAsync uses that exact resolution when a real
+  // create/edit/delete request for either of these DestinationType values comes in. So the backend already
+  // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
+  // prefix list) is closing a UI/backend mismatch, not inventing a new code.
   private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): string[] {
     switch (type) {
       case 'sql':      return ['sqlserver', 'azuresql'];
@@ -684,8 +682,8 @@ export class NodeLibraryDialogComponent {
       case 'mongo':    return ['mongo'];
       case 'postgres': return ['postgresql'];
       case 'blob':     return ['blobstorage'];
-      case 'medplum':  return [];
-      case 'fhir':     return [];
+      case 'medplum':  return ['sourceconnections'];
+      case 'fhir':     return ['sourceconnections'];
     }
   }
 

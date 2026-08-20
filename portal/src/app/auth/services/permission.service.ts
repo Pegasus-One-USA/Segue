@@ -1,6 +1,8 @@
 import { Injectable, inject, computed, isDevMode } from '@angular/core';
 import { AuthStore } from '../store/auth.store';
 import { PermissionMode } from '../models/permission-check.model';
+import { SOURCES } from '../../data/sources.data';
+import { TRANSFORMS } from '../../data/transforms.data';
 
 /**
  * Centralized, fast permission evaluation. This is the ONLY place in the app that
@@ -26,6 +28,35 @@ export class PermissionService {
 
   /** Read-only view for debugging / an admin "what can I do" panel. Never used for lookups. */
   readonly permissions = computed<readonly string[]>(() => Array.from(this.permissionSet()));
+
+  /** Every permission-code prefix that represents a workflow "node" (a source vendor or destination
+   *  type usable inside a workflow) rather than the Workflow module itself — derived from the same
+   *  `permissionPrefix` fields sources.data.ts/transforms.data.ts already declare for Node Library tile
+   *  gating, not a second hand-maintained list (per the "don't duplicate the node-prefix list" rule this
+   *  screen was built against). Deliberate, sole exception to this service's "doesn't know what
+   *  permission codes exist" rule above — "is this code a workflow node" is a structural question about
+   *  the app's own catalog, not a specific vendor identity baked into permission-evaluation logic. */
+  private readonly workflowNodePermissionCodes: readonly string[] = (() => {
+    const prefixes = [
+      ...SOURCES.map(s => s.permissionPrefix),
+      ...TRANSFORMS.map(t => t.permissionPrefix),
+    ].filter((p): p is string => !!p);
+    const actions = ['view', 'create', 'edit', 'delete', 'execute'];
+    return prefixes.flatMap(prefix => actions.map(action => `${prefix}.${action}`));
+  })();
+
+  /**
+   * True when the current user can reach the Workflow module at all — either they hold the literal
+   * `workflow.view` permission, or they hold ANY permission on ANY workflow node (any action, e.g.
+   * `epic.view`, `sqlserver.edit`). This is the single source of truth for "module access," used by the
+   * sidebar, the /workflows and /workflow-builder route guards, and the Node Library's open-gate —
+   * matching the same rule the backend's WorkflowModuleAccessAuthorizationHandler enforces
+   * independently. Does NOT imply any individual node's own view/create/edit/delete/execute permission,
+   * nor any workflow.create/edit/delete/run — those all stay fully independent.
+   */
+  hasWorkflowModuleAccess(): boolean {
+    return this.hasPermission('workflow.view') || this.hasAny(this.workflowNodePermissionCodes);
+  }
 
   /** Always true today: permissions are decoded synchronously from the JWT before the app
    *  bootstraps (see APP_INITIALIZER in app.config.ts), so there's no async gap to model.

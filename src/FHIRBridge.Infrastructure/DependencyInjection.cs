@@ -127,6 +127,13 @@ public static class DependencyInjection
         services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 
+        // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
+        // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
+        // a role's permission count grew into the hundreds (dynamically-discovered per-vendor/per-
+        // destination-type codes). Registered unconditionally, works against either repository.
+        services.AddMemoryCache();
+        services.AddSingleton<IUserPermissionsProvider, CachedUserPermissionsProvider>();
+
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();

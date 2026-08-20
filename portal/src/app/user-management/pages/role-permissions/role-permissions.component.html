@@ -95,7 +95,9 @@
               aria-label="Select all permissions"
               [checked]="isAllChecked()"
               [indeterminate]="isAllIndeterminate()"
-              [disabled]="isSystemRole()"
+              [disabled]="isSystemRole() || !canEditPermissions()"
+              [matTooltip]="canEditPermissions() ? '' : 'You need the Role Edit permission to modify permissions.'"
+              matTooltipPosition="above"
               (change)="toggleAll($event.checked)"
             ></mat-checkbox>
           </div>
@@ -116,6 +118,9 @@
                 <h3 class="permission-section__title">{{ section.label }}</h3>
               </button>
               @if (!isSectionCollapsed(section.id)) {
+                @if (section.note) {
+                  <p class="permission-section__note">{{ section.note }}</p>
+                }
                 <div class="permission-matrix-scroll">
                   <table class="permission-matrix">
                     <thead>
@@ -143,14 +148,14 @@
                           } @else {
                             @for (action of section.actions; track action) {
                               <td class="permission-matrix__cell">
-                                @if (row.cells.get(action); as perm) {
+                                @if (row.cells.get(action); as cell) {
                                   <mat-checkbox
-                                    [attr.aria-label]="perm.displayName"
-                                    [matTooltip]="perm.description"
+                                    [attr.aria-label]="cell.perm.displayName"
+                                    [matTooltip]="canEditPermissions() ? (cell.tooltipOverride ?? cell.perm.description) : 'You need the Role Edit permission to modify permissions.'"
                                     matTooltipPosition="above"
-                                    [checked]="isChecked(perm.id)"
-                                    [disabled]="isSystemRole()"
-                                    (change)="togglePermission(perm.id)"
+                                    [checked]="isChecked(cell.perm.id)"
+                                    [disabled]="isSystemRole() || !canEditPermissions()"
+                                    (change)="togglePermission(cell.perm.id)"
                                   ></mat-checkbox>
                                 }
                               </td>
@@ -161,7 +166,9 @@
                                 [attr.aria-label]="'Select all ' + row.label + ' permissions'"
                                 [checked]="isRowChecked(row)"
                                 [indeterminate]="isRowIndeterminate(row)"
-                                [disabled]="isSystemRole()"
+                                [disabled]="isSystemRole() || !canEditPermissions()"
+                                [matTooltip]="canEditPermissions() ? '' : 'You need the Role Edit permission to modify permissions.'"
+                                matTooltipPosition="above"
                                 (change)="toggleRow(row, $event.checked)"
                               ></mat-checkbox>
                             </td>
@@ -185,6 +192,7 @@
         <button
           mat-flat-button
           class="btn-save"
+          *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Edit)"
           [disabled]="isSystemRole() || saving()"
           (click)="save()"
         >

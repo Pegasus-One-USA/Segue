@@ -126,6 +126,55 @@ public static class WorkflowEndpoints
             // point of allowing "Existing Source" to be usable for athenahealth at all.
             var allReferencedSourceConnectionIds = new HashSet<Guid>();
 
+            // A WorkflowId means this build is re-saving an existing workflow — loaded here (rather than only
+            // where the version bump reads it further down) so a removed node can be checked before any of this
+            // request's writes happen; the version-bump usage below reuses this same instance.
+            var existingDefinition = request.WorkflowId is { } existingWorkflowIdForRemovalCheck
+                ? await store.GetAsync(existingWorkflowIdForRemovalCheck, cancellationToken)
+                : null;
+
+            // Removing a node from a workflow requires BOTH workflow.edit (already checked above) AND that
+            // node's own vendor `.delete` permission (epic.delete, sqlserver.delete, ...) — same per-vendor
+            // pattern Create/Edit already use above, so a role can be blocked from removing one specific
+            // vendor's node even though it can otherwise edit this workflow. "Removed" is detected via the
+            // underlying SourceConnection/DestinationConfiguration id every node carries in its own config,
+            // not via matching node ids — node identity isn't stable across saves (every save recreates every
+            // WorkflowNode row with a fresh id; see WorkflowDefinition.AddNode), so the connection/destination
+            // id is the only thing that reliably survives from one save to the next. Deliberately does NOT
+            // touch sourceconnections.delete/destinationconnections.delete (the codes SourceConnectionsController
+            // .Delete/ConfigurationsController.DeleteDestinationConfiguration check for deleting the underlying
+            // stored connection in Settings) — that remains a fully separate action from removing a node here.
+            if (existingDefinition is not null)
+            {
+                var newSourceConnectionIds = CollectConfigurationGuids(request.Nodes.Select(n => n.ConfigurationJson), "sourceConnectionId");
+                var removedSourceConnectionIds = CollectConfigurationGuids(existingDefinition.Nodes.Select(n => n.ConfigurationJson), "sourceConnectionId")
+                    .Except(newSourceConnectionIds);
+                foreach (var removedSourceConnectionId in removedSourceConnectionIds)
+                {
+                    var removedSource = await configurationService.GetSourceConnectionByIdAsync(removedSourceConnectionId, cancellationToken);
+                    if (removedSource is null) continue; // already gone (e.g. deleted elsewhere) — nothing left to protect
+                    if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, removedSource.SourceSystemType, PermissionActionCode.Delete))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+                }
+
+                var newDestinationIds = CollectConfigurationGuids(request.Nodes.Select(n => n.ConfigurationJson), "destinationId");
+                var removedDestinationIds = CollectConfigurationGuids(existingDefinition.Nodes.Select(n => n.ConfigurationJson), "destinationId")
+                    .Except(newDestinationIds);
+                foreach (var removedDestinationId in removedDestinationIds)
+                {
+                    var removedDestination = await configurationRepository.GetDestinationAsync(removedDestinationId, cancellationToken);
+                    if (removedDestination is null) continue;
+                    if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, removedDestination.DestinationType, PermissionActionCode.Delete))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+                }
+            }
+
             // 1. Destinations first — self-contained, and they provision the inline secret whose reference the node needs.
             foreach (var spec in request.Destinations ?? [])
             {
@@ -369,11 +418,8 @@ public static class WorkflowEndpoints
                 request.Edges,
                 request.Trigger);
 
-            // A WorkflowId on the request means this build is re-saving an existing workflow, not creating a new
-            // one — bump the version off whatever is currently stored so version history is real instead of always 1.
-            var existingDefinition = request.WorkflowId is { } existingWorkflowId
-                ? await store.GetAsync(existingWorkflowId, cancellationToken)
-                : null;
+            // Bump the version off whatever is currently stored (existingDefinition, loaded further up for the
+            // node-removal check) so version history is real instead of always 1.
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
@@ -414,6 +460,8 @@ public static class WorkflowEndpoints
 
         // Dry-run structural validation — never persists anything, but still requires being able to see/build
         // workflows at all (same reasoning as a preview of what create/edit would produce).
+        // Module-access gate (workflow.view OR any workflow-node permission) — this is a view/preview action,
+        // not a mutation, so it doesn't need the stricter workflow.create/edit + per-node check /build enforces.
         group.MapPost("/workflows/validate", (
             WorkflowDefinitionRequest request,
             IWorkflowGraphValidator validator) =>
@@ -421,17 +469,15 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
             var result = validator.Validate(workflow);
             return Results.Ok(result);
-        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Raw list (no summary/paging/facets) — superseded by /workflows/summary for the portal's list screen,
-        // kept for any lower-level caller. Same view gate either way.
+        // kept for any lower-level caller. Same module-access gate either way.
         group.MapGet("/workflows", async (
             IWorkflowDefinitionStore store,
             CancellationToken cancellationToken) =>
             Results.Ok(await store.ListAsync(cancellationToken)))
-        .RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+        .RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Workflow-list screen: one summary row per workflow — shape, enabled state, last run, and the derived
         // action. The source node's referenced connection decides Launch (interactive SMART) vs Run (backend), so the
@@ -576,10 +622,9 @@ public static class WorkflowEndpoints
 
             return Results.Ok(new WorkflowSummaryPageDto(
                 pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
-        // Workflow-module gate: can this role view the Workflows list at all — the real data source behind
-        // the Workflows page (see the class-level comment on this endpoint's registration).
-        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+        // Workflow-module access gate (workflow.view OR any workflow-node permission) — can this role view
+        // the Workflows list at all. This is the real data source behind the Workflows page.
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Source Connections page: which source-connection ids are referenced by at least one workflow's Source
         // node right now — used to block Edit/Delete on a connection a workflow still depends on. Deliberately
@@ -743,19 +788,62 @@ public static class WorkflowEndpoints
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
             return workflow is null ? Results.NotFound() : Results.Ok(workflow);
-        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+        // Module-access gate (workflow.view OR any workflow-node permission) — opening a single workflow to
+        // view it, same as the list endpoints above.
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Low-level upsert-by-id — superseded by /workflows/build for the portal's builder canvas (which also
         // provisions source/destination/mapping records), kept for any lower-level caller. Always modifies
         // whatever workflow already has this id, so it's workflow.edit regardless of caller.
+        // NOTE: unlike /workflows/build, this route still has no per-vendor Create/Edit check for a node this
+        // request adds or changes — that's a pre-existing gap, out of scope for the node-removal fix below,
+        // which only closes the ONE bypass this task asked about (removing a node without that vendor's own
+        // .delete permission). A caller with only workflow.edit could still use this route to add/edit a node
+        // of any vendor with no vendor-specific check at all; flagging this separately rather than expanding
+        // this change to cover it too.
         group.MapPut("/workflows/{workflowId:guid}", async (
             Guid workflowId,
             WorkflowDefinitionRequest request,
             IWorkflowDefinitionStore store,
+            IConfigurationService configurationService,
+            IConfigurationRepository configurationRepository,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var existing = await store.GetAsync(workflowId, cancellationToken);
+
+            // Same node-removal check as /workflows/build — see the detailed comment there. Kept in sync
+            // deliberately rather than factored into one shared helper, matching how the rest of this file
+            // already tolerates small duplication between the two save paths (e.g. BuildWorkflow's own
+            // version-bump logic) rather than adding shared-helper indirection for a two-call-site rule.
+            if (existing is not null)
+            {
+                var newSourceConnectionIds = CollectConfigurationGuids(request.Nodes.Select(n => n.ConfigurationJson), "sourceConnectionId");
+                foreach (var removedSourceConnectionId in CollectConfigurationGuids(existing.Nodes.Select(n => n.ConfigurationJson), "sourceConnectionId").Except(newSourceConnectionIds))
+                {
+                    var removedSource = await configurationService.GetSourceConnectionByIdAsync(removedSourceConnectionId, cancellationToken);
+                    if (removedSource is null) continue;
+                    if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, removedSource.SourceSystemType, PermissionActionCode.Delete))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+                }
+
+                var newDestinationIds = CollectConfigurationGuids(request.Nodes.Select(n => n.ConfigurationJson), "destinationId");
+                foreach (var removedDestinationId in CollectConfigurationGuids(existing.Nodes.Select(n => n.ConfigurationJson), "destinationId").Except(newDestinationIds))
+                {
+                    var removedDestination = await configurationRepository.GetDestinationAsync(removedDestinationId, cancellationToken);
+                    if (removedDestination is null) continue;
+                    if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, removedDestination.DestinationType, PermissionActionCode.Delete))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+                }
+            }
+
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
@@ -975,8 +1063,9 @@ public static class WorkflowEndpoints
 
             var result = validator.Validate(workflow);
             return Results.Ok(result);
-        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+        // Module-access gate (workflow.view OR any workflow-node permission) — same reasoning as the
+        // draft-validate endpoint above.
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         group.MapPost("/workflows/{workflowId:guid}/run", async (
             Guid workflowId,
@@ -2230,6 +2319,22 @@ public static class WorkflowEndpoints
 
     private static string? GetConfigurationString(string? configurationJson, string key)
         => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
+
+    // Used by the node-removal permission check above: every node whose config carries `key` (sourceConnectionId
+    // or destinationId) as a valid Guid, across a set of nodes' raw ConfigurationJson strings. A mapping/merge
+    // node with neither key simply contributes nothing — no need to filter by node category first.
+    private static HashSet<Guid> CollectConfigurationGuids(IEnumerable<string?> configurationJsons, string key)
+    {
+        var ids = new HashSet<Guid>();
+        foreach (var json in configurationJsons)
+        {
+            if (TryGetConfigurationGuid(json, key, out var value))
+            {
+                ids.Add(value);
+            }
+        }
+        return ids;
+    }
 
     // A node can carry the legacy single mappingProfileId, the per-resource mappingProfileIds map, or both (see
     // the "Kept for backward compatibility" comment in BuildWorkflow) — collect ids from whichever are present.

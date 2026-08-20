@@ -5,6 +5,8 @@ import { ToastService } from '../../../services/toast.service';
 import { Icd10SettingsService, Icd10ImportHistoryEntry } from '../../services/icd10-settings.service';
 import { ReleaseFreshness } from '../../services/icd10pcs-settings.service';
 import { TerminologyFreshnessCardComponent } from '../../components/terminology-freshness-card/terminology-freshness-card.component';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -18,7 +20,13 @@ const POLL_INTERVAL_MS = 3000;
 export class Icd10SettingsComponent implements OnInit, OnDestroy {
   private readonly service = inject(Icd10SettingsService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
   private pollTimer?: ReturnType<typeof setTimeout>;
+
+  /** This route allows icd10.view OR icd10.write to enter — a view-only role must still see current
+   *  freshness/history, but Check/Download/Import need the write check this flag provides. */
+  protected readonly canWrite = this.permissions.hasPermission('icd10.write');
 
   protected readonly loading = signal(true);
   protected readonly uploading = signal(false);
@@ -36,6 +44,7 @@ export class Icd10SettingsComponent implements OnInit, OnDestroy {
   }
 
   protected checkForUpdates(): void {
+    if (!this.actionGuard.ensure('icd10.write', 'You do not have permission to check for ICD-10-CM updates.')) return;
     this.checking.set(true);
     this.service.checkForUpdates().subscribe({
       next: (f) => {
@@ -51,6 +60,7 @@ export class Icd10SettingsComponent implements OnInit, OnDestroy {
   }
 
   protected downloadAndImport(): void {
+    if (!this.actionGuard.ensure('icd10.write', 'You do not have permission to import ICD-10-CM.')) return;
     this.downloading.set(true);
     this.service.downloadAndImport().subscribe({
       next: () => {
@@ -77,6 +87,7 @@ export class Icd10SettingsComponent implements OnInit, OnDestroy {
   protected import(): void {
     const file = this.selectedFile();
     if (!file) return;
+    if (!this.actionGuard.ensure('icd10.write', 'You do not have permission to import ICD-10-CM.')) return;
     this.uploading.set(true);
     this.uploadProgress.set(0);
     this.service.importFile(file).subscribe({

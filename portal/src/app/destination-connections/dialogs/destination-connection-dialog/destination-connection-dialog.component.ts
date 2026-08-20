@@ -12,6 +12,8 @@ import {
   DestinationType,
 } from '../../models/destination-configuration.model';
 import { newSecretName } from '../../utils/destination-connection-secret.util';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 
 export interface DestinationConnectionDialogData {
   mode: 'create' | 'edit' | 'view';
@@ -56,6 +58,8 @@ export class DestinationConnectionDialogComponent {
   private readonly fb = inject(FormBuilder);
   private readonly svc = inject(DestinationConfigurationService);
   private readonly dialogRef = inject(MatDialogRef<DestinationConnectionDialogComponent>);
+  private readonly actionGuard = inject(PermissionActionGuard);
+  readonly permissions = inject(PermissionService);
   readonly data = inject<DestinationConnectionDialogData>(MAT_DIALOG_DATA);
 
   readonly connectionForm = viewChild(DestinationConnectionFormComponent);
@@ -128,6 +132,11 @@ export class DestinationConnectionDialogComponent {
     const type = this.formDestinationType();
     const form = this.connectionForm();
     if (!type || !form) return;
+    // Defense-in-depth: the trigger (DestinationConnectionListComponent.openNew()) already checked
+    // "holds any create code" before this dialog opened — this re-checks against the SPECIFIC type
+    // the user just picked from the two type-choice cards, since holding sqlserver.create doesn't
+    // imply csv.create or vice versa.
+    if (!this.actionGuard.ensure(`${type.toLowerCase()}.create`, `You do not have permission to create a ${type} destination.`)) return;
 
     const metadata = form.getMetadata();
     if (!metadata) {
@@ -151,6 +160,9 @@ export class DestinationConnectionDialogComponent {
 
   private _saveEdit(): void {
     const destination = this.data.destination!;
+    // Defense-in-depth: DestinationConnectionListComponent.openEdit() already checked this before
+    // opening the dialog — re-checked here against a permission change landing mid-edit.
+    if (!this.actionGuard.ensure(`${destination.destinationType.toLowerCase()}.edit`, `You do not have permission to edit this ${destination.destinationType} destination.`)) return;
     if (this.metaForm.invalid) {
       this.metaForm.markAllAsTouched();
       return;

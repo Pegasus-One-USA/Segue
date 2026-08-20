@@ -5,12 +5,16 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { CanvasService } from '../../services/canvas.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { CanvasNode } from '../../models/node.model';
+import { CanvasNode, TransformNode } from '../../models/node.model';
 import { SourceNodeComponent } from '../nodes/source-node/source-node.component';
 import { TransformNodeComponent } from '../nodes/transform-node/transform-node.component';
 import { MergeNodeComponent } from '../nodes/merge-node/merge-node.component';
 import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors.component';
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
+import { PermissionService } from '../../auth/services/permission.service';
+import { sourceFormKeyForNode } from '../node-library/source-node-vendor.util';
+import { SOURCES } from '../../data/sources.data';
+import { TRANSFORMS } from '../../data/transforms.data';
 
 @Component({
   selector: 'app-canvas',
@@ -26,10 +30,11 @@ import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
   styleUrl: './canvas.component.scss',
 })
 export class CanvasComponent {
-  protected readonly store   = inject(PipelineStore);
-  protected readonly canvas  = inject(CanvasService);
-  protected readonly toast   = inject(ToastService);
-  protected readonly appSvc  = inject(ApplicabilityService);
+  protected readonly store       = inject(PipelineStore);
+  protected readonly canvas      = inject(CanvasService);
+  protected readonly toast       = inject(ToastService);
+  protected readonly appSvc      = inject(ApplicabilityService);
+  private readonly permissions   = inject(PermissionService);
 
   // ── events upward ─────────────────────────────────────────────────────────
   readonly openWizard          = output<string>();
@@ -155,9 +160,45 @@ export class CanvasComponent {
   // ── node delete (with confirmation) ──────────────────────────────────────
   protected readonly pendingDeleteId = signal<string | null>(null);
 
+  // Removing a node from the canvas requires BOTH workflow.edit/create (readOnly(), checked first) AND
+  // that node's own vendor `.delete` permission (epic.delete, sqlserver.delete, ...) — the same AND
+  // pattern Add/Edit already use (onSourceSelected/onTransformSelected in workflow-builder.component.ts
+  // each check canMutate() AND the vendor's create/edit). This is a DIFFERENT action from deleting the
+  // underlying stored Source/Destination Connection in Settings (SourceConnectionsController.cs/
+  // ConfigurationsController.cs's DELETE endpoints, which additionally require sourceconnections.delete/
+  // destinationconnections.delete) — the two share the same vendor code by design, not by accident: both
+  // are "can this role delete Epic-related things," just at two different scopes. See
+  // WorkflowEndpoints.cs's /workflows/build node-removal check for the backend half of this same rule.
   onNodeDelete(nodeId: string): void {
     if (this.readOnly()) return;
+    // The template already hides this action's trigger when canDeleteNode() is false (see
+    // ctxNodeCanDelete()/each node component's own [canDelete] input) — this re-check is defense-in-depth
+    // against a permission revoked in another tab since the menu/icon last rendered, not the primary gate.
+    if (!this.canDeleteNode(nodeId)) {
+      this.toast.show('Not permitted', "You don't have permission to remove this node from the workflow.");
+      return;
+    }
     this.pendingDeleteId.set(nodeId);
+  }
+
+  /** Resolves the node's vendor (via source-node-vendor.util.ts for a source node, TRANSFORMS lookup for
+   *  a destination node) and checks its `.delete` permission. Merge nodes and any node whose vendor can't
+   *  be resolved have no vendor-level delete gate — always deletable once past readOnly(), same as before
+   *  this check existed. Kept public (not private) so the template can also use it to HIDE the Delete
+   *  affordance up front — this is a defense-in-depth re-check for the click itself (e.g. a permission
+   *  revoked in another tab since the menu was last rendered), not the primary gate. */
+  protected canDeleteNode(nodeId: string): boolean {
+    const node = this.store.byId(nodeId);
+    if (!node) return true;
+
+    const prefix = node.kind === 'transform'
+      ? TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.permissionPrefix
+      : node.kind === undefined
+        ? SOURCES.find(s => s.id === sourceFormKeyForNode(node))?.permissionPrefix
+        : undefined;
+    if (!prefix) return true;
+
+    return this.permissions.hasPermission(`${prefix}.delete`);
   }
 
   confirmDelete(): void {
@@ -279,6 +320,13 @@ export class CanvasComponent {
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     return node?.kind === 'transform' && node.transformId === 'field-mapping';
+  }
+
+  /** Drives whether the context menu's Delete item renders at all for the node currently under it —
+   *  see canDeleteNode() for the actual vendor `.delete` check. */
+  protected ctxNodeCanDelete(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    return !!id && this.canDeleteNode(id);
   }
 
   ctxToggleCheckpoint(): void {

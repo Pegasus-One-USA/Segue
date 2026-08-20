@@ -2,6 +2,7 @@ import { Component, input, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { BrandingService } from '../../../services/branding.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 
 interface NavItem {
   type: 'item';
@@ -14,6 +15,12 @@ interface NavItem {
   /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a regular Admin
    *  also satisfies via isAdmin(). Takes precedence over `permissions` when both are set. */
   superAdminOnly?: boolean;
+  /** Overrides `permissions` entirely when present — for an entry whose visibility isn't a plain "holds
+   *  any of these exact codes" OR-list (e.g. Workflows, gated on PermissionService.hasWorkflowModuleAccess()
+   *  — workflow.view OR any workflow-node permission). Receives PermissionService because NAV_ENTRIES is a
+   *  module-level const evaluated before any injector exists — the component's navEntries computed calls
+   *  this with its own injected instance. */
+  customCheck?: (permissions: PermissionService) => boolean;
 }
 
 interface NavSection {
@@ -34,7 +41,11 @@ const NAV_ENTRIES: NavEntry[] = [
   { type: 'item', icon: '⊞',  label: 'Dashboard',        route: '/dashboard' },
   { type: 'item', icon: '🔐', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
   { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
-  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows', permissions: ['workflow.view'] },
+  // Module access: workflow.view OR any workflow-node permission (epic.*, sqlserver.*, ...) — a role
+  // holding only e.g. epic.view must still see this entry, since node access implies module access
+  // (see PermissionService.hasWorkflowModuleAccess, the single shared source of truth also used by the
+  // /workflows and /workflow-builder route guards and the Node Library's open-gate).
+  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows', customCheck: p => p.hasWorkflowModuleAccess() },
   { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history', permissions: ['workflow.view'] },
   // Settings hub — Branding/EHR Endpoints/Source & Destination Connections/Mapping Profiles/
   // Transformation Rules/Allowed Origins/System Settings (Email + Terminology Codes' four
@@ -75,6 +86,7 @@ export class SidebarComponent {
   readonly collapsed = input(false);
 
   private readonly store = inject(AuthStore);
+  private readonly permissions = inject(PermissionService);
   protected readonly branding = inject(BrandingService);
 
   // Same visibility rule as permissionGuard: admins always pass; otherwise the item needs at
@@ -83,6 +95,7 @@ export class SidebarComponent {
     NAV_ENTRIES.filter(entry => {
       if (this.isSection(entry)) return true;
       if (entry.superAdminOnly) return this.store.hasRole('SuperAdmin');
+      if (entry.customCheck) return entry.customCheck(this.permissions);
       if (!entry.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return entry.permissions.some(p => this.store.hasPermission(p));

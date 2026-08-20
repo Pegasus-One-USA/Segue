@@ -29,7 +29,8 @@
         [showRetryFields]="true"
         [saving]="saving()"
         [syncing]="syncing()"
-        [saveDisabled]="saving() || form.invalid"
+        [saveDisabled]="saving() || form.invalid || !canWrite"
+        [syncDisabled]="!canWrite"
         (save)="save()"
         (synchronize)="synchronize()"
       />
@@ -41,10 +42,10 @@
 
       <div class="upload-row">
         <label class="file-input">
-          <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading()" />
+          <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading() || !canWrite" />
           <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
         </label>
-        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading() || !canWrite" (click)="import()">
           {{ uploading() ? 'Uploading…' : 'Import' }}
         </button>
       </div>

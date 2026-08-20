@@ -20,6 +20,8 @@ import { IRoleService } from '../../services/i-role.service';
 import { User, Role, Permission, PermissionCategory, UserRole } from '../../../auth/models/user.model';
 import { ROLE_CONFIG } from '../../pages/user-list/user-list.component';
 import { AuthStore } from '../../../auth/store/auth.store';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 function backendErrorMessage(err: unknown, fallback: string): string {
   const body = (err as { error?: { error?: string } } | null)?.error;
@@ -70,6 +72,7 @@ export class AssignRolesDialogComponent implements OnInit {
   private readonly authStore   = inject(AuthStore);
   private readonly dialogRef   = inject(MatDialogRef<AssignRolesDialogComponent>);
   private readonly toast       = inject(ToastService);
+  private readonly actionGuard = inject(PermissionActionGuard);
   readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
 
   // ─── State signals ────────────────────────────────────────────────────────
@@ -167,6 +170,10 @@ export class AssignRolesDialogComponent implements OnInit {
 
   selectRole(role: Role): void {
     if (this.actionLoading() || this.isRoleDisabled(role.id)) return;
+    // Each click here is its own immediate mutation (no separate Save/confirm step), so the
+    // permission re-check belongs on every call, not just at dialog-open — this is the sole
+    // enforcement point shared by both of this dialog's callers (user-list, user-detail).
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
 
     const currentRoles = this.localUser().roles;
     const alreadyAssigned = currentRoles.some(r => r.id === role.id);

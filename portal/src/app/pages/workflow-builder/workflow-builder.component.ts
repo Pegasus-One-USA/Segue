@@ -221,6 +221,10 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   // ── topbar ─────────────────────────────────────────────────────────────────
   onReset(): void {
+    // Defense in depth — the trigger button is already hidden whenever !canMutate() (see the
+    // template), same rule as Save: workflow.create for a new workflow, workflow.edit for an
+    // existing one.
+    if (!this.canMutate()) { this.confirmReset.set(false); return; }
     this.store.reset();
     this.toast.show('Canvas reset', 'All nodes removed.');
     this.confirmReset.set(false);

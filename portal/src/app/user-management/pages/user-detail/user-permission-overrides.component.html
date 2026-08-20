@@ -12,7 +12,9 @@
     <div class="inherit-row">
       <mat-checkbox
         [checked]="inheritFromRole()"
-        [disabled]="clearing() || saving()"
+        [disabled]="clearing() || saving() || !canEdit()"
+        [matTooltip]="canEdit() ? '' : 'You need the User Edit permission to modify permission overrides.'"
+        matTooltipPosition="above"
         (change)="onInheritFromRoleToggle($event)"
       >
         Inherit permissions from role
@@ -53,7 +55,7 @@
           <span class="check-all-label">Set all:</span>
           <app-tri-state-toggle
             [value]="globalState()"
-            [disabled]="saving()"
+            [disabled]="saving() || !canEdit()"
             ariaLabel="Set every permission"
             tooltip="Set every permission below to Deny, Inherit, or Grant"
             (valueChange)="setGlobalState($event)"
@@ -96,10 +98,10 @@
                       @if (row.cells.get(action); as perm) {
                         <mat-checkbox
                           [attr.aria-label]="perm.displayName"
-                          [matTooltip]="perm.displayName + ': ' + perm.description"
+                          [matTooltip]="canEdit() ? (perm.displayName + ': ' + perm.description) : 'You need the User Edit permission to modify permission overrides.'"
                           matTooltipPosition="above"
                           [checked]="isCellGranted(perm.id)"
-                          [disabled]="inheritFromRole() || saving()"
+                          [disabled]="inheritFromRole() || saving() || !canEdit()"
                           (change)="setCellGranted(perm.id, $event.checked)"
                         ></mat-checkbox>
                       }
@@ -108,7 +110,7 @@
                   <td class="permission-grid__cell permission-grid__cell--all">
                     <app-tri-state-toggle
                       [value]="rowState(row)"
-                      [disabled]="inheritFromRole() || saving()"
+                      [disabled]="inheritFromRole() || saving() || !canEdit()"
                       [ariaLabel]="'Set all ' + row.displayName + ' permissions'"
                       (valueChange)="setRowState(row, $event)"
                     ></app-tri-state-toggle>
@@ -127,7 +129,11 @@
     @if (!inheritFromRole()) {
       <div class="page-actions">
         <button mat-stroked-button class="btn-cancel" [disabled]="saving() || !isDirty()" (click)="cancel()">Cancel</button>
-        <button mat-flat-button class="btn-save" [disabled]="saving() || !isDirty()" (click)="save()">
+        <button
+          mat-flat-button class="btn-save"
+          *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)"
+          [disabled]="saving() || !isDirty()"
+          (click)="save()">
           @if (saving()) {
             <mat-spinner diameter="16"></mat-spinner>
           } @else {

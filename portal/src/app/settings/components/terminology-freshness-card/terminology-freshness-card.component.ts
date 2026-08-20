@@ -28,6 +28,11 @@ export class TerminologyFreshnessCardComponent {
   readonly freshness = input<TerminologyReleaseFreshness | null>(null);
   readonly checking = input(false);
   readonly downloading = input(false);
+  /** The consuming page passes `!hasWritePermission` for a route that allows `.view` OR `.write` to
+   *  enter at all (today: only icd10-settings, since ICD-10-CM is the one of these three vocabularies
+   *  with a real permission group — ICD-10-PCS/HCPCS have none yet and don't pass this). Defaults to
+   *  false so those two are unaffected. */
+  readonly writeDisabled = input(false);
   readonly checkForUpdates = output<void>();
   readonly downloadAndImport = output<void>();
 }
