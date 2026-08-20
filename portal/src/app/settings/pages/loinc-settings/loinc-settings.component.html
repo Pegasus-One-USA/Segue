@@ -50,7 +50,8 @@
         [showDownloadTimeout]="true"
         [saving]="saving()"
         [syncing]="syncing()"
-        [saveDisabled]="saving() || form.invalid"
+        [saveDisabled]="saving() || form.invalid || !canWrite"
+        [syncDisabled]="!canWrite"
         (save)="save()"
         (synchronize)="synchronize()"
       />

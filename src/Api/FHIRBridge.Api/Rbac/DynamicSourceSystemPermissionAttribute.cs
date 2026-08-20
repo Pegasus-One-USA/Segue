@@ -15,7 +15,11 @@ namespace FHIRBridge.Api.Security;
 /// auto-discovered. The actual authorization call still has to be made explicitly in the action body,
 /// passing the same real enum value the request resolved to <see cref="ControllerAuthorizationExtensions.AuthorizePermissionAsync"/>.
 /// </summary>
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+// AllowMultiple: true — an endpoint whose required action depends on the request body (e.g.
+// /workflows/build treats a spec with no ExistingId as a create, one with an ExistingId as an
+// edit) has to declare every action it can actually require so PermissionCatalog discovers all
+// of them, even though only one is checked per real request.
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
 public sealed class DynamicSourceSystemPermissionAttribute : Attribute
 {
     public DynamicSourceSystemPermissionAttribute(Type enumType, PermissionActionCode action, string? description = null)

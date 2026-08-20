@@ -199,8 +199,14 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     {
         // ExecuteDeleteAsync bypasses the change tracker (and AuditingSaveChangesInterceptor's
         // soft-delete conversion for ISoftDeletable entities) — see DeleteUserAsync for why a
-        // genuine hard delete is required here.
+        // genuine hard delete is required here. IgnoreQueryFilters() matters too: the global
+        // soft-delete filter (!IsDeleted) would otherwise narrow this delete to only currently-active
+        // rows, silently leaving any already-soft-deleted row for this role behind — the unique
+        // (RoleId, PermissionId) index has no IsDeleted-aware filter, so the AddRangeAsync below would
+        // then throw a duplicate-key DbUpdateException the moment the desired set re-includes that
+        // exact permission id.
         await _dbContext.PermissionAllocations
+            .IgnoreQueryFilters()
             .Where(x => x.RoleId == roleId)
             .ExecuteDeleteAsync(cancellationToken);
 
@@ -212,7 +218,12 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
 
     public async Task AddRolePermissionAsync(Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
+        // IgnoreQueryFilters(): same reasoning as SetRolePermissionsAsync above — a soft-deleted row for
+        // this exact (RoleId, PermissionId) would otherwise be invisible to this check (the global
+        // !IsDeleted filter hides it), so `exists` would wrongly come back false and the AddAsync below
+        // would collide with it on the unique index instead of correctly no-op'ing.
         var exists = await _dbContext.PermissionAllocations
+            .IgnoreQueryFilters()
             .AnyAsync(x => x.RoleId == roleId && x.PermissionId == permissionId, cancellationToken);
 
         if (!exists)

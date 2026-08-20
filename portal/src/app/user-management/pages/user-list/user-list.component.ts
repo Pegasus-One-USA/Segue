@@ -29,7 +29,6 @@ import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/as
 import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/invite-result-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
-import { DisableWithoutPermissionDirective } from '../../../auth/directives/disable-without-permission.directive';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { ToastService } from '../../../services/toast.service';
@@ -59,7 +58,6 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     MatProgressSpinnerModule,
     MatDividerModule,
     HideWithoutPermissionDirective,
-    DisableWithoutPermissionDirective,
   ],
   templateUrl: './user-list.component.html',
   styleUrls: ['./user-list.component.scss'],

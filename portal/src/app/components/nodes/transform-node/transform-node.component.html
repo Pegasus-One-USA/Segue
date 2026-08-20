@@ -1,7 +1,7 @@
 <span class="port port-in"></span>
 <span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
 
-@if (!isMapping()) {
+@if (!isMapping() && !readOnly() && canDelete()) {
   <button
     class="sn-del-btn"
     (click)="onDeleteClick($event)"
@@ -12,7 +12,7 @@
   </button>
 }
 
-@if (!isDestination()) {
+@if (!isDestination() && !readOnly()) {
   <button
     class="sn-add-btn"
     (click)="onAddNextClick($event)"

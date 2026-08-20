@@ -10,13 +10,16 @@ public sealed class UserAccessService : IUserAccessService
 {
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserPermissionsProvider _permissionsProvider;
 
     public UserAccessService(
         IUserAccessRepository repository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUserPermissionsProvider permissionsProvider)
     {
         _repository = repository;
         _currentUserService = currentUserService;
+        _permissionsProvider = permissionsProvider;
     }
 
     public async Task<UserProfileDto> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
@@ -69,18 +72,22 @@ public sealed class UserAccessService : IUserAccessService
         return user;
     }
 
-    private Task<UserProfileDto> ToProfileDtoAsync(
+    private async Task<UserProfileDto> ToProfileDtoAsync(
         User user,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(new UserProfileDto(
+        // Looked up fresh (DB-backed, short-lived cache) rather than read off the JWT's claims — the
+        // token no longer carries a "permissions" claim at all (see IUserPermissionsProvider).
+        var permissions = await _permissionsProvider.GetEffectivePermissionCodesAsync(user.Id, cancellationToken);
+
+        return new UserProfileDto(
             user.Id,
             user.ExternalUserId,
             user.Email,
             user.DisplayName,
             _currentUserService.CurrentUser.Roles,
-            _currentUserService.CurrentUser.Permissions,
+            permissions,
             user.RequiresPasswordChange,
-            user.IsMfaSetupRequired));
+            user.IsMfaSetupRequired);
     }
 }

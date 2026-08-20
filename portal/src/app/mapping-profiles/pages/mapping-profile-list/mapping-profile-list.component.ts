@@ -18,6 +18,9 @@ import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
 import { FHIR_RESOURCES } from '../../../data/scope-constants.data';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 
 interface NamedEntity {
   id: string;
@@ -42,15 +45,18 @@ interface NamedEntity {
     MatIconModule,
     MatTooltipModule,
     PaginationBarComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './mapping-profile-list.component.html',
   styleUrls: ['./mapping-profile-list.component.scss'],
 })
 export class MappingProfileListComponent implements OnInit {
-  private readonly svc = inject(MappingProfileService);
-  private readonly http = inject(HttpClient);
-  private readonly dialog = inject(MatDialog);
-  private readonly toast = inject(ToastService);
+  private readonly svc         = inject(MappingProfileService);
+  private readonly http        = inject(HttpClient);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+  readonly permissions         = inject(PermissionService);
 
   readonly searchQuery = signal('');
   readonly resourceTypeFilter = signal('');
@@ -183,10 +189,12 @@ export class MappingProfileListComponent implements OnInit {
   }
 
   openNew(): void {
+    if (!this.actionGuard.ensure('mappingprofiles.create', 'You do not have permission to create mapping profiles.')) return;
     this._openDialog({ mode: 'create' }, 'Mapping profile created.');
   }
 
   openEdit(item: MappingProfileDto): void {
+    if (!this.actionGuard.ensure('mappingprofiles.edit', 'You do not have permission to edit mapping profiles.')) return;
     this._openDialog({ mode: 'edit', mappingProfile: item }, 'Mapping profile updated.');
   }
 
@@ -221,6 +229,7 @@ export class MappingProfileListComponent implements OnInit {
   }
 
   toggleEnabled(item: MappingProfileDto): void {
+    if (!this.actionGuard.ensure('mappingprofiles.deactivate', 'You do not have permission to activate or deactivate mapping profiles.')) return;
     const action = item.isEnabled ? this.svc.deactivate(item.id) : this.svc.activate(item.id);
     action.subscribe({
       next: () => {
@@ -235,6 +244,7 @@ export class MappingProfileListComponent implements OnInit {
 
   confirmDelete(item: MappingProfileDto): void {
     if (this.isUsedInWorkflow(item)) return;
+    if (!this.actionGuard.ensure('mappingprofiles.delete', 'You do not have permission to delete mapping profiles.')) return;
 
     this.dialog
       .open(ConfirmDialogComponent, {

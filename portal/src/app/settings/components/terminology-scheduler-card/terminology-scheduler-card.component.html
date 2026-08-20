@@ -51,7 +51,7 @@
     <button class="btn-primary" type="button" [disabled]="saveDisabled()" (click)="save.emit()">
       {{ saving() ? 'Saving…' : 'Save Settings' }}
     </button>
-    <button class="btn-outline" type="button" [disabled]="syncing()" (click)="synchronize.emit()">
+    <button class="btn-outline" type="button" [disabled]="syncing() || syncDisabled()" (click)="synchronize.emit()">
       {{ syncing() ? 'Synchronizing…' : 'Synchronize Now' }}
     </button>
   </div>

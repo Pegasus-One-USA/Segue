@@ -32,6 +32,11 @@ export class TerminologySchedulerCardComponent {
   readonly saving = input(false);
   readonly syncing = input(false);
   readonly saveDisabled = input(false);
+  /** Additive to `syncing()` — the consuming page passes `!hasWritePermission` here for a
+   *  view-only visitor of a route that (unlike most settings screens) allows `.view` OR `.write` to
+   *  enter at all (see LOINC/SNOMED/RxNorm/ICD-10 settings.routes.ts entries). Defaults to false so
+   *  pages that don't pass it (NDC, UCUM — no permission group of their own yet) are unaffected. */
+  readonly syncDisabled = input(false);
 
   readonly save = output<void>();
   readonly synchronize = output<void>();

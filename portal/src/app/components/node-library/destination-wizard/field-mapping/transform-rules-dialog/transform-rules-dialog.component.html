@@ -99,10 +99,14 @@
                 }
               </div>
 
-              <button mat-stroked-button class="override-btn" (click)="toggleEdit(row)">
-                <mat-icon>{{ row.editing ? 'expand_less' : 'edit' }}</mat-icon>
-                {{ row.steps.length > 0 ? 'Edit rules (' + row.steps.length + ')' : 'Add rule' }}
-              </button>
+              <!-- "Edit rules (n)" is VIEW access to already-loaded steps — always shown; "Add rule" (no
+                   steps yet) is a write action, hidden without transformationrules.write. -->
+              @if (row.steps.length > 0 || permissions.hasPermission('transformationrules.write')) {
+                <button mat-stroked-button class="override-btn" (click)="toggleEdit(row)">
+                  <mat-icon>{{ row.editing ? 'expand_less' : 'edit' }}</mat-icon>
+                  {{ row.steps.length > 0 ? 'Edit rules (' + row.steps.length + ')' : 'Add rule' }}
+                </button>
+              }
             </div>
 
             @if (row.viewingInherited) {
@@ -129,7 +133,7 @@
                   <p class="inherited-view__hint">
                     This is defined in Settings → Transformation Rules and applies to more than just this field.
                   </p>
-                  <button mat-stroked-button class="override-btn" (click)="overrideFromInherited(row)">
+                  <button mat-stroked-button class="override-btn" *appHideWithoutPermission="'transformationrules.write'" (click)="overrideFromInherited(row)">
                     <mat-icon>content_copy</mat-icon> Override for this field
                   </button>
                 } @else {
@@ -176,7 +180,7 @@
                                   <option [value]="opt.value">{{ opt.label }}</option>
                                 }
                               </select>
-                              <div class="step-reorder">
+                              <div class="step-reorder" *appHideWithoutPermission="'transformationrules.write'">
                                 <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(row, step, -1)" matTooltip="Run earlier">
                                   <mat-icon>arrow_upward</mat-icon>
                                 </button>
@@ -238,10 +242,10 @@
                       </div>
 
                       <div class="step-card__actions">
-                        <button class="btn-text-danger" type="button" [disabled]="step.saving" (click)="removeStep(row, step)">
+                        <button class="btn-text-danger" type="button" *appHideWithoutPermission="'transformationrules.delete'" [disabled]="step.saving" (click)="removeStep(row, step)">
                           Remove step
                         </button>
-                        <button mat-flat-button color="primary" [disabled]="step.saving" (click)="saveStep(row, step)">
+                        <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" [disabled]="step.saving" (click)="saveStep(row, step)">
                           @if (step.saving) {
                             <mat-spinner diameter="16"></mat-spinner>
                           } @else {
@@ -253,7 +257,7 @@
                   </div>
                 }
 
-                <button mat-stroked-button class="add-step-btn" (click)="addStep(row)">
+                <button mat-stroked-button class="add-step-btn" *appHideWithoutPermission="'transformationrules.write'" (click)="addStep(row)">
                   <mat-icon>add</mat-icon> Add another step
                 </button>
               </div>

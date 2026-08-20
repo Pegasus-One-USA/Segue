@@ -26,8 +26,7 @@ public sealed class WorkerAccessTokenIssuer : IAccessTokenIssuer
 {
     public AccessTokenDto Issue(
         User user,
-        IReadOnlyCollection<string> roleNames,
-        IReadOnlyCollection<string>? permissionCodes = null)
+        IReadOnlyCollection<string> roleNames)
         => throw new NotSupportedException("Access tokens are not issued by the background worker.");
 
     public (string TokenHash, DateTime ExpiresOnUtc) IssueRefreshToken()

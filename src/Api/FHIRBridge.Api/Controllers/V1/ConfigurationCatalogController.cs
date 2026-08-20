@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -16,26 +17,35 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// builder can offer pickers that reference real, RBAC-scoped config by id (Option A). Creation/edit stays in
 /// <see cref="ConfigurationsController"/>.
 /// </summary>
+/// <remarks>
+/// No class-level policy: Source Connections listing stays UnifiedAdmin (unchanged, out of scope for the
+/// menu-level permission tree — see per-action attributes below), while Destinations and Mapping Profiles
+/// listing now use their own dedicated View permission instead.
+/// </remarks>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+[Authorize]
 [Route("api/v1")]
 public sealed class ConfigurationCatalogController : ControllerBase
 {
     private readonly IConfigurationRepository _repository;
     private readonly IConfigurationService _configurationService;
     private readonly IUserDisplayNameResolver _userDisplayNameResolver;
+    private readonly IAuthorizationService _authorizationService;
 
     public ConfigurationCatalogController(
         IConfigurationRepository repository,
         IConfigurationService configurationService,
-        IUserDisplayNameResolver userDisplayNameResolver)
+        IUserDisplayNameResolver userDisplayNameResolver,
+        IAuthorizationService authorizationService)
     {
         _repository = repository;
         _configurationService = configurationService;
         _userDisplayNameResolver = userDisplayNameResolver;
+        _authorizationService = authorizationService;
     }
 
     [HttpGet("source-connections")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(IReadOnlyList<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnections(CancellationToken cancellationToken)
     {
@@ -53,6 +63,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("source-connections/paged")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(PagedResult<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnectionsPaged(
         [FromQuery] string? search,
@@ -80,12 +91,29 @@ public sealed class ConfigurationCatalogController : ControllerBase
             result.PageSize));
     }
 
+    // Declares View for discovery purposes (see DynamicSourceSystemPermissionAttribute's remarks) — there's
+    // no single-destination detail endpoint to attach a real per-type View check to (destinations are
+    // otherwise only ever read back as part of a whole workflow definition, gated by workflow.view), so
+    // this list is the one real place a per-type View check can mean something: which destination TYPES a
+    // role sees rows for. The blanket DestinationConnections.View above still gates the endpoint itself.
     [HttpGet("destinations")]
+    [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.View, description: "View the list of destination connections.")]
+    [DynamicSourceSystemPermission(typeof(DestinationType), PermissionActionCode.View, description: "View destination connections of this type.")]
     [ProducesResponseType(typeof(IReadOnlyList<DestinationConfigurationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListDestinations(CancellationToken cancellationToken)
     {
         var destinations = await _repository.GetDestinationsAsync(cancellationToken);
         var dtos = destinations.Select(ConfigurationMapper.ToDto).ToArray();
+
+        var visibleTypes = new HashSet<DestinationType>();
+        foreach (var type in dtos.Select(d => d.DestinationType).Distinct())
+        {
+            if (await ControllerAuthorizationExtensions.HasPermissionAsync(_authorizationService, User, type, PermissionActionCode.View))
+            {
+                visibleTypes.Add(type);
+            }
+        }
+        dtos = dtos.Where(d => visibleTypes.Contains(d.DestinationType)).ToArray();
 
         var names = await _userDisplayNameResolver.ResolveAsync(
             dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
@@ -98,6 +126,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("destinations/paged")]
+    [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.View, description: "View the list of destination connections.")]
     [ProducesResponseType(typeof(PagedResult<DestinationConfigurationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListDestinationsPaged(
         [FromQuery] string? search,
@@ -121,6 +150,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("destinations/{destinationId:guid}/has-execution-history")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(DestinationExecutionHistoryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> HasDestinationExecutionHistory(Guid destinationId, CancellationToken cancellationToken)
     {
@@ -129,6 +159,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("mapping-profiles")]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.View, description: "View the list of mapping profiles.")]
     [ProducesResponseType(typeof(IReadOnlyList<MappingProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListMappingProfiles(CancellationToken cancellationToken)
     {
@@ -146,6 +177,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("mapping-profiles/paged")]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.View, description: "View the list of mapping profiles.")]
     [ProducesResponseType(typeof(PagedResult<MappingProfileDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListMappingProfilesPaged(
         [FromQuery] string? search,
@@ -171,6 +203,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("mapping-profiles/{mappingProfileId:guid}")]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.View, description: "View a mapping profile.")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMappingProfileById(Guid mappingProfileId, CancellationToken cancellationToken)

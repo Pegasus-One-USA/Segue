@@ -32,6 +32,9 @@ import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dia
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { ToastService } from '../../../services/toast.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -68,6 +71,7 @@ interface StatusCategory {
     MatCardModule,
     MatBadgeModule,
     UserPermissionOverridesComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './user-detail.component.html',
   styleUrls: ['./user-detail.component.scss'],
@@ -85,6 +89,26 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   private readonly dialog      = inject(MatDialog);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating ──────────────────────────────────────────────────────
+  // Mirrors user-list.component.ts's canX() pattern exactly — this page reaches the exact same
+  // dialogs/API calls (Edit, Assign Roles, Enable/Disable/Suspend, Resend Invitation, Delete) via a
+  // second entry point, so it must be gated identically or a role.view-only reachable-by-URL detail
+  // page would silently bypass the list page's RBAC.
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
+
+  private isAdmin(): boolean    { return this.authService.isAdmin(); }
+  canEdit       = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Edit));
+  canToggle     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Deactivate));
+  canInvite     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Invite));
+  canDelete     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Delete));
+  canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.Role, PermissionAction.Assign));
+  // The "Status" dropdown trigger itself has no single permission of its own — hide it unless at
+  // least one item inside it (Enable/Disable/Suspend, Reset Password, Resend Invitation) would show.
+  hasStatusMenu = (): boolean => this.canToggle() || this.canEdit() || this.canInvite();
 
   private readonly destroy$ = new Subject<void>();
 
@@ -205,6 +229,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   openEditDialog(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
     const ref = this.dialog.open(EditUserDialogComponent, {
       width: '640px',
       disableClose: true,
@@ -218,6 +243,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   openAssignRolesDialog(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
     const ref = this.dialog.open(AssignRolesDialogComponent, {
       width: '820px',
       maxWidth: '95vw',
@@ -233,6 +259,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   toggleStatus(action: 'enable' | 'disable' | 'suspend'): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Deactivate), 'You do not have permission to activate or deactivate users.')) return;
 
     if (action !== 'enable' && this.isSelf()) {
       this.toast.error(`You cannot ${action} your own account.`);
@@ -259,6 +286,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   resetPassword(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to reset user passwords.')) return;
     this.userService.resetUserPassword(u.id, u.email)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -310,6 +338,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   toggleMfaRequirement(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to change the MFA requirement.')) return;
     const required = !u.mfaRequired;
 
     this.userService.setUserMfaRequirement(u.id, required)
@@ -332,6 +361,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   resendInvitation(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     this.userService.resendInvitation(u.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -347,6 +377,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   deleteUser(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
     if (this.isSelf()) {
       this.toast.error('You cannot delete your own account.');
       return;

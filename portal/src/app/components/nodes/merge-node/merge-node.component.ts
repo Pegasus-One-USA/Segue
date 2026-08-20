@@ -16,6 +16,8 @@ export class MergeNodeComponent {
   private readonly appSvc = inject(ApplicabilityService);
 
   readonly node = input.required<CanvasNode>();
+  /** Hides the delete/add-next buttons — set by canvas.component from the builder's canMutate(). */
+  readonly readOnly = input(false);
 
   readonly delete  = output<string>();
   readonly addNext = output<string>();

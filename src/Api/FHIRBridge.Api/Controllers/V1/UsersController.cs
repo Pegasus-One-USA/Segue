@@ -20,7 +20,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.User, PermissionActionCode.View, description: "View the list of users.")]
     [ProducesResponseType(typeof(IReadOnlyList<UserManagementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {

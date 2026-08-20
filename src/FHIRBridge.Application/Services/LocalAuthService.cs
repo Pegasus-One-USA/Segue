@@ -399,7 +399,9 @@ public sealed class LocalAuthService : ILocalAuthService
 
         var permissionCodes = await GetPermissionCodesAsync(user.Id, roles.Select(r => r.Id).ToArray(), cancellationToken);
 
-        var token = _accessTokenIssuer.Issue(user, roleNames, permissionCodes);
+        // permissionCodes is still returned in the login response's Profile (below) for the frontend's
+        // immediate use — it's just no longer embedded as JWT claims (see IUserPermissionsProvider).
+        var token = _accessTokenIssuer.Issue(user, roleNames);
 
         var (refreshHash, refreshExpiry) = _accessTokenIssuer.IssueRefreshToken();
         user.SetRefreshToken(refreshHash, refreshExpiry);

@@ -1,5 +1,6 @@
 import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { PermissionService } from '../../auth/services/permission.service';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
@@ -43,6 +44,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
@@ -51,6 +53,20 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   // ── page state ─────────────────────────────────────────────────────────────
   protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
+
+  // ── RBAC: view vs. mutate ───────────────────────────────────────────────────
+  // workflow.view only grants VIEW access — reaching this page and loading an existing workflow onto the
+  // canvas. Actually changing anything (adding/editing/deleting a module, Save) needs the action-specific
+  // permission: workflow.create while building a brand-new workflow (no ?id=), workflow.edit once editing
+  // one that already exists — mirrors exactly the branch WorkflowEndpoints' POST /workflows/build now
+  // checks server-side, so the UI and the backend can never disagree about which permission a given save
+  // needs. Set synchronously from the route's ?id= in ngOnInit (not derived from currentWorkflowId, which
+  // stays null until the async load resolves) so canMutate is correct from the very first render.
+  protected readonly isEditingExistingWorkflow = signal(false);
+  protected readonly canMutate = computed(() =>
+    this.isEditingExistingWorkflow()
+      ? this.permissions.hasPermission('workflow.edit')
+      : this.permissions.hasPermission('workflow.create'));
 
   // ── node library dialog (unified — replaces source + transform pickers) ────
   protected readonly libraryOpen      = signal(false);
@@ -182,6 +198,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
     // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
     const editId = this.route.snapshot.queryParamMap.get('id');
+    this.isEditingExistingWorkflow.set(!!editId);
 
     // The PipelineStore is a root singleton, so its canvas state outlives this component (e.g. an abandoned,
     // unsaved edit/creation left nodes on it). A fresh "New Workflow" navigation must always start blank rather
@@ -204,6 +221,10 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   // ── topbar ─────────────────────────────────────────────────────────────────
   onReset(): void {
+    // Defense in depth — the trigger button is already hidden whenever !canMutate() (see the
+    // template), same rule as Save: workflow.create for a new workflow, workflow.edit for an
+    // existing one.
+    if (!this.canMutate()) { this.confirmReset.set(false); return; }
     this.store.reset();
     this.toast.show('Canvas reset', 'All nodes removed.');
     this.confirmReset.set(false);
@@ -238,6 +259,12 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
    * path activates when a launch source id is present).
    */
   onSave(): void {
+    // Defense in depth — the Save button is already hidden whenever !canMutate() (see the template), and
+    // the backend independently rejects the underlying build/save call with 403 regardless of this check.
+    if (!this.canMutate()) {
+      return;
+    }
+
     if (!this.workflowName().trim()) {
       this.nameTouched.set(true);
       this.nameInput()?.nativeElement.focus();
@@ -435,13 +462,22 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   // ── canvas events (unchanged API — canvas.component stays untouched) ───────
+  // canvas.component itself already hides the "+ Add module" FAB/context-menu entry when
+  // [readOnly]="!canMutate()" (see the template), and onTransformSelected/onSourceSelected/
+  // onMergeSelected below re-check canMutate() as the actual gate — every path that adds a node
+  // ends in one of those three, however the dialog was opened, and the node-library dialog's own
+  // "edit an existing node" flow reuses the same three (see onOpenWizard), which VIEWING a node's
+  // config must still be able to reach for a workflow.view-only role. These two guards are just
+  // the entry points that skip opening the dialog for a brand-new add at all.
   onOpenSourcePicker(): void {
+    if (!this.canMutate()) return;
     this.libraryMode.set('source');
     this.libraryOriginId.set(null);
     this.libraryOpen.set(true);
   }
 
   onOpenTransformPicker(nodeId: string): void {
+    if (!this.canMutate()) return;
     this.libraryMode.set('transform');
     this.libraryOriginId.set(nodeId);
     this.libraryOpen.set(true);
@@ -450,15 +486,39 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   // ── node library dialog outputs ────────────────────────────────────────────
   // 'epic' never reaches here — node-library-dialog's addSelected() opens the Epic form
   // inline and returns before emitting sourceSelected for that id.
+  //
+  // canMutate() is re-checked here (not just at the dialog's open-triggers above) because this is
+  // also where the dialog's "edit an existing node" submit lands (see onOpenWizard, which opens the
+  // same dialog to let a view-only role look at a node's configuration) — without this check, that
+  // dialog's own submit button could still write the edited fields onto the canvas even though
+  // nothing that led here was itself blocked.
   onSourceSelected(id: string): void {
+    if (!this.canMutate()) return;
     const src = SOURCES.find(s => s.id === id);
     if (!src) return;
+    // Always adds a brand-new stub node (see addStubSource) — this path never edits an existing one,
+    // so it's always the vendor's Create permission, never Edit.
+    if (src.permissionPrefix && !this.permissions.hasPermission(`${src.permissionPrefix}.create`)) {
+      this.toast.error('Not permitted', `You don't have permission to add a new ${src.name} source.`);
+      return;
+    }
     this.addStubSource(src);
   }
 
   onTransformSelected(e: AddTransformEvent): void {
+    if (!this.canMutate()) return;
     const t = TRANSFORMS.find(x => x.id === e.transformId);
     if (!t) return;
+
+    // Same View/Create/Edit split as onSourceSelected — editNodeId present means this is the dest
+    // wizard's edit flow (Edit), absent means it's adding a brand-new destination node (Create).
+    if (t.permissionPrefix) {
+      const requiredAction = e.editNodeId ? 'edit' : 'create';
+      if (!this.permissions.hasPermission(`${t.permissionPrefix}.${requiredAction}`)) {
+        this.toast.error('Not permitted', `You don't have permission to ${requiredAction} a ${t.name} destination.`);
+        return;
+      }
+    }
 
     // Editing an existing destination node's configuration (dest wizard edit flow). Merge onto the node's existing
     // fields rather than replacing them outright — server-injected machine keys (destinationId, mappingProfileId,
@@ -582,6 +642,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   }
 
   onMergeSelected(e: MergeEvent): void {
+    if (!this.canMutate()) return;
     const opt = e.opt;
     let members: CanvasNode[];
 

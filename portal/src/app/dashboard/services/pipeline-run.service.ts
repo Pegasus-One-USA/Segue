@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../execution-history/services/execution-history-api.service';
 import { ToastService } from '../../services/toast.service';
@@ -40,8 +41,17 @@ export class PipelineRunService {
         sortDirection: 'desc',
       })
       .pipe(
-        catchError(() => {
-          this.toast.error('Could not load pipelines', 'A server error occurred. Try again later.');
+        catchError((err: HttpErrorResponse) => {
+          // Dashboard is reachable by every authenticated role regardless of workflow.view (it's a
+          // mandatory platform entry point, not an RBAC-controlled permission) — but this table's
+          // data still comes from the same workflow.view-gated endpoint Workflows/Execution History
+          // use. A role without it gets a 403 here on every load/auto-refresh; that's expected, not
+          // a server error, so it degrades to an empty table silently instead of alarming the user
+          // with a misleading "server error" toast (see the stat-tiles' matching handling in
+          // dashboard.component.ts's loadRunStatusCounts).
+          if (err.status !== 403) {
+            this.toast.error('Could not load pipelines', 'A server error occurred. Try again later.');
+          }
           return of({ items: [], totalCount: 0, page: 1, pageSize: RECENT_COUNT });
         }),
       )

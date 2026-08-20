@@ -14,6 +14,8 @@ import { EhrEndpoint } from '../../models/ehr-endpoint.model';
 import { EhrEndpointDialogComponent } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 
 @Component({
   selector: 'app-ehr-endpoint-list',
@@ -27,14 +29,16 @@ import { ToastService } from '../../../services/toast.service';
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './ehr-endpoint-list.component.html',
   styleUrls: ['./ehr-endpoint-list.component.scss'],
 })
 export class EhrEndpointListComponent implements OnInit {
-  private readonly svc    = inject(IEhrEndpointService);
-  private readonly dialog = inject(MatDialog);
-  private readonly toast  = inject(ToastService);
+  private readonly svc         = inject(IEhrEndpointService);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   readonly searchQuery = signal('');
   readonly pageIndex   = signal(0);
@@ -118,6 +122,7 @@ export class EhrEndpointListComponent implements OnInit {
   }
 
   openAdd(): void {
+    if (!this.actionGuard.ensure('ehrendpoints.create', 'You do not have permission to create EHR endpoints.')) return;
     this.dialog
       .open(EhrEndpointDialogComponent, {
         width: '560px',
@@ -135,6 +140,7 @@ export class EhrEndpointListComponent implements OnInit {
   }
 
   openEdit(endpoint: EhrEndpoint): void {
+    if (!this.actionGuard.ensure('ehrendpoints.edit', 'You do not have permission to edit EHR endpoints.')) return;
     this.dialog
       .open(EhrEndpointDialogComponent, {
         width: '560px',
@@ -152,6 +158,7 @@ export class EhrEndpointListComponent implements OnInit {
   }
 
   confirmDelete(endpoint: EhrEndpoint): void {
+    if (!this.actionGuard.ensure('ehrendpoints.delete', 'You do not have permission to delete EHR endpoints.')) return;
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',

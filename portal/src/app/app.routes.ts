@@ -40,16 +40,29 @@ export const routes: Routes = [
       import('./layout/app-shell/app-shell.component').then(m => m.AppShellComponent),
     children: [
 
-      // Dashboard
+      // Dashboard is a mandatory platform entry point, not an RBAC-controlled permission — every
+      // authenticated role can reach it (the App Shell route above already applies
+      // authGuard/mfaSetupGuard to every child here, so this still requires being logged in, just
+      // no permission on top). Its stat tiles/"Recent Workflows" widget still call the same
+      // /workflow-runs[/stats] endpoints Workflows itself uses, which stay workflow.view-gated —
+      // see dashboard.component.ts/pipeline-run.service.ts for how those widgets degrade instead
+      // of erroring when that permission is missing.
       {
         path: 'dashboard',
         loadChildren: () =>
           import('./dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES),
       },
 
-      // Workflow / Pipeline Builder
+      // Workflow / Pipeline Builder — gated on workflow.view only (reach/view baseline); the finer
+      // create-vs-edit mutation permission depends on the ?id= query param (new vs. existing workflow),
+      // which a route guard can't branch on cleanly, so it's enforced inside the component itself
+      // (WorkflowBuilderComponent.canMutate) and independently by the backend (workflow.create/edit).
       {
         path: 'workflow-builder',
+        canActivate: [permissionGuard],
+        // Module access (workflow.view OR any workflow-node permission), not a plain workflow.view
+        // check — see permission.guard.ts / PermissionService.hasWorkflowModuleAccess.
+        data: { workflowModuleAccess: true },
         canDeactivate: [unsavedChangesGuard],
         loadComponent: () =>
           import('./pages/workflow-builder/workflow-builder.component').then(
@@ -60,6 +73,8 @@ export const routes: Routes = [
       // Workflows list (launch / run / view destination data)
       {
         path: 'workflows',
+        canActivate: [permissionGuard],
+        data: { workflowModuleAccess: true },
         loadComponent: () =>
           import('./pages/workflow-list/workflow-list.component').then(
             m => m.WorkflowListComponent
@@ -126,10 +141,12 @@ export const routes: Routes = [
           import('./user/pages/help/help.component').then(m => m.HelpComponent),
       },
 
-      // Execution History (per-route pipeline run history: fetch/map/store detail)
+      // Execution History (per-route pipeline run history: fetch/map/store detail) — reuses workflow.view,
+      // same as Dashboard above (this list is backed by the identical /workflow-runs endpoint).
       {
         path: 'execution-history',
-        canActivate: [authGuard],
+        canActivate: [permissionGuard],
+        data: { permissions: ['workflow.view'] },
         loadComponent: () =>
           import('./execution-history/pages/execution-history-list/execution-history-list.component').then(
             m => m.ExecutionHistoryListComponent

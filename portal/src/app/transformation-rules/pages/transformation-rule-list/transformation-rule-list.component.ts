@@ -21,6 +21,9 @@ import {
 import {
   RuleConfigFormComponent, applyNodeDefaults,
 } from '../../../components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 
 // Pre-mapping HashingMasking rules walk raw source JSON by path (see SafeHarborDeIdentificationService) and
 // so support strategies a post-mapping scalar transform can't (removing a property outright, generalizing a
@@ -116,7 +119,7 @@ function emptyTargetForm(): NewTargetForm {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatProgressSpinnerModule,
-    RuleConfigFormComponent,
+    RuleConfigFormComponent, HideWithoutPermissionDirective,
   ],
   templateUrl: './transformation-rule-list.component.html',
   styleUrls: ['./transformation-rule-list.component.scss'],
@@ -126,6 +129,8 @@ export class TransformationRuleListComponent implements OnInit {
   private readonly catalogService = inject(MappingCatalogService);
   private readonly toast = inject(ToastService);
   private readonly deIdentificationProfileSvc = inject(DeIdentificationProfileService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+  readonly permissions = inject(PermissionService);
 
   readonly scopeOptions = BROAD_SCOPE_OPTIONS;
   readonly destinationTypeOptions = DESTINATION_TYPE_OPTIONS;
@@ -151,6 +156,7 @@ export class TransformationRuleListComponent implements OnInit {
   createDeIdentificationProfileForNewTarget(): void {
     const name = this.newProfileName().trim();
     if (!name) return;
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to create transformation rules.')) return;
     this.creatingProfile.set(true);
     this.deIdentificationProfileSvc.create({ name }).subscribe({
       next: profile => {
@@ -309,6 +315,7 @@ export class TransformationRuleListComponent implements OnInit {
   setNewTargetSourceField(sourceField: string): void { this.newTarget.set({ ...this.newTarget(), sourceField }); }
 
   startNewTarget(): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to create transformation rules.')) return;
     this.creatingNew.set(true);
     this.newTarget.set(emptyTargetForm());
     this.sourceFieldOptions.set([]);
@@ -319,6 +326,7 @@ export class TransformationRuleListComponent implements OnInit {
   }
 
   createTarget(): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to create transformation rules.')) return;
     const t = this.newTarget();
     if (t.scope === 'ResourceType' && !t.resourceType.trim()) {
       this.toast.error('Resource type is required for a resource-type-scoped rule.');
@@ -402,6 +410,7 @@ export class TransformationRuleListComponent implements OnInit {
   }
 
   addStep(group: RuleTargetGroup): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     const applicable = this.applicableNodeTypesFor(group);
     const nodeType: TransformNodeType = group.executionPhase === 'PreMapping'
       ? 'HashingMasking'
@@ -447,6 +456,7 @@ export class TransformationRuleListComponent implements OnInit {
   }
 
   moveStep(group: RuleTargetGroup, step: RuleStep, direction: -1 | 1): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     const index = group.steps.indexOf(step);
     const swapWith = index + direction;
     if (swapWith < 0 || swapWith >= group.steps.length) return;
@@ -457,6 +467,7 @@ export class TransformationRuleListComponent implements OnInit {
   }
 
   saveStep(group: RuleTargetGroup, step: RuleStep, opts: { silent?: boolean } = {}): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     step.saving = true;
     this.groups.set([...this.groups()]);
     this.rulesService.save({
@@ -492,6 +503,9 @@ export class TransformationRuleListComponent implements OnInit {
   }
 
   removeStep(group: RuleTargetGroup, step: RuleStep): void {
+    // Only a persisted step (step.id set) triggers a real DELETE call — discarding an unsaved local
+    // step is equivalent to Cancel and needs no permission check of its own.
+    if (step.id && !this.actionGuard.ensure('transformationrules.delete', 'You do not have permission to delete transformation rules.')) return;
     const remove = () => {
       group.steps = group.steps.filter(s => s !== step);
       if (group.steps.length === 0) {

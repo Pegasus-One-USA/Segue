@@ -43,7 +43,7 @@
           </svg>
           Reset
         </button>
-        <button class="btn-add" type="button" (click)="openNew()">
+        <button class="btn-add" type="button" *appHideWithoutPermission="'mappingprofiles.create'" (click)="openNew()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -129,11 +129,20 @@
               </span>
             </th>
             <td mat-cell *matCellDef="let m">
-              <button type="button" class="status-badge-btn" [matTooltip]="m.isEnabled ? 'Click to deactivate' : 'Click to activate'" (click)="toggleEnabled(m)">
+              <!-- The status itself is information every viewer of this row should see (hidden per the
+                   core hide-by-default rule would remove data, not just an action) — only the click-to-toggle
+                   affordance is permission-gated, rendered as a plain non-interactive badge without it. -->
+              @if (permissions.hasPermission('mappingprofiles.deactivate')) {
+                <button type="button" class="status-badge-btn" [matTooltip]="m.isEnabled ? 'Click to deactivate' : 'Click to activate'" (click)="toggleEnabled(m)">
+                  <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
+                    {{ m.isEnabled ? 'enabled' : 'disabled' }}
+                  </span>
+                </button>
+              } @else {
                 <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
                   {{ m.isEnabled ? 'enabled' : 'disabled' }}
                 </span>
-              </button>
+              }
             </td>
           </ng-container>
 
@@ -155,12 +164,13 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let m" class="col-actions">
               <div class="actions-cell">
-                <button mat-icon-button class="btn-view" matTooltip="Edit" (click)="openEdit(m)">
+                <button mat-icon-button class="btn-view" matTooltip="Edit" *appHideWithoutPermission="'mappingprofiles.edit'" (click)="openEdit(m)">
                   <mat-icon>edit</mat-icon>
                 </button>
                 <button
                   mat-icon-button
                   class="btn-delete"
+                  *appHideWithoutPermission="'mappingprofiles.delete'"
                   [disabled]="isUsedInWorkflow(m)"
                   [matTooltip]="isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : 'Delete'"
                   (click)="confirmDelete(m)"

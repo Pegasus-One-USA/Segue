@@ -16,6 +16,8 @@ import { ToastService } from '../../../services/toast.service';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { User, UserRole, UserStatus } from '../../../auth/models/user.model';
 import { UpdateUserRequest } from '../../../auth/models/auth-request.model';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 interface DialogData {
   user: User;
@@ -58,6 +60,7 @@ export class EditUserDialogComponent implements OnInit {
   private readonly dialogRef   = inject(MatDialogRef<EditUserDialogComponent>);
   private readonly toast       = inject(ToastService);
   private readonly fb          = inject(FormBuilder);
+  private readonly actionGuard = inject(PermissionActionGuard);
   readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
 
   // ─── State ───────────────────────────────────────────────────────────────
@@ -92,6 +95,9 @@ export class EditUserDialogComponent implements OnInit {
 
   // ─── Submit ──────────────────────────────────────────────────────────────
   submit(): void {
+    // Defense-in-depth: this dialog is now gated at every known trigger (user-list, user-detail) —
+    // this re-check guards against a permission change landing in another tab while it's still open.
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
     this.submitted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();

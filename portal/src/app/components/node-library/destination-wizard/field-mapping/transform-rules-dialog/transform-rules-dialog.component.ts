@@ -17,6 +17,9 @@ import {
 } from '../transformation-rules.service';
 import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS, nodeAbbr, nodeAccentVar } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
+import { PermissionActionGuard } from '../../../../../auth/services/permission-action-guard.service';
+import { PermissionService } from '../../../../../auth/services/permission.service';
+import { HideWithoutPermissionDirective } from '../../../../../auth/directives/hide-without-permission.directive';
 
 export interface TransformRulesDialogData {
   resourceType: string;
@@ -71,7 +74,7 @@ interface ColumnRuleRow {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
-    MatDividerModule, MatTooltipModule, RuleConfigFormComponent,
+    MatDividerModule, MatTooltipModule, RuleConfigFormComponent, HideWithoutPermissionDirective,
   ],
   templateUrl: './transform-rules-dialog.component.html',
   styleUrls: ['./transform-rules-dialog.component.scss'],
@@ -80,6 +83,8 @@ export class TransformRulesDialogComponent implements OnInit {
   private readonly dialogRef = inject(MatDialogRef<TransformRulesDialogComponent>);
   private readonly rulesService = inject(TransformationRulesService);
   private readonly toast = inject(ToastService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+  readonly permissions = inject(PermissionService);
   readonly data = inject<TransformRulesDialogData>(MAT_DIALOG_DATA);
 
   readonly loading = signal(true);
@@ -179,8 +184,11 @@ export class TransformRulesDialogComponent implements OnInit {
   }
 
   toggleEdit(row: ColumnRuleRow): void {
+    // Expanding to look at already-loaded steps is VIEW access, always allowed — only the "start a new
+    // override with nothing there yet" branch below is a write, gated inside addStep()/overrideFromInherited().
     row.editing = !row.editing;
     if (row.editing && row.steps.length === 0) {
+      if (!this.permissions.hasPermission('transformationrules.write')) { row.editing = false; return; }
       if (this.effectiveScopeIsInherited(row)) {
         this.overrideFromInherited(row);
         return;
@@ -214,6 +222,7 @@ export class TransformRulesDialogComponent implements OnInit {
   /** Starts a Field-level override pre-filled from the currently-resolved rule(s), instead of blank schema
    *  defaults — fixes "Add rule" previously discarding what's actually running. */
   overrideFromInherited(row: ColumnRuleRow): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     if (row.inheritedRules !== null) {
       this.cloneIntoEditableSteps(row, row.inheritedRules);
       return;
@@ -266,6 +275,7 @@ export class TransformRulesDialogComponent implements OnInit {
   }
 
   addStep(row: ColumnRuleRow): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     const nodeType = row.applicableNodeTypes[0]?.value ?? ALL_NODE_TYPE_OPTIONS[0].value;
     row.steps.push({
       id: null,
@@ -315,6 +325,9 @@ export class TransformRulesDialogComponent implements OnInit {
   }
 
   removeStep(row: ColumnRuleRow, step: RuleStep): void {
+    // Only a persisted step (step.id set) triggers a real DELETE call — discarding an unsaved local
+    // step is equivalent to Cancel and needs no permission check of its own.
+    if (step.id && !this.actionGuard.ensure('transformationrules.delete', 'You do not have permission to delete transformation rules.')) return;
     if (step.id) {
       step.saving = true;
       this.rows.set([...this.rows()]);
@@ -338,6 +351,7 @@ export class TransformRulesDialogComponent implements OnInit {
   }
 
   moveStep(row: ColumnRuleRow, step: RuleStep, direction: -1 | 1): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     const index = row.steps.indexOf(step);
     const swapWith = index + direction;
     if (swapWith < 0 || swapWith >= row.steps.length) return;
@@ -380,6 +394,7 @@ export class TransformRulesDialogComponent implements OnInit {
   }
 
   saveStep(row: ColumnRuleRow, step: RuleStep, opts: { silent?: boolean } = {}): void {
+    if (!this.actionGuard.ensure('transformationrules.write', 'You do not have permission to modify transformation rules.')) return;
     step.saving = true;
     this.rows.set([...this.rows()]);
     this.rulesService.save({

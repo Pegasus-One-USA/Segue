@@ -5,6 +5,8 @@ import { LoincSettingsService, LoincImportHistoryEntry } from '../../services/lo
 import { TerminologyImportHistoryComponent } from '../../components/terminology-import-history/terminology-import-history.component';
 import { TerminologySchedulerCardComponent } from '../../components/terminology-scheduler-card/terminology-scheduler-card.component';
 import { TerminologyHistoryPoller } from '../../utils/terminology-history-poller';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 @Component({
   selector: 'app-loinc-settings',
@@ -17,6 +19,12 @@ export class LoincSettingsComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(LoincSettingsService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  /** This route allows loinc.view OR loinc.write to enter — a view-only role must still see current
+   *  settings/history, but Save/Synchronize need the write check this control-level flag provides. */
+  protected readonly canWrite = this.permissions.hasPermission('loinc.write');
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
@@ -52,6 +60,7 @@ export class LoincSettingsComponent implements OnInit, OnDestroy {
         this.form.patchValue(x);
         this.usernameSet.set(x.hasUsernameConfigured);
         this.passwordSet.set(x.hasPasswordConfigured);
+        if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
         this.loading.set(false);
       },
       error: () => {
@@ -67,6 +76,7 @@ export class LoincSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected save(): void {
+    if (!this.actionGuard.ensure('loinc.write', 'You do not have permission to modify LOINC settings.')) return;
     if (this.form.invalid) return;
     this.saving.set(true);
     const v = this.form.getRawValue();
@@ -88,6 +98,7 @@ export class LoincSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected synchronize(): void {
+    if (!this.actionGuard.ensure('loinc.write', 'You do not have permission to synchronize LOINC.')) return;
     if (this.form.dirty) {
       this.toast.error('Save settings before synchronizing');
       return;

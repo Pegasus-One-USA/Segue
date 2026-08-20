@@ -19,6 +19,9 @@ import {
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -38,14 +41,47 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
     MatProgressSpinnerModule,
     MatTooltipModule,
     PaginationBarComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './destination-connection-list.component.html',
   styleUrls: ['./destination-connection-list.component.scss'],
 })
 export class DestinationConnectionListComponent implements OnInit {
-  private readonly svc = inject(DestinationConfigurationService);
-  private readonly dialog = inject(MatDialog);
-  private readonly toast = inject(ToastService);
+  private readonly svc         = inject(DestinationConfigurationService);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating ──────────────────────────────────────────────────────
+  // There is no `destinationconnections.create` — Create is authorized per destination type
+  // (ConfigurationsController.cs), and this dialog's create-flow only ever offers two type choices
+  // (see destination-connection-dialog.component.ts's chosenTypeToDestinationType), so "can this role
+  // create a destination connection at all" is "holds sqlserver.create OR csv.create".
+  readonly CREATE_CODES = ['sqlserver.create', 'csv.create'];
+
+  /** `{destinationType}.edit`, e.g. `sqlserver.edit` — the code the backend actually authorizes
+   *  PUT /destinations/{id} against, independent of the generic destinationconnections group (which
+   *  has no edit action of its own). */
+  editCode(item: DestinationConfigurationDto): string {
+    return `${item.destinationType.toLowerCase()}.edit`;
+  }
+
+  /** Delete requires BOTH the generic destinationconnections.delete AND the type-specific
+   *  `{destinationType}.delete` (ConfigurationsController.cs checks both) — mirrored here with
+   *  mode:'all' rather than either alone, so a role missing either one doesn't see a Delete button
+   *  the backend would reject. */
+  deleteCodes(item: DestinationConfigurationDto): string[] {
+    return ['destinationconnections.delete', `${item.destinationType.toLowerCase()}.delete`];
+  }
+
+  /** The combined View/Edit icon button (label swaps per hasHistory) is always safe to show for a row
+   *  already-visible in this view.list — a history-locked row is VIEW-only regardless of edit
+   *  permission, same as workflow-list's "View in Workflow Builder" relabeling; only the editable case
+   *  needs the permission check, since that's the one that actually lets a mutation through. */
+  canOpenEntity(item: DestinationConfigurationDto): boolean {
+    return this.hasHistory(item) || this.permissions.hasPermission(this.editCode(item));
+  }
 
   readonly searchQuery = signal('');
   readonly typeFilter = signal<DestinationType | ''>('');
@@ -197,11 +233,13 @@ export class DestinationConnectionListComponent implements OnInit {
   }
 
   openNew(): void {
+    if (!this.actionGuard.ensure(this.CREATE_CODES, 'You do not have permission to create destination connections.')) return;
     this._openDialog({ mode: 'create' }, 'Destination connection created.');
   }
 
   openEdit(item: DestinationConfigurationDto): void {
     const mode = this.hasHistory(item) ? 'view' : 'edit';
+    if (mode === 'edit' && !this.actionGuard.ensure(this.editCode(item), `You do not have permission to edit this ${item.destinationType} destination connection.`)) return;
     this._openDialog({ mode, destination: item }, 'Destination connection updated.');
   }
 
@@ -224,6 +262,7 @@ export class DestinationConnectionListComponent implements OnInit {
 
   confirmDelete(item: DestinationConfigurationDto): void {
     if (this.hasHistory(item) || this.isUsedInWorkflow(item)) return;
+    if (!this.actionGuard.ensure(this.deleteCodes(item), 'You do not have permission to delete this destination connection.', 'all')) return;
 
     this.dialog
       .open(ConfirmDialogComponent, {
