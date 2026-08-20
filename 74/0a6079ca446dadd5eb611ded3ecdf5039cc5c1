@@ -1,0 +1,30 @@
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_ab5e5a25fe15ae::t_1bcd365f4721cf 280-292,299-309
+  s_ab5e5a25fe15ae::t_d75bfa1c590fcf 293-298
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_ab5e5a25fe15ae::t_6761349038cbf4 21-32
+  s_ab5e5a25fe15ae::t_a8b3a3a2a2e0cf 182
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_ab5e5a25fe15ae::t_a752c7dd57dfaf 161-177
+  s_ab5e5a25fe15ae::t_c6e67d35bcb176 256-258
+  s_ab5e5a25fe15ae::t_6888c64a3c612d 300
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_ab5e5a25fe15ae::t_b845c80de161b0 271-275
+  s_ab5e5a25fe15ae::t_b951e625a5a168 25-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "740a6079ca446dadd5eb611ded3ecdf5039cc5c1",
+  "prompts": {},
+  "sessions": {
+    "s_ab5e5a25fe15ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3d8d0ea-4903-4204-af6e-9c51b90f5397",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
