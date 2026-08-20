@@ -1,0 +1,19 @@
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_4eef1c0f046975::t_43a4929c00a23a 136-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "43815374753e5e157607cc746f87cb5f470eb84f",
+  "prompts": {},
+  "sessions": {
+    "s_4eef1c0f046975": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37954b15-385c-4352-b879-ce187b1c8467",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
