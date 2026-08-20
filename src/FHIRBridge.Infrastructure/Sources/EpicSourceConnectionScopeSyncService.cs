@@ -21,6 +21,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     private const string EpicSourceNodeType = "EpicSourceNode";
     private const string SourceConnectionIdConfigKey = "sourceConnectionId";
     private const string DestinationResourcesConfigKey = "dest_resources";
+    private const string AutoFetchMissingReferencesConfigKey = "dest_autoFetchMissingReferences";
 
     private readonly IWorkflowDefinitionStore _workflowStore;
     private readonly IConfigurationRepository _configurationRepository;
@@ -189,15 +190,42 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         return value is not null && Guid.TryParse(value, out var parsed) ? parsed : null;
     }
 
+    // "Automatically fetch a missing reference from the source" (dest_autoFetchMissingReferences) pulls whatever
+    // resource type a written record happens to reference (e.g. a Patient's managingOrganization/generalPractitioner)
+    // — discovered reactively at write time by parsing each record's FHIR JSON, never known ahead of from config
+    // alone. Scoping only for the explicitly selected/mapped types therefore isn't enough: a destination scoped for
+    // Patient-only with auto-fetch on can 403 the moment it tries to pull a referenced Organization/Practitioner
+    // that was never selected (see the athena-aidbox Brand/CSG/PG/Provider 403s).
+    //
+    // A wildcard resource scope ("system/*.read") would sidestep needing to enumerate anything, but athenahealth's
+    // authorization server rejects the ENTIRE token request (401 access_denied, verified live against the sandbox)
+    // the moment a wildcard resource scope appears — not just the extra access, the whole run's auth. So the
+    // widened set has to stay a concrete, enumerated list of resource types, not "*". ReferenceTargetTypes below is
+    // sourced from FHIR R4's own StructureDefinitions (which resource types each reference-typed element on a given
+    // resource can point to) rather than hand-maintained per vendor surprise — it only needs revisiting on a FHIR
+    // version change, not every time a new vendor-specific reference pattern turns up.
     private static IEnumerable<string> GetDestinationResourceTypes(WorkflowNode node)
     {
         var raw = TryGetConfigValue(node, DestinationResourcesConfigKey);
-        if (string.IsNullOrWhiteSpace(raw))
+        var selected = string.IsNullOrWhiteSpace(raw)
+            ? []
+            : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (!string.Equals(TryGetConfigValue(node, AutoFetchMissingReferencesConfigKey), "true", StringComparison.OrdinalIgnoreCase))
         {
-            return [];
+            return selected;
         }
 
-        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var widened = new SortedSet<string>(selected, StringComparer.OrdinalIgnoreCase);
+        foreach (var type in selected)
+        {
+            foreach (var referenced in FhirReferenceTargets.For(type))
+            {
+                widened.Add(referenced);
+            }
+        }
+
+        return widened;
     }
 
     private static string? TryGetConfigValue(WorkflowNode node, string key)

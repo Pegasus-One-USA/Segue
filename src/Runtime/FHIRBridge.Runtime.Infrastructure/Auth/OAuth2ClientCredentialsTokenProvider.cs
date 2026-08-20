@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -40,6 +41,23 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
         if (string.IsNullOrWhiteSpace(source.ClientId) || string.IsNullOrWhiteSpace(source.ClientSecret))
         {
             throw new InvalidOperationException("OAuth2 client-credentials requires a client id and secret.");
+        }
+
+        // The "no scopes configured yet" default (a bare wildcard resource scope) is safe for most vendors here —
+        // Cerner/Allscripts/generic FHIR R4 servers accept it. athenahealth's authorization server does not: it
+        // rejects the ENTIRE token request with a flat 401 "access_denied" / "Policy evaluation failed" the moment
+        // a wildcard resource scope appears (verified live against the preview sandbox), rather than granting a
+        // narrower subset. An empty Scopes list here almost always means the connection has no resource types
+        // selected yet (SourceConnectionRuntimeResolver regenerates scopes fresh from Retrieval.ResourceTypes on
+        // every run — an empty resource-type list produces an empty scope list) — surfacing that as a clear,
+        // actionable configuration error is far more useful than a cryptic vendor-side 401 with no indication of
+        // what to fix.
+        if (source.Scopes.Count == 0 && source.SourceType == RuntimeSourceType.Athenahealth)
+        {
+            throw new InvalidOperationException(
+                "This athenahealth source connection has no resource types configured, so no OAuth scope can be " +
+                "requested — athenahealth rejects a wildcard scope outright. Select at least one resource type " +
+                "(directly, or by wiring this source to a destination's selected resources) before running.");
         }
 
         var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
