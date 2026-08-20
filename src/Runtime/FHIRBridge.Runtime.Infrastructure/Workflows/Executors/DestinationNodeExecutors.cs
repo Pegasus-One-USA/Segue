@@ -25,8 +25,9 @@ public sealed class SqlServerDestinationNodeExecutor : DestinationNodeExecutor
     public SqlServerDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.SqlServerDestination, DestinationType.SqlServer, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -36,8 +37,9 @@ public sealed class AzureSqlDestinationNodeExecutor : DestinationNodeExecutor
     public AzureSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AzureSqlDestination, DestinationType.AzureSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -47,8 +49,9 @@ public sealed class BlobDestinationNodeExecutor : DestinationNodeExecutor
     public BlobDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.BlobDestination, DestinationType.BlobStorage, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -58,8 +61,9 @@ public sealed class PowerBiDestinationNodeExecutor : DestinationNodeExecutor
     public PowerBiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.PowerBiDestination, DestinationType.PowerBi, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -69,8 +73,9 @@ public sealed class PostgreSqlDestinationNodeExecutor : DestinationNodeExecutor
     public PostgreSqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.PostgreSqlDestination, DestinationType.PostgreSql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -80,8 +85,9 @@ public sealed class MySqlDestinationNodeExecutor : DestinationNodeExecutor
     public MySqlDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.MySqlDestination, DestinationType.MySql, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -91,8 +97,9 @@ public sealed class SnowflakeDestinationNodeExecutor : DestinationNodeExecutor
     public SnowflakeDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.SnowflakeDestination, DestinationType.Snowflake, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -102,8 +109,9 @@ public sealed class TableauDestinationNodeExecutor : DestinationNodeExecutor
     public TableauDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.TableauDestination, DestinationType.Tableau, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -113,8 +121,9 @@ public sealed class DatabricksDestinationNodeExecutor : DestinationNodeExecutor
     public DatabricksDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.DatabricksDestination, DestinationType.Databricks, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -124,8 +133,9 @@ public sealed class S3DestinationNodeExecutor : DestinationNodeExecutor
     public S3DestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.S3Destination, DestinationType.S3, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -135,8 +145,9 @@ public sealed class MongoDestinationNodeExecutor : DestinationNodeExecutor
     public MongoDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.MongoDestination, DestinationType.Mongo, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.MongoDestination, DestinationType.Mongo, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -146,8 +157,9 @@ public sealed class MedplumDestinationNodeExecutor : DestinationNodeExecutor
     public MedplumDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.MedplumDestination, DestinationType.Medplum, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.MedplumDestination, DestinationType.Medplum, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -158,9 +170,10 @@ public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecu
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
         IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null,
         FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
         FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
-        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, sourceClientFactory, sourceConnectionResolver)
+        : base(WorkflowNodeTypes.FhirRepositoryDestination, DestinationType.FhirRepository, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager, sourceClientFactory, sourceConnectionResolver)
     {
     }
 }
@@ -170,8 +183,9 @@ public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.CsvDestination, DestinationType.Csv, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -181,8 +195,9 @@ public sealed class ExcelDestinationNodeExecutor : DestinationNodeExecutor
     public ExcelDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.ExcelDestination, DestinationType.Excel, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -192,8 +207,9 @@ public sealed class NdjsonDestinationNodeExecutor : DestinationNodeExecutor
     public NdjsonDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.NdjsonDestination, DestinationType.Ndjson, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -203,8 +219,9 @@ public sealed class ParquetDestinationNodeExecutor : DestinationNodeExecutor
     public ParquetDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.ParquetDestination, DestinationType.Parquet, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -214,8 +231,9 @@ public sealed class AvroDestinationNodeExecutor : DestinationNodeExecutor
     public AvroDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.AvroDestination, DestinationType.Avro, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -225,8 +243,9 @@ public sealed class ProtobufDestinationNodeExecutor : DestinationNodeExecutor
     public ProtobufDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.ProtobufDestination, DestinationType.Protobuf, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -236,8 +255,9 @@ public sealed class PdfDestinationNodeExecutor : DestinationNodeExecutor
     public PdfDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.PdfDestination, DestinationType.Pdf, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -247,8 +267,9 @@ public sealed class SftpDestinationNodeExecutor : DestinationNodeExecutor
     public SftpDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.SftpDestination, DestinationType.Sftp, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -258,8 +279,9 @@ public sealed class RestApiDestinationNodeExecutor : DestinationNodeExecutor
     public RestApiDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.RestApiDestination, DestinationType.RestApi, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -269,8 +291,9 @@ public sealed class InMemoryDestinationNodeExecutor : DestinationNodeExecutor
     public InMemoryDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
-        IConfigurationRepository? configurationRepository = null)
-        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+        IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null)
+        : base(WorkflowNodeTypes.InMemoryDestination, DestinationType.InMemory, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, exceptionManager)
     {
     }
 }
@@ -592,6 +615,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IGovernanceLogger? _governanceLogger;
     private readonly IConfigurationRepository? _configurationRepository;
+    private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? _sourceClientFactory;
     private readonly FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? _sourceConnectionResolver;
 
@@ -602,6 +626,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IGovernanceLogger? governanceLogger = null,
         IConfigurationRepository? configurationRepository = null,
+        IGlobalExceptionManager? exceptionManager = null,
         FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
         FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
         : base(nodeType, WorkflowDataContract.DestinationWriteResult)
@@ -611,6 +636,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         _workflowDefinitionStore = workflowDefinitionStore;
         _governanceLogger = governanceLogger;
         _configurationRepository = configurationRepository;
+        _exceptionManager = exceptionManager;
         _sourceClientFactory = sourceClientFactory;
         _sourceConnectionResolver = sourceConnectionResolver;
     }
@@ -766,7 +792,34 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var totalWritten = 0;
             string? firstDownloadUrl = null;
             var groups = records.GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var group in OrderGroupsByReferenceDependency(groups))
+            var (orderedGroups, cycleResourceTypes) = OrderGroupsByReferenceDependency(groups);
+
+            // A cycle (Patient references Encounter AND Encounter references Patient, say) has no correct write
+            // order — real FHIR reference graphs shouldn't produce one, but a mapping mistake (or an intentional
+            // bidirectional link) can. Rather than silently falling back to input order with no trace of why,
+            // record it the same way SourceNodeExecutors reports a non-fatal condition (CaptureExpectedAsync,
+            // Informational severity) — visible on the Operations → Errors screen and Correlation Search, not
+            // just a log line — naming which resources are involved and the exact fallback order actually used.
+            if (cycleResourceTypes.Count > 0 && _exceptionManager is not null)
+            {
+                var actualOrder = string.Join(", ", orderedGroups.Select(g => g.Key));
+                await _exceptionManager.CaptureExpectedAsync(
+                    new ExpectedFailure(
+                        "CircularReferenceFallback",
+                        $"Destination node '{node.Id}' ({node.NodeType}): a circular reference was detected among " +
+                        $"[{string.Join(", ", cycleResourceTypes)}] — these resources reference each other, so " +
+                        "there's no order that guarantees every reference resolves. Falling back to the original " +
+                        $"batch order for them. Actual write order for this run: [{actualOrder}]."),
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        Severity: "Informational",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: node.WorkflowDefinitionId.ToString(),
+                        ExecutionId: context.WorkflowRunId.ToString()),
+                    cancellationToken);
+            }
+
+            foreach (var group in orderedGroups)
             {
                 var groupRecords = group.ToArray();
                 var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
@@ -1026,10 +1079,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// e.g. Observation's PatientId lookup pointing at "Patient") is written first — the referenced table's rows
     /// must already exist for <see cref="MappedSqlServerDestinationWriter"/>'s lookup to find them. A simple
     /// topological sort (Kahn/DFS style); any cycle (which shouldn't occur for real FHIR reference graphs) just
-    /// falls back to the original grouping order for whichever groups are involved in it, rather than looping.
+    /// falls back to the original grouping order for whichever groups are involved in it, rather than looping —
+    /// <see cref="CycleResourceTypes"/> names those groups so the caller can warn instead of silently guessing.
     /// </summary>
-    private static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
-        List<IGrouping<string, MappedDestinationRecord>> groups)
+    private static (List<IGrouping<string, MappedDestinationRecord>> Ordered, IReadOnlyList<string> CycleResourceTypes)
+        OrderGroupsByReferenceDependency(List<IGrouping<string, MappedDestinationRecord>> groups)
     {
         // Keyed on the bare table name (schema prefix and any ";mode=..." write-mode suffix stripped). A
         // group's own DestinationObject carries both — it's the full profile-level value (e.g.
@@ -1058,13 +1112,30 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         var ordered = new List<IGrouping<string, MappedDestinationRecord>>();
         var visited = new HashSet<IGrouping<string, MappedDestinationRecord>>();
         var visiting = new HashSet<IGrouping<string, MappedDestinationRecord>>();
+        // Every group still on the DFS stack (in `visiting`) at the moment a cycle is detected — i.e. every
+        // group actually participating in that cycle, not just whichever one closed the loop.
+        var cycleGroups = new HashSet<IGrouping<string, MappedDestinationRecord>>();
 
         void Visit(IGrouping<string, MappedDestinationRecord> group)
         {
-            if (visited.Contains(group) || !visiting.Add(group))
+            if (visited.Contains(group))
             {
-                return; // already ordered, or a cycle — stop recursing rather than looping forever
+                return; // already ordered
             }
+            if (visiting.Contains(group))
+            {
+                // Re-entered a group still being visited: everything currently on the stack forms (part of)
+                // a cycle. Stop recursing here rather than looping forever — the caller falls back to
+                // original grouping order for these groups and reports the cycle.
+                foreach (var onStack in visiting)
+                {
+                    cycleGroups.Add(onStack);
+                }
+                cycleGroups.Add(group);
+                return;
+            }
+
+            visiting.Add(group);
 
             foreach (var dependency in dependencies[group])
             {
@@ -1081,7 +1152,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             Visit(group);
         }
 
-        return ordered;
+        var cycleResourceTypes = cycleGroups.Select(g => g.Key).ToList();
+        return (ordered, cycleResourceTypes);
     }
 
     /// <summary>Strips a ";mode=..." write-mode suffix and any schema prefix, leaving just the bare table
