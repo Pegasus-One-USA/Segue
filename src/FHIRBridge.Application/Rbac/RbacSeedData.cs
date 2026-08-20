@@ -133,6 +133,15 @@ public static class RbacSeedData
         new("Create a new source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
         new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
         new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
+        // Execute a workflow whose source vendor / destination type has no dedicated permission group of its own
+        // (anything that falls back to the generic SourceConnections group). The workflow /run endpoint checks an
+        // Execute permission per source/destination node; the dynamic-discovery loop deliberately skips this generic
+        // fallback group, so its Execute permission must be seeded here by hand like the Edit one above — without it
+        // the "HasPermission:sourceconnections.execute" policy is never registered and /run throws "No policy found".
+        new(
+            "Execute a workflow using a source connection or destination with no dedicated permission group of its own.",
+            PermissionGroupCode.SourceConnections,
+            PermissionActionCode.Execute),
 
         // User module permissions.
         new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),
