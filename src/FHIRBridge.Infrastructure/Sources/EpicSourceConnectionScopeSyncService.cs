@@ -18,7 +18,18 @@ namespace FHIRBridge.Infrastructure.Sources;
 /// </summary>
 public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnectionScopeSyncService
 {
-    private const string EpicSourceNodeType = "EpicSourceNode";
+    // Every canvas source node used to be persisted as "EpicSourceNode" regardless of actual vendor (see
+    // workflow-graph-mapper.service.ts's transformIdForNode() and its own remarks) — Healow is now the one
+    // exception, correctly labeled "EClinicalWorksSourceNode" so it routes to its own executor/client at run time
+    // (see SourceNodeExecutors.cs's TrustResolverSourceType). GetUsedResourceTypes below must recognize that real
+    // node type too, or a Healow connection's resource-scope-from-destination-mappings derivation silently finds
+    // "no workflow references this connection" and regenerates an empty (base-scopes-only) scope string on every
+    // save that touches it.
+    private static readonly HashSet<string> RecognizedSourceNodeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EpicSourceNode",
+        "EClinicalWorksSourceNode",
+    };
     private const string SourceConnectionIdConfigKey = "sourceConnectionId";
     private const string DestinationResourcesConfigKey = "dest_resources";
 
@@ -168,7 +179,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         foreach (var workflow in workflows)
         {
             var referencesThisConnection = workflow.Nodes.Any(node =>
-                string.Equals(node.NodeType, EpicSourceNodeType, StringComparison.OrdinalIgnoreCase) &&
+                RecognizedSourceNodeTypes.Contains(node.NodeType) &&
                 TryGetSourceConnectionId(node) == sourceConnectionId);
 
             if (!referencesThisConnection)

@@ -22,6 +22,15 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
   sample: 'SampleSourceNode',
   'generic-fhir': 'GenericFhirSourceNode',
+  // Healow (eClinicalWorks) — its IFhirSourceClient (EClinicalWorksFhirSourceClient) and workflow node executor
+  // (EClinicalWorksSourceNodeExecutor) are both registered server-side (see SourceNodeExecutors.cs's
+  // TrustResolverSourceType), so labeling the canvas node correctly here is what lets a saved eCW source
+  // actually route to them instead of silently falling through to Epic's. Cerner/Athenahealth/Allscripts/
+  // MeditechGreenfield are deliberately NOT added here yet: their canvas save() paths (transformIdForNode below,
+  // WorkflowBuildAssemblerService.buildSource()) still resolve to Epic, and only Athenahealth's backend has its
+  // own carve-out to compensate — adding a node-type entry for the others without also finishing their build-
+  // assembler branch would just swap which vendor's client the run silently uses.
+  healow: 'EClinicalWorksSourceNode',
   'fhir-validation': 'UsCoreValidationNode',
   normalize: 'NormalizationNode',
   'patient-matching': 'PatientMatchingNode',
@@ -259,6 +268,11 @@ export class WorkflowGraphMapperService {
     const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
     if (/sample/i.test(connector)) return 'sample';
     if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
+    // EhrVendorSourceFormComponent stamps 'Connector' with the exact backend SourceSystemType enum member name
+    // ('Healow', 'Epic', 'Athenahealth', ...) — see its own remarks on that field. Checked by exact match (not a
+    // substring regex like sample/generic-fhir above) since "Healow" both never collides with another vendor's
+    // name and needs no case-insensitive matching the way free-typed labels might.
+    if (connector === 'Healow') return 'healow';
     return 'epic';
   }
 

@@ -277,6 +277,36 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    // eClinicalWorks (Healow) — same shared Epic-shaped wizard fields (Client ID, FHIR base URL, Scopes, App key,
+    // ...), but its own sourceSystemType so the backend's Healow-specific authorize-request handling actually
+    // applies (no PKCE, v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's
+    // last path segment — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest) and so the run-time
+    // pipeline routes through EClinicalWorksSourceNodeExecutor/EClinicalWorksFhirSourceClient instead of Epic's
+    // (see SourceNodeExecutors.cs's TrustResolverSourceType). Healow only supports the Patient (standalone)
+    // audience (see VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
+    if (/healow/i.test(connector)) {
+      const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      return {
+        name: fields['__name'] || 'eCW',
+        sourceSystemType: 'Healow',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: {
+          authenticationType: 'None',
+          clientId: fields['Client ID'] || fields['Active client ID'] || null,
+          tokenEndpoint: fields['Token endpoint'] || null,
+          scopes: healowScopes,
+        },
+        applicationType: this.applicationTypeFor(fields),
+        interactive: {
+          redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
+          launchUrl: null,
+          trustedIssuers: [],
+          patientSelectionMethod: null,
+          launchDisplayMode: null,
+        },
+      };
+    }
+
     // Epic (best-effort from the Epic source wizard fields).
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const discoveredScopes = (fields['Discovered scopes'] ?? '').split(/[\s,]+/).filter(Boolean);

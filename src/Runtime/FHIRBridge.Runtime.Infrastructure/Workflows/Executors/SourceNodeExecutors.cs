@@ -158,6 +158,23 @@ public sealed class Hl7v2MllpSourceNodeExecutor : WorkflowNodeExecutorBase
 
 public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 {
+    // Every canvas source node is currently persisted with NodeType "EpicSourceNode" regardless of actual vendor
+    // for most vendors (workflow-graph-mapper.service.ts's transformIdForNode() only labels Sample/GenericFhir/
+    // Athenahealth/Healow correctly — Cerner/Allscripts/MeditechGreenfield still fall through to 'epic'; see that
+    // file's own remarks). For a vendor whose IFhirSourceClient IS actually registered (FhirSourceClientFactory.
+    // DefaultRegistrations) and whose SourceConnectionRuntimeResolver mapping is real, trust the resolver's
+    // SourceType over this executor's own ctor-fixed one — otherwise the override below would silently stomp a
+    // correctly-resolved Athenahealth/Healow connection's type back to Epic right before client selection, sending
+    // the request through EpicFhirSourceClient (wrong defaults, no ah-practice/practice_code handling) instead of
+    // the vendor's own client. Cerner/Allscripts/MeditechGreenfield are deliberately excluded: their clients aren't
+    // registered yet, so resolving to their real type here would throw ArgumentOutOfRangeException instead of
+    // falling back to the shared Epic-shaped client they still rely on.
+    private static readonly HashSet<RuntimeSourceType> TrustResolverSourceType =
+    [
+        RuntimeSourceType.Athenahealth,
+        RuntimeSourceType.Healow,
+    ];
+
     private readonly RuntimeSourceType _sourceType;
     private readonly IFhirSourceClientFactory? _sourceClientFactory;
     private readonly ISourceConnectionRuntimeResolver? _sourceResolver;
@@ -236,16 +253,9 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
         }
 
-        // TEMPORARY carve-out: every canvas source node is currently persisted with NodeType "EpicSourceNode"
-        // regardless of actual vendor (workflow-graph-mapper.service.ts's transformIdForNode() falls through to
-        // 'epic' for every vendor except Sample/GenericFhir — a real frontend bug, not yet fixed). That pins this
-        // executor's _sourceType to RuntimeSourceType.Epic even for an athenahealth connection, so the unconditional
-        // override below would silently stomp SourceConnectionRuntimeResolver's correctly-resolved Athenahealth type
-        // back to Epic right before client selection — sending the request through EpicFhirSourceClient (no
-        // ah-practice injection, wrong defaults) instead of AthenahealthFhirSourceClient. Trust the resolver's value
-        // for athenahealth specifically until the frontend node-type labeling is fixed; every other vendor keeps the
-        // existing override behavior unchanged.
-        if (source.SourceType != _sourceType && source.SourceType != RuntimeSourceType.Athenahealth)
+        // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
+        // client is actually registered; every other vendor keeps the existing override behavior unchanged.
+        if (source.SourceType != _sourceType && !TrustResolverSourceType.Contains(source.SourceType))
         {
             source = source with { SourceType = _sourceType };
         }
@@ -287,7 +297,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var client = _sourceClientFactory.Create(
-            source.SourceType == RuntimeSourceType.Athenahealth ? source.SourceType : _sourceType);
+            TrustResolverSourceType.Contains(source.SourceType) ? source.SourceType : _sourceType);
 
         // Below configuredResources in priority: a Backend System Search REST retrieval config carries its own
         // resource-type list on the connection itself (potentially several types under one connection with no
