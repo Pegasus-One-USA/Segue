@@ -6,11 +6,11 @@ namespace FHIRBridge.Runtime.Infrastructure.Connectors;
 
 /// <summary>
 /// eClinicalWorks (Healow) FHIR R4 source connector. Reuses <see cref="FhirSourceConnectorBase"/>'s paginated
-/// search/retry/throttle machinery unchanged — unlike athenahealth, no eCW-specific request-level header/query
-/// parameter or per-resource-type search requirement has been confirmed against a live sandbox yet (see the
-/// ECW_Net proof-of-concept's own "unverified" notes on scope/host shape). This type exists mainly to give eCW its
-/// own <see cref="SourceDisplayName"/> for correct log/error messages instead of borrowing Epic's; add overrides
-/// here (mirroring AthenahealthFhirSourceClient) if a live run surfaces a real eCW-specific requirement.
+/// search/retry/throttle machinery, minus the base's default <c>_count</c> injection (see
+/// <see cref="BuildSearchUrl"/>) — every other vendor-specific request-level header/query parameter or
+/// per-resource-type search requirement remains unconfirmed against a live sandbox (see the ECW_Net
+/// proof-of-concept's own "unverified" notes on scope/host shape). Add further overrides here (mirroring
+/// AthenahealthFhirSourceClient) if a live run surfaces another real eCW-specific requirement.
 /// </summary>
 public sealed class EClinicalWorksFhirSourceClient : FhirSourceConnectorBase
 {
@@ -24,4 +24,24 @@ public sealed class EClinicalWorksFhirSourceClient : FhirSourceConnectorBase
     }
 
     protected override string SourceDisplayName => "eClinicalWorks FHIR";
+
+    /// <summary>
+    /// eCW's FHIR R4 API rejects the standard SMART/FHIR <c>_count</c> pagination parameter outright — confirmed
+    /// against a live search: "Unsupported query parameter(s): _count. These parameters are not allowed." The base
+    /// class always injects one when the caller's own search parameters don't already carry it; this override
+    /// drops that injection entirely for eCW instead. Pagination still works via whatever <c>next</c> Bundle link
+    /// eCW returns — the base class's paging loop follows that unconditionally, independent of this URL's shape.
+    /// </summary>
+    protected override string BuildSearchUrl(
+        string baseUrl,
+        string resourceType,
+        int searchCount,
+        string? searchParameters)
+    {
+        var query = string.IsNullOrWhiteSpace(searchParameters)
+            ? string.Empty
+            : searchParameters.Trim().TrimStart('?');
+
+        return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
+    }
 }
