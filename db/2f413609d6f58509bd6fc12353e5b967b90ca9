@@ -1,0 +1,213 @@
+src/FHIRBridge.Application/DTOs/NodeCatalogDto.cs
+  s_e4f33bc5f787da::t_482ff1b13a38c0 1-32,40-54
+  s_e4f33bc5f787da::t_c8ebf2b2828cb4 33-39
+src/FHIRBridge.Domain/Enums/PermissionSource.cs
+  s_50c987f1d763d9::t_60f09516f285fb 1-32
+tests/FHIRBridge.UnitTests/Security/PermissionSyncPolicyTests.cs
+  s_50c987f1d763d9::t_826febc2379d88 1-75
+tests/FHIRBridge.UnitTests/Auth/MagicLinkAuthTests.cs
+  s_50c987f1d763d9::t_d68cc35bb8a47f 128
+  s_50c987f1d763d9::t_a439e0901a5e22 96
+src/Api/FHIRBridge.Api/Security/ControllerAuthorizationExtensions.cs
+  s_e4f33bc5f787da::t_4bed4ed1b5fe76 40-46,54-58
+portal/src/app/services/node-catalog.service.ts
+  s_e4f33bc5f787da::t_4681401d716c8d 1-54
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_e4f33bc5f787da::t_9f834669158591 3,62
+  s_e4f33bc5f787da::t_beff33c105ee8c 267-275
+  s_e4f33bc5f787da::t_17070bb5c8382a 295-299
+  s_e4f33bc5f787da::t_457f057dbe8325 230-231,238-239
+  s_e4f33bc5f787da::t_94fba33c48229c 63-65
+  s_e4f33bc5f787da::t_3d22abf7416ca4 5
+  s_e4f33bc5f787da::t_e47a18b6d0f98a 287-289
+  s_e4f33bc5f787da::t_4e97d9e66ec553 174
+  s_e4f33bc5f787da::t_ac3d9b6b0fe2a2 4
+  s_e4f33bc5f787da::t_267a59fafed2ff 61
+portal/src/app/data/node-catalog-legacy-ids.ts
+  s_e4f33bc5f787da::t_dd14317f3555f0 1-54
+portal/src/app/components/canvas/canvas.component.ts
+  s_e4f33bc5f787da::t_7ee14e58ba4c79 200-207
+  s_e4f33bc5f787da::t_1aed95f0c6f6ad 16-18,40
+  s_e4f33bc5f787da::t_22bf7de365120b 39
+  s_e4f33bc5f787da::t_b1db1fd2ad7b49 41-43
+  s_e4f33bc5f787da::t_58d2e7e7a42402 208,210-211
+  s_e4f33bc5f787da::t_f4db7fef18817a 190
+src/FHIRBridge.Application/Services/IRoleManagementService.cs
+  s_e4f33bc5f787da::t_94ded42d0ede57 15-17
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_50c987f1d763d9::t_ee319640487479 72-77,80
+  s_e4f33bc5f787da::t_eb5484787e4a75 162-172
+  s_50c987f1d763d9::t_2b2de432547b73 96-99,102,105,108
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_50c987f1d763d9::t_4cfcee267363d2 170-177
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  s_e4f33bc5f787da::t_55b82a0f7896b1 25-38,46-47,50
+src/FHIRBridge.Infrastructure/Rbac/RbacBootstrapper.cs
+  s_50c987f1d763d9::t_6dc6895df8d3e1 188-197
+  s_50c987f1d763d9::t_f0de0b6e4e70e3 4
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_e4f33bc5f787da::t_32f298a86b4a27 17,23-30,32
+  s_50c987f1d763d9::t_3b5538585863ac 3-8,16,18-22,31,69-73,82-86,140-141,211-216,218-228,231-236,246-247,250-251,260-269,271-273,275-276,278-293
+  s_e4f33bc5f787da::t_63c01ebd5a0876 229,237-245,248-249,252-259,270,274,277
+  s_e4f33bc5f787da::t_1925c20b7cf360 230
+tests/FHIRBridge.Api.IntegrationTests/Tests/DestinationConfigurationTests.cs
+  s_e4f33bc5f787da::t_800fd208bc5ec5 90-121
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_e4f33bc5f787da::t_d8fdab6ec01cbb 86-95
+  s_e4f33bc5f787da::t_d9d674c3ae1254 4
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260820111208_AddPermissionSource.Designer.cs
+  s_50c987f1d763d9::t_7e8cf296ea6fd0 1-5473
+portal/src/app/auth/services/permission.service.ts
+  s_e4f33bc5f787da::t_3f7cd25fd7670e 4
+  s_e4f33bc5f787da::t_c61bbb41539e14 20-27
+  s_e4f33bc5f787da::t_34978b9b679066 28,40-54
+  s_e4f33bc5f787da::t_c77f93632c106b 66
+src/Api/FHIRBridge.Api/Program.cs
+  s_50c987f1d763d9::t_248a939ba64be1 18
+  s_50c987f1d763d9::t_9d54096bd71352 688-691,694-695,697
+  s_50c987f1d763d9::t_1f5bb9ec2f7ab9 750-759
+  s_50c987f1d763d9::t_d19e0b4fa9e838 778-779
+  s_e4f33bc5f787da::t_06794fa9219e6c 485-489
+src/FHIRBridge.Domain/Entities/Permission.cs
+  s_50c987f1d763d9::t_3f42023d86c985 1,12,23
+  s_50c987f1d763d9::t_19309dba11287a 90-100
+  s_50c987f1d763d9::t_eec8fdf501dd23 54-59
+tests/FHIRBridge.UnitTests/Security/NodeCatalogBuilderTests.cs
+  s_e4f33bc5f787da::t_54be98a6e1fb8b 76
+  s_e4f33bc5f787da::t_314c8209c741dd 1-74,77-93,95-98,100-112,114-116,118,126-127,129,131,134,185-186
+  s_e4f33bc5f787da::t_3fce693a5ee57f 75
+  s_e4f33bc5f787da::t_6e428b8cd7521c 94,99
+  s_e4f33bc5f787da::t_360fae517e5e5e 113,117,128,130,135-155
+  s_e4f33bc5f787da::t_34b24f8b13fa88 119-125,132,156-184
+  s_e4f33bc5f787da::t_975b8556395ea9 133
+portal/src/app/models/node-catalog.model.ts
+  s_e4f33bc5f787da::t_f7d84e20133b85 71
+  s_e4f33bc5f787da::t_5a2674f5f989a2 6
+  s_e4f33bc5f787da::t_50e69384dde8e9 23
+  s_e4f33bc5f787da::t_56db0d5407a177 50-54
+  s_e4f33bc5f787da::t_735f08e2de8cc9 1-5,7-22,24-49,55-70,72-82
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_e4f33bc5f787da::t_25ca053bd7f102 723-724,728-731,733,735-740,745-755
+  s_e4f33bc5f787da::t_92ab2eda884986 12-14,486
+  s_e4f33bc5f787da::t_fbab0b448f9c3e 375-379,381-382,386
+  s_e4f33bc5f787da::t_dab11a1090ea6f 80-82
+  s_e4f33bc5f787da::t_4c7a166e7c7dd5 702-703,710,712
+  s_e4f33bc5f787da::t_65b763cde5bcda 156-158
+  s_e4f33bc5f787da::t_4506cb09b040c9 168-171
+  s_e4f33bc5f787da::t_4b1daac9169846 734
+  s_e4f33bc5f787da::t_4904d5761bcb43 452-464
+  s_e4f33bc5f787da::t_cfa584d998bb39 137
+  s_e4f33bc5f787da::t_5c4aa97f70864e 633-641
+  s_e4f33bc5f787da::t_54bca366f2afb8 383-385,387-389,391-394,404-408,419-421,436-444,446-451,465-485
+  s_e4f33bc5f787da::t_2ee84eedfb488b 653-658
+  s_e4f33bc5f787da::t_d5761fd0cf116c 318-321
+  s_e4f33bc5f787da::t_fd341264fd4476 445
+  s_e4f33bc5f787da::t_4ff8635ed7c7a1 612-632
+portal/src/app/user-management/services/api-role.service.ts
+  s_e4f33bc5f787da::t_d673e4a07c7e5f 65-71
+  s_e4f33bc5f787da::t_4e2fa9643c18f7 12
+portal/src/app/services/phase-config.service.ts
+  s_e4f33bc5f787da::t_802c7d1237d628 4,13-14,27-29,54
+  s_e4f33bc5f787da::t_d007324a4f9a97 15
+  s_e4f33bc5f787da::t_0cb803ffdadb6a 5-9
+src/FHIRBridge.Application/Rbac/PermissionSyncPolicy.cs
+  s_50c987f1d763d9::t_9e009e856eca88 3
+  s_50c987f1d763d9::t_ce471a9dea370a 1-2,4-38
+tests/FHIRBridge.UnitTests/Security/PermissionSourceTests.cs
+  s_50c987f1d763d9::t_e8fa84fb32f996 1-58
+portal/src/app/components/node-library/source-node-vendor.util.ts
+  s_e4f33bc5f787da::t_b6eaa24b5baf42 22-28,34
+portal/src/app/core/api-endpoints.ts
+  s_e4f33bc5f787da::t_fe25d0f288e8f9 70-73
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_e4f33bc5f787da::t_0ff960532058c2 334-335,345-348
+  s_e4f33bc5f787da::t_8bfc2eaec04a1a 5-6
+  s_e4f33bc5f787da::t_452f7773e0dafc 282-309
+tests/FHIRBridge.Api.IntegrationTests/Tests/NodeCatalogAuthorizationTests.cs
+  s_e4f33bc5f787da::t_d1aa3433f8655b 91-92,104-108,111,114-122,128-147,149-156
+  s_e4f33bc5f787da::t_9499cc8eec9831 1-74,76-80,82-85,158
+  s_e4f33bc5f787da::t_363e588c61af06 86-90,93-103,109-110,112-113,123-127,148,157
+  s_e4f33bc5f787da::t_c6999fc8dd4286 75,81
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_e4f33bc5f787da::t_cce6034e047620 85-89,91
+  s_e4f33bc5f787da::t_b2f33f96f9e317 29-34,36
+src/FHIRBridge.Application/Rbac/NodeCatalog/NodeCatalogMetadata.cs
+  s_e4f33bc5f787da::t_bdfad9914bc6f3 7,15,25,41-42
+  s_e4f33bc5f787da::t_5d799148ade2a1 1-6,8-14,16-24,43,51-53,59,61,63,75,77,79,81,91,93,95,99,101,103-106,114,116,118,120,122,124,126,128,135,137,139,141,143,145,147,149,151,153,155,157,163,165,167-206
+  s_e4f33bc5f787da::t_ac01abaa5c3d67 26-40,44-50
+  s_e4f33bc5f787da::t_5d5ab606b95e44 161
+  s_e4f33bc5f787da::t_59bec01145e784 108-113
+  s_e4f33bc5f787da::t_4c1133df5aeb03 54-58,65-74,76
+  s_e4f33bc5f787da::t_dfbadb4f9371f4 78,80,82-90,92
+  s_e4f33bc5f787da::t_1f8f17c6d895db 107,115,117,119,121,123,125,127,129-134,136,138,140,142,144,146,148,150,152,154,156,158-160,162,164,166
+  s_e4f33bc5f787da::t_0417c09d9bac63 60,62,64,94,96-98,100,102
+src/Api/FHIRBridge.Api/Controllers/V1/PermissionsController.cs
+  s_e4f33bc5f787da::t_e02f9cd523ec7e 20-21,23,32,34,47-52,54
+  s_e4f33bc5f787da::t_598d454b6819f1 42-46,53,55-61
+portal/src/app/user-management/services/i-role.service.ts
+  s_e4f33bc5f787da::t_d82af3003ec1b0 4,14-17
+portal/src/app/data/transforms.data.ts
+  s_e4f33bc5f787da::t_3b20a8d4eee9ce 3-7
+src/FHIRBridge.Application/Rbac/NodeCatalog/NodeCatalogBuilder.cs
+  s_e4f33bc5f787da::t_6afce14e72c67d 1-86,88-104
+  s_e4f33bc5f787da::t_c5a1425d382637 87
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_50c987f1d763d9::t_d01fa54d02eb6c 393-394,397
+  s_50c987f1d763d9::t_f0fece061b4697 114,118-119,121-129,132,142
+  s_e4f33bc5f787da::t_cbc11cde9a1b8a 18
+  s_50c987f1d763d9::t_e24f5e17165514 189-193,197
+  s_e4f33bc5f787da::t_824a6b86422dd2 273-275,277,280
+  s_50c987f1d763d9::t_a952daa46d3422 22-23
+  s_50c987f1d763d9::t_d19308189763ab 369-370,372-373
+  s_e4f33bc5f787da::t_559d3df21e019e 108-111,115-117,120
+  s_50c987f1d763d9::t_d1a15708e92e0b 340
+  s_50c987f1d763d9::t_e2af5f2d7aac70 251,258
+  s_50c987f1d763d9::t_d488b53c157bb4 300,304
+portal/src/app/user-management/pages/role-permissions/permission-matrix-dependencies.ts
+  s_50c987f1d763d9::t_9d5937a3092096 23-29,31,33-43,48-55,71-73,78,90,93,98,101-102,124,130,135-140,150-151
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_50c987f1d763d9::t_7e8cf296ea6fd0 1674-1678,5338-5340
+  s_50c987f1d763d9::t_4ddd9f3dc6ea13 4697,4860,5085,5148,5172,5197,5247-5337,5341,5406
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_e4f33bc5f787da::t_db7b8934310bd4 859,867-869,871-872,874,878
+  s_e4f33bc5f787da::t_50a78e36fc6cfb 515-523,527-533,544,546,561,567
+  s_e4f33bc5f787da::t_7059a826980f50 13-15
+  s_e4f33bc5f787da::t_c7ad487d62d0a2 500-501,505-507
+  s_e4f33bc5f787da::t_feb518a495fd21 50,54
+portal/src/app/models/transform.model.ts
+  s_e4f33bc5f787da::t_635ae40eba08e9 1-5
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PermissionConfiguration.cs
+  s_50c987f1d763d9::t_b8d5a43cfb03c6 2
+  s_50c987f1d763d9::t_feb93ad9fe84c8 38-45
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260820111208_AddPermissionSource.cs
+  s_50c987f1d763d9::t_7e8cf296ea6fd0 1-29
+tests/FHIRBridge.UnitTests/Security/MigrationDefinedPermissionCatalogTests.cs
+  s_50c987f1d763d9::t_6e47848549f859 1-60,62-68
+  s_50c987f1d763d9::t_7a3a95486792e7 61
+portal/src/app/services/workflow-build-assembler.service.spec.ts
+  s_e4f33bc5f787da::t_70d7be78c682bf 1-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "db2f413609d6f58509bd6fc12353e5b967b90ca9",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
