@@ -52,26 +52,49 @@ export function buildSftpUri(f: Record<string, string>): string {
   return `sftp://${user}:${pass}@${host}:${port}/${folder}`;
 }
 
+/** Builds the FHIR-repository destination's encrypted secret blob, shaped to match exactly what the backend's
+ *  FhirRepositoryAuthResolver (FHIRBridge.Infrastructure) expects to parse for each auth type. Mirrors
+ *  WorkflowBuildAssemblerService's private buildFhirSecretBlob — duplicated rather than imported for the same
+ *  reason buildSqlConnectionString/buildSftpUri above are (see this file's header comment). */
+export function buildFhirSecretBlob(f: Record<string, string>): string {
+  const authType = f['dest_authType'] ?? 'oauth2';
+  if (authType === 'basic') {
+    return JSON.stringify({ username: f['dest_username'] ?? '', password: f['dest_password'] ?? '' });
+  }
+  if (authType === 'bearer') {
+    return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
+  }
+  return JSON.stringify({
+    clientId: f['dest_clientId'] ?? '',
+    clientSecret: f['dest_clientSecret'] ?? '',
+    tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+  });
+}
+
 /**
  * Non-secret dest_* fields as a flat JSON object — everything getConfig()/buildDestination() collect EXCEPT
- * dest_password/dest_sftpPassword, which only ever live in the encrypted secret (see buildSqlConnectionString/
- * buildSftpUri above), never here. Persisted on DestinationConfiguration.ConnectionMetadataJson so a later
- * "select existing" can repopulate a form's non-secret fields without ever reading the secret back.
+ * dest_password/dest_sftpPassword/dest_clientSecret/dest_bearerToken, which only ever live in the encrypted
+ * secret (see buildSqlConnectionString/buildSftpUri/buildFhirSecretBlob above), never here. Persisted on
+ * DestinationConfiguration.ConnectionMetadataJson so a later "select existing" can repopulate a form's
+ * non-secret fields without ever reading the secret back.
  */
-export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'blob'): string {
+export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'fhir' | 'blob'): string {
   const keys =
     kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
-      : kind === 'blob'
-        ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
-           'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
-           'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
-           // Two independent settings: how many records share one blob (bulk vs individual), and — only
-           // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
-           'dest_blobGranularity', 'dest_blobRecordMode',
-           // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
-           // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
-           'dest_blobFolderPattern', 'dest_blobFileNamePattern']
+      : kind === 'fhir'
+        ? ['dest_name', 'dest_baseUrl', 'dest_project', 'dest_writeMode', 'dest_fhirWriteMode',
+           'dest_tokenEndpoint', 'dest_clientId', 'dest_username']
+        : kind === 'blob'
+          ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
+             'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
+             'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
+             // Two independent settings: how many records share one blob (bulk vs individual), and — only
+             // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
+             'dest_blobGranularity', 'dest_blobRecordMode',
+             // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
+             // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
+             'dest_blobFolderPattern', 'dest_blobFileNamePattern']
         : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
            'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
            'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
@@ -95,6 +118,14 @@ export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' |
   const metadata: Record<string, string> = {};
   for (const key of keys) {
     if (f[key] !== undefined) metadata[key] = f[key];
+  }
+  // The backend reads this metadata key as dest_fhirAuthType (see FhirRepositoryAuthResolver); the form's own
+  // field/control name is dest_authType — bridge the naming difference here, matching
+  // WorkflowBuildAssemblerService.buildConnectionMetadata's own established bridge exactly. The form's internal
+  // value for OAuth2 is 'oauth2' (matches its authType control/validators), but the backend's
+  // CreateDestinationConfigurationRequestValidator/FhirRepositoryAuthResolver only recognize 'clientCredentials'.
+  if (kind === 'fhir' && f['dest_authType'] !== undefined) {
+    metadata['dest_fhirAuthType'] = f['dest_authType'] === 'oauth2' ? 'clientCredentials' : f['dest_authType'];
   }
   return JSON.stringify(metadata);
 }

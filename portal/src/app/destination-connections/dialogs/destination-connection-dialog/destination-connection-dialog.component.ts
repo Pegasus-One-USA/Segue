@@ -20,22 +20,23 @@ export interface DestinationConnectionDialogData {
   destination?: DestinationConfigurationDto;
 }
 
-/** Still only offers Sql/Csv from this screen's create-flow type picker (two cards) — unchanged UX. 'sql'
- *  now resolves to the real SqlServer DestinationType (the registry's default SQL-family entry point), since
- *  DESTINATION_FORM_REGISTRY components no longer have an in-form "Database engine" dropdown to pick
+/** Still only offers Sql/Csv/Fhir from this screen's create-flow type picker (three cards) — unchanged UX.
+ *  'sql' now resolves to the real SqlServer DestinationType (the registry's default SQL-family entry point),
+ *  since DESTINATION_FORM_REGISTRY components no longer have an in-form "Database engine" dropdown to pick
  *  MySQL/PostgreSQL/AzureSql from (see SqlFamilyDestinationFormComponent) — creating those specific engines
  *  isn't reachable from this admin dialog yet, only from a future full registry-driven type picker. */
-function chosenTypeToDestinationType(t: 'sql' | 'csv'): DestinationType {
-  return t === 'sql' ? 'SqlServer' : 'Csv';
+function chosenTypeToDestinationType(t: 'sql' | 'csv' | 'fhir'): DestinationType {
+  return t === 'sql' ? 'SqlServer' : t === 'fhir' ? 'FhirRepository' : 'Csv';
 }
 
-/** Maps the entity's full 22-value enum down to the two form shapes this screen's create-flow choice cards
- *  offer, for `unsupportedType()`'s edit-mode gating only — unrelated to which exact registry component
+/** Maps the entity's full enum down to the three form shapes this screen's create-flow choice cards offer,
+ *  for `unsupportedType()`'s edit-mode gating only — unrelated to which exact registry component
  *  DestinationConnectionFormComponent loads for editing (see toEditableDestinationType below), which now
  *  uses the destination's real, un-collapsed DestinationType instead. */
-function toFormType(t: DestinationType): 'sql' | 'csv' | null {
+function toFormType(t: DestinationType): 'sql' | 'csv' | 'fhir' | null {
   if (t === 'SqlServer' || t === 'AzureSql' || t === 'PostgreSql' || t === 'MySql') return 'sql';
   if (t === 'Csv' || t === 'Sftp') return 'csv';
+  if (t === 'FhirRepository') return 'fhir';
   return null;
 }
 
@@ -71,7 +72,7 @@ export class DestinationConnectionDialogComponent {
 
   // Create: the user picks a type before the rich connection form appears. Edit/view: the type is fixed,
   // derived from the saved destination — this screen only lets you *replace* an existing secret, not retype it.
-  readonly chosenType = signal<'sql' | 'csv' | null>(
+  readonly chosenType = signal<'sql' | 'csv' | 'fhir' | null>(
     this.isCreate ? null : toFormType(this.data.destination!.destinationType),
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
@@ -106,8 +107,17 @@ export class DestinationConnectionDialogComponent {
     }
   }
 
-  chooseType(type: 'sql' | 'csv'): void {
+  chooseType(type: 'sql' | 'csv' | 'fhir'): void {
     this.chosenType.set(type);
+  }
+
+  /** FHIR credentials aren't validated server-side the way SQL's are checked against a real schema fetch before
+   *  Save is even possible — a wrong secret would otherwise save silently and only fail later at run time. Only
+   *  relevant when a new secret is actually being entered: create, or edit with "Replace connection secret" on. */
+  fhirTestPending(): boolean {
+    if (this.chosenType() !== 'fhir') return false;
+    if (!this.isCreate && !this.replaceSecret()) return false;
+    return this.connectionForm()?.probeState() !== 'ok';
   }
 
   toggleReplaceSecret(): void {
@@ -150,7 +160,10 @@ export class DestinationConnectionDialogComponent {
       destinationType: type,
       keyVaultName: 'workflow-secrets',
       secretName: newSecretName(name),
-      target: metadata.fields['dest_filePattern'] || null,
+      // Required by CreateDestinationConfigurationRequestValidator.ValidateFhirRepositoryMetadata whenever
+      // dest_fhirAuthType isn't 'none' (the FHIR form always sets an auth type, so effectively always
+      // required for FhirRepository in practice) — dest_baseUrl covers that case, dest_filePattern covers Csv.
+      target: metadata.fields['dest_baseUrl'] || metadata.fields['dest_filePattern'] || null,
       inlineSecret: metadata.secret ?? '',
       connectionMetadataJson: JSON.stringify(metadata.fields),
     };

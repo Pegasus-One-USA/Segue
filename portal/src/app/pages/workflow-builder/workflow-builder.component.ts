@@ -574,6 +574,16 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
 
+    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement
+    // (WorkflowGraphValidator.DestinationRequiresMappedRecords — unconditional, both modes) — a Field Mapping node
+    // has no configuration screen and no way to receive the FHIR-specific signal it would need. Both "passthrough"
+    // and "customize" modes are handled directly by MappingNodeExecutor/FhirFieldTransformApplier against the raw
+    // resource batch, neither goes through a real Mapping node's field-mapping engine — so wire the destination
+    // directly to its source/transform parent in both cases instead of forcing one in.
+    if (transformId === 'dest-fhir') {
+      return attachNode;
+    }
+
     const isMappingNode = attachNode.kind === 'transform' && (attachNode as TransformNode).transformId === 'field-mapping';
     if (!isMappingNode) {
       return this.insertMappingNode(attachNode);
@@ -671,7 +681,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
     const node = this.store.byId(nodeId);
     if (node?.kind === 'transform') {
       const tId = (node as TransformNode).transformId;
-      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-fhir') {
+      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum') {
         // Edit destination node — open library in transform mode with parent as origin.
         const parent = this.store.parentOf(nodeId);
         this.editingNodeId.set(nodeId);

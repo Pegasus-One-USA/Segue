@@ -7,6 +7,7 @@ import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+  MagicLinkRequest, MagicLinkRedeemRequest,
 } from '../models/auth-request.model';
 import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
 
@@ -17,6 +18,11 @@ import { MOCK_USERS, ALL_ROLES } from '../mock/mock-db';
 // flow locally, not to simulate real TOTP validation.
 const MFA_DEV_BACKUP_CODE = 'DEV-BYPASS';
 const pendingMfaChallenges = new Map<string, string>();
+
+// ─── Magic-link simulation (local dev only, no backend) ────────────────────────
+// Maps a fabricated token to the email it was issued for, so redeemMagicLink can find the same
+// user again without a real server-side store.
+const pendingMagicLinks = new Map<string, string>();
 
 function isAcceptableMockCode(code: string): boolean {
   return /^\d{6}$/.test(code) || code.trim().toUpperCase() === MFA_DEV_BACKUP_CODE;
@@ -169,6 +175,48 @@ export class MockAuthService extends IAuthService {
         if (req.newPassword.length < 8)
           return throwError(() => ({ code: 'WEAK_PASSWORD', message: 'Password must be at least 8 characters.' }));
         return of<MessageResponse>({ success: true, message: 'Password changed successfully.' });
+      })
+    );
+  }
+
+  // ─── Magic-link request ─────────────────────────────────────────────────────
+  override requestMagicLink(req: MagicLinkRequest): Observable<MessageResponse> {
+    return of(null).pipe(
+      delay(1200),
+      switchMap(() => {
+        const email = req.email.trim().toLowerCase();
+        if (MOCK_USERS.some(u => u.email.toLowerCase() === email)) {
+          pendingMagicLinks.set(`magiclink_${email}_${Date.now()}`, email);
+        }
+        // Always succeed to prevent email enumeration.
+        return of<MessageResponse>({
+          success: true,
+          message: `If an account exists for ${req.email}, a sign-in link has been sent.`,
+        });
+      })
+    );
+  }
+
+  // ─── Magic-link redeem ──────────────────────────────────────────────────────
+  override redeemMagicLink(req: MagicLinkRedeemRequest): Observable<LoginResult> {
+    return of(null).pipe(
+      delay(500),
+      switchMap(() => {
+        const email = pendingMagicLinks.get(req.token);
+        const user = email ? MOCK_USERS.find(u => u.email.toLowerCase() === email) : undefined;
+        if (!user || user.email.toLowerCase() !== req.email.trim().toLowerCase()) {
+          return throwError(() => ({ code: 'INVALID_TOKEN', message: 'This sign-in link is invalid or has expired.' }));
+        }
+
+        pendingMagicLinks.delete(req.token);
+
+        if (user.twoFactorEnabled) {
+          const mfaChallengeToken = `mfa_${user.id}_${Date.now()}`;
+          pendingMfaChallenges.set(mfaChallengeToken, user.id);
+          return of<LoginResult>({ requiresMfa: true, mfaChallengeToken });
+        }
+
+        return of<LoginResult>({ requiresMfa: false, user: sanitise(user) });
       })
     );
   }

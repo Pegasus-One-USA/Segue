@@ -225,6 +225,19 @@ export const SETTINGS_ROUTES: Routes = [
               },
             ],
           },
+          {
+            // SSO Configurations (SAML/magic-link admin screen) is SuperAdmin-role-only, matching the
+            // backend's SsoConfigurationsController ([Authorize(Policy = SuperAdminOnly)]) — same
+            // pattern as General/Security above, gated by role on its own child route rather than by
+            // a permission code.
+            path: 'sso-configurations',
+            canActivate: [superAdminGuard],
+            canDeactivate: [unsavedChangesGuard],
+            loadComponent: () =>
+              import('./pages/sso-configurations/sso-configurations.component').then(
+                m => m.SsoConfigurationsComponent
+              ),
+          },
           // Was a static `redirectTo: 'email'` — landed a Terminology-Codes-only (or General/Security-
           // only) role on Email's own route, which their permissions/role don't cover, bouncing them
           // straight to /unauthorized instead of into the section they can actually use.
@@ -236,6 +249,7 @@ export const SETTINGS_ROUTES: Routes = [
               { path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS },
               { path: 'general', superAdminOnly: true },
               { path: 'security', superAdminOnly: true },
+              { path: 'sso-configurations', superAdminOnly: true },
             ])],
           },
         ],

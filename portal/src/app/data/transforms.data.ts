@@ -27,7 +27,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-databricks',  rank: 7, category: 'Analytics',    name: 'Databricks',         sub: 'Load into Databricks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-blob',        rank: 7, category: 'Cloud / FHIR', name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.',      permissionPrefix: 'blobstorage' },
   { id: 'dest-s3',          rank: 7, category: 'Cloud / FHIR', name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
-  { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', name: 'FHIR Repository',    sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-medplum',     rank: 7, category: 'Cloud / FHIR', name: 'Medplum (FHIR)',     sub: 'Write FHIR resources to a Medplum store', permissionPrefix: 'sourceconnections' },
   { id: 'dest-csv',         rank: 7, category: 'File',         name: 'CSV',                sub: 'Emit CSV files.',                   permissionPrefix: 'csv' },
   { id: 'dest-xlsx',        rank: 7, category: 'File',         name: 'Excel',              sub: 'Emit .xlsx workbooks.',             permissionPrefix: 'sourceconnections' },

@@ -153,7 +153,12 @@ public sealed class WorkflowGraphValidator : IWorkflowGraphValidator
     }
 
     private static bool DestinationRequiresMappedRecords(WorkflowNode destination)
-        => destination.Category is WorkflowNodeCategory.Destination or WorkflowNodeCategory.Analytics;
+        => destination.Category is WorkflowNodeCategory.Destination or WorkflowNodeCategory.Analytics
+           // FhirRepositoryDestination is spec-owned (see docs/backend/14-mapping-profile-master-screen-plan.md) —
+           // it accepts raw/normalized resources directly (see DefaultWorkflowNodeCatalog.Destination()'s widened
+           // InputContracts for this node type), so it never needs an upstream Mapping node. Every other
+           // destination/analytics node type is unaffected.
+           && !string.Equals(destination.NodeType, WorkflowNodeTypes.FhirRepositoryDestination, StringComparison.OrdinalIgnoreCase);
 
     private static bool AreContractsCompatible(
         WorkflowDataContract fromContract,

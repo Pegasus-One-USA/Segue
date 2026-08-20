@@ -95,7 +95,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
-  'dest-fhir':        { abbr: 'FHR', color: '#00A89D' },
+  'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
@@ -336,7 +336,7 @@ export class NodeLibraryDialogComponent {
         const node = untracked(() => this.store.byId(id));
         if (node?.kind === 'transform') {
           const tId = (node as TransformNode).transformId;
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-medplum' || tId === 'dest-fhir' || tId === 'dest-blob') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum') {
             untracked(() => this._openDestWizardEdit(node));
             // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
             // without setting showDestWizard() true if the permission check failed — stopping there would
@@ -439,7 +439,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-medplum' || t.id === 'dest-fhir' || t.id === 'dest-blob') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -534,7 +534,7 @@ export class NodeLibraryDialogComponent {
       this.openSourceForm(item.id);
       return;
     }
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-medplum' || item.id === 'dest-fhir' || item.id === 'dest-blob') {
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum') {
       const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' =
         item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : 'csv';
       if (this.showDestWizard()) {
@@ -557,7 +557,7 @@ export class NodeLibraryDialogComponent {
   }
 
   destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | null): string {
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository' : type === 'blob' ? 'Azure Blob Storage' : 'CSV';
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'blob' ? 'Azure Blob Storage' : 'CSV';
   }
 
   confirmDestSwitch(): void {

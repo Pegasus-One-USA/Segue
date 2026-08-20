@@ -25,6 +25,7 @@ using System.Text.Json.Nodes;
 // ---------------------------------------------------------------------------------------------------------------
 
 var verify = args.Contains("--verify", StringComparer.OrdinalIgnoreCase);
+var provenance = args.Contains("--provenance", StringComparer.OrdinalIgnoreCase);
 
 var baseUrl = (Environment.GetEnvironmentVariable("MEDPLUM_BASE_URL") ?? "https://api.medplum.com/fhir/R4").TrimEnd('/');
 var clientId = Environment.GetEnvironmentVariable("MEDPLUM_CLIENT_ID");
@@ -49,6 +50,11 @@ try
     Console.WriteLine($"[auth] Requesting client_credentials token from {tokenUrl} ...");
     var token = await GetTokenAsync(http, tokenUrl, clientId!, clientSecret!);
     Console.WriteLine("      OK — got bearer token.");
+
+    if (provenance)
+    {
+        return await RunProvenanceAsync(http, token, baseUrl);
+    }
 
     return verify
         ? await RunVerifyAsync(http, token, baseUrl, searchUrl)
@@ -128,6 +134,104 @@ async Task<int> RunVerifyAsync(HttpClient httpClient, string token, string fhirB
         ? $"CONFIRMED. Exactly one Patient; {versions.Count} version(s) under a single id — writes update in place (idempotent)."
         : "Multiple resources matched — investigate the upsert key.");
     return count == 1 ? 0 : 1;
+}
+
+// Proves the bug-fix's one external assumption: Provenance has NO `identifier` search parameter in FHIR R4, so it
+// can't be conditional-upserted like other resources (that path is what returned 400 "Unknown search parameter:
+// identifier"). The fix upserts it by a DETERMINISTIC v5 logical id derived from the source key, via PUT
+// Provenance/{uuid}. This mode replays exactly that: PUT the same uuid twice, read it back, and check history shows
+// one id with versions accruing (idempotent — no duplicate), mirroring MappedMedplumDestinationWriter.BuildUpsert.
+async Task<int> RunProvenanceAsync(HttpClient httpClient, string token, string fhirBase)
+{
+    // Mirror the writer's key: {system}|{type}|{sourceId} hashed to a v5 UUID under the same fixed namespace.
+    var deterministicNamespace = new Guid("8b2f0b3e-3f4a-4c1d-9a7e-2c6d5f9b0a11");
+    const string sourceId = "etRVGHu3lF1bbCgzbQAH8CsWG3H0k8nDjHclm3aRDgvY3"; // a real Epic-style Provenance id
+    var logicalId = CreateNameBasedUuid(deterministicNamespace, $"urn:fhirbridge:source-id|Provenance|{sourceId}").ToString();
+    Console.WriteLine($"[key ] source id '{sourceId}' -> deterministic logical id {logicalId}");
+
+    var url = $"{fhirBase}/Provenance/{logicalId}";
+    var body = new JsonObject
+    {
+        ["resourceType"] = "Provenance",
+        ["id"] = logicalId,
+        ["target"] = new JsonArray(new JsonObject { ["display"] = "FHIRBridge POC target" }),
+        ["recorded"] = "2024-01-01T00:00:00Z",
+        ["agent"] = new JsonArray(new JsonObject
+        {
+            ["who"] = new JsonObject { ["display"] = "FHIRBridge POC" }
+        })
+    }.ToJsonString();
+
+    Console.WriteLine("[1/3] PUT Provenance/{id} (client-supplied UUID, update-as-create) ...");
+    var firstId = await PutByLogicalIdAsync(httpClient, token, url, body);
+    Console.WriteLine($"      OK — server accepted the client-supplied id: {firstId}");
+
+    Console.WriteLine("[2/3] PUT the SAME id again (re-run) ...");
+    var secondId = await PutByLogicalIdAsync(httpClient, token, url, body);
+    Console.WriteLine($"      OK — id after re-run: {secondId}");
+
+    Console.WriteLine($"[3/3] GET Provenance/{logicalId}/_history ...");
+    var versions = await HistoryAsync(httpClient, token, $"{fhirBase}/Provenance/{Uri.EscapeDataString(logicalId)}/_history");
+    foreach (var (v, lastUpdated) in versions)
+    {
+        Console.WriteLine($"        - versionId={v}  lastUpdated={lastUpdated}");
+    }
+
+    Console.WriteLine();
+    var idempotent = string.Equals(firstId, secondId, StringComparison.Ordinal) && firstId == logicalId;
+    Console.WriteLine(idempotent
+        ? $"SUCCESS. Medplum accepts PUT Provenance/{{uuid}}; both runs resolve to the SAME id ({firstId}) — idempotent, no duplicate. The fix works against live Medplum."
+        : "UNEXPECTED — the two runs did not resolve to the same logical id; investigate.");
+    return idempotent ? 0 : 1;
+}
+
+// PUT to {type}/{id} (logical-id upsert). Returns the server's resource id from the response body.
+static async Task<string> PutByLogicalIdAsync(HttpClient http, string token, string url, string fhirJson)
+{
+    using var request = new HttpRequestMessage(HttpMethod.Put, url)
+    {
+        Content = new StringContent(fhirJson, Encoding.UTF8, "application/fhir+json")
+    };
+    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    using var response = await http.SendAsync(request);
+    var body = await response.Content.ReadAsStringAsync();
+    if (!response.IsSuccessStatusCode)
+    {
+        throw new InvalidOperationException($"PUT {url} returned {(int)response.StatusCode}: {Truncate(body)}");
+    }
+
+    using var doc = JsonDocument.Parse(body);
+    return doc.RootElement.TryGetProperty("id", out var id) ? id.GetString() ?? "(none)" : "(none)";
+}
+
+// RFC 4122 §4.3 name-based (v5, SHA-1) UUID — identical to MappedMedplumDestinationWriter.CreateNameBasedUuid.
+static Guid CreateNameBasedUuid(Guid namespaceId, string name)
+{
+    var namespaceBytes = namespaceId.ToByteArray();
+    SwapGuidByteOrder(namespaceBytes);
+
+    var nameBytes = Encoding.UTF8.GetBytes(name);
+    var toHash = new byte[namespaceBytes.Length + nameBytes.Length];
+    Buffer.BlockCopy(namespaceBytes, 0, toHash, 0, namespaceBytes.Length);
+    Buffer.BlockCopy(nameBytes, 0, toHash, namespaceBytes.Length, nameBytes.Length);
+
+    var hash = System.Security.Cryptography.SHA1.HashData(toHash);
+
+    var uuid = new byte[16];
+    Array.Copy(hash, 0, uuid, 0, 16);
+    uuid[6] = (byte)((uuid[6] & 0x0F) | 0x50);
+    uuid[8] = (byte)((uuid[8] & 0x3F) | 0x80);
+
+    SwapGuidByteOrder(uuid);
+    return new Guid(uuid);
+}
+
+static void SwapGuidByteOrder(byte[] guid)
+{
+    (guid[0], guid[3]) = (guid[3], guid[0]);
+    (guid[1], guid[2]) = (guid[2], guid[1]);
+    (guid[4], guid[5]) = (guid[5], guid[4]);
+    (guid[6], guid[7]) = (guid[7], guid[6]);
 }
 
 static string DeriveTokenUrl(string fhirBaseUrl)

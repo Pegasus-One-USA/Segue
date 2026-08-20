@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSO Login Setup Guide — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --azure: #0076A8;
+    --azure-bg: #E0F2FE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h2.section-divider {
+    margin-top: 72px;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  h2.section-divider .tag {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 22px;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+  /* Table of contents */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc .toc-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); margin: 14px 0 4px; }
+  nav.toc .toc-group-label:first-of-type { margin-top: 0; }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-azure    { color: var(--azure);    background: var(--azure-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 24px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  /* Field-mapping table */
+  table.map-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.map-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.map-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.map-table tr:last-child td { border-bottom: none; }
+  table.map-table tr:hover td { background: #FAFBFC; }
+  table.map-table td.field { font-weight: 700; color: #0F172A; white-space: nowrap; }
+  table.map-table td.source-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: #0F172A; }
+
+  /* File tables */
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.placeholder { border-left-color: var(--muted); background: #F1F5F9; }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table, table.map-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>SSO Login Setup Guide</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — Microsoft Entra ID login (implemented) and Organization SSO / SAML 2.0 (in progress)</p>
+    <div class="meta">
+      <div><strong>Branch</strong> Main_Working_Mapping_V1_SSO_Implementation</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20) + Azure AD (Microsoft Entra ID)</div>
+      <div><strong>Status</strong> Microsoft Entra ID — implemented &amp; verified &middot; Organization SSO — pending</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <div class="toc-group-label">Section 1 — Microsoft (Entra ID) Login</div>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#azure-setup">How the Azure application was set up</a></li>
+      <li><a href="#files-changed">Files created or updated, and why</a></li>
+      <li><a href="#sso-config-screen">Configuring the SSO Configurations screen</a></li>
+      <li><a href="#user-requirement">User provisioning requirement</a></li>
+      <li><a href="#login-flow">Login flow, step by step</a></li>
+      <li><a href="#troubleshooting">Known limitations &amp; troubleshooting notes</a></li>
+    </ol>
+    <div class="toc-group-label">Section 2 — Organization SSO</div>
+    <ol>
+      <li><a href="#org-sso">Organization SSO (SAML 2.0) — placeholder</a></li>
+    </ol>
+  </nav>
+
+  <h2 class="section-divider"><span class="tag">Section 1 of 2</span>Microsoft (Entra ID) Login</h2>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    FHIRBridge already had a "Continue with Microsoft" button and a backend Entra token validator, but
+    two things stood in the way of it actually working end to end: the Entra client/tenant configuration
+    was hardcoded to <code>appsettings.json</code> (any change needed a service restart, and there was no
+    screen to change it from), and the sign-in flow used MSAL's popup mode, which silently got stuck on
+    Microsoft's cross-origin login page in this deployment. This work made the Entra configuration
+    live-editable from a new admin screen and switched the sign-in flow to MSAL's redirect mode, which
+    resolved the stuck-popup issue. It was verified against a real Azure AD tenant and a real App
+    Registration, and the user confirmed sign-in works end to end.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">1</div><div class="label">Azure App Registration</div></div>
+    <div class="card"><div class="num">4</div><div class="label">live-editable Entra fields</div></div>
+    <div class="card"><div class="num">loginPopup &rarr; loginRedirect</div><div class="label">core flow change</div></div>
+    <div class="card"><div class="num">0</div><div class="label">restarts needed to change config</div></div>
+  </div>
+
+  <h2 id="azure-setup"><span class="num">2.</span>How the Azure application was set up</h2>
+  <p class="section-intro">
+    Microsoft's "Continue with Microsoft" flow needs an <strong>App Registration</strong> in Azure AD /
+    Microsoft Entra ID — this is a different object from a SAML Enterprise Application (see
+    <a href="#org-sso">Section 2</a>). An App Registration can be created self-service by anyone holding
+    the <strong>Application Developer</strong> Entra role; a true non-gallery Enterprise Application (for
+    SAML) needs an admin with the Cloud Application Administrator role instead.
+  </p>
+
+  <div class="card">
+    <h4>Step 1 — Register the application</h4>
+    <p style="margin:0 0 10px;">Azure Portal: <strong>Microsoft Entra ID &rarr; App registrations &rarr; New registration</strong>, or via CLI:</p>
+    <pre><code>az ad app create --display-name "FHIRBridge Portal" --sign-in-audience AzureADMyOrg</code></pre>
+    <p style="margin:0;">This returns the application's <strong>Object ID</strong> and <strong>Application (client) ID</strong> — both are needed in the next steps.</p>
+  </div>
+
+  <div class="card">
+    <h4>Step 2 — Add the portal as a Single-Page Application (SPA) redirect URI</h4>
+    <p style="margin:0 0 10px;">
+      The portal uses MSAL's redirect flow, which requires the redirect URI to be registered under the
+      <strong>SPA</strong> platform (not "Web") — the SPA platform is what allows a browser-only app with
+      no client secret to complete the OAuth code exchange. <code>az ad app create</code> has no direct
+      flag for this, so it's set via a Microsoft Graph API call:
+    </p>
+    <pre><code>az rest --method PATCH `
+  --uri "https://graph.microsoft.com/v1.0/applications/&lt;object-id&gt;" `
+  --body '{"spa":{"redirectUris":["https://segue.pegasusone.com:6003"]}}'</code></pre>
+    <p style="margin:0;">
+      The redirect URI must exactly match the app's own origin — the portal's MSAL config
+      (<code>sso.service.ts</code>) uses <code>window.location.origin</code> as its <code>redirectUri</code>,
+      since the redirect flow lands the browser tab back on the app's own root, not a dedicated page.
+    </p>
+  </div>
+
+  <div class="card">
+    <h4>Step 3 — Grant the Microsoft Graph <code>User.Read</code> permission and admin consent</h4>
+    <pre><code>az ad app permission add --id &lt;client-id&gt; `
+  --api 00000003-0000-0000-c000-000000000000 `
+  --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+
+az ad app permission admin-consent --id &lt;client-id&gt;</code></pre>
+    <p style="margin:0;">
+      <code>00000003-0000-0000-c000-000000000000</code> is Microsoft Graph's fixed resource ID;
+      <code>e1fe6dd8-ba31-4d61-89e7-88639da4683d</code> is the <code>User.Read</code> delegated
+      permission ID. The <code>admin-consent</code> call needs a Global Administrator or Privileged Role
+      Administrator — a non-admin account gets a <code>403</code> here, which is expected and just means
+      a tenant admin needs to run that one command (or click "Grant admin consent" in the Portal's
+      <strong>API permissions</strong> tab).
+    </p>
+  </div>
+
+  <div class="card">
+    <h4>Step 4 — Read back the values the SSO Configurations screen needs</h4>
+    <pre><code>az ad app show --id &lt;object-id&gt; --query "{appId:appId}" -o tsv
+az account show --query tenantId -o tsv</code></pre>
+    <p style="margin:0;">In this deployment's registration these resolved to:</p>
+    <table class="map-table">
+      <tr><th>Value</th><th>Where it came from</th></tr>
+      <tr><td class="field">Application (Client) ID</td><td class="source-code">d9bfa3a7-f7ff-46bc-8289-53a9c4a27f3d</td></tr>
+      <tr><td class="field">Directory (Tenant) ID</td><td class="source-code">d5ae9301-08f4-4e80-b0b0-1b8a97b7687f</td></tr>
+      <tr><td class="field">Object ID (used only for the Graph PATCH in Step 2)</td><td class="source-code">363aa3cb-1b49-4958-a1e4-93d62e2ae9e4</td></tr>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>App Registration vs. Enterprise Application — don't mix these up</strong>
+    This App Registration is the OIDC object used for "Continue with Microsoft" (Section 1). A separate
+    Enterprise Application, created via <strong>Enterprise Applications &rarr; New application &rarr;
+    Create your own application &rarr; Integrate any other application you don't find in the gallery
+    (Non-gallery)</strong>, is needed for SAML-based Organization SSO (Section 2) — creating it the wrong
+    way (e.g. via "Register an app you're developing") produces an OIDC-only object with no SAML
+    sign-on-method option.
+  </div>
+
+  <h2 id="files-changed"><span class="num">3.</span>Files created or updated, and why</h2>
+  <p class="section-intro">Every file touched to make Microsoft login live-configurable and to fix the stuck-popup bug.</p>
+
+  <h3>Backend <span class="pill pill-backend">Backend</span></h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Infrastructure/Security/EntraTokenValidator.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        Rewritten to resolve <code>Instance</code>/<code>TenantId</code>/<code>ClientId</code>/<code>Audience</code>
+        live via <code>ISystemSettingsCache</code> on every validation call, falling back to the appsettings
+        value if no override is saved — the same live-config pattern already used by
+        <code>SamlConfigurationProvider</code>. The OpenID Connect metadata/JWKS
+        <code>ConfigurationManager</code> is cached per resolved authority in a
+        <code>ConcurrentDictionary</code>, so a config change only rebuilds the manager the first time the
+        new authority is actually used, not on every request.
+      </td>
+    </tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Infrastructure/Security/CompositeExternalTokenValidator.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why"><code>IsProviderEnabledAsync</code> made async so the Entra "is this provider enabled" check can also read live from <code>ISystemSettingsCache</code>; Google's check is unchanged (still appsettings-only).</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Application/DTOs/SsoConfigurationsRequests.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added <code>EntraEnabled</code>, <code>EntraInstance</code>, <code>EntraTenantId</code>, <code>EntraClientId</code> to <code>SsoConfigurationsDto</code>/<code>UpdateSsoConfigurationsRequest</code>, alongside the existing SAML/magic-link fields.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Application/Services/ISsoConfigurationsService.cs / SsoConfigurationsService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Reads/writes the four new Entra fields the same way as SAML's fields — via <code>ISystemSettingsCache.GetBoolAsync/GetStringAsync</code> for reads, and the existing <code>ISystemSettingsService.SetAsync</code> (which already upserts and invalidates the cache) for writes.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Api/FHIRBridge.Api/Controllers/V1/SsoConfigurationsController.cs</td>
+      <td class="status"><span class="pill pill-backend">Backend</span></td>
+      <td class="why"><code>GET</code>/<code>PUT api/v1/system/sso-configurations</code>, <code>SuperAdminOnly</code> — the endpoint the new screen reads from and saves to.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">SSO config status (<code>GetSsoConfig</code>) and the Entra enabled-gate now read live from the cache instead of a statically injected options object, so toggling Entra off from the new screen takes effect immediately.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Application/Services/SsoAuthService.cs / ISsoAuthService.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        Extracted <code>LoginWithIdentityAsync(ExternalIdentity, CancellationToken)</code> as the shared
+        core of every SSO login: resolve the user by external subject, fall back to matching by email,
+        reject if no <em>enabled</em> account matches, link the identity on first success, then issue a
+        normal session. This is the logic that enforces the "a matching user must already exist" rule
+        (see <a href="#user-requirement">Section 5</a>).
+      </td>
+    </tr>
+  </table>
+
+  <h3>Backend — Tests <span class="pill pill-test">Test</span></h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">tests/FHIRBridge.UnitTests/Auth/SsoConfigurationsServiceTests.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Extended to cover the four new Entra fields: falls back to the appsettings default when no <code>SystemSetting</code> row exists, and a saved override is immediately visible on the next read.</td>
+    </tr>
+  </table>
+
+  <h3>Frontend <span class="pill pill-frontend">Frontend</span></h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">portal/src/app/auth/services/sso.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        The core fix. <code>signInWithEntra()</code> switched from <code>loginPopup()</code> to
+        <code>loginRedirect()</code> — a popup relies on the opener window keeping a live handle to the
+        popup, but the browser severs that <code>window.opener</code> reference once the popup navigates
+        to Microsoft's cross-origin login page (confirmed directly in this deployment), leaving the popup
+        stuck forever with no error. <code>loginRedirect</code> avoids the problem entirely: the single tab
+        navigates to Microsoft and back. New <code>handleRedirectResponse()</code> picks up the result on
+        the next app boot after that return trip. <code>redirectUri</code> is <code>window.location.origin</code>
+        (the app's own root), matching the SPA redirect URI registered in Azure (Section 2, Step 2 above).
+      </td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/auth/components/sso-buttons/sso-buttons.component.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">The Entra branch of <code>continueWith()</code> now just calls <code>signInWithEntra()</code> and returns — there's no token to emit here since the whole tab is about to navigate away to Microsoft.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/app.config.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">
+        <code>initApp()</code>'s <code>APP_INITIALIZER</code> factory gained
+        <code>completeEntraRedirectIfReturning()</code>, run before the usual session-restore path on
+        every app boot. It resolves to <code>false</code> on a normal boot (nothing to do) and only
+        branches when the browser has just returned from Microsoft: it exchanges the Entra ID token for a
+        FHIRBridge session via the SSO login endpoint, then navigates to <code>/dashboard</code> on
+        success or <code>/auth/login?error=sso_failed</code> on failure (e.g. no matching account).
+      </td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/auth/pages/login/login.component.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Reads the <code>?error=sso_failed</code> query param (set by <code>app.config.ts</code> above, since the login page isn't mounted yet at the point that failure is detected) and shows a toast: "No matching account found for this identity. Ask an administrator for an invitation."</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/settings/pages/sso-configurations/sso-configurations.component.ts / .html / .scss</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the "Microsoft Entra ID" card to the existing SSO Configurations screen — an Enabled toggle plus Instance / Directory (Tenant) ID / Application (Client) ID fields, loaded from and saved to the endpoint above.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/settings/models/sso-configurations.model.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the four Entra fields to the frontend model, mirroring the backend DTO.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/settings/services/sso-configurations.service.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Thin HTTP wrapper for the endpoint above — no logic beyond passing the Entra fields through.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/core/api-endpoints.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the <code>SSO_CONFIGURATIONS_ENDPOINTS</code> block (<code>GET</code>/<code>PUT api/v1/system/sso-configurations</code>) that the SSO Configurations screen — including its Entra fields — reads from and saves to.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/settings/settings.routes.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Registered the <code>sso-configurations</code> child route under System Settings, so the screen is reachable — inherits the parent route's existing SuperAdmin guard and unsaved-changes guard, no new guard needed.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Added the "SSO Configurations" entry to the System Settings side navigation, alongside General/Security/Terminology Codes.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/core/logs-compliance-nav.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Restored the "Authentication Logs" tab (it had been deliberately hidden in an earlier iteration) — needed to see SSO sign-in attempts, successes, and failures while verifying this feature.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/src/app/governance/layout/governance-shell.component.ts</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Comment-only update to reflect Authentication Logs' restored visibility above — no behavior change in this file itself.</td>
+    </tr>
+    <tr>
+      <td class="file-path">portal/public/msal-redirect.html</td>
+      <td class="status"><span class="pill pill-new">Created</span> &rarr; <span class="pill pill-deleted">Deleted</span></td>
+      <td class="why">An interim fix attempt (a dedicated static landing page for the popup flow) built and verified to compile into the production bundle, then removed once the root cause was correctly diagnosed as the <code>window.opener</code> issue and the flow was switched to <code>loginRedirect</code> instead — no longer needed.</td>
+    </tr>
+  </table>
+
+  <h2 id="sso-config-screen"><span class="num">4.</span>Configuring the SSO Configurations screen</h2>
+  <p class="section-intro">
+    Path: <strong>Settings &rarr; System Settings &rarr; SSO Configurations</strong> (requires SuperAdmin).
+    The "Microsoft Entra ID" card holds four fields — all take effect immediately on save, no restart.
+  </p>
+  <table class="map-table">
+    <tr><th>Field</th><th>Value to enter</th><th>Where it comes from</th></tr>
+    <tr>
+      <td class="field">Enabled</td>
+      <td>Toggle on</td>
+      <td>Turns the "Continue with Microsoft" button on/off for every user of this deployment.</td>
+    </tr>
+    <tr>
+      <td class="field">Instance</td>
+      <td class="source-code">https://login.microsoftonline.com/</td>
+      <td>Leave as the default unless this tenant is in a national/sovereign Azure cloud (e.g. Azure Government).</td>
+    </tr>
+    <tr>
+      <td class="field">Directory (Tenant) ID</td>
+      <td class="source-code">d5ae9301-08f4-4e80-b0b0-1b8a97b7687f</td>
+      <td>Azure Portal &rarr; the App Registration's <strong>Overview</strong> page &rarr; "Directory (tenant) ID" (also returned by <code>az account show --query tenantId</code>).</td>
+    </tr>
+    <tr>
+      <td class="field">Application (Client) ID</td>
+      <td class="source-code">d9bfa3a7-f7ff-46bc-8289-53a9c4a27f3d</td>
+      <td>Azure Portal &rarr; the same Overview page &rarr; "Application (client) ID" (also returned by <code>az ad app show --query appId</code>).</td>
+    </tr>
+  </table>
+  <div class="callout">
+    <strong>Google stays read-only</strong>
+    The screen also shows Google's enabled/disabled status for visibility, but changing it still requires
+    an <code>appsettings</code> edit and a service restart — Google is wired into the authentication
+    pipeline at startup, unlike Entra and SAML.
+  </div>
+
+  <h2 id="user-requirement"><span class="num">5.</span>User provisioning requirement</h2>
+  <p>
+    Microsoft login <strong>does not create FHIRBridge accounts</strong> — it only signs in to one that
+    already exists. Before anyone can use "Continue with Microsoft":
+  </p>
+  <ul class="feature-list">
+    <li><strong>A FHIRBridge user must already exist with the same email address</strong> as the Microsoft/Entra account (the address in the Microsoft account's <code>email</code>, <code>preferred_username</code>, or UPN claim) — created the normal way, e.g. via an admin invitation.</li>
+    <li><strong>That user must be enabled.</strong> A disabled account is rejected with the same "no matching account" error as a genuinely unknown email.</li>
+    <li><strong>First successful sign-in auto-links the identity.</strong> <code>SsoAuthService.LoginWithIdentityAsync</code> looks the user up by the stable Entra subject (<code>oid</code>) first, and only falls back to matching by email for that very first sign-in — once linked, every subsequent login resolves directly by subject, so a later email change on either side won't break sign-in.</li>
+    <li><strong>No match &rarr; a clear rejection, not a new account.</strong> The attempt is logged to Authentication Logs (governance audit trail) and the user sees: "No matching account found for this identity. Ask an administrator for an invitation."</li>
+  </ul>
+
+  <h2 id="login-flow"><span class="num">6.</span>Login flow, step by step</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>User clicks "Continue with Microsoft"</strong><span><code>signInWithEntra()</code> calls MSAL's <code>loginRedirect()</code>, which navigates the whole browser tab away to Microsoft's sign-in page — no popup window is involved.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>User authenticates with Microsoft</strong><span>Standard Microsoft sign-in/consent screen; on success Microsoft redirects the browser back to the app's own origin (the registered SPA redirect URI).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>App boot picks up the response</strong><span>The <code>APP_INITIALIZER</code>'s <code>completeEntraRedirectIfReturning()</code> calls <code>handleRedirectPromise()</code>, which resolves the Entra ID token — this runs before the router's own initial navigation, so no page has flashed yet.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Token exchanged for a FHIRBridge session</strong><span>The ID token is POSTed to the SSO login endpoint. <code>EntraTokenValidator</code> validates its signature against the tenant's live JWKS and checks issuer/audience using the currently configured Instance/Tenant/Client (resolved fresh from <code>ISystemSettingsCache</code> on every call).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>User match &amp; session issued</strong><span><code>SsoAuthService.LoginWithIdentityAsync</code> resolves the matching enabled FHIRBridge user (see <a href="#user-requirement">Section 5</a>), links the identity if this is the first SSO sign-in, and issues a normal session — the same session type as password or SAML login.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Redirect into the app</strong><span>Success &rarr; <code>/dashboard</code>. Failure (token invalid, or no matching enabled user) &rarr; <code>/auth/login?error=sso_failed</code>, which shows a toast explaining no matching account was found.</span></div>
+    </div>
+  </div>
+
+  <h2 id="troubleshooting"><span class="num">7.</span>Known limitations &amp; troubleshooting notes</h2>
+  <div class="callout warn">
+    <strong>AADSTS50011 — redirect URI mismatch</strong>
+    The SPA redirect URI registered on the App Registration must be an exact match for the portal's
+    origin (scheme, host, and port). If this deployment's URL changes, re-run the <code>az rest PATCH</code>
+    command in Section 2, Step 2, with the new origin.
+  </div>
+  <div class="callout warn">
+    <strong>interaction_in_progress</strong>
+    If a user closes the Microsoft sign-in tab/window manually mid-flow, MSAL's sessionStorage-tracked
+    interaction flag can get stuck, causing this error on the next attempt. A fresh tab, or clearing
+    sessionStorage for the site, clears it.
+  </div>
+  <div class="callout warn">
+    <strong>Popup mode is not used, deliberately</strong>
+    <code>loginPopup()</code> was tried first and abandoned: the browser severs the popup's
+    <code>window.opener</code> reference once it navigates to Microsoft's cross-origin login page, so the
+    popup never signals completion back to the opener tab, with no visible error. Do not reintroduce popup
+    mode for Entra without a different completion-detection mechanism.
+  </div>
+  <div class="callout warn">
+    <strong>Entra's separate JWT-bearer scheme is unaffected</strong>
+    If a caller ever presents a raw Entra token directly as an API <code>Authorization</code> header
+    (a distinct, legacy path from the login flow documented here), that scheme is still registered once at
+    ASP.NET Core startup and still needs a service restart to pick up a changed Tenant/Client ID — this is
+    a pre-existing limitation, not something this work changed.
+  </div>
+
+  <h2 id="org-sso" class="section-divider"><span class="tag">Section 2 of 2</span>Organization SSO</h2>
+  <p class="section-intro">
+    SAML 2.0 "Organization SSO" is for hospital/corporate identity providers (Okta, ADFS, Azure AD
+    configured as a SAML app) — distinct from the Microsoft Entra ID login covered in Section 1. The
+    backend (SAML endpoints, live-editable configuration via the same SSO Configurations screen,
+    ACS/metadata URLs) and frontend (SAML button, redirect flow) are already implemented and have been
+    verified end to end against a test IdP (below). A real production IdP (Okta or Azure AD SAML
+    Enterprise Application) is in progress but not yet finalized.
+  </p>
+
+  <h3>Testing option — MockSAML <span class="pill pill-new">Verified working</span></h3>
+  <p>
+    <a href="https://mocksaml.com">mocksaml.com</a> is a small hosted test IdP built specifically for
+    SAML SP integration testing — no signup, no catalog, no app to register. It accepts any SP and always
+    signs its response with its own published test certificate, which sidesteps the intermittent
+    <code>IDX13515</code> (non-NCName ID) bug that makes <a href="https://www.samltest.dev">samltest.dev</a>
+    unreliable for this SP. This is the fastest way to confirm the SAML plumbing (redirect &rarr; ACS
+    &rarr; user match &rarr; session) works before spending time on a real enterprise IdP.
+  </p>
+  <table class="map-table">
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td class="field">Identity Provider Entity ID</td><td class="source-code">https://saml.example.com/entityid</td></tr>
+    <tr><td class="field">Single Sign-On URL</td><td class="source-code">https://mocksaml.com/api/saml/sso</td></tr>
+    <tr><td class="field">Identity Provider Certificate</td><td>Published on mocksaml.com — copy the base64 body only, stripping the <code>-----BEGIN/END CERTIFICATE-----</code> lines and newlines (same "plain base64, no PEM headers" requirement as any other IdP certificate here).</td></tr>
+  </table>
+  <div class="callout">
+    <strong>How to test</strong>
+    Enter the three values above into the SAML card on the SSO Configurations screen (Service Provider
+    Entity ID / Redirect URLs can stay whatever you already use for Section 1's Entra flow, or any value —
+    MockSAML doesn't validate the SP's registration), enable SAML, save. Click "Continue with SAML" on the
+    login page &rarr; MockSAML shows a simple form asking what email/name to assert (no real credentials)
+    &rarr; it posts a signed assertion back to the ACS URL. As with Entra (<a href="#user-requirement">Section
+    1.5</a>), whatever email you type into that form must already belong to an existing, enabled
+    FHIRBridge user, or the attempt is rejected and logged to Authentication Logs.
+  </div>
+
+  <h3>Testing option — Auth0 <span class="pill pill-new">Verified working</span></h3>
+  <p>
+    Auth0 (an Okta company — a separate console from Okta itself) can also act as a full SAML IdP for
+    testing, using its <strong>SAML2 Web App</strong> add-on. Unlike MockSAML this exercises a real
+    identity platform with actual user accounts, connections, and logs — closer to a real hospital/corporate
+    IdP than MockSAML's throwaway form.
+  </p>
+  <div class="card">
+    <h4>Setup steps used</h4>
+    <ol style="margin:0; padding-left:20px;">
+      <li>Create (or use) an Auth0 application of type <strong>Regular Web Application</strong> — the SAML2 Web App add-on only appears on this type.</li>
+      <li>On the app's <strong>Settings</strong> tab, add the FHIRBridge <strong>ACS URL</strong> to <strong>Allowed Callback URLs</strong>. Skipping this produces the generic "Oops! something went wrong" error below with no other symptom.</li>
+      <li>On the app's <strong>Addons</strong> tab, enable <strong>SAML2 Web App</strong>. Set <strong>Application Callback URL</strong> to the same ACS URL, and set the add-on's Settings JSON to force the NameID to the user's email (this SP reads the SAML subject as the email, and its own metadata declares <code>emailAddress</code> NameID format):
+        <pre><code>{
+  "nameIdentifierFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+  "nameIdentifierProbes": [
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+  ],
+  "mappings": {
+    "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+  }
+}</code></pre>
+      </li>
+      <li>On the app's <strong>Connections</strong> tab, create/enable a database connection for the test user (e.g. <code>Username-Password-Authentication</code>) and toggle it <strong>on</strong> for this application. A newly created connection needed <strong>"Promote Connection to Domain Level"</strong> before Auth0 would resolve it for this SP-initiated SAML request — without it, Auth0 returned <code>"The connection is not yet configured"</code> with an empty <code>connection_id</code> in its logs. Use <strong>Test Connection</strong> on that tab to confirm it works before retrying the SSO login.</li>
+      <li>Create a test user in that connection whose email matches an existing, enabled FHIRBridge account.</li>
+    </ol>
+  </div>
+  <table class="map-table">
+    <tr><th>Field</th><th>Value</th><th>Where it came from</th></tr>
+    <tr><td class="field">Identity Provider Entity ID</td><td class="source-code">urn:dev-qtnyouhk3qbwmxn8.us.auth0.com</td><td>The add-on's Usage tab &mdash; "Issuer" (use verbatim)</td></tr>
+    <tr><td class="field">Single Sign-On URL</td><td class="source-code">https://dev-.../samlp/&lt;client-id&gt;?connection=Username-Password-Authentication</td><td>The add-on's Usage tab &mdash; "Identity Provider Login URL", with <code>?connection=...</code> appended to pin the exact connection and avoid ambiguous resolution</td></tr>
+    <tr><td class="field">Identity Provider Certificate</td><td>Downloaded from the add-on's Usage tab ("Download Auth0 certificate")</td><td>Stripped of PEM headers/newlines, same as every other IdP certificate on this screen</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Troubleshooting encountered during this test</strong>
+    Two distinct causes produced Auth0's generic "Oops! something went wrong" page (Auth0's own error page
+    never shows the real reason — the actual cause is only visible under <strong>Monitoring &rarr; Logs</strong>
+    in the Auth0 dashboard): (1) the ACS URL missing from Allowed Callback URLs, and (2) the database
+    connection existing but not yet enabled/promoted for this application. Both are covered in the setup
+    steps above.
+  </div>
+
+  <div class="callout placeholder">
+    <strong>Pending — to be completed</strong>
+    A real production IdP integration (Okta Developer Edition or a properly-created Azure AD non-gallery
+    SAML Enterprise Application) is in progress but not yet finalized/verified. This part of the section
+    is left as a stub to be filled in once that setup is confirmed working end to end.
+  </div>
+
+  <footer>
+    FHIRBridge &middot; SSO Login Setup Guide &middot; branch <code>Main_Working_Mapping_V1_SSO_Implementation</code>
+  </footer>
+
+</div>
+</body>
+</html>

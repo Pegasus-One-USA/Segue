@@ -16,6 +16,7 @@ import { AuthService } from '../../services/auth.service';
 import { SsoButtonsComponent } from '../../components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
+import { SsoConfigService } from '../../services/sso-config.service';
 import { extractApiErrorMessage } from '../../../core/http-error.util';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 import { AppFooterComponent } from '../../../layout/app-footer/app-footer.component';
@@ -51,6 +52,21 @@ export class LoginComponent {
   private readonly ssoApi   = inject(SsoAuthApiService);
   private readonly toast    = inject(ToastService);
   protected readonly auth = inject(AuthService);
+  private readonly ssoConfig = inject(SsoConfigService);
+
+  protected readonly magicLinkEnabled = this.ssoConfig.magicLinkEnabled;
+
+  constructor() {
+    void this.ssoConfig.load();
+
+    // Surfaces a failed Entra loginRedirect completion (see app.config.ts's APP_INITIALIZER) —
+    // that failure happens before this page is even mounted, so a query param is how it gets here,
+    // the same pattern the SAML ACS redirect already uses for its own failures.
+    const ssoError = this.route.snapshot.queryParamMap.get('error');
+    if (ssoError === 'sso_failed') {
+      this.toast.error('No matching account found for this identity. Ask an administrator for an invitation.');
+    }
+  }
 
   protected readonly ssoBusy = signal(false);
 

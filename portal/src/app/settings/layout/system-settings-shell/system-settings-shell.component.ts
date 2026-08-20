@@ -27,6 +27,9 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
       'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
     ],
   },
+  // SuperAdmin-role-only, matching settings.routes.ts's own sso-configurations child guard and the
+  // backend's SsoConfigurationsController policy.
+  { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings', superAdminOnly: true },
 ];
 
 @Component({

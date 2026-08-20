@@ -22,7 +22,9 @@ public sealed record CreateFirstSuperAdminSsoRequest(
 /// <summary>Public SSO configuration for the portal: which providers are enabled and their client-side settings.</summary>
 public sealed record SsoConfigDto(
     SsoEntraConfigDto Entra,
-    SsoGoogleConfigDto Google);
+    SsoGoogleConfigDto Google,
+    SsoSamlConfigDto Saml,
+    SsoMagicLinkConfigDto MagicLink);
 
 public sealed record SsoEntraConfigDto(
     bool Enabled,
@@ -32,3 +34,9 @@ public sealed record SsoEntraConfigDto(
 public sealed record SsoGoogleConfigDto(
     bool Enabled,
     string? ClientId);
+
+/// <summary>SAML is a plain full-page redirect (no client-side SDK/token needed), unlike Entra/Google's
+/// popup + token exchange — the portal only needs to know whether to show the button.</summary>
+public sealed record SsoSamlConfigDto(bool Enabled);
+
+public sealed record SsoMagicLinkConfigDto(bool Enabled);

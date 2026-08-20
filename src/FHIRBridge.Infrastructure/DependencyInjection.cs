@@ -114,6 +114,16 @@ public static class DependencyInjection
                     destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
         }
 
+        // FhirRepository (e.g. Aidbox) needs an authenticated conformance check (GET {base}/metadata), not the
+        // anonymous HEAD/directory check TargetReachabilityDestinationHealthCheckProvider does above — it gets its
+        // own provider instead of joining that loop. Previously FhirRepository had no registered health check at all.
+        services.AddHttpClient(nameof(Destinations.FhirRepositoryHealthCheckProvider));
+        services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
+            new Destinations.FhirRepositoryHealthCheckProvider(
+                sp.GetRequiredService<ISecretProvider>(),
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
+
         services.AddSingleton<BlobContainerClientCache>();
         services.AddScoped<IBlobContainerClientFactory, BlobContainerClientFactory>();
         services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider, BlobStorageDestinationHealthCheckProvider>();
@@ -133,6 +143,10 @@ public static class DependencyInjection
         // destination-type codes). Registered unconditionally, works against either repository.
         services.AddMemoryCache();
         services.AddSingleton<IUserPermissionsProvider, CachedUserPermissionsProvider>();
+
+        // "SSO Configurations" admin screen — reads/writes SAML + magic-link fields as SystemSetting
+        // rows via the two services registered just above, so saves take effect without a restart.
+        services.AddScoped<ISsoConfigurationsService, SsoConfigurationsService>();
 
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
@@ -290,6 +304,11 @@ public static class DependencyInjection
         services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
         services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
 
+        // SAML 2.0 SSO (single configured IdP, system-wide — see FHIRBridge.Domain/README.md on why this
+        // isn't per-tenant). Off by default; the ACS endpoint 404s until Authentication:Saml:Enabled is set.
+        services.Configure<SamlAuthenticationOptions>(configuration.GetSection("Authentication:Saml"));
+        services.AddSingleton<ISamlConfigurationProvider, SamlConfigurationProvider>();
+
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
@@ -299,6 +318,11 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(EpicEndpointDirectorySeeder));
         services.AddHttpClient(nameof(MappedRestApiDestinationWriter));
         services.AddHttpClient(nameof(MappedFhirRepositoryDestinationWriter));
+        services.AddHttpClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider));
+        services.AddScoped<Destinations.Auth.IFhirDestinationTokenProvider>(sp =>
+            new Destinations.Auth.FhirDestinationOAuth2TokenProvider(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider)),
+                sp.GetRequiredService<IFhirAccessTokenCache>()));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
         services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
@@ -371,6 +395,11 @@ public static class DependencyInjection
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
+        services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));
+        services.AddScoped<IFhirDestinationConnectionTestService>(sp =>
+            new Destinations.FhirDestinationConnectionTestService(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {

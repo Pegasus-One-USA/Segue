@@ -451,7 +451,7 @@ export class WorkflowBuildAssemblerService {
       node.nodeType.includes('Medplum') ||
       (fields['__transformId'] ?? '') === 'dest-medplum';
     const isFhir =
-      node.nodeType.includes('FhirRepository') ||
+      node.nodeType.includes('Fhir') ||
       (fields['__transformId'] ?? '') === 'dest-fhir';
     const isBlob =
       node.nodeType.includes('Blob') ||
@@ -530,15 +530,21 @@ export class WorkflowBuildAssemblerService {
     }
 
     if (isFhir) {
+      // dest_clientSecret/dest_password/dest_bearerToken are redacted from persisted config (see
+      // WorkflowGraphMapperService's SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload —
+      // same "don't blank an already-provisioned secret unless the user actually typed a new one" guard the
+      // SQL/Mongo/SFTP branches above use.
+      const hasNewSecretInput = !!(fields['dest_clientSecret'] || fields['dest_password'] || fields['dest_bearerToken']);
       return {
         name,
         destinationType: 'FhirRepository',
         keyVaultName,
         secretName,
-        // A plain, unauthenticated FHIR R4 server — the FHIR base URL is the whole destination target, and
-        // there is no secret at all (inlineSecret null). Base URL also carried in metadata for the run path.
-        target: fields['dest_fhirBaseUrl'] || null,
-        inlineSecret: null,
+        target: fields['dest_baseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !hasNewSecretInput
+            ? null
+            : this.buildFhirSecretBlob(fields),
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
       };
     }
@@ -606,65 +612,97 @@ export class WorkflowBuildAssemblerService {
         : kind === 'mongo'
           ? ['dest_name', 'dest_collection', 'dest_writeMode']
           : kind === 'medplum'
-          ? [
-              'dest_name',
-              // Carried in metadata as a fallback for Target: the workflow-graph / bulk-export-resume run path
-              // reconstructs the destination from node config and can leave Target empty, so the FHIR base URL must
-              // also live here for the Medplum writer to resolve it. See MedplumConnectionMetadata.BaseUrl.
-              'dest_medplumBaseUrl',
-              'dest_medplumClientId',
-              'dest_medplumAuthMethod',
-              'dest_medplumWriteMode',
-              'dest_medplumBatchSize',
-              'dest_medplumIdentifierSystem',
-            ]
-          : kind === 'fhir'
-          ? [
-              'dest_name',
-              // A plain FHIR R4 server has no auth — the base URL is all there is. Carried in metadata (not
-              // only Target) so the workflow-graph run path can reconstruct the destination with an empty Target.
-              'dest_fhirBaseUrl',
-            ]
-          : kind === 'blob'
             ? [
                 'dest_name',
-                'dest_blobAuthMode',
-                'dest_blobContainer',
-                'dest_blobAccountUrl',
-                'dest_blobAccountName',
-                'dest_blobEndpointSuffix',
-                'dest_blobTenantId',
-                'dest_blobClientId',
-                'dest_blobManagedIdentityClientId',
-                'dest_blobPathPrefix',
-                'dest_blobCreateContainerIfNotExists',
-                'dest_blobGranularity',
-                'dest_blobRecordMode',
-                'dest_blobFolderPattern',
-                'dest_blobFileNamePattern',
+                // Carried in metadata as a fallback for Target: the workflow-graph / bulk-export-resume run path
+                // reconstructs the destination from node config and can leave Target empty, so the FHIR base URL
+                // must also live here for the Medplum writer to resolve it. See MedplumConnectionMetadata.BaseUrl.
+                'dest_medplumBaseUrl',
+                'dest_medplumClientId',
+                'dest_medplumAuthMethod',
+                'dest_medplumWriteMode',
+                'dest_medplumBatchSize',
+                'dest_medplumIdentifierSystem',
               ]
-            : [
-              'dest_name',
-              'dest_deliveryMode',
-              'dest_filePattern',
-              'dest_delimiter',
-              'dest_encoding',
-              'dest_sftpHost',
-              'dest_sftpPort',
-              'dest_sftpUsername',
-              'dest_sftpAuthType',
-              'dest_sftpRemoteFolder',
-              'dest_emailTo',
-              'dest_emailCc',
-              'dest_emailSubjectTemplate',
-              'dest_emailBodyTemplate',
-              'dest_downloadLinkExpiryMinutes',
-            ];
+            : kind === 'fhir'
+            ? [
+                'dest_name',
+                'dest_baseUrl',
+                'dest_project',
+                'dest_writeMode',
+                'dest_fhirWriteMode',
+                'dest_tokenEndpoint',
+                'dest_clientId',
+                'dest_username',
+                'dest_fhirMapMode',
+                'dest_fhirCustomRules',
+              ]
+            : kind === 'blob'
+              ? [
+                  'dest_name',
+                  'dest_blobAuthMode',
+                  'dest_blobContainer',
+                  'dest_blobAccountUrl',
+                  'dest_blobAccountName',
+                  'dest_blobEndpointSuffix',
+                  'dest_blobTenantId',
+                  'dest_blobClientId',
+                  'dest_blobManagedIdentityClientId',
+                  'dest_blobPathPrefix',
+                  'dest_blobCreateContainerIfNotExists',
+                  'dest_blobGranularity',
+                  'dest_blobRecordMode',
+                  'dest_blobFolderPattern',
+                  'dest_blobFileNamePattern',
+                ]
+              : [
+                'dest_name',
+                'dest_deliveryMode',
+                'dest_filePattern',
+                'dest_delimiter',
+                'dest_encoding',
+                'dest_sftpHost',
+                'dest_sftpPort',
+                'dest_sftpUsername',
+                'dest_sftpAuthType',
+                'dest_sftpRemoteFolder',
+                'dest_emailTo',
+                'dest_emailCc',
+                'dest_emailSubjectTemplate',
+                'dest_emailBodyTemplate',
+                'dest_downloadLinkExpiryMinutes',
+              ];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
     }
+    // The backend reads this metadata key as dest_fhirAuthType (see FhirRepositoryAuthResolver); the wizard's own
+    // field/form-control name is dest_authType — bridge the naming difference here rather than renaming either
+    // side to match, since dest_authType already mirrors the SQL family's dest_auth naming convention. The wizard's
+    // internal value for this option is 'oauth2' (matches its own authType control/validators throughout the
+    // component), but the backend's CreateDestinationConfigurationRequestValidator/FhirRepositoryAuthResolver only
+    // recognize 'clientCredentials' — bridge the value too, not just the key.
+    if (kind === 'fhir' && f['dest_authType'] !== undefined) {
+      metadata['dest_fhirAuthType'] = f['dest_authType'] === 'oauth2' ? 'clientCredentials' : f['dest_authType'];
+    }
     return JSON.stringify(metadata);
+  }
+
+  /** Builds the FHIR-repository destination's encrypted secret blob, shaped to match exactly what the backend's
+   *  FhirRepositoryAuthResolver (FHIRBridge.Infrastructure) expects to parse for each auth type. */
+  private buildFhirSecretBlob(f: Record<string, string>): string {
+    const authType = f['dest_authType'] ?? 'oauth2';
+    if (authType === 'basic') {
+      return JSON.stringify({ username: f['dest_username'] ?? '', password: f['dest_password'] ?? '' });
+    }
+    if (authType === 'bearer') {
+      return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
+    }
+    return JSON.stringify({
+      clientId: f['dest_clientId'] ?? '',
+      clientSecret: f['dest_clientSecret'] ?? '',
+      tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+    });
   }
 
   private buildSqlConnectionString(f: Record<string, string>, isMySql = false, isPostgres = false): string {

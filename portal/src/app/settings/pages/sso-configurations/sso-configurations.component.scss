@@ -1,0 +1,98 @@
+:host {
+  display: block;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
+.dash-content { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0; }
+.page-sub    { font-size: 14px; color: var(--color-muted); margin: 0; }
+
+.settings-body { display: flex; flex-direction: column; gap: 20px; }
+
+/* ── Cards ────────────────────────────────────────────────────────── */
+.settings-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-modal); padding: 22px 24px; }
+.card-row      { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 0; }
+.card-title    { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
+.card-sub      { font-size: 13px; color: var(--color-muted); margin: 0; }
+
+/* ── Form grid ────────────────────────────────────────────────────── */
+.es-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+  margin-top: 18px;
+}
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field--full { grid-column: 1 / -1; }
+.form-field label {
+  font-size: 12px; font-weight: 600; color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.form-field input,
+.form-field textarea {
+  padding: 9px 12px; border: 1px solid var(--color-border-input); border-radius: 9px;
+  font-size: 13.5px; color: var(--color-ink); background: var(--color-surface); outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+  &:hover { border-color: var(--color-muted-2); }
+  &:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12); }
+}
+.form-field textarea { resize: vertical; }
+
+.toggle-field {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--color-ink);
+  input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
+}
+
+.form-actions { display: flex; gap: 10px; }
+
+.btn-primary {
+  padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
+  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background var(--transition-base);
+  &:hover:not(:disabled) { background: var(--color-primary-dark); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+.btn-outline {
+  padding: 9px 18px; border-radius: 9px; background: none;
+  border: 1px solid var(--color-primary); color: var(--color-primary);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all var(--transition-base);
+  &:hover:not(:disabled) { background: var(--color-primary-soft); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+.btn-outline--sm { padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+
+/* ── Read-only computed URLs ──────────────────────────────────────── */
+.readonly-block { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--color-border); }
+.readonly-hint { font-size: 12.5px; color: var(--color-muted); margin: 0 0 10px; }
+.readonly-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+
+  label {
+    flex: 0 0 220px;
+    font-size: 12px; font-weight: 600; color: var(--color-muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  input {
+    flex: 1; min-width: 0;
+    padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 9px;
+    font-size: 13px; color: var(--color-muted); background: var(--color-side);
+  }
+}
+
+/* ── Other-provider status ────────────────────────────────────────── */
+.status-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-top: 1px solid var(--color-border);
+  &:first-of-type { border-top: none; margin-top: 12px; }
+}
+.status-label { font-size: 13.5px; font-weight: 600; color: var(--color-ink); }
+.badge {
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.badge--on  { background: var(--color-success-soft); color: var(--color-success-strong); }
+.badge--off { background: var(--color-side); color: var(--color-muted); }
