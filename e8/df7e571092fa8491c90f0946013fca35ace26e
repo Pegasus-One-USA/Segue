@@ -1,0 +1,178 @@
+portal/src/app/settings/settings.routes.ts
+  s_50c987f1d763d9::t_b11b1204678a09 228-240,252
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_50c987f1d763d9::t_0c0a51d9f784c8 30-32
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_50c987f1d763d9::t_edd0dd205cbeed 49-54
+  s_50c987f1d763d9::t_e03000e074cb7e 109
+portal/src/app/data/transforms.data.ts
+  s_50c987f1d763d9::t_f6557797238bb9 30
+poc/Medplum.Poc/Program.cs
+  s_50c987f1d763d9::t_f9edf66e976427 28,54-58,139-236
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.html
+  s_50c987f1d763d9::t_8960ea8befb092 2-114
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_50c987f1d763d9::t_f5caaebcd3e062 27-41,482-489,492,497-498,501-512,1434,1437,1543,1913-1921,1957
+portal/src/app/core/logs-compliance-nav.ts
+  s_8c124f3f2435f0::t_8015f1f245c999 21-23
+portal/src/app/governance/layout/governance-shell.component.ts
+  s_8c124f3f2435f0::t_173f3a5cde1171 8-9,16-19
+portal/src/app/services/destination-schema.service.ts
+  s_8c124f3f2435f0::t_60c186927e6a9b 120-132,138-143,184-188
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_50c987f1d763d9::t_b717791fd40f87 454,533-537,543-547,617-638,640-674,679-687,691-707
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_8c124f3f2435f0::t_cb4440fa1a7253 64-67,74-104
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  s_50c987f1d763d9::t_a702939b5730aa 19-25,49-68,166-192,245-248,251-252,498-507,509,520-542,551,577,622-661,665,674-677,683,694-695
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_8c124f3f2435f0::t_fa16d4caed5eb7 700-892
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_8c124f3f2435f0::t_61ba70140df770 73-193
+tests/FHIRBridge.UnitTests/Destinations/MappedFhirRepositoryDestinationWriterTests.cs
+  s_50c987f1d763d9::t_222c801e22764e 9,16-17,21-22,27,30-32,34-35,46-86,90,92-145,148,154-156,160-161,170,177,179-180,189,196-212,219-220,229,238-239,248,257-258,263,271-272,275,280-987,989,991-1014,1016,1018-1023,1026-1098,1101-1108,1112-1131
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  s_50c987f1d763d9::t_71019fc17658a5 121-193
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_8c124f3f2435f0::t_6d5ae692f1a42b 187-237
+portal/src/app/app.config.ts
+  s_d68f9144c308b2::t_b724498611aaea 6,9,20-21,35-60,70-83,85,123
+portal/src/app/auth/pages/login/login.component.html
+  s_62affcfc9947ba::t_0b27726acc017b 233-240
+portal/src/app/auth/pages/login/login.component.ts
+  s_62affcfc9947ba::t_b8cefca84da96c 19,55-69
+portal/src/app/auth/services/auth.service.ts
+  s_563b36e6d1f96c::t_6114a9dcbce955 17,115-143
+portal/src/app/components/node-library/destination-wizard/destination-connection-form.component.ts
+  s_e4f33bc5f787da::t_fc4ad970661f4e 3,8-9,23-28,33,38-40,44,47,51-72,78-80,83-90,94,107-121,151-160,163-170,172-179,182-285
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_4332600612c768::t_04150e992290c6 101-228,274-281,337-346,350-363,365-674,677-679,756,873,876-898,955-960,987
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_39163135bbc470::t_ba9be63a01b6d8 657-782,1099-1151
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_e4f33bc5f787da::t_763bfff60f7504 2-15,18,20-27,30-39,41-46,48-51,54-58,60-67,70-77,84-87,89-96,98-106,117-190,195,205,207-208,213-215,217-252,256-258,260-295,299-301,303-338,342-344,346-375,379-381,383-412,424-441,451-457,462,466-468,472-474,493-495,500-502,504,506,564,566,573,584,607-624,628-631,641-648,656-659,673-677,688-968,978-980,988,995,1014,1025-1027,1034-1035,1037-1041,1051-1062,1070-1072,1077,1089-1092,1102,1120-1123,1125-1136,1139-1142,1158-1160,1163-1166,1170,1186-1190,1194-1197,1206,1208-1214,1241-1242,1247-1253,1271-1275,1277-1289,1294-1304,1315-1327,1333-1339,1345-1363,1365-1371,1377-1384,1397,1409-1411,1425-1434,1436-1441,1452-1460,1462-1474,1476-1483,1485-1497,1570-1575,1586-1594,1597-1601,1604-1630,1642-1645,1663-1667,1677-1690,1693-1698,1701-1703,1712-1718,1726-1733,1737-1744,1748-1755,1759-1766,1781-1782,1815-1833,1845-1851,1853-1855,1860-1861,1864-1870,1878-1879,1881-1883,1889-1891,1901-1905,1909-1918,1922-1924,1937-1982,1984-1986,2004-2009,2014-2020,2031-2047,2053,2058-2061,2065,2069-2071,2083-2107,2109,2115,2155-2159,2168-2169,2177-2179,2183-2198,2200,2208-2213,2217-2218,2221-2226,2231-2235,2248-2250,2253-2256,2260-2265,2269-2271,2273-2296,2307-2309,2311-2315,2328-2331,2333-2348,2354-2360,2369,2373-2381,2383-2386,2396-2404,2439-2440,2458-2460,2462-2464,2467-2469,2473,2487-2489,2491-2492,2500-2502,2507-2509,2514-2516,2527-2530,2532-2534,2538-2540,2552-2556,2567-2573,2584-2586,2593-2598,2605-2608,2615,2623-2625,2629-2685,2690-2694,2712-2715,2724,2736-2738,2740,2744,2746,2750-2756,2760,2777,2784-2786,2792-2821,2824-2828,2835-2837,2841-2843,2857-2864,2866-2875,2886-2892,2894-2903,2912-2916,2931-2933,2938-2939,2950-2952,2956,2963-2966,2972-2979,2985-2992,2996-3050,3054,3059-3061,3072,3082-3083,3087,3110-3113,3116,3122-3145,3158-3160,3166-3171,3179-3180,3185-3187,3190,3197-3201,3206-3217,3237-3242,3245,3247-3248,3251-3256,3267-3268,3276-3321,3329-3341,3344-3348,3351-3355,3358-3364,3371-3373,3379-3384,3387-3389,3395-3397,3403-3405,3425-3431,3437-3440,3456-3461,3465-3550,3576-3588,3594-3598,3607-3665,3673,3680,3682-3692,3702-3705,3711-3712,3715,3728-3730,3744-3747,3762,3769-3780,3786-3787,3795,3810-3827,3837-3841,3844,3846-3848,3850-3855,3857-3860,3869-3871,3876-3881,3883-3886,3898,3900-3910
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_50c987f1d763d9::t_58d9ea093dd0de 98,339,442,537,560
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_50c987f1d763d9::t_c061aa6386ef2c 25
+portal/src/app/core/api-endpoints.ts
+  s_39163135bbc470::t_ae97da14e9ef6f 33-36,116,204-211
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_50c987f1d763d9::t_d817b90d3e50d4 23-25,28-29,32-33,36,39,75,110,114-122,163-166
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_50c987f1d763d9::t_373db713c2b1e3 577-586,684
+portal/src/app/services/phase-config.service.ts
+  s_62affcfc9947ba::t_2a78d4d16b6995 28
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_39163135bbc470::t_dc48fbc6cb58ac 50-53,96,307-316
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_3679e3048431dc::t_7cbab485034e89 21,25-26,30,127-137
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_50c987f1d763d9::t_c55af32a72c17f 166-170,175,255-332,501-523
+src/FHIRBridge.Domain/Entities/User.cs
+  s_c60546938fff22::t_463e1ed58c9aa1 64-67,278-291
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_50c987f1d763d9::t_6027886d405932 117-126,147-150,307-311,321-325,398-402
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_8c124f3f2435f0::t_13d7b32df6b611 8,74,85-105,184-186,204-209,429-435,444-452,456-458,529-531,544-587
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_b00fde828a6357::t_23071a534e0d9c 160-163,574-589,595-596,604-606,614-687,697-715,730,735-736,895-905,945-960
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_8c124f3f2435f0::t_3a886c89d78be8 19,93-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "e8df7e571092fa8491c90f0946013fca35ace26e",
+  "prompts": {},
+  "sessions": {
+    "s_3679e3048431dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1568ea7-c9f3-4703-ba4e-28032014b5af",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_39163135bbc470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "090ee8e8-1a8c-48c0-a281-acd211695217",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_4332600612c768": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf9e2857-7293-457a-af6b-6d0d6036c899",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_563b36e6d1f96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d1be468-7973-4038-9618-43ded366ad88",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_b00fde828a6357": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a436ff8f3fdda6043",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_c60546938fff22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4671f36f-ac74-4243-98fb-238f21a2a76b",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

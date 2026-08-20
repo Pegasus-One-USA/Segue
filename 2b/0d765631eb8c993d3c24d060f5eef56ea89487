@@ -1,0 +1,358 @@
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.ts
+  s_50c987f1d763d9::t_71d3cc2f650d53 31-35
+portal/src/app/operations/pages/errors/errors.component.ts
+  s_50c987f1d763d9::t_ff237ff3d264c5 90,96
+  s_50c987f1d763d9::t_1fc835da5964fc 9-10
+  s_50c987f1d763d9::t_b7796e356be8d9 23,31
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.ts
+  s_50c987f1d763d9::t_c216c58f763341 98-100
+  s_50c987f1d763d9::t_db867ddf92be8c 19-20
+  s_50c987f1d763d9::t_c7d055de049012 63
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_50c987f1d763d9::t_7ba645739418ea 12-14
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_50c987f1d763d9::t_6f6a0a3a471670 27-28,135
+  s_50c987f1d763d9::t_4ae64878f11c4c 294,305
+  s_50c987f1d763d9::t_789f715481abea 118-134
+  s_50c987f1d763d9::t_29523acf9c8819 55-60
+  s_50c987f1d763d9::t_82f003ab624d2b 136-144
+  s_50c987f1d763d9::t_61461b7589556f 317
+tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs
+  s_50c987f1d763d9::t_9165dc4a52221b 86
+  s_50c987f1d763d9::t_5a719136aaefad 101
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_50c987f1d763d9::t_bc2ea858c04d05 37-48
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_50c987f1d763d9::t_a410bf65e1bf14 12-13
+  s_50c987f1d763d9::t_2ae6706c97c179 146
+  s_50c987f1d763d9::t_5e9e0899fa1c10 102
+  s_50c987f1d763d9::t_efb2151d5f3abe 132
+  s_50c987f1d763d9::t_8965bb980caf3f 30-39
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_50c987f1d763d9::t_109214a89af486 32,38-41
+  s_50c987f1d763d9::t_d6710b82fb853a 161
+  s_50c987f1d763d9::t_8d69b8272bb964 17-18
+  s_50c987f1d763d9::t_efe4fdbdd23535 125
+  s_50c987f1d763d9::t_75c235c9754a6b 143
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_50c987f1d763d9::t_e6a8d32b2405c4 183-196
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_50c987f1d763d9::t_183bdad044e47f 159
+  s_50c987f1d763d9::t_5e7f1dac22bdf5 24-26
+  s_50c987f1d763d9::t_c0ed2cd04364e2 413
+  s_50c987f1d763d9::t_33dd191c88fdb7 329
+  s_50c987f1d763d9::t_6861080fd2be4b 459
+  s_50c987f1d763d9::t_4a5e61cd526e00 470
+  s_50c987f1d763d9::t_dddeff3547818d 506-508
+  s_50c987f1d763d9::t_514ba9d6645a60 122,132-133
+  s_50c987f1d763d9::t_6e6a4a5dc8c522 318
+portal/src/app/data/transforms.data.ts
+  s_50c987f1d763d9::t_93b62dc388f5b9 17-27,29-31,33-38,40-41
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_50c987f1d763d9::t_adb1d428dbe301 67-74
+portal/src/app/user-management/user-management.routes.ts
+  s_50c987f1d763d9::t_ff00e53033f2dd 31-36,38-39
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  s_50c987f1d763d9::t_1e8487d6af70ec 13-22
+src/FHIRBridge.Infrastructure/Security/CachedUserPermissionsProvider.cs
+  s_50c987f1d763d9::t_c1aafc99eb1626 1-79
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_50c987f1d763d9::t_d95eddfc811b64 22-24,77
+  s_50c987f1d763d9::t_8afb223463552c 78-84
+  s_50c987f1d763d9::t_b81ba40aebeddf 44,50-76
+  s_50c987f1d763d9::t_a86dacedb5b6c3 265
+  s_50c987f1d763d9::t_719ae605bbad0e 236,242
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_50c987f1d763d9::t_29b01b89efdd2f 62-69
+  s_50c987f1d763d9::t_ecb5dfd5b7eab1 46-49
+  s_50c987f1d763d9::t_d532f828e6adff 111-115,117-118,133-143,145
+  s_50c987f1d763d9::t_51c4f26b84dfa6 23-27
+  s_50c987f1d763d9::t_ac9f7d65d6c7bd 144
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_50c987f1d763d9::t_666f75bb693ab2 321-323
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_50c987f1d763d9::t_722770f4afb899 259-262
+  s_50c987f1d763d9::t_fe7546ecfc9012 22
+  s_50c987f1d763d9::t_78387991ea987c 127
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.ts
+  s_50c987f1d763d9::t_1b94a3d55941ff 63
+  s_50c987f1d763d9::t_06b593a24416e1 22-27
+  s_50c987f1d763d9::t_3288377e1035f8 8-9
+  s_50c987f1d763d9::t_ea813d1e060e69 79
+  s_50c987f1d763d9::t_f606cb6863bdfc 101
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_50c987f1d763d9::t_ff4bbe1b9f803a 224-227
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_50c987f1d763d9::t_75bf67218d60ba 329-335
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_50c987f1d763d9::t_543daf25e6b487 135
+  s_50c987f1d763d9::t_8d83aa0ab6e902 130-134,136
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_50c987f1d763d9::t_d015e4a3e10927 14
+src/Worker/FHIRBridge.Worker/WorkerSecurityServices.cs
+  s_50c987f1d763d9::t_24fd0c32142acc 29
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_50c987f1d763d9::t_afbfbeb250b11b 157
+  s_50c987f1d763d9::t_91d6183ca2abda 121-123
+  s_50c987f1d763d9::t_b9d8fda41dbe49 195
+  s_50c987f1d763d9::t_9d84a412bc23fb 151,153-154,156,158
+  s_50c987f1d763d9::t_ea64e9cd45888b 169-171
+  s_50c987f1d763d9::t_fa0c074714d020 98-100
+portal/src/app/components/node-library/source-node-vendor.util.ts
+  s_50c987f1d763d9::t_6d782996e98046 1-28
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.html
+  s_50c987f1d763d9::t_cc3ef9e170215e 11,22,25
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_50c987f1d763d9::t_9de0701dceecf6 143-152,156
+  s_50c987f1d763d9::t_1ebfd21cc3627b 46
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  s_50c987f1d763d9::t_8b967050450f3e 72-78,82-97,99-100
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_50c987f1d763d9::t_023613b8abfc71 253-260
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.ts
+  s_50c987f1d763d9::t_909c8d1bf5105e 9-10
+  s_50c987f1d763d9::t_ebfa0d3a3a191b 77
+  s_50c987f1d763d9::t_d17c6d9d630459 61
+  s_50c987f1d763d9::t_08fa0eb15a5bb6 97
+  s_50c987f1d763d9::t_9429b86143ab89 23-28
+  s_50c987f1d763d9::t_cd1f85f7758a4b 124
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  s_50c987f1d763d9::t_c16452ede5a0b1 114
+  s_50c987f1d763d9::t_806864b0d23e1f 72
+  s_50c987f1d763d9::t_46da7b2f8b23d3 23-30
+  s_50c987f1d763d9::t_e690bbcc7bdaaf 7-8
+  s_50c987f1d763d9::t_73929934f9a55e 83
+src/Api/FHIRBridge.Api/Security/WorkflowModuleAccessAuthorizationHandler.cs
+  s_50c987f1d763d9::t_e910075e85c78c 1-64
+portal/src/app/components/canvas/canvas.component.ts
+  s_50c987f1d763d9::t_23cee6290671d8 8,14-17
+  s_50c987f1d763d9::t_3aa0f8abbc1454 174-180
+  s_50c987f1d763d9::t_e70e88bfb65582 202-203
+  s_50c987f1d763d9::t_6a9ddbdf709823 33-37
+  s_50c987f1d763d9::t_4d159aa54e00bd 163-171,184-201
+  s_50c987f1d763d9::t_30e897117b7bb4 325-331
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  s_50c987f1d763d9::t_db29ea1cfd033f 73-75
+  s_50c987f1d763d9::t_b48c04147c617e 29
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_50c987f1d763d9::t_e24653b50a898f 167,173
+  s_50c987f1d763d9::t_857e0b10e0d32e 132-141,145
+  s_50c987f1d763d9::t_15491d8ef26a6d 46
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.ts
+  s_50c987f1d763d9::t_520d43f5e3b336 35-39
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  s_50c987f1d763d9::t_dd6d702e37ac2a 47
+  s_50c987f1d763d9::t_7ff9b424f1fe2e 95-98
+  s_50c987f1d763d9::t_6709fe452c0233 20-21
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_50c987f1d763d9::t_18830300fefe47 142,145
+  s_50c987f1d763d9::t_24cb65d2bcbd3d 29
+src/Api/FHIRBridge.Api/Security/PermissionAuthorizationHandler.cs
+  s_50c987f1d763d9::t_5d208bedd73fed 9,11-13,16,19-22,26-32
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.ts
+  s_50c987f1d763d9::t_e48b9b1c686653 63
+  s_50c987f1d763d9::t_350b2e0acb8ca5 8-9,30
+  s_50c987f1d763d9::t_1a045883936aaf 23-24,27-29
+  s_50c987f1d763d9::t_80cbc7e54f4d08 47
+  s_50c987f1d763d9::t_a8a9be84ca08b3 90
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  s_50c987f1d763d9::t_af2751ae9551f3 19-22
+portal/src/app/auth/services/permission.service.ts
+  s_50c987f1d763d9::t_dd3c4d85eda659 32-60
+  s_50c987f1d763d9::t_2b5d3e70eb997d 4-5
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_50c987f1d763d9::t_c8e1be08abd60a 122-126,129-131,135-139
+  s_50c987f1d763d9::t_9d83c6a48c1046 29-34
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_50c987f1d763d9::t_3e1e6d70618bb5 50-57
+  s_50c987f1d763d9::t_4e3fb6407b345a 13
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_50c987f1d763d9::t_d7e5339ac9dac8 44-48
+  s_50c987f1d763d9::t_f31b9b66313d27 89,98
+  s_50c987f1d763d9::t_930842e8c3e65f 5,18-23
+portal/src/app/user-management/pages/user-detail/user-detail.component.html
+  s_50c987f1d763d9::t_c367ddedbb9d97 236
+  s_50c987f1d763d9::t_4bc7e9e0fba097 462,475
+  s_50c987f1d763d9::t_fbd87a844d7705 70,75-79,81-116,119
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_50c987f1d763d9::t_2d1efb515415ca 129-177
+  s_50c987f1d763d9::t_4ca8df1f32739c 625-627
+  s_50c987f1d763d9::t_92ab1590c1725d 2323-2338
+  s_50c987f1d763d9::t_b8d5a3cce96479 791-793
+  s_50c987f1d763d9::t_ef39f6127be569 463-464,472,475,480
+  s_50c987f1d763d9::t_1829a06d49d703 421-422
+  s_50c987f1d763d9::t_91fccb66dd52ca 1066-1068
+  s_50c987f1d763d9::t_5b65d460dd29f4 798-803,808-811,815-846
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.html
+  s_50c987f1d763d9::t_80e95039c614b1 20,24
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_50c987f1d763d9::t_98e1cd1f72658b 75
+  s_50c987f1d763d9::t_cf02d4c2b79820 173-176
+  s_50c987f1d763d9::t_7488c473d440f3 23-24
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.html
+  s_50c987f1d763d9::t_87bd76d95d6afb 35-36,48,51
+src/Api/FHIRBridge.Api/Security/WorkflowModuleAccessRequirement.cs
+  s_50c987f1d763d9::t_d8dc52a3ab306f 1-18
+src/FHIRBridge.Application/Abstractions/Security/IAccessTokenIssuer.cs
+  s_50c987f1d763d9::t_3e94bb2d52ef8e 8-10,13
+portal/src/app/user-management/pages/role-permissions/permission-matrix-dependencies.ts
+  s_50c987f1d763d9::t_411a3ef071b7e2 1-2,10,23-68,88-90,93,102,105-108,110,112,114-117,127,130-132
+  s_50c987f1d763d9::t_371beafe30f2d3 3-9,11-22,69-87,91-92,94-101,103-104,109,111,113,118-126,128-129
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_50c987f1d763d9::t_df44576c887fed 157
+  s_50c987f1d763d9::t_398a5eaef4b012 249
+  s_50c987f1d763d9::t_7ff31a81c8d4de 314-315,322
+  s_50c987f1d763d9::t_32090c946da1dc 16
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_50c987f1d763d9::t_b254c1edcfebc1 262
+  s_50c987f1d763d9::t_d6d408aa4e3641 232
+  s_50c987f1d763d9::t_4c9214ac756340 246
+  s_50c987f1d763d9::t_66714e1a67c3e7 380
+  s_50c987f1d763d9::t_802a7c2b82bad2 364
+  s_50c987f1d763d9::t_4eb4e9d5ea213b 289
+  s_50c987f1d763d9::t_a08283fb7b2792 341
+  s_50c987f1d763d9::t_54691d28b45880 74,92-111
+  s_50c987f1d763d9::t_d3aef3a1bfff3b 35-37
+src/FHIRBridge.Application/Abstractions/Security/IUserPermissionsProvider.cs
+  s_50c987f1d763d9::t_71b2b23d5dd281 1-18
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  s_50c987f1d763d9::t_144c51ab2f24a4 13,17-18,22
+  s_50c987f1d763d9::t_f5f1b6e467a3fc 75,79-83,89,91
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_50c987f1d763d9::t_30108b7fca3c60 13-14
+  s_50c987f1d763d9::t_25a3e30cd0c61f 67-74
+  s_50c987f1d763d9::t_397699ddbbefd9 37-39
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_50c987f1d763d9::t_b6823e626ebf99 61
+  s_50c987f1d763d9::t_083fd1e632e11a 62
+  s_50c987f1d763d9::t_da20ed56f12a2a 163-165
+  s_50c987f1d763d9::t_369e8a0897b7e9 15
+  s_50c987f1d763d9::t_3e887e8c4d4774 16
+  s_50c987f1d763d9::t_a6e51c364b3f32 135-139
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.html
+  s_50c987f1d763d9::t_08c1ace3096324 53-54
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.html
+  s_50c987f1d763d9::t_5760852c744068 32-33,45,48
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  s_50c987f1d763d9::t_2cc48a1990ea81 4
+portal/src/app/auth/guards/permission.guard.ts
+  s_50c987f1d763d9::t_b46eda59dde908 4,7-16,19-23
+src/Api/FHIRBridge.Api/Program.cs
+  s_50c987f1d763d9::t_bb3ef4e92e0c4c 149
+  s_50c987f1d763d9::t_2f0a30b8ee5eb8 201-210
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_50c987f1d763d9::t_8a32666ecd06ef 102-109
+  s_50c987f1d763d9::t_245afdf2dc4465 245,248,260
+  s_50c987f1d763d9::t_57ab3fb9793a7e 136
+  s_50c987f1d763d9::t_33fe15f2e6aefb 183
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.html
+  s_50c987f1d763d9::t_dd1c452acc8556 15-17
+  s_50c987f1d763d9::t_684ee9d438d33b 132-136
+  s_50c987f1d763d9::t_64f299e8967a3d 58
+  s_50c987f1d763d9::t_42c62e2f31fbf8 113
+  s_50c987f1d763d9::t_b63d8b25754fa1 101,104
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_50c987f1d763d9::t_a720a2e1e955a4 203,211
+  s_50c987f1d763d9::t_d125dc6d5d718c 56-77
+  s_50c987f1d763d9::t_d1843d0eeb5a91 220
+portal/src/app/components/nodes/source-node/source-node.component.html
+  s_50c987f1d763d9::t_7f0ca0302dec8f 4
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_50c987f1d763d9::t_73920f5153023d 55-58
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_50c987f1d763d9::t_6b1831d66d2757 77,86-87
+  s_50c987f1d763d9::t_9fe11164276be4 278
+  s_50c987f1d763d9::t_db5b1b5be2dfc7 20-22
+  s_50c987f1d763d9::t_1a3d1d5b763d97 397
+  s_50c987f1d763d9::t_03585ef18d2b93 187-188,191
+  s_50c987f1d763d9::t_ed6bf3de404ee3 225
+  s_50c987f1d763d9::t_7f2974ed534816 354
+  s_50c987f1d763d9::t_d4d20870d51a49 328-330
+portal/src/app/operations/pages/errors/errors.component.html
+  s_50c987f1d763d9::t_9c5af0db5e329d 130,132
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_50c987f1d763d9::t_1bc73aea2501df 160-167
+  s_50c987f1d763d9::t_0f0bf96643c44b 340-343,345
+  s_50c987f1d763d9::t_a020ea80a2fecd 362
+  s_50c987f1d763d9::t_7487b2768d4e58 67,76-80,83-94
+  s_50c987f1d763d9::t_da059368157780 109-141,145-146
+  s_50c987f1d763d9::t_2c81e64448299e 314-315,322-323
+  s_50c987f1d763d9::t_7216376d894383 338
+  s_50c987f1d763d9::t_710b1a72693bb6 28-33,43,50
+  s_50c987f1d763d9::t_3e4d93b6466885 339,344,346,348
+  s_50c987f1d763d9::t_e853c75562498f 177,180,188,198
+  s_50c987f1d763d9::t_1f138c6064e672 311
+  s_50c987f1d763d9::t_64d58986ca1914 270-285
+  s_50c987f1d763d9::t_c5c70fc1f6c291 22
+  s_50c987f1d763d9::t_c16e30a0418a3a 305,312-313,318-321
+  s_50c987f1d763d9::t_ca3a39e5431462 363,367
+  s_50c987f1d763d9::t_27d64f8e95474d 260
+  s_50c987f1d763d9::t_dbfd5b24987181 23-27,95,324
+  s_50c987f1d763d9::t_1dd059c06183c3 364-366,368,370,375-378,384
+  s_50c987f1d763d9::t_5136563695a43b 390-393
+  s_50c987f1d763d9::t_37f77e0c6e963b 220-221
+  s_50c987f1d763d9::t_be1af760d6ad07 397-398,411
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_50c987f1d763d9::t_78ff44e7e6d8da 247
+  s_50c987f1d763d9::t_860436f19bbb16 21,23
+  s_50c987f1d763d9::t_89f71ed07b873c 22
+  s_50c987f1d763d9::t_5ee8fc899b6d70 59
+  s_50c987f1d763d9::t_11bcf7e8ea66a7 192,197
+  s_50c987f1d763d9::t_4fd086c0f4ff9f 232
+  s_50c987f1d763d9::t_36fdc55455be0f 48,54-58
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  s_50c987f1d763d9::t_7c6fe36c73be0d 14
+  s_50c987f1d763d9::t_12bb2aa92c6f1c 59
+  s_50c987f1d763d9::t_4ab2eb07440587 107-110
+portal/src/app/app.routes.ts
+  s_50c987f1d763d9::t_19df046096529d 63-65,77
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.html
+  s_50c987f1d763d9::t_47a40ad4b27979 54
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_50c987f1d763d9::t_3a958f607c1524 48-51
+  s_50c987f1d763d9::t_8964f7bc9d20b0 168
+  s_50c987f1d763d9::t_caf64eac7c6b60 146
+  s_50c987f1d763d9::t_5a6d12762c4986 18-21,35,41-47,52-54
+  s_50c987f1d763d9::t_9ad530fd3e6850 128
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_50c987f1d763d9::t_cce3a71df6eb3d 496
+portal/src/app/components/canvas/canvas.component.html
+  s_50c987f1d763d9::t_5fcb706c8a8abe 25,39
+  s_50c987f1d763d9::t_b5891b509d4c07 97
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.ts
+  s_50c987f1d763d9::t_697b1983479d72 23-28
+  s_50c987f1d763d9::t_26fadcb2b97714 61
+  s_50c987f1d763d9::t_fd93b2e5381551 9-10
+  s_50c987f1d763d9::t_652f1496026fd8 77
+  s_50c987f1d763d9::t_89014b53a25bf8 97
+  s_50c987f1d763d9::t_4819f0dee16a95 124
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_50c987f1d763d9::t_eaa5bbf8a38315 267
+  s_50c987f1d763d9::t_5772d5b4edd7b2 346
+  s_50c987f1d763d9::t_c733e3d9553bdc 309
+  s_50c987f1d763d9::t_2a44fc0c8cd260 377
+  s_50c987f1d763d9::t_255a89d48e7230 284
+  s_50c987f1d763d9::t_52aa14b2e5da33 82,104-116
+  s_50c987f1d763d9::t_f00fff0007ecba 41-44
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_50c987f1d763d9::t_028792051bf0b5 18
+  s_50c987f1d763d9::t_1a1816715967aa 341-346,354-357
+  s_50c987f1d763d9::t_3e2a891c23a03d 669-676,685-686
+  s_50c987f1d763d9::t_e6aa34bbb8810f 579-580,582
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2b0d765631eb8c993d3c24d060f5eef56ea89487",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
