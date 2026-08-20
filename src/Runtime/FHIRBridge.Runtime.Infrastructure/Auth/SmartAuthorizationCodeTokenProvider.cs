@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -204,13 +205,16 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         var codeVerifier = Pkce.CreateCodeVerifier();
         var isEhrLaunch = launch is not null;
 
-        // eClinicalWorks (Healow) deviates from the standard SMART authorize request in three confirmed ways (all
-        // against a live authorize attempt): no PKCE, no v2 granular resource scopes, and a mandatory practice_code
-        // parameter. Every ApplicationType strategy (Patient/Standalone/EhrLaunch) delegates to THIS one vendor-
-        // neutral provider regardless of vendor (see PatientApplicationStrategy etc.), so all three must be checked
-        // here directly via source.SourceType rather than as virtual hooks a vendor subclass would override — a
-        // vendor subclass (e.g. HealowAuthorizationCodeTokenProvider) is never actually instantiated for those
-        // strategies.
+        // eClinicalWorks (Healow) deviates from the standard SMART authorize request in two confirmed ways: no v2
+        // granular resource scopes, and a mandatory practice_code parameter — confirmed against the working
+        // D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/practice_code). That same
+        // reference sends PKCE (code_challenge/code_challenge_method) unconditionally and it is accepted, which
+        // disproves the earlier "eCW rejects PKCE" assumption this file used to carry — PKCE is now sent for every
+        // vendor, including Healow (see the unconditional block below). Every ApplicationType strategy (Patient/
+        // Standalone/EhrLaunch) delegates to THIS one vendor-neutral provider regardless of vendor (see
+        // PatientApplicationStrategy etc.), so the remaining Healow-specific behavior must be checked here directly
+        // via source.SourceType rather than as a virtual hook a vendor subclass would override — a vendor subclass
+        // (e.g. HealowAuthorizationCodeTokenProvider) is never actually instantiated for those strategies.
         var isHealow = source.SourceType == RuntimeSourceType.Healow;
 
         var resolvedScope = ResolveScopes(source, isEhrLaunch);
@@ -235,28 +239,12 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         query["response_type"] = "code";
         query["client_id"] = source.ClientId!;
         query["redirect_uri"] = redirectUri;
-        // TEMPORARY DIAGNOSTIC (Healow/eCW only) — sent blank on request to isolate whether eCW's invalid_scope
-        // rejection is somehow tied to the state value itself, rather than the scope/practice_code/client
-        // registration. The OAuth callback still decrypts `state` server-side to look up the pending authorization
-        // (PKCE verifier, workflow/route id, redirect URI) — sending it blank breaks that round trip, so a real
-        // sign-in cannot complete while this is in place. Revert to `query["state"] = state;` unconditionally once
-        // the diagnosis is done.
-        query["state"] = isHealow ? string.Empty : state;
         query["scope"] = resolvedScope;
+        query["state"] = state;
 
-        // PKCE (RFC 7636) — every vendor except eClinicalWorks, whose live authorize endpoint has been confirmed to
-        // reject/ignore it entirely. The code_verifier is still generated and returned above either way:
-        // ExchangeAuthorizationCodeAsync always sends it on the token POST, which a server that never received a
-        // code_challenge simply has nothing to validate it against.
-        if (!isHealow)
-        {
-            query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
-            query["code_challenge_method"] = "S256";
-        }
-
-        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against a live authorize
-        // request. Derived from source.BaseUrl's last path segment, which by this point already reflects a
-        // resolved EhrEndpoint's own FhirBaseUrl when one applies (see
+        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against the working
+        // D:\FHIR\RnD\ECW_Net reference client. Derived from source.BaseUrl's last path segment, which by this
+        // point already reflects a resolved EhrEndpoint's own FhirBaseUrl when one applies (see
         // InteractiveSourceAuthorizationService.StartStandaloneCoreAsync's `baseUrl = ehrEndpoint?.FhirBaseUrl ??
         // sourceConnection.BaseUrl`) — eCW deploys its FHIR API per-practice as /fhir/r4/{practiceCode}, so no
         // separate config field is needed.
@@ -276,6 +264,13 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             query["aud"] = source.BaseUrl;
         }
 
+        // PKCE (RFC 7636) — sent for every vendor, including eClinicalWorks: the working ECW_Net reference client
+        // sends code_challenge/code_challenge_method unconditionally against the same real eCW sandbox and it is
+        // accepted, so there is no vendor exception here (a previous version of this file wrongly assumed eCW
+        // rejected PKCE).
+        query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
+        query["code_challenge_method"] = "S256";
+
         // EHR launch: forward the opaque launch token so the EHR restores the patient/encounter context.
         if (!string.IsNullOrWhiteSpace(launch))
         {
@@ -289,7 +284,10 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     // See the eCW-specific block in BuildAuthorizationRequest above. Rewrites every "prefix/Type.<version-suffix>"
     // resource scope to "prefix/Type.read"; scopes with no dot suffix (openid, fhirUser, launch/patient, ...) pass
-    // through unchanged.
+    // through unchanged. Also drops "offline_access" regardless of the SourceConnection's own configured/persisted
+    // scope list — the working D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/
+    // practice_code) never requests it, and this app registration is not confirmed to be approved for
+    // offline/refresh-token access; requesting it anyway is a plausible independent cause of invalid_scope.
     private static string NormalizeHealowScope(string resolvedScope)
     {
         var scopes = resolvedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -312,7 +310,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             scopes[i] = $"{scope[..(slashIndex + 1 + dotIndex)]}.read";
         }
 
-        return string.Join(' ', scopes);
+        return string.Join(' ', scopes.Where(scope => !string.Equals(scope, "offline_access", StringComparison.OrdinalIgnoreCase)));
     }
 
     // See the practice_code block in BuildAuthorizationRequest above. Null when the base URL isn't
