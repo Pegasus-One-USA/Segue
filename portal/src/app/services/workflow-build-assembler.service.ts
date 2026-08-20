@@ -279,11 +279,15 @@ export class WorkflowBuildAssemblerService {
 
     // eClinicalWorks (Healow) — same shared Epic-shaped wizard fields (Client ID, FHIR base URL, Scopes, App key,
     // ...), but its own sourceSystemType so the backend's Healow-specific authorize-request handling actually
-    // applies (no PKCE, v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's
-    // last path segment — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest) and so the run-time
-    // pipeline routes through EClinicalWorksSourceNodeExecutor/EClinicalWorksFhirSourceClient instead of Epic's
-    // (see SourceNodeExecutors.cs's TrustResolverSourceType). Healow only supports the Patient (standalone)
-    // audience (see VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
+    // applies (v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's last path
+    // segment, no offline_access — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest). The canvas
+    // node itself still resolves to NodeType "EpicSourceNode" (see workflow-graph-mapper.service.ts's
+    // transformIdForNode — the backend's workflow node catalog gates EClinicalWorksSourceNode out until the
+    // generic Source hierarchy lands), so this connection's actual pipeline RUN executes via
+    // EpicSourceNodeExecutor — which still picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
+    // based on this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType), just not via a
+    // dedicated Healow executor class. Healow only supports the Patient (standalone) audience (see
+    // VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
     if (/healow/i.test(connector)) {
       const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
       return {
