@@ -117,7 +117,31 @@ export class FieldMappingAnchorService {
 
   anchorFor(id: string): DOMRect | null {
     const el = this.elements.get(id);
-    return el ? el.getBoundingClientRect() : null;
+    if (!el) return null;
+    return this.clampToScrollableAncestor(el, el.getBoundingClientRect());
+  }
+
+  /**
+   * When `el` sits inside a scrollable row region (.fm-source-rows/.fm-target-rows — scrollable
+   * vertically via the "fit to screen" toggle, see FieldMappingSourceTreeComponent/
+   * FieldMappingTargetCardComponent's fitMode) and is currently scrolled out of that region's visible
+   * band, clamps the returned rect's vertical center to the region's own visible top/bottom edge instead
+   * of the field's true, off-screen position. Without this, a wire to/from a row scrolled out of view is
+   * drawn straight to that off-screen point, visibly breaking out past the card's edge into open canvas
+   * space rather than stopping at the card boundary. Only clamps once the row's true center itself exits
+   * the visible band (not merely if any part of it is clipped), so a still-mostly-visible row keeps its
+   * natural wire position.
+   */
+  private clampToScrollableAncestor(el: HTMLElement, rect: DOMRect): DOMRect {
+    const container = el.closest<HTMLElement>('.fm-source-rows, .fm-target-rows');
+    if (!container) return rect;
+
+    const containerRect = container.getBoundingClientRect();
+    const centerY = rect.top + rect.height / 2;
+    const clampedCenterY = Math.min(containerRect.bottom, Math.max(containerRect.top, centerY));
+    if (clampedCenterY === centerY) return rect;
+
+    return new DOMRect(rect.x, clampedCenterY, rect.width, 0);
   }
 
   /** Center-right point of a rect (source port position), in model-space coordinates. */

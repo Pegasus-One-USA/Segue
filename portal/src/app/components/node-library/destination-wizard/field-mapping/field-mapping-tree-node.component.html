@@ -26,10 +26,11 @@
   </div>
 
   @if (!isCollapsed()(node().id)) {
-    @for (child of node().children; track child.id) {
+    @for (child of node().children; track child.id; let i = $index) {
       <app-field-mapping-tree-node
         [node]="child"
         [depth]="depth() + 1"
+        [siblingIndex]="i"
         [isCollapsed]="isCollapsed()"
         [isMapped]="isMapped()"
         [isArmed]="isArmed()"
@@ -47,6 +48,7 @@
     class="fm-tree-row fm-tree-row--leaf"
     [class.fm-tree-row--mapped]="isMapped()(node().id)"
     [class.fm-tree-row--armed]="isArmed()(node().id)"
+    [class.fm-tree-row--stripe]="isStripe()"
     [style.padding-left.px]="12 + depth() * 18"
     role="button"
     tabindex="0"

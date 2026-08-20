@@ -32,6 +32,11 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
 
   readonly node = input.required<FmTreeNode>();
   readonly depth = input<number>(0);
+  /** This row's position (0-based) among its own sibling nodes — NOT a global row count. Used only to
+   *  zebra-stripe alternating rows; `:nth-child` can't do this itself because each row is wrapped in its
+   *  own `<app-field-mapping-tree-node>` host (recursion), so rows are never real DOM siblings of each
+   *  other even though `:host { display: contents }` makes them render flush together. */
+  readonly siblingIndex = input<number>(0);
   readonly isCollapsed = input.required<(id: string) => boolean>();
   readonly isMapped = input.required<(id: string) => boolean>();
   readonly isArmed = input.required<(id: string) => boolean>();
@@ -52,6 +57,7 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
 
   label(): string { return this.node().label; }
   isGroup(): boolean { return this.node().kind === 'group'; }
+  isStripe(): boolean { return this.siblingIndex() % 2 === 1; }
 
   /** e.g. "Patient, Group" for Observation.subject — empty when this leaf isn't a reference field, or
    *  the backend catalog didn't carry the metadata (built-in fallback defs). See

@@ -27,6 +27,17 @@
   font-weight: 600;
 }
 
+// Zebra-stripe leaf rows only (group rows keep their own fixed --color-side above). Can't use
+// :nth-child here — each row is wrapped in its own recursive <app-field-mapping-tree-node> host, so
+// rows are never real DOM siblings even though `:host { display: contents }` renders them flush
+// together. --stripe is instead set from the node's position among its own siblings (siblingIndex
+// input, see the component).
+.fm-tree-row--stripe {
+  background: var(--color-bg);
+
+  &:hover { background: var(--color-side); }
+}
+
 .fm-tree-row--armed {
   box-shadow: inset 0 0 0 2px var(--color-primary);
   background: var(--color-primary-soft);
@@ -48,6 +59,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-wrap: auto;
   color: var(--color-ink-2);
 }
 
@@ -72,6 +84,7 @@
 .fm-tree-badge--ref {
   color: var(--color-info-strong);
   background: var(--color-info-soft);
+  text-wrap: auto;
 }
 
 .fm-tree-count {

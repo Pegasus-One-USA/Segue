@@ -75,6 +75,31 @@ export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy
   onSearchInput(value: string): void { this.searchQuery.set(value); }
   clearSearch(): void { this.searchQuery.set(''); }
 
+  /** Native scroll inside .fm-source-rows doesn't touch anchors.version/pan/zoom on its own — without
+   *  this, a wire to/from a row scrolled into or out of view (see FieldMappingAnchorService's
+   *  clampToScrollableAncestor) would stay frozen at its pre-scroll position until some unrelated change
+   *  happened to bump the anchor registry. */
+  onRowsScroll(): void { this.anchors.refreshAll(); }
+
+  // ── fit-to-screen / expand ───────────────────────────────────────────────
+  // Defaults to "fit" (capped, scrollable) rather than the old always-uncapped behavior — a big resource
+  // (e.g. Patient's 184 fields) no longer forces panning the whole canvas just to reach a field near the
+  // bottom. Backed by a CSS max-height cap (.fm-source-card--fit), not a direct height binding: a
+  // continuously-bound height would fight the native drag-resize handle (which sets inline height
+  // directly) on every change-detection cycle. max-height only ever narrows the visible box on top of
+  // whatever height is currently set, so it never needs to touch — or undo — the user's own drag.
+  readonly fitMode = signal(true);
+
+  toggleFit(): void {
+    const nowFit = !this.fitMode();
+    this.fitMode.set(nowFit);
+    if (!nowFit) {
+      // Expanding: clear any inline height left over from a drag-resize while fitted, so "expand" really
+      // does mean "show everything", matching the card's natural auto-height default.
+      this.card().nativeElement.style.height = '';
+    }
+  }
+
   ngAfterViewInit(): void {
     // One-time default sized to fit the longest label actually in this resource's tree, in place of the
     // old flat 400px default — never re-applied afterward (see field-mapping-card-size.util.ts), so it
