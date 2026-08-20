@@ -371,7 +371,15 @@ public sealed class OAuthController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(error))
         {
-            _logger.LogWarning("[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription}", error, errorDescription);
+            // state is logged here (not sensitive beyond a short-lived CSRF nonce, already logged in full as part
+            // of the authorizationUrl below) specifically so this line can be correlated back to the "[Step 4/6]
+            // BuildAuthorizationRequest produced: ... authorizationUrl=..." log line for the SAME sign-in attempt —
+            // that URL is the only place the exact scope/aud/practice_code actually sent to the EHR is recorded.
+            // Without this, an EHR-side rejection (e.g. invalid_scope) has no way to be traced back to what request
+            // caused it.
+            _logger.LogWarning(
+                "[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription} state={State}",
+                error, errorDescription, state);
             // error is an OAuth-standard code (e.g. "access_denied") and safe to return; error_description is
             // freeform text from the EHR/IdP and must never be echoed back verbatim — log it above, show generic.
             return BadRequest(new { error, error_description = "Authorization failed. Please try connecting again." });

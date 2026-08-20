@@ -839,6 +839,16 @@ export class LaunchStandalonePatientComponent implements OnInit {
         baseUrlOverride,
       );
       this.sessionId = result.sessionId;
+
+      // Debug aid: show the exact authorize URL FHIRBridge minted (scope, aud, practice_code, everything) before
+      // the full-page navigation away — otherwise the only way to see it is digging through server-side logs
+      // after the fact. OK proceeds with the redirect exactly as before; Cancel aborts it so a URL that looks
+      // wrong can be caught before actually hitting the EHR.
+      if (!window.confirm(`About to redirect to this authorize URL:\n\n${result.launchUrl}\n\nContinue?`)) {
+        this.isRedirectingToMyChart.set(false);
+        return;
+      }
+
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);

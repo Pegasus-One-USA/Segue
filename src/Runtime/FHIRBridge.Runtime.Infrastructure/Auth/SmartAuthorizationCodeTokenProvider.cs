@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -50,19 +51,6 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     /// <summary>Human-readable provider name used in messages, audit actions, and the token-store key prefix.</summary>
     protected virtual string ProviderName => "SMART";
-
-    private static readonly IReadOnlyDictionary<string, string> NoAdditionalAuthorizationParameters = new Dictionary<string, string>();
-
-    /// <summary>
-    /// Extra authorize-request query parameters this vendor's authorization server requires beyond the standard
-    /// SMART App Launch set (response_type/client_id/redirect_uri/scope/state/code_challenge/
-    /// code_challenge_method/aud/launch) — e.g. eClinicalWorks' mandatory <c>practice_code</c> identifying which
-    /// practice's patient portal to authenticate against (see <see cref="HealowAuthorizationCodeTokenProvider"/>).
-    /// The base adds none; vendor subclasses override when their authorization server requires extra
-    /// request-level scoping beyond the standard set.
-    /// </summary>
-    protected virtual IReadOnlyDictionary<string, string> AdditionalAuthorizationParameters(FhirSourceConfiguration source) =>
-        NoAdditionalAuthorizationParameters;
 
     /// <summary>
     /// Whether the authorize request should carry PKCE's <c>code_challenge</c>/<c>code_challenge_method</c> — true
@@ -269,16 +257,40 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             query["launch"] = launch;
         }
 
-        // Vendor-specific extras beyond the standard SMART set (e.g. eClinicalWorks' mandatory practice_code) —
-        // the base sends none; see AdditionalAuthorizationParameters.
-        foreach (var (key, value) in AdditionalAuthorizationParameters(source))
+        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against a live authorize
+        // request. Every ApplicationType strategy (Patient/Standalone/EhrLaunch) delegates to THIS one vendor-
+        // neutral provider regardless of vendor (see PatientApplicationStrategy etc.), so this must be checked
+        // here directly rather than as a virtual hook a vendor subclass would override — that subclass is never
+        // actually instantiated for those strategies. Derived from source.BaseUrl's last path segment, which by
+        // this point already reflects a resolved EhrEndpoint's own FhirBaseUrl when one applies (see
+        // InteractiveSourceAuthorizationService.StartStandaloneCoreAsync's `baseUrl = ehrEndpoint?.FhirBaseUrl ??
+        // sourceConnection.BaseUrl`) — eCW deploys its FHIR API per-practice as /fhir/r4/{practiceCode}, so no
+        // separate config field is needed.
+        if (source.SourceType == RuntimeSourceType.Healow)
         {
-            query[key] = value;
+            var practiceCode = ExtractHealowPracticeCode(source.BaseUrl);
+            if (!string.IsNullOrWhiteSpace(practiceCode))
+            {
+                query["practice_code"] = practiceCode;
+            }
         }
 
         var separator = source.AuthorizationEndpoint!.Contains('?') ? "&" : "?";
         var authorizationUrl = $"{source.AuthorizationEndpoint}{separator}{query}";
         return new SmartAuthorizationRequest(authorizationUrl, codeVerifier, state);
+    }
+
+    // See the practice_code block in BuildAuthorizationRequest above. Null when the base URL isn't
+    // configured/parseable yet (e.g. a source still being set up), so no blank practice_code is ever sent.
+    private static string? ExtractHealowPracticeCode(string? baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl) || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : null;
     }
 
     /// <summary>
