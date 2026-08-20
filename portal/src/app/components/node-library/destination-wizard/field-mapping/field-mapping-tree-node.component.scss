@@ -69,6 +69,11 @@
   background: var(--color-success-soft);
 }
 
+.fm-tree-badge--ref {
+  color: var(--color-info-strong);
+  background: var(--color-info-soft);
+}
+
 .fm-tree-count {
   margin-left: auto;
   font-size: 10px;

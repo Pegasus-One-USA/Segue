@@ -1,5 +1,5 @@
 import { Component, HostBinding, computed, inject, input, output, signal } from '@angular/core';
-import { MappingRow, MappingInstanceSelection, isReferenceField } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, isReferenceCandidate } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -212,8 +212,8 @@ export class FieldMappingListComponent {
     });
   }
 
-  // ── reference-lookup control — only meaningful for a FHIR reference field (path ends ".reference") ──
-  isReferenceField = isReferenceField;
+  // ── reference-lookup control — any single-value mapped field, see isReferenceCandidate ──
+  isReferenceCandidate = isReferenceCandidate;
 
   /** Every mapped resource this row could resolve against — excludes its own resource (a reference never
    *  points at its own resource type in these mappings). Drawn from allResources (every resource selected

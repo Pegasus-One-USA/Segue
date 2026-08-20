@@ -654,6 +654,36 @@
   margin-top: 14px;
 }
 
+/* Wider variant for a dialog whose body has real controls (dropdown + button per item), not just prose. */
+.dw-confirm-dialog--wide {
+  width: 460px;
+}
+
+.dw-ref-warning {
+  text-align: left;
+
+  & + & {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  p {
+    margin: 0 0 6px;
+  }
+}
+
+.dw-ref-warning-fix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-ref-warning-select {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ── FHIR passthrough / customize choice (step 3) ────────────────────────────── */
 .dw-fhir-choice {
   display: flex;

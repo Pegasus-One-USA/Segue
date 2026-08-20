@@ -52,6 +52,19 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
 
   label(): string { return this.node().label; }
   isGroup(): boolean { return this.node().kind === 'group'; }
+
+  /** e.g. "Patient, Group" for Observation.subject — empty when this leaf isn't a reference field, or
+   *  the backend catalog didn't carry the metadata (built-in fallback defs). See
+   *  ResourceFieldDef.referenceTargetTypes for why this exists: a field named "Subject" gives no hint
+   *  by itself that it's the Patient link. */
+  referenceTargetTypes(): string[] {
+    return this.node().field?.referenceTargetTypes ?? [];
+  }
+
+  leafTooltip(): string {
+    const types = this.referenceTargetTypes();
+    return types.length ? `${this.node().id} — may reference: ${types.join(', ')}` : this.node().id;
+  }
   fieldCount(): number {
     return this.node().kind === 'leaf' ? 1 : countLeaves(this.node());
   }

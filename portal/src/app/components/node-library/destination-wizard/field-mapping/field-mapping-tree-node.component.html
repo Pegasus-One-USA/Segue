@@ -52,13 +52,16 @@
     tabindex="0"
     [attr.aria-pressed]="isArmed()(node().id)"
     [attr.aria-label]="ariaLabel()"
-    [title]="node().id"
+    [title]="leafTooltip()"
     (keydown)="onKeydown($event)"
     (pointerdown)="onPointerDown($event)"
     (pointermove)="onPointerMove($event)"
     (pointerup)="onPointerUp($event)"
   >
     <span class="fm-tree-label">{{ label() }}</span>
+    @if (referenceTargetTypes().length) {
+      <span class="fm-tree-badge fm-tree-badge--ref">→ {{ referenceTargetTypes().join(', ') }}</span>
+    }
     <span class="fm-tree-port" aria-hidden="true"></span>
   </div>
 }

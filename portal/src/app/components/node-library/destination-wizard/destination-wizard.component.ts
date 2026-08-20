@@ -103,6 +103,7 @@ import {
   sortByDependencyRank,
   dependencyRankFor,
   recommendedFor,
+  requiredClosureFor,
 } from './resource-dependency.config';
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
@@ -199,6 +200,31 @@ export interface ResourceFieldDef {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  // Resource types this field may reference (e.g. ["Patient", "Group"] for Observation.subject) — lets
+  // the source tree surface "this could be the Patient link" without the user already knowing FHIR's
+  // "subject"/"performer"/... naming for it. Absent for the built-in fallback defs, same as the above.
+  referenceTargetTypes?: string[];
+}
+
+/** One unresolved "required parent reference" for the pendingSaveWarnings confirm-before-save dialog —
+ *  see buildParentReferenceWarnings. `message` is a plain-text fallback for a case with no auto-fix
+ *  (parent not selected as a data group, or the catalog has no reference field for it at all); when
+ *  `sourceFieldPath` is set instead, the dialog offers a destination-column dropdown and a one-click fix
+ *  (resolvePendingReferenceWarning) instead of just describing the problem. */
+export interface PendingParentReferenceWarning {
+  resource: string;
+  parent: string;
+  message: string | null;
+  sourceFieldPath: string | null;
+  sourceFieldLabel: string | null;
+  sourceFieldJsonPath?: string;
+  sourceFieldValueType?: string;
+  sourceFieldArrays?: string[];
+  /** Set when sourceFieldPath is already mapped to some column — the fix re-targets/resolves that row
+   *  instead of creating a new one. */
+  existingRow: MappingRow | null;
+  destinationColumns: string[];
+  selectedDestinationColumn: string | null;
 }
 
 export interface ResourceDef {
@@ -1931,6 +1957,7 @@ export class DestinationWizardComponent implements OnInit {
       jsonPath: f.jsonPath,
       valueType: f.valueType,
       arrays: f.arrays,
+      referenceTargetTypes: f.referenceTargetTypes,
     };
   }
 
@@ -2142,6 +2169,8 @@ export class DestinationWizardComponent implements OnInit {
   private mappingRowsSnapshot: MappingRow[] | null = null;
   private targetByResourceSnapshot: Record<string, string> | null = null;
   readonly pendingExitConfirm = signal(false);
+  /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
+  readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
 
   /** The real backend DestinationType for whichever destination family this wizard instance is
    *  configuring — same ternary already used inline at every mapping-profiles/import call site
@@ -2434,6 +2463,106 @@ export class DestinationWizardComponent implements OnInit {
       );
       return;
     }
+    // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
+    // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
+    // parent resource's mapping in another group, or resolve it later, so they're shown a
+    // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
+    const warnings = this.buildParentReferenceWarnings(group);
+    if (warnings.length > 0) {
+      this.pendingSaveWarnings.set(warnings);
+      return;
+    }
+    this.completeSaveGroupMapping(group);
+  }
+
+  /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
+  confirmSaveWithWarnings(): void {
+    const group = this.activeMappingGroup();
+    this.pendingSaveWarnings.set(null);
+    if (group) this.completeSaveGroupMapping(group);
+  }
+
+  /** User chose "Keep editing" on the pendingSaveWarnings dialog — nothing is saved. */
+  cancelSaveWithWarnings(): void {
+    this.pendingSaveWarnings.set(null);
+  }
+
+  onSaveWarningsBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelSaveWithWarnings();
+  }
+
+  /** The dialog's one-click fix for a warning that has a detected source field (see
+   *  buildParentReferenceWarnings): re-targets the row already mapping that field if one exists, or
+   *  creates a fresh one — either way setting referencesResource so the reference actually resolves.
+   *  Re-evaluates warnings for the resource afterward; if none remain, closes the dialog and returns the
+   *  user to the canvas to review the fix rather than saving for them — they still click Save themselves
+   *  when ready (same as if there'd been no warning at all). If other warnings remain, the dialog just
+   *  updates to show those. */
+  resolvePendingReferenceWarning(
+    w: PendingParentReferenceWarning,
+    destinationColumn: string,
+  ): void {
+    if (!w.sourceFieldPath) return;
+
+    if (!destinationColumn) {
+      this.toast.error(
+        'Select a destination column',
+        `Choose which column on ${this.targetFor(w.resource)} should receive "${w.sourceFieldLabel}" before mapping it.`,
+      );
+      return;
+    }
+
+    const rows = this.mappingRows();
+    const idx = rows.findIndex(
+      (r) => r.resource === w.resource && r.sources[0]?.fhirPath === w.sourceFieldPath,
+    );
+    const tableName = this.targetFor(w.resource);
+    const collidesWithOtherRow = rows.some(
+      (r, i) => i !== idx && r.resource === w.resource && r.tableName === tableName && r.targetName === destinationColumn,
+    );
+    if (collidesWithOtherRow) {
+      this.toast.error(
+        'Column already mapped',
+        `"${destinationColumn}" on ${tableName} is already mapped from another field — pick a different column, or remove that mapping first.`,
+      );
+      return;
+    }
+
+    this.mappingRows.update((rows) => {
+      if (idx >= 0) {
+        const updated = [...rows];
+        updated[idx] = { ...updated[idx], targetName: destinationColumn, referencesResource: w.parent };
+        return updated;
+      }
+      const newRow: MappingRow = {
+        resource: w.resource,
+        sources: [{
+          fhirPath: w.sourceFieldPath!,
+          label: w.sourceFieldLabel ?? w.sourceFieldPath!,
+          jsonPath: w.sourceFieldJsonPath,
+          valueType: w.sourceFieldValueType,
+          arrays: w.sourceFieldArrays,
+        }],
+        mode: 'value',
+        instance: { type: 'first' },
+        targetName: destinationColumn,
+        tableName: this.targetFor(w.resource),
+        referencesResource: w.parent,
+      };
+      return [...rows, newRow];
+    });
+
+    const remaining = this.buildParentReferenceWarnings(w.resource);
+    this.pendingSaveWarnings.set(remaining.length === 0 ? null : remaining);
+    if (remaining.length === 0) {
+      this.toast.success(
+        'Reference resolved',
+        `"${w.sourceFieldLabel}" now resolves to "${w.parent}" — review the mapping, then click Save.`,
+      );
+    }
+  }
+
+  private completeSaveGroupMapping(group: string): void {
     this.closeGroupMapping();
     if (this.canSaveMappingSummary()) this.buildAndShowMappingSummary();
     else
@@ -2500,6 +2629,7 @@ export class DestinationWizardComponent implements OnInit {
     const knownTables = this.hasSqlTables()
       ? new Set(this.sqlTableOptions())
       : null;
+
     const targetCounts = new Map<string, number>();
 
     for (const row of rows) {
@@ -2587,6 +2717,105 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     return errors;
+  }
+
+  /** Soft, confirm-before-proceed checks shown via pendingSaveWarnings — distinct from
+   *  validateMappingForSave's errors, which block Save outright. A resource with a "required" parent per
+   *  RESOURCE_DEPENDENCIES (e.g. Observation → Patient) needs some mapped field pointed at that parent via
+   *  the target card / list's "which resource does this reference?" picker (referencesResource), or the
+   *  destination row has no link back to its parent at all. Resource selection only ever *hints*
+   *  required/recommended companions (see recommendedResources below) — it never blocks or auto-wires the
+   *  reference itself — so this is the only place a missing required link is ever surfaced. Not a hard
+   *  block: the user may still intend to wire it via another group's canvas, or accept the gap knowingly.
+   *  Relational-only: referencesResource resolves to a real FK lookup against another mapped resource's
+   *  table (see WorkflowBuildAssemblerService.resolveReferenceLookup), which is meaningless without a live
+   *  SQL schema to resolve against.
+   *
+   *  Beyond just describing the gap, this resolves an actual fix where it can: the catalog's
+   *  referenceTargetTypes (see ResourceFieldDef) identifies which field on `resource` could BE the
+   *  reference (e.g. "Subject › Reference" targets Patient/Group/Device/Location) — mirroring
+   *  MappingCatalogService.resolveParentReferenceField's own tie-break (fewest target types, then
+   *  path) for picking among multiple candidates. If the user already mapped that exact field (just
+   *  never set "Resolves to"), that row is offered as the one-click fix; otherwise a fresh mapping is
+   *  offered, defaulting to the resource's first destination column. */
+  private buildParentReferenceWarnings(resource: string): PendingParentReferenceWarning[] {
+    const knownTables = this.hasSqlTables()
+      ? new Set(this.sqlTableOptions())
+      : null;
+    if (!knownTables) return [];
+
+    const rows = this.mappingRows().filter((r) => r.resource === resource);
+    if (rows.length === 0) return [];
+
+    const selectedResources = new Set(this.selectedResources());
+    const warnings: PendingParentReferenceWarning[] = [];
+
+    for (const parent of requiredClosureFor(resource)) {
+      if (rows.some((r) => r.referencesResource === parent)) continue; // already satisfied
+
+      if (!selectedResources.has(parent)) {
+        warnings.push({
+          resource, parent,
+          message: `"${resource}" requires a reference to "${parent}", but "${parent}" isn't selected as a data group in this workflow — add it in the previous step.`,
+          sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
+          destinationColumns: [], selectedDestinationColumn: null,
+        });
+        continue;
+      }
+
+      // referenceTargetTypes is Firely-model metadata the real backend catalog carries — a pasted "Load
+      // JSON payload" or the built-in fallback defs (both of which availableFields() prefers when
+      // present) never have it, since neither has any notion of the FHIR spec's Reference semantics.
+      // The catalog fetch (see the effect populating catalogByResource) runs unconditionally for every
+      // selected resource regardless of what the visible tree is sourced from, so it's used here
+      // directly instead of availableFields() — falling back to that only if the catalog genuinely
+      // hasn't loaded (e.g. no backend reachable), in which case there's truly nothing to auto-detect.
+      const candidates = (this.catalogByResource()[resource] ?? this.availableFields(resource))
+        .filter((f) => (f.referenceTargetTypes ?? []).includes(parent))
+        .sort((a, b) =>
+          (a.referenceTargetTypes!.length - b.referenceTargetTypes!.length) ||
+          a.path.localeCompare(b.path));
+
+      // Prefer whichever candidate the user already mapped (just never resolved) over the "best" one by
+      // tie-break rank — the tie-break is only a default for when nothing's mapped yet.
+      let chosen = candidates[0] ?? null;
+      let existingRow: MappingRow | null = null;
+      for (const c of candidates) {
+        const row = rows.find((r) => r.sources[0]?.fhirPath === c.path);
+        if (row) { chosen = c; existingRow = row; break; }
+      }
+
+      if (!chosen) {
+        warnings.push({
+          resource, parent,
+          message: `"${resource}" requires a reference to "${parent}" — map a reference field (e.g. subject) and set its "references" target to "${parent}" so the destination row links back correctly.`,
+          sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
+          destinationColumns: [], selectedDestinationColumn: null,
+        });
+        continue;
+      }
+
+      const destinationColumns = this.columnsForResourceTarget(resource);
+      warnings.push({
+        resource, parent, message: null,
+        sourceFieldPath: chosen.path,
+        // chosen.label is already the group-then-leaf breadcrumb the source tree itself renders for this
+        // field (e.g. "Subject › Reference" — see buildResourceTree in field-mapping-tree.util.ts, whose
+        // leaf label is this exact same catalog label). Prefixing the resource name gives the field's full
+        // path exactly as it'd read if the tree were expanded all the way to it.
+        sourceFieldLabel: `${resource} › ${chosen.label}`,
+        sourceFieldJsonPath: chosen.jsonPath,
+        sourceFieldValueType: chosen.valueType,
+        sourceFieldArrays: chosen.arrays,
+        existingRow,
+        destinationColumns,
+        // Pre-select only when there's already a real choice (the row the user previously mapped) —
+        // otherwise leave it blank so picking a column is a deliberate act, not a silent default to
+        // whichever happens to be first.
+        selectedDestinationColumn: existingRow?.targetName ?? null,
+      });
+    }
+    return warnings;
   }
 
   /** "Close" below the canvas — always confirms first, since it discards unsaved changes. */

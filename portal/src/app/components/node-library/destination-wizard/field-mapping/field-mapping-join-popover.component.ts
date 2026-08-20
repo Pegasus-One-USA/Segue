@@ -1,6 +1,6 @@
 import { Component, HostBinding, computed, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
-import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceField } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
 
 /**
  * Join order/delimiter + array instance-selection editor. Opens either from a wire click or from the
@@ -84,7 +84,7 @@ export class FieldMappingJoinPopoverComponent {
     return arrays?.length ? arrays[arrays.length - 1] : '';
   });
 
-  isReferenceField = isReferenceField;
+  isReferenceCandidate = isReferenceCandidate;
   otherResources = computed(() => {
     const resource = this.draft()?.resource;
     return this.allResources().filter(r => r !== resource);
