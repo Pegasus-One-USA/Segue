@@ -548,7 +548,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             new HttpDocumentRetriever(_httpClient) { RequireHttps = !IsLocalHttp(metadataAddress) });
         var configuration = await configurationManager.GetConfigurationAsync(cancellationToken);
 
-        var principal = handler.ValidateToken(idToken, new TokenValidationParameters
+        var validationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuer = configuration.Issuer,
@@ -558,7 +558,23 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = configuration.SigningKeys,
             ClockSkew = TimeSpan.FromMinutes(2)
-        }, out _);
+        };
+
+        // eCW's sandbox jwks_uri serves a signing key whose X.509 certificate expired in 2022 and was apparently
+        // never rotated (confirmed live: IDX10249 "X509SecurityKey validation failed ... certificate has expired").
+        // The default IssuerSigningKeyValidator rejects any X509SecurityKey with an expired certificate, on top of
+        // (not instead of) actually verifying the token's signature against it. IssuerSigningKeys above was just
+        // fetched fresh from that same issuer's own live discovery document a few lines up, so there is no
+        // separate "is this key trusted" question the cert-lifetime check is protecting against here — skip only
+        // that assertion for Healow, keeping the "is this key one of the ones the issuer actually offered" check
+        // every other vendor still gets from the default validator.
+        if (source.SourceType == RuntimeSourceType.Healow)
+        {
+            validationParameters.IssuerSigningKeyValidator = (securityKey, _, parameters) =>
+                parameters.IssuerSigningKeys?.Contains(securityKey) == true;
+        }
+
+        var principal = handler.ValidateToken(idToken, validationParameters, out _);
 
         return (principal.FindFirst("fhirUser")?.Value, principal.FindFirst("patient")?.Value);
     }
