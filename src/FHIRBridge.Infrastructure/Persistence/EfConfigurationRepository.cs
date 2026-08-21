@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
@@ -17,6 +18,30 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
     public EfConfigurationRepository(FHIRBridgeDbContext db)
     {
         _db = db;
+    }
+
+    /// <summary>
+    /// Recursively marks every owned reference navigation (OwnsOne, including nested OwnsOne-within-OwnsOne, e.g.
+    /// SourceConnection.Authentication.ClientSecret) as <see cref="EntityState.Modified"/>. Call this before
+    /// <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> whenever a domain Update() method reassigns a
+    /// brand-new owned-value-object instance onto an already-tracked entity — EF Core's automatic change detection
+    /// does not reliably flag a nested owned entity's own properties as changed purely because its *parent* owned
+    /// reference was replaced wholesale, so relying on it silently leaves nested columns at their old values even
+    /// though SaveChangesAsync completes without error. A no-op (produces an identical UPDATE) when nothing nested
+    /// actually changed, so this is safe to apply unconditionally.
+    /// </summary>
+    private static void MarkOwnedGraphModified(EntityEntry entry)
+    {
+        foreach (var reference in entry.References)
+        {
+            if (reference.TargetEntry is null)
+            {
+                continue;
+            }
+
+            reference.TargetEntry.State = EntityState.Modified;
+            MarkOwnedGraphModified(reference.TargetEntry);
+        }
     }
 
     public async Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
@@ -115,6 +140,17 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
     public async Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct)
     {
+        // Update() reassigns a brand-new Authentication instance, which itself owns nested ClientSecret/PrivateKey
+        // (OwnsOne within OwnsOne — see SourceConnectionConfiguration). EF Core's automatic change detection does
+        // not reliably propagate into a nested owned entity when its *parent* owned reference is replaced wholesale
+        // (a documented EF Core limitation, not something fixable from the domain model without turning
+        // SourceAuthenticationConfiguration into a mutable in-place-edited type) — the nested KeyVaultName/
+        // SecretName columns silently kept their old values across every Update() in practice, even though a
+        // secret was correctly written to the secret store every time (WriteInlineClientSecretAsync succeeded) and
+        // sibling top-level properties like Scopes updated fine. Forcing the whole owned graph to Modified before
+        // SaveChangesAsync guarantees every nested owned column is included in the UPDATE regardless of whether EF
+        // detected the change itself.
+        MarkOwnedGraphModified(_db.Entry(e));
         await _db.SaveChangesAsync(ct);
 
         // Update() reassigns brand-new owned-value-object instances (Authentication/Interactive/Retrieval, and
@@ -162,6 +198,9 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
     public async Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct)
     {
+        // See UpdateSourceConnectionAsync's remarks — same owned-reference-replacement risk whenever Update()
+        // reassigns a brand-new owned instance onto an already-tracked entity.
+        MarkOwnedGraphModified(_db.Entry(e));
         await _db.SaveChangesAsync(ct);
 
         // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() reassigns a
@@ -242,6 +281,11 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
     public async Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct)
     {
+        // See UpdateSourceConnectionAsync's remarks — same owned-reference-replacement risk whenever Update()
+        // reassigns a brand-new owned SecretReference onto an already-tracked entity. Rotating a destination's
+        // secret currently happens to work in practice mostly because every observed test workflow created a
+        // fresh destination rather than editing an existing one's secret — the underlying risk is identical.
+        MarkOwnedGraphModified(_db.Entry(e));
         await _db.SaveChangesAsync(ct);
 
         // Same owned-reference-replacement corruption as UpdateSourceConnectionAsync above (Update() reassigns a

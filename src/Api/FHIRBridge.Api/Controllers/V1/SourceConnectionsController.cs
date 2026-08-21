@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,7 +15,9 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// <see cref="ConfigurationsController"/> (their permission depends on the connection's vendor, resolved at
 /// runtime) — this controller only adds the two operations neither of those expose yet: fetch a single source
 /// connection by id, and delete one. Gated by the flat (vendor-independent) SourceConnections/View and
-/// SourceConnections/Delete permissions the Source Connections admin page checks on the frontend.
+/// SourceConnections/Delete permissions the Source Connections admin page checks on the frontend, AND —
+/// additionally, independently — by the connection's own vendor-specific View/Delete permission, resolved
+/// from the fetched row's SourceSystemType (the id alone doesn't reveal the vendor).
 /// </summary>
 [ApiController]
 [Authorize]
@@ -23,13 +26,16 @@ public sealed class SourceConnectionsController : ControllerBase
 {
     private readonly IConfigurationService _configurationService;
     private readonly ISigningKeyGenerationService _signingKeyGenerationService;
+    private readonly IAuthorizationService _authorizationService;
 
     public SourceConnectionsController(
         IConfigurationService configurationService,
-        ISigningKeyGenerationService signingKeyGenerationService)
+        ISigningKeyGenerationService signingKeyGenerationService,
+        IAuthorizationService authorizationService)
     {
         _configurationService = configurationService;
         _signingKeyGenerationService = signingKeyGenerationService;
+        _authorizationService = authorizationService;
     }
 
     /// <summary>
@@ -68,20 +74,41 @@ public sealed class SourceConnectionsController : ControllerBase
 
     [HttpGet("{sourceConnectionId:guid}")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.View, description: "View a source connection's configuration.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var sourceConnection = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
-        return sourceConnection is null ? NotFound() : Ok(sourceConnection);
+        if (sourceConnection is null)
+        {
+            return NotFound();
+        }
+
+        // Two independent layers, same pattern as everywhere else: the generic SourceConnections.View
+        // above AND this connection's own vendor's View permission.
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, sourceConnection.SourceSystemType, PermissionActionCode.View);
+        if (denied is not null) return denied;
+
+        return Ok(sourceConnection);
     }
 
     [HttpDelete("{sourceConnectionId:guid}")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.Delete, description: "Delete a source connection.")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Delete, description: "Delete a source connection.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
+        var sourceConnection = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
+        if (sourceConnection is null)
+        {
+            return NotFound();
+        }
+
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, sourceConnection.SourceSystemType, PermissionActionCode.Delete);
+        if (denied is not null) return denied;
+
         await _configurationService.DeleteSourceConnectionAsync(sourceConnectionId, cancellationToken);
         return NoContent();
     }

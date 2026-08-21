@@ -11,10 +11,12 @@
         <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
         Refresh
       </button>
-      <button class="btn-cta" type="button" (click)="onNewWorkflow()">
-        <span class="btn-ico">&#43;</span>
-        New Workflow
-      </button>
+      @if (canCreate()) {
+        <button class="btn-cta" type="button" (click)="onNewWorkflow()">
+          <span class="btn-ico">&#43;</span>
+          New Workflow
+        </button>
+      }
     </div>
   </div>
 
@@ -157,41 +159,52 @@
                       [style.bottom.px]="pos.bottom"
                       [style.left.px]="pos.left"
                     >
+                      <!-- Always visible with workflow.view alone (the route guard already required it) —
+                           opening the builder to look at an existing workflow is VIEW access; only its own
+                           Save button (gated on workflow.edit there) decides whether anything can actually
+                           be changed. Relabeled so a view-only role isn't told it can "Edit". -->
                       <button type="button" class="row-menu-item" (click)="onEdit(w); openActionMenuId.set(null)">
-                        <mat-icon>edit</mat-icon> Edit in Workflow Builder
+                        <mat-icon>{{ canEdit() ? 'edit' : 'visibility' }}</mat-icon>
+                        {{ canEdit() ? 'Edit in Workflow Builder' : 'View in Workflow Builder' }}
                       </button>
 
-                      <button
-                        type="button"
-                        class="row-menu-item"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        (click)="onToggleEnabled(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
-                        {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
-                      </button>
+                      @if (canEdit()) {
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="onToggleEnabled(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
+                          {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
+                        </button>
+                      }
 
-                      <button
-                        type="button"
-                        class="row-menu-item"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        [title]="w.isPubliclyLaunchable
-                          ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
-                          : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
-                        (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
-                        {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
-                      </button>
+                      @if (canEdit()) {
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          [title]="w.isPubliclyLaunchable
+                            ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
+                            : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
+                          (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
+                          {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
+                        </button>
+                      }
 
-                      <button
-                        type="button"
-                        class="row-menu-item"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        (click)="askCopyWorkflow(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>content_copy</mat-icon> Duplicate
-                      </button>
+                      @if (canCreate()) {
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="askCopyWorkflow(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>content_copy</mat-icon> Duplicate
+                        </button>
+                      }
 
                       <button
                         type="button"
@@ -203,16 +216,18 @@
                         <mat-icon>tag</mat-icon> Copy Workflow ID
                       </button>
 
-                      <div class="row-menu-divider"></div>
+                      @if (canDelete()) {
+                        <div class="row-menu-divider"></div>
 
-                      <button
-                        type="button"
-                        class="row-menu-item row-menu-item--danger"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        (click)="askDelete(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>delete</mat-icon> Delete
-                      </button>
+                        <button
+                          type="button"
+                          class="row-menu-item row-menu-item--danger"
+                          [disabled]="rowBusyId() === w.workflowId"
+                          (click)="askDelete(w); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>delete</mat-icon> Delete
+                        </button>
+                      }
                     </div>
                   }
                 </div>
@@ -260,7 +275,7 @@
                          background path (see onAction's 'async' default) so the row stays interactive and the run
                          survives navigating away, with live status now pushed via SignalR (RunStatusHubService)
                          instead of requiring the old blocking wait. -->
-                    @if (w.action === 'Run') {
+                    @if (w.action === 'Run' && canRun()) {
                       <button
                         class="btn-primary"
                         type="button"
@@ -292,7 +307,7 @@
         <div class="empty-icon">&#9889;</div>
         <h3>{{ searchQuery() ? 'No workflows matched your search' : 'No workflows yet' }}</h3>
         <p>{{ searchQuery() ? 'Try a different search term.' : 'Create your first workflow to see it here.' }}</p>
-        @if (!searchQuery()) {
+        @if (!searchQuery() && canCreate()) {
           <button class="btn-cta" type="button" (click)="onNewWorkflow()">
             <span class="btn-ico">&#43;</span>
             New Workflow

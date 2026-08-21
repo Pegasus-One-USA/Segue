@@ -11,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint, EhrEndpointRequest, EhrEndpointType, EhrVendor } from '../../models/ehr-endpoint.model';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 export interface EhrEndpointDialogData {
   endpoint?: EhrEndpoint;
@@ -55,6 +56,7 @@ export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string 
 export class EhrEndpointDialogComponent {
   private readonly svc = inject(IEhrEndpointService);
   private readonly fb  = inject(FormBuilder);
+  private readonly actionGuard = inject(PermissionActionGuard);
   readonly dialogRef   = inject(MatDialogRef<EhrEndpointDialogComponent>);
   readonly data: EhrEndpointDialogData = inject(MAT_DIALOG_DATA);
 
@@ -102,6 +104,10 @@ export class EhrEndpointDialogComponent {
   }
 
   save(): void {
+    // Defense-in-depth: EhrEndpointListComponent.openAdd()/openEdit() already checked before this
+    // dialog opened — re-checked here against a permission change landing mid-edit.
+    const requiredCode = this.isEdit ? 'ehrendpoints.edit' : 'ehrendpoints.create';
+    if (!this.actionGuard.ensure(requiredCode, `You do not have permission to ${this.isEdit ? 'edit' : 'create'} EHR endpoints.`)) return;
     this.submitted.set(true);
     this.errorMessage.set(null);
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }

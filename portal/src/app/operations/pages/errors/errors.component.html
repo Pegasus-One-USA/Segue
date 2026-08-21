@@ -127,9 +127,9 @@
           <td mat-cell *matCellDef="let r">
             @if (r.errorReferenceId) {
               @if ((r.status || 'Open') === 'Open') {
-                <button class="btn btn-ghost btn-sm" type="button" (click)="resolve(r)">Resolve</button>
+                <button class="btn btn-ghost btn-sm" type="button" *appHideWithoutPermission="'governance.write'" (click)="resolve(r)">Resolve</button>
               } @else {
-                <button class="btn btn-ghost btn-sm" type="button" (click)="reopen(r)">Reopen</button>
+                <button class="btn btn-ghost btn-sm" type="button" *appHideWithoutPermission="'governance.write'" (click)="reopen(r)">Reopen</button>
               }
             }
           </td>

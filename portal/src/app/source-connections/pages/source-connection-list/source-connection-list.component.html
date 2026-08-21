@@ -53,24 +53,28 @@
           Reset
         </button>
         <!-- Vendor for the new connection — replaces the in-form EHR `<select>` this page used to rely on before
-             that control was removed from the shared engine (see ehr-vendor-source-form.component.ts). -->
-        <select class="type-filter-select" [value]="addVendor()" (change)="addVendor.set($any($event.target).value)">
-          @for (o of createVendorOptions; track o.value) {
-            <option [value]="o.value">{{ o.label }}</option>
-          }
-        </select>
-        <button
-          class="btn-add"
-          type="button"
-          appDisableWithoutPermission="sourceconnections.edit"
-          appDisableWithoutPermissionReason="You need Source Connections Edit access to add a connection."
-          (click)="openAdd()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New Source Connection
-        </button>
+             that control was removed from the shared engine (see ehr-vendor-source-form.component.ts).
+             Narrowed to vendors this role can actually create (permittedCreateVendorOptions) — there is no
+             `sourceconnections.create` code; Create is authorized per-vendor (epic.create, cerner.create, ...),
+             so offering a vendor the role can't create would let them fill out the whole form only to hit a
+             403 on save. -->
+        @if (permittedCreateVendorOptions().length > 0) {
+          <select class="type-filter-select" [value]="addVendor()" (change)="addVendor.set($any($event.target).value)">
+            @for (o of permittedCreateVendorOptions(); track o.value) {
+              <option [value]="o.value">{{ o.label }}</option>
+            }
+          </select>
+          <button
+            class="btn-add"
+            type="button"
+            (click)="openAdd()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            New Source Connection
+          </button>
+        }
       </div>
 
     </div>
@@ -196,7 +200,7 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let c" class="col-actions">
               <div class="actions-cell">
-                <button mat-icon-button class="btn-view" matTooltip="View Source Connection" (click)="openView(c)">
+                <button mat-icon-button class="btn-view" matTooltip="View Source Connection" *appHideWithoutPermission="'sourceconnections.view'" (click)="openView(c)">
                   <mat-icon>visibility</mat-icon>
                 </button>
                 <button
@@ -204,8 +208,7 @@
                   class="btn-edit"
                   [matTooltip]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — edit disabled' : 'Edit Source Connection'"
                   [disabled]="isUsedInWorkflow(c)"
-                  appDisableWithoutPermission="sourceconnections.edit"
-                  appDisableWithoutPermissionReason="You need Source Connections Edit access to edit this connection."
+                  *appHideWithoutPermission="vendorEditCode(c)"
                   (click)="openEdit(c)">
                   <mat-icon>edit</mat-icon>
                 </button>
@@ -214,7 +217,7 @@
                   class="btn-delete"
                   [matTooltip]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — delete disabled' : 'Delete Source Connection'"
                   [disabled]="isUsedInWorkflow(c)"
-                  *appHideWithoutPermission="'sourceconnections.delete'"
+                  *appHideWithoutPermission="deleteCodes(c); mode: 'all'"
                   (click)="confirmDelete(c)">
                   <mat-icon>delete_outline</mat-icon>
                 </button>

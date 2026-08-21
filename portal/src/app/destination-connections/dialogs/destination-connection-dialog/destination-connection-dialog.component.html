@@ -34,18 +34,24 @@
     @if (!chosenType()) {
       <p class="dcd-hint">Choose a connection type to continue.</p>
       <div class="dcd-type-choice">
-        <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
-          <strong>SQL</strong>
-          <span>Write mapped records into a relational table (SQL Server, MySQL, or PostgreSQL).</span>
-        </button>
-        <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
-          <strong>CSV</strong>
-          <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
-        </button>
-        <button type="button" class="dcd-type-card" (click)="chooseType('fhir')">
-          <strong>Aidbox (FHIR)</strong>
-          <span>Write FHIR resources to a FHIR-native store (Aidbox).</span>
-        </button>
+        @if (permissions.hasPermission('sqlserver.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
+            <strong>SQL</strong>
+            <span>Write mapped records into a relational table (SQL Server, MySQL, or PostgreSQL).</span>
+          </button>
+        }
+        @if (permissions.hasPermission('csv.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
+            <strong>CSV</strong>
+            <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
+          </button>
+        }
+        @if (permissions.hasPermission('sourceconnections.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('fhir')">
+            <strong>Aidbox (FHIR)</strong>
+            <span>Write FHIR resources to a FHIR-native store (Aidbox).</span>
+          </button>
+        }
       </div>
     } @else {
       <app-destination-connection-form [destType]="formDestinationType()!" mode="create" />

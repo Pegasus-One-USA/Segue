@@ -43,7 +43,7 @@ public sealed class TransformationRulesController : ControllerBase
     /// <summary>Every rule configured for the given filters, across whichever scopes match — the Rules modal
     /// uses this (unfiltered by scope) to show what's already defined at every tier for one resource type.</summary>
     [HttpGet]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.TransformationRules, PermissionActionCode.View, description: "View transformation rules.")]
     [ProducesResponseType(typeof(List<TransformationRuleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListRules(
         [FromQuery] TransformScope? scope,
@@ -63,15 +63,14 @@ public sealed class TransformationRulesController : ControllerBase
     /// <summary>Config schema for every node type — which keys it reads, what control to render, and its
     /// default — so the UI can render proper dropdowns/checkboxes instead of a raw JSON textarea.</summary>
     [HttpGet("node-schemas")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.TransformationRules, PermissionActionCode.View, description: "View transformation rules.")]
     [ProducesResponseType(typeof(List<TransformNodeSchemaDto>), StatusCodes.Status200OK)]
     public IActionResult GetNodeSchemas() => Ok(_service.GetNodeSchemas());
 
     /// <summary>Creates a new rule, or updates one in place when <see cref="SaveTransformationRuleRequest.Id"/> is supplied.</summary>
     [HttpPost]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [StandardPermission(
-        PermissionGroupCode.Configuration,
+        PermissionGroupCode.TransformationRules,
         PermissionActionCode.Write,
         description: "Create or update a scoped transformation rule.")]
     [ProducesResponseType(typeof(TransformationRuleDto), StatusCodes.Status200OK)]
@@ -83,10 +82,9 @@ public sealed class TransformationRulesController : ControllerBase
     }
 
     [HttpDelete("{ruleId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [StandardPermission(
-        PermissionGroupCode.Configuration,
-        PermissionActionCode.Write,
+        PermissionGroupCode.TransformationRules,
+        PermissionActionCode.Delete,
         description: "Delete a scoped transformation rule.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> DeleteRule(Guid ruleId, CancellationToken cancellationToken)
@@ -99,7 +97,7 @@ public sealed class TransformationRulesController : ControllerBase
     /// value through it, returning the final value plus a per-node trace — the modal's live preview and the
     /// wizard's "auto-applied on add" pre-fill both call this.</summary>
     [HttpPost("preview")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.TransformationRules, PermissionActionCode.View, description: "View transformation rules.")]
     [ProducesResponseType(typeof(TransformPreviewResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> Preview(
         [FromBody] TransformPreviewRequest request, CancellationToken cancellationToken)
@@ -112,7 +110,7 @@ public sealed class TransformationRulesController : ControllerBase
     /// show/clone what's really running when there's no Field-level rule of its own yet, instead of the wizard's
     /// "Add rule" starting from blank schema defaults.</summary>
     [HttpGet("effective")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.TransformationRules, PermissionActionCode.View, description: "View transformation rules.")]
     [ProducesResponseType(typeof(List<TransformationRuleDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetEffectiveRules(
         [FromQuery] DestinationType destinationType,

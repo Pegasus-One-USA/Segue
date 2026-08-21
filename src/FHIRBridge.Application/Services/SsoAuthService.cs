@@ -44,6 +44,13 @@ public sealed class SsoAuthService : ISsoAuthService
             throw;
         }
 
+        return await LoginWithIdentityAsync(identity, cancellationToken);
+    }
+
+    public async Task<LocalLoginResponse> LoginWithIdentityAsync(ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        var authenticationType = $"SSO:{identity.Provider}";
+
         // Prefer the stable external subject; fall back to the verified email for first-time SSO of a
         // user that was provisioned locally (e.g. invited) but not yet linked to this identity.
         var user = await _repository.GetUserByExternalIdAsync(identity.Subject, cancellationToken);
@@ -65,10 +72,10 @@ public sealed class SsoAuthService : ISsoAuthService
 
         // Ensure the identity is linked so subsequent logins resolve by subject.
         if (!string.Equals(user.ExternalUserId, identity.Subject, StringComparison.Ordinal) ||
-            user.LoginProvider != request.Provider ||
+            user.LoginProvider != identity.Provider ||
             user.IsLocalLoginEnabled)
         {
-            user.LinkExternalIdentity(identity.Subject, request.Provider);
+            user.LinkExternalIdentity(identity.Subject, identity.Provider);
             await _repository.UpdateUserAsync(user, cancellationToken);
         }
 

@@ -6,6 +6,8 @@ import { ApplicabilityService } from '../../services/applicability.service';
 import { PhaseConfigService } from '../../services/phase-config.service';
 import { WizardService } from '../../services/wizard.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
+import { PermissionService } from '../../auth/services/permission.service';
+import { ToastService } from '../../services/toast.service';
 import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { RANK_LABEL } from '../../models/transform.model';
@@ -13,6 +15,7 @@ import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../model
 import { MergeNodeOption } from '../../models/wizard-state.model';
 import { SourceConfigFormComponent } from '../shared/config-form/config-form.contract';
 import { SOURCE_FORM_REGISTRY, EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from './source-form.registry';
+import { sourceFormKeyForNode } from './source-node-vendor.util';
 import { EpicSourceFormComponent } from './epic-source-form/epic-source-form.component';
 import { CernerSourceFormComponent } from './cerner-source-form/cerner-source-form.component';
 import { AthenahealthSourceFormComponent } from './athenahealth-source-form/athenahealth-source-form.component';
@@ -147,6 +150,8 @@ export class NodeLibraryDialogComponent {
   private readonly appSvc   = inject(ApplicabilityService);
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly graphMapper = inject(WorkflowGraphMapperService);
+  private readonly permissions = inject(PermissionService);
+  private readonly toast = inject(ToastService);
   readonly wiz              = inject(WizardService);
 
   readonly open         = input(false);
@@ -333,6 +338,12 @@ export class NodeLibraryDialogComponent {
           const tId = (node as TransformNode).transformId;
           if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum') {
             untracked(() => this._openDestWizardEdit(node));
+            // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
+            // without setting showDestWizard() true if the permission check failed — stopping there would
+            // otherwise leave the whole dialog open on the empty "Select a node from the left" placeholder,
+            // with nothing left to select from. Close it so the visible result is just the toast, not a
+            // stranded dialog that opened only to immediately reject the one node it was opened for.
+            if (!untracked(() => this.showDestWizard())) { untracked(() => this._close()); }
           }
           return;
         }
@@ -340,6 +351,10 @@ export class NodeLibraryDialogComponent {
         // recognizable vendor marker — e.g. every canvas node created before per-vendor forms existed).
         const key = node && isSourceNode(node) ? this._sourceFormKeyForNode(node) : 'epic';
         untracked(() => this.openSourceForm(key, node ?? id));
+        // Same reasoning as the destination branch above — openSourceForm() only sets
+        // openSourceFormType() on success; if its permission check failed, close the dialog instead of
+        // leaving it stranded on the empty picker with the toast as the only sign anything happened.
+        if (!untracked(() => this.openSourceFormType())) { untracked(() => this._close()); }
       }
     });
   }
@@ -367,8 +382,20 @@ export class NodeLibraryDialogComponent {
     const pm = this.pickerModel();
     const byRank = new Map<number, LibraryItem[]>();
 
-    // Rank 0 — Sources (filtered by phase config: only enabled sources shown)
-    const visibleSources = SOURCES.filter(s => this.phaseCfg.isSourceEnabled(s.id));
+    // Rank 0 — Sources (filtered by phase config: only enabled sources shown; and by RBAC — a source
+    // with a dedicated permission group the current role lacks View for is excluded from the library
+    // entirely, same as a phase-hidden source, rather than shown disabled. Tile visibility is
+    // specifically the vendor's own View permission — separate from Create (gates actually adding a
+    // new node, see onSourceSelected) and Edit (gates modifying an existing one) — a role could hold
+    // View without Create/Edit and still see the tile, just be unable to complete adding/editing it.
+    // This is a presentation-only filter: the backend re-validates the exact same permissions
+    // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
+    // removing a node from view here is not a security control — it's purely so a user never sees, or
+    // can search up, a type their role can't use.
+    const visibleSources = SOURCES.filter(s =>
+      this.phaseCfg.isSourceEnabled(s.id) &&
+      (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
+    );
     byRank.set(0, visibleSources.map(s => ({
       id:       s.id,
       rank:     0,
@@ -389,6 +416,11 @@ export class NodeLibraryDialogComponent {
       if (this.phaseCfg.isRankHidden(t.rank)) return;
       // Hide items not enabled in this phase (don't show as disabled)
       if (!this.phaseCfg.isTransformEnabled(t.id)) return;
+      // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
+      // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
+      // the matching comment on the Sources filter above for why this is presentation-only, not a
+      // security control, and for the View/Create/Edit distinction.
+      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';
@@ -544,34 +576,32 @@ export class NodeLibraryDialogComponent {
 
   // ── inline source-config form (registry-driven — Epic, other EHR vendors, Generic FHIR, HL7v2, Sample) ────────
   /** Best-effort vendor/source-type detection for an existing canvas node, used when re-opening its form for
-   *  editing (see the constructor's effect above). Reads the same 'Connector' field value every source form's
-   *  own getFields() now writes (see EhrVendorSourceFormComponent.buildFieldsToSave); a node saved before that
-   *  field existed (any pre-refactor Epic node) falls back to 'epic', preserving prior behavior exactly. */
-  private _isGenericFhirNode(node: CanvasNode): boolean {
-    return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
-  }
-
-  private _isHl7v2Node(node: CanvasNode): boolean {
-    return isSourceNode(node) && /hl7\s*v?\s*2|mllp/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
-  }
-
+   *  editing (see the constructor's effect above) — now shared with canvas.component.ts's node-delete
+   *  permission gate via source-node-vendor.util.ts, so the two never resolve a node's vendor differently. */
   private _sourceFormKeyForNode(node: CanvasNode): string {
-    if (this._isGenericFhirNode(node)) return 'generic-fhir';
-    if (this._isHl7v2Node(node)) return 'hl7v2';
-    // 'Connector' on a self-contained vendor node is the raw EhrVendor value (e.g. 'Cerner') — map it back to the
-    // matching sources.data.ts id via the same table SourceConnectionListComponent uses for entity-mode rows.
-    // Falls back to 'epic' both for a node with no 'Connector' at all (any canvas node saved before this refactor
-    // introduced that field) and for an unrecognized value — matching the pre-refactor "anything that isn't
-    // Generic FHIR must be Epic" assumption exactly.
-    const connector = node.fields['Connector'];
-    const mapped = connector ? EHR_VENDOR_TO_SOURCE_FORM_KEY[connector] : undefined;
-    return mapped ?? 'epic';
+    return sourceFormKeyForNode(node);
   }
 
   /** Opens the registered form for `key` (a sources.data.ts id) — self-contained vendor forms restore through
    *  WizardService.open()/editingFields() exactly as EpicAudienceFormComponent always did; headless forms
    *  (generic-fhir, hl7v2) restore through their own `initialFields` input, seeded from `editNodeOrId`'s fields. */
+  // The single choke point every source vendor's form opens through, self-contained (Epic, Cerner,
+  // Athenahealth, Allscripts, Healow, Meditech, Sample — each mutates PipelineStore directly, never
+  // emitting sourceSelected/transformSelected) or headless (Generic FHIR, HL7 v2, Sample — routed
+  // back through onHeadlessSourceFormSave() below). Gating here, rather than in each of those forms
+  // individually, is what makes View/Create/Edit enforcement apply uniformly across all nine vendors:
+  // an editNodeOrId present means this reopens an EXISTING node's config (Edit); absent means it's
+  // about to add a brand-new one (Create).
   openSourceForm(key: string, editNodeOrId?: CanvasNode | string | null): void {
+    const prefix = SOURCES.find(s => s.id === key)?.permissionPrefix;
+    if (prefix) {
+      const action = editNodeOrId ? 'edit' : 'create';
+      if (!this.permissions.hasPermission(`${prefix}.${action}`)) {
+        this.toast.error('Not permitted', `You don't have permission to ${action} this source.`);
+        return;
+      }
+    }
+
     this.sourceFormError.set(null);
     if (SELF_CONTAINED_SOURCE_FORM_KEYS.has(key)) {
       const nodeId = typeof editNodeOrId === 'string' ? editNodeOrId : editNodeOrId?.id;
@@ -630,7 +660,43 @@ export class NodeLibraryDialogComponent {
   }
 
   // ── destination wizard ────────────────────────────────────────────────────
+  // The wizard's own 'sql' type covers both SQL Server and Azure SQL (the specific DestinationType
+  // is only chosen inside the wizard itself, not at this outer selection) — checked as an OR of
+  // both permission prefixes here as a best-effort UI filter; the backend's own per-spec check in
+  // WorkflowEndpoints.cs (which sees the actual chosen DestinationType once the form is submitted)
+  // is what actually enforces the precise one.
+  //
+  // 'medplum' and 'fhir' have no DEDICATED backend permission group (no PermissionGroupCode.Medplum /
+  // .FhirRepository member exists) — but that doesn't mean they're unenforced: SourceSystemPermissionGroups
+  // .GroupFor(DestinationType.Medplum / .FhirRepository) falls back to the generic SourceConnections group
+  // (no same-named PermissionGroupCode member => fallback, per that method's own doc comment), and
+  // ControllerAuthorizationExtensions.HasPermissionAsync uses that exact resolution when a real
+  // create/edit/delete request for either of these DestinationType values comes in. So the backend already
+  // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
+  // prefix list) is closing a UI/backend mismatch, not inventing a new code.
+  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): string[] {
+    switch (type) {
+      case 'sql':      return ['sqlserver', 'azuresql'];
+      case 'csv':      return ['csv'];
+      case 'mysql':    return ['mysql'];
+      case 'mongo':    return ['mongo'];
+      case 'postgres': return ['postgresql'];
+      case 'blob':     return ['blobstorage'];
+      case 'medplum':  return ['sourceconnections'];
+      case 'fhir':     return ['sourceconnections'];
+    }
+  }
+
+  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob', action: 'create' | 'edit'): boolean {
+    const prefixes = this.destWizardPermissionPrefixes(type);
+    if (!prefixes.length) return true;
+    if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
+    this.toast.error('Not permitted', `You don't have permission to ${action} this destination.`);
+    return false;
+  }
+
   private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob'): void {
+    if (!this.canOpenDestWizard(type, 'create')) return;
     const pm = this.pickerModel();
     if (!pm) return;
     this.destWizardType.set(type);
@@ -650,6 +716,7 @@ export class NodeLibraryDialogComponent {
     const tId = (node as TransformNode).transformId;
     const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' =
       tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : 'csv';
+    if (!this.canOpenDestWizard(type, 'edit')) return;
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

@@ -112,14 +112,21 @@ export class WorkflowBuildAssemblerService {
     // consumed downstream, instead of a separately-configured source-side picker that could silently drift out of
     // sync with it (the real cause of repeated "Invalid Scope" failures against the live sandbox). A cheap
     // pre-pass over dest_mappings — far cheaper than the full buildMappings() schema-diff work done in the real
-    // destinations loop below, and this only needs the bare resource name per row.
+    // destinations loop below, and this only needs the bare resource name per row. Also unions in dest_resources
+    // (the Step 2 "Data groups" selection) directly: a FHIR-passthrough destination (Aidbox/Medplum) never
+    // populates dest_mappings at all — there's no field-by-field mapping table for a whole-resource passthrough
+    // write — so relying on dest_mappings alone left athenahealth's retrieval resourceTypes permanently empty for
+    // that combination, failing save with "At least one resource type is required for Search (REST) retrieval"
+    // even after the user picked resources in Step 2.
     const destinationResourceTypesBySourceNodeId = new Map<string, Set<string>>();
     for (const destNode of graph.nodes.filter((node) => this.isDestinationNode(node))) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
       const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
       const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
       if (!sourceNodeId) continue;
-      const resources = [...new Set(this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource))];
+      const mappedResources = this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource);
+      const selectedResources = (destFields['dest_resources'] ?? '').split(',').map((r) => r.trim()).filter(Boolean);
+      const resources = new Set([...mappedResources, ...selectedResources]);
       const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
       resources.forEach((r) => set.add(r));
       destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);

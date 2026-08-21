@@ -15,6 +15,10 @@ import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.compo
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { AuthService } from '../../../auth/services/auth.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 @Component({
   selector: 'app-role-list',
@@ -28,15 +32,26 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
     MatProgressSpinnerModule,
     MatTooltipModule,
     PaginationBarComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './role-list.component.html',
   styleUrls: ['./role-list.component.scss'],
 })
 export class RoleListComponent implements OnInit {
-  private readonly svc    = inject(IRoleService);
-  private readonly dialog = inject(MatDialog);
-  private readonly toast  = inject(ToastService);
-  private readonly router = inject(Router);
+  private readonly svc         = inject(IRoleService);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  private readonly router      = inject(Router);
+  readonly authService         = inject(AuthService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating — mirrors user-list.component.ts's established pattern exactly. Exposed
+  // as instance fields (template expressions can't reach an imported enum/function directly) and
+  // consumed via *appHideWithoutPermission in the template rather than local canX() wrappers, since
+  // nothing here needs an isAdmin() OR beyond what the directive already does internally. ──────
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
 
   readonly searchQuery = signal('');
   readonly pageIndex   = signal(0);
@@ -110,6 +125,7 @@ export class RoleListComponent implements OnInit {
   }
 
   openAdd(): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Create), 'You do not have permission to create roles.')) return;
     this.dialog
       .open(RoleDialogComponent, {
         width: '560px',
@@ -127,6 +143,7 @@ export class RoleListComponent implements OnInit {
   }
 
   openEdit(role: Role): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Edit), 'You do not have permission to edit roles.')) return;
     this.dialog
       .open(RoleDialogComponent, {
         width: '560px',
@@ -148,6 +165,7 @@ export class RoleListComponent implements OnInit {
   }
 
   confirmDelete(role: Role): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Delete), 'You do not have permission to delete roles.')) return;
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',

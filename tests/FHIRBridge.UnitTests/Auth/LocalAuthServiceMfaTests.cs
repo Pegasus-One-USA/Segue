@@ -83,7 +83,7 @@ public sealed class LocalAuthServiceMfaTests
         response.AccessToken.Should().BeNull();
         user.FailedLoginCount.Should().Be(0);
         user.MfaChallengeTokenHash.Should().Be("challenge-hash");
-        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class LocalAuthServiceMfaTests
         _repository.Setup(x => x.GetUserByMfaChallengeTokenHashAsync(challengeToken, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _totp.Setup(x => x.ValidateCode("SECRET", "123456")).Returns(true);
-        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()))
+        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>()))
             .Returns(new AccessTokenDto("access-token", "Bearer", DateTime.UtcNow.AddHours(1)));
         _accessTokenIssuer.Setup(x => x.IssueRefreshToken()).Returns(("refresh-hash", DateTime.UtcNow.AddDays(30)));
         _repository.Setup(x => x.GetUserRolesAsync(user.Id, It.IsAny<CancellationToken>()))

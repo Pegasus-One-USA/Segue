@@ -26,8 +26,7 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
 
     public AccessTokenDto Issue(
         User user,
-        IReadOnlyCollection<string> roleNames,
-        IReadOnlyCollection<string>? permissionCodes = null)
+        IReadOnlyCollection<string> roleNames)
     {
         var signingKey = _secretAccessor.JwtSigningKey;
         if (string.IsNullOrWhiteSpace(signingKey))
@@ -71,14 +70,9 @@ public sealed class JwtAccessTokenIssuer : IAccessTokenIssuer
             claims.Add(new Claim("roles", roleName));
         }
 
-        if (permissionCodes is not null)
-        {
-            foreach (var code in permissionCodes.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                claims.Add(new Claim("permissions", code));
-            }
-        }
-
+        // Permission codes are deliberately NOT embedded here — see IUserPermissionsProvider. They're
+        // resolved per-request instead, from the database (with short-lived caching), keyed off the
+        // small "uid" claim already on this token.
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(

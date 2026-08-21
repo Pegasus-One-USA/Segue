@@ -13,7 +13,7 @@
     <div class="page-header__title-row">
       <h1>Transformation Rules</h1>
       @if (!creatingNew()) {
-        <button mat-flat-button color="primary" (click)="startNewTarget()">
+        <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
           <mat-icon>add</mat-icon> New rule target
         </button>
       }
@@ -154,7 +154,7 @@
           matches, without needing to be re-configured per workflow.
         </p>
         @if (!creatingNew()) {
-          <button mat-flat-button color="primary" class="empty-state__action" (click)="startNewTarget()">
+          <button mat-flat-button color="primary" class="empty-state__action" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
             <mat-icon>add</mat-icon> New rule target
           </button>
         }
@@ -246,7 +246,7 @@
                                 <option [value]="opt.value">{{ opt.label }}</option>
                               }
                             </select>
-                            <div class="step-reorder">
+                            <div class="step-reorder" *appHideWithoutPermission="'transformationrules.write'">
                               <button type="button" class="step-reorder-btn" [disabled]="isFirst" (click)="moveStep(group, step, -1)" matTooltip="Run earlier">
                                 <mat-icon>arrow_upward</mat-icon>
                               </button>
@@ -311,15 +311,15 @@
                     </div>
 
                     <div class="step-card__actions">
-                      <button class="btn-text-danger" type="button" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
-                      <button mat-flat-button color="primary" [disabled]="step.saving" (click)="saveStep(group, step)">
+                      <button class="btn-text-danger" type="button" *appHideWithoutPermission="'transformationrules.delete'" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
+                      <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" [disabled]="step.saving" (click)="saveStep(group, step)">
                         @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { Save step }
                       </button>
                     </div>
                   </div>
                 </div>
               }
-              <button mat-stroked-button class="add-step-btn" (click)="addStep(group)">
+              <button mat-stroked-button class="add-step-btn" *appHideWithoutPermission="'transformationrules.write'" (click)="addStep(group)">
                 <mat-icon>add</mat-icon> Add another step
               </button>
             </div>

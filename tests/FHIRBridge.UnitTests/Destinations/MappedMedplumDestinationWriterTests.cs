@@ -119,6 +119,79 @@ public sealed class MappedMedplumDestinationWriterTests
     }
 
     [Fact]
+    public async Task Upserts_identifierless_types_by_a_deterministic_logical_id_not_by_identifier()
+    {
+        // Provenance has no `identifier` element or search parameter in FHIR R4, so `?identifier=` conditional
+        // update is impossible (Medplum 400s "Unknown search parameter: identifier"). It must upsert by logical id.
+        var (writer, handler) = CreateWriter();
+        var resource = """{"resourceType":"Provenance","id":"epic-src-42","recorded":"2024-01-01T00:00:00Z"}""";
+
+        var result = await writer.WriteAsync(
+            Destination(ClientMetadata),
+            new MappingProfile("Provenance → Medplum", "Provenance", Guid.NewGuid(), Guid.NewGuid(), "Provenance", []),
+            [new MappedDestinationRecord(Guid.NewGuid(), "Provenance", "Provenance", "epic-src-42", new Dictionary<string, object?>(), SourceJson: resource)],
+            Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        var put = handler.FhirRequests.Should().ContainSingle().Subject;
+        put.Method.Should().Be(HttpMethod.Put);
+        put.Url.Should().NotContain("?identifier=");
+        // A logical-id PUT to a valid UUID, and the body id must match the URL id.
+        put.Url.Should().MatchRegex($@"^{System.Text.RegularExpressions.Regex.Escape(BaseUrl)}/Provenance/[0-9a-f]{{8}}-[0-9a-f]{{4}}-5[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$");
+        var logicalId = put.Url.Split('/').Last();
+        put.Body.Should().Contain($"\"id\":\"{logicalId}\"");
+    }
+
+    [Fact]
+    public async Task Identifierless_type_falls_back_to_POST_create_when_PUT_returns_404()
+    {
+        // Hosted Medplum won't update-as-create a client-assigned id: PUT /Provenance/{uuid} to a non-existent id
+        // 404s. The writer must then POST /Provenance to create it, and count the record as written.
+        var (writer, handler) = CreateWriter(req =>
+            new HttpResponseMessage(req.Method == HttpMethod.Post ? HttpStatusCode.Created : HttpStatusCode.NotFound));
+        var resource = """{"resourceType":"Provenance","id":"epic-1","recorded":"2024-01-01T00:00:00Z"}""";
+
+        var result = await writer.WriteAsync(
+            Destination(ClientMetadata),
+            new MappingProfile("Provenance → Medplum", "Provenance", Guid.NewGuid(), Guid.NewGuid(), "Provenance", []),
+            [new MappedDestinationRecord(Guid.NewGuid(), "Provenance", "Provenance", "epic-1", new Dictionary<string, object?>(), SourceJson: resource)],
+            Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        result.RecordErrors.Should().BeNull();
+        handler.FhirRequests.Should().HaveCount(2);
+        var put = handler.FhirRequests[0];
+        var post = handler.FhirRequests[1];
+        put.Method.Should().Be(HttpMethod.Put);
+        put.Url.Should().Contain("/Provenance/");                 // logical-id PUT first
+        post.Method.Should().Be(HttpMethod.Post);
+        post.Url.Should().Be($"{BaseUrl}/Provenance");            // create at the type collection
+        post.Body.Should().NotContain("\"id\"");                  // server owns id on create
+    }
+
+    [Fact]
+    public async Task Identifierless_upsert_id_is_stable_across_runs()
+    {
+        // Idempotency guarantee: the same source id maps to the same logical id every run, so re-running updates
+        // in place rather than creating a duplicate Provenance.
+        static async Task<string> RunOnce()
+        {
+            var (writer, handler) = CreateWriter();
+            var resource = """{"resourceType":"AuditEvent","id":"a-1","recorded":"2024-01-01T00:00:00Z"}""";
+            await writer.WriteAsync(
+                Destination(ClientMetadata),
+                new MappingProfile("AuditEvent → Medplum", "AuditEvent", Guid.NewGuid(), Guid.NewGuid(), "AuditEvent", []),
+                [new MappedDestinationRecord(Guid.NewGuid(), "AuditEvent", "AuditEvent", "a-1", new Dictionary<string, object?>(), SourceJson: resource)],
+                Context(), CancellationToken.None);
+            return handler.FhirRequests.Single().Url;
+        }
+
+        var first = await RunOnce();
+        var second = await RunOnce();
+        second.Should().Be(first);
+    }
+
+    [Fact]
     public async Task Derives_the_token_url_from_the_fhir_base_url()
     {
         var (writer, handler) = CreateWriter();

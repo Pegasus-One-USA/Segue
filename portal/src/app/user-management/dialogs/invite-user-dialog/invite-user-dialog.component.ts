@@ -17,6 +17,8 @@ import { IUserService } from '../../../auth/services/i-user.service';
 import { Role, UserRole } from '../../../auth/models/user.model';
 import { InviteUserRequest } from '../../../auth/models/auth-request.model';
 import { InviteResultDialogComponent } from '../invite-result-dialog/invite-result-dialog.component';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 @Component({
   selector: 'app-invite-user-dialog',
@@ -42,6 +44,7 @@ export class InviteUserDialogComponent implements OnInit {
   private readonly dialog      = inject(MatDialog);
   private readonly toast       = inject(ToastService);
   private readonly fb          = inject(FormBuilder);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   // ─── State ───────────────────────────────────────────────────────────────
   loading      = signal(false);
@@ -89,6 +92,10 @@ export class InviteUserDialogComponent implements OnInit {
 
   // ─── Submit ──────────────────────────────────────────────────────────────
   submit(): void {
+    // Defense-in-depth: the only way to reach this dialog is UserListComponent's/UserDetailComponent's
+    // gated openInviteDialog()/resendInvitation()-adjacent triggers — this re-check guards against a
+    // permission change landing in another tab while the dialog is still open, not a normal path.
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     this.submitted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();

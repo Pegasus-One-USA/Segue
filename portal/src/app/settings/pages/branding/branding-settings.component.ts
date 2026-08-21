@@ -9,6 +9,8 @@ import { BrandingService } from '../../../services/branding.service';
 import { ThemeService } from '../../../services/theme.service';
 import { ToastService } from '../../../services/toast.service';
 import { BrandConfiguration, BrandThemeMode, LoaderStyle } from '../../../models/brand-configuration.model';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
@@ -25,6 +27,16 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   protected readonly branding  = inject(BrandingService);
   private readonly themeService = inject(ThemeService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  /** The route already requires configuration.write to enter this screen at all, so this is
+   *  defense-in-depth (a permission revoked in another tab while this one stays open) rather than
+   *  the only line of defense — same reasoning as every other "route already gates this" case
+   *  elsewhere in the app. Disabling the whole form (rather than gating each of its ~17 controls
+   *  individually) also disables every embedded app-brand-asset-field's Upload/Clear via the
+   *  standard ControlValueAccessor.setDisabledState() protocol — no per-field wiring needed. */
+  protected readonly canWrite = this.permissions.hasPermission('configuration.write');
 
   protected readonly saving = signal(false);
 
@@ -87,6 +99,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     this.originalConfig    = this.branding.current();
     this.originalThemeMode = this.themeService.mode();
     this.populateForm(this.originalConfig);
+    if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
     // The pills reflect what's actually on screen right now, not just whatever
     // was last saved into the branding record — avoids showing "Light" active
     // while the page is actually rendering in dark mode.
@@ -116,6 +129,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   }
 
   protected save(): void {
+    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify branding.')) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.saving.set(true);
     this.branding.save(this.buildConfig()).subscribe(saved => {
@@ -129,6 +143,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   }
 
   protected resetToDefault(): void {
+    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify branding.')) return;
     this.branding.resetToDefault();
     this.originalConfig    = this.branding.current();
     this.originalThemeMode = this.originalConfig.defaultThemeMode;

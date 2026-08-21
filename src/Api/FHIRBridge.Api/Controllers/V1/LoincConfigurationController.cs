@@ -24,15 +24,15 @@ public sealed class LoincConfigurationController : ControllerBase
         (_service, _importChannel, _db) = (service, importChannel, db);
 
     [HttpGet]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View LOINC terminology configuration.")]
+    [StandardPermission(PermissionGroupCode.Loinc, PermissionActionCode.View, description: "View LOINC terminology configuration.")]
     public async Task<ActionResult<LoincConfigurationDto>> Get(CancellationToken cancellationToken) => Ok(await _service.GetAsync(cancellationToken));
 
     [HttpPut]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Update LOINC terminology configuration and credentials.")]
+    [StandardPermission(PermissionGroupCode.Loinc, PermissionActionCode.Write, description: "Update LOINC terminology configuration and credentials.")]
     public async Task<ActionResult<LoincConfigurationDto>> Update([FromBody] UpdateLoincConfigurationRequest request, CancellationToken cancellationToken) => Ok(await _service.UpdateAsync(request, cancellationToken));
 
     [HttpPost("synchronize")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Manually synchronize the LOINC release.")]
+    [StandardPermission(PermissionGroupCode.Loinc, PermissionActionCode.Write, description: "Manually synchronize the LOINC release.")]
     public IActionResult Synchronize()
     {
         _importChannel.Enqueue(async (services, ct) =>
@@ -45,7 +45,7 @@ public sealed class LoincConfigurationController : ControllerBase
     }
 
     [HttpGet("history")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View LOINC import history.")]
+    [StandardPermission(PermissionGroupCode.Loinc, PermissionActionCode.View, description: "View LOINC import history.")]
     public async Task<ActionResult<IReadOnlyList<LoincImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
     {
         var history = await _db.LoincImportHistory

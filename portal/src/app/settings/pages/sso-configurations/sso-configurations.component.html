@@ -1,0 +1,118 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">SSO Configurations</h1>
+    <p class="page-sub">Configure SAML 2.0 single sign-on and Microsoft Entra ID login. Changes here take effect immediately — no restart needed.</p>
+  </div>
+
+  @if (loading()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
+
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">SAML 2.0 SSO</h2>
+            <p class="card-sub">Lets staff sign in via your organization's own identity provider (Okta, ADFS, Azure AD as a SAML app, etc.).</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="samlEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field">
+            <label for="sso-spEntityId">Service Provider Entity ID</label>
+            <input id="sso-spEntityId" type="text" formControlName="serviceProviderEntityId" placeholder="https://your-domain/saml/sp" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-idpEntityId">Identity Provider Entity ID</label>
+            <input id="sso-idpEntityId" type="text" formControlName="identityProviderEntityId" placeholder="From your IdP's metadata" />
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="sso-ssoUrl">Single Sign-On URL</label>
+            <input id="sso-ssoUrl" type="text" formControlName="singleSignOnUrl" placeholder="From your IdP's metadata" />
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="sso-cert">Identity Provider Certificate</label>
+            <textarea id="sso-cert" formControlName="identityProviderCertificate" rows="4"
+                      placeholder="Base64 X.509 certificate — public, not a secret"></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="sso-redirect">Redirect On Success</label>
+            <input id="sso-redirect" type="text" formControlName="portalRedirectUrl" placeholder="https://your-domain/dashboard" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-error-redirect">Redirect On Failure</label>
+            <input id="sso-error-redirect" type="text" formControlName="portalErrorRedirectUrl" placeholder="https://your-domain/auth/login" />
+          </div>
+        </div>
+
+        <div class="readonly-block">
+          <p class="readonly-hint">Give these two URLs to your IdP admin when setting up the trust relationship:</p>
+          <div class="readonly-row">
+            <label>SP Metadata URL</label>
+            <input type="text" [value]="samlMetadataUrl()" readonly />
+            <button type="button" class="btn-outline btn-outline--sm" (click)="copy(samlMetadataUrl())">Copy</button>
+          </div>
+          <div class="readonly-row">
+            <label>Assertion Consumer Service (ACS) URL</label>
+            <input type="text" [value]="samlAcsUrl()" readonly />
+            <button type="button" class="btn-outline btn-outline--sm" (click)="copy(samlAcsUrl())">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Passwordless Email Sign-In hidden for now — SMTP + MagicLinkUrlTemplate aren't ready on
+           every deployment yet. magicLinkEnabled still round-trips via the form so an existing
+           saved value isn't clobbered by a save made while this card is hidden. -->
+
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">Microsoft Entra ID</h2>
+            <p class="card-sub">"Continue with Microsoft" login. Applies to sign-in only — a separate, legacy path that accepts a raw Entra token directly as an API request still needs a restart to pick up changes, if it's ever used.</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="entraEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="sso-entra-instance">Instance</label>
+            <input id="sso-entra-instance" type="text" formControlName="entraInstance" placeholder="https://login.microsoftonline.com/" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-entra-tenant">Directory (Tenant) ID</label>
+            <input id="sso-entra-tenant" type="text" formControlName="entraTenantId" placeholder="From the App Registration's Overview page" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-entra-client">Application (Client) ID</label>
+            <input id="sso-entra-client" type="text" formControlName="entraClientId" placeholder="From the App Registration's Overview page" />
+          </div>
+        </div>
+      </section>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save SSO Configurations' }}
+        </button>
+      </div>
+    </form>
+
+    <!-- "Other Identity Providers" (Google read-only status) hidden for now, alongside the
+         Passwordless Email Sign-In card above. -->
+  }
+</div>

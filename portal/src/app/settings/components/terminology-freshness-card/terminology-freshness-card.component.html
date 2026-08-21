@@ -17,11 +17,11 @@
       }
     </div>
     <div class="actions">
-      <button class="btn-outline" type="button" [disabled]="checking()" (click)="checkForUpdates.emit()">
+      <button class="btn-outline" type="button" [disabled]="checking() || writeDisabled()" (click)="checkForUpdates.emit()">
         {{ checking() ? 'Checking…' : 'Check for Updates' }}
       </button>
       @if (freshness()?.latestKnownFileName) {
-        <button class="btn-primary" type="button" [disabled]="downloading()" (click)="downloadAndImport.emit()">
+        <button class="btn-primary" type="button" [disabled]="downloading() || writeDisabled()" (click)="downloadAndImport.emit()">
           {{ downloading() ? 'Downloading…' : 'Download & Import' }}
         </button>
       }

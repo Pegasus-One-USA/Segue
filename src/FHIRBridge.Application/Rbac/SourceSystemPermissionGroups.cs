@@ -2,13 +2,17 @@ namespace FHIRBridge.Application.Security;
 
 /// <summary>
 /// Resolves the <see cref="PermissionGroupCode"/> that governs a resource-based permission check for
-/// a given enum value (e.g. a <c>SourceSystemType</c>) — by name, not a hand-maintained lookup table.
-/// A value gets its own dedicated group (and, via <see cref="PermissionCatalog"/>, its own
-/// auto-discovered permissions) purely by there being a same-named <see cref="PermissionGroupCode"/>
+/// a given enum value — <c>SourceSystemType</c> (source vendors) or <c>DestinationType</c> (destination
+/// types) alike — by name, not a hand-maintained lookup table. Despite the "SourceSystem" name (kept for
+/// the vendor case it was originally written for), nothing here is specific to <c>SourceSystemType</c>:
+/// <see cref="GroupFor"/> and <see cref="AllGroupsFor"/> both take a bare <see cref="Enum"/>/<see cref="Type"/>
+/// and resolve purely by name. A value gets its own dedicated group (and, via <see cref="PermissionCatalog"/>,
+/// its own auto-discovered permissions) purely by there being a same-named <see cref="PermissionGroupCode"/>
 /// member; a value with no matching group name falls back to the generic
-/// <see cref="PermissionGroupCode.SourceConnections"/> group. This is why every vendor
-/// <see cref="PermissionGroupCode"/> member (Epic, Athenahealth, Cerner, ...) must be named
-/// identically to its source enum's member (e.g. <c>SourceSystemType.Athenahealth</c>).
+/// <see cref="PermissionGroupCode.SourceConnections"/> group. This is why every vendor/destination-type
+/// <see cref="PermissionGroupCode"/> member (Epic, Athenahealth, Cerner, ..., SqlServer, Mongo, ...) must be
+/// named identically to its source enum's member (e.g. <c>SourceSystemType.Athenahealth</c>,
+/// <c>DestinationType.SqlServer</c>).
 /// </summary>
 public static class SourceSystemPermissionGroups
 {

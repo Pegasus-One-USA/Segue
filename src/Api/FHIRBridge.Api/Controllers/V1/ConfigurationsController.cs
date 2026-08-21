@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -21,17 +22,20 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class ConfigurationsController : ControllerBase
 {
     private readonly IConfigurationService _configurationService;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly IAuthorizationService _authorizationService;
     private readonly IEpicSourceConnectionScopeSyncService _scopeSyncService;
     private readonly IMappingImportService _mappingImportService;
 
     public ConfigurationsController(
         IConfigurationService configurationService,
+        IConfigurationRepository configurationRepository,
         IAuthorizationService authorizationService,
         IEpicSourceConnectionScopeSyncService scopeSyncService,
         IMappingImportService mappingImportService)
     {
         _configurationService = configurationService;
+        _configurationRepository = configurationRepository;
         _authorizationService = authorizationService;
         _scopeSyncService = scopeSyncService;
         _mappingImportService = mappingImportService;
@@ -41,15 +45,27 @@ public sealed class ConfigurationsController : ControllerBase
     // Which permission a source connection requires depends on its vendor (SourceSystemType), known
     // only once the request is inspected — a static [StandardPermission] can't express that, so these
     // two check a resolved, vendor-specific permission at runtime instead of declaring one up front.
+    // Add/Update used to share one combined Edit permission per vendor; now split into the vendor's own
+    // Create (this endpoint always mints a new SourceConnection) vs. Edit (UpdateSourceConnection below),
+    // matching the same node-level View/Create/Edit/Delete/Execute split as every other vendor action.
 
+    // The Execute declaration below is discovery-only (no [DynamicSourceSystemPermission] site
+    // enforces it here) — WorkflowEndpoints.cs's /workflows/{id}/run is a minimal-API endpoint, not a
+    // ControllerBase action, so it can't itself carry an attribute PermissionCatalog would scan; this is
+    // simply where "epic.execute" etc. get catalogued so the Role Permissions screen can manage them,
+    // while the actual check happens in /run. For Epic/Athenahealth/Cerner specifically, this crosses
+    // the same already-hand-seeded permission RbacSeedData created for exactly this purpose ("Trigger a
+    // pipeline run against ...") — same deterministic id, so this only ever updates that existing row's
+    // metadata, never creates a duplicate.
     [HttpPost("source-connections")]
-    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Create, description: "Create a source connection.")]
+    [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Execute, description: "Execute a workflow using this source connection's vendor.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddSourceConnection(
         [FromBody] CreateSourceConnectionRequest request,
         CancellationToken cancellationToken)
     {
-        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Create);
         if (denied is not null) return denied;
 
         var sourceConnection = await _configurationService.AddSourceConnectionAsync(request, cancellationToken);
@@ -158,26 +174,42 @@ public sealed class ConfigurationsController : ControllerBase
 
     // ── Destinations ──────────────────────────────────────────────────────────
 
+    // Which permission a destination configuration requires depends on its type (DestinationType), known only
+    // once the request is inspected — same reasoning as the source-connection pair above, and the same
+    // DynamicSourceSystemPermission/AuthorizePermissionAsync mechanism, just crossed with DestinationType
+    // instead of SourceSystemType (see SourceSystemPermissionGroups — already generic over either enum).
+    // Add/Update used to share one combined Edit permission per type; now split into Create (this endpoint
+    // always mints a new DestinationConfiguration) vs. Edit (UpdateDestinationConfiguration below).
+
+    // Execute is discovery-only here too — see the matching comment on AddSourceConnection above; the
+    // real check lives in WorkflowEndpoints.cs's /workflows/{id}/run.
     [HttpPost("destinations")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [DynamicSourceSystemPermission(typeof(DestinationType), PermissionActionCode.Create, description: "Create a destination configuration.")]
+    [DynamicSourceSystemPermission(typeof(DestinationType), PermissionActionCode.Execute, description: "Execute a workflow using this destination type.")]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddDestinationConfiguration(
         [FromBody] CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.DestinationType, PermissionActionCode.Create);
+        if (denied is not null) return denied;
+
         var destinationConfiguration = await _configurationService.AddDestinationConfigurationAsync(request, cancellationToken);
 
         return Created($"/api/v1/destinations/{destinationConfiguration.Id}", destinationConfiguration);
     }
 
     [HttpPut("destinations/{destinationId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [DynamicSourceSystemPermission(typeof(DestinationType), PermissionActionCode.Edit, description: "Add or edit a destination configuration.")]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateDestinationConfiguration(
         Guid destinationId,
         [FromBody] CreateDestinationConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, request.DestinationType, PermissionActionCode.Edit);
+        if (denied is not null) return denied;
+
         var destinationConfiguration = await _configurationService.UpdateDestinationConfigurationAsync(
             destinationId,
             request,
@@ -187,7 +219,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("destinations/{destinationId:guid}/deactivate")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.Deactivate, description: "Deactivate a destination connection.")]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateDestinationConfiguration(
         Guid destinationId,
@@ -202,7 +234,8 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpDelete("destinations/{destinationId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.Delete, description: "Delete a destination connection.")]
+    [DynamicSourceSystemPermission(typeof(DestinationType), PermissionActionCode.Delete, description: "Delete a destination configuration.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -210,6 +243,20 @@ public sealed class ConfigurationsController : ControllerBase
         Guid destinationId,
         CancellationToken cancellationToken)
     {
+        // Two independent layers, same as everywhere else in this file: the generic
+        // DestinationConnections.Delete above (already enforced by [StandardPermission]) AND this
+        // type-specific one — a role needs both the module-level Delete permission and this
+        // particular destination's own type's Delete permission. The type isn't in the request (just
+        // an id), so it's resolved by fetching the row first, same pattern /workflows/{id}/copy uses.
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        if (destination is null)
+        {
+            return NotFound();
+        }
+
+        var denied = await this.AuthorizePermissionAsync(_authorizationService, destination.DestinationType, PermissionActionCode.Delete);
+        if (denied is not null) return denied;
+
         await _configurationService.DeleteDestinationConfigurationAsync(destinationId, cancellationToken);
         return NoContent();
     }
@@ -217,7 +264,7 @@ public sealed class ConfigurationsController : ControllerBase
     // ── Mapping profiles ──────────────────────────────────────────────────────
 
     [HttpPost("mapping-profiles")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Create, description: "Create a mapping profile.")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddMappingProfile(
         [FromBody] CreateMappingProfileRequest request,
@@ -229,7 +276,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPut("mapping-profiles/{mappingProfileId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Edit, description: "Edit a mapping profile.")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateMappingProfile(
         Guid mappingProfileId,
@@ -245,7 +292,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("mapping-profiles/{mappingProfileId:guid}/deactivate")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Deactivate, description: "Activate or deactivate a mapping profile.")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> DeactivateMappingProfile(
         Guid mappingProfileId,
@@ -260,7 +307,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpPost("mapping-profiles/{mappingProfileId:guid}/activate")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Deactivate, description: "Activate or deactivate a mapping profile.")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> ActivateMappingProfile(
         Guid mappingProfileId,
@@ -275,7 +322,7 @@ public sealed class ConfigurationsController : ControllerBase
     }
 
     [HttpDelete("mapping-profiles/{mappingProfileId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Delete, description: "Delete a mapping profile.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -302,7 +349,7 @@ public sealed class ConfigurationsController : ControllerBase
     /// never overwrites an existing one, even one that already matches the same resource type/source/destination.
     /// </summary>
     [HttpPost("mapping-profiles/{mappingProfileId:guid}/promote-to-master")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.MappingProfiles, PermissionActionCode.Create, description: "Promote a mapping profile to a reusable master template (always creates a new profile).")]
     [ProducesResponseType(typeof(MappingProfileDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> PromoteMappingProfileToMaster(
         Guid mappingProfileId,

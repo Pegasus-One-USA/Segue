@@ -47,7 +47,7 @@ public sealed class SnomedConfigurationController : ControllerBase
     [HttpPost("import")]
     [RequestSizeLimit(2_147_483_648)]
     [RequestFormLimits(MultipartBodyLengthLimit = 2_147_483_648)]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Import a SNOMED CT RF2 release archive.")]
+    [StandardPermission(PermissionGroupCode.SnomedCt, PermissionActionCode.Write, description: "Import a SNOMED CT RF2 release archive.")]
     public async Task<IActionResult> Import(IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0) return BadRequest("A SNOMED CT release .zip file is required.");
@@ -68,7 +68,7 @@ public sealed class SnomedConfigurationController : ControllerBase
     }
 
     [HttpGet("history")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View SNOMED CT import history.")]
+    [StandardPermission(PermissionGroupCode.SnomedCt, PermissionActionCode.View, description: "View SNOMED CT import history.")]
     public async Task<ActionResult<IReadOnlyList<SnomedImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
     {
         var history = await _db.SnomedImportHistory

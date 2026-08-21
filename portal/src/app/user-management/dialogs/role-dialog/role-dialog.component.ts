@@ -10,6 +10,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 export interface RoleDialogData {
   role?: Role;
@@ -32,8 +34,9 @@ export interface RoleDialogData {
   styleUrls: ['./role-dialog.component.scss'],
 })
 export class RoleDialogComponent {
-  private readonly svc = inject(IRoleService);
-  private readonly fb  = inject(FormBuilder);
+  private readonly svc         = inject(IRoleService);
+  private readonly fb          = inject(FormBuilder);
+  private readonly actionGuard = inject(PermissionActionGuard);
   readonly dialogRef   = inject(MatDialogRef<RoleDialogComponent>);
   readonly data: RoleDialogData = inject(MAT_DIALOG_DATA);
 
@@ -61,6 +64,14 @@ export class RoleDialogComponent {
 
   save(): void {
     if (this.isSystemRole) return;
+    // Defense-in-depth: the only way to reach this dialog today is via RoleListComponent's
+    // openAdd()/openEdit(), which already gate on the same codes and hide their triggering buttons
+    // entirely without permission — this re-check guards against a permission change landing in
+    // another tab while this dialog is still open, not against a normally-reachable gap.
+    const requiredCode = this.isEdit
+      ? permissionCode(PermissionGroup.Role, PermissionAction.Edit)
+      : permissionCode(PermissionGroup.Role, PermissionAction.Create);
+    if (!this.actionGuard.ensure(requiredCode, `You do not have permission to ${this.isEdit ? 'edit' : 'create'} roles.`)) return;
     this.submitted.set(true);
     this.errorMessage.set(null);
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }

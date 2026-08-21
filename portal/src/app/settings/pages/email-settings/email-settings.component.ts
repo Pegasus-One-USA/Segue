@@ -4,6 +4,8 @@ import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ToastService } from '../../../services/toast.service';
 import { NotificationSettingsService } from '../../services/notification-settings.service';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 @Component({
   selector:    'app-email-settings',
@@ -18,6 +20,14 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
   private readonly settingsSvc = inject(NotificationSettingsService);
   private readonly toast = inject(ToastService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  /** This route's own guard allows EITHER configuration.view OR configuration.write (a view-only
+   *  role can open the page to see current settings) — unlike Branding, which requires write just to
+   *  enter. So this control-level check is the ONLY thing standing between a view-only role and a
+   *  fully live Save/Send Test Email button, not defense-in-depth for an already-closed gap. */
+  protected readonly canWrite = this.permissions.hasPermission('configuration.write');
 
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
@@ -59,6 +69,7 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
         }, { emitEvent: false });
         this.hasPasswordConfigured.set(settings.hasPasswordConfigured);
         this.form.markAsPristine();
+        if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
         this.loading.set(false);
       },
       error: () => {
@@ -69,6 +80,7 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
   }
 
   protected save(): void {
+    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify email settings.')) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.saving.set(true);
     const v = this.form.getRawValue();
@@ -99,6 +111,7 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
   }
 
   protected sendTestEmail(): void {
+    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to send test emails.')) return;
     const toEmail = this.testEmailAddress().trim();
     if (!toEmail) {
       this.toast.error('Enter an email address to send the test to');

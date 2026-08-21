@@ -16,8 +16,13 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// FHIR JSON (<see cref="MappedDestinationRecord.SourceJson"/>) is persisted as-is. Writes are made <b>idempotent</b>
 /// via conditional update — <c>PUT {base}/{ResourceType}?identifier={system}|{value}</c> — keyed on the resource's
 /// business identifier (see <see cref="MedplumConnectionMetadata.IdentifierSystem"/>): 0 matches creates, 1 updates,
-/// so re-running a pipeline never duplicates. When a record has no usable identifier it falls back to a logical-id
-/// <c>PUT {base}/{ResourceType}/{id}</c> (update-or-create). Auth is OAuth2 <c>client_credentials</c> via
+/// so re-running a pipeline never duplicates. When a record carries no usable identifier a synthetic one is stamped
+/// from the source id and conditional-updated by it. Types that have <b>no</b> <c>identifier</c> search parameter in
+/// FHIR R4 (Provenance, Binary, AuditEvent, …) can't be conditional-updated at all, so they target a deterministic v5
+/// logical id derived from the source key — <c>PUT {base}/{ResourceType}/{uuid}</c> — and, because hosted Medplum will
+/// not update-as-create a client-assigned id (a PUT to a non-existent id 404s), fall back to <c>POST {base}/{ResourceType}</c>
+/// to create. (Trade-off: on such a server these types are not idempotent — re-runs create duplicates, as they carry no
+/// business key to dedupe on.) Auth is OAuth2 <c>client_credentials</c> via
 /// <see cref="IMedplumTokenProvider"/> (client_secret or private_key_jwt); the writer is rate-limit aware and backs
 /// off on HTTP 429.
 ///
@@ -40,6 +45,26 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
     {
         WriteIndented = false
     };
+
+    // FHIR R4 resource types that define NO `identifier` element or search parameter, so an identifier-based
+    // conditional update is impossible — Medplum rejects `PUT {type}?identifier=…` with 400 "Unknown search
+    // parameter: identifier". These are upserted by a deterministic logical id instead (see BuildUpsert).
+    private static readonly HashSet<string> IdentifierlessResourceTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Provenance", "AuditEvent", "Binary", "Bundle", "Parameters"
+    };
+
+    // Fixed namespace for deriving stable v5 (name-based) UUIDs for identifier-less resources. Value is arbitrary but
+    // MUST stay constant — changing it re-maps every source id to a new logical id and would duplicate on re-run.
+    private static readonly Guid DeterministicIdNamespace = new("8b2f0b3e-3f4a-4c1d-9a7e-2c6d5f9b0a11");
+
+    /// <summary>
+    /// The write plan for one record: a primary conditional/logical-id <c>PUT</c>, plus an optional
+    /// <c>POST</c>-create fallback. <see cref="CreatePath"/>/<see cref="CreateBody"/> are set only for identifier-less
+    /// types — used when the primary PUT returns 404 because the server won't update-as-create a client-assigned id.
+    /// </summary>
+    private readonly record struct MedplumUpsert(
+        string ResourceType, string PutPath, string PutBody, string? CreatePath, string? CreateBody);
 
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -138,9 +163,33 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
                 var accessToken = await _tokenProvider.GetAccessTokenAsync(
                     tokenUrl, credential, cancellationToken);
 
-                var (_, upsertPath, body) = BuildUpsert(record, metadata.IdentifierSystem);
-                await SendWithRateLimitRetryAsync(
-                    httpClient, accessToken, $"{baseUrl}/{upsertPath}", body, cancellationToken);
+                var upsert = BuildUpsert(record, metadata.IdentifierSystem);
+                var (status, errorBody) = await SendWithRateLimitRetryAsync(
+                    httpClient, accessToken, HttpMethod.Put, $"{baseUrl}/{upsert.PutPath}", upsert.PutBody, cancellationToken);
+
+                if (!IsSuccess(status))
+                {
+                    // Create-on-PUT fallback: hosted Medplum returns 404 on a PUT to a non-existent client-assigned
+                    // id (its only create-if-missing is search-based conditional upsert, which identifier-less types
+                    // like Provenance/Binary can't use). POST {type} to create instead. NOTE: on such a server this
+                    // makes re-runs create duplicates for these types — there is no business key to dedupe on; types
+                    // WITH an identifier are unaffected (they carry no CreatePath).
+                    if (status == HttpStatusCode.NotFound && upsert.CreatePath is not null)
+                    {
+                        var (createStatus, createErrorBody) = await SendWithRateLimitRetryAsync(
+                            httpClient, accessToken, HttpMethod.Post, $"{baseUrl}/{upsert.CreatePath}", upsert.CreateBody!, cancellationToken);
+                        if (!IsSuccess(createStatus))
+                        {
+                            throw new HttpRequestException(
+                                $"Medplum POST '{baseUrl}/{upsert.CreatePath}' returned {(int)createStatus}: {Truncate(createErrorBody)}");
+                        }
+                    }
+                    else
+                    {
+                        throw new HttpRequestException(
+                            $"Medplum PUT '{baseUrl}/{upsert.PutPath}' returned {(int)status}: {Truncate(errorBody)}");
+                    }
+                }
 
                 written++;
                 writtenIds.Add(record.SourceResourceId);
@@ -193,11 +242,14 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             {
                 try
                 {
-                    var (_, upsertPath, body) = BuildUpsert(record, metadata.IdentifierSystem);
+                    // Async-batch entries use the logical-id/conditional PUT only. Identifier-less types (Provenance,
+                    // Binary) whose server won't update-as-create surface as per-entry 4xx and are isolated by
+                    // TallyBatchResponse — the POST-create fallback lives on the per-record path (WritePerRecordAsync).
+                    var upsert = BuildUpsert(record, metadata.IdentifierSystem);
                     entries.Add(new JsonObject
                     {
-                        ["resource"] = JsonNode.Parse(body),
-                        ["request"] = new JsonObject { ["method"] = "PUT", ["url"] = upsertPath }
+                        ["resource"] = JsonNode.Parse(upsert.PutBody),
+                        ["request"] = new JsonObject { ["method"] = "PUT", ["url"] = upsert.PutPath }
                     });
                     entryRecords.Add(record);
                 }
@@ -443,11 +495,18 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         response.Headers.RetryAfter?.Delta is { } delta && delta > TimeSpan.Zero ? delta : DefaultPollInterval;
 
     /// <summary>
-    /// Produces the (resourceType, upsert URL path, body) for one record. Prefers a conditional update keyed on a
-    /// business identifier (idempotent, no id remapping); falls back to logical-id update-or-create when the resource
-    /// carries no usable identifier.
+    /// Produces the (resourceType, upsert URL path, body) for one record, choosing an idempotency strategy by type:
+    /// <list type="number">
+    ///   <item>Types with no <c>identifier</c> search parameter (<see cref="IdentifierlessResourceTypes"/>, e.g.
+    ///   Provenance, Binary) can't be conditional-updated by identifier — Medplum 400s "Unknown search parameter:
+    ///   identifier". They target a <b>deterministic v5 logical id</b> derived from the source system + type + id
+    ///   (<c>PUT {type}/{uuid}</c>), idempotent on servers that update-as-create; when the server won't (hosted
+    ///   Medplum 404s a client-assigned id), a <c>POST {type}</c> create fallback is supplied.</item>
+    ///   <item>Otherwise a conditional update keyed on a business identifier (idempotent, no id remapping).</item>
+    ///   <item>Otherwise a synthetic identifier stamped from the source id, then conditional-updated by it.</item>
+    /// </list>
     /// </summary>
-    private static (string ResourceType, string UpsertPath, string Body) BuildUpsert(
+    private static MedplumUpsert BuildUpsert(
         MappedDestinationRecord record, string? preferredSystem)
     {
         if (string.IsNullOrWhiteSpace(record.SourceJson)
@@ -458,6 +517,29 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
                 $"Medplum destination needs FHIR JSON (SourceJson) for '{record.ResourceType}'; none was present.");
         }
 
+        if (IdentifierlessResourceTypes.Contains(resourceType))
+        {
+            // No identifier search parameter exists for this type, so conditional-update-by-identifier can't work.
+            // Derive a stable logical id from the source key (system + type + source id) and PUT {type}/{uuid}. On a
+            // server that update-as-creates a client-assigned id this is idempotent (re-runs update in place). Hosted
+            // Medplum does NOT — a PUT to a non-existent id returns 404 — so we also hand back a POST {type} create
+            // fallback (see WritePerRecordAsync). FHIR update semantics require the PUT body id to match the URL id;
+            // the POST create drops it so the server assigns its own.
+            var keySystem = string.IsNullOrWhiteSpace(preferredSystem) ? "urn:fhirbridge:source-id" : preferredSystem!;
+            var keyValue = string.IsNullOrWhiteSpace(record.SourceResourceId)
+                ? resource["id"]?.GetValue<string>()
+                : record.SourceResourceId;
+            var logicalId = string.IsNullOrWhiteSpace(keyValue)
+                ? Guid.NewGuid().ToString() // no stable source key: fall back to a fresh id (not idempotent, but valid)
+                : CreateNameBasedUuid(DeterministicIdNamespace, $"{keySystem}|{resourceType}|{keyValue}").ToString();
+
+            resource["id"] = logicalId;
+            var putBody = resource.ToJsonString(JsonOptions);
+            resource.Remove("id"); // POST create: server owns id assignment.
+            var createBody = resource.ToJsonString(JsonOptions);
+            return new MedplumUpsert(resourceType, $"{resourceType}/{logicalId}", putBody, resourceType, createBody);
+        }
+
         if (TrySelectIdentifier(resource, preferredSystem, out var system, out var value))
         {
             // Conditional update: PUT {type}?identifier={system}|{value}. Body id is dropped so the server assigns/
@@ -466,7 +548,7 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             var query = string.IsNullOrEmpty(system)
                 ? Uri.EscapeDataString(value)
                 : $"{Uri.EscapeDataString(system)}%7C{Uri.EscapeDataString(value)}"; // %7C = '|'
-            return (resourceType, $"{resourceType}?identifier={query}", resource.ToJsonString(JsonOptions));
+            return new MedplumUpsert(resourceType, $"{resourceType}?identifier={query}", resource.ToJsonString(JsonOptions), null, null);
         }
 
         // Fallback: the resource carries no business identifier. A logical-id PUT ({type}/{sourceId}) does NOT work
@@ -492,7 +574,7 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         identifiers.Add(new JsonObject { ["system"] = syntheticSystem, ["value"] = syntheticValue });
 
         var syntheticQuery = $"{Uri.EscapeDataString(syntheticSystem)}%7C{Uri.EscapeDataString(syntheticValue)}"; // %7C = '|'
-        return (resourceType, $"{resourceType}?identifier={syntheticQuery}", resource.ToJsonString(JsonOptions));
+        return new MedplumUpsert(resourceType, $"{resourceType}?identifier={syntheticQuery}", resource.ToJsonString(JsonOptions), null, null);
     }
 
     /// <summary>
@@ -537,12 +619,50 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
         return true;
     }
 
-    private async Task SendWithRateLimitRetryAsync(
-        HttpClient httpClient, string accessToken, string url, string body, CancellationToken cancellationToken)
+    /// <summary>
+    /// Builds an RFC 4122 §4.3 name-based (version 5, SHA-1) UUID from a namespace and name. Deterministic: the same
+    /// inputs always produce the same GUID, which is what makes identifier-less resources idempotent across re-runs.
+    /// </summary>
+    private static Guid CreateNameBasedUuid(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapGuidByteOrder(namespaceBytes); // .NET stores the first three fields little-endian; RFC hashes big-endian.
+
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var toHash = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, toHash, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, toHash, namespaceBytes.Length, nameBytes.Length);
+
+        var hash = System.Security.Cryptography.SHA1.HashData(toHash);
+
+        var uuid = new byte[16];
+        Array.Copy(hash, 0, uuid, 0, 16);
+        uuid[6] = (byte)((uuid[6] & 0x0F) | 0x50); // version 5
+        uuid[8] = (byte)((uuid[8] & 0x3F) | 0x80); // RFC 4122 variant
+
+        SwapGuidByteOrder(uuid); // back to .NET little-endian field order
+        return new Guid(uuid);
+    }
+
+    private static void SwapGuidByteOrder(byte[] guid)
+    {
+        (guid[0], guid[3]) = (guid[3], guid[0]);
+        (guid[1], guid[2]) = (guid[2], guid[1]);
+        (guid[4], guid[5]) = (guid[5], guid[4]);
+        (guid[6], guid[7]) = (guid[7], guid[6]);
+    }
+
+    /// <summary>
+    /// Sends one write, retrying on HTTP 429 (rate limited). Returns the terminal status and — on a non-2xx — the
+    /// response body (Medplum's OperationOutcome diagnostics, not PHI), so the caller can decide success vs. a
+    /// create-on-PUT fallback vs. a hard error. Only a 429 that exhausts retries, or a network failure, throws.
+    /// </summary>
+    private async Task<(HttpStatusCode Status, string Body)> SendWithRateLimitRetryAsync(
+        HttpClient httpClient, string accessToken, HttpMethod method, string url, string body, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Put, url)
+            using var request = new HttpRequestMessage(method, url)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
             };
@@ -551,22 +671,16 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (response.StatusCode != HttpStatusCode.TooManyRequests)
             {
-                if (!response.IsSuccessStatusCode)
-                {
-                    // Surface Medplum's OperationOutcome so a rejected write says WHY (validation, bad reference,
-                    // etc.), not just the status code. Body is server diagnostics, not PHI.
-                    var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                    throw new HttpRequestException(
-                        $"Medplum PUT '{url}' returned {(int)response.StatusCode}: {Truncate(errorBody)}");
-                }
-
-                return;
+                var errorBody = response.IsSuccessStatusCode
+                    ? string.Empty
+                    : await response.Content.ReadAsStringAsync(cancellationToken);
+                return (response.StatusCode, errorBody);
             }
 
             if (attempt >= MaxRateLimitRetries)
             {
                 throw new HttpRequestException(
-                    $"Medplum returned 429 (rate limited) after {MaxRateLimitRetries} attempts for '{url}'.");
+                    $"Medplum returned 429 (rate limited) after {MaxRateLimitRetries} attempts for '{method} {url}'.");
             }
 
             var delay = GetRetryDelay(response);
@@ -576,6 +690,8 @@ public sealed class MappedMedplumDestinationWriter : IConfiguredDestinationWrite
             await Task.Delay(delay, cancellationToken);
         }
     }
+
+    private static bool IsSuccess(HttpStatusCode status) => (int)status is >= 200 and < 300;
 
     /// <summary>Honors Retry-After (delta-seconds), else the reset window in the <c>RateLimit</c> header, else a default.</summary>
     private static TimeSpan GetRetryDelay(HttpResponseMessage response)

@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { AuthStore } from '../../../auth/store/auth.store';
 
 interface TerminologySection {
   label: string;
@@ -9,15 +10,18 @@ interface TerminologySection {
   /** True for a vocabulary whose auto-poll/import screen is blocked on something external (e.g. CPT's AMA
    * license) — rendered as a disabled, non-navigable tab instead of a normal link. */
   locked?: boolean;
+  /** Each terminology system with real backend RBAC coverage has its own independent View/Write pair —
+   *  see settings.routes.ts's per-system guards below this shell. Omitted for a system with no
+   *  PermissionGroupCode yet (icd-10-pcs, hcpcs, ndc, cvx, ucum, cpt) — those stay reachable by anyone
+   *  who can reach this shell at all, until real permission coverage is added for them. */
+  permissions?: string[];
 }
 
-// Every SuperAdmin who can reach this shell (see settings.routes.ts's superAdminGuard) can see all
-// sections — same flat, unguarded layout as the parent SYSTEM_SETTINGS_SECTIONS list.
 const TERMINOLOGY_SECTIONS: TerminologySection[] = [
-  { label: 'LOINC', route: 'loinc', icon: 'biotech' },
-  { label: 'SNOMED CT', route: 'snomed-ct', icon: 'medical_information' },
-  { label: 'RxNorm', route: 'rxnorm', icon: 'medication' },
-  { label: 'ICD-10-CM', route: 'icd-10', icon: 'local_hospital' },
+  { label: 'LOINC', route: 'loinc', icon: 'biotech', permissions: ['loinc.view', 'loinc.write'] },
+  { label: 'SNOMED CT', route: 'snomed-ct', icon: 'medical_information', permissions: ['snomedct.view', 'snomedct.write'] },
+  { label: 'RxNorm', route: 'rxnorm', icon: 'medication', permissions: ['rxnorm.view', 'rxnorm.write'] },
+  { label: 'ICD-10-CM', route: 'icd-10', icon: 'local_hospital', permissions: ['icd10.view', 'icd10.write'] },
   { label: 'ICD-10-PCS', route: 'icd-10-pcs', icon: 'health_and_safety' },
   { label: 'HCPCS', route: 'hcpcs', icon: 'medical_services' },
   { label: 'NDC', route: 'ndc', icon: 'vaccines' },
@@ -34,5 +38,15 @@ const TERMINOLOGY_SECTIONS: TerminologySection[] = [
   styleUrl: './terminology-configurations-shell.component.scss',
 })
 export class TerminologyConfigurationsShellComponent {
-  readonly sections = TERMINOLOGY_SECTIONS;
+  private readonly store = inject(AuthStore);
+
+  // Same visibility rule as the parent shells — a role holding only e.g. loinc.view must see just
+  // the LOINC tab here, not all four (each system is independently permission-controlled). A section
+  // with no `permissions` at all (icd-10-pcs, hcpcs, ndc, cvx, ucum, cpt — no PermissionGroupCode
+  // exists for them yet) is always shown, since there's no code to check it against.
+  readonly sections = computed<TerminologySection[]>(() =>
+    TERMINOLOGY_SECTIONS.filter(section =>
+      !section.permissions?.length || this.store.isAdmin() || section.permissions.some(p => this.store.hasPermission(p))
+    )
+  );
 }

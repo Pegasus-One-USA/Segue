@@ -146,6 +146,7 @@ builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -195,6 +196,16 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new SuperAdminOnlyRequirement());
+    });
+
+    // View-level Workflow module access: workflow.view OR any workflow-node permission (see
+    // WorkflowModuleAccessAuthorizationHandler). Used only on the view-level workflow endpoints —
+    // build/copy/run/delete keep their own literal workflow.create/edit/delete/run policy below,
+    // unaffected by this one.
+    options.AddPolicy(AuthorizationPolicies.WorkflowModuleAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new WorkflowModuleAccessRequirement());
     });
 
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
@@ -663,7 +674,10 @@ static async Task SyncDiscoveredPermissionsAsync(
     // deactivated by this method.
     var seedDeclaredPermissionIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
 
-    var superAdminRole = await repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, CancellationToken.None);
+    // Every role that exists at the moment a brand-new dynamically-discovered permission is first created
+    // (built-in AND custom, e.g. an admin-created role) — see the grant loop in step 2/3 below for why this
+    // keeps the rollout of a new source/destination-type permission non-breaking.
+    var allRoles = await repository.GetRolesAsync(CancellationToken.None);
 
     // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
     foreach (var existingPermission in existingPermissions)
@@ -760,9 +774,18 @@ static async Task SyncDiscoveredPermissionsAsync(
                 discoveredPermission.Code);
         }
 
-        if (superAdminRole is not null)
+        // Non-breaking rollout: grant a genuinely brand-new permission (e.g. a newly added source or
+        // destination vendor's Edit permission) to every role that already exists right now — not just
+        // SuperAdmin — so nothing loses access to a source/destination it could already use before this
+        // permission existed. This only ever runs inside the "new permission" branch above (the `continue`
+        // a few lines up handles the "already exists" case), and a Permission row is only ever created
+        // once in its lifetime (removed permissions are deactivated, never deleted — see step 1 above) —
+        // so this grant loop can only ever fire once per permission. A role that has this permission
+        // unchecked later via the Role Permissions screen is therefore never silently re-granted it on a
+        // subsequent restart.
+        foreach (var role in allRoles)
         {
-            await repository.AddRolePermissionAsync(superAdminRole.Id, newPermission.Id, CancellationToken.None);
+            await repository.AddRolePermissionAsync(role.Id, newPermission.Id, CancellationToken.None);
         }
     }
 }

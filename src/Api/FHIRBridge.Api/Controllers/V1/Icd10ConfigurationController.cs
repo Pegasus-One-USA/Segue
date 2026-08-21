@@ -63,7 +63,7 @@ public sealed class Icd10ConfigurationController : ControllerBase
     [HttpPost("import")]
     [RequestSizeLimit(536_870_912)]
     [RequestFormLimits(MultipartBodyLengthLimit = 536_870_912)]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Import an ICD-10-CM release archive.")]
+    [StandardPermission(PermissionGroupCode.Icd10, PermissionActionCode.Write, description: "Import an ICD-10-CM release archive.")]
     public async Task<IActionResult> Import(IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0) return BadRequest("An ICD-10-CM release .zip file is required.");
@@ -84,7 +84,7 @@ public sealed class Icd10ConfigurationController : ControllerBase
     }
 
     [HttpGet("history")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View ICD-10-CM import history.")]
+    [StandardPermission(PermissionGroupCode.Icd10, PermissionActionCode.View, description: "View ICD-10-CM import history.")]
     public async Task<ActionResult<IReadOnlyList<Icd10ImportHistoryEntryDto>>> History(CancellationToken cancellationToken)
     {
         var history = await _db.Icd10ImportHistory

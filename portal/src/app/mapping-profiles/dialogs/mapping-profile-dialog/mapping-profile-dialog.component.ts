@@ -19,6 +19,7 @@ import {
 import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
 import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 export interface MappingProfileDialogData {
   mode: 'create' | 'edit' | 'view';
@@ -123,6 +124,7 @@ export class MappingProfileDialogComponent {
   private readonly svc = inject(MappingProfileService);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly dialogRef = inject(MatDialogRef<MappingProfileDialogComponent>);
+  private readonly actionGuard = inject(PermissionActionGuard);
   readonly data = inject<MappingProfileDialogData>(MAT_DIALOG_DATA);
 
   readonly mappingForm = viewChild(MappingProfileCanvasComponent);
@@ -254,6 +256,10 @@ export class MappingProfileDialogComponent {
   }
 
   save(): void {
+    // Defense-in-depth: MappingProfileListComponent.openNew()/openEdit() already checked before this
+    // dialog opened — re-checked here against a permission change landing mid-edit.
+    const requiredCode = this.isCreate ? 'mappingprofiles.create' : 'mappingprofiles.edit';
+    if (!this.actionGuard.ensure(requiredCode, `You do not have permission to ${this.isCreate ? 'create' : 'edit'} mapping profiles.`)) return;
     this.errorMessage.set(null);
     this.mappingErrors.set([]);
 

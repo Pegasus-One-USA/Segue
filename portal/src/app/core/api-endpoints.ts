@@ -30,6 +30,10 @@ export const AUTH_ENDPOINTS = {
   forgotPassword: `${API_V1_BASE}/auth/internal/forgot-password`,
   resetPassword:  `${API_V1_BASE}/auth/internal/reset-password`,
   changePassword: `${API_V1_BASE}/auth/internal/change-password`,
+  magicLinkRequest: `${API_V1_BASE}/auth/magic-link/request`,
+  magicLinkRedeem:  `${API_V1_BASE}/auth/magic-link/redeem`,
+  // Plain full-page redirect (no XHR) — the browser is sent straight to the IdP, not through HttpClient.
+  samlLogin: `${API_V1_BASE}/auth/saml/login`,
 };
 
 // ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────
@@ -195,6 +199,14 @@ export const SYSTEM_SETTINGS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/settings`,
   byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
   decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
+};
+
+// ─── SSO Configurations (SsoConfigurationsController — api/v1/system/sso-configurations) ───
+// SuperAdmin-only: SAML + magic-link fields, DB-backed (SystemSetting rows under the hood) so a save
+// here takes effect immediately, no appsettings edit or restart needed.
+export const SSO_CONFIGURATIONS_ENDPOINTS = {
+  get:    `${API_V1_BASE}/system/sso-configurations`,
+  update: `${API_V1_BASE}/system/sso-configurations`,
 };
 
 // ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──

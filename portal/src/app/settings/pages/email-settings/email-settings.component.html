@@ -69,30 +69,34 @@
           </div>
         </div>
 
-        <div class="form-actions">
-          <button type="submit" class="btn-primary" [disabled]="saving()">
-            {{ saving() ? 'Saving…' : 'Save Email Settings' }}
-          </button>
-        </div>
+        @if (canWrite) {
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Saving…' : 'Save Email Settings' }}
+            </button>
+          </div>
+        }
       </section>
     </form>
 
-    <section class="settings-card">
-      <h2 class="card-title">Send a Test Email</h2>
-      <p class="card-sub">Sends using the currently saved settings above — save your changes first if you just edited them.</p>
-      <div class="inline-form">
-        <div class="form-field">
-          <label for="es-testEmail">Send to</label>
-          <input id="es-testEmail" type="email" placeholder="you@example.com"
-                 [value]="testEmailAddress()"
-                 (input)="testEmailAddress.set($any($event.target).value)" />
+    @if (canWrite) {
+      <section class="settings-card">
+        <h2 class="card-title">Send a Test Email</h2>
+        <p class="card-sub">Sends using the currently saved settings above — save your changes first if you just edited them.</p>
+        <div class="inline-form">
+          <div class="form-field">
+            <label for="es-testEmail">Send to</label>
+            <input id="es-testEmail" type="email" placeholder="you@example.com"
+                   [value]="testEmailAddress()"
+                   (input)="testEmailAddress.set($any($event.target).value)" />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-outline" [disabled]="testing()" (click)="sendTestEmail()">
+              {{ testing() ? 'Sending…' : 'Send Test Email' }}
+            </button>
+          </div>
         </div>
-        <div class="form-actions">
-          <button type="button" class="btn-outline" [disabled]="testing()" (click)="sendTestEmail()">
-            {{ testing() ? 'Sending…' : 'Send Test Email' }}
-          </button>
-        </div>
-      </div>
-    </section>
+      </section>
+    }
   }
 </div>

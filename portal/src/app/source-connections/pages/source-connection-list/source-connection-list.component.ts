@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { DisableWithoutPermissionDirective } from '../../../auth/directives/disable-without-permission.directive';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { ISourceConnectionService } from '../../services/i-source-connection.service';
 import { ApplicationTypeModel, SourceConnectionModel, SourceSortColumn, SortOrder } from '../../models/source-connection.model';
@@ -25,6 +24,8 @@ import { SampleSourceFormComponent } from '../../../components/node-library/samp
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { PermissionService } from '../../../auth/services/permission.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
 @Component({
   selector: 'app-source-connection-list',
@@ -37,7 +38,6 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
-    DisableWithoutPermissionDirective,
     HideWithoutPermissionDirective,
     EpicSourceFormComponent,
     CernerSourceFormComponent,
@@ -52,10 +52,12 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
   styleUrls: ['./source-connection-list.component.scss'],
 })
 export class SourceConnectionListComponent implements OnInit {
-  private readonly svc    = inject(ISourceConnectionService);
-  private readonly dialog = inject(MatDialog);
-  private readonly toast  = inject(ToastService);
-  protected readonly wiz  = inject(WizardService);
+  private readonly svc         = inject(ISourceConnectionService);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  protected readonly wiz       = inject(WizardService);
+  private readonly permissions = inject(PermissionService);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   readonly searchQuery = signal('');
   readonly ehrFilter = signal<EhrVendor | ''>('');
@@ -113,7 +115,33 @@ export class SourceConnectionListComponent implements OnInit {
    */
   readonly createVendorOptions = this.ehrOptions.filter(o => o.value in EHR_VENDOR_TO_SOURCE_FORM_KEY && o.value !== 'GenericFhir' && o.value !== 'Hl7v2');
 
-  readonly addVendor = signal<EhrVendor>('Epic');
+  // There is no `sourceconnections.create` permission (RbacSeedData deliberately doesn't seed one —
+  // Create is authorized per-vendor, e.g. `epic.create`, `cerner.create`). So "can this role create a
+  // Source Connection at all" is "does it hold ANY vendor's own .create code" — narrowed to the vendors
+  // createVendorOptions already offers (the ones with a real entity-mode form), so a permission the
+  // user holds for a vendor with no form here (e.g. a future addition) never produces a dead option.
+  readonly permittedCreateVendorOptions = computed(() =>
+    this.createVendorOptions.filter(o => this.permissions.hasPermission(`${o.value.toLowerCase()}.create`))
+  );
+
+  readonly addVendor = signal<EhrVendor>(this.permittedCreateVendorOptions()[0]?.value ?? 'Epic');
+
+  /** `{vendor}.edit` for a specific row, e.g. `epic.edit` — the code the backend actually authorizes
+   *  PUT /source-connections/{id} against (ConfigurationsController.cs), never the generic
+   *  `sourceconnections.edit` fallback (that only covers a vendor with no dedicated permission group). */
+  vendorEditCode(c: SourceConnectionModel): string {
+    return `${c.sourceSystemType.toLowerCase()}.edit`;
+  }
+
+  /** Delete requires BOTH the generic sourceconnections.delete AND the row's own vendor-specific
+   *  `{vendor}.delete` — SourceConnectionsController.cs's DELETE action checks both independently
+   *  ([StandardPermission(SourceConnections, Delete)] automatically, plus an explicit
+   *  AuthorizePermissionAsync(sourceConnection.SourceSystemType, Delete) in the method body).
+   *  Mirrored here with mode:'all' so a role missing either one doesn't see a Delete button the
+   *  backend would reject. */
+  deleteCodes(c: SourceConnectionModel): string[] {
+    return ['sourceconnections.delete', `${c.sourceSystemType.toLowerCase()}.delete`];
+  }
 
   /** Which registered per-vendor form to render for the currently-open entity-mode dialog — driven by
    *  wiz.ehrType() (seeded from the row being viewed/edited, or from addVendor() for a brand-new connection; see
@@ -263,6 +291,7 @@ export class SourceConnectionListComponent implements OnInit {
    *  right after, and the entity-mode-CREATE branch of EhrVendorSourceFormComponent's own vendor-sync effect
    *  keeps it there once the matching wrapper (see currentEntityFormKey) mounts. */
   openAdd(vendor: EhrVendor = this.addVendor()): void {
+    if (!this.actionGuard.ensure(`${vendor.toLowerCase()}.create`, `You do not have permission to add a new ${vendor} source connection.`)) return;
     this.wiz.openEntity(null);
     this.wiz.ehrType.set(vendor);
   }
@@ -273,6 +302,7 @@ export class SourceConnectionListComponent implements OnInit {
 
   openEdit(connection: SourceConnectionModel): void {
     if (this.isUsedInWorkflow(connection)) return;
+    if (!this.actionGuard.ensure(this.vendorEditCode(connection), `You do not have permission to edit this ${connection.sourceSystemType} source connection.`)) return;
     this.wiz.openEntity(connection, { readonly: false });
   }
 
@@ -284,6 +314,7 @@ export class SourceConnectionListComponent implements OnInit {
 
   confirmDelete(connection: SourceConnectionModel): void {
     if (this.isUsedInWorkflow(connection)) return;
+    if (!this.actionGuard.ensure(this.deleteCodes(connection), `You do not have permission to delete this ${connection.sourceSystemType} source connection.`, 'all')) return;
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',
