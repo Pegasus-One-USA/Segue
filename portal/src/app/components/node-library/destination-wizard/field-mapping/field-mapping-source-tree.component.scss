@@ -8,11 +8,12 @@
   // can render touching/overlapping before either has been dragged. Still freely resizable wider if the
   // header ever feels cramped, see below.
   width: 380px;
-  // Auto-height, uncapped, so the card always grows to fully show the payload tree — even a big
-  // resource (e.g. Patient's 184 fields) — instead of scrolling inside it; the outer canvas viewport's
-  // own pan/scroll (see .fm-scrollbar-track) is what handles a card taller than the visible area, not a
-  // second scrollbar nested inside it. Only width is user-resizable (resize: horizontal below); height
-  // simply tracks content, so this card can never itself grow a vertical scrollbar.
+  // Auto-height by default — the card grows to fully show the payload tree. Both width AND height are
+  // now user-resizable via the native drag handle (resize: both); dragging height down shrinks the card
+  // below its content, at which point .fm-source-rows' own overflow:auto kicks in as an internal
+  // scrollbar. The header's "fit to screen" toggle (.fm-source-card--fit, see the component) caps height
+  // at a viewport-relative bound without touching the drag-resize inline height directly, so the two
+  // controls never fight each other — see toggleFit()'s doc comment.
   height: auto;
   min-width: 260px;
   max-width: 720px;
@@ -21,12 +22,18 @@
   flex-direction: column;
   // resize needs overflow other than the default `visible` to reliably show the drag handle across
   // browsers — `auto` here (not `hidden`), same reasoning as the join popover's own resize handle.
-  resize: horizontal;
+  resize: both;
   overflow: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-xs);
+
+  // "Fit to screen" toggle — caps height instead of setting it directly, so a manual drag-resize (which
+  // sets inline height) is preserved underneath the cap rather than overwritten by it.
+  &--fit {
+    max-height: 70vh;
+  }
 
   // The native resize handle is barely visible against this card's light body — draw an explicit grip
   // so the affordance is actually discoverable (matches field-mapping-join-popover.component.scss's
@@ -133,6 +140,22 @@
   &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
 }
 
+.fm-source-fit-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-on-primary);
+  opacity: 0.75;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { opacity: 1; background: rgba(255, 255, 255, 0.14); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+}
+
 .fm-source-no-match {
   padding: var(--space-8, 16px);
   text-align: center;
@@ -143,12 +166,27 @@
 .fm-source-rows {
   flex: 1;
   min-height: 0;
-  // The card's height is uncapped and only horizontally resizable (see .fm-source-card), so in practice
-  // this never actually clips/scrolls — kept as a safety net, and to keep .fm-source-head (title +
-  // search box) pinned above this region rather than scrolling away with the fields, matching
-  // field-mapping-target-card.component.scss's .fm-target-rows.
+  // Genuinely scrollable now that the card's "fit to screen" toggle (fitMode) can cap its height — also
+  // keeps .fm-source-head (title + search box) pinned above this region rather than scrolling away with
+  // the fields, matching field-mapping-target-card.component.scss's .fm-target-rows. Scrollbar sized up
+  // (double a typical thin custom scrollbar) so it's easy to grab without fighting the drag-to-map
+  // gesture that dominates this region.
+  // padding-right: .fm-tree-port sits half outside its row (right: -5px, 10px wide) — a small buffer so
+  // that overhang isn't clipped by this region's own scroll boundary.
   overflow: auto;
+  padding-right: 6px;
   background: var(--color-surface);
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-muted-2) transparent;
+
+  &::-webkit-scrollbar { width: 14px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-muted-2);
+    border-radius: 7px;
+    border: 3px solid var(--color-surface);
+  }
+  &::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 }
 
 .fm-source-group + .fm-source-group {
