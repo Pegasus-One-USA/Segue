@@ -5,8 +5,16 @@ namespace FHIRBridge.Worker;
 
 public sealed class RuntimeWorkerOptions
 {
-    public bool Enabled { get; set; }
     public int IntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// Direct-call route scheduling (Worker.RunDueRoutesAsync) — disabled by default now that
+    /// ScheduleDispatcherWorker/PipelineRunCommandProcessor (the queue-based path) is the live scheduler. Kept as a
+    /// fast-rollback switch: set true to fall back to direct polling without a redeploy if the queue path misbehaves.
+    /// Workflow scheduling (RunDueWorkflowsAsync) has no queue-based equivalent and always runs regardless of this flag.
+    /// </summary>
+    public bool DirectRouteSchedulingEnabled { get; set; }
+
     public string[] ResourceTypes { get; set; } = SupportedFhirResourceTypes.All.ToArray();
     public RuntimeWorkerSourceOptions Source { get; set; } = new();
     public RuntimeWorkerDestinationOptions Destination { get; set; } = new();

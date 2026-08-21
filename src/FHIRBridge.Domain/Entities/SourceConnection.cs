@@ -5,7 +5,7 @@ using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class SourceConnection : AuditableChildEntity<Guid>
+public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private SourceConnection()
     {
@@ -32,6 +32,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public SourceSystemType SourceSystemType { get; private set; }
     public string BaseUrl { get; private set; } = default!;
     public SourceAuthenticationConfiguration Authentication { get; private set; } = default!;
@@ -74,14 +75,14 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>
         IsEnabled = isEnabled;
     }
 
-    /// <summary>Advances the incremental-sync cursor after a workflow run completes successfully. No-op when this
-    /// connection has no retrieval configuration (interactive sources, or Backend sources created before this field
-    /// existed).</summary>
-    public void RecordRetrievalSync(DateTime syncedAtUtc)
+    /// <summary>Advances the incremental-sync cursor for the given resource types after a workflow run completes
+    /// successfully. No-op when this connection has no retrieval configuration (interactive sources, or Backend
+    /// sources created before this field existed).</summary>
+    public void RecordRetrievalSync(IReadOnlyCollection<string> resourceTypes, DateTime syncedAtUtc)
     {
         if (Retrieval is not null)
         {
-            Retrieval = Retrieval.WithLastSuccessfulSync(syncedAtUtc);
+            Retrieval = Retrieval.WithLastSuccessfulSync(resourceTypes, syncedAtUtc);
         }
     }
 

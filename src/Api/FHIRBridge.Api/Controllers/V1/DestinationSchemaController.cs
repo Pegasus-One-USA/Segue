@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -17,13 +18,16 @@ public sealed class DestinationSchemaController : ControllerBase
 {
     private readonly IDestinationSchemaService _schemaService;
     private readonly ICsvDestinationConnectionTestService _csvConnectionTestService;
+    private readonly IFhirDestinationConnectionTestService _fhirConnectionTestService;
 
     public DestinationSchemaController(
         IDestinationSchemaService schemaService,
-        ICsvDestinationConnectionTestService csvConnectionTestService)
+        ICsvDestinationConnectionTestService csvConnectionTestService,
+        IFhirDestinationConnectionTestService fhirConnectionTestService)
     {
         _schemaService = schemaService;
         _csvConnectionTestService = csvConnectionTestService;
+        _fhirConnectionTestService = fhirConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -44,6 +48,73 @@ public sealed class DestinationSchemaController : ControllerBase
         => Ok(await _schemaService.ProbeSchemaAsync(request, cancellationToken));
 
     /// <summary>
+    /// Executes a real ALTER TABLE against an ad-hoc SQL Server / Azure SQL connection. Always returns 200 —
+    /// failures (bad connection, invalid identifier/type, column already exists, etc.) come back as
+    /// <c>success:false</c> + <c>error</c> so the mapping canvas can surface them inline.
+    /// </summary>
+    [HttpPost("schema/add-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Add a column to a destination table via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddColumn(
+        [FromBody] AddColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.AddColumnAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real CREATE TABLE (auto-increment Id primary key, plus any requested columns and an
+    /// optional FK to a parent table) against an ad-hoc SQL Server / Azure SQL connection. Always returns
+    /// 200 — failures (bad connection, table/parent-table already exists or missing, etc.) come back as
+    /// <c>success:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("schema/create-table")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Create a new destination table via a real CREATE TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CreateTable(
+        [FromBody] CreateTableRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.CreateTableAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real, irreversible ALTER TABLE ... DROP COLUMN against an ad-hoc SQL Server / Azure SQL
+    /// connection — permanently deletes the column and any data in it. Always returns 200 — failures come
+    /// back as <c>success:false</c> + <c>error</c>. Confirming this with the user is the caller's
+    /// responsibility; this endpoint executes unconditionally once called.
+    /// </summary>
+    [HttpPost("schema/drop-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Permanently drop a column from a destination table via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DropColumn(
+        [FromBody] DropColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.DropColumnAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Executes a real ALTER TABLE ... ALTER COLUMN (data type change) and/or an sp_rename (column
+    /// rename) against an ad-hoc SQL Server / Azure SQL connection. Always returns 200 — failures (bad
+    /// connection, invalid identifier/type, incompatible data, name collision, etc.) come back as
+    /// <c>success:false</c> + <c>error</c> so the mapping canvas can surface them inline.
+    /// </summary>
+    [HttpPost("schema/alter-column")]
+    [StandardPermission(
+        PermissionGroupCode.Configuration,
+        PermissionActionCode.Write,
+        description: "Rename a destination table column and/or change its data type via a real ALTER TABLE.")]
+    [ProducesResponseType(typeof(SchemaMutationResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AlterColumn(
+        [FromBody] AlterColumnRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _schemaService.AlterColumnAsync(request, cancellationToken));
+
+    /// <summary>
     /// Tests an ad-hoc SFTP connection for a CSV destination (storageType 'sftp'). Always returns 200 —
     /// connection failures come back as <c>connected:false</c> + <c>error</c>.
     /// </summary>
@@ -53,4 +124,15 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] SftpConnectionTestRequest request,
         CancellationToken cancellationToken)
         => Ok(await _csvConnectionTestService.TestSftpConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc FHIR-repository connection (e.g. Aidbox) for a not-yet-saved <c>FhirRepository</c>
+    /// destination. Always returns 200 — connection failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("fhir-test")]
+    [ProducesResponseType(typeof(FhirConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestFhirConnection(
+        [FromBody] FhirConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _fhirConnectionTestService.TestConnectionAsync(request, cancellationToken));
 }

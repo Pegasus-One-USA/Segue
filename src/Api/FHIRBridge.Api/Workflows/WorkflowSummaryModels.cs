@@ -20,4 +20,20 @@ public sealed record WorkflowSummaryDto(
     string? SourceSystemType,
     string? ApplicationType,
     bool HasDestination,
-    bool IsPubliclyLaunchable);
+    bool IsPubliclyLaunchable,
+    DateTime? CreatedOnUtc = null,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null);
+
+/// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
+/// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for
+/// the portal's "Showing X-Y of Z" / page-count UI. The three Available* lists are the full distinct-value set
+/// across every workflow (not just what's matching right now) so the portal's Status/Audience/Source multi-select
+/// filter checkboxes have a stable option list regardless of what's currently checked.</summary>
+public sealed record WorkflowSummaryPageDto(
+    IReadOnlyList<WorkflowSummaryDto> Items,
+    int TotalCount,
+    IReadOnlyList<string> AvailableStatuses,
+    IReadOnlyList<string> AvailableApplicationTypes,
+    IReadOnlyList<string> AvailableSourceSystemTypes);

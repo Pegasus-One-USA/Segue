@@ -1,0 +1,169 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Pipeline Executions</h1>
+    <p class="page-sub">History of data-sync runs. Each row is one run of a configured job that moves records from an <strong>input</strong> to a <strong>target</strong>. Click a row to see the breakdown by data type (Patients, Observations, …).</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Every row is <strong>one execution of a configured pipeline route</strong> — a saved rule that reads records from an <strong>input</strong> (Epic, Healow, a FHIR server, a file…) and writes them to a <strong>target</strong> (a database, CSV, SFTP…).</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">How a run gets here <span class="info-heading-hint">— shown in the Triggered By column</span></h4>
+        <dl class="info-defs">
+          <div class="info-def">
+            <dt><span class="info-tag">Scheduled</span></dt>
+            <dd>Ran automatically on its schedule — unattended, system-to-system inputs.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Webhook</span></dt>
+            <dd>Started because an external system pushed data in.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Manual / Bulk</span></dt>
+            <dd>Started by an admin, or a large bulk export.</dd>
+          </div>
+          <div class="info-def">
+            <dt><span class="info-tag">Interactive launch</span></dt>
+            <dd>A user launched the app from the EHR (e.g. <code>epic-ehr-launch</code>); the resulting sync lands here too.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">What the numbers mean</h4>
+        <div class="info-metrics">
+          <div class="info-metric"><span class="info-metric-key">Read</span> records pulled from the input</div>
+          <div class="info-metric"><span class="info-metric-key">Written</span> records delivered to the target</div>
+          <div class="info-metric"><span class="info-metric-key">Run Errors</span> failures recorded for this run</div>
+        </div>
+      </section>
+
+      <section class="info-section">
+        <h4 class="info-heading">Statuses</h4>
+        <div class="info-statuses">
+          <span class="info-status"><span class="status-badge status-success">Completed</span> all good</span>
+          <span class="info-status"><span class="status-badge status-warn">Completed with errors</span> some records failed</span>
+          <span class="info-status"><span class="status-badge status-fail">Failed</span> nothing written</span>
+          <span class="info-status"><span class="status-badge status-neutral">Skipped</span> dependencies disabled</span>
+          <span class="info-status"><span class="status-badge status-neutral">Running</span> in progress</span>
+        </div>
+      </section>
+
+      <p class="info-note">This is the config-driven engine. Visual "Run"-button and workflow-graph launches instead appear under <strong>Execution History</strong>.</p>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Search pipeline or input…"
+      [value]="search()"
+      (input)="onSearchChange($any($event.target).value)"
+      (keyup.enter)="applyFilters()"
+    />
+    <select [value]="status()" (change)="onStatusChange($any($event.target).value)">
+      <option value="">All statuses</option>
+      <option value="Running">Running</option>
+      <option value="Completed">Completed</option>
+      <option value="CompletedWithErrors">Completed with errors</option>
+      <option value="Failed">Failed</option>
+      <option value="Skipped">Skipped</option>
+    </select>
+    <button class="btn" type="button" (click)="applyFilters()">Search</button>
+    <button class="btn btn-ghost" type="button" (click)="reset()">Reset</button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="entries()" class="data-table">
+
+        <ng-container matColumnDef="pipelineName">
+          <th mat-header-cell *matHeaderCellDef>Pipeline</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.pipelineName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="sourceName">
+          <th mat-header-cell *matHeaderCellDef>Input</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.sourceName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="startedOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Started</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.startedOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="durationMs">
+          <th mat-header-cell *matHeaderCellDef>Duration</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.durationMs !== null ? (r.durationMs / 1000 | number:'1.0-1') + 's' : '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">
+            <span class="status-badge"
+                  [class.status-success]="r.status === 'Completed'"
+                  [class.status-warn]="r.status === 'CompletedWithErrors'"
+                  [class.status-fail]="r.status === 'Failed'"
+                  [class.status-neutral]="r.status === 'Running' || r.status === 'Skipped'">
+              {{ r.status }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="triggeredBy">
+          <th mat-header-cell *matHeaderCellDef title="Who or what started this run: Scheduled, Webhook, Manual, Bulk, or an interactive launch (e.g. epic-ehr-launch).">Triggered By</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)">{{ r.triggeredBy || '—' }} <span class="mono" *ngIf="r.triggerType">({{ r.triggerType }})</span></td>
+        </ng-container>
+
+        <ng-container matColumnDef="counts">
+          <th mat-header-cell *matHeaderCellDef title="Read = records pulled from the input. Written = records delivered to the target. Run Errors = failures recorded for the whole run.">Read / Written / Run Errors</th>
+          <td mat-cell *matCellDef="let r" class="clickable" (click)="openDetail(r)"
+              title="Read = pulled from input · Written = delivered to target · Run Errors = failures for this run">
+            {{ r.extractedCount }} / {{ r.writtenCount }} /
+            @if (r.errorCount > 0 && r.correlationId) {
+              <button class="btn-link error-count" type="button" (click)="viewCorrelation(r, $event)" title="View these errors in Correlation Search">{{ r.errorCount }}</button>
+            } @else {
+              <span [class.error-count]="r.errorCount > 0">{{ r.errorCount }}</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="correlationId">
+          <th mat-header-cell *matHeaderCellDef>Correlation ID</th>
+          <td mat-cell *matCellDef="let r" class="corr-cell">
+            @if (r.correlationId) {
+              <button class="btn-link corr-link" type="button" (click)="viewCorrelation(r, $event)" [title]="r.correlationId"><code class="mono">{{ r.correlationId }}</code></button>
+            } @else {
+              —
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (entries().length === 0 && !loading()) {
+      <div class="empty-state">No pipeline executions found.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+
+    @if (totalCount() > 0) {
+      <mat-paginator
+        [length]="totalCount()"
+        [pageSize]="perPage()"
+        [pageIndex]="page() - 1"
+        [pageSizeOptions]="[5, 10, 25, 50]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+        class="table-paginator"
+      ></mat-paginator>
+    }
+  </div>
+</div>

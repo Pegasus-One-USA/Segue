@@ -1,0 +1,147 @@
+{
+  "resourceType": "Immunization",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "status": "<Code · 1..1 · required>",
+  "statusReason": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "vaccineCode": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "patient": {
+    "reference": "<String · 1..1 · required>",
+    "display": "<String · 0..1>"
+  },
+  "encounter": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "occurrenceDateTime": "<DateTime · 1..1 · required>",
+  "occurrenceString": "<String · 1..1 · required>",
+  "primarySource": "<boolean · 0..1>",
+  "reportOrigin": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "location": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "manufacturer": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "lotNumber": "<String · 0..1>",
+  "expirationDate": "<Date · 0..1>",
+  "site": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "route": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ]
+  },
+  "doseQuantity": {
+    "value": "<Decimal · 0..1>",
+    "unit": "<String · 0..1>",
+    "system": "<Uri · 0..1>",
+    "code": "<Code · 0..1>"
+  },
+  "performer": [
+    {
+      "function": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ]
+      },
+      "actor": {
+        "reference": "<String · 1..1 · required>",
+        "display": "<String · 0..1>"
+      }
+    }
+  ],
+  "note": [
+    {
+      "authorString": "<String · 0..1>",
+      "time": "<DateTime · 0..1>",
+      "text": "<Markdown · 1..1 · required>"
+    }
+  ],
+  "reasonCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ],
+  "reasonReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "isSubpotent": "<boolean · 0..1>",
+  "subpotentReason": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ]
+    }
+  ]
+}

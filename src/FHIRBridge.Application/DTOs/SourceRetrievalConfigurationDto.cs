@@ -16,7 +16,7 @@ public sealed record SourceRetrievalConfigurationDto(
     string? RetryPolicy = null,
     int? TimeoutSeconds = null,
     int? MaxRecordsPerRun = null,
-    DateTime? LastSuccessfulSyncUtc = null,
+    IReadOnlyDictionary<string, DateTime>? LastSuccessfulSyncUtcByResourceType = null,
     string? ExportScope = null,
     string? GroupId = null,
     string[]? PatientIds = null,

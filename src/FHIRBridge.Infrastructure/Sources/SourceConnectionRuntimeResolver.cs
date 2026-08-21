@@ -1,11 +1,14 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Infrastructure.Sources;
 
@@ -18,19 +21,25 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 {
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    private readonly IScopeGeneratorService _scopeGenerator;
     // IFhirPatientContextProvider is never registered as its own service type — it's reached by downcasting the
     // registered IFhirAccessTokenProvider (CompositeFhirAccessTokenProvider implements both), the same pattern
     // FhirSourceConnectorBase.ApplyPatientScopeAsync already uses.
     private readonly IFhirAccessTokenProvider? _accessTokenProvider;
+    private readonly ILogger _logger;
 
     public SourceConnectionRuntimeResolver(
         IConfigurationRepository repository,
         ISecretProvider secretProvider,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
+        IScopeGeneratorService scopeGenerator,
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        ILogger<SourceConnectionRuntimeResolver>? logger = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _scopeGenerator = scopeGenerator;
         _accessTokenProvider = accessTokenProvider;
+        _logger = logger ?? NullLogger<SourceConnectionRuntimeResolver>.Instance;
     }
 
     public async Task<FhirSourceConfiguration?> ResolveAsync(
@@ -38,7 +47,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
-        string? patientSearchCriteria = null)
+        string? patientSearchCriteria = null,
+        string? callerId = null)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -53,7 +63,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             SourceSystemType.Cerner => RuntimeSourceType.Cerner,
             SourceSystemType.Allscripts => RuntimeSourceType.Allscripts,
             SourceSystemType.GenericFhir => RuntimeSourceType.GenericFhir,
-            SourceSystemType.Athenahealth => RuntimeSourceType.GenericFhir,
+            SourceSystemType.Athenahealth => RuntimeSourceType.Athenahealth,
             SourceSystemType.Healow => RuntimeSourceType.Healow,
             SourceSystemType.MeditechGreenfield => RuntimeSourceType.MeditechGreenfield,
             _ => throw new NotSupportedException($"Source system '{sourceConnection.SourceSystemType}' is not supported by the workflow engine.")
@@ -82,6 +92,52 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var retrieval = sourceConnection.Retrieval;
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
+        // athenahealth's Backend System app registrations verified against the live preview sandbox are
+        // provisioned with v1 coarse scopes only (system/{Type}.read) — v2 granular scopes (system/{Type}.rs)
+        // get rejected by the token endpoint with "Invalid Scope". Every other vendor keeps the v2 default (see
+        // the portal's identical vendor check in ehr-vendor-source-form.component.ts).
+        var scopeVersion = sourceConnection.SourceSystemType == SourceSystemType.Athenahealth ? "v1" : "v2";
+
+        // Backend System / Provider Standalone sources own their resource-type list directly (Retrieval.ResourceTypes
+        // — the same Resource Type picker Settings already exposes), so it is always regenerated fresh here rather
+        // than trusted from whatever Authentication.Scopes last happened to persist. A stale/never-resynced scope
+        // snapshot was a real, repeated failure mode (an edited Resource Type selection silently kept requesting the
+        // OLD resource set's scopes, tripping providers — athenahealth included — that reject the whole token
+        // request for a single unrecognized scope) — regenerating on every resolve makes the Resource Type picker
+        // the single, always-correct source of truth, with no separate sync step to remember to run.
+        //
+        // Interactive-only sources (EHR launch / Patient) have no Retrieval config of their own — there is nothing
+        // to regenerate FROM here, so they keep using whatever IEpicSourceConnectionScopeSyncService (destination-
+        // union, on workflow save) or the wizard's own scope preview last persisted, falling back to a generated
+        // default only when that's genuinely never been populated.
+        var scopes = retrieval is not null
+            ? _scopeGenerator.Generate(
+                sourceConnection.ApplicationType,
+                retrieval.ResourceTypes,
+                scopeVersion: scopeVersion,
+                scopeVersionDetected: false,
+                supportedScopes: null).Scopes
+            : sourceConnection.Authentication.Scopes.Any()
+                ? sourceConnection.Authentication.Scopes
+                : _scopeGenerator.Generate(
+                    sourceConnection.ApplicationType,
+                    [],
+                    scopeVersion: scopeVersion,
+                    scopeVersionDetected: false,
+                    supportedScopes: null).Scopes;
+
+        _logger.LogInformation(
+            "SourceConnectionRuntimeResolver: resolved connection {SourceConnectionId} ({SourceSystemType}) — " +
+            "baseUrl={BaseUrl} tokenEndpoint={TokenEndpoint} practiceId={PracticeId} authPlacement={AuthPlacement} " +
+            "scopesFrom={ScopesFrom} scope=\"{Scope}\"",
+            sourceConnection.Id, sourceConnection.SourceSystemType, sourceConnection.BaseUrl,
+            sourceConnection.Authentication.TokenEndpoint, sourceConnection.Authentication.PracticeId,
+            sourceConnection.Authentication.AuthPlacement,
+            retrieval is not null
+                ? $"regenerated-from-retrieval({scopeVersion})"
+                : sourceConnection.Authentication.Scopes.Any() ? "stored" : $"fallback-generated({scopeVersion})",
+            string.Join(' ', scopes));
+
         var config = new FhirSourceConfiguration(
             sourceType,
             sourceConnection.Name,
@@ -90,7 +146,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             sourceConnection.Authentication.ClientId,
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
-            sourceConnection.Authentication.Scopes,
+            scopes,
             retrieval?.PageSize ?? 100,
             5,
             sourceConnection.Id,
@@ -107,12 +163,22 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             PatientIds: retrieval?.PatientIds is { Length: > 0 } patientIds ? patientIds : null,
             OutputFormat: retrieval?.OutputFormat,
             // Bulk $export uses the _since cursor (not the search path's _lastUpdated); carry it only when incremental
-            // sync is on and a prior run recorded a timestamp.
-            Since: retrieval is { IncrementalSyncEnabled: true, LastSuccessfulSyncUtc: { } lastSync }
+            // sync is on and every configured resource type has a prior recorded timestamp (see
+            // GetEarliestSuccessfulSyncUtc — a batched export job can't give one type a different _since than another).
+            Since: retrieval is { IncrementalSyncEnabled: true } && retrieval.GetEarliestSuccessfulSyncUtc(retrieval.ResourceTypes) is { } lastSync
                 ? new DateTimeOffset(DateTime.SpecifyKind(lastSync, DateTimeKind.Utc))
                 : null,
+            // Search REST fetches each resource type via its own independent request, so each tracks its own
+            // _lastUpdated cursor instead of sharing one connection-wide value (see SourceNodeExecutors, which
+            // looks this up per resource type when building each request).
+            LastUpdatedWatermarks: retrieval is { IncrementalSyncEnabled: true }
+                ? retrieval.LastSuccessfulSyncUtcByResourceType
+                : null,
             TargetPatientId: targetPatientId,
-            PatientSearchCriteria: patientSearchCriteria);
+            PatientSearchCriteria: patientSearchCriteria,
+            CallerId: callerId,
+            PracticeId: sourceConnection.Authentication.PracticeId,
+            AuthPlacement: sourceConnection.Authentication.AuthPlacement);
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -131,7 +197,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return config;
     }
 
-    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task DiscardTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is not IFhirPatientContextProvider patientContextProvider)
         {
@@ -156,7 +222,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             Scopes: [],
             SourceConnectionId: sourceConnection.Id,
             ApplicationType: sourceConnection.ApplicationType,
-            TargetPatientId: targetPatientId);
+            TargetPatientId: targetPatientId,
+            CallerId: callerId);
 
         await patientContextProvider.DiscardTokenAsync(source, cancellationToken);
     }
@@ -167,14 +234,14 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     // actually search for resources. For an interactive source this is a cache lookup (silently refreshing via the
     // refresh token if the cached access token has merely expired); it only returns false when a genuinely fresh
     // interactive sign-in is required.
-    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken)
+    public async Task<bool> HasValidTokenAsync(Guid sourceConnectionId, string? targetPatientId, CancellationToken cancellationToken, string? callerId = null)
     {
         if (_accessTokenProvider is null)
         {
             return false;
         }
 
-        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken);
+        var source = await ResolveAsync(sourceConnectionId, searchParameters: null, targetPatientId, cancellationToken, callerId: callerId);
         if (source is null)
         {
             return false;
@@ -205,20 +272,41 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var parts = new List<string>();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         if (!string.IsNullOrWhiteSpace(baseSearchParameters))
         {
-            parts.Add(baseSearchParameters.Trim('&'));
+            var trimmed = baseSearchParameters.Trim('&');
+            parts.Add(trimmed);
+            foreach (var segment in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                seenKeys.Add(ExtractParameterKey(segment));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
         {
-            parts.Add(retrieval.SearchCriteria.Trim('&'));
+            // The node-level "Search criteria" field is frequently a wizard-authored snapshot of this same
+            // connection's SearchCriteria (see epic-audience-form.component.ts save()), not an independently
+            // chosen addition — concatenating both unconditionally then re-sends the identical parameter twice
+            // (e.g. "identifier=A,B&identifier=A,B"), which Epic rejects outright for identifier ("Don't support
+            // searching by IDENTIFIER AND IDENTIFIER"). Only carry over parameters whose key isn't already present
+            // in baseSearchParameters.
+            var additional = retrieval.SearchCriteria.Trim('&')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Where(segment => seenKeys.Add(ExtractParameterKey(segment)))
+                .ToList();
+
+            if (additional.Count > 0)
+            {
+                parts.Add(string.Join('&', additional));
+            }
         }
 
-        if (retrieval.IncrementalSyncEnabled && retrieval.LastSuccessfulSyncUtc is { } lastSync)
-        {
-            parts.Add($"_lastUpdated=gt{lastSync:yyyy-MM-ddTHH:mm:ssZ}");
-        }
+        // _lastUpdated is intentionally NOT added here: each resource type is fetched via its own independent
+        // search request with its own watermark (source.LastUpdatedWatermarks, applied per-type by
+        // SourceNodeExecutors), rather than one value shared across every resource type this connection is
+        // configured for.
 
         if (!string.IsNullOrWhiteSpace(retrieval.SortOrder))
         {
@@ -239,5 +327,11 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
+    }
+
+    private static string ExtractParameterKey(string segment)
+    {
+        var equalsIndex = segment.IndexOf('=');
+        return equalsIndex < 0 ? segment : segment[..equalsIndex];
     }
 }

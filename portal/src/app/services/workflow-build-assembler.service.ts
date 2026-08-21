@@ -1,12 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { PipelineStore } from './pipeline.store';
 import { WorkflowGraphMapperService } from './workflow-graph-mapper.service';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { EHR_VENDOR_TO_SOURCE_FORM_KEY } from '../components/node-library/source-form.registry';
+import { HL7V2_CONNECTOR_PATTERN } from '../components/node-library/source-node-vendor.util';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
   DestinationBuildSpec,
   MappingBuildSpec,
   MappingFieldRequest,
+  ParentReferenceSpec,
   SourceBuildSpec,
   SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
@@ -25,6 +29,48 @@ interface DestMappingRow {
   jsonPath?: string; // e.g. "$.name[*].given[*]"
   valueType?: string; // String | Integer | Decimal | Boolean | Date | DateTime | Json
   arrays?: string[]; // array-ancestor fhir paths
+  isUpsertKey?: boolean; // wizard-forced true on the resource's mandatory id row, false elsewhere
+  isRequiredParentRef?: boolean; // wizard-forced true on a locked "child of" reference-field row
+  parentResourceType?: string;   // which parent (of possibly several) this locked row satisfies
+  // Advanced MappingFieldDto members the wizard has no UI to author (docs/backend/14-mapping-profile-master-screen-plan.md
+  // §3.2) but must still round-trip losslessly when present — e.g. a row loaded from a profile the Mapping
+  // Profiles master screen authored. undefined for every wizard-authored row, in which case the computed
+  // defaults below (isRequired/arrayPolicy/etc.) apply exactly as before.
+  isRequired?: boolean;
+  defaultValue?: string;
+  format?: string;
+  normalizationType?: string;
+  terminologySystemJsonPath?: string;
+  terminologyCodeJsonPath?: string;
+  arrayPolicy?: string;
+  cardinality?: string;
+  correlationCodeJsonPath?: string;
+  correlationCodeValue?: string;
+  isEnabled?: boolean;
+  // True when this row's field-mapping metadata (JsonPath/arrayPolicy/etc.) was derived by naive path
+  // conversion rather than the backend FHIR catalog's own authoritative shape — see field-mapping-model.ts.
+  approximated?: boolean;
+  // Set by field-mapping-model.ts's serializeRowsFlat only when `target` is a genuine child table of this
+  // resource's own primary table (e.g. dbo.PatientName, child of dbo.Patient) — lets buildMappingForResource
+  // route this one field to its own table via MappingFieldRequest.destinationObject rather than the
+  // resource's single baseDestinationObject, exactly mirroring MappingImportService.BuildFieldAsync on the
+  // backend for the mapping-profiles/import path.
+  parentTable?: string;
+  parentKeyColumn?: string;
+  foreignKeyColumn?: string;
+  // Set by field-mapping-list.component.ts's "which resource does this reference?" picker (round-tripped
+  // through field-mapping-model.ts's serializeRowsFlat) — resolved in buildMappingForResource into the
+  // referenced resource's own table/id column, since the raw FHIR reference string ("Patient/xyz") this field
+  // is sourced from can never be written as-is into what's normally a NOT NULL FK column.
+  referencesResource?: string;
+}
+
+/** Fresh secret name for a wizard-typed client secret — same convention as WizardService's newClientSecretName
+ *  (duplicated, not imported: that one lives in a service built for entity-mode save, this one for canvas build). */
+function newInlineSecretName(connectionName: string): string {
+  const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `src-${slug}-${suffix}`;
 }
 
 /**
@@ -63,17 +109,42 @@ export class WorkflowBuildAssemblerService {
         .map((node) => node.id),
     );
 
+    // Pre-computed, per source node, the union of resource types its destinations actually map — used to derive
+    // athenahealth's retrieval resource types (and therefore the OAuth scopes it requests) from what's genuinely
+    // consumed downstream, instead of a separately-configured source-side picker that could silently drift out of
+    // sync with it (the real cause of repeated "Invalid Scope" failures against the live sandbox). A cheap
+    // pre-pass over dest_mappings — far cheaper than the full buildMappings() schema-diff work done in the real
+    // destinations loop below, and this only needs the bare resource name per row. Also unions in dest_resources
+    // (the Step 2 "Data groups" selection) directly: a FHIR-passthrough destination (Aidbox/Medplum) never
+    // populates dest_mappings at all — there's no field-by-field mapping table for a whole-resource passthrough
+    // write — so relying on dest_mappings alone left athenahealth's retrieval resourceTypes permanently empty for
+    // that combination, failing save with "At least one resource type is required for Search (REST) retrieval"
+    // even after the user picked resources in Step 2.
+    const destinationResourceTypesBySourceNodeId = new Map<string, Set<string>>();
+    for (const destNode of graph.nodes.filter((node) => this.isDestinationNode(node))) {
+      const destFields = this.fieldsFor(destNode.id, nodesById);
+      const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
+      const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
+      if (!sourceNodeId) continue;
+      const mappedResources = this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource);
+      const selectedResources = (destFields['dest_resources'] ?? '').split(',').map((r) => r.trim()).filter(Boolean);
+      const resources = new Set([...mappedResources, ...selectedResources]);
+      const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
+      resources.forEach((r) => set.add(r));
+      destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);
+    }
+
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
       const fields = this.fieldsFor(id, nodesById);
-      // Existing-source pick left untouched (see EpicAudienceFormComponent.save()'s resolvedSourceConnectionId) —
+      // Existing-source pick left untouched (see EhrVendorSourceFormComponent.save()'s resolvedSourceConnectionId) —
       // skip entirely, no create/update. Mirrors destinationResolved below: a connection another workflow also
       // points at can't be mutated by this save, and the backend resolves sourceConnectionId straight off this
       // node's own config for the Mappings step regardless.
       if (fields['sourceConnectionResolved'] === 'true') continue;
       sources.push({
         nodeId: id,
-        source: this.buildSource(fields),
+        source: this.buildSource(fields, [...(destinationResourceTypesBySourceNodeId.get(id) ?? [])]),
         existingId: fields['sourceConnectionId'] || null,
       });
     }
@@ -107,17 +178,15 @@ export class WorkflowBuildAssemblerService {
       if (!mappingNodeId || !sourceNodeId) continue;
 
       const mappingFields = this.fieldsFor(mappingNodeId, nodesById);
-      const mappingSpec = this.buildMapping(
-        mappingNodeId,
-        sourceNodeId,
-        destNode.id,
-        destFields,
+      mappings.push(
+        ...this.buildMappings(
+          mappingNodeId,
+          sourceNodeId,
+          destNode.id,
+          destFields,
+          mappingFields,
+        ),
       );
-      if (mappingSpec)
-        mappings.push({
-          ...mappingSpec,
-          existingId: mappingFields['mappingProfileId'] || null,
-        });
     }
 
     return { ...graph, sources, destinations, mappings };
@@ -126,6 +195,7 @@ export class WorkflowBuildAssemblerService {
   // ── source ────────────────────────────────────────────────────────────────
   private buildSource(
     fields: Record<string, string>,
+    destinationResourceTypes: string[] = [],
   ): CreateSourceConnectionRequest {
     const connector = fields['Connector'] ?? fields['__name'] ?? '';
     const isSample =
@@ -142,8 +212,110 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
-    // Epic (best-effort from the Epic source wizard fields).
+    // Generic FHIR (GenericFhirSourceFormComponent) — a bare, unauthenticated conformant FHIR R4 server. No
+    // OAuth/interactive concepts apply, so applicationType/interactive stay null (same as Sample). Retrieval
+    // reuses the exact same buildRetrieval() Epic's Backend-System retrieval section feeds — search-rest's
+    // _since/_lastUpdated incremental cursor, _count, _sort, _include/_revinclude, and bulk $export's
+    // scope/group/patient/output-format are all vendor-agnostic on the backend, not Epic-specific.
+    if (/generic.?fhir/i.test(connector)) {
+      return {
+        name: fields['__name'] || 'Generic FHIR Source',
+        sourceSystemType: 'GenericFhir',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: { authenticationType: 'None', scopes: [] },
+        applicationType: null,
+        interactive: null,
+        retrieval: this.buildRetrieval(fields),
+      };
+    }
+
+    // athenahealth — same shared-form field bag as Epic, but Backend audience authenticates via client_credentials
+    // + client secret (not private_key_jwt), and every request needs the Practice ID field's ah-practice scoping.
+    // A freshly typed secret (fields['Client Secret'], non-blank) is provisioned via inlineClientSecret under a
+    // brand-new vault reference — see WizardService.save()'s identical pattern for entity mode. Canvas mode has
+    // no prior connection to preserve an existing reference from here (this always builds a fresh
+    // CreateSourceConnectionRequest), so a blank secret simply omits it — matching a brand-new "New Source" node.
+    if (/athenahealth/i.test(connector)) {
+      const athenaAppType = this.applicationTypeFor(fields);
+      // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
+      // destinationResourceTypesBySourceNodeId in assemble() — not the source's own Retrieval Configuration
+      // picker, which is now hidden for athenahealth in the form (ehr-vendor-source-form.component.ts's
+      // visibleRetrievalFields). Falls back to whatever fields['Scopes']/['Retrieval resource type'] already
+      // held when no destination is wired up yet (e.g. the very first save of a bare source node), so this
+      // never regresses to an empty/invalid request. The backend's own SourceConnectionRuntimeResolver
+      // regenerates the actual OAuth scope string fresh from Retrieval.ResourceTypes on every run regardless —
+      // this is just what gets initially persisted/validated at build time.
+      const athenaResourceTypes = destinationResourceTypes.length
+        ? destinationResourceTypes
+        : (fields['Retrieval resource type'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      const athenaScopes = athenaResourceTypes.length
+        ? athenaResourceTypes.map((rt) => `system/${rt}.read`)
+        : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      const athenaTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
+      const athenaBaseRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
+      const athenaRetrieval = athenaBaseRetrieval
+        ? { ...athenaBaseRetrieval, resourceTypes: athenaResourceTypes.length ? athenaResourceTypes : athenaBaseRetrieval.resourceTypes }
+        : null;
+      return {
+        name: fields['__name'] || 'Athenahealth',
+        sourceSystemType: 'Athenahealth',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: {
+          authenticationType: athenaAppType === 'Backend' ? 'OAuthClientCredentials' : 'None',
+          clientId: fields['Client ID'] || fields['Active client ID'] || null,
+          tokenEndpoint: fields['Token endpoint'] || null,
+          scopes: athenaScopes,
+          practiceId: fields['Practice ID'] || null,
+          clientSecretKeyVaultName: athenaTypedSecret ? 'workflow-secrets' : null,
+          clientSecretName: athenaTypedSecret ? newInlineSecretName(fields['__name'] || 'athena') : null,
+          inlineClientSecret: athenaTypedSecret,
+          authPlacement: (fields['Auth placement'] as 'post' | 'basic') || 'post',
+        },
+        applicationType: athenaAppType,
+        interactive:
+          athenaAppType === 'Backend'
+            ? null
+            : {
+                redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
+                launchUrl: fields['Launch URL'] || null,
+                trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
+                patientSelectionMethod: null,
+                launchDisplayMode: athenaAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
+              },
+        retrieval: athenaRetrieval,
+      };
+    }
+
+    // HL7 v2 / MLLP (Hl7v2SourceFormComponent) — deliberately NOT built into a CreateSourceConnectionRequest.
+    // SourceConnection's shape (BaseUrl + OAuth/JWT SourceAuthenticationConfiguration) has no host/port/MLLP
+    // fields at all: Hl7v2SourceFormComponent.getFields() emits Host/Port/'MLLP timeout (seconds)', never
+    // 'FHIR base URL'/'Client ID'/Scopes. Falling through to the Epic-shaped branch below (the old behavior)
+    // would silently persist sourceSystemType: 'Epic' with an empty baseUrl and fabricated SmartBackendServices
+    // auth, discarding Host/Port/timeout entirely — a wrong vendor masquerading as a successful save. Throwing
+    // here instead is caught by workflow-builder.component.ts's existing assemble() try/catch (the same
+    // established pattern already used for other up-front configuration gaps, e.g. Upsert with no id-mapped key
+    // column) and surfaced as a toast, so the failure is explicit rather than a silent misclassification.
+    if (HL7V2_CONNECTOR_PATTERN.test(connector)) {
+      throw new Error(
+        'HL7 v2 / MLLP sources cannot be saved from the Workflow Builder yet. Remove this node before saving.',
+      );
+    }
+
+    // Epic, Cerner, Allscripts, Healow, MeditechGreenfield (EhrVendorSourceFormComponent) — all four non-Epic
+    // vendors here are field-shape-identical to Epic: buildFieldsToSave() writes the exact same keys for every
+    // one of them, varying only the 'Connector' value itself (see that method's own doc comment). sourceSystemType
+    // must therefore be the actual selected vendor, not a hardcoded 'Epic' — EHR_VENDOR_TO_SOURCE_FORM_KEY's keys
+    // are the one authoritative set of real, form-backed SourceSystemType names (the same map SOURCE_FORM_REGISTRY
+    // and sourceFormKeyForNode() already use); a recognized one is used verbatim below, and only a genuinely
+    // unrecognized/legacy connector (e.g. any source node saved before the 'Connector' field existed) falls back
+    // to 'Epic', preserving that one prior behavior exactly. NewEHR/NewEHRTwo are deliberately NOT in this map
+    // (no real form exists for either — see EHR_VENDOR_TO_SOURCE_FORM_KEY's own construction in
+    // source-form.registry.ts) so a connector value of 'NewEHR'/'NewEHRTwo' cannot match here either; it too
+    // falls to the 'Epic' default below, unchanged from today's behavior for any other unrecognized value.
+    const sourceSystemType = connector in EHR_VENDOR_TO_SOURCE_FORM_KEY ? connector : 'Epic';
+
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+    const discoveredScopes = (fields['Discovered scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const appType = this.applicationTypeFor(fields);
     const interactive =
       appType === 'Backend'
@@ -151,7 +323,7 @@ export class WorkflowBuildAssemblerService {
         : {
             redirectUris: [
               fields['Redirect URI'] ||
-                'http://localhost:5000/api/v1/oauth/callback',
+                OAUTH_DEFAULT_URLS.redirectUri,
             ],
             launchUrl: fields['Launch URL'] || null,
             trustedIssuers: (fields['Trusted issuers'] ?? '')
@@ -166,8 +338,8 @@ export class WorkflowBuildAssemblerService {
           };
 
     return {
-      name: fields['__name'] || 'Epic',
-      sourceSystemType: 'Epic',
+      name: fields['__name'] || sourceSystemType,
+      sourceSystemType,
       baseUrl: fields['FHIR base URL'] || '',
       authentication: {
         authenticationType:
@@ -177,9 +349,13 @@ export class WorkflowBuildAssemblerService {
         scopes,
         keyId: fields['JWT kid'] || null,
         // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
-        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
+        // required by ConfigurationService.ValidateEpicSourceConnection for Epic specifically; Cerner/Allscripts/
+        // Healow/MeditechGreenfield have no vendor-specific backend validation at all (see ConfigurationService.
+        // ValidateSourceConnectionRequestAsync — only Epic gets a dedicated branch), so this same field shape is
+        // accepted as-is for them too.
         privateKeyKeyVaultName: fields['Key vault reference'] || null,
         privateKeySecretName: fields['Secret Name'] || null,
+        discoveredScopes: discoveredScopes.length ? discoveredScopes : null,
       },
       applicationType: appType,
       interactive,
@@ -296,11 +472,31 @@ export class WorkflowBuildAssemblerService {
     fields: Record<string, string>,
     node: WorkflowNodeRequest,
   ): CreateDestinationConfigurationRequest {
+    const isMySql =
+      node.nodeType.includes('MySql') ||
+      (fields['__transformId'] ?? '') === 'dest-mysql';
+    const isPostgres =
+      node.nodeType.includes('PostgreSql') ||
+      (fields['__transformId'] ?? '') === 'dest-postgres';
     const isSql =
+      isMySql ||
+      isPostgres ||
       node.nodeType.includes('SqlServer') ||
       (fields['__transformId'] ?? '') === 'dest-sqlserver';
+    const isMongo =
+      node.nodeType.includes('Mongo') ||
+      (fields['__transformId'] ?? '') === 'dest-mongo';
+    const isMedplum =
+      node.nodeType.includes('Medplum') ||
+      (fields['__transformId'] ?? '') === 'dest-medplum';
+    const isFhir =
+      node.nodeType.includes('Fhir') ||
+      (fields['__transformId'] ?? '') === 'dest-fhir';
+    const isBlob =
+      node.nodeType.includes('Blob') ||
+      (fields['__transformId'] ?? '') === 'dest-blob';
     const name =
-      fields['dest_name'] || (isSql ? 'SQL Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -309,18 +505,110 @@ export class WorkflowBuildAssemblerService {
     const secretName =
       fields['secretName'] || `dest-${this.slug(name)}-${this.shortId()}`;
 
+    // dest_password/dest_sftpPassword are redacted from persisted config (see WorkflowGraphMapperService's
+    // SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload — a blank password field on a
+    // destination that's ALREADY been provisioned (it already carries a secretName from a prior build) means
+    // "the wizard never had a password to show", not "the user wants to blank out a working credential". Rebuilding
+    // the connection string/URI anyway would send a non-blank string with an empty password embedded in it, which
+    // the backend's own "don't touch the secret if none was sent" guard (ConfigurationService's
+    // UpdateDestinationConfigurationAsync, checking IsNullOrWhiteSpace on the WHOLE string) can't catch — silently
+    // overwriting a working credential with a broken one on every no-op re-save. Only rebuild when a password was
+    // actually entered, or this is a brand-new destination with nothing to preserve yet.
+    const hasExistingSecret = !!fields['secretName'];
+
     if (isSql) {
       return {
         name,
-        destinationType: 'SqlServer',
+        destinationType: isMySql ? 'MySql' : isPostgres ? 'PostgreSql' : 'SqlServer',
         keyVaultName,
         secretName,
         target: null,
-        inlineSecret: this.buildSqlConnectionString(fields),
-        connectionMetadataJson: this.buildConnectionMetadata(fields, true),
+        inlineSecret:
+          hasExistingSecret && !fields['dest_password']
+            ? null
+            : this.buildSqlConnectionString(fields, isMySql, isPostgres),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'sql'),
       };
     }
 
+    if (isMongo) {
+      return {
+        name,
+        destinationType: 'Mongo',
+        keyVaultName,
+        secretName,
+        target: fields['dest_collection'] || null,
+        // The whole connection string is treated as secret (see destination-wizard.component.ts's mongoForm
+        // comment) — there's no split server/database/credentials form to assemble from, so this is a direct
+        // pass-through of whatever the wizard collected, same "don't touch an already-provisioned secret unless
+        // the user actually typed a new one" guard the SQL/SFTP branches use.
+        inlineSecret:
+          hasExistingSecret && !fields['dest_connectionString']
+            ? null
+            : fields['dest_connectionString'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'mongo'),
+      };
+    }
+
+    if (isMedplum) {
+      return {
+        name,
+        destinationType: 'Medplum',
+        keyVaultName,
+        secretName,
+        // The FHIR base URL is the destination target; the client secret / PEM private key is treated as the
+        // whole opaque secret (see destination-wizard.component.ts's medplumForm) — same "don't touch an
+        // already-provisioned secret unless the user actually typed a new one" guard the SQL/SFTP/Mongo branches use.
+        target: fields['dest_medplumBaseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !fields['dest_medplumSecret']
+            ? null
+            : fields['dest_medplumSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'medplum'),
+      };
+    }
+
+    if (isFhir) {
+      // dest_clientSecret/dest_password/dest_bearerToken are redacted from persisted config (see
+      // WorkflowGraphMapperService's SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload —
+      // same "don't blank an already-provisioned secret unless the user actually typed a new one" guard the
+      // SQL/Mongo/SFTP branches above use.
+      const hasNewSecretInput = !!(fields['dest_clientSecret'] || fields['dest_password'] || fields['dest_bearerToken']);
+      return {
+        name,
+        destinationType: 'FhirRepository',
+        keyVaultName,
+        secretName,
+        target: fields['dest_baseUrl'] || null,
+        inlineSecret:
+          hasExistingSecret && !hasNewSecretInput
+            ? null
+            : this.buildFhirSecretBlob(fields),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
+      };
+    }
+
+    if (isBlob) {
+      return {
+        name,
+        destinationType: 'BlobStorage',
+        keyVaultName,
+        secretName,
+        target: fields['dest_blobContainer'] || null,
+        // Managed Identity never resolves a Key Vault secret (see BlobDestinationSettings.RequiresSecret
+        // server-side) — always sent as '' for that mode, same "don't touch an already-provisioned secret
+        // unless the user actually typed a new one" guard the SQL/SFTP branches use otherwise.
+        inlineSecret:
+          fields['dest_blobAuthMode'] === 'managedIdentity'
+            ? ''
+            : hasExistingSecret && !fields['dest_blobSecret']
+              ? null
+              : fields['dest_blobSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'blob'),
+      };
+    }
+
+    const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
       // Always 'Csv': the delivery mode (download/email/sftp/download-link) is a ConnectionMetadataJson field
@@ -330,58 +618,161 @@ export class WorkflowBuildAssemblerService {
       keyVaultName,
       secretName,
       target: fields['dest_filePattern'] || null,
-      inlineSecret:
-        fields['dest_deliveryMode'] === 'sftp' ? this.buildSftpUri(fields) : '',
-      connectionMetadataJson: this.buildConnectionMetadata(fields, false),
+      inlineSecret: !isSftp
+        ? ''
+        : hasExistingSecret && !fields['dest_sftpPassword']
+          ? null
+          : this.buildSftpUri(fields),
+      connectionMetadataJson: this.buildConnectionMetadata(fields, 'csv'),
     };
   }
 
-  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword,
-   *  which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri), never here. Mirrors
-   *  destination-connection-secret.util.ts's buildConnectionMetadata — duplicated rather than imported for the
-   *  same reason buildSqlConnectionString/buildSftpUri are (see that file's own header comment). */
+  /** Non-secret dest_* fields as a flat JSON object — everything above EXCEPT dest_password/dest_sftpPassword/
+   *  dest_connectionString, which only ever live in the encrypted secret (buildSqlConnectionString/buildSftpUri/
+   *  the Mongo pass-through), never here. Mirrors destination-connection-secret.util.ts's buildConnectionMetadata
+   *  — duplicated rather than imported for the same reason buildSqlConnectionString/buildSftpUri are (see that
+   *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    isSql: boolean,
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob',
   ): string {
-    const keys = isSql
-      ? [
-          'dest_name',
-          'dest_server',
-          'dest_database',
-          'dest_auth',
-          'dest_username',
-          'dest_schema',
-          'dest_writeMode',
-        ]
-      : [
-          'dest_name',
-          'dest_deliveryMode',
-          'dest_filePattern',
-          'dest_delimiter',
-          'dest_encoding',
-          'dest_sftpHost',
-          'dest_sftpPort',
-          'dest_sftpUsername',
-          'dest_sftpAuthType',
-          'dest_sftpRemoteFolder',
-          'dest_emailTo',
-          'dest_emailCc',
-          'dest_emailSubjectTemplate',
-          'dest_emailBodyTemplate',
-          'dest_downloadLinkExpiryMinutes',
-        ];
+    const keys =
+      kind === 'sql'
+        ? [
+            'dest_name',
+            'dest_server',
+            'dest_database',
+            'dest_auth',
+            'dest_username',
+            'dest_schema',
+            'dest_writeMode',
+            'dest_requireSsl',
+          ]
+        : kind === 'mongo'
+          ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          : kind === 'medplum'
+            ? [
+                'dest_name',
+                // Carried in metadata as a fallback for Target: the workflow-graph / bulk-export-resume run path
+                // reconstructs the destination from node config and can leave Target empty, so the FHIR base URL
+                // must also live here for the Medplum writer to resolve it. See MedplumConnectionMetadata.BaseUrl.
+                'dest_medplumBaseUrl',
+                'dest_medplumClientId',
+                'dest_medplumAuthMethod',
+                'dest_medplumWriteMode',
+                'dest_medplumBatchSize',
+                'dest_medplumIdentifierSystem',
+              ]
+            : kind === 'fhir'
+            ? [
+                'dest_name',
+                'dest_baseUrl',
+                'dest_project',
+                'dest_writeMode',
+                'dest_fhirWriteMode',
+                'dest_tokenEndpoint',
+                'dest_clientId',
+                'dest_username',
+                'dest_fhirMapMode',
+                'dest_fhirCustomRules',
+              ]
+            : kind === 'blob'
+              ? [
+                  'dest_name',
+                  'dest_blobAuthMode',
+                  'dest_blobContainer',
+                  'dest_blobAccountUrl',
+                  'dest_blobAccountName',
+                  'dest_blobEndpointSuffix',
+                  'dest_blobTenantId',
+                  'dest_blobClientId',
+                  'dest_blobManagedIdentityClientId',
+                  'dest_blobPathPrefix',
+                  'dest_blobCreateContainerIfNotExists',
+                  'dest_blobGranularity',
+                  'dest_blobRecordMode',
+                  'dest_blobFolderPattern',
+                  'dest_blobFileNamePattern',
+                ]
+              : [
+                'dest_name',
+                'dest_deliveryMode',
+                'dest_filePattern',
+                'dest_delimiter',
+                'dest_encoding',
+                'dest_sftpHost',
+                'dest_sftpPort',
+                'dest_sftpUsername',
+                'dest_sftpAuthType',
+                'dest_sftpRemoteFolder',
+                'dest_emailTo',
+                'dest_emailCc',
+                'dest_emailSubjectTemplate',
+                'dest_emailBodyTemplate',
+                'dest_downloadLinkExpiryMinutes',
+              ];
     const metadata: Record<string, string> = {};
     for (const key of keys) {
       if (f[key] !== undefined) metadata[key] = f[key];
     }
+    // The backend reads this metadata key as dest_fhirAuthType (see FhirRepositoryAuthResolver); the wizard's own
+    // field/form-control name is dest_authType — bridge the naming difference here rather than renaming either
+    // side to match, since dest_authType already mirrors the SQL family's dest_auth naming convention. The wizard's
+    // internal value for this option is 'oauth2' (matches its own authType control/validators throughout the
+    // component), but the backend's CreateDestinationConfigurationRequestValidator/FhirRepositoryAuthResolver only
+    // recognize 'clientCredentials' — bridge the value too, not just the key.
+    if (kind === 'fhir' && f['dest_authType'] !== undefined) {
+      metadata['dest_fhirAuthType'] = f['dest_authType'] === 'oauth2' ? 'clientCredentials' : f['dest_authType'];
+    }
     return JSON.stringify(metadata);
   }
 
-  private buildSqlConnectionString(f: Record<string, string>): string {
+  /** Builds the FHIR-repository destination's encrypted secret blob, shaped to match exactly what the backend's
+   *  FhirRepositoryAuthResolver (FHIRBridge.Infrastructure) expects to parse for each auth type. */
+  private buildFhirSecretBlob(f: Record<string, string>): string {
+    const authType = f['dest_authType'] ?? 'oauth2';
+    if (authType === 'basic') {
+      return JSON.stringify({ username: f['dest_username'] ?? '', password: f['dest_password'] ?? '' });
+    }
+    if (authType === 'bearer') {
+      return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
+    }
+    return JSON.stringify({
+      clientId: f['dest_clientId'] ?? '',
+      clientSecret: f['dest_clientSecret'] ?? '',
+      tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+    });
+  }
+
+  private buildSqlConnectionString(f: Record<string, string>, isMySql = false, isPostgres = false): string {
     const server = f['dest_server'] ?? '';
     const database = f['dest_database'] ?? '';
+    const requireSsl = f['dest_requireSsl'] === 'true';
+    if (isPostgres) {
+      // Npgsql uses Host (not Server) and Username (not User Id); "Require" mode encrypts without validating
+      // the server certificate, so no separate "trust cert" flag is needed. Off by default — a local/docker
+      // Postgres with SSL disabled would otherwise refuse to connect — checked for providers that enforce it
+      // (e.g. AWS RDS's rds.force_ssl).
+      return [
+        `Host=${server}`,
+        `Database=${database}`,
+        `Username=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+        `SSL Mode=${requireSsl ? 'Require' : 'Prefer'}`,
+      ].join(';');
+    }
     const parts = [`Server=${server}`, `Database=${database}`];
+    if (isMySql) {
+      // MySqlConnector's connection string builder rejects SQL-Server-only keywords
+      // (TrustServerCertificate/Encrypt/Authentication=Active Directory Default), so MySQL always
+      // authenticates with the username/password entered in the (shared) SQL-family wizard form.
+      parts.push(
+        `User Id=${f['dest_username'] ?? ''}`,
+        `Password=${f['dest_password'] ?? ''}`,
+        `SslMode=${requireSsl ? 'Required' : 'Preferred'}`,
+      );
+      return parts.join(';');
+    }
     if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
       parts.push(
         `User Id=${f['dest_username'] ?? ''}`,
@@ -408,63 +799,187 @@ export class WorkflowBuildAssemblerService {
   }
 
   // ── mapping ───────────────────────────────────────────────────────────────
-  private buildMapping(
+  // One MappingBuildSpec per resource the destination actually selected — a destination picking Patient +
+  // Observation + Condition produces three specs, all sharing the same canvas "Field Mapping" node id (that one
+  // node's wizard-authored dest_mappings already carries every resource's field rows, tagged by resource). The
+  // backend creates one MappingProfile per spec and accumulates their ids onto that shared node (see
+  // WorkflowEndpoints.cs's Mappings step) rather than each overwriting the last — previously only the first
+  // (primary) resource ever got a real profile, and every other selected resource silently inherited the
+  // primary's field mappings at run time instead of its own (see MappingNodeExecutor).
+  private buildMappings(
     mappingNodeId: string,
     sourceNodeId: string,
     destinationNodeId: string,
     destFields: Record<string, string>,
-  ): MappingBuildSpec | null {
+    mappingFields: Record<string, string>,
+  ): MappingBuildSpec[] {
     const rows = this.parseMappingRows(destFields['dest_mappings']);
     const resources = [...new Set(rows.map((row) => row.resource))];
-    if (resources.length === 0) return null;
+    if (resources.length === 0) return [];
 
-    const primary = resources[0];
-    if (resources.length > 1)
-      this.lastUnmappedResources.push(...resources.slice(1));
+    const existingIdsByResource = this.parseExistingMappingProfileIds(mappingFields);
 
-    const primaryRows = rows.filter((row) => row.resource === primary);
+    return resources.map((resource) => {
+      const spec = this.buildMappingForResource(
+        mappingNodeId,
+        sourceNodeId,
+        destinationNodeId,
+        destFields,
+        rows,
+        resource,
+      );
+      return {
+        ...spec,
+        existingId:
+          existingIdsByResource[resource] ??
+          // Legacy single-resource node from before mappingProfileIds existed: its one profile id was only ever
+          // stored under the flat mappingProfileId field, with no resource tagging at all.
+          (resources.length === 1 ? mappingFields['mappingProfileId'] || null : null),
+      };
+    });
+  }
+
+  private parseExistingMappingProfileIds(
+    mappingFields: Record<string, string>,
+  ): Record<string, string> {
+    const raw = mappingFields['mappingProfileIds'];
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, string>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private buildMappingForResource(
+    mappingNodeId: string,
+    sourceNodeId: string,
+    destinationNodeId: string,
+    destFields: Record<string, string>,
+    rows: DestMappingRow[],
+    resource: string,
+  ): MappingBuildSpec {
+    const resourceRows = rows.filter((row) => row.resource === resource);
+    // dest_targets (the wizard's own per-resource "which table is primary" record) is authoritative and
+    // must be checked BEFORE resourceRows[0]?.target — now that a row's target correctly reflects its own
+    // table (see field-mapping-model.ts's serializeRowsFlat), resourceRows[0] could just as easily be a
+    // child-table row as the primary one, and array order here isn't meaningful.
     const baseDestinationObject =
-      primaryRows[0]?.target ||
-      this.targetForResource(destFields, primary) ||
-      primary;
+      this.targetForResource(destFields, resource) ||
+      resourceRows[0]?.target ||
+      resource;
     // The destination wizard's "Write mode" (dw-writeMode) is only ever stashed on dest_writeMode for display —
     // nothing previously translated it into the ;mode=upsert suffix MappedSqlServerDestinationWriter actually
-    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. No explicit ;key=
-    // override: the writer's own default key (SourceResourceId) matches that label's "by source id" semantics.
-    const destinationObject =
-      destFields['dest_writeMode'] === 'upsert'
-        ? `${baseDestinationObject};mode=upsert`
-        : baseDestinationObject;
+    // reads, so picking "Upsert by source id" in the UI silently still did a blind INSERT. The writer resolves the
+    // key column from whichever mapped field is flagged isUpsertKey (the wizard forces this on the resource's
+    // mandatory id row — see destination-wizard.component.ts's ID-row reconciliation) rather than a query-string
+    // option, so "by source id" only means something once that field is present. jsonPath === '$.id' is kept as a
+    // fallback match for mapping rows saved before isUpsertKey existed on a node.
+    const idRow =
+      resourceRows.find((row) => row.isUpsertKey) ??
+      resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource)) === '$.id');
 
-    const fields: MappingFieldRequest[] = primaryRows.map((row) => {
+    let destinationObject = baseDestinationObject;
+    const writeMode = destFields['dest_writeMode'];
+    if (writeMode === 'upsert' || writeMode === 'update') {
+      if (!idRow) {
+        const modeLabel = writeMode === 'upsert' ? 'Upsert by source id' : 'Update only';
+        throw new Error(
+          `"${resource}" destination is set to ${modeLabel}, but no destination column is mapped from ` +
+            `${resource}.id. Map the resource's id field to a column, or switch Write mode to Insert only.`,
+        );
+      }
+      destinationObject = `${baseDestinationObject};mode=${writeMode}`;
+    }
+
+    const fields: MappingFieldRequest[] = resourceRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, primary);
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      // A row whose own table differs from this resource's baseDestinationObject is a genuine child-table
+      // field (e.g. Patient.name.use -> dbo.PatientName) — route it there explicitly via a per-field
+      // destinationObject override, same as MappingImportService.BuildFieldAsync does for mapping-profiles
+      // /import. Every ordinary same-table field omits this (undefined), keeping the wire payload unchanged
+      // from before this existed.
+      const isChildTableField = !!row.target && row.target !== baseDestinationObject;
       return {
         targetField: row.column,
         jsonPath,
-        valueType: row.valueType ?? this.valueTypeFor(row.path),
-        isRequired: false,
-        defaultValue: null,
-        format: null,
+        ...(isChildTableField ? {
+          destinationObject: row.target,
+          parentTable: row.parentTable ?? null,
+          parentKeyColumn: row.parentKeyColumn ?? null,
+          foreignKeyColumn: row.foreignKeyColumn ?? null,
+        } : {}),
+        // Resolves the field-mapping-list "which resource does this reference?" picker into the referenced
+        // resource's own table/id column — without this a FHIR reference field (e.g. Observation.subject.
+        // reference) keeps writing the raw "Patient/xyz" string, or NULL, into what's normally a NOT NULL FK
+        // column, on every save, regardless of what the user picked in that dropdown.
+        ...(row.referencesResource ? this.resolveReferenceLookup(rows, row.referencesResource) : {}),
+        // The field-mapping canvas always writes SeparateDestination child-table rows as StoreJson-shaped
+        // Json regardless of the naive path-derived type, matching the backend engine's own StoreJson handling.
+        valueType: row.arrayPolicy === 'StoreJson' ? 'Json' : (row.valueType ?? this.valueTypeFor(row.path)),
+        // The id/Upsert-key row is structurally mandatory (every resource always has an id) — flagging it
+        // required here matches reality and satisfies the backend's NOT NULL-vs-IsRequired check
+        // (CreateMappingProfileRequestValidator) for destinations whose key column is NOT NULL, which is
+        // virtually always the case for a primary key. Every other row defaults to optional; a locked
+        // "child of" reference row is upgraded to required separately below. A row carrying its own
+        // isRequired (loaded from a profile authored outside the wizard) overrides this computed default.
+        isRequired: row.isRequired ?? row === idRow,
+        defaultValue: row.defaultValue ?? null,
+        format: row.format ?? null,
+        normalizationType: row.normalizationType,
+        terminologySystemJsonPath: row.terminologySystemJsonPath,
+        terminologyCodeJsonPath: row.terminologyCodeJsonPath,
+        cardinality: row.cardinality,
         // A flat destination column takes the first match when the path crosses an array; multi-value
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: isArrayPath ? 'FirstItem' : 'Scalar',
+        arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
         arrayAncestors: arrays.length > 0 ? arrays : null,
+        isUpsertKey: row.isUpsertKey ?? row === idRow,
+        correlationCodeJsonPath: row.correlationCodeJsonPath ?? null,
+        correlationCodeValue: row.correlationCodeValue ?? null,
+        isEnabled: row.isEnabled,
       };
     });
+    // A locked "child of" row is mandatory the same way the id row is — mark it required so the built
+    // request reflects that, even though server-side enforcement (ValidateMappingParentReferences) checks
+    // presence/JsonPath match rather than this flag.
+    for (const row of resourceRows.filter((r) => r.isRequiredParentRef)) {
+      const field = fields.find((f) => f.jsonPath === (row.jsonPath ?? this.toJsonPath(row.path, resource)));
+      if (field) field.isRequired = true;
+    }
+
+    const parentReferences = this.parentReferencesFor(destFields, resource);
 
     return {
       nodeId: mappingNodeId,
       sourceNodeId,
       destinationNodeId,
-      name: `${primary} mapping`,
-      resourceType: primary,
+      name: `${resource} mapping`,
+      resourceType: resource,
       destinationObject,
       fields,
+      parentReferences: parentReferences.length ? parentReferences : undefined,
     };
+  }
+
+  // Reads the wizard's per-resource "child of" chip selections (dest_parentSelections: Record<child,
+  // parent[]>) and turns them into the ParentReferenceSpec[] the backend validates against sibling specs
+  // sharing the same destination node.
+  private parentReferencesFor(destFields: Record<string, string>, resource: string): ParentReferenceSpec[] {
+    try {
+      const parsed = JSON.parse(destFields['dest_parentSelections'] ?? '{}') as Record<string, string[]>;
+      const parents = parsed[resource] ?? [];
+      return parents.map((parentResourceType) => ({ parentResourceType }));
+    } catch {
+      return [];
+    }
   }
 
   private parseMappingRows(json: string | undefined): DestMappingRow[] {
@@ -505,6 +1020,11 @@ export class WorkflowBuildAssemblerService {
   }
 
   private valueTypeFor(path: string): string {
+    // Checked against the original (not lowercased) path: FHIR's choice-type fields spell out their type as
+    // a capitalized suffix (deceasedBoolean, multipleBirthBoolean, valueBoolean, ...), and "active" is FHIR's
+    // other common bare boolean field (Patient.active, Practitioner.active, Location.active, ...). Without this,
+    // both fell through to the 'String' default below despite the backend catalog itself typing them Boolean.
+    if (/Boolean$/.test(path) || /(^|\.)active$/i.test(path)) return 'Boolean';
     const p = path.toLowerCase();
     if (
       p.includes('birthdate') ||
@@ -519,6 +1039,27 @@ export class WorkflowBuildAssemblerService {
     )
       return 'DateTime';
     return 'String';
+  }
+
+  /**
+   * Resolves a "which resource does this reference?" picker value (row.referencesResource) into the referenced
+   * resource's own destination table + the column its own "$.id" field targets. Mirrors
+   * field-mapping-summary.model.ts's computeResourceKeyInfo — that copy only feeds dest_mapping_summary_v1's
+   * UI-redisplay round-trip; this is the one that actually reaches MappingFieldRequest.referenceLookupTable/
+   * referenceLookupKeyColumn, which JsonMappingEngine/MappedSqlServerDestinationWriter read at pipeline-run
+   * time to resolve a raw FHIR reference string into the referenced row's real key at write time. Returns {}
+   * (never throws) when the referenced resource has no id row yet — an incomplete save shouldn't crash, it
+   * should just leave the reference unresolved, same as if the picker had never been touched.
+   */
+  private resolveReferenceLookup(
+    rows: DestMappingRow[],
+    referencedResource: string,
+  ): { referenceLookupTable?: string; referenceLookupKeyColumn?: string } {
+    const idRow = rows.find(
+      (r) => r.resource === referencedResource
+        && (r.jsonPath ?? this.toJsonPath(r.path, referencedResource)) === '$.id',
+    );
+    return idRow ? { referenceLookupTable: idRow.target, referenceLookupKeyColumn: idRow.column } : {};
   }
 
   // ── graph helpers ───────────────────────────────────────────────────────────

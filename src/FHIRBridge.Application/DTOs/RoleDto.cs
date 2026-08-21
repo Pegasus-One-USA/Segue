@@ -5,4 +5,8 @@ public sealed record RoleDto(
     string Name,
     string Description,
     IReadOnlyList<PermissionDto> Permissions,
-    bool IsSystemRole);
+    bool IsSystemRole,
+    DateTime? CreatedOnUtc = null,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null);

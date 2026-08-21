@@ -27,11 +27,19 @@ public static class ConfigurationMapper
                 sourceConnection.Authentication.ClientSecret?.SecretName,
                 sourceConnection.Authentication.PrivateKey?.KeyVaultName,
                 sourceConnection.Authentication.PrivateKey?.SecretName,
-                sourceConnection.Authentication.KeyId),
+                sourceConnection.Authentication.KeyId,
+                sourceConnection.Authentication.JwksUrl,
+                sourceConnection.Authentication.DiscoveredScopes,
+                sourceConnection.Authentication.PracticeId,
+                sourceConnection.Authentication.AuthPlacement),
             sourceConnection.IsEnabled,
             sourceConnection.ApplicationType,
             ToDto(sourceConnection.Interactive),
-            ToDto(sourceConnection.Retrieval));
+            ToDto(sourceConnection.Retrieval),
+            sourceConnection.CreatedOnUtc,
+            sourceConnection.CreatedBy,
+            sourceConnection.ModifiedOnUtc,
+            sourceConnection.ModifiedBy);
     }
 
     private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>
@@ -71,7 +79,7 @@ public static class ConfigurationMapper
                 retrieval.RetryPolicy,
                 retrieval.TimeoutSeconds,
                 retrieval.MaxRecordsPerRun,
-                retrieval.LastSuccessfulSyncUtc,
+                retrieval.LastSuccessfulSyncUtcByResourceType,
                 retrieval.ExportScope,
                 retrieval.GroupId,
                 retrieval.PatientIds,
@@ -92,11 +100,21 @@ public static class ConfigurationMapper
                 dto.RetryPolicy,
                 dto.TimeoutSeconds,
                 dto.MaxRecordsPerRun,
-                dto.LastSuccessfulSyncUtc,
+                dto.LastSuccessfulSyncUtcByResourceType,
                 dto.ExportScope,
                 dto.GroupId,
                 dto.PatientIds,
                 dto.OutputFormat);
+
+    public static SourceConfigurationDto ToDto(SourceConfiguration sourceConfiguration)
+    {
+        return new SourceConfigurationDto(
+            sourceConfiguration.Id,
+            sourceConfiguration.ConnectionId,
+            sourceConfiguration.Name,
+            sourceConfiguration.Scopes,
+            ToDto(sourceConfiguration.Retrieval));
+    }
 
     public static WebhookConfigurationDto ToDto(WebhookConfiguration webhookConfiguration)
     {
@@ -119,7 +137,12 @@ public static class ConfigurationMapper
             destinationConfiguration.SecretReference.SecretName,
             destinationConfiguration.Target,
             destinationConfiguration.IsEnabled,
-            destinationConfiguration.ConnectionMetadataJson);
+            destinationConfiguration.ConnectionMetadataJson,
+            destinationConfiguration.CreatedOnUtc,
+            destinationConfiguration.CreatedBy,
+            destinationConfiguration.ModifiedOnUtc,
+            destinationConfiguration.ModifiedBy,
+            destinationConfiguration.DeIdentificationProfileId);
     }
 
     public static MappingProfileDto ToDto(MappingProfile mappingProfile)
@@ -134,7 +157,13 @@ public static class ConfigurationMapper
             mappingProfile.Fields
                 .Select(ToDto)
                 .ToList(),
-            mappingProfile.IsEnabled);
+            mappingProfile.IsEnabled,
+            mappingProfile.CreatedOnUtc,
+            mappingProfile.CreatedBy,
+            mappingProfile.ModifiedOnUtc,
+            mappingProfile.ModifiedBy,
+            mappingProfile.SourceConfigurationId,
+            mappingProfile.MappingJson);
     }
 
     public static MappingFieldDto ToDto(MappingField field)
@@ -155,7 +184,16 @@ public static class ConfigurationMapper
             field.Cardinality,
             string.IsNullOrWhiteSpace(field.ArrayAncestors)
                 ? null
-                : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                : field.ArrayAncestors.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            field.IsUpsertKey,
+            field.CorrelationCodeJsonPath,
+            field.CorrelationCodeValue,
+            IsEnabled: field.IsEnabled,
+            ParentTable: field.ParentTable,
+            ParentKeyColumn: field.ParentKeyColumn,
+            ForeignKeyColumn: field.ForeignKeyColumn,
+            ReferenceLookupTable: field.ReferenceLookupTable,
+            ReferenceLookupKeyColumn: field.ReferenceLookupKeyColumn);
     }
 
     public static ResourcePipelineRouteDto ToDto(ResourcePipelineRoute route)
@@ -173,7 +211,8 @@ public static class ConfigurationMapper
                 .OrderBy(x => x.ExecutionOrder)
                 .ThenBy(x => x.MappingProfileId)
                 .Select(ToDto)
-                .ToList());
+                .ToList(),
+            route.TimeZoneId);
     }
 
     private static ResourcePipelineRouteMappingDto ToDto(ResourcePipelineRouteMapping mapping)
@@ -183,7 +222,10 @@ public static class ConfigurationMapper
             mapping.MappingProfileId,
             mapping.IsEnabled,
             mapping.ExecutionOrder,
-            mapping.SearchParameters);
+            mapping.SearchParameters,
+            mapping.ParentReferences
+                .Select(x => new ParentReferenceDto(x.ParentMappingProfileId, x.ReferenceFieldOverride))
+                .ToList());
     }
 
     public static MappingField ToDomain(MappingFieldDto dto)
@@ -203,7 +245,15 @@ public static class ConfigurationMapper
             IsEnabled: true,
             ArrayPolicy: dto.ArrayPolicy,
             Cardinality: dto.Cardinality,
-            ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null);
+            ArrayAncestors: dto.ArrayAncestors is { Count: > 0 } ? string.Join('|', dto.ArrayAncestors) : null,
+            IsUpsertKey: dto.IsUpsertKey,
+            CorrelationCodeJsonPath: dto.CorrelationCodeJsonPath,
+            CorrelationCodeValue: dto.CorrelationCodeValue,
+            ParentTable: dto.ParentTable,
+            ParentKeyColumn: dto.ParentKeyColumn,
+            ForeignKeyColumn: dto.ForeignKeyColumn,
+            ReferenceLookupTable: dto.ReferenceLookupTable,
+            ReferenceLookupKeyColumn: dto.ReferenceLookupKeyColumn);
     }
 
     public static SourceAuthenticationConfiguration ToDomain(SourceAuthenticationDto dto)
@@ -215,7 +265,11 @@ public static class ConfigurationMapper
             dto.Scopes ?? [],
             CreateSecretReference(dto.ClientSecretKeyVaultName, dto.ClientSecretName),
             CreateSecretReference(dto.PrivateKeyKeyVaultName, dto.PrivateKeySecretName),
-            dto.KeyId);
+            dto.KeyId,
+            dto.JwksUrl,
+            dto.DiscoveredScopes,
+            dto.PracticeId,
+            dto.AuthPlacement);
     }
 
     private static SecretReference? CreateSecretReference(string? keyVaultName, string? secretName)

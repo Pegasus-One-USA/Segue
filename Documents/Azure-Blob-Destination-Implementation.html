@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Blob Storage Destination — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden: #64748B;
+    --hidden-bg: #F1F5F9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14.5px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  /* Table of contents */
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-active   { color: var(--new);      background: var(--new-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+  .pill-required { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-optional { color: var(--muted);    background: var(--hidden-bg); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  /* File tables */
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.danger { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  /* Auth-mode cards */
+  .auth-mode {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 20px;
+  }
+  .auth-mode .auth-mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .auth-mode .auth-mode-head h3, .auth-mode .auth-mode-head h4 { margin: 0; }
+  .auth-mode .auth-mode-value { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  table.spec-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; }
+  table.spec-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: #F1F5F9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    width: 190px;
+  }
+  table.spec-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.spec-table tr:last-child td, table.spec-table tr:last-child th { border-bottom: none; }
+
+  /* Config reference table */
+  table.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 12.8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.config-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.config-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.config-table tr:last-child td { border-bottom: none; }
+  table.config-table tr:hover td { background: #FAFBFC; }
+  table.config-table td.key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: #0F172A; }
+  table.config-table td.default { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  details.trace {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 0;
+  }
+  details.trace summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 700;
+    font-size: 13.5px;
+    list-style: none;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸ "; color: var(--primary); }
+  details.trace[open] summary::before { content: "▾ "; }
+  details.trace .trace-body { padding: 0 18px 16px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+    details.trace { break-inside: avoid; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table, table.spec-table, table.config-table { font-size: 12px; }
+    table.spec-table th { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Azure Blob Storage Destination</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — complete implementation reference: all five authentication modes, exact configuration keys, write-mode behavior, architecture, file-by-file changes, and troubleshooting</p>
+    <div class="meta">
+      <div><strong>Branch</strong> Azure_Blob_Destination_Implementation</div>
+      <div><strong>Scope</strong> Backend (.NET 9, Azure.Storage.Blobs SDK) + Frontend (Angular 20)</div>
+      <div><strong>Status</strong> Implemented, tested, confirmed working end to end</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#features">What was built</a></li>
+      <li><a href="#quick-start">Quick start — your first Blob destination</a></li>
+      <li><a href="#auth-modes">Authentication modes — all five, and where to get each value</a></li>
+      <li><a href="#config-reference">Complete configuration key reference</a></li>
+      <li><a href="#container-name">Container naming rules &amp; validation</a></li>
+      <li><a href="#write-modes">Write modes — Delivery &amp; Record mode</a></li>
+      <li><a href="#naming-metadata">Blob naming patterns &amp; metadata reference</a></li>
+      <li><a href="#architecture">Architecture — classes, call flow, and per-mode traces</a></li>
+      <li><a href="#backend-files">Backend — files</a></li>
+      <li><a href="#backend-tests">Backend — tests</a></li>
+      <li><a href="#frontend-files">Frontend — files</a></li>
+      <li><a href="#workflow-catalog">The workflow node catalog gate</a></li>
+      <li><a href="#limitations">Known limitations &amp; follow-ups</a></li>
+      <li><a href="#troubleshooting">Troubleshooting — every error seen and its fix</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    Azure Blob Storage is now a first-class destination in FHIRBridge's workflow wizard. The previous
+    <code>BlobStorage</code> destination type existed only as a generic "PUT the file to a pre-signed URL"
+    hack shared with the S3 writer &mdash; it never used the Azure Storage SDK and had no real support for
+    account keys, managed identity, or Azure AD service principals. This work replaced it with a genuine
+    <code>Azure.Storage.Blobs</code>-SDK-backed writer supporting five distinct authentication modes and two
+    independent write-behavior settings, because client storage setups and integration patterns vary widely
+    and the product can't assume any one shape.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">5</div><div class="label">supported auth modes</div></div>
+    <div class="card"><div class="num">3</div><div class="label">currently enabled in the wizard</div></div>
+    <div class="card"><div class="num">2</div><div class="label">independent settings — Delivery &amp; Record mode</div></div>
+    <div class="card"><div class="num">8</div><div class="label">new backend files</div></div>
+    <div class="card"><div class="num">91+</div><div class="label">backend unit tests passing</div></div>
+    <div class="card"><div class="num">3</div><div class="label">layers of container-name validation</div></div>
+    <div class="card"><div class="num">14</div><div class="label"><code>dest_blob*</code> config keys</div></div>
+    <div class="card"><div class="num">1</div><div class="label">Azure SDK package added</div></div>
+  </div>
+
+  <h2 id="features"><span class="num">2.</span>What was built</h2>
+  <ul class="feature-list">
+    <li><strong>Real Azure SDK writer.</strong> <code>MappedBlobStorageDestinationWriter</code> uploads blobs via <code>Azure.Storage.Blobs</code> instead of a raw HTTP PUT, with proper content-type, metadata, and access-tier support.</li>
+    <li><strong>Five authentication modes.</strong> Connection String, Account Name + Key, SAS URL/Token, Managed Identity, and Service Principal (Azure AD) &mdash; selectable per destination, covering every realistic way a client's storage account might be set up.</li>
+    <li><strong>Two independent write-behavior settings.</strong> <strong>Delivery</strong> (Bulk upload vs Individual records) and, only for Individual, <strong>Record mode</strong> (Insert / Upsert / Update) &mdash; see §7.</li>
+    <li><strong>Auto-created container, or not.</strong> A "Create container if it doesn't exist" toggle, automatically disabled behind the scenes for a container-scoped SAS (which has no permission to create its own container).</li>
+    <li><strong>Cached, credential-aware client.</strong> One <code>BlobContainerClient</code> is built and cached per destination + credential combination; rotating the secret automatically busts the cache (no restart needed).</li>
+    <li><strong>Dedicated health check.</strong> Blob destinations get their own reachability check instead of the generic "HEAD the secret as a URL" one every other file-based destination shares (that assumption doesn't hold once the secret can be a connection string or client secret).</li>
+    <li><strong>Backwards-compatible.</strong> Any destination row saved under the old SAS-PUT-URL behavior, or under this feature's earlier single <code>dest_writeMode</code> field, is automatically detected and coerced correctly &mdash; nothing breaks retroactively.</li>
+    <li><strong>Container-name validation at three layers.</strong> Inline in the wizard form, in the backend request validator, and as a last line of defense in the writer itself &mdash; catching Azure's naming rules before Azure does.</li>
+    <li><strong>Multi-resource-type batches split correctly.</strong> A destination fed several resource types in one batch now gets one write call (and one blob/folder) per resource type, instead of everything silently merging into one mislabeled blob.</li>
+  </ul>
+
+  <h2 id="quick-start"><span class="num">3.</span>Quick start — your first Blob destination</h2>
+  <p class="section-intro">A concrete, step-by-step walkthrough for wiring up a new Blob destination on the workflow canvas, from a source through mapping to Azure.</p>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Prepare the Azure side</strong><span>Have a storage account and (if not using "create container automatically") a container ready. Decide which auth mode fits your setup — Connection String is the fastest to get working; SAS URL is the least-privilege option; see §4 for exactly where to find each credential.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Add the node</strong><span>On the workflow canvas, open the Node Library and pick <strong>Azure Blob Storage</strong> under Cloud / FHIR destinations, attached downstream of a Mapping node (a Mapping node is inserted automatically if you attach it somewhere else).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Configure step — connection</strong><span>Fill in Destination name and Container name (must follow the naming rules in §6), pick a <strong>Delivery</strong> mode (Bulk to start is simplest), then choose your Authentication mode and fill in its fields (see §4/§5 for exactly what each mode needs).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Advance past Configure</strong><span>Leaving this step provisions the real <code>DestinationConfiguration</code> row immediately (create-on-save) — a real <code>destinationId</code> exists from this point on, the same way it does for every other destination type.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Pick data groups &amp; map fields</strong><span>Select the FHIR resource types you want (step 2), then map each one's fields to blob output columns (step 3) — the canvas card for this destination is labeled "blob" so it's clear these are per-resource blob names, not SQL tables.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>(Individual delivery only) Set an upsert key</strong><span>If you picked Individual delivery and want Upsert/Update record mode to key off a specific field rather than the record's own source id, click the 🔑 toggle on that field in the mapping canvas.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">7</div>
+      <div class="step-body"><strong>Review &amp; save</strong><span>Step 4 shows every setting you configured (auth mode, Delivery, Record mode if applicable, path prefix). Save, then run the workflow — check the container in the Azure Portal or Storage Explorer to confirm blobs landed where expected.</span></div>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>Editing later</strong>
+    Click the node's edit icon on the canvas to reopen Configure with everything you saved &mdash; secret
+    fields are always shown blank (secrets never round-trip back from the API); leave them blank to keep the
+    existing secret, or type a new value to replace it.
+  </div>
+
+  <h2 id="auth-modes"><span class="num">4.</span>Authentication modes — all five, and where to get each value</h2>
+  <p class="section-intro">
+    The wizard's <strong>Authentication</strong> dropdown currently shows three modes. The other two
+    (<strong>Managed Identity</strong> and <strong>Service Principal</strong>) are fully implemented end to end
+    on both backend and frontend, but their dropdown options are commented out in the template for now —
+    nothing was removed, so re-enabling them later is a one-line uncomment in
+    <code>destination-wizard.component.html</code>.
+  </p>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>1. Connection String</h3><span class="pill pill-active">Enabled</span></div>
+    <div class="auth-mode-value">wizard value: <code>connectionString</code> &middot; default mode</div>
+    <p>The simplest option — one field holds the full connection string, which already bundles the account name, key, and endpoint suffix together. Internally this becomes <code>new BlobServiceClient(connectionString)</code>.</p>
+    <table class="spec-table">
+      <tr><th>Field</th><td><strong>Connection string</strong> — goes into the Key Vault secret, never <code>ConnectionMetadataJson</code>.</td></tr>
+      <tr><th>Where to get it (Portal)</th><td>Azure Portal &rarr; your <strong>Storage account</strong> &rarr; <strong>Security + networking &rarr; Access keys</strong> &rarr; click "Show" next to <code>key1</code> (or <code>key2</code>) &rarr; copy the <strong>Connection string</strong> field directly.</td></tr>
+      <tr><th>Where to get it (CLI)</th><td><code>az storage account show-connection-string --name &lt;account&gt; --resource-group &lt;rg&gt;</code></td></tr>
+      <tr><th>Format</th><td><code>DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=&hellip;;EndpointSuffix=core.windows.net</code></td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>2. Account Name + Key</h3><span class="pill pill-active">Enabled</span></div>
+    <div class="auth-mode-value">wizard value: <code>accountKey</code></div>
+    <p>For when you have the raw account name and key separately, rather than a pre-combined connection string. Internally this becomes <code>new BlobServiceClient(accountUrl, new StorageSharedKeyCredential(accountName, accountKey))</code>.</p>
+    <table class="spec-table">
+      <tr><th>Account name</th><td>Top of the storage account's <strong>Overview</strong> page, or the same <strong>Access keys</strong> page. Metadata key: <code>dest_blobAccountName</code> <span class="pill pill-required">Required</span>.</td></tr>
+      <tr><th>Account key</th><td>Storage account &rarr; <strong>Security + networking &rarr; Access keys</strong> &rarr; "Show" &rarr; copy the <strong>Key</strong> value itself (not the whole connection string) for key1 or key2. Goes into the Key Vault secret.</td></tr>
+      <tr><th>Endpoint suffix <em>(optional)</em></th><td>Defaults to <code>core.windows.net</code>. Only change it for a sovereign cloud — Azure Government is <code>core.usgovcloudapi.net</code>, Azure China is <code>core.chinacloudapi.cn</code>. Confirm from the domain shown on the Access keys/Endpoints page. Metadata key: <code>dest_blobEndpointSuffix</code>.</td></tr>
+      <tr><th>Where to get it (CLI)</th><td><code>az storage account keys list --account-name &lt;account&gt; --resource-group &lt;rg&gt;</code></td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>3. SAS URL or Token</h3><span class="pill pill-active">Enabled</span></div>
+    <div class="auth-mode-value">wizard value: <code>sasUrl</code> &middot; least-privilege option</div>
+    <p>No raw account key ever leaves Azure. Works with either an account-wide SAS or a narrower container-scoped SAS, and also with a bare token (no scheme/host) if you also supply the Account URL separately. The client factory inspects the resolved secret at build time and picks the right shape automatically:</p>
+    <table class="spec-table">
+      <tr><th>Full URL, has a path segment</th><td>Treated as a <strong>container-scoped SAS</strong> — built directly as <code>new BlobContainerClient(sasUri)</code>. Container auto-create is <strong>automatically disabled</strong> for this shape, since a container SAS has no permission over the account itself.</td></tr>
+      <tr><th>Full URL, no path segment</th><td>Treated as an <strong>account/service-scoped SAS</strong> — built as <code>new BlobServiceClient(sasUri).GetBlobContainerClient(container)</code>. Container auto-create still works.</td></tr>
+      <tr><th>Bare token (no scheme/host)</th><td>Combined with the separately-supplied <strong>Account URL</strong> field into a full URL, then treated as an account-scoped SAS.</td></tr>
+      <tr><th>Where to get it (Portal, account-wide)</th><td>Storage account &rarr; <strong>Security + networking &rarr; Shared access signature</strong> &rarr; set allowed services/resource types/permissions/expiry &rarr; "Generate SAS and connection string" &rarr; copy the <strong>Blob service SAS URL</strong>.</td></tr>
+      <tr><th>Where to get it (Portal, container-scoped — recommended)</th><td>Storage account &rarr; <strong>Containers &rarr; (your container) &rarr; Shared access tokens</strong> &rarr; set permissions/expiry &rarr; "Generate SAS token and URL".</td></tr>
+      <tr><th>Account URL <em>(only for the bare-token case)</em></th><td>Storage account &rarr; <strong>Endpoints</strong> &rarr; <strong>Blob service</strong> URL, e.g. <code>https://acct.blob.core.windows.net</code>. Metadata key: <code>dest_blobAccountUrl</code>.</td></tr>
+    </table>
+    <div class="callout warn">
+      <strong>Must include Write permission</strong>
+      A SAS generated with only Read/List checked produces exactly the Azure error
+      <code>403 InsufficientAccountPermissions — Write operations are not allowed</code> the first time
+      FHIRBridge tries to upload a blob. When generating the SAS, check <strong>Write</strong> (and
+      <strong>Create</strong>/<strong>Add</strong> if "Create container if it doesn't exist" is enabled and
+      you're using an account-scoped SAS — a container-scoped SAS can't create containers regardless).
+    </div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>4. Managed Identity</h3><span class="pill pill-hidden">Hidden in wizard — implemented</span></div>
+    <div class="auth-mode-value">wizard value: <code>managedIdentity</code> &middot; no secret is ever stored or resolved</div>
+    <p>The host running FHIRBridge (App Service, VM, AKS) authenticates as itself via <code>DefaultAzureCredential</code> — the Key Vault secret is never resolved at all for this mode (<code>BlobDestinationSettings.RequiresSecret</code> is <code>false</code> here, and it's the only mode where that's true). Only works when FHIRBridge itself runs in Azure; it cannot work from a dev box.</p>
+    <table class="spec-table">
+      <tr><th>Account URL</th><td>Storage account &rarr; <strong>Endpoints &rarr; Blob service</strong> URL. <span class="pill pill-required">Required</span> — this mode has no account-key fallback to derive it from.</td></tr>
+      <tr><th>User-assigned identity client ID <em>(optional)</em></th><td>If using a <strong>user-assigned</strong> managed identity: the <strong>Managed Identity</strong> resource &rarr; <strong>Overview</strong> &rarr; <strong>Client ID</strong>. Leave blank for a <strong>system-assigned</strong> identity. Passed as <code>DefaultAzureCredentialOptions.ManagedIdentityClientId</code>.</td></tr>
+      <tr><th>Authority host <em>(optional, sovereign clouds)</em></th><td>Only needed for Azure Government/China — e.g. <code>https://login.microsoftonline.us/</code>. Metadata key: <code>dest_blobAuthorityHost</code>.</td></tr>
+      <tr><th>Required setup step (not a form field)</th><td>On the compute host &rarr; <strong>Identity</strong> blade &rarr; turn the identity on. Then on the <strong>storage account</strong> &rarr; <strong>Access Control (IAM) &rarr; Add role assignment</strong> &rarr; role <strong>Storage Blob Data Contributor</strong> &rarr; assign it to that identity.</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>5. Service Principal (Azure AD)</h3><span class="pill pill-hidden">Hidden in wizard — implemented</span></div>
+    <div class="auth-mode-value">wizard value: <code>servicePrincipal</code> &middot; for cross-tenant or non-Azure-hosted setups</div>
+    <p>For when FHIRBridge runs outside Azure entirely (on-prem, another cloud) so managed identity isn't an option, or the storage account lives in a different Azure AD tenant. Internally: <code>new ClientSecretCredential(tenantId, clientId, clientSecret)</code>.</p>
+    <table class="spec-table">
+      <tr><th>Account URL</th><td>Storage account &rarr; <strong>Endpoints &rarr; Blob service</strong> URL. <span class="pill pill-required">Required</span>.</td></tr>
+      <tr><th>Tenant ID</th><td><strong>Microsoft Entra ID &rarr; Overview</strong> &rarr; <strong>Tenant ID</strong>. <span class="pill pill-required">Required</span>. Metadata key: <code>dest_blobTenantId</code>.</td></tr>
+      <tr><th>Client ID</th><td><strong>Microsoft Entra ID &rarr; App registrations &rarr; (your app) &rarr; Overview</strong> &rarr; <strong>Application (client) ID</strong>. No app yet? <strong>App registrations &rarr; New registration</strong>. <span class="pill pill-required">Required</span>. Metadata key: <code>dest_blobClientId</code>.</td></tr>
+      <tr><th>Client secret</th><td>Same app registration &rarr; <strong>Certificates &amp; secrets &rarr; New client secret</strong> &rarr; copy the <strong>Value</strong> immediately &mdash; Azure only shows it once. Goes into the Key Vault secret.</td></tr>
+      <tr><th>Required setup step (not a form field)</th><td>Storage account &rarr; <strong>Access Control (IAM) &rarr; Add role assignment</strong> &rarr; role <strong>Storage Blob Data Contributor</strong> &rarr; assign it to that app registration.</td></tr>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>Common to every mode</strong>
+    The <strong>container name</strong> field is whatever container blobs should be written to — create it
+    ahead of time under Storage account &rarr; <strong>Containers &rarr; + Container</strong>, or leave
+    "Create container if it doesn't exist" checked and FHIRBridge will create it automatically (permissions
+    allowing — see §16 for what happens if it can't).
+  </div>
+  <div class="callout warn">
+    <strong>To re-enable Managed Identity / Service Principal in the wizard</strong>
+    Uncomment the two <code>&lt;option&gt;</code> elements in the Authentication <code>&lt;select&gt;</code> in
+    <code>portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html</code>
+    (currently wrapped in an HTML comment with a note explaining why). Every other piece — form fields,
+    validators, backend parsing, DI, tests — is already live and requires no further change.
+  </div>
+
+  <h2 id="config-reference"><span class="num">5.</span>Complete configuration key reference</h2>
+  <p class="section-intro">
+    Every setting lives in one of two places on <code>DestinationConfiguration</code>: the
+    <strong>secret</strong> (resolved via <code>ISecretProvider</code> from the Key Vault reference, never
+    logged or persisted in plain text) or the <strong>non-secret <code>dest_blob*</code> bag</strong>
+    (a flat JSON object in <code>ConnectionMetadataJson</code>). <code>Target</code> is the one exception —
+    it's a first-class column on the entity, reused as the container name (falling back to
+    <code>dest_blobContainer</code> in the metadata bag if <code>Target</code> is blank).
+  </p>
+  <table class="config-table">
+    <tr><th>Key</th><th>Lives in</th><th>Applies to</th><th>Default</th><th>Notes</th></tr>
+    <tr><td class="key">Target</td><td>Entity column</td><td>All modes</td><td class="default">&mdash;</td><td>Container name, preferred over <code>dest_blobContainer</code>.</td></tr>
+    <tr><td class="key">dest_blobContainer</td><td>Metadata</td><td>All modes</td><td class="default">&mdash;</td><td>Fallback container name if <code>Target</code> is blank. <span class="pill pill-required">Required</span> (one or the other).</td></tr>
+    <tr><td class="key">dest_blobAuthMode</td><td>Metadata</td><td>All modes</td><td class="default">connectionString</td><td>One of <code>connectionString</code>, <code>accountKey</code>, <code>sasUrl</code>, <code>managedIdentity</code>, <code>servicePrincipal</code> (case-insensitive; unrecognized falls back to <code>connectionString</code>).</td></tr>
+    <tr><td class="key">(secret)</td><td>Key Vault secret</td><td>All except Managed Identity</td><td class="default">&mdash;</td><td>Meaning depends on auth mode: connection string, account key, SAS URL/token, or client secret.</td></tr>
+    <tr><td class="key">dest_blobAccountName</td><td>Metadata</td><td>Account Key <span class="pill pill-required">Required</span>; also derives Account URL if blank elsewhere</td><td class="default">&mdash;</td><td>Storage account name.</td></tr>
+    <tr><td class="key">dest_blobAccountUrl</td><td>Metadata</td><td>Managed Identity/Service Principal <span class="pill pill-required">Required</span>; SAS (bare token) <span class="pill pill-required">Required</span>; Account Key <span class="pill pill-optional">Optional</span></td><td class="default">derived from AccountName + EndpointSuffix</td><td>Blob service endpoint, e.g. <code>https://acct.blob.core.windows.net</code>.</td></tr>
+    <tr><td class="key">dest_blobEndpointSuffix</td><td>Metadata</td><td>Account Key (derivation only)</td><td class="default">core.windows.net</td><td>Sovereign-cloud lever — <code>core.usgovcloudapi.net</code>, <code>core.chinacloudapi.cn</code>.</td></tr>
+    <tr><td class="key">dest_blobTenantId</td><td>Metadata</td><td>Service Principal <span class="pill pill-required">Required</span></td><td class="default">&mdash;</td><td>Microsoft Entra ID tenant ID.</td></tr>
+    <tr><td class="key">dest_blobClientId</td><td>Metadata</td><td>Service Principal <span class="pill pill-required">Required</span></td><td class="default">&mdash;</td><td>App registration's Application (client) ID.</td></tr>
+    <tr><td class="key">dest_blobManagedIdentityClientId</td><td>Metadata</td><td>Managed Identity <span class="pill pill-optional">Optional</span></td><td class="default">null (system-assigned)</td><td>Set only for a user-assigned managed identity.</td></tr>
+    <tr><td class="key">dest_blobAuthorityHost</td><td>Metadata</td><td>Managed Identity/Service Principal <span class="pill pill-optional">Optional</span></td><td class="default">null (public Azure)</td><td>Sovereign-cloud AAD authority, e.g. <code>https://login.microsoftonline.us/</code>.</td></tr>
+    <tr><td class="key">dest_blobPathPrefix</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">null</td><td>Virtual folder prepended to every blob path; leading/trailing <code>/</code> trimmed automatically.</td></tr>
+    <tr><td class="key">dest_blobCreateContainerIfNotExists</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">true</td><td><code>"true"</code>/<code>"false"</code> string; ignored (treated as unsupported) for a container-scoped SAS regardless of value.</td></tr>
+    <tr><td class="key">dest_blobAccessTier</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">null (account default)</td><td><code>Hot</code>, <code>Cool</code>, or <code>Cold</code> — applied to every blob written.</td></tr>
+    <tr><td class="key">dest_blobGranularity</td><td>Metadata</td><td>All modes <span class="pill pill-optional">Optional</span></td><td class="default">bulk</td><td><code>bulk</code> or <code>individual</code> (§7). Falls back to the legacy <code>dest_writeMode</code> key (<code>append</code>&rarr;bulk, <code>upsert</code>&rarr;individual) if absent.</td></tr>
+    <tr><td class="key">dest_blobRecordMode</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">upsert</td><td><code>insert</code>, <code>upsert</code>, or <code>update</code> (§7). No effect at Bulk delivery.</td></tr>
+    <tr><td class="key">dest_blobFolderPattern</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">{name}</td><td>Placeholder pattern for the folder a record's blob lands in (§8). Blank/missing uses the default.</td></tr>
+    <tr><td class="key">dest_blobFileNamePattern</td><td>Metadata</td><td>Individual delivery only <span class="pill pill-optional">Optional</span></td><td class="default">Insert: {id}_{date:yyyyMMddHHmmssfff}_{guid}.json &mdash; Upsert/Update: {id}.json</td><td>Placeholder pattern for a record's blob name (§8). Blank/missing uses the Record mode's own default.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Every metadata key is read defensively</strong>
+    <code>ConnectionMetadataReader.GetString</code> tolerates a null/empty/malformed
+    <code>ConnectionMetadataJson</code> document and simply returns null for any missing key — so a
+    destination row saved before a given key existed just falls back to that key's default, never throws.
+  </div>
+
+  <h2 id="container-name"><span class="num">6.</span>Container naming rules &amp; validation</h2>
+  <p class="section-intro">
+    Azure rejects an invalid container name with an opaque <code>400 InvalidResourceName</code> error at
+    write time. FHIRBridge now catches this before it ever reaches Azure, at three layers, all enforcing the
+    same rule:
+  </p>
+  <ul class="feature-list">
+    <li><strong>3–63 characters</strong> total length.</li>
+    <li><strong>Lowercase letters, numbers, and hyphens only</strong> — no uppercase, underscores, or other punctuation.</li>
+    <li><strong>Must start and end with a letter or number</strong> — no leading or trailing hyphen.</li>
+    <li><strong>No consecutive hyphens</strong> (e.g. <code>fhir--export</code> is invalid).</li>
+  </ul>
+  <table class="file-table">
+    <tr><th>Layer</th><th>What it does</th></tr>
+    <tr><td class="file-path">destination-wizard.component.ts / .html</td><td class="why">A <code>Validators.pattern</code> on the container field gives an inline error the moment you type an invalid name, before you can even save.</td></tr>
+    <tr><td class="file-path">CreateDestinationConfigurationRequestValidator.cs</td><td class="why">Defense in depth for any client calling the API directly (not just the wizard) — returns a field-level <code>dest_blobContainer</code> validation error.</td></tr>
+    <tr><td class="file-path">BlobDestinationSettings.cs</td><td class="why">Last line of defense inside the writer itself, catching any legacy row saved before this check existed. Throws <code>InvalidOperationException</code> with the exact message quoted in §16.</td></tr>
+  </table>
+  <pre><code>Regex: ^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$
+
+Valid:    fhir, fhirbridge-exports, a23
+Invalid:  FHIR_Export (uppercase/underscore), ab (too short),
+          -fhir (leading hyphen), fhir- (trailing hyphen),
+          fhir--export (consecutive hyphens)</code></pre>
+  <p>The identical regex is used in three independent places (JavaScript in the wizard, C# in the validator, C# in the writer) — kept in sync by hand rather than shared, since each layer is a different language/runtime with no natural single source of truth to share it from.</p>
+
+  <h2 id="write-modes"><span class="num">7.</span>Write modes — two independent settings</h2>
+  <p class="section-intro">
+    The Blob form (Configure step, right after Container name) has <strong>two independent settings</strong>
+    controlling how mapped records become blob(s) — deliberately split apart rather than folded into one
+    dropdown, since they answer two different questions: how many records share a blob, and (only once that's
+    "one blob per record") what happens to a record relative to whatever already exists at its key.
+  </p>
+  <table class="spec-table">
+    <tr><th><strong>1. Delivery</strong></th><td>How many records share one blob — <strong>Bulk upload</strong> (all records, one blob) or <strong>Individual records</strong> (one blob per record). Wizard control: <code>blobForm.granularity</code>. Metadata key: <code>dest_blobGranularity</code>.</td></tr>
+    <tr><th><strong>2. Record mode</strong></th><td>Only shown once Delivery is set to Individual. Decides what happens to a single record's blob relative to whatever's already there under its key — <strong>Insert</strong>, <strong>Upsert</strong>, or <strong>Update</strong>. Wizard control: <code>blobForm.recordMode</code>. Metadata key: <code>dest_blobRecordMode</code>.</td></tr>
+  </table>
+
+  <h3>Setting 1 — Delivery: Bulk upload vs Individual records</h3>
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h4>Bulk upload — all records in one blob</h4><span class="pill pill-active">Default</span></div>
+    <div class="auth-mode-value">wizard value: <code>bulk</code></div>
+    <p>The original, only-ever-shipped behavior. Every pipeline run writes one brand-new, timestamped NDJSON
+    blob containing that run's whole batch — object storage's natural "write-once" shape, suited to a
+    data-lake / audit-trail consumer reading an append-only stream. There is no per-record identity or "update
+    a record" concept at this setting, regardless of Record mode (which doesn't apply here at all —
+    <code>WriteBulkAsync</code> never even looks at it).</p>
+    <pre><code>container/prefix/Patient_20260812130455123.ndjson    &lt;- ALL of this run's Patient records, one file
+container/prefix/Patient_20260812140212871.ndjson   &lt;- a new file every run, nothing overwritten</code></pre>
+    <p>Content type <code>application/x-ndjson</code>; one JSON object per line, one line per record.</p>
+  </div>
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h4>Individual records — one blob per record</h4></div>
+    <div class="auth-mode-value">wizard value: <code>individual</code></div>
+    <p>Each record gets its own blob, named by whichever mapped field is flagged as the <strong>upsert key</strong>
+    on the mapping canvas (the same 🔑 toggle SQL/Mongo already use) — falling back to the record's own source
+    resource id if no key field is designated. Selecting this reveals the <strong>Record mode</strong> setting
+    below, which decides exactly what "one blob per record" means when that blob already exists from a
+    previous run, plus two more fields — <strong>Folder pattern</strong> and <strong>File name pattern</strong>
+    — that control exactly where and how each record's blob is named (see §8).</p>
+    <pre><code>container/prefix/Patient/abc-123.json
+container/prefix/Patient/xyz-789.json   &lt;- a separate blob per record, one folder per resource type</code></pre>
+    <p>Content type <code>application/json</code>; one JSON object per blob.</p>
+  </div>
+
+  <h3>Setting 2 — Record mode (Individual delivery only): Insert vs Upsert vs Update</h3>
+  <table class="spec-table">
+    <tr><th>Insert</th><td><strong>Always add new.</strong> Every record gets a brand-new blob — even a record already written before gets another one, never overwriting the last. The blob name is suffixed with a fresh timestamp + GUID every time specifically so it can never collide, even for a repeated key.</td></tr>
+    <tr><th>Upsert</th><td><strong>Update if it exists, else insert.</strong> Writes to the key-derived blob path unconditionally — creates it if absent, overwrites it if present. This is the default, and the natural behavior of a plain blob upload (no existence check needed — <code>UploadAsync</code> with the <code>BlobUploadOptions</code> overload always succeeds, present or not).</td></tr>
+    <tr><th>Update</th><td><strong>Only if it exists.</strong> Only overwrites the key-derived blob path if it's already there; if it isn't, the record is skipped entirely — never creates a new blob. Requires one extra <code>BlobClient.ExistsAsync</code> call per record before deciding.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Key resolution order (all three modes)</strong>
+    1) the mapped field flagged <code>IsUpsertKey</code> for this resource type/destination object, if any
+    (via <code>MappingProfile.Fields</code>, scoped by <code>ResourceType</code>/<code>DestinationObject</code>
+    when those are set on the field). 2) the record's own <code>SourceResourceId</code>. 3) if neither
+    resolves: <strong>Insert</strong> still writes under a uniquified name (stem <code>"record"</code>);
+    <strong>Upsert</strong> still writes under a one-off unique name (it just can't be reliably updated next
+    run without a stable identity); <strong>Update</strong> has nothing to check existence against, so it
+    skips the record rather than guessing.
+  </div>
+  <table class="config-table">
+    <tr><th>Delivery</th><th>Record mode</th><th>Behavior when a record's blob already exists</th><th>Behavior when it doesn't</th><th>Returned <code>Count</code> reflects</th></tr>
+    <tr><td class="key">bulk</td><td class="key">&mdash; (ignored)</td><td colspan="2">N/A — always one new blob for the whole batch</td><td>records.Count (always)</td></tr>
+    <tr><td class="key">individual</td><td class="key">insert</td><td>Writes anyway, under a different (uniquified) name — old blob untouched</td><td>Writes under a uniquified name</td><td>Every record (always written)</td></tr>
+    <tr><td class="key">individual</td><td class="key">upsert</td><td>Overwrites it</td><td>Creates it</td><td>Every record (always written)</td></tr>
+    <tr><td class="key">individual</td><td class="key">update</td><td>Overwrites it</td><td><strong>Skipped</strong> — not written</td><td>Only records that had an existing blob</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>A mixed multi-resource-type batch now splits per resource type either way</strong>
+    Blob was added to the workflow engine's per-resource-type write splitting (the same mechanism SQL/Mongo
+    already used, via <code>DestinationNodeExecutors.MultiTableRelationalDestinationTypes</code>) — a
+    destination fed records from several resource types in one batch now gets one write call (and, at Bulk
+    delivery, one blob; at Individual delivery, one folder) per resource type, instead of everything landing
+    in a single blob whose metadata could only ever name one of the resource types actually inside it. The
+    SQL-only <code>;mode=...</code> target suffix that mechanism also splices in is explicitly skipped for
+    Blob (and defensively stripped in the writer too, as a second layer) so it can't corrupt a blob name.
+  </div>
+
+  <h2 id="naming-metadata"><span class="num">8.</span>Blob naming patterns &amp; metadata reference</h2>
+  <p class="section-intro">
+    Bulk delivery's naming is fixed (unchanged since the feature first shipped). Individual delivery's
+    <strong>Folder pattern</strong> and <strong>File name pattern</strong> are user-configurable placeholder
+    templates — a small resolver in <code>MappedBlobStorageDestinationWriter</code> substitutes recognized
+    tokens and leaves everything else (literal text, including <code>/</code> for nested folders) untouched.
+  </p>
+  <table class="config-table">
+    <tr><th>Scenario</th><th>Pattern</th></tr>
+    <tr><td>Bulk, no path prefix</td><td class="key">{stem}_{yyyyMMddHHmmssfff}.ndjson</td></tr>
+    <tr><td>Bulk, with path prefix</td><td class="key">{prefix}/{stem}_{yyyyMMddHHmmssfff}.ndjson</td></tr>
+    <tr><td>Individual, any mode</td><td class="key">{prefix?}/{resolved FolderPattern}/{resolved FileNamePattern}</td></tr>
+  </table>
+  <p>
+    <strong>{stem}</strong> (Bulk only) is <code>MappingProfile.DestinationObject</code> after three cleanup
+    passes, in order: (1) strip a trailing <code>;mode=...</code> suffix (the SQL-only write-mode suffix,
+    defended against even though it's skipped for Blob upstream), (2) strip a trailing <code>.ndjson</code>/
+    <code>.json</code>/<code>.csv</code>/<code>.tsv</code>/<code>.txt</code> extension (guards against a
+    row whose target still carries the CSV-shaped default from before this feature existed), (3) replace any
+    character in <code>Path.GetInvalidFileNameChars()</code> with <code>_</code>. The same cleaned value feeds
+    the <code>{name}</code> token below.
+  </p>
+
+  <h3>Placeholder tokens (Folder pattern &amp; File name pattern)</h3>
+  <table class="config-table">
+    <tr><th>Token</th><th>Resolves to</th></tr>
+    <tr><td class="key">{name}</td><td>The cleaned mapping-profile stem (same value as Bulk's <code>{stem}</code>) — the resource/destination-object name, e.g. <code>Patient</code>.</td></tr>
+    <tr><td class="key">{id}</td><td>The record's resolved upsert key (🔑-flagged mapped field, falling back to <code>SourceResourceId</code> — same resolution order as before). Falls back to the literal <code>record</code> if neither resolves (Folder pattern never uses <code>{id}</code> — no single record exists yet when the folder is built).</td></tr>
+    <tr><td class="key">{guid}</td><td>A fresh <code>Guid.NewGuid()</code>, hex-formatted (<code>N</code>), generated per record for File name pattern or once per batch for Folder pattern.</td></tr>
+    <tr><td class="key">{date:&lt;.NET custom format&gt;}</td><td>The current UTC time formatted with the given <a href="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings" target="_blank" rel="noopener">.NET custom date/time format string</a>, e.g. <code>{date:yyyyMMddHHmmssfff}</code> or <code>{date:yyyy/MM/dd}</code>. A genuinely malformed format string (e.g. an unterminated quoted literal) falls back to <code>yyyyMMddHHmmssfff</code> rather than failing the write.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>A <code>/</code> inside <code>{date:...}</code> nests real subfolders</strong>
+    The resolved pattern is split on <code>/</code> <em>before</em> each segment is sanitized (not after) —
+    so a pattern like <code>{name}/{date:yyyy/MM/dd}</code> produces real nested folders
+    (<code>Patient/2026/08/14/...</code>) instead of a single segment with slashes replaced. Every other
+    character outside <code>Path.GetInvalidFileNameChars()</code> passes through literally, so static text
+    mixed with tokens (e.g. <code>patients-{date:yyyyMMdd}</code>) works as expected.
+  </div>
+
+  <h3>Defaults, by Record mode</h3>
+  <table class="config-table">
+    <tr><th>Record mode</th><th>Default Folder pattern</th><th>Default File name pattern</th><th>Why</th></tr>
+    <tr><td class="key">Insert</td><td class="key">{name}</td><td class="key">{id}_{date:yyyyMMddHHmmssfff}_{guid}.json</td><td>Insert never looks a blob up again, so its default is deliberately always-unique — <code>{date:...}</code> + <code>{guid}</code> guarantee no two writes ever collide, even for a repeated key.</td></tr>
+    <tr><td class="key">Upsert</td><td class="key">{name}</td><td class="key">{id}.json</td><td>Upsert/Update must re-derive the <em>exact same</em> name on a later run to find the record again, so the default is deliberately static — no <code>{date:...}</code>/<code>{guid}</code> at all.</td></tr>
+    <tr><td class="key">Update</td><td class="key">{name}</td><td class="key">{id}.json</td><td>Same as Upsert.</td></tr>
+  </table>
+  <p>
+    Both fields are fully overridable — set <code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>
+    (or the wizard's Folder pattern/File name pattern inputs) to anything using the tokens above. A blank value
+    means "use this Record mode's default," so switching Record mode later doesn't leave a stale pattern from a
+    different mode behind. The wizard shows a non-blocking warning on <strong>either</strong> field if an
+    Upsert/Update pattern contains <code>{date:...}</code> or <code>{guid}</code> — those modes' key resolution
+    depends on writing to the exact same full path (folder <em>and</em> file name) every run, and either token
+    in either field breaks that.
+  </p>
+  <pre><code>// Insert, defaults, key resolved to "abc-123":
+container/prefix/Patient/abc-123_20260814101500123_3f9a1c7b8e5d4a2f9c1b6e7d4a3f8c92.json
+
+// Upsert/Update, defaults, key resolved to "abc-123":
+container/prefix/Patient/abc-123.json
+
+// Custom Folder pattern "{name}/{date:yyyy/MM/dd}" + File name pattern "{id}-{date:yyyyMMdd}.json" (Insert):
+container/prefix/Patient/2026/08/14/abc-123-20260814.json</code></pre>
+
+  <h3>Naming pattern validation — only what Azure allows in a blob name</h3>
+  <p>
+    Both pattern fields are checked, at the same three layers §6 already uses for the container name, against
+    what Azure itself permits in a blob name — placeholder tokens are exempt (their braces/colons are fine),
+    only the literal text you type around them is restricted:
+  </p>
+  <ul class="feature-list">
+    <li><strong>No backslash (<code>\</code>) or control characters.</strong> <code>/</code> is the only supported nesting delimiter — use it, not <code>\</code>, for a nested folder.</li>
+    <li><strong>File name pattern cannot contain <code>/</code> at all.</strong> Nesting belongs in Folder pattern only — a <code>/</code> in File name pattern would silently split the record's blob into extra folders instead of naming a single file. (Folder pattern is exempt from this one — <code>/</code> there is the whole point.)</li>
+    <li><strong>Cannot end with <code>.</code> (or <code>/</code>, for Folder pattern).</strong> Azure rejects a blob name ending that way.</li>
+    <li><strong>1024 characters or fewer</strong> — Azure's own blob-name length ceiling (checked here at 512 characters on the raw, unresolved pattern, leaving headroom for token expansion).</li>
+  </ul>
+  <div class="callout">
+    <strong>Defense in depth for data, not just the pattern itself</strong>
+    Even though the checks above already reject a literal <code>/</code> in a configured File name pattern, a
+    <em>resolved</em> <code>{id}</code> value can still contain one (e.g. a raw FHIR reference like
+    <code>Patient/123</code> used as the upsert key). <code>MappedBlobStorageDestinationWriter</code> sanitizes
+    the fully-resolved file name as <strong>one single segment</strong> (never splitting on <code>/</code>) —
+    unlike Folder pattern's resolution, which deliberately does split on <code>/</code> to create real nested
+    folders. So a key value <code>"abc/123"</code> becomes the file <code>abc_123.json</code>, never an extra
+    <code>abc/</code> folder.
+  </div>
+  <table class="file-table">
+    <tr><th>Layer</th><th>What it does</th></tr>
+    <tr><td class="file-path">blob-storage-destination-form.component.ts / .html</td><td class="why">A <code>Validators.pattern</code>/<code>Validators.maxLength</code> on both pattern fields gives an inline error the moment you type an invalid pattern, before you can even save.</td></tr>
+    <tr><td class="file-path">CreateDestinationConfigurationRequestValidator.cs</td><td class="why">Defense in depth for any client calling the API directly (not just the wizard) — returns a field-level <code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code> validation error.</td></tr>
+    <tr><td class="file-path">BlobDestinationSettings.cs</td><td class="why">Last line of defense inside the writer itself, catching any legacy row saved before this check existed. Throws <code>InvalidOperationException</code>.</td></tr>
+  </table>
+  <p>A blank value is always valid at every layer — it means "use this Record mode's own default" (§8), and every built-in default already satisfies these rules.</p>
+
+  <h4>Blob metadata (every blob gets one of these two sets)</h4>
+  <table class="config-table">
+    <tr><th>Bulk delivery</th><th>Individual delivery</th></tr>
+    <tr><td class="key">pipelineRunId</td><td class="key">pipelineRunId</td></tr>
+    <tr><td class="key">resourceType</td><td class="key">resourceType</td></tr>
+    <tr><td class="key">destinationObject</td><td class="key">destinationObject</td></tr>
+    <tr><td class="key">recordCount</td><td class="key">sourceResourceId</td></tr>
+    <tr><td class="key">writtenOnUtc</td><td class="key">writtenOnUtc</td></tr>
+    <tr><td class="key">routeName</td><td class="key">routeName</td></tr>
+  </table>
+  <p>
+    <code>routeName</code> is sanitized to printable ASCII (any character outside the 32&ndash;126 range
+    becomes <code>_</code>) before being set as blob metadata, since a user-typed workflow name isn't
+    guaranteed to be header-safe. <code>writtenOnUtc</code> is ISO-8601 (<code>DateTime.ToString("o")</code>).
+  </p>
+
+  <h2 id="architecture"><span class="num">9.</span>Architecture — classes, call flow, and per-mode traces</h2>
+
+  <h3>Class map</h3>
+  <table class="file-table">
+    <tr><th>Class</th><th>Role</th></tr>
+    <tr><td class="file-path">BlobDestinationSettings</td><td class="why">Immutable record parsed from <code>ConnectionMetadataJson</code> + <code>Target</code>; validates container name and per-auth-mode required fields; the single source of truth for every setting in §5.</td></tr>
+    <tr><td class="file-path">IBlobContainerClientFactory / BlobContainerClientFactory</td><td class="why">Resolves the secret (skipped for Managed Identity) and builds the right <code>BlobContainerClient</code> for the auth mode — the interface is the test seam.</td></tr>
+    <tr><td class="file-path">BlobContainerClientCache</td><td class="why">Singleton <code>Dictionary&lt;string, BlobDestinationTarget&gt;</code> behind a lock, keyed by destination + credential hash.</td></tr>
+    <tr><td class="file-path">BlobDestinationTarget</td><td class="why">Record pairing a built <code>BlobContainerClient</code> with whether it <code>SupportsContainerCreate</code> (false only for a container-scoped SAS).</td></tr>
+    <tr><td class="file-path">MappedBlobStorageDestinationWriter</td><td class="why">Implements <code>IConfiguredDestinationWriter</code>; owns container-create, and dispatches to <code>WriteBulkAsync</code>/<code>WriteIndividualAsync</code>.</td></tr>
+    <tr><td class="file-path">BlobStorageDestinationHealthCheckProvider</td><td class="why">Implements <code>IDestinationHealthCheckProvider</code> for <code>DestinationType.BlobStorage</code>; parses settings, gets the target, calls <code>ExistsAsync</code> on the container.</td></tr>
+  </table>
+
+  <h3>Call sequence for one write</h3>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>BlobDestinationSettings.Parse(destination)</strong><span>Reads every <code>dest_blob*</code> key (§5), validates the container name (§6) and per-auth-mode required fields, throws <code>InvalidOperationException</code> with a specific message on any failure (§16 lists them verbatim).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>BlobContainerClientFactory.GetTargetAsync(destination, settings, ct)</strong><span>Resolves the Key Vault secret via <code>ISecretProvider</code> (skipped entirely when <code>settings.RequiresSecret</code> is false — Managed Identity only), builds a cache key from <code>destination.Id + AuthMode + ContainerName + AccountUrl + SHA-256(secret)[..16]</code> ("none" in place of the hash for Managed Identity), and either returns the cached <code>BlobDestinationTarget</code> or builds a fresh one for whichever auth mode applies (see the per-mode client construction in §4's "Internally, this becomes&hellip;" notes).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>MappedBlobStorageDestinationWriter.WriteAsync</strong><span>Short-circuits on an empty batch (<code>Count == 0</code>). If <code>CreateContainerIfNotExists</code> and the target supports it, calls <code>CreateIfNotExistsAsync(PublicAccessType.None, null, ct)</code>, swallowing (with a log warning) a 403/409 — the identity most commonly just lacks account-level create rights while still having write access to an already-existing container; the upload below surfaces the real error if the container genuinely doesn't exist.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Dispatch on Granularity</strong><span><code>WriteBulkAsync</code> (one NDJSON blob for the whole batch) or <code>WriteIndividualAsync</code> (loops records, branching on <code>RecordMode</code> per the table in §7) — see the per-mode traces below for exactly what each does.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Rotation-aware caching</strong><span>Because the cache key includes a hash of the resolved secret, rotating a Key Vault secret or SAS token automatically invalidates the cached client on the very next write — no restart needed. Client construction alone never calls Azure, so cache misses are cheap.</span></div>
+    </div>
+  </div>
+
+  <h3>Per-scenario traces</h3>
+  <details class="trace">
+    <summary>Bulk delivery — full trace</summary>
+    <div class="trace-body">
+      <pre><code>settings.Granularity == Bulk
+&rarr; WriteBulkAsync(target, mappingProfile, records, context, settings, ct)
+   blobName = BuildBulkBlobName(mappingProfile, settings)
+            = [prefix/]CleanStem(DestinationObject) + "_" + UtcNow:yyyyMMddHHmmssfff + ".ndjson"
+   content  = MappedDestinationSerialization.ToNdjson(records)   // one JSON line per record
+   blobClient.UploadAsync(content, {
+     ContentType = "application/x-ndjson",
+     Metadata    = { pipelineRunId, resourceType, destinationObject, recordCount, writtenOnUtc, routeName },
+     AccessTier  = settings.AccessTier (if set)
+   })
+&rarr; return DestinationWriteResult(records.Count)   // always the full batch size</code></pre>
+    </div>
+  </details>
+  <details class="trace">
+    <summary>Individual delivery, Insert — full trace</summary>
+    <div class="trace-body">
+      <pre><code>settings.Granularity == Individual, settings.RecordMode == Insert
+&rarr; WriteIndividualAsync(...)
+   keyField = ResolveUpsertKeyField(mappingProfile)   // the mapped field flagged IsUpsertKey, if any
+   folder   = BuildIndividualFolder(mappingProfile, settings)   // [prefix/]CleanStem(DestinationObject)
+   for each record:
+     keyValue = ResolveKeyValue(record, keyField)   // field value, else SourceResourceId, else null
+     stem     = keyValue ?? "record"
+     blobName = folder + "/" + SanitizePathSegment(stem) + "_" + UtcNow:yyyyMMddHHmmssfff + "_" + Guid:N + ".json"
+     UploadRecordAsync(blobName, record, ...)   // ContentType application/json, always succeeds
+     written++
+&rarr; return DestinationWriteResult(written)   // == records.Count, always</code></pre>
+    </div>
+  </details>
+  <details class="trace">
+    <summary>Individual delivery, Upsert — full trace</summary>
+    <div class="trace-body">
+      <pre><code>settings.Granularity == Individual, settings.RecordMode == Upsert
+&rarr; WriteIndividualAsync(...)
+   for each record:
+     keyValue = ResolveKeyValue(record, keyField)
+     if keyValue is null:
+       blobName = folder + "/" + UtcNow:yyyyMMddHHmmssfff + "_" + Guid:N + ".json"   // one-off unique
+     else:
+       blobName = folder + "/" + SanitizePathSegment(keyValue) + ".json"            // deterministic
+     UploadRecordAsync(blobName, record, ...)   // overwrites if it already exists, creates if not
+     written++
+&rarr; return DestinationWriteResult(written)   // == records.Count, always</code></pre>
+    </div>
+  </details>
+  <details class="trace">
+    <summary>Individual delivery, Update — full trace</summary>
+    <div class="trace-body">
+      <pre><code>settings.Granularity == Individual, settings.RecordMode == Update
+&rarr; WriteIndividualAsync(...)
+   for each record:
+     keyValue = ResolveKeyValue(record, keyField)
+     if keyValue is null:
+       continue   // nothing to check existence against — skip, don't guess
+     blobName = folder + "/" + SanitizePathSegment(keyValue) + ".json"
+     exists = await target.Container.GetBlobClient(blobName).ExistsAsync(ct)
+     if !exists.Value:
+       continue   // skip — Update never creates
+     UploadRecordAsync(blobName, record, ...)   // overwrite
+     written++
+&rarr; return DestinationWriteResult(written)   // &lt;= records.Count — only records that existed already</code></pre>
+    </div>
+  </details>
+
+  <h2 id="backend-files"><span class="num">10.</span>Backend — files</h2>
+  <p class="section-intro">All new files live under <code>src/FHIRBridge.Infrastructure/Destinations/Blob/</code>.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What it does</th></tr>
+    <tr>
+      <td class="file-path">Blob/BlobDestinationAuthMode.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The closed enum of five auth modes.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobDestinationSettings.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Parses/validates the <code>dest_blob*</code> config bag; contains the container-name regex, every <code>InvalidOperationException</code> message in §16, the Record-mode-aware Folder pattern/File name pattern defaults, and their own naming-pattern validation (§8).</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/IBlobContainerClientFactory.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The seam that lets the writer and health check be unit-tested without a real storage account; also declares <code>BlobDestinationTarget</code>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobContainerClientFactory.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Builds the right <code>BlobServiceClient</code>/<code>BlobContainerClient</code> per auth mode; handles the legacy SAS-PUT-URL coercion and the cache-key construction.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobContainerClientCache.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Singleton cache of built clients, keyed by destination + credential hash.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobStorageDestinationHealthCheckProvider.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Dedicated reachability check, replacing the generic URL-HEAD check that no longer fits.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobDeliveryGranularity.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The Delivery enum (Bulk/Individual) — §7, Setting 1.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Blob/BlobRecordMode.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">The Record mode enum (Insert/Upsert/Update), meaningful only when Delivery is Individual — §7, Setting 2.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Adds Blob to <code>MultiTableRelationalDestinationTypes</code> (splits a mixed multi-resource-type batch into one write call per resource type) while explicitly skipping the SQL-only <code>;mode=...</code> suffix splice for Blob, which would otherwise corrupt its blob name.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Destinations/MappedBlobStorageDestinationWriter.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Rewritten to use the SDK factory instead of a raw <code>HttpClient.PutAsync</code>; dispatches to <code>WriteBulkAsync</code>/<code>WriteIndividualAsync</code> per <code>BlobDestinationSettings.Granularity</code>, strips a stray extension/write-mode suffix from the destination-object stem before naming a blob, and resolves the Folder pattern/File name pattern placeholder tokens (§8) via <code>ResolvePattern</code>/<code>SanitizeBlobPath</code>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">Destinations/TargetReachabilityDestinationHealthCheckProvider.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why"><code>BlobStorage</code> removed from its generic URL-HEAD loop (now has its own provider).</td>
+    </tr>
+    <tr>
+      <td class="file-path">DependencyInjection.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Registers the new cache/factory/health-check; removes the now-unused <code>HttpClient</code> registration for the writer.</td>
+    </tr>
+    <tr>
+      <td class="file-path">FHIRBridge.Infrastructure.csproj</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Adds the <code>Azure.Storage.Blobs</code> package reference.</td>
+    </tr>
+    <tr>
+      <td class="file-path">CreateDestinationConfigurationRequestValidator.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Per-auth-mode required-field rules, the container-name pattern check, and the Folder pattern/File name pattern naming-rule checks (§8).</td>
+    </tr>
+    <tr>
+      <td class="file-path">Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs</td>
+      <td class="status"><span class="pill pill-modified">Modified</span></td>
+      <td class="why">Registers <code>BlobDestination</code> in the workflow graph-validation catalog (see §13).</td>
+    </tr>
+  </table>
+
+  <h2 id="backend-tests"><span class="num">11.</span>Backend — tests</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Coverage</th></tr>
+    <tr><td class="file-path">BlobDestinationSettingsTests.cs</td><td class="why">Auth-mode parsing/defaults, container resolution (Target vs metadata), account URL derivation (incl. custom endpoint suffix, explicit override), per-mode required-field errors, container-name validation (valid/invalid cases), Delivery/Record-mode parsing and defaults (case-insensitive, unrecognized falls back to Bulk/Upsert, legacy <code>dest_writeMode</code> fallback), Folder pattern/File name pattern defaults and overrides (Record-mode-aware), and their naming-rule validation (backslash throws, trailing "."/"/" throws, over-length throws, tokens-only passes, File name pattern rejects "/" anywhere while Folder pattern still allows it).</td></tr>
+    <tr><td class="file-path">BlobContainerClientFactoryTests.cs</td><td class="why">Client construction for all five auth modes (URI, account name, shared-key credential presence), the legacy-SAS coercion, container-scoped vs account-scoped vs bare-token SAS detection, cache hit/rotation-busts-cache behavior — all network-free since client construction alone never calls Azure.</td></tr>
+    <tr><td class="file-path">MappedBlobStorageDestinationWriterTests.cs</td><td class="why">Empty-batch short circuit, NDJSON upload content/metadata, blob naming, path-prefix handling, container auto-create (enabled/disabled/unsupported-for-SAS), a 403 during container-create not aborting the upload, an upload failure propagating, extension/write-mode-suffix stripping from the destination-object stem, Bulk-delivery default, every Individual-delivery case across all three Record modes (Insert never collides even for a repeated key, Upsert's key resolution order and JSON content type, Update's overwrite-if-exists/skip-if-not/skip-with-no-key behavior), custom Folder/File name patterns, a <code>{date:...}</code> token nesting real subfolders, a malformed date format degrading to a fixed timestamp instead of throwing, Upsert producing the same name across two runs for the same key, and a resolved key value containing a slash (e.g. a raw FHIR reference) sanitizing into one flat file-name segment instead of an extra folder — mocking <code>BlobContainerClient</code>/<code>BlobClient</code>'s virtual members per Microsoft's own Azure SDK testing guidance.</td></tr>
+    <tr><td class="file-path">CreateDestinationConfigurationRequestValidatorTests.cs</td><td class="why">Extended with per-auth-mode required-field cases, container-name-format cases, and Folder pattern/File name pattern naming-rule cases (blank passes, backslash/control-char fails, trailing "."/"/" fails, over-length fails, tokens-only passes, File name pattern rejects "/" anywhere while Folder pattern still allows it).</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Why client-construction tests don't need Azurite</strong>
+    Building a <code>BlobServiceClient</code>/<code>BlobContainerClient</code> is pure local object
+    construction — no network call happens until a caller invokes an operation on it. So
+    <code>BlobContainerClientFactoryTests</code> can assert on the constructed client's observable state
+    (<code>Uri</code>, <code>AccountName</code>, <code>CanGenerateSasUri</code>) without any emulator or
+    mocking, while <code>MappedBlobStorageDestinationWriterTests</code> mocks the client's virtual members
+    (the pattern Microsoft's own Azure SDK docs recommend) to exercise the actual upload/exists logic.
+  </div>
+
+  <h2 id="frontend-files"><span class="num">12.</span>Frontend — files</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>What changed</th></tr>
+    <tr><td class="file-path">destination-forms/blob-storage-destination-form.component.ts / .html</td><td class="why">The <code>blobForm</code> group (auth fields, the <strong>Delivery</strong> select, and its conditionally-shown <strong>Record mode</strong> select plus <strong>Folder pattern</strong>/<strong>File name pattern</strong> inputs — §8), auth-mode-conditional fields, per-mode validators, and every <code>WizardDestinationFormApi</code> method (<code>getFullConfig</code>/<code>patchFrom</code>/<code>reset</code>) the SQL/Mongo/CSV forms already implement. The Folder/File name pattern inputs render only at Individual delivery, each with its own <code>Validators.pattern</code> (File name pattern's additionally rejects "/" anywhere), a placeholder showing the active Record mode's default, a worked example in the hint text, and a non-blocking warning on <strong>either</strong> field if an Upsert/Update pattern contains <code>{date:...}</code>/<code>{guid}</code>.</td></tr>
+    <tr><td class="file-path">destination-wizard.component.html</td><td class="why">Step 4 review cards for Blob add Folder pattern/File name pattern rows (falling back to the active Record mode's default display text when blank), alongside the existing Delivery/Record mode rows.</td></tr>
+    <tr><td class="file-path">field-mapping-target-card.component.html</td><td class="why">The canvas card's kind label now says "blob" for a Blob destination instead of the generic "file" it shared with CSV/Mongo.</td></tr>
+    <tr><td class="file-path">field-mapping-model.ts</td><td class="why"><code>MappingDestType</code> widened to include <code>'blob'</code>.</td></tr>
+    <tr><td class="file-path">phase-config.service.ts</td><td class="why"><code>dest-blob</code> unblocked from the Phase-1 palette gate.</td></tr>
+    <tr><td class="file-path">node-library-dialog.component.ts</td><td class="why">Every destination-type dispatch list (open wizard, lock while editing, type-to-form mapping, label) extended with <code>dest-blob</code>.</td></tr>
+    <tr><td class="file-path">workflow-builder.component.ts</td><td class="why">Its own separate copy of the destination-type allowlist (missed in the first pass) extended with <code>dest-blob</code> — this is what gated the node's edit icon.</td></tr>
+    <tr><td class="file-path">workflow-graph-mapper.service.ts</td><td class="why"><code>FALLBACK_NODE_TYPES['dest-blob'] = 'BlobDestinationNode'</code>; <code>dest_blobSecret</code> added to the redacted-secret key set.</td></tr>
+    <tr><td class="file-path">workflow-build-assembler.service.ts</td><td class="why">Blob branch in the destination-request builder, mirroring the SQL/Mongo/CSV branches (secret handling, target, metadata key list including <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>/<code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>).</td></tr>
+    <tr><td class="file-path">destination-connection-secret.util.ts</td><td class="why"><code>buildConnectionMetadata</code>'s boolean <code>isSql</code> parameter widened to a <code>'sql' | 'csv' | 'blob'</code> string; blob metadata key list includes <code>dest_blobGranularity</code>/<code>dest_blobRecordMode</code>/<code>dest_blobFolderPattern</code>/<code>dest_blobFileNamePattern</code>.</td></tr>
+    <tr><td class="file-path">destination-connection-dialog.component.ts</td><td class="why">Updated call sites for the widened <code>buildConnectionMetadata</code> signature (the standalone admin screen doesn't yet support creating/editing Blob directly — see §14).</td></tr>
+  </table>
+
+  <h2 id="workflow-catalog"><span class="num">13.</span>The workflow node catalog gate</h2>
+  <p>
+    There are <strong>two independent phase gates</strong> that both had to list Blob before it would work
+    end to end — missing either one produces a real error even though the other is correct:
+  </p>
+  <table class="file-table">
+    <tr><th>Gate</th><th>Controls</th><th>Symptom if Blob is missing</th></tr>
+    <tr><td class="file-path">phase-config.service.ts</td><td class="why">Whether Blob is selectable in the Angular node-library palette at all.</td><td class="why">Blob simply doesn't appear in the node library.</td></tr>
+    <tr><td class="file-path">DefaultWorkflowNodeCatalog.cs</td><td class="why">Whether the <strong>backend</strong> accepts a <code>BlobDestinationNode</code> when validating a saved workflow graph.</td><td class="why"><code>"Node 'BlobDestinationNode' is not in the workflow node catalog"</code> plus a secondary rank-ordering error, even though the node looks fine on screen.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Both are now fixed</strong>
+    <code>Destination(WorkflowNodeTypes.BlobDestination)</code> is registered in
+    <code>DefaultWorkflowNodeCatalog.cs</code> at the same rank (70) as every other destination, with its
+    <code>dest-blob</code> transform ID, "Azure Blob Storage" display name, and description wired into the
+    same switch statements every other destination type uses.
+  </div>
+
+  <h2 id="limitations"><span class="num">14.</span>Known limitations &amp; follow-ups</h2>
+  <ul class="feature-list">
+    <li><strong>Managed Identity / Service Principal hidden in the wizard.</strong> Fully implemented on both ends, but the two dropdown options are commented out for now (see §4) — a deliberate, easily-reversed scope decision, not a bug.</li>
+    <li><strong>Standalone Destination Connections admin screen doesn't support Blob yet.</strong> That screen's <code>toFormType()</code> only recognizes SQL/CSV — the same gap that already exists for MongoDB there, so this is consistent with existing precedent rather than a regression. Blob destinations can only be created/edited from the workflow canvas wizard.</li>
+    <li><strong>No "Test Connection" probe for Blob.</strong> Unlike SQL's live connection test, there's no equivalent live check in the wizard yet — you find out about auth/permission problems on the first real workflow run. A dedicated probe endpoint is a natural follow-up.</li>
+    <li><strong>No automated Azurite integration test.</strong> An <code>azurite</code> service was added to <code>docker-compose.yml</code> for manual local testing, but there's no automated integration test exercising a real (emulated) container yet.</li>
+    <li><strong>Update mode's existence check is one extra round trip per record.</strong> For a very large individual-delivery batch in Update mode, this roughly doubles the number of Azure calls compared to Insert/Upsert. No batching/parallelization has been added for this yet.</li>
+    <li><strong>The Upsert/Update "unique-token in a static pattern" warning is advisory, not enforced.</strong> The wizard shows a callout (§8) if a <code>{date:...}</code>/<code>{guid}</code> token appears in an Upsert/Update File name pattern, but nothing blocks saving it — a self-defeating pattern (one that can never be found again) is only ever surfaced as a UI hint, never rejected server-side.</li>
+  </ul>
+
+  <h2 id="troubleshooting"><span class="num">15.</span>Troubleshooting — every error seen and its fix</h2>
+
+  <h4>400 InvalidResourceName — "The specified resource name contains invalid characters"</h4>
+  <p><strong>Cause:</strong> the container name doesn't follow Azure's naming rules (see §6) — typically uppercase letters or underscores.</p>
+  <p><strong>Fix:</strong> already prevented going forward by the three-layer validation added in this work; rename the container to lowercase letters/digits/hyphens only.</p>
+
+  <h4>403 InsufficientAccountPermissions — "Write operations are not allowed"</h4>
+  <p><strong>Cause #1 (most common):</strong> the SAS was generated with only Read/List permission, not Write. <strong>Fix:</strong> regenerate the SAS with Write (and Create/Add if container auto-create is on and it's an account-scoped SAS) checked, then paste the new SAS into the destination — editing the old one's expiry doesn't retroactively add permissions.</p>
+  <p><strong>Cause #2:</strong> the account URL points at the <code>-secondary</code> endpoint of a geo-redundant (RA-GRS/GZRS) storage account. Secondary endpoints are read-only by design and reject every write with this exact error, regardless of what the SAS/key/identity allows. <strong>Fix:</strong> use the primary endpoint (no <code>-secondary</code> suffix) — confirm under Storage account &rarr; Endpoints.</p>
+  <p><strong>Cause #3:</strong> a <strong>Read-only</strong> ARM resource lock on the storage account or its resource group. This blocks all data-plane writes account-wide, no matter what any SAS/key/identity grants. <strong>Fix:</strong> Storage account (and its resource group) &rarr; <strong>Locks</strong> &rarr; remove the Read-only lock, or change it to Delete-only.</p>
+
+  <h4>"Nothing to configure — This module type doesn't have a configuration screen yet"</h4>
+  <p><strong>Cause:</strong> a Blob node created during earlier development, before the phase-config, workflow-catalog, and workflow-builder fixes were all in place. Its saved <code>transformId</code>/state predates the fix and doesn't self-heal on edit (editing only merges form fields, it doesn't re-derive <code>transformId</code>).</p>
+  <p><strong>Fix:</strong> delete the old node and re-add "Azure Blob Storage" fresh from the Node Library — a newly created node now works end to end.</p>
+
+  <h4>InvalidOperationException: "Destination '&lt;name&gt;' has no blob container configured (Target or dest_blobContainer)."</h4>
+  <p><strong>Cause:</strong> neither <code>Target</code> nor <code>dest_blobContainer</code> is set — shouldn't happen via the wizard (Container name is a required field), but possible via a direct API call.</p>
+  <p><strong>Fix:</strong> set the container name.</p>
+
+  <h4>InvalidOperationException: "&hellip;is not a valid Azure Blob container name&hellip;"</h4>
+  <p><strong>Cause:</strong> a legacy row saved before the container-name validator existed, or a direct API call bypassing the wizard's inline check. See §6 for the exact rule.</p>
+  <p><strong>Fix:</strong> rename the container to satisfy the naming rule and re-save.</p>
+
+  <h4>InvalidOperationException: "&hellip;uses Account Key auth but has no dest_blobAccountName configured."</h4>
+  <p><strong>Cause:</strong> Account Key mode selected but Account name left blank.</p>
+  <p><strong>Fix:</strong> fill in Account name (§4, mode 2).</p>
+
+  <h4>InvalidOperationException: "&hellip;uses Managed Identity auth but has no dest_blobAccountUrl/dest_blobAccountName configured."</h4>
+  <p><strong>Cause:</strong> Managed Identity mode selected but neither Account URL nor Account name (to derive it from) was supplied.</p>
+  <p><strong>Fix:</strong> fill in Account URL (§4, mode 4) — this mode has no other way to know which storage account to talk to.</p>
+
+  <h4>InvalidOperationException: "&hellip;uses Service Principal auth but is missing dest_blobTenantId/dest_blobClientId."</h4>
+  <p><strong>Cause:</strong> Service Principal mode selected but Tenant ID and/or Client ID left blank.</p>
+  <p><strong>Fix:</strong> fill in both (§4, mode 5).</p>
+
+  <h4>A record silently doesn't appear as a new blob in Update mode</h4>
+  <p><strong>Cause:</strong> this is expected, not a bug — Update mode only overwrites a blob that already exists; a record with no pre-existing blob under its key is skipped by design (see §7's behavior table). <code>DestinationWriteResult.Count</code> reflects only the records actually written, so a lower-than-expected count in the run history is the signal this happened.</p>
+  <p><strong>Fix (if you actually wanted it created):</strong> switch Record mode to Upsert, which creates-or-overwrites unconditionally.</p>
+
+  <h4>Every run creates a brand-new blob even though I expected updates</h4>
+  <p><strong>Cause:</strong> Delivery is set to Bulk (the default) — Bulk has no per-record identity concept at all, by design; Record mode has no effect at this setting.</p>
+  <p><strong>Fix:</strong> switch Delivery to Individual records, then pick Upsert or Update as appropriate.</p>
+
+  <h4>Container auto-create silently does nothing even though the toggle is on</h4>
+  <p><strong>Cause:</strong> the resolved auth is a container-scoped SAS — <code>SupportsContainerCreate</code> is <code>false</code> for that shape regardless of the toggle, since a container SAS has no permission over the account itself to create anything.</p>
+  <p><strong>Fix:</strong> either pre-create the container yourself, or switch to an account-scoped SAS/another auth mode if you need auto-create.</p>
+
+  <h4>Update mode never finds a record to update — it just keeps skipping</h4>
+  <p><strong>Cause:</strong> the Folder pattern <em>or</em> File name pattern includes a <code>{date:...}</code> or <code>{guid}</code> token — every run resolves a different full path, so <code>BlobClient.ExistsAsync</code> on this run's freshly-resolved path never finds last run's blob. The wizard warns about this on either field (§8) but doesn't block saving it.</p>
+  <p><strong>Fix:</strong> remove the <code>{date:...}</code>/<code>{guid}</code> token from whichever field has it (or clear the field to use the Update default) so the same key always resolves to the same full path.</p>
+
+  <h4>"...contains a character Azure blob names don't allow" / "...cannot end with '.' or '/'"</h4>
+  <p><strong>Cause:</strong> the Folder pattern or File name pattern contains a backslash/control character, or ends with a literal <code>.</code> or <code>/</code> — see §8's naming-pattern validation rules.</p>
+  <p><strong>Fix:</strong> use <code>/</code> instead of <code>\</code> for nested folders, and make sure the pattern's last literal character isn't <code>.</code> or <code>/</code> (a trailing placeholder token like <code>{guid}</code> or <code>.json</code> is fine).</p>
+
+  <h4>"File name pattern cannot contain '/'"</h4>
+  <p><strong>Cause:</strong> the File name pattern has a <code>/</code> in it (e.g. trying to use <code>{date:yyyy/MM/dd}</code> there) — File name pattern is always exactly one path segment; nesting only belongs in Folder pattern.</p>
+  <p><strong>Fix:</strong> move the nested part into Folder pattern (e.g. Folder pattern <code>{name}/{date:yyyy/MM/dd}</code>, File name pattern <code>{id}.json</code>).</p>
+
+  <h4>A custom date format in a pattern doesn't error, but the resulting name looks wrong</h4>
+  <p><strong>Cause:</strong> the format string was syntactically valid .NET but not what was intended — <code>ResolvePattern</code> only falls back to the fixed <code>yyyyMMddHHmmssfff</code> format on a genuine <code>FormatException</code> (e.g. an unterminated quoted literal); most typos in a .NET custom format string still parse, just not the way you expected.</p>
+  <p><strong>Fix:</strong> check the token against the <a href="https://learn.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings" target="_blank" rel="noopener">.NET custom date/time format string</a> reference (§8).</p>
+
+  <h2 id="verification"><span class="num">16.</span>Verification</h2>
+  <ul class="feature-list">
+    <li><strong>Backend:</strong> full solution build succeeds; 99 Blob-specific unit tests pass (626/628 across the whole <code>FHIRBridge.UnitTests</code> suite — the two failures, a locale-dependent DateTime-parsing repro test and <code>DestinationExecutionHistoryGateTests</code>, are pre-existing and untouched by this feature).</li>
+    <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the wizard form, catalog wiring, and workflow-builder fix.</li>
+    <li><strong>Manual end-to-end:</strong> created a fresh Blob destination via the wizard against a real Azure Storage account using Connection String, Account Key, and SAS URL modes; confirmed the specific 400/403 errors above and their fixes against a live account; confirmed the feature works end to end after all fixes.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; Azure Blob Storage destination implementation documentation &middot; branch <code>Azure_Blob_Destination_Implementation</code>
+  </footer>
+
+</div>
+</body>
+</html>

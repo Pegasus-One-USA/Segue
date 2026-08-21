@@ -11,15 +11,25 @@ import { PatientService } from './core/services/patient.service';
 import { FHIRBRIDGE_BASE_URL, PROVIDER_LAUNCH_CONTEXT } from './core/config/launch.config';
 import { environment } from '../../../environments/environment';
 
-/** Matches Demo_TestApp's GET /api/provider-in-app-launch-context response. */
+/** Matches Demo_TestApp's GET /api/provider-in-app-launch-context response. standaloneBaseUrl is
+ *  WorkflowSettingsEntity.StandaloneBaseUrl — deliberately reused rather than a dedicated field, since
+ *  Provider_InApp and Provider_Standalone both launch against the same FHIRBridge deployment. */
 interface ProviderInAppLaunchContext {
   providerLaunchContext: string;
+  standaloneBaseUrl: string;
 }
 
 // A blank/placeholder token is indistinguishable from a real one syntactically — FHIRBridge's own launch
 // endpoint would 404 on either, so both are treated as "ask an admin to set one" rather than attempted.
 function isConfiguredValue(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0 && !value.includes('REPLACE_WITH_REAL');
+}
+
+// Same "not configured" shape as isConfiguredValue above, but for StandaloneBaseUrl — guards against both an
+// empty value and the literal placeholder left in appsettings.json's DefaultWorkflowSettings:StandaloneBaseUrl
+// (REPLACE_WITH_PUBLIC_URL) for any environment that hasn't set a real one yet.
+function isConfiguredBaseUrl(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0 && value !== 'http://REPLACE_WITH_PUBLIC_URL';
 }
 
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge.
@@ -45,6 +55,11 @@ export class LaunchProviderInAppComponent implements OnInit {
   // Falls back to whatever's in launch.config.ts (the pre-existing, gitignored, compile-time mechanism) until
   // an admin sets this through the UI, so a repo that already filled in that file keeps working unchanged.
   private providerLaunchContext = PROVIDER_LAUNCH_CONTEXT;
+  // Same admin-editable/fallback story as providerLaunchContext above — falls back to the build-time
+  // FHIRBRIDGE_BASE_URL constant (only ever correct when the browser and FHIRBridge Api share a host, e.g. local
+  // dev) until loadLaunchContext() resolves the admin-configured WorkflowSettingsEntity.StandaloneBaseUrl
+  // (reused from Provider_Standalone rather than a dedicated field — see ProviderInAppLaunchContext).
+  private baseUrl = FHIRBRIDGE_BASE_URL;
   private launchContextLoadPromise: Promise<void> | null = null;
 
   readonly age = computed(() => {
@@ -78,6 +93,9 @@ export class LaunchProviderInAppComponent implements OnInit {
       if (isConfiguredValue(current.providerLaunchContext)) {
         this.providerLaunchContext = current.providerLaunchContext;
       }
+      if (isConfiguredBaseUrl(current.standaloneBaseUrl)) {
+        this.baseUrl = current.standaloneBaseUrl;
+      }
     } catch {
       // Non-fatal — falls back to whatever's in launch.config.ts (possibly still the placeholder, which every
       // caller below already guards against via isConfiguredValue).
@@ -101,9 +119,14 @@ export class LaunchProviderInAppComponent implements OnInit {
     const launch = params.get('launch');
     if (iss && launch) {
       await this.ensureLaunchContextLoaded();
+      // Passes our own current origin as a live callerId override, so FHIRBridge redirects back here after OAuth
+      // completes regardless of which environment (local/staging/production) is actually running this page — the
+      // static providerLaunchContext token can't otherwise reflect that per-environment. See OAuthController.LaunchPipeline.
+      const callerId = `${window.location.origin}/launchproviderinapp`;
       const launchUrl =
-        `${FHIRBRIDGE_BASE_URL}/api/v1/oauth/launch/${this.providerLaunchContext}` +
-        `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}`;
+        `${this.baseUrl}/api/v1/oauth/launch/${this.providerLaunchContext}` +
+        `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}` +
+        `&callerId=${encodeURIComponent(callerId)}`;
       window.location.href = launchUrl;
       return;
     }
@@ -111,13 +134,40 @@ export class LaunchProviderInAppComponent implements OnInit {
     // FHIRBridge sets this instead of ?workflowRunId= when the workflow it triggered after OAuth threw —
     // surface it rather than silently falling back to mock data, which would look like a working demo.
     const launchError = params.get('launchError');
+    const workflowRunId = params.get('workflowRunId');
+
+    // Consume both once, then strip them from the visible URL — same reasoning as the Standalone components'
+    // own history.replaceState calls (see launch-standalone-provider.ts/launch-standalone-patient.ts): without
+    // this, ?workflowRunId=... sits in the address bar indefinitely (this app has no router to otherwise clean
+    // it up), and app.ts's login() deliberately preserves the current query string across a subsequent login for
+    // this exact role (needed so a real iss+launch survives logging in first) — which also preserves a STALE
+    // workflowRunId across a DIFFERENT HealthApp account's later login on the same tab. That account would then
+    // silently be shown whichever patient the ORIGINAL account's real EHR launch fetched (FHIRBridge's launch-
+    // result endpoint has no per-caller ownership check on the run id), never seeing an error or a fresh fetch.
+    if (launchError || workflowRunId) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     if (launchError) {
       this.launchError.set(launchError);
       this.isPatientLoading.set(false);
       return;
     }
 
-    this.patientService.getPatient().subscribe({
+    // Account-linking check — see Demo_TestApp/backend's AccountContextLinkEntity remarks for what this
+    // enforces (and why it lives here, not in FHIRBridge's own binding table): this app has ground-truth
+    // knowledge of which HealthApp account is logged in, so it can reject a different account claiming a
+    // patient another account already linked. A no-op (ok: true) when there's no session to check against at
+    // all (the genuinely embedded-iframe case) or the request otherwise can't be completed — never blocks the
+    // existing flow on a failure of this check itself, only on an actual, confirmed mismatch.
+    const linkOk = await this.checkAccountContextLink(workflowRunId);
+    if (!linkOk.ok) {
+      this.launchError.set(linkOk.message ?? 'This account is already linked to a different patient.');
+      this.isPatientLoading.set(false);
+      return;
+    }
+
+    this.patientService.getPatient(workflowRunId).subscribe({
       next: (patient) => {
         this.patient.set(patient);
         this.isPatientLoading.set(false);
@@ -127,6 +177,24 @@ export class LaunchProviderInAppComponent implements OnInit {
         this.isPatientLoading.set(false);
       },
     });
+  }
+
+  private async checkAccountContextLink(workflowRunId: string | null): Promise<{ ok: boolean; message?: string }> {
+    if (!workflowRunId) {
+      return { ok: true };
+    }
+    try {
+      return await firstValueFrom(
+        this.http.get<{ ok: boolean; message?: string }>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/account-context-link/check`,
+          { params: { workflowRunId, audienceType: 'ehrLaunch' }, withCredentials: true },
+        ),
+      );
+    } catch {
+      // Non-fatal — see this method's only caller's remarks. A failed check must never block a launch that
+      // would otherwise have succeeded.
+      return { ok: true };
+    }
   }
 
   displayValue(value: string | null | undefined): string {

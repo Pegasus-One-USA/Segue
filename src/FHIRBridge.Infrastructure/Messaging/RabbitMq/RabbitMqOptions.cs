@@ -5,10 +5,15 @@ public sealed class RabbitMqOptions
 {
     public string HostName { get; set; } = "localhost";
     public int Port { get; set; } = 5672;
+    /// <summary>HTTP management API port (rabbitmq:3-management image) — used only for Queue Monitor, never for AMQP.</summary>
+    public int ManagementPort { get; set; } = 15672;
     public string UserName { get; set; } = "fhirbridge";
     public string Password { get; set; } = "fhirbridge";
     public string VirtualHost { get; set; } = "/";
+    /// <summary>HIPAA #15: encrypts the AMQP connection. Required outside Development — see AddRabbitMqMessaging's fail-fast check.</summary>
+    public bool UseTls { get; set; }
     public string PipelineRunsQueue { get; set; } = "pipeline-runs";
     public string WebhookIngestionQueue { get; set; } = "webhook-ingestion";
+    public string LineageCaptureQueue { get; set; } = "lineage-capture";
     public ushort PrefetchCount { get; set; } = 10;
 }

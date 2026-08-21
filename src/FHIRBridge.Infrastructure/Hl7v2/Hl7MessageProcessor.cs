@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using FHIRBridge.Integration.Hl7v2;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,15 +21,18 @@ public sealed class Hl7MessageProcessor
     private readonly IWebhookIngestionDispatcher _dispatcher;
     private readonly Hl7MllpOptions _options;
     private readonly ILogger<Hl7MessageProcessor> _logger;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public Hl7MessageProcessor(
         IWebhookIngestionDispatcher dispatcher,
         IOptions<Hl7MllpOptions> options,
-        ILogger<Hl7MessageProcessor>? logger = null)
+        ILogger<Hl7MessageProcessor>? logger = null,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _dispatcher = dispatcher;
         _options = options.Value;
         _logger = logger ?? NullLogger<Hl7MessageProcessor>.Instance;
+        _exceptionManager = exceptionManager;
     }
 
     /// <summary>Processes one HL7 v2 message and returns the HL7 ACK text to frame and send back.</summary>
@@ -42,6 +46,13 @@ public sealed class Hl7MessageProcessor
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Failed to parse inbound HL7 v2 message.");
+
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureAsync(
+                    exception, new ExceptionContext(Module: "HL7 v2 MLLP"), cancellationToken);
+            }
+
             // Without a parseable MSH we cannot echo control ids; return a minimal AE.
             return "MSH|^~\\&|FHIRBridge||||||ACK|ERR-ACK|P|2.5\rMSA|AE|unknown|" + Sanitize(exception.Message);
         }
@@ -71,6 +82,15 @@ public sealed class Hl7MessageProcessor
         catch (Exception exception)
         {
             _logger.LogError(exception, "Failed to ingest HL7 v2 message {ControlId}.", message.MessageControlId);
+
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(Module: "HL7 v2 MLLP", RequestId: message.MessageControlId),
+                    cancellationToken);
+            }
+
             return Hl7MllpProtocol.BuildAck(message, accepted: false, errorText: exception.Message);
         }
     }

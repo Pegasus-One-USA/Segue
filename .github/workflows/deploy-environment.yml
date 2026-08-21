@@ -8,11 +8,12 @@ name: Deploy Environment (reusable)
 # completely separate and untouched by this file.
 #
 # See deploy/windows/Deploy-FHIRBridge-Environment.ps1 for what the deploy step actually does: each
-# environment gets 6 Windows Services under C:\inetpub\wwwroot\<Environment>\, all reusing the same 4
-# published executables this build job produces (Api, Gateway, Worker, DemoApi) -- Gateway is
-# deployed 3 times per environment in different config-only roles (portal-only, proxy-only,
-# demo-portal-only). See Documents/CICD-Deployment-Guide.html for the full topology/port/service-name
-# reference.
+# environment gets the same 4-service shape production already uses (Api, Gateway, Worker, DemoApi),
+# just parameterized per environment -- Gateway serves the portal and proxies the API on one port,
+# DemoApi serves its own demo portal and its own API on one port. Portal and Demo app frontend builds
+# below use the ordinary "production" Angular configuration (no per-environment build needed), since
+# the portal is same-origin with its own API here exactly like production. See
+# Documents/CICD-Deployment-Guide.html for the full topology/port/service-name reference.
 
 on:
   workflow_call:
@@ -34,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lowercase environment name (for Angular build configuration + npm cache key)
+      - name: Lowercase environment name (for artifact naming)
         id: env-lower
         shell: bash
         run: echo "value=$(echo '${{ inputs.environment }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
@@ -78,17 +79,17 @@ jobs:
           -c Release -r win-x64 --self-contained false
           -o publish/DemoApi
 
-      - name: Build portal (${{ inputs.environment }} configuration)
+      - name: Build portal
         working-directory: portal
         run: |
           npm ci
-          npm run build -- --configuration ${{ steps.env-lower.outputs.value }}
+          npm run build -- --configuration production
 
-      - name: Build Demo app frontend (${{ inputs.environment }} configuration)
+      - name: Build Demo app frontend
         working-directory: Demo_TestApp/frontend
         run: |
           npm ci
-          npm run build -- --configuration ${{ steps.env-lower.outputs.value }}
+          npm run build -- --configuration production
 
       - name: Stage static frontend builds
         run: |

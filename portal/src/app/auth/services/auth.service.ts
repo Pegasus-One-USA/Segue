@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
+import { tap, finalize, catchError, map } from 'rxjs/operators';
 import { Observable, EMPTY, of } from 'rxjs';
 import { IAuthService } from './i-auth.service';
 import { SessionService } from './session.service';
@@ -9,13 +9,13 @@ import { AuthStore } from '../store/auth.store';
 import { PermissionService } from './permission.service';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
-import { UserRole, MessageResponse, TokenPair } from '../models/user.model';
+import { User, UserRole, MessageResponse } from '../models/user.model';
 import {
   LoginRequest, LoginResponse, LoginResult,
   RegisterRequest, RegisterResponse,
   ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
+  MagicLinkRequest, MagicLinkRedeemRequest,
 } from '../models/auth-request.model';
-import { buildUserFromJwt } from './jwt-user.mapper';
 import { extractApiErrorMessage } from '../../core/http-error.util';
 
 const LOCKOUT_MINUTES = 30;
@@ -65,7 +65,7 @@ export class AuthService {
 
           this.security.clearAttempts(req.email, res.user.id);
           this.store.setUser(res.user);
-          this.session.start(res.user.id, res.accessToken, res.refreshToken, req.rememberMe ?? false);
+          this.session.start(res.user.id, req.rememberMe ?? false);
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -99,7 +99,7 @@ export class AuthService {
         next: (res) => {
           this.security.clearAttempts(email, res.user.id);
           this.store.setUser(res.user);
-          this.session.start(res.user.id, res.accessToken, res.refreshToken, rememberMe);
+          this.session.start(res.user.id, rememberMe);
           this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
@@ -112,12 +112,52 @@ export class AuthService {
     );
   }
 
+  // ─── Magic-link request ─────────────────────────────────────────────────────
+  requestMagicLink(req: MagicLinkRequest): Observable<MessageResponse> {
+    return this.api.requestMagicLink(req);
+  }
+
+  // ─── Magic-link redeem ──────────────────────────────────────────────────────
+  // Same shape as login(): may resolve to an MFA challenge (no session yet) or a completed session.
+  redeemMagicLink(req: MagicLinkRedeemRequest): Observable<LoginResult> {
+    this.store.setLoading(true);
+    this.store.setError(null);
+
+    return this.api.redeemMagicLink(req).pipe(
+      tap({
+        next: (res) => {
+          this.store.setLoading(false);
+          if (res.requiresMfa) return;
+
+          this.store.setUser(res.user);
+          this.session.start(res.user.id, false);
+          this.router.navigate(['/dashboard']);
+        },
+        error: (err) => {
+          this.store.setError(extractApiErrorMessage(err, 'This sign-in link is invalid or has expired.'));
+          this.store.setLoading(false);
+        },
+      })
+    );
+  }
+
   // ─── Logout ────────────────────────────────────────────────────────────────
+  // Clears local session state and navigates to login unconditionally via finalize(), regardless of
+  // whether the backend POST /auth/logout call succeeds — an already-expired/invalid access token makes
+  // that call 401 (the auth interceptor deliberately never retries/refreshes calls under /auth/, see
+  // auth.interceptor.ts), and with only a `next` handler that 401 previously left the user stuck "signed
+  // in" with a dead session, since the token was never cleared and the redirect never fired.
   logout(): void {
-    this.api.logout().subscribe(() => {
-      this.session.end();
-      this.router.navigate(['/auth/login']);
-    });
+    this.api.logout().pipe(
+      // Swallow the error here (a dead/expired token 401s) rather than in subscribe()'s error callback —
+      // finalize() below already does the actual cleanup unconditionally, so there's nothing left for an
+      // error handler to do.
+      catchError(() => EMPTY),
+      finalize(() => {
+        this.session.end();
+        this.router.navigate(['/auth/login']);
+      }),
+    ).subscribe();
   }
 
   // ─── Register ──────────────────────────────────────────────────────────────
@@ -129,7 +169,7 @@ export class AuthService {
       tap({
         next: (res) => {
           this.store.setUser(res.user);
-          this.session.start(res.user.id, res.accessToken, res.refreshToken);
+          this.session.start(res.user.id);
           this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
@@ -157,22 +197,22 @@ export class AuthService {
   }
 
   // ─── Refresh ───────────────────────────────────────────────────────────────
-  // Called by authInterceptor on a 401. Two things easy to get wrong here, both fixed:
-  //  1. setTokens()'s 3rd arg defaults to false — omitting it would silently flip a
-  //     "Remember me" (localStorage) session back to session-only on every refresh.
-  //     Reading the current flag first and passing it through preserves the user's choice.
-  //  2. A refreshed access token may carry different permission claims (e.g. an admin
-  //     changed this user's role since login) — re-decoding it and updating AuthStore
-  //     is what actually makes "permissions update on refresh" true, not just the token.
-  refreshToken(refreshToken: string): Observable<TokenPair> {
-    const rememberMe = this.tokens.isRemembered;
-    return this.api.refreshToken(refreshToken).pipe(
-      tap(pair => {
-        this.tokens.setTokens(pair.accessToken, pair.refreshToken, rememberMe);
-        const payload = this.tokens.decodePayload<Record<string, unknown>>(pair.accessToken);
-        if (payload) this.store.setUser(buildUserFromJwt(payload));
+  // Called by authInterceptor on a 401. The backend rotates both cookies on every call; the
+  // rebuilt User (from the fresh profile) may carry different permission claims than before
+  // (e.g. an admin changed this user's role since login) — updating AuthStore here is what
+  // actually makes "permissions update on refresh" true, not just the cookie.
+  refreshToken(): Observable<User> {
+    return this.api.refreshToken().pipe(
+      tap(user => {
+        this.tokens.markSessionActive();
+        this.store.setUser(user);
       })
     );
+  }
+
+  // ─── Get current user (used for cross-tab sync and session bootstrap) ─────
+  getCurrentUser(): Observable<User> {
+    return this.api.getCurrentUser();
   }
 
   // ─── Permission helpers ───────────────────────────────────────────────────
@@ -185,21 +225,24 @@ export class AuthService {
   hasPermission(perm: string): boolean      { return this.permission.hasPermission(perm); }
   isAdmin(): boolean                        { return this.store.isAdmin(); }
 
-  // ─── Initialise from stored token (called in app init) ───────────────────
-  // Rebuild the current user (roles + permissions) synchronously from the stored JWT claims via
-  // buildUserFromJwt — the same mapper login/SSO use, so no API round-trip or mock lookup is
-  // needed. Returns an Observable so app.config's APP_INITIALIZER can treat it uniformly.
+  // ─── Initialise session (called in app init) ──────────────────────────────
+  // HIPAA #7: the access token is an HttpOnly cookie now — this client can no longer decode it
+  // synchronously from storage, so bootstrapping the session means actually asking the server via
+  // GET /auth/me. A 401 (no cookie, or an expired one the browser already dropped) just means
+  // "not logged in" — not an error the caller needs to handle specially.
   initFromToken(): Observable<void> {
-    const token = this.tokens.getAccessToken();
-    if (!token || this.tokens.isExpired(token)) {
-      this.tokens.clearTokens();
+    if (!this.tokens.hasSession()) {
       return of(undefined);
     }
-    const payload = this.tokens.decodePayload<Record<string, unknown>>(token);
-    if (payload) {
-      this.store.setUser(buildUserFromJwt(payload));
-    }
-    return of(undefined);
+
+    return this.api.getCurrentUser().pipe(
+      tap(user => this.store.setUser(user)),
+      map(() => undefined),
+      catchError(() => {
+        this.tokens.clearTokens();
+        return of(undefined);
+      }),
+    );
   }
 
   // ─── Discard any stored session (called at boot when the backend requires first-run setup) ──

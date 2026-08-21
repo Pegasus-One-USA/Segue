@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- HIPAA #10: shares IPhiRedactor with the Serilog PhiMaskingEnricher so exception text persisted to
+         ErrorLogs and exception text written to log sinks can never drift onto two different rule sets. -->
+    <ProjectReference Include="..\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
+  </ItemGroup>
+
+</Project>

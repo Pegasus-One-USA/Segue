@@ -17,6 +17,7 @@ public static class WorkflowServiceCollectionExtensions
         services.AddSingleton<IWorkflowRunStore, InMemoryWorkflowRunStore>();
         services.AddSingleton<IWorkflowNodeResourceHistoryRecorder, InMemoryWorkflowNodeResourceHistoryRecorder>();
         services.AddScoped<IWorkflowAuditRecorder, InMemoryWorkflowAuditRecorder>();
+        services.AddSingleton<IWorkflowRunTracker, InMemoryWorkflowRunTracker>();
 
         return services;
     }

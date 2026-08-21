@@ -22,6 +22,15 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
 
     public override ApplicationType Handles => ApplicationType.EhrLaunch;
 
+    // Patient-kind binding — but see EnforceEhrLaunchBindingAsync (InteractiveSourceAuthorizationService): for
+    // THIS application type, the binding is inverted from every other application type. Identity is
+    // "{iss}:{patient}" rather than a caller-supplied identity, precisely because a provider is expected to
+    // launch into MANY different patients' charts over time — that's the normal, intended use of Provider EHR
+    // Launch, not a security violation to guard against. Instead, this pins a given (issuer, patient) pair to
+    // whichever caller identity first established it (tracked in its own CallerIdentity column, not ResourceId) —
+    // a DIFFERENT caller identity later authorizing against that SAME already-bound patient is rejected.
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Patient;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.EhrLaunch,
         SmartOAuthFlows.AuthorizationCode,
@@ -45,11 +54,15 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
     public override Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.DiscardTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.GetGrantedScopeAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);
         RequireAuthorizationEndpoint(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
 
         // The trusted-iss allow-list is mandatory for EHR launch (incoming iss must be validated before redirect).
         // It is validated here once the launch-context configuration is added to the source model (build item 4).

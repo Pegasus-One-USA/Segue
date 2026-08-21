@@ -1,16 +1,18 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 
 // ── Phase Configuration ────────────────────────────────────────────────────────
-// Controls which sources, transform categories, and destinations are visible.
-// To enable items in a future phase, flip the flag to `true` — no code changes.
+// Controls which pipeline-step transforms and rank categories are visible in the Node Library.
+// Source/destination-TYPE implemented status ("does Cerner have a real wizard yet", "does Aidbox
+// have a real wizard yet") now lives in the canonical Node Catalog (see
+// NodeCatalogMetadata.Entry.Implemented on the backend) instead of here — this service no longer
+// knows about source/destination ids at all. To enable a pipeline step in a future phase, add its
+// id to enabledTransformIds — no other code change needed.
 
 export interface PhaseConfig {
-  /** Source connector IDs that are enabled and visible. All others are hidden. */
-  enabledSourceIds: string[];
-
   /**
-   * Transform/destination IDs that are enabled and selectable.
-   * Items NOT in this list will be shown as greyed-out (disabled) or hidden.
+   * Pipeline-step transform IDs (Field Mapping, Audit & Lineage, HEDIS, ...) that are enabled and
+   * selectable. Items NOT in this list are hidden entirely, not shown disabled. Destination-TYPE
+   * ids no longer belong here — see NodeCatalogMetadata.Entry.Implemented instead.
    */
   enabledTransformIds: string[];
 
@@ -22,28 +24,13 @@ export interface PhaseConfig {
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic only
-// Categories:   Destination visible; Field Mapping/Validation/Normalize/
-//               Terminology/De-identify hidden
-// Destinations: SQL Server + CSV only
+// No pipeline-step transforms are enabled yet (Field Mapping, Audit & Lineage, HEDIS, Anomaly,
+// Patient Aggregation are all Phase 2+) — same as before this file stopped also tracking
+// source/destination-type rollout. Validation/Normalize/Terminology/De-identify stay hidden by rank.
 const PHASE_1_CONFIG: PhaseConfig = {
-  enabledSourceIds: [
-    'epic',
-    // Phase 2+: 'cerner', 'athena', 'allscripts', 'healow', 'meditech',
-    //           'generic-fhir', 'hl7v2', 'sample'
-  ],
-
   enabledTransformIds: [
-    // Destinations — Phase 1
-    'dest-sqlserver',
-    'dest-csv',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
-    // Phase 2+ destinations: 'dest-azuresql', 'dest-postgres', 'dest-mysql',
-    //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',
-    //   'dest-blob', 'dest-s3', 'dest-fhir', 'dest-xlsx', 'dest-ndjson',
-    //   'dest-parquet', 'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp',
-    //   'dest-restapi', 'dest-inmemory'
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'
   ],
 
@@ -64,12 +51,7 @@ export class PhaseConfigService {
   /** The active phase configuration (reactive). */
   readonly config = this._config.asReadonly();
 
-  /** True if the given source connector ID is enabled in the current phase. */
-  isSourceEnabled(id: string): boolean {
-    return this._config().enabledSourceIds.includes(id);
-  }
-
-  /** True if the given transform/destination ID is visible in the current phase. */
+  /** True if the given pipeline-step transform ID is visible in the current phase. */
   isTransformEnabled(id: string): boolean {
     return this._config().enabledTransformIds.includes(id);
   }

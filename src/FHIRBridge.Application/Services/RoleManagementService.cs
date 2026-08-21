@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Rbac.NodeCatalog;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 
@@ -18,13 +19,16 @@ public sealed class RoleManagementService : IRoleManagementService
 
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
 
     public RoleManagementService(
         IUserAccessRepository repository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUserDisplayNameResolver userDisplayNameResolver)
     {
         _repository = repository;
         _currentUserService = currentUserService;
+        _userDisplayNameResolver = userDisplayNameResolver;
     }
 
     public async Task<IReadOnlyList<RoleDto>> GetRolesAsync(CancellationToken cancellationToken)
@@ -77,6 +81,16 @@ public sealed class RoleManagementService : IRoleManagementService
             .Where(c => c.IsVisible && groupsByCategoryId.ContainsKey(c.Id))
             .Select(c => new PermissionCatalogCategoryDto(c.Id, c.Name, c.DisplayName, groupsByCategoryId[c.Id]))
             .ToArray();
+    }
+
+    // The single canonical Node Catalog — built over the exact same data GetPermissionCatalogAsync
+    // already returns (so the two can never disagree about which permissions a node has), plus the
+    // NodeCatalogMetadata registry for display/rollout metadata. See NodeCatalogBuilder's own doc
+    // comment for why this reuse is safe and deliberate.
+    public async Task<IReadOnlyList<NodeCatalogEntryDto>> GetNodeCatalogAsync(CancellationToken cancellationToken)
+    {
+        var permissionCatalog = await GetPermissionCatalogAsync(cancellationToken);
+        return NodeCatalogBuilder.Build(permissionCatalog);
     }
 
     public async Task<IReadOnlyList<PermissionDto>> GetRolePermissionsAsync(
@@ -196,13 +210,19 @@ public sealed class RoleManagementService : IRoleManagementService
     private async Task<RoleDto> ToDtoAsync(Role role, CancellationToken cancellationToken)
     {
         var permissions = await _repository.GetRolePermissionsAsync(role.Id, cancellationToken);
+        var createdBy = await _userDisplayNameResolver.ResolveOneAsync(role.CreatedBy, cancellationToken);
+        var modifiedBy = await _userDisplayNameResolver.ResolveOneAsync(role.ModifiedBy, cancellationToken);
 
         return new RoleDto(
             role.Id,
             role.Name,
             role.Description,
             permissions.Where(p => p.IsActive).Select(ToDto).ToArray(),
-            SystemRoleIds.Contains(role.Id) || role.IsSystem);
+            SystemRoleIds.Contains(role.Id) || role.IsSystem,
+            role.CreatedOnUtc,
+            createdBy,
+            role.ModifiedOnUtc,
+            modifiedBy);
     }
 
     private static PermissionDto ToDto(Permission permission)

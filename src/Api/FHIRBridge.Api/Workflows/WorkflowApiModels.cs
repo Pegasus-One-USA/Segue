@@ -8,14 +8,15 @@ public sealed record WorkflowDefinitionRequest(
     IReadOnlyCollection<WorkflowNodeRequest> Nodes,
     IReadOnlyCollection<WorkflowEdgeRequest> Edges,
     WorkflowTriggerRequest? Trigger = null,
-    bool IsPubliclyLaunchable = false);
+    bool IsPubliclyLaunchable = true);
 
 /// <summary>Optional workflow-level scheduling metadata (Backend-Systems workflows). Omit / Manual = run on demand.</summary>
 public sealed record WorkflowTriggerRequest(
     WorkflowTriggerType Type,
     string? ScheduleExpression = null,
     int? IntervalMinutes = null,
-    bool BackfillOnFirstRun = false);
+    bool BackfillOnFirstRun = false,
+    string TimeZoneId = "UTC");
 
 public sealed record WorkflowNodeRequest(
     string Id,
@@ -44,6 +45,19 @@ public sealed record WorkflowRunRequest(
     // "identifier=MRN12345", "family=Smith&given=John", "birthdate=1990-01-01" — instead of (or before) knowing a
     // specific PatientId. Passed through as-is (see FhirSourceConnectorBase.ApplyPatientScopeAsync); every other
     // configured resource type is unaffected. Omit for every existing caller/behavior.
-    string? PatientSearchCriteria = null);
+    string? PatientSearchCriteria = null,
+    // Identifies the logged-in end user of the calling third-party app (e.g. HealthApp's Patient Standalone
+    // session). For an ApplicationType.Patient source, lets every pipeline that shares this same logged-in user's
+    // session reuse the one interactive OAuth token their authorization already covers, instead of each
+    // SourceConnection needing its own separate MyChart consent — see FhirSourceConfiguration.CallerId. Omit for
+    // every other ApplicationType, or when this run should keep using the pre-existing per-SourceConnection session.
+    string? CallerId = null,
+    // When true, the run is dispatched to a background task and the endpoint returns 202 Accepted with the
+    // run id immediately instead of blocking until the whole DAG finishes — see IWorkflowRunTracker. Poll
+    // GET /workflow-runs/{runId}/status (or the existing /workflow-runs/{runId} once terminal) for progress.
+    // Omit/false keeps the pre-existing blocking behavior.
+    bool Async = false);
+
+public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 
 public sealed record CopyWorkflowRequest(string Name);

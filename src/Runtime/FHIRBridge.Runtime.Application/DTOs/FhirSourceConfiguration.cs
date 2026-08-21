@@ -53,4 +53,22 @@ public sealed record FhirSourceConfiguration(
     // instead of relying on the EHR's own interactive patient picker. Passed through to the Patient resource type's
     // search as-is (FhirSourceConnectorBase.ApplyPatientScopeAsync); every other configured resource type is
     // unaffected. Null/blank (the default) preserves existing behavior for every caller that doesn't set it.
-    string? PatientSearchCriteria = null);
+    string? PatientSearchCriteria = null,
+    // Identifies the logged-in end user of the calling third-party app (e.g. HealthApp's Patient Standalone
+    // session), independent of which SourceConnection/pipeline is invoked. For ApplicationType.Patient,
+    // SmartAuthorizationCodeTokenProvider.BuildStoreKey keys the interactive OAuth token store on this instead of
+    // SourceConnectionId, so every pipeline that shares the same logged-in user's session reuses the one token that
+    // user's authorization already covers, rather than needing its own separate MyChart consent. Null preserves the
+    // pre-existing per-SourceConnection keying for every other ApplicationType and for callers that don't supply it.
+    string? CallerId = null,
+    // Per-resource-type incremental sync watermark ("_lastUpdated" cursor), keyed by resource type — search REST
+    // fetches each resource type via its own independent request, so each tracks its own cursor rather than sharing
+    // one connection-wide value (contrast with Since above, bulk export's single job-level cursor). Null when
+    // incremental sync isn't enabled, or the referenced SourceConnection has no retrieval config at all.
+    IReadOnlyDictionary<string, DateTime>? LastUpdatedWatermarks = null,
+    // Tenant-scoping identifier some vendors require on every request (e.g. athenahealth's numeric practice id).
+    // Null for every vendor that doesn't need per-tenant request scoping — unchanged behavior for all of them.
+    string? PracticeId = null,
+    // Where OAuth2ClientCredentialsTokenProvider places client id/secret — "post" (default) or "basic". Null
+    // behaves as "post", unchanged from before this field existed.
+    string? AuthPlacement = null);

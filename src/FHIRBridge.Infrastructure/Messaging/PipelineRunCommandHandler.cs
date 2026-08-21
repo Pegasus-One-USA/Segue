@@ -1,9 +1,14 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace FHIRBridge.Infrastructure.Messaging;
 
@@ -15,17 +20,23 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
 {
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
+    private readonly IGovernanceLogger _governanceLogger;
+    private readonly IAmbientActorContext _ambientActorContext;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<PipelineRunCommandHandler> _logger;
 
     public PipelineRunCommandHandler(
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
+        IGovernanceLogger governanceLogger,
+        IAmbientActorContext ambientActorContext,
         IOptions<MessageProcessingOptions> options,
         ILogger<PipelineRunCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
+        _governanceLogger = governanceLogger;
+        _ambientActorContext = ambientActorContext;
         _options = options.Value;
         _logger = logger;
     }
@@ -39,6 +50,14 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
         }
 
         ConfiguredPipelineRunDto? run = null;
+
+        var actorLabel = string.Equals(command.TriggeredBy, "scheduler", StringComparison.OrdinalIgnoreCase)
+            ? "Scheduler (Automated Pipeline Run)"
+            : $"Automated Pipeline Run ({command.TriggeredBy ?? "unknown trigger"})";
+        // Gives this Worker-side execution a real span (there is none today outside ASP.NET Core's own
+        // per-request Activity) — BeginCorrelatedScope below tags it with correlation_id.
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
+        using var actorScope = _ambientActorContext.BeginCorrelatedScope(actorLabel, command.CorrelationId);
 
         // Transient failures (e.g. source/DB unavailable) are retried with backoff.
         await MessageRetry.ExecuteAsync(
@@ -54,7 +73,15 @@ public sealed class PipelineRunCommandHandler : IPipelineRunCommandHandler
             _options,
             _logger,
             $"Pipeline run command {command.MessageId}",
-            cancellationToken);
+            cancellationToken,
+            onRetryAsync: (attempt, delayMs, exception, token) => _governanceLogger.LogRetryAsync(
+                new RetryEntry(
+                    $"Pipeline run command {command.MessageId}",
+                    attempt,
+                    delayMs,
+                    exception.Message,
+                    command.CorrelationId),
+                token));
 
         // A run that completed but reported Failed is dead-lettered (no point retrying a deterministic failure).
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))

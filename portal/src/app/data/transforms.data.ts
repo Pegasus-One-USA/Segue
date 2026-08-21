@@ -1,5 +1,10 @@
 import { Transform } from '../models/transform.model';
 
+// Destination-TYPE rows (SQL Server, Aidbox, Medplum, Azure Blob Storage, Snowflake, ...) used to
+// live here (rank 7) — they now come from the canonical Node Catalog (GET /api/v1/permissions/
+// node-catalog; see node-catalog.model.ts / node-catalog-legacy-ids.ts), the same source Role
+// Permissions' Workflow Nodes section reads from. This file now only holds pipeline STEPS, which
+// have no SourceSystemType/DestinationType backing and stay outside that consolidation.
 export const TRANSFORMS: Transform[] = [
   { id: 'fhir-validation',  rank: 2, name: 'FHIR Validation',                     sub: 'Validate resources against US Core / base R4 profiles.' },
   { id: 'normalize',        rank: 3, group: 'normalize', name: 'Normalize Data',          sub: 'Flatten extensions, score quality, tag US Core.' },
@@ -9,27 +14,6 @@ export const TRANSFORMS: Transform[] = [
   { id: 'deid-safeharbor',  rank: 5, group: 'deid', name: 'De-identification · Safe Harbor', sub: 'Per-resource HIPAA Safe Harbor redaction.' },
   { id: 'deid-kanon',       rank: 5, group: 'deid', name: 'De-identification · k-anonymity',  sub: 'Cohort generalization + suppression.' },
   { id: 'field-mapping',    rank: 6, name: 'Field Mapping',                        sub: 'Map FHIR paths to destination fields.' },
-  { id: 'dest-sqlserver',   rank: 7, category: 'Relational',   name: 'SQL Server',         sub: 'Write to Microsoft SQL Server.' },
-  { id: 'dest-azuresql',    rank: 7, category: 'Relational',   name: 'Azure SQL',          sub: 'Write to Azure SQL Database.' },
-  { id: 'dest-postgres',    rank: 7, category: 'Relational',   name: 'PostgreSQL',         sub: 'Write to PostgreSQL.' },
-  { id: 'dest-mysql',       rank: 7, category: 'Relational',   name: 'MySQL',              sub: 'Write to MySQL.' },
-  { id: 'dest-snowflake',   rank: 7, category: 'Analytics',    name: 'Snowflake',          sub: 'Load into Snowflake.' },
-  { id: 'dest-powerbi',     rank: 7, category: 'Analytics',    name: 'Power BI',           sub: 'Push to a Power BI dataset.' },
-  { id: 'dest-tableau',     rank: 7, category: 'Analytics',    name: 'Tableau',            sub: 'Publish to Tableau.' },
-  { id: 'dest-databricks',  rank: 7, category: 'Analytics',    name: 'Databricks',         sub: 'Load into Databricks.' },
-  { id: 'dest-blob',        rank: 7, category: 'Cloud / FHIR', name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.' },
-  { id: 'dest-s3',          rank: 7, category: 'Cloud / FHIR', name: 'Amazon S3',          sub: 'Write objects to Amazon S3.' },
-  { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', name: 'FHIR Repository',    sub: 'POST a transaction bundle to a FHIR store.' },
-  { id: 'dest-csv',         rank: 7, category: 'File',         name: 'CSV',                sub: 'Emit CSV files.' },
-  { id: 'dest-xlsx',        rank: 7, category: 'File',         name: 'Excel',              sub: 'Emit .xlsx workbooks.' },
-  { id: 'dest-ndjson',      rank: 7, category: 'File',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.' },
-  { id: 'dest-parquet',     rank: 7, category: 'File',         name: 'Parquet',            sub: 'Emit columnar Parquet.' },
-  { id: 'dest-avro',        rank: 7, category: 'File',         name: 'Avro',               sub: 'Emit Avro records.' },
-  { id: 'dest-protobuf',    rank: 7, category: 'File',         name: 'Protobuf',           sub: 'Emit Protobuf messages.' },
-  { id: 'dest-pdf',         rank: 7, category: 'File',         name: 'PDF Report',         sub: 'Render a PDF report.' },
-  { id: 'dest-sftp',        rank: 7, category: 'Delivery',     name: 'SFTP',               sub: 'Deliver files over SFTP.' },
-  { id: 'dest-restapi',     rank: 7, category: 'Delivery',     name: 'REST API',           sub: 'POST to an outbound REST endpoint.' },
-  { id: 'dest-inmemory',    rank: 7, category: 'Delivery',     name: 'In-memory (test)',   sub: 'Sink for testing — discards output.' },
   { id: 'audit-lineage',    rank: 8, category: 'Audit & Lineage', name: 'Audit & Lineage', sub: 'Hash-chained audit + record-level lineage.' },
   { id: 'hedis',            rank: 9, category: 'Analytics',    name: 'HEDIS Measure Report', sub: 'Compute HEDIS quality measures.' },
   { id: 'anomaly',          rank: 9, category: 'Analytics',    name: 'Anomaly Detection',  sub: 'Flag statistical anomalies.' },

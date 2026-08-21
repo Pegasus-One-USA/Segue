@@ -8,4 +8,10 @@ public sealed record MappingProfileDto(
     Guid DestinationId,
     string DestinationObject,
     IReadOnlyList<MappingFieldDto> Fields,
-    bool IsEnabled);
+    bool IsEnabled,
+    DateTime CreatedOnUtc,
+    string? CreatedBy,
+    DateTime? ModifiedOnUtc,
+    string? ModifiedBy,
+    Guid? SourceConfigurationId = null,
+    string? MappingJson = null);

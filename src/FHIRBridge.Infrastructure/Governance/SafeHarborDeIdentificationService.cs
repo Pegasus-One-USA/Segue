@@ -3,33 +3,39 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Governance;
-using Microsoft.Extensions.Configuration;
+using FHIRBridge.Application.Abstractions.Persistence;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// HIPAA Safe Harbor-style de-identification. Applies a configurable set of FHIR-path redaction rules over the
-/// resource JSON: direct identifiers are removed or hashed, dates are generalized to the year, and ZIP codes are
-/// truncated to three digits. Rules can be supplied via <c>Deidentification:Rules</c>; sensible Safe Harbor defaults
-/// are used otherwise. Replaces the pass-through stub that performed no masking.
+/// HIPAA Safe Harbor-style de-identification. Applies the pre-mapping <c>TransformationRule</c> rows belonging
+/// to <see cref="DeIdentificationRequest.ProfileId"/> as a set of FHIR-path redaction rules over the raw resource
+/// JSON: direct identifiers are removed, hashed, or masked, and dates/ZIPs are generalized. A null
+/// <see cref="DeIdentificationRequest.ProfileId"/> means "no profile assigned" — the resource passes through
+/// unchanged, since profiles (not one tenant-wide default) are the unit of "what redaction applies here."
 /// </summary>
 public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
 {
-    private readonly IReadOnlyList<DeIdentificationRule> _rules;
+    private readonly ITransformationRuleRepository _ruleRepository;
     private readonly ILogger<SafeHarborDeIdentificationService> _logger;
 
     public SafeHarborDeIdentificationService(
-        IConfiguration configuration,
+        ITransformationRuleRepository ruleRepository,
         ILogger<SafeHarborDeIdentificationService>? logger = null)
     {
+        _ruleRepository = ruleRepository;
         _logger = logger ?? NullLogger<SafeHarborDeIdentificationService>.Instance;
-        _rules = LoadRules(configuration);
     }
 
-    public Task<string> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
+    public async Task<string> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
     {
+        if (request.ProfileId is not { } profileId)
+        {
+            return request.RawJson;
+        }
+
         JsonNode? root;
         try
         {
@@ -38,52 +44,75 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "De-identification skipped: {ResourceType} is not valid JSON.", request.ResourceType);
-            return Task.FromResult(request.RawJson);
+            return request.RawJson;
         }
 
         if (root is not JsonObject resource)
         {
-            return Task.FromResult(request.RawJson);
+            return request.RawJson;
         }
 
-        foreach (var rule in _rules)
+        var rules = await _ruleRepository.GetPreMappingRulesAsync(profileId, request.ResourceType, cancellationToken);
+        foreach (var rule in rules)
         {
-            if (rule.AppliesTo(request.ResourceType))
+            if (string.IsNullOrWhiteSpace(rule.SourceField) || !TryReadStrategy(rule.ConfigJson, out var strategy))
             {
-                ApplyPath(resource, rule.PathSegments, 0, rule.Strategy);
+                continue;
             }
+
+            var pathSegments = rule.SourceField.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            ApplyPath(resource, pathSegments, 0, strategy, rule.ConfigJson);
         }
 
-        return Task.FromResult(resource.ToJsonString());
+        return resource.ToJsonString();
     }
 
-    private static void ApplyPath(JsonNode? node, IReadOnlyList<string> path, int index, DeIdentificationStrategy strategy)
+    private static bool TryReadStrategy(string configJson, out DeIdentificationStrategy strategy)
+    {
+        strategy = default;
+        try
+        {
+            using var document = JsonDocument.Parse(configJson);
+            if (!document.RootElement.TryGetProperty("mode", out var modeElement) || modeElement.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            return Enum.TryParse(modeElement.GetString(), true, out strategy);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static void ApplyPath(JsonNode? node, IReadOnlyList<string> path, int index, DeIdentificationStrategy strategy, string configJson)
     {
         switch (node)
         {
             case JsonArray array:
                 foreach (var element in array)
                 {
-                    ApplyPath(element, path, index, strategy);
+                    ApplyPath(element, path, index, strategy, configJson);
                 }
 
                 break;
 
             case JsonObject obj when index == path.Count - 1:
-                ApplyStrategy(obj, path[index], strategy);
+                ApplyStrategy(obj, path[index], strategy, configJson);
                 break;
 
             case JsonObject obj:
                 if (obj.TryGetPropertyValue(path[index], out var child))
                 {
-                    ApplyPath(child, path, index + 1, strategy);
+                    ApplyPath(child, path, index + 1, strategy, configJson);
                 }
 
                 break;
         }
     }
 
-    private static void ApplyStrategy(JsonObject parent, string property, DeIdentificationStrategy strategy)
+    private static void ApplyStrategy(JsonObject parent, string property, DeIdentificationStrategy strategy, string configJson)
     {
         if (!parent.TryGetPropertyValue(property, out var current) || current is null)
         {
@@ -97,13 +126,22 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
                 break;
 
             case DeIdentificationStrategy.Redact:
-                parent[property] = "[REDACTED]";
+                parent[property] = ReadConfigString(configJson, "token") ?? "[REDACTED]";
                 break;
 
             case DeIdentificationStrategy.Hash:
                 if (current is JsonValue hashValue && hashValue.TryGetValue<string>(out var raw))
                 {
                     parent[property] = Hash(raw);
+                }
+
+                break;
+
+            case DeIdentificationStrategy.Mask:
+                if (current is JsonValue maskValue && maskValue.TryGetValue<string>(out var maskRaw))
+                {
+                    var keepLength = ReadConfigInt(configJson, "keepLength", 4);
+                    parent[property] = Mask(maskRaw, keepLength);
                 }
 
                 break;
@@ -129,50 +167,37 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     private static string Hash(string value)
         => "anon-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
 
-    private static IReadOnlyList<DeIdentificationRule> LoadRules(IConfiguration configuration)
+    private static string Mask(string value, int keepLength)
+        => value.Length <= keepLength ? value : new string('*', value.Length - keepLength) + value[^keepLength..];
+
+    private static string? ReadConfigString(string configJson, string property)
     {
-        var configured = configuration.GetSection("Deidentification:Rules").Get<List<RuleConfig>>();
-        if (configured is { Count: > 0 })
+        try
         {
-            return configured
-                .Where(r => !string.IsNullOrWhiteSpace(r.Path) && Enum.TryParse<DeIdentificationStrategy>(r.Strategy, true, out _))
-                .Select(r => new DeIdentificationRule(
-                    string.IsNullOrWhiteSpace(r.ResourceType) ? "*" : r.ResourceType,
-                    r.Path,
-                    Enum.Parse<DeIdentificationStrategy>(r.Strategy, true)))
-                .ToList();
+            using var document = JsonDocument.Parse(configJson);
+            return document.RootElement.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
         }
-
-        return DefaultSafeHarborRules;
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    private static readonly IReadOnlyList<DeIdentificationRule> DefaultSafeHarborRules =
-    [
-        new("Patient", "name", DeIdentificationStrategy.Remove),
-        new("Patient", "telecom", DeIdentificationStrategy.Remove),
-        new("Patient", "photo", DeIdentificationStrategy.Remove),
-        new("Patient", "contact", DeIdentificationStrategy.Remove),
-        new("Patient", "address.line", DeIdentificationStrategy.Remove),
-        new("Patient", "address.text", DeIdentificationStrategy.Remove),
-        new("Patient", "address.postalCode", DeIdentificationStrategy.GeneralizeZip3),
-        new("Patient", "birthDate", DeIdentificationStrategy.GeneralizeDateToYear),
-        new("Patient", "identifier.value", DeIdentificationStrategy.Hash),
-        new("*", "text", DeIdentificationStrategy.Remove)
-    ];
-
-    private sealed record DeIdentificationRule(string ResourceType, string Path, DeIdentificationStrategy Strategy)
+    private static int ReadConfigInt(string configJson, string property, int fallback)
     {
-        public IReadOnlyList<string> PathSegments { get; } = Path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        public bool AppliesTo(string resourceType)
-            => ResourceType == "*" || string.Equals(ResourceType, resourceType, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class RuleConfig
-    {
-        public string? ResourceType { get; set; }
-        public string Path { get; set; } = string.Empty;
-        public string Strategy { get; set; } = string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(configJson);
+            return document.RootElement.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
+                ? parsed
+                : fallback;
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
     }
 }
 
@@ -182,5 +207,6 @@ public enum DeIdentificationStrategy
     Redact = 1,
     Hash = 2,
     GeneralizeDateToYear = 3,
-    GeneralizeZip3 = 4
+    GeneralizeZip3 = 4,
+    Mask = 5
 }

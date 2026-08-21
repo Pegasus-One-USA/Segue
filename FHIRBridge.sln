@@ -49,6 +49,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Gateway", "src\G
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Api.IntegrationTests", "tests\FHIRBridge.Api.IntegrationTests\FHIRBridge.Api.IntegrationTests.csproj", "{0C32E477-F4BF-BD78-46DF-E25693463DAA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Governance", "src\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj", "{80DAA888-84BF-4979-A2E4-69B9685AD93B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -263,6 +265,18 @@ Global
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA}.Release|x64.Build.0 = Release|Any CPU
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA}.Release|x86.ActiveCfg = Release|Any CPU
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA}.Release|x86.Build.0 = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|x64.Build.0 = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Debug|x86.Build.0 = Debug|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x64.ActiveCfg = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x64.Build.0 = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x86.ActiveCfg = Release|Any CPU
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -289,6 +303,7 @@ Global
 		{6306A8FB-679E-111F-6585-8F70E0EE6013} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{BF4AAB9C-984B-4482-86D7-4E7B12E8E273} = {6306A8FB-679E-111F-6585-8F70E0EE6013}
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{80DAA888-84BF-4979-A2E4-69B9685AD93B} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3D3F029B-E6AC-4D16-9551-75C0409A78CD}

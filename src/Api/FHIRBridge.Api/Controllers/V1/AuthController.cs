@@ -1,8 +1,20 @@
+using System.Security.Claims;
+using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
+using ITfoxtec.Identity.Saml2;
+using ITfoxtec.Identity.Saml2.MvcCore;
+using ITfoxtec.Identity.Saml2.Schemas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -16,19 +28,44 @@ public sealed class AuthController : ControllerBase
     private readonly ISsoAuthService _ssoAuthService;
     private readonly ISetupService _setupService;
     private readonly IConfiguration _configuration;
+    private readonly ISamlConfigurationProvider _samlConfigurationProvider;
+    private readonly SamlAuthenticationOptions _samlOptions;
+    private readonly ILogger<AuthController> _logger;
+    private readonly IGovernanceLogger _governanceLogger;
+    private readonly ISystemSettingsCache _settingsCache;
+
+    private const string EntraEnabledKey = "Authentication:Entra:Enabled";
+    private const string EntraInstanceKey = "Authentication:Entra:Instance";
+    private const string EntraTenantIdKey = "Authentication:Entra:TenantId";
+    private const string EntraClientIdKey = "Authentication:Entra:ClientId";
+    private const string SamlEnabledKey = "Authentication:Saml:Enabled";
+    private const string ServiceProviderEntityIdKey = "Authentication:Saml:ServiceProviderEntityId";
+    private const string PortalRedirectUrlKey = "Authentication:Saml:PortalRedirectUrl";
+    private const string PortalErrorRedirectUrlKey = "Authentication:Saml:PortalErrorRedirectUrl";
+    private const string MagicLinkEnabledKey = "LocalAuth:MagicLink:Enabled";
 
     public AuthController(
         IUserAccessService userAccessService,
         ILocalAuthService localAuthService,
         ISsoAuthService ssoAuthService,
         ISetupService setupService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ISamlConfigurationProvider samlConfigurationProvider,
+        IOptions<SamlAuthenticationOptions> samlOptions,
+        ILogger<AuthController> logger,
+        IGovernanceLogger governanceLogger,
+        ISystemSettingsCache settingsCache)
     {
         _userAccessService = userAccessService;
         _localAuthService = localAuthService;
         _ssoAuthService = ssoAuthService;
         _setupService = setupService;
         _configuration = configuration;
+        _samlConfigurationProvider = samlConfigurationProvider;
+        _logger = logger;
+        _governanceLogger = governanceLogger;
+        _settingsCache = settingsCache;
+        _samlOptions = samlOptions.Value;
     }
 
     /// <summary>First-run check — true when the deployment still needs its initial SuperAdmin created.</summary>
@@ -61,7 +98,7 @@ public sealed class AuthController : ControllerBase
 
         var response = await _setupService.CreateFirstSuperAdminAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>
@@ -79,7 +116,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _ssoAuthService.LoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>
@@ -101,30 +138,219 @@ public sealed class AuthController : ControllerBase
 
         var response = await _setupService.CreateFirstSuperAdminViaSsoAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     /// <summary>Public SSO configuration for the portal: which providers are enabled and their client settings.</summary>
     [HttpGet("/api/v1/config")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(SsoConfigDto), StatusCodes.Status200OK)]
-    public IActionResult GetSsoConfig()
+    public async Task<IActionResult> GetSsoConfig(CancellationToken cancellationToken)
     {
-        var entra = _configuration.GetSection("Authentication:Entra");
+        var entraOptions = _configuration.GetSection("Authentication:Entra");
         var google = _configuration.GetSection("Authentication:Google");
 
-        var entraEnabled = entra.GetValue<bool>("Enabled");
-        var instance = (entra["Instance"] ?? "https://login.microsoftonline.com/").TrimEnd('/');
-        var tenantId = entra["TenantId"];
+        var entraEnabled = await _settingsCache.GetBoolAsync(EntraEnabledKey, entraOptions.GetValue<bool>("Enabled"), cancellationToken);
+        var instance = (await _settingsCache.GetStringAsync(
+            EntraInstanceKey, entraOptions["Instance"] ?? "https://login.microsoftonline.com/", cancellationToken)).TrimEnd('/');
+        var tenantId = await _settingsCache.GetStringAsync(EntraTenantIdKey, entraOptions["TenantId"] ?? string.Empty, cancellationToken);
+        var entraClientId = await _settingsCache.GetStringAsync(EntraClientIdKey, entraOptions["ClientId"] ?? string.Empty, cancellationToken);
         var authority = entraEnabled && !string.IsNullOrWhiteSpace(tenantId)
             ? $"{instance}/{tenantId}"
             : null;
 
+        var samlEnabled = await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken);
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+
         var dto = new SsoConfigDto(
-            new SsoEntraConfigDto(entraEnabled, authority, entra["ClientId"]),
-            new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]));
+            new SsoEntraConfigDto(entraEnabled, authority, entraClientId),
+            new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]),
+            new SsoSamlConfigDto(samlEnabled),
+            new SsoMagicLinkConfigDto(magicLinkEnabled));
 
         return Ok(dto);
+    }
+
+    /// <summary>Redirects the browser to the configured SAML IdP's Single Sign-On endpoint with a signed AuthnRequest.</summary>
+    [HttpGet("saml/login")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> SamlLogin(CancellationToken cancellationToken)
+    {
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        var config = await _samlConfigurationProvider.GetConfigurationAsync(cancellationToken);
+        var authnRequest = new Saml2AuthnRequest(config)
+        {
+            AssertionConsumerServiceUrl = new Uri(BuildAcsUrl()),
+        };
+
+        var binding = new Saml2RedirectBinding();
+        return binding.Bind(authnRequest).ToActionResult();
+    }
+
+    /// <summary>
+    /// SAML Assertion Consumer Service: receives the IdP's signed assertion via HTTP-POST binding, validates
+    /// it, and completes sign-in for the linked/known user — same user-resolution and audit-log tail as
+    /// <see cref="SsoLogin"/>, via <see cref="ISsoAuthService.LoginWithIdentityAsync"/>. This is a top-level
+    /// browser navigation (not an XHR the portal's JS can catch), so outcomes are conveyed by redirecting
+    /// into the portal rather than a JSON response.
+    /// </summary>
+    [HttpPost("saml/acs")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> SamlAssertionConsumerService(CancellationToken cancellationToken)
+    {
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var config = await _samlConfigurationProvider.GetConfigurationAsync(cancellationToken);
+            var binding = new Saml2PostBinding();
+            var saml2AuthnResponse = new Saml2AuthnResponse(config);
+            var genericRequest = Request.ToGenericHttpRequest(validate: true);
+
+            binding.ReadSamlResponse(genericRequest, saml2AuthnResponse);
+            if (saml2AuthnResponse.Status != Saml2StatusCodes.Success)
+            {
+                await _governanceLogger.LogAuthenticationAsync(
+                    new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: $"IdP returned status {saml2AuthnResponse.Status}"),
+                    cancellationToken);
+                return await RedirectToPortalErrorAsync($"saml_status_{saml2AuthnResponse.Status}", cancellationToken);
+            }
+
+            binding.Unbind(genericRequest, saml2AuthnResponse);
+
+            var claims = saml2AuthnResponse.ClaimsIdentity;
+            var subject = claims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(subject))
+            {
+                await _governanceLogger.LogAuthenticationAsync(
+                    new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: "Assertion carried no NameID/subject"),
+                    cancellationToken);
+                return await RedirectToPortalErrorAsync("saml_no_subject", cancellationToken);
+            }
+
+            var email = claims.FindFirst(ClaimTypes.Email)?.Value
+                ?? claims.FindFirst(ClaimTypes.Upn)?.Value
+                ?? claims.FindFirst("mail")?.Value
+                ?? claims.FindFirst("email")?.Value
+                ?? string.Empty;
+            var name = claims.FindFirst(ClaimTypes.Name)?.Value;
+
+            var identity = new ExternalIdentity(LoginProvider.Saml, subject, email, name);
+            var response = await _ssoAuthService.LoginWithIdentityAsync(identity, cancellationToken);
+
+            IssueTokenCookiesAndStrip(response);
+            var portalRedirectUrl = await _settingsCache.GetStringAsync(
+                PortalRedirectUrlKey, _samlOptions.PortalRedirectUrl ?? string.Empty, cancellationToken);
+            return Redirect(string.IsNullOrWhiteSpace(portalRedirectUrl) ? "/" : portalRedirectUrl);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "SAML ACS: no enabled account matched the asserted identity.");
+            return await RedirectToPortalErrorAsync("saml_no_account", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SAML ACS: assertion processing failed.");
+            // Same authentication-log surface as every other login path (Governance > Authentication Logs in the
+            // portal) — so a signature/certificate/audience mismatch is visible from the UI, not just server logs.
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("SSO:Saml", Success: false, FailureReason: ex.Message),
+                cancellationToken);
+            return await RedirectToPortalErrorAsync("saml_failed", cancellationToken);
+        }
+    }
+
+    /// <summary>Serves this app's SAML SP metadata so a hospital IT team can configure their IdP to trust it.</summary>
+    [HttpGet("saml/metadata")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SamlMetadata(CancellationToken cancellationToken)
+    {
+        if (!await _settingsCache.GetBoolAsync(SamlEnabledKey, _samlOptions.Enabled, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        var acsUrl = BuildAcsUrl();
+        var entityId = await _settingsCache.GetStringAsync(
+            ServiceProviderEntityIdKey, _samlOptions.ServiceProviderEntityId ?? string.Empty, cancellationToken);
+        var xml = $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{entityId}">
+              <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="false" WantAssertionsSigned="true">
+                <NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat>
+                <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{acsUrl}" index="0" isDefault="true" />
+              </SPSSODescriptor>
+            </EntityDescriptor>
+            """;
+
+        return Content(xml, "application/samlmetadata+xml");
+    }
+
+    /// <summary>Requests a passwordless "sign-in link" email.</summary>
+    [HttpPost("magic-link/request")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(typeof(MagicLinkResponse), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> RequestMagicLink(
+        [FromBody] MagicLinkRequest request,
+        CancellationToken cancellationToken)
+    {
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+        if (!magicLinkEnabled)
+        {
+            return NotFound();
+        }
+
+        var response = await _localAuthService.RequestMagicLinkAsync(request, cancellationToken);
+
+        return Accepted(response);
+    }
+
+    /// <summary>Redeems a magic-link token to complete sign-in.</summary>
+    [HttpPost("magic-link/redeem")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RedeemMagicLink(
+        [FromBody] MagicLinkRedeemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var magicLinkEnabled = await _settingsCache.GetBoolAsync(
+            MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
+        if (!magicLinkEnabled)
+        {
+            return NotFound();
+        }
+
+        var response = await _localAuthService.RedeemMagicLinkAsync(request, cancellationToken);
+
+        return Ok(IssueTokenCookiesAndStrip(response));
+    }
+
+    private string BuildAcsUrl() => $"{Request.Scheme}://{Request.Host}/api/v1/auth/saml/acs";
+
+    private async Task<IActionResult> RedirectToPortalErrorAsync(string errorCode, CancellationToken cancellationToken)
+    {
+        var baseUrl = await _settingsCache.GetStringAsync(
+            PortalErrorRedirectUrlKey, _samlOptions.PortalErrorRedirectUrl ?? string.Empty, cancellationToken);
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            baseUrl = "/";
+        }
+
+        var separator = baseUrl.Contains('?') ? "&" : "?";
+        return Redirect($"{baseUrl}{separator}error={errorCode}");
     }
 
     [HttpGet("me")]
@@ -155,7 +381,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.LoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/login/mfa")]
@@ -168,7 +394,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.CompleteMfaLoginAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/change-password")]
@@ -179,7 +405,7 @@ public sealed class AuthController : ControllerBase
     {
         var response = await _localAuthService.ChangePasswordAsync(request, cancellationToken);
 
-        return Ok(response);
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("internal/forgot-password")]
@@ -216,13 +442,22 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(LocalLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(
-        [FromBody] RefreshTokenRequest request,
+        [FromBody] RefreshTokenRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await _localAuthService.RefreshTokenAsync(request, cancellationToken);
+        // HIPAA #7: the refresh token now lives in an HttpOnly cookie, not the request body — the body param
+        // is kept only so an already-in-flight caller from before this change doesn't 400 on a stale contract.
+        var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? request?.RefreshToken;
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return Unauthorized();
+        }
 
-        return Ok(response);
+        var response = await _localAuthService.RefreshTokenAsync(new RefreshTokenRequest(refreshToken), cancellationToken);
+
+        return Ok(IssueTokenCookiesAndStrip(response));
     }
 
     [HttpPost("logout")]
@@ -231,6 +466,57 @@ public sealed class AuthController : ControllerBase
     {
         await _localAuthService.LogoutAsync(cancellationToken);
 
+        ClearTokenCookies();
+
         return NoContent();
     }
+
+    private const string AccessTokenCookieName = "fhirbridge_access_token";
+    private const string RefreshTokenCookieName = "fhirbridge_refresh_token";
+    internal const string CsrfCookieName = "fhirbridge_csrf";
+
+    /// <summary>
+    /// HIPAA #7: moves the issued tokens out of the JSON body into HttpOnly cookies (mitigates XSS-driven token
+    /// theft) and returns the same response with the raw token fields nulled out — everything else (Profile,
+    /// RequiresMfa, etc.) is unchanged so existing frontend code that reads those fields keeps working.
+    /// </summary>
+    private LocalLoginResponse IssueTokenCookiesAndStrip(LocalLoginResponse response)
+    {
+        if (response.AccessToken is not null && response.ExpiresOnUtc is not null)
+        {
+            Response.Cookies.Append(AccessTokenCookieName, response.AccessToken, CookieOptionsFor(response.ExpiresOnUtc.Value));
+        }
+
+        if (response.RefreshToken is not null && response.RefreshTokenExpiresOnUtc is not null)
+        {
+            Response.Cookies.Append(RefreshTokenCookieName, response.RefreshToken, CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value));
+
+            // Double-submit CSRF token: readable by the portal's JS (NOT HttpOnly) so it can echo it back as a
+            // header on state-changing requests — cookie auth alone can't prove the request came from our own
+            // page, since browsers attach cookies to cross-site requests too.
+            var csrfOptions = CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value);
+            csrfOptions.HttpOnly = false;
+            Response.Cookies.Append(CsrfCookieName, Guid.NewGuid().ToString("N"), csrfOptions);
+        }
+
+        return response with { AccessToken = null, RefreshToken = null };
+    }
+
+    private void ClearTokenCookies()
+    {
+        Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(CsrfCookieName, new CookieOptions { Path = "/" });
+    }
+
+    private CookieOptions CookieOptionsFor(DateTime expiresOnUtc) => new()
+    {
+        HttpOnly = true,
+        // Secure is required for SameSite=Strict cookies in modern browsers, but a hardcoded `true` would make
+        // the cookie silently vanish on a plain-HTTP local `dotnet run` — tie it to the actual request scheme.
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresOnUtc, DateTimeKind.Utc)),
+        Path = "/",
+    };
 }

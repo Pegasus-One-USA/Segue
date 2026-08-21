@@ -19,6 +19,10 @@ public interface ISourceApplicationStrategy
     /// <summary>The single application type this strategy is responsible for.</summary>
     ApplicationType Handles { get; }
 
+    /// <summary>Which FHIR resource type a user-to-FHIR-context binding enforces for this application type — see
+    /// <see cref="FhirContextBindingKind"/>.</summary>
+    FhirContextBindingKind BindingResourceType { get; }
+
     /// <summary>The invariant description of this application type's OAuth flow and configuration surfaces.</summary>
     SourceApplicationDescriptor Describe();
 
@@ -45,4 +49,14 @@ public interface ISourceApplicationStrategy
     /// <summary>Discards any cached token for this source (no-op for types that acquire tokens on demand rather than
     /// caching an interactive session, e.g. Backend Services).</summary>
     Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the SMART scope string actually granted by the authorization server for this session, or null when
+    /// it isn't known yet (no token minted/stored, or the server didn't echo a <c>scope</c> back). Distinct from
+    /// <see cref="FhirSourceConfiguration.Scopes"/>, which is only what was requested/configured — the grant can be
+    /// narrower. Every strategy supports this the same way it acquires a token: Backend Services mints (or reuses a
+    /// cached) token on demand since there is no user to wait on; the interactive types read back whatever their
+    /// stored session already carries.
+    /// </summary>
+    Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken);
 }

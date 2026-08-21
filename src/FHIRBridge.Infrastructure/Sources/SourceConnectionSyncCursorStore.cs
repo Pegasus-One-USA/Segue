@@ -17,15 +17,24 @@ public sealed class SourceConnectionSyncCursorStore : ISourceConnectionSyncCurso
         _repository = repository;
     }
 
-    public async Task RecordSuccessfulSyncAsync(Guid sourceConnectionId, DateTime syncedAtUtc, CancellationToken cancellationToken)
+    public async Task RecordSuccessfulSyncAsync(
+        Guid sourceConnectionId,
+        IReadOnlyCollection<string> resourceTypes,
+        DateTime syncedAtUtc,
+        CancellationToken cancellationToken)
     {
+        if (resourceTypes.Count == 0)
+        {
+            return;
+        }
+
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
         {
             return;
         }
 
-        sourceConnection.RecordRetrievalSync(syncedAtUtc);
+        sourceConnection.RecordRetrievalSync(resourceTypes, syncedAtUtc);
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
     }
 }

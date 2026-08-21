@@ -1,23 +1,25 @@
 <span class="port port-in"></span>
 <span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
 
-<button
-  class="sn-del-btn"
-  (click)="onDeleteClick($event)"
-  (pointerdown)="$event.stopPropagation()"
-  title="Delete this module"
->
-  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
-</button>
+@if (!readOnly() && canDelete()) {
+  <button
+    class="sn-del-btn"
+    (click)="onDeleteClick($event)"
+    (pointerdown)="$event.stopPropagation()"
+    title="Delete this module"
+  >
+    <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+  </button>
 
-<button
-  class="sn-add-btn"
-  (click)="onAddNextClick($event)"
-  (pointerdown)="$event.stopPropagation()"
-  title="Add next module"
->
-  <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-</button>
+  <button
+    class="sn-add-btn"
+    (click)="onAddNextClick($event)"
+    (pointerdown)="$event.stopPropagation()"
+    title="Add next module"
+  >
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+}
 
 <div
   class="sn-circle"
@@ -36,5 +38,4 @@
 <div class="sn-labels">
   <strong class="sn-name">{{ name() }}</strong>
   <span class="sn-context">{{ contextLabel() }}</span>
-  <span class="sn-type-tag">Source</span>
 </div>

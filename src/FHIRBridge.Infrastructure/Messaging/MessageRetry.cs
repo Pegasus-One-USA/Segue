@@ -10,7 +10,8 @@ internal static class MessageRetry
         MessageProcessingOptions options,
         ILogger logger,
         string context,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<int, int, Exception, CancellationToken, Task>? onRetryAsync = null)
     {
         var maxAttempts = Math.Max(1, options.MaxAttempts);
 
@@ -30,6 +31,11 @@ internal static class MessageRetry
                     exception,
                     "{Context} failed on attempt {Attempt}/{MaxAttempts}; retrying in {DelayMs} ms.",
                     context, attempt, maxAttempts, (int)delayMs);
+
+                if (onRetryAsync is not null)
+                {
+                    await onRetryAsync(attempt, (int)delayMs, exception, cancellationToken);
+                }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
             }

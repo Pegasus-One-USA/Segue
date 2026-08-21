@@ -1,0 +1,36 @@
+{
+  "resourceType": "CarePlan",
+  "id": "careplan-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:careplan",
+      "value": "CAREPLAN-002"
+    }
+  ],
+  "status": "active",
+  "intent": "plan",
+  "title": "Hypertension management plan",
+  "subject": {
+    "reference": "Patient/patient-002",
+    "display": "Linda Nguyen"
+  },
+  "addresses": [
+    {
+      "reference": "Condition/condition-002",
+      "display": "condition-002"
+    }
+  ],
+  "period": {
+    "start": "2026-05-04"
+  }
+}

@@ -1,13 +1,16 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+
+type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
+type SortDirection = 'asc' | 'desc';
 
 @Component({
   selector: 'app-execution-history-list',
@@ -15,10 +18,11 @@ import { PagedResult, RouteExecution } from '../../models/execution-history.mode
   imports: [
     CommonModule,
     DatePipe,
+    RouterLink,
     MatTableModule,
     MatButtonModule,
     MatIconModule,
-    MatPaginatorModule,
+    PaginationBarComponent,
   ],
   templateUrl: './execution-history-list.component.html',
   styleUrls: ['./execution-history-list.component.scss'],
@@ -26,6 +30,7 @@ import { PagedResult, RouteExecution } from '../../models/execution-history.mode
 export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly api = inject(ExecutionHistoryApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
 
   readonly searchQuery   = signal('');
@@ -33,10 +38,12 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly triggerFilter = signal('');
   readonly pageIndex     = signal(0);
   readonly pageSize      = signal(10);
+  readonly sortColumn    = signal<SortColumn>('lastRun');
+  readonly sortDirection = signal<SortDirection>('desc');
   readonly loading       = signal(false);
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy'];
+  readonly displayedCols = ['index', 'name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
@@ -44,6 +51,13 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       this.pageIndex.set(0);
       this.load();
     });
+
+    // A Dashboard stat tile links here with ?status=X (e.g. clicking "Failed") — pre-select that
+    // status filter before the first load so the tile's click-through actually lands pre-filtered.
+    const statusFromQuery = this.route.snapshot.queryParamMap.get('status');
+    if (statusFromQuery) {
+      this.statusFilter.set(statusFromQuery);
+    }
 
     this.load();
   }
@@ -60,6 +74,8 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
+      sortColumn: this.sortColumn(),
+      sortDirection: this.sortDirection(),
     }).subscribe({
       next: result => {
         this.result.set(result);
@@ -82,21 +98,26 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
+    this.load();
+  }
+
+  onSort(column: SortColumn): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+    this.pageIndex.set(0);
     this.load();
   }
 
   openDetail(execution: RouteExecution): void {
     this.router.navigate(['/execution-history', execution.id]);
   }
-
-  readonly showingFrom = () =>
-    this.result().totalCount === 0 ? 0 : this.pageIndex() * this.pageSize() + 1;
-
-  readonly showingTo = () =>
-    Math.min((this.pageIndex() + 1) * this.pageSize(), this.result().totalCount);
 
   statusLabel(status: string): string {
     return {

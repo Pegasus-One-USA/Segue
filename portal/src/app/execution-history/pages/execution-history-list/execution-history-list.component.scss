@@ -1,6 +1,18 @@
 @use '../../../_list-page' as *;
 
+// .data-row is shared across every list page (Users, Roles, Destinations, ...), most of which have no
+// row-level click — only specific action buttons inside the row do (Edit/Delete/toggle). This page is
+// different: (click)="openDetail(row)" is on the row itself (see the .html), so only here does the whole
+// row need to look clickable. Scoped to this component (view encapsulation) instead of the shared
+// partial, so those other list pages' non-clickable rows don't wrongly show a pointer too.
+.data-row { cursor: pointer; }
+
 .cell-name { display: flex; align-items: center; gap: 12px; }
+
+.mono { font-family: monospace; font-size: 12px; }
+
+.link { color: var(--color-primary); text-decoration: none; }
+.link:hover { text-decoration: underline; }
 
 .pipe-avatar {
   width: 36px; height: 36px; border-radius: 8px;

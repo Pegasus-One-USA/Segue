@@ -1,11 +1,12 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
+import { Subject } from 'rxjs';
 import { PipelineStore } from './pipeline.store';
 import { ScopeBuilderService } from './scope-builder.service';
 import { ToastService } from './toast.service';
 import { EPIC_APPS } from '../data/epic-apps.data';
 import { EPIC_ENV } from '../data/epic-environments.data';
 import { EPIC_INGESTION } from '../data/ingestion-modes.data';
-import { DEFAULT_RESOURCES } from '../data/scope-constants.data';
+import { FHIR_RESOURCES } from '../data/scope-constants.data';
 import { AppKey, EpicApp } from '../models/epic-app.model';
 import { EnvKey } from '../models/epic-env.model';
 import { SourceNode } from '../models/node.model';
@@ -13,8 +14,20 @@ import { AUDIENCE_FIELD_CONFIG, EpicAudience } from '../components/epic-source-w
 import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
+import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 
 export type WizardMode = 'canvas' | 'entity';
+
+/** Fresh (keyVaultName, secretName) pair for a wizard-typed client secret, provisioned via
+ *  ConfigurationService.WriteInlineClientSecretAsync (inlineClientSecret on save) — same fixed-vault +
+ *  slug-plus-random-suffix naming convention as destination-connection-secret.util.ts's newSecretName,
+ *  duplicated here (not imported) since that util's own naming ("dest-...") is destination-specific. */
+function newClientSecretName(connectionName: string): string {
+  const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `src-${slug}-${suffix}`;
+}
+const CLIENT_SECRET_KEY_VAULT_NAME = 'workflow-secrets';
 
 /** Backend ApplicationType enum member name ↔ the wizard's EpicAudience string. Null/undefined maps to
  *  'provider-ehr-launch' — ApplicationType is nullable server-side for legacy connections created before this
@@ -90,8 +103,18 @@ export class WizardService {
   readonly ehrType      = signal<EhrVendor>('Epic');
   /** The SourceConnection id being edited in entity mode; null when creating new. */
   readonly entityId     = signal<string | null>(null);
+  /** The full DTO passed to openEntity() — entity mode's equivalent of editingFields() below. Named signals here
+   *  only ever cover a handful of fields; long-tail data entity mode has no other way to restore (JWT key
+   *  material, CDS Hooks, retrieval config, ...) reads back from this directly, the same way canvas-mode editing
+   *  reads from editingFields(). Null when creating new or in canvas mode. */
+  readonly entityDto    = signal<SourceConnectionModel | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
+  /** Emits once per save() call, after the create/update HTTP call actually settles — save() itself is
+   *  fire-and-forget (subscribes internally and returns immediately), so a caller that needs to know the
+   *  real outcome (e.g. keep a dialog open and let the user fix a validation error, rather than assuming
+   *  success the instant save() is invoked) should subscribe to this first. */
+  readonly saveOutcome$ = new Subject<{ success: boolean; error?: string }>();
 
   // ── step ──────────────────────────────────────────────────────────────────
   readonly step = signal<WizardStep>(1);
@@ -112,7 +135,9 @@ export class WizardService {
   readonly discovered = signal(false);
 
   // ── resources + scopes ────────────────────────────────────────────────────
-  readonly resources = signal<string[]>([...DEFAULT_RESOURCES]);
+  // Empty until the user actually checks boxes (or an existing node/connection is loaded) — nothing is
+  // ever preselected by default.
+  readonly resources = signal<string[]>([]);
 
   // Live-discovered from the source's /metadata + smart-configuration (populated by the Connect step's Discover).
   readonly discoveredResourceTypes = signal<string[]>([]);
@@ -134,10 +159,17 @@ export class WizardService {
 
   // ── audience-form extra fields ────────────────────────────────────────────
   readonly clientId     = signal('');
+  readonly practiceId   = signal('');
+  /** Existing (keyVaultName, secretName) reference for an already-saved connection's client secret — restored
+   *  in openEntity() so leaving the Client Secret field blank on an edit preserves whatever secret is already
+   *  stored there, instead of orphaning the reference. Null for a brand-new connection or one that has never
+   *  had a secret provisioned (e.g. still using JWT/public auth). */
+  readonly existingClientSecretRef = signal<{ keyVaultName: string; secretName: string } | null>(null);
   readonly authMethod   = signal<'public' | 'secret' | 'jwt'>('secret');
+  readonly authPlacement = signal<'post' | 'basic'>('post');
   readonly epicAudience = signal('provider-ehr-launch');
-  readonly redirectUri  = signal('http://localhost:5000/api/v1/oauth/callback');
-  readonly launchUrlWiz = signal('https://fhirbridge.com/launch');
+  readonly redirectUri  = signal(OAUTH_DEFAULT_URLS.redirectUri);
+  readonly launchUrlWiz = signal(OAUTH_DEFAULT_URLS.launchUrl);
   readonly isEditing    = computed(() => !!this.store.editingNodeId() || !!this.entityId());
 
   /** Raw field bag of the node being edited (or null when creating new) — the source of truth for every persisted
@@ -169,6 +201,10 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
+    // Canvas mode has no backend SourceConnection to restore a secret reference from yet (it's created later, at
+    // workflow build time) — a stale reference from a previous openEntity() call must not leak in.
+    this.existingClientSecretRef.set(null);
 
     const node = existingNodeId ? this.store.byId(existingNodeId) : undefined;
     const f = (node?.fields ?? {}) as Record<string, string>;
@@ -183,7 +219,7 @@ export class WizardService {
     this.resources.set(
       f['Resources']
         ? f['Resources'].split(',').map(s => s.trim()).filter(Boolean)
-        : [...DEFAULT_RESOURCES]
+        : []
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.mode.set(f['Ingestion mode'] || gate?.default || 'search');
@@ -191,10 +227,11 @@ export class WizardService {
     this.modeValues.set({});
 
     this.clientId.set(f['Client ID'] ?? '');
+    this.practiceId.set(f['Practice ID'] ?? '');
     this.authMethod.set(((f['Auth method'] as string) || 'secret') as 'public' | 'secret' | 'jwt');
     this.epicAudience.set(f['Epic audience'] || f['App key'] || 'provider-ehr-launch');
-    this.redirectUri.set(f['Redirect URI'] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(f['Launch URL'] ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(f['Redirect URI'] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(f['Launch URL'] ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(f['Trusted issuers'] ?? '');
 
     this.store.editingNodeId.set(existingNodeId ?? null);
@@ -209,6 +246,7 @@ export class WizardService {
     this.wizardMode.set('entity');
     this.readonlyMode.set(!!opts?.readonly);
     this.entityId.set(dto?.id ?? null);
+    this.entityDto.set(dto);
     this.ehrType.set(dto?.sourceSystemType ?? 'Epic');
 
     this.env.set('sandbox');
@@ -218,10 +256,16 @@ export class WizardService {
     this.baseUrl.set(dto?.baseUrl ?? EPIC_ENV['sandbox'].base);
     this.token.set(dto?.authentication?.tokenEndpoint ?? '');
     this.authorize.set('');
+    // Entity mode has no Resource Type & Scopes picker UI at all (removed — see ehr-vendor-source-form.component.ts's
+    // showResourcePickerSection remarks), so a brand-new connection needs a real, non-empty default here
+    // regardless of audience: ScopeBuilderService.buildScopes returns scopes derived ONLY from this list for a
+    // non-interactive app (Backend System has no "free" base scopes the way EHR-launch/Standalone/Patient do —
+    // see buildScopes), so leaving this empty silently sent scopes: [] to the backend and tripped
+    // ConfigurationService's "Epic scopes are required."
     this.resources.set(
       dto?.retrieval?.resourceTypes?.length
         ? [...dto.retrieval.resourceTypes]
-        : [...DEFAULT_RESOURCES]
+        : [...FHIR_RESOURCES]
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.setMode(gate?.default || 'search');
@@ -229,12 +273,19 @@ export class WizardService {
     this.modeValues.set({});
 
     this.clientId.set(dto?.authentication?.clientId ?? '');
+    this.practiceId.set(dto?.authentication?.practiceId ?? '');
+    this.existingClientSecretRef.set(
+      dto?.authentication?.clientSecretKeyVaultName && dto?.authentication?.clientSecretName
+        ? { keyVaultName: dto.authentication.clientSecretKeyVaultName, secretName: dto.authentication.clientSecretName }
+        : null
+    );
     this.authMethod.set(AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto?.authentication?.authenticationType ?? 'None'] ?? 'secret');
+    this.authPlacement.set((dto?.authentication?.authPlacement as 'post' | 'basic') || 'post');
     this.epicAudience.set(
       (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType]) || 'provider-ehr-launch'
     );
-    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? 'http://localhost:5000/api/v1/oauth/callback');
-    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? 'https://fhirbridge.com/launch');
+    this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? OAUTH_DEFAULT_URLS.redirectUri);
+    this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? OAUTH_DEFAULT_URLS.launchUrl);
     this.trustedIssuers.set(dto?.interactive?.trustedIssuers?.join(', ') ?? '');
 
     this.store.editingNodeId.set(null);
@@ -249,6 +300,7 @@ export class WizardService {
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
     this.entityId.set(null);
+    this.entityDto.set(null);
   }
 
   // ── step navigation ───────────────────────────────────────────────────────
@@ -344,6 +396,107 @@ export class WizardService {
       fields['Secret Name']     = (formValues.secretName ?? '').trim();
     }
 
+    // Build the SourceConnectionRequest — same shape for canvas and entity mode. Canvas mode now also creates/
+    // updates the real backend SourceConnection immediately (rather than deferring to workflow build), so a real
+    // sourceConnectionId exists on the node right away instead of only after the whole workflow gets built.
+    // Which of interactive/retrieval to send is driven by the selected audience's own field config
+    // (AUDIENCE_FIELD_CONFIG), not app.interactive (a canvas-only, per-App-key concept) — Provider Standalone,
+    // for example, shows BOTH a Redirect URI (interactive login) AND a Data Retrieval Method section, so it needs
+    // both populated, which a single interactive-vs-retrieval binary can't express.
+    // Read Client ID / Auth method from `fields` (built fresh from this exact save() call's live formValues /
+    // step3ModeValues), not from `this.clientId()` / `this.authMethod()` — those WizardService signals are only
+    // ever synced at open() /openEntity() time and go stale the moment the user edits the reactive form, since
+    // neither field routes back through a signal write the way ehrType/resources/trustedIssuers do (see their
+    // own `this.wiz.xxx.set(...)` calls in EhrVendorSourceFormComponent.save() just before this method is invoked).
+    const audienceKey = (fields['Epic audience'] || 'provider-ehr-launch') as EpicAudience;
+    const audCfg = AUDIENCE_FIELD_CONFIG[audienceKey];
+    const liveAuthMethod = (fields['Auth method'] || 'secret') as 'public' | 'secret' | 'jwt';
+    const liveClientId = fields['Client ID'] || null;
+    // A freshly typed secret (non-blank) gets a brand-new vault reference and is provisioned via
+    // inlineClientSecret; leaving it blank on an edit preserves whatever reference/secret is already stored
+    // (existingClientSecretRef, restored in openEntity()) instead of orphaning it with a null/empty reference.
+    const typedClientSecret = (fields['Client Secret'] ?? '').trim() || null;
+    const existingSecretRef = this.existingClientSecretRef();
+    const clientSecretKeyVaultName = typedClientSecret ? CLIENT_SECRET_KEY_VAULT_NAME : (existingSecretRef?.keyVaultName ?? null);
+    const clientSecretName = typedClientSecret ? newClientSecretName(fields['__name'] || 'source') : (existingSecretRef?.secretName ?? null);
+    const retrievalResourceTypes = fields['Retrieval resource type']
+      ? fields['Retrieval resource type'].split(',').map(s => s.trim()).filter(Boolean)
+      : this.resources();
+
+    const request: SourceConnectionRequest = {
+      name:             fields['__name'],
+      sourceSystemType: this.ehrType(),
+      baseUrl:          fields['FHIR base URL'],
+      applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
+      authentication: {
+        authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
+        clientId:           liveClientId,
+        tokenEndpoint:       fields['Token endpoint'] || null,
+        // ScopeBuilderService.buildScopes already includes the base auth-flow scopes (openid/fhirUser/
+        // launch/offline_access) for an interactive app regardless of how many resources are passed — so
+        // this stays correct even with zero resources (the common case for a brand-new source; real
+        // resource-derived scopes get filled in later by EpicSourceConnectionScopeSyncService once a
+        // workflow wires this source to a destination — see ehr-vendor-source-form.component.ts).
+        scopes:              this.scopeString().split(' ').filter(Boolean),
+        clientSecretKeyVaultName: clientSecretKeyVaultName,
+        clientSecretName:         clientSecretName,
+        inlineClientSecret:       typedClientSecret,
+        privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
+        privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
+        keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
+        // Persisted so reopening this connection (Settings → Source Connections, which has no workflow node to
+        // recover it from otherwise — see EhrVendorSourceFormComponent's liveJwksUrl remarks) shows back whatever URL
+        // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
+        // FHIRBridge's own hosted URL guess.
+        jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
+        // athenahealth only — the backend builds the ah-practice reference from this bare practice id. Null for
+        // every other vendor (EhrVendorSourceFormComponent only ever populates this field for Athenahealth).
+        practiceId:               fields['Practice ID'] || null,
+        // Where OAuth2ClientCredentialsTokenProvider places client id/secret — only meaningful for Client Secret
+        // auth (liveAuthMethod === 'secret'); null (→ "post") for every other auth method, unchanged from before
+        // this field existed.
+        authPlacement:            liveAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
+      },
+      interactive: audCfg.showRedirect
+        ? {
+            redirectUris:   fields['Redirect URI'] ? [fields['Redirect URI']] : [],
+            launchUrl:       fields['Launch URL'] ?? null,
+            trustedIssuers:  this.trustedIssuers().trim() ? [this.trustedIssuers().trim()] : [],
+          }
+        : null,
+      // Retrieval (search criteria, resource types, scopes, pagination, bulk-export settings) is workflow-specific,
+      // not connection-level — entity mode (Settings → Source Connections) manages only the reusable connection,
+      // so it never persists a retrieval payload here regardless of what the audience would otherwise show in
+      // canvas mode. See EhrVendorSourceFormComponent.showRetrievalSection, which hides the corresponding UI section.
+      retrieval: (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
+        ? {
+            retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
+            resourceTypes:          retrievalResourceTypes,
+            searchCriteria:         fields['Search criteria'] || null,
+            incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
+            // Bulk Export fields — EhrVendorSourceFormComponent.save() has always written these into `fields`
+            // ('Export scope' / 'Group ID' / 'Patient ID / list' / 'FHIR output format'), but this builder never
+            // read them back out, so every Bulk Export connection silently saved with a null scope/group/patient
+            // list/output format regardless of what the form showed. Patient ID / list is comma-separated in the
+            // form, same split-and-trim pattern as Retrieval resource type above.
+            exportScope:            fields['Export scope'] || null,
+            groupId:                fields['Group ID'] || null,
+            patientIds:             fields['Patient ID / list']
+              ? fields['Patient ID / list'].split(',').map(s => s.trim()).filter(Boolean)
+              : [],
+            outputFormat:           fields['FHIR output format'] || null,
+          }
+        : null,
+    };
+
+    // Canvas mode never calls the backend from here — it only ever adds/updates a local canvas node.
+    // The real backend SourceConnection is created later, at workflow build time (WorkflowBuildAssemblerService),
+    // once the whole pipeline (and the destinations that determine this source's real scopes — see
+    // EpicSourceConnectionScopeSyncService) is known. This deliberately gives up the "real id exists immediately"
+    // convenience destinations get from provisionDestinationConnection(), in exchange for never hitting the
+    // backend's name-uniqueness check before the client-side dedup (_resolveUniqueSourceName) has had a real
+    // chance to load the existing-names list — a race that eager creation here would otherwise expose on every
+    // single "Add to Pipeline" click, not just an edge case.
     if (this.wizardMode() === 'canvas') {
       const editingId = this.store.editingNodeId();
       if (editingId) {
@@ -369,63 +522,15 @@ export class WizardService {
         this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
       }
 
+      this.saveOutcome$.next({ success: true });
       this.close();
       return;
     }
 
     // ── entity mode: persist to the backend SourceConnection API ────────────
-    // Which of interactive/retrieval to send is driven by the selected audience's own field config
-    // (AUDIENCE_FIELD_CONFIG), not app.interactive (a canvas-only, per-App-key concept) — Provider Standalone,
-    // for example, shows BOTH a Redirect URI (interactive login) AND a Data Retrieval Method section, so it needs
-    // both populated, which a single interactive-vs-retrieval binary can't express.
-    // Read Client ID / Auth method from `fields` (built fresh from this exact save() call's live formValues /
-    // step3ModeValues), not from `this.clientId()` / `this.authMethod()` — those WizardService signals are only
-    // ever synced at open() /openEntity() time and go stale the moment the user edits the reactive form, since
-    // neither field routes back through a signal write the way ehrType/resources/trustedIssuers do (see their
-    // own `this.wiz.xxx.set(...)` calls in EpicAudienceFormComponent.save() just before this method is invoked).
-    const audienceKey = (fields['Epic audience'] || 'provider-ehr-launch') as EpicAudience;
-    const audCfg = AUDIENCE_FIELD_CONFIG[audienceKey];
-    const liveAuthMethod = (fields['Auth method'] || 'secret') as 'public' | 'secret' | 'jwt';
-    const liveClientId = fields['Client ID'] || null;
-    const retrievalResourceTypes = fields['Retrieval resource type']
-      ? fields['Retrieval resource type'].split(',').map(s => s.trim()).filter(Boolean)
-      : this.resources();
-
-    const request: SourceConnectionRequest = {
-      name:             fields['__name'],
-      sourceSystemType: this.ehrType(),
-      baseUrl:          fields['FHIR base URL'],
-      applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
-      authentication: {
-        authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
-        clientId:           liveClientId,
-        tokenEndpoint:       fields['Token endpoint'] || null,
-        scopes:              this.resources().length ? this.scopeString().split(' ').filter(Boolean) : [],
-        clientSecretKeyVaultName: null,
-        clientSecretName:         null,
-        privateKeyKeyVaultName:   liveAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
-        privateKeySecretName:     liveAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
-        keyId:                    liveAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
-      },
-      interactive: audCfg.showRedirect
-        ? {
-            redirectUris:   fields['Redirect URI'] ? [fields['Redirect URI']] : [],
-            launchUrl:       fields['Launch URL'] ?? null,
-            trustedIssuers:  this.trustedIssuers().trim() ? [this.trustedIssuers().trim()] : [],
-          }
-        : null,
-      retrieval: audCfg.showRetrieval
-        ? {
-            retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
-            resourceTypes:          retrievalResourceTypes,
-            searchCriteria:         fields['Search criteria'] || null,
-            incrementalSyncEnabled: fields['Incremental cursor'] === 'enabled',
-          }
-        : null,
-    };
-
     const id = this.entityId();
     const obs = id ? this.sourceConnectionSvc.update(id, request) : this.sourceConnectionSvc.create(request);
+
     obs.subscribe({
       next: () => {
         this.toast.show(
@@ -433,11 +538,16 @@ export class WizardService {
           id ? 'Source Connection updated successfully.' : 'Source Connection created successfully.'
         );
         this.saved.update(n => n + 1);
+        this.saveOutcome$.next({ success: true });
         this.close();
       },
       error: (err) => {
-        const msg = err?.error?.title ?? err?.error?.message ?? err?.message ?? 'Failed to save the Source Connection.';
-        this.toast.show('Save failed', typeof msg === 'string' ? msg : 'Failed to save the Source Connection.', 'error');
+        // `.error.error` first — ConfigurationService's validation failures (InvalidOperationException,
+        // caught by the global handler) come back as { error: "<message>" }, not .title/.message.
+        const msg = err?.error?.error ?? err?.error?.title ?? err?.error?.message ?? err?.message ?? 'Failed to save the Source Connection.';
+        const errorText = typeof msg === 'string' ? msg : 'Failed to save the Source Connection.';
+        this.toast.show('Save failed', errorText, 'error');
+        this.saveOutcome$.next({ success: false, error: errorText });
       },
     });
   }

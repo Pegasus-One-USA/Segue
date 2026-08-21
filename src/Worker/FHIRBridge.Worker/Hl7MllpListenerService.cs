@@ -1,7 +1,11 @@
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Hl7v2;
 using FHIRBridge.Integration.Hl7v2;
 using Microsoft.Extensions.Options;
@@ -10,13 +14,21 @@ namespace FHIRBridge.Worker;
 
 /// <summary>
 /// Listens for HL7 v2 messages over MLLP (TCP), hands each to the <see cref="Hl7MessageProcessor"/>, and writes back
-/// the framed ACK. Disabled by default; enable via Hl7Mllp:Enabled with a Port and WebhookConfigurationId.
+/// the framed ACK. Gated by Hl7Mllp:Enabled with a Port and WebhookConfigurationId.
 /// </summary>
+/// <remarks>
+/// <b>NOT CURRENTLY REGISTERED</b> — <c>Program.cs</c> does not call <c>AddHostedService&lt;Hl7MllpListenerService&gt;()</c>,
+/// so the <c>Hl7Mllp:Enabled</c> config flag has no effect today regardless of its value: this listener never starts,
+/// and no HL7 v2 MLLP messages are received. Unlike the scheduler/queue processors elsewhere in this file's sibling
+/// classes, this one has no known race risk — it's standalone (an inbound TCP listener), so registering it should be
+/// safe whenever this feature is actually needed. See docs/backend/08-governance-logging-status.md.
+/// </remarks>
 public sealed class Hl7MllpListenerService : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly Hl7MllpOptions _options;
     private readonly ILogger<Hl7MllpListenerService> _logger;
+    private X509Certificate2? _serverCertificate;
 
     public Hl7MllpListenerService(
         IServiceScopeFactory serviceScopeFactory,
@@ -35,6 +47,19 @@ public sealed class Hl7MllpListenerService : BackgroundService
             _logger.LogInformation("HL7 v2 MLLP listener is disabled. Set Hl7Mllp:Enabled=true to start it.");
             return;
         }
+
+        // HIPAA #8: TLS is mandatory whenever this listener is enabled — never accept a plaintext connection.
+        if (string.IsNullOrWhiteSpace(_options.CertificatePath))
+        {
+            _logger.LogError(
+                "Hl7Mllp:Enabled is true but Hl7Mllp:CertificatePath is not configured. The MLLP listener will " +
+                "NOT start without TLS — configure a certificate before enabling this feature.");
+            return;
+        }
+
+        _serverCertificate = string.IsNullOrEmpty(_options.CertificatePassword)
+            ? X509CertificateLoader.LoadCertificateFromFile(_options.CertificatePath)
+            : X509CertificateLoader.LoadPkcs12FromFile(_options.CertificatePath, _options.CertificatePassword);
 
         var listener = new TcpListener(IPAddress.Any, _options.Port);
         listener.Start();
@@ -61,8 +86,26 @@ public sealed class Hl7MllpListenerService : BackgroundService
     private async Task HandleConnectionAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
-        await using (var stream = client.GetStream())
+        await using (var sslStream = new SslStream(client.GetStream(), leaveInnerStreamOpen: false))
         {
+            try
+            {
+                await sslStream.AuthenticateAsServerAsync(
+                    new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _serverCertificate,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.None, // let the OS pick the strongest mutually-supported protocol
+                    },
+                    cancellationToken);
+            }
+            catch (Exception exception) when (exception is AuthenticationException or IOException)
+            {
+                _logger.LogWarning(exception, "HL7 v2 MLLP TLS handshake failed; connection rejected.");
+                return;
+            }
+
+            Stream stream = sslStream;
             var buffer = new List<byte>();
             var readBuffer = new byte[4096];
 
@@ -98,6 +141,14 @@ public sealed class Hl7MllpListenerService : BackgroundService
             catch (Exception exception)
             {
                 _logger.LogError(exception, "HL7 v2 MLLP connection failed.");
+
+                using var scope = _serviceScopeFactory.CreateScope();
+                var exceptionManager = scope.ServiceProvider.GetService<IGlobalExceptionManager>();
+                if (exceptionManager is not null)
+                {
+                    await exceptionManager.CaptureAsync(
+                        exception, new ExceptionContext(Module: "HL7 v2 MLLP"), CancellationToken.None);
+                }
             }
         }
     }

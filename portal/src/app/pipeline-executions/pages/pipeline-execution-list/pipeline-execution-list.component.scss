@@ -1,0 +1,156 @@
+.list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.page-header h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.page-sub {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.search-input, select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-input);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.search-input {
+  flex: 0 0 260px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px solid var(--color-border-input);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-primary);
+}
+
+.table-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+
+  th, td {
+    padding: 10px 16px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  td { height: 52px; }
+
+  // Pipeline name is the row's primary label — let it wrap to two lines if long
+  // rather than forcing the whole table wider.
+  td.clickable:first-of-type {
+    white-space: normal;
+    max-width: 200px;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+}
+
+.corr-cell {
+  max-width: 220px;
+}
+
+.corr-link {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.error-count {
+  color: var(--color-error-strong);
+  font-weight: 600;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-success { background: var(--color-success-soft); color: var(--color-success-strong); }
+.status-warn { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+.status-fail { background: var(--color-error-soft); color: var(--color-error-strong); }
+.status-neutral { background: var(--color-border); color: var(--color-ink-2); }
+
+.empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.table-paginator {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-side);
+
+  ::ng-deep {
+    .mat-mdc-paginator-container { padding: 8px 16px; }
+    .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
+  }
+}
+

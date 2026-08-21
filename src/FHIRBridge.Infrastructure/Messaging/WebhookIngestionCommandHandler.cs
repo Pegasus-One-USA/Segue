@@ -1,9 +1,14 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Pipeline;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
+using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 namespace FHIRBridge.Infrastructure.Messaging;
 
@@ -15,17 +20,23 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 {
     private readonly IConfiguredPipelineService _pipelineService;
     private readonly IProcessedMessageStore _processedMessageStore;
+    private readonly IGovernanceLogger _governanceLogger;
+    private readonly IAmbientActorContext _ambientActorContext;
     private readonly MessageProcessingOptions _options;
     private readonly ILogger<WebhookIngestionCommandHandler> _logger;
 
     public WebhookIngestionCommandHandler(
         IConfiguredPipelineService pipelineService,
         IProcessedMessageStore processedMessageStore,
+        IGovernanceLogger governanceLogger,
+        IAmbientActorContext ambientActorContext,
         IOptions<MessageProcessingOptions> options,
         ILogger<WebhookIngestionCommandHandler> logger)
     {
         _pipelineService = pipelineService;
         _processedMessageStore = processedMessageStore;
+        _governanceLogger = governanceLogger;
+        _ambientActorContext = ambientActorContext;
         _options = options.Value;
         _logger = logger;
     }
@@ -40,6 +51,12 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
 
         ConfiguredPipelineRunDto? run = null;
 
+        // Gives this Worker-side execution a real span (there is none today outside ASP.NET Core's own
+        // per-request Activity) — BeginCorrelatedScope below tags it with correlation_id.
+        using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
+        using var actorScope = _ambientActorContext.BeginCorrelatedScope(
+            $"Webhook Ingestion (Automated, config {command.WebhookConfigurationId:N})", command.CorrelationId);
+
         await MessageRetry.ExecuteAsync(
             async token => run = await _pipelineService.StartWebhookAsync(
                 command.WebhookConfigurationId,
@@ -48,7 +65,15 @@ public sealed class WebhookIngestionCommandHandler : IWebhookIngestionCommandHan
             _options,
             _logger,
             $"Webhook command {command.MessageId}",
-            cancellationToken);
+            cancellationToken,
+            onRetryAsync: (attempt, delayMs, exception, token) => _governanceLogger.LogRetryAsync(
+                new RetryEntry(
+                    $"Webhook command {command.MessageId}",
+                    attempt,
+                    delayMs,
+                    exception.Message,
+                    command.CorrelationId),
+                token));
 
         if (run is not null && string.Equals(run.Status, "Failed", StringComparison.OrdinalIgnoreCase))
         {

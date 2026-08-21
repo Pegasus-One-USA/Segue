@@ -1,4 +1,5 @@
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -19,8 +20,13 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
             .HasMaxLength(150)
             .IsRequired();
 
+        // Combined descriptions grow with every new endpoint sharing a permission code (see PermissionCatalog's
+        // " | "-joining of every distinct [StandardPermission] description for the same code) — 500 chars was
+        // already tight before this session's governance-endpoint additions pushed governance.read's combined
+        // description past it (SQL error 2628 truncation on startup sync). 4000 gives real headroom as the
+        // catalog keeps growing, not just enough for today's count.
         builder.Property(x => x.Description)
-            .HasMaxLength(500)
+            .HasMaxLength(4000)
             .IsRequired();
 
         builder.Property(x => x.IsSystem).IsRequired();
@@ -29,7 +35,18 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
 
         builder.Property(x => x.IsActive).IsRequired();
 
-        builder.Property(x => x.Instances).HasMaxLength(1000);
+        // Defaulted to Code (0) so every pre-existing row (seeded or discovered, all of it code-governed
+        // today) is retroactively and correctly Code the moment this column is added — see
+        // PermissionSource's own doc comment for why this is what makes the deactivation-safety fix
+        // backward compatible with zero behavior change for anything that already exists.
+        builder.Property(x => x.Source)
+            .IsRequired()
+            .HasDefaultValue(PermissionSource.Code);
+
+        // Same scaling problem as Description above: comma-joined "ClassName.MethodName" for every occurrence
+        // of a shared permission code (governance.read is now used by 30+ endpoints) outgrew 1000 chars —
+        // SQL error 2628 on Api startup. Widened generously for the same reason.
+        builder.Property(x => x.Instances).HasMaxLength(4000);
 
         builder.HasOne<PermissionGroup>()
             .WithMany()

@@ -3,7 +3,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class User : AuditableChildEntity<Guid>
+public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private User()
     {
@@ -28,15 +28,42 @@ public sealed class User : AuditableChildEntity<Guid>
     public string ExternalUserId { get; private set; } = default!;
     public string? Email { get; private set; }
     public string? DisplayName { get; private set; }
+    string? IHasAuditDisplayName.AuditDisplayName => DisplayName ?? Email;
 
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
+
+    /// <summary>Falls back to "FirstName LastName" (then Email) when no explicit DisplayName was ever set —
+    /// e.g. an SSO-provisioned user gets FirstName/LastName from the IdP's claims but DisplayName is never
+    /// populated by that path, unlike local invite/signup which always sets it.</summary>
+    public string EffectiveDisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(DisplayName))
+            {
+                return DisplayName;
+            }
+
+            var composedName = $"{FirstName} {LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(composedName))
+            {
+                return composedName;
+            }
+
+            return Email ?? ExternalUserId;
+        }
+    }
 
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }
     public string? PasswordResetTokenHash { get; private set; }
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
+
+    /// <summary>Hash of the short-lived, single-use passwordless "magic link" sign-in token.</summary>
+    public string? MagicLinkTokenHash { get; private set; }
+    public DateTime? MagicLinkTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Account status: Active, Inactive, or Invited.</summary>
     public UserStatus Status { get; private set; }
@@ -54,6 +81,15 @@ public sealed class User : AuditableChildEntity<Guid>
     public DateTime? LastPasswordChangedOnUtc { get; private set; }
     public DateTime? PasswordExpiresOnUtc { get; private set; }
     public bool MfaEnabled { get; private set; }
+
+    /// <summary>
+    /// HIPAA #12: true if either an admin/self-service reset explicitly requires a change
+    /// (<see cref="MustChangePassword"/>), or the configured rotation period has elapsed
+    /// (<see cref="PasswordExpiresOnUtc"/>). Callers gating login/session behavior should read this, not
+    /// <see cref="MustChangePassword"/> alone, so expiry-driven rotation reuses the same enforced flow.
+    /// </summary>
+    public bool RequiresPasswordChange =>
+        MustChangePassword || (PasswordExpiresOnUtc is { } expiresOnUtc && expiresOnUtc < DateTime.UtcNow);
 
     /// <summary>Base32 TOTP shared secret. Staged during enrollment, active once <see cref="MfaEnabled"/> is true.</summary>
     public string? MfaSecret { get; private set; }
@@ -200,12 +236,16 @@ public sealed class User : AuditableChildEntity<Guid>
         MustSetupMfa = required;
     }
 
+    /// <summary>HIPAA #12: rotation period applied whenever a password is (re)set. See policies/09-access-control-and-authentication.md.</summary>
+    public static readonly TimeSpan PasswordRotationPeriod = TimeSpan.FromDays(90);
+
     public void EnableLocalLogin(string passwordHash, bool mustChangePassword)
     {
         PasswordHash = passwordHash;
         IsLocalLoginEnabled = true;
         MustChangePassword = mustChangePassword;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         Status = UserStatus.Active;
         IsEnabled = true;
     }
@@ -218,6 +258,7 @@ public sealed class User : AuditableChildEntity<Guid>
         PasswordResetTokenHash = null;
         PasswordResetTokenExpiresOnUtc = null;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         FailedLoginCount = 0;
         LockoutEndUtc = null;
     }
@@ -232,6 +273,20 @@ public sealed class User : AuditableChildEntity<Guid>
     {
         PasswordResetTokenHash = null;
         PasswordResetTokenExpiresOnUtc = null;
+    }
+
+    /// <summary>Stores the hash of a newly requested magic-link sign-in token.</summary>
+    public void SetMagicLinkToken(string tokenHash, DateTime expiresOnUtc)
+    {
+        MagicLinkTokenHash = tokenHash;
+        MagicLinkTokenExpiresOnUtc = expiresOnUtc;
+    }
+
+    /// <summary>Clears the magic-link token once it has been consumed or should no longer be usable.</summary>
+    public void ClearMagicLinkToken()
+    {
+        MagicLinkTokenHash = null;
+        MagicLinkTokenExpiresOnUtc = null;
     }
 
     /// <summary>Marks the user as invited, storing the hashed invitation token.</summary>
@@ -253,6 +308,7 @@ public sealed class User : AuditableChildEntity<Guid>
         MustChangePassword = false;
         PasswordHash = passwordHash;
         LastPasswordChangedOnUtc = DateTime.UtcNow;
+        PasswordExpiresOnUtc = DateTime.UtcNow.Add(PasswordRotationPeriod);
         FailedLoginCount = 0;
         LockoutEndUtc = null;
         InvitationTokenHash = null;

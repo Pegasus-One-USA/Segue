@@ -18,8 +18,21 @@ export function newSecretName(destinationName: string): string {
 }
 
 export function buildSqlConnectionString(f: Record<string, string>): string {
+  const engine = f['dest_engine'] ?? 'sqlserver';
   const server = f['dest_server'] ?? '';
   const database = f['dest_database'] ?? '';
+  const requireSsl = f['dest_requireSsl'] === 'true';
+
+  if (engine === 'postgres') {
+    // "Require" mode encrypts without validating the server certificate — no separate "trust cert" flag needed.
+    // Defaults to Prefer (off) so a local/docker Postgres with SSL disabled still connects; check the SSL
+    // toggle for providers that enforce it (e.g. AWS RDS's rds.force_ssl).
+    return [`Host=${server}`, `Database=${database}`, `Username=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`, `SSL Mode=${requireSsl ? 'Require' : 'Prefer'}`].join(';');
+  }
+  if (engine === 'mysql') {
+    return [`Server=${server}`, `Database=${database}`, `User Id=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`, `SslMode=${requireSsl ? 'Required' : 'Preferred'}`].join(';');
+  }
+
   const parts = [`Server=${server}`, `Database=${database}`];
   if ((f['dest_auth'] ?? 'sql-auth') === 'sql-auth') {
     parts.push(`User Id=${f['dest_username'] ?? ''}`, `Password=${f['dest_password'] ?? ''}`);
@@ -39,22 +52,80 @@ export function buildSftpUri(f: Record<string, string>): string {
   return `sftp://${user}:${pass}@${host}:${port}/${folder}`;
 }
 
+/** Builds the FHIR-repository destination's encrypted secret blob, shaped to match exactly what the backend's
+ *  FhirRepositoryAuthResolver (FHIRBridge.Infrastructure) expects to parse for each auth type. Mirrors
+ *  WorkflowBuildAssemblerService's private buildFhirSecretBlob — duplicated rather than imported for the same
+ *  reason buildSqlConnectionString/buildSftpUri above are (see this file's header comment). */
+export function buildFhirSecretBlob(f: Record<string, string>): string {
+  const authType = f['dest_authType'] ?? 'oauth2';
+  if (authType === 'basic') {
+    return JSON.stringify({ username: f['dest_username'] ?? '', password: f['dest_password'] ?? '' });
+  }
+  if (authType === 'bearer') {
+    return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
+  }
+  return JSON.stringify({
+    clientId: f['dest_clientId'] ?? '',
+    clientSecret: f['dest_clientSecret'] ?? '',
+    tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+  });
+}
+
 /**
  * Non-secret dest_* fields as a flat JSON object — everything getConfig()/buildDestination() collect EXCEPT
- * dest_password/dest_sftpPassword, which only ever live in the encrypted secret (see buildSqlConnectionString/
- * buildSftpUri above), never here. Persisted on DestinationConfiguration.ConnectionMetadataJson so a later
- * "select existing" can repopulate a form's non-secret fields without ever reading the secret back.
+ * dest_password/dest_sftpPassword/dest_clientSecret/dest_bearerToken, which only ever live in the encrypted
+ * secret (see buildSqlConnectionString/buildSftpUri/buildFhirSecretBlob above), never here. Persisted on
+ * DestinationConfiguration.ConnectionMetadataJson so a later "select existing" can repopulate a form's
+ * non-secret fields without ever reading the secret back.
  */
-export function buildConnectionMetadata(f: Record<string, string>, isSql: boolean): string {
-  const keys = isSql
-    ? ['dest_name', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode']
-    : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
-       'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
-       'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
-       'dest_downloadLinkExpiryMinutes'];
+export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'fhir' | 'blob'): string {
+  const keys =
+    kind === 'sql'
+      ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
+      : kind === 'fhir'
+        ? ['dest_name', 'dest_baseUrl', 'dest_project', 'dest_writeMode', 'dest_fhirWriteMode',
+           'dest_tokenEndpoint', 'dest_clientId', 'dest_username']
+        : kind === 'blob'
+          ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
+             'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',
+             'dest_blobPathPrefix', 'dest_blobCreateContainerIfNotExists',
+             // Two independent settings: how many records share one blob (bulk vs individual), and — only
+             // meaningful for individual — what happens relative to a record's existing blob (insert/upsert/update).
+             'dest_blobGranularity', 'dest_blobRecordMode',
+             // Only meaningful for individual delivery — folder/file-name placeholder patterns (see
+             // BlobDestinationSettings.FolderPattern/FileNamePattern). Blank means "use the record mode's default".
+             'dest_blobFolderPattern', 'dest_blobFileNamePattern']
+        : ['dest_name', 'dest_deliveryMode', 'dest_filePattern', 'dest_delimiter', 'dest_encoding',
+           'dest_sftpHost', 'dest_sftpPort', 'dest_sftpUsername', 'dest_sftpAuthType', 'dest_sftpRemoteFolder',
+           'dest_emailTo', 'dest_emailCc', 'dest_emailSubjectTemplate', 'dest_emailBodyTemplate',
+           'dest_downloadLinkExpiryMinutes',
+           // MongoDB — the connection string itself lives only in the encrypted secret (see the mongo branch
+           // in destination-wizard.component.ts's provisionDestinationConnection); collection/writeMode aren't
+           // secret, so they round-trip here the same way SQL's non-secret fields do.
+           'dest_collection', 'dest_writeMode',
+           // Medplum (FHIR) — the base URL becomes the DestinationConfiguration.target and the client secret /
+           // PEM key becomes the encrypted inlineSecret (dest_medplumSecret, redacted); everything else is
+           // non-secret connection metadata that round-trips here.
+           // Base URL also carried in metadata (not only Target): the workflow-graph run path can reconstruct the
+           // destination with an empty Target, so the Medplum writer falls back to this. See MedplumConnectionMetadata.BaseUrl.
+           'dest_medplumBaseUrl',
+           'dest_medplumClientId', 'dest_medplumAuthMethod', 'dest_medplumWriteMode',
+           'dest_medplumBatchSize', 'dest_medplumIdentifierSystem',
+           // FHIR Repository (plain FHIR R4 server, e.g. HAPI) — no auth: the base URL becomes the
+           // DestinationConfiguration.target and there is no secret at all. Base URL also carried here so the
+           // workflow-graph run path can reconstruct the destination with an empty Target.
+           'dest_fhirBaseUrl'];
   const metadata: Record<string, string> = {};
   for (const key of keys) {
     if (f[key] !== undefined) metadata[key] = f[key];
+  }
+  // The backend reads this metadata key as dest_fhirAuthType (see FhirRepositoryAuthResolver); the form's own
+  // field/control name is dest_authType — bridge the naming difference here, matching
+  // WorkflowBuildAssemblerService.buildConnectionMetadata's own established bridge exactly. The form's internal
+  // value for OAuth2 is 'oauth2' (matches its authType control/validators), but the backend's
+  // CreateDestinationConfigurationRequestValidator/FhirRepositoryAuthResolver only recognize 'clientCredentials'.
+  if (kind === 'fhir' && f['dest_authType'] !== undefined) {
+    metadata['dest_fhirAuthType'] = f['dest_authType'] === 'oauth2' ? 'clientCredentials' : f['dest_authType'];
   }
   return JSON.stringify(metadata);
 }

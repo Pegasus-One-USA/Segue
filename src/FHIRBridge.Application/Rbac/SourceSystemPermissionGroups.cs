@@ -2,13 +2,17 @@ namespace FHIRBridge.Application.Security;
 
 /// <summary>
 /// Resolves the <see cref="PermissionGroupCode"/> that governs a resource-based permission check for
-/// a given enum value (e.g. a <c>SourceSystemType</c>) — by name, not a hand-maintained lookup table.
-/// A value gets its own dedicated group (and, via <see cref="PermissionCatalog"/>, its own
-/// auto-discovered permissions) purely by there being a same-named <see cref="PermissionGroupCode"/>
+/// a given enum value — <c>SourceSystemType</c> (source vendors) or <c>DestinationType</c> (destination
+/// types) alike — by name, not a hand-maintained lookup table. Despite the "SourceSystem" name (kept for
+/// the vendor case it was originally written for), nothing here is specific to <c>SourceSystemType</c>:
+/// <see cref="GroupFor"/> and <see cref="AllGroupsFor"/> both take a bare <see cref="Enum"/>/<see cref="Type"/>
+/// and resolve purely by name. A value gets its own dedicated group (and, via <see cref="PermissionCatalog"/>,
+/// its own auto-discovered permissions) purely by there being a same-named <see cref="PermissionGroupCode"/>
 /// member; a value with no matching group name falls back to the generic
-/// <see cref="PermissionGroupCode.SourceConnections"/> group. This is why every vendor
-/// <see cref="PermissionGroupCode"/> member (Epic, Athenahealth, Cerner, ...) must be named
-/// identically to its source enum's member (e.g. <c>SourceSystemType.Athenahealth</c>).
+/// <see cref="PermissionGroupCode.SourceConnections"/> group. This is why every vendor/destination-type
+/// <see cref="PermissionGroupCode"/> member (Epic, Athenahealth, Cerner, ..., SqlServer, Mongo, ...) must be
+/// named identically to its source enum's member (e.g. <c>SourceSystemType.Athenahealth</c>,
+/// <c>DestinationType.SqlServer</c>).
 /// </summary>
 public static class SourceSystemPermissionGroups
 {
@@ -19,18 +23,31 @@ public static class SourceSystemPermissionGroups
     /// </summary>
     public static PermissionGroupCode GroupFor(Enum value)
     {
+        return TryGroupFor(value, out var group) ? group : PermissionGroupCode.SourceConnections;
+    }
+
+    /// <summary>
+    /// Same resolution as <see cref="GroupFor"/>, but reports whether <paramref name="value"/> actually
+    /// has its own dedicated group rather than silently returning the generic fallback either way.
+    /// Callers that gate a real action (e.g. <c>ControllerAuthorizationExtensions.HasPermissionAsync</c>)
+    /// need this distinction: a source/destination type with no dedicated group was never given its own
+    /// permission at all (see <see cref="AllGroupsFor"/>'s exclusion), so checking a "sourceconnections.
+    /// {action}" permission for it would probe a policy that was never registered and throw, rather than
+    /// correctly treating the type as ungated — exactly as it was before it had any RBAC.
+    /// </summary>
+    public static bool TryGroupFor(Enum value, out PermissionGroupCode group)
+    {
         // An undefined value of value's own enum type (e.g. a raw out-of-range integer let through by
         // JsonStringEnumConverter's default AllowIntegerValues) renders via ToString() as just its number —
         // Enum.TryParse would then happily parse that number into PermissionGroupCode's own numbering,
         // which can coincide with a real, unrelated vendor's group. Reject it before that can happen.
         if (!Enum.IsDefined(value.GetType(), value))
         {
-            return PermissionGroupCode.SourceConnections;
+            group = PermissionGroupCode.SourceConnections;
+            return false;
         }
 
-        return Enum.TryParse<PermissionGroupCode>(value.ToString(), ignoreCase: false, out var group)
-            ? group
-            : PermissionGroupCode.SourceConnections;
+        return Enum.TryParse(value.ToString(), ignoreCase: false, out group);
     }
 
     /// <summary>

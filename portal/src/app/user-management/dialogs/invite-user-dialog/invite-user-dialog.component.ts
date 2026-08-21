@@ -11,12 +11,14 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
+import { ToastService } from '../../../services/toast.service';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { Role, UserRole } from '../../../auth/models/user.model';
 import { InviteUserRequest } from '../../../auth/models/auth-request.model';
 import { InviteResultDialogComponent } from '../invite-result-dialog/invite-result-dialog.component';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 @Component({
   selector: 'app-invite-user-dialog',
@@ -40,8 +42,9 @@ export class InviteUserDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
   private readonly dialogRef   = inject(MatDialogRef<InviteUserDialogComponent>);
   private readonly dialog      = inject(MatDialog);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly fb          = inject(FormBuilder);
+  private readonly actionGuard = inject(PermissionActionGuard);
 
   // ─── State ───────────────────────────────────────────────────────────────
   loading      = signal(false);
@@ -76,7 +79,7 @@ export class InviteUserDialogComponent implements OnInit {
       },
       error: err => {
         this.rolesLoading.set(false);
-        this.snackBar.open(err?.message ?? 'Failed to load roles.', 'Dismiss', { duration: 4000 });
+        this.toast.error(err?.message ?? 'Failed to load roles.');
       },
     });
   }
@@ -89,6 +92,10 @@ export class InviteUserDialogComponent implements OnInit {
 
   // ─── Submit ──────────────────────────────────────────────────────────────
   submit(): void {
+    // Defense-in-depth: the only way to reach this dialog is UserListComponent's/UserDetailComponent's
+    // gated openInviteDialog()/resendInvitation()-adjacent triggers — this re-check guards against a
+    // permission change landing in another tab while the dialog is still open, not a normal path.
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     this.submitted.set(true);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -109,11 +116,7 @@ export class InviteUserDialogComponent implements OnInit {
     this.userService.inviteUser(req).subscribe({
       next: res => {
         this.loading.set(false);
-        this.snackBar.open(
-          res.message ?? `Invitation sent to "${req.email}".`,
-          'Dismiss',
-          { duration: 4000, panelClass: 'snack-success' },
-        );
+        this.toast.success(res.message ?? `Invitation sent to "${req.email}".`);
         // Show the invitation link with a copy button.
         this.dialog.open(InviteResultDialogComponent, {
           width: '540px', restoreFocus: false, data: res,
@@ -122,11 +125,7 @@ export class InviteUserDialogComponent implements OnInit {
       },
       error: err => {
         this.loading.set(false);
-        this.snackBar.open(
-          err?.error?.message ?? err?.message ?? 'Failed to send invitation. Please try again.',
-          'Dismiss',
-          { duration: 5000, panelClass: 'snack-error' },
-        );
+        this.toast.error(err?.message ?? 'Failed to send invitation. Please try again.');
       },
     });
   }

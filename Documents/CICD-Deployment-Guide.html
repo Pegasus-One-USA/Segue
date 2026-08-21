@@ -318,10 +318,9 @@
       <li><a href="#linux-gaps">Remaining work to fully enable Linux</a></li>
       <li class="toc-section-head"><a href="#envs-deployment">&#9654; Staging / QA / Dev / Working Environments</a></li>
       <li><a href="#envs-overview">Overview &amp; topology per environment</a></li>
-      <li><a href="#envs-gateway-roles">Reusing Gateway.exe as a static portal host</a></li>
+      <li><a href="#envs-script">Deploy script internals</a></li>
       <li><a href="#envs-triggers">Triggers &amp; chained approval gates</a></li>
       <li><a href="#envs-workflows">Workflow structure</a></li>
-      <li><a href="#envs-angular">Angular build configurations &amp; CORS</a></li>
       <li><a href="#envs-setup">Manual setup checklist</a></li>
       <li><a href="#gotchas">Known gotchas &amp; lessons learned</a></li>
       <li><a href="#reference">Quick reference</a></li>
@@ -529,8 +528,8 @@ C:\inetpub\FHIRBridge_Configurations\demoapp-portal\      (currently empty)</cod
   <h4>What goes in each service's config</h4>
   <table class="file-table">
     <tr><th>Service</th><th>Keys to populate</th></tr>
-    <tr><td class="file-path">fhirbridge-api</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>Authentication:SigningKey</code>, <code>DataProtection:KeyRingPath</code> (persistent folder, e.g. <code>C:\FHIRBridge\keys</code>, so OAuth/launch tokens survive redeploys and restarts), <code>Portal:AllowedOrigins</code> (Gateway's public origin &mdash; the browser talks to Gateway, not the Api's loopback address), <code>AllowedHosts</code></td></tr>
-    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> = <code>C:\inetpub\wwwroot\fhirbridge-portal</code> (absolute path). <code>ReverseProxy:Clusters:api-cluster:Destinations</code> (already <code>http://127.0.0.1:5000/</code> checked in) only needs overriding if the Api ever moves off port 5000.</td></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>Authentication:SigningKey</code>, <code>DataProtection:KeyRingPath</code> (persistent folder, e.g. <code>C:\FHIRBridge\keys</code>, so OAuth/launch tokens survive redeploys and restarts), <code>Portal:AllowedOrigins</code> (Gateway's public origin &mdash; the browser talks to Gateway, not the Api's loopback address), <code>AllowedHosts</code>, <code>GeneratedFileDownload:PublicBaseUrl</code> (the base <code>appsettings.json</code> checked into the repo defaults this to <code>http://localhost:5000</code> &mdash; override it here to this environment's real public Api/Gateway address, or generated download links will silently point at the wrong host)</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="why"><code>StaticFiles:RootPath</code> = <code>C:\inetpub\wwwroot\fhirbridge-portal</code> (absolute path). <code>ApiBaseUrl</code> &mdash; a single flat setting (<code>Program.cs</code> builds the YARP routes/clusters in code, reading only the destination address from config) &mdash; defaults to <code>http://127.0.0.1:5000/</code> in code, so only needs overriding here if the Api ever moves off port 5000.</td></tr>
     <tr><td class="file-path">fhirbridge-worker</td><td class="why"><code>ConnectionStrings:FHIRBridgeDb</code>, <code>RuntimeWorker:Enabled</code>, <code>Messaging:Provider</code> (<code>InMemory</code> / <code>RabbitMQ</code> / <code>AzureServiceBus</code>), <code>Hl7MllpOptions</code> if the MLLP listener is in use</td></tr>
     <tr><td class="file-path">demoapp-api</td><td class="why"><code>ConnectionStrings:Default</code> (a separate database from FHIRBridgeDb, used only by the demo app), <code>AllowedFrontendOrigin</code> (this app's own public URL, e.g. <code>http://&lt;server&gt;:5500</code>)</td></tr>
     <tr><td class="file-path">fhirbridge-portal / demoapp-portal</td><td class="why">No runtime config file today &mdash; these Angular builds bake their config in at build time. Folders exist under ConfigRoot for consistency and in case a runtime-loaded config file is added later.</td></tr>
@@ -819,58 +818,84 @@ sudo firewall-cmd --reload</code></pre>
     <div class="env-card"><h4>Dev</h4><div class="env-branch">branch: develop &middot; 1 approval gate</div></div>
     <div class="env-card"><h4>Working</h4><div class="env-branch">branch: any &middot; no approval</div></div>
   </div>
-  <p>Each environment gets the same 6 deploy folders, under <code>C:\inetpub\wwwroot\&lt;Environment&gt;\</code>
-  and <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\</code>:</p>
-  <table class="file-table">
-    <tr><th>Folder</th><th>Staging</th><th>QA</th><th>Dev</th><th>Working</th><th>Windows Service name</th></tr>
-    <tr><td class="file-path">fhirbridge-portal</td><td class="file-path">:2000</td><td class="file-path">:3000</td><td class="file-path">:4000</td><td class="file-path">:6000</td><td class="file-path">fhirbridge-&lt;env&gt;-portal</td></tr>
-    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">:2002</td><td class="file-path">:3002</td><td class="file-path">:4002</td><td class="file-path">:6002</td><td class="file-path">fhirbridge-&lt;env&gt;-api</td></tr>
-    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">:2003</td><td class="file-path">:3003</td><td class="file-path">:4003</td><td class="file-path">:6003</td><td class="file-path">fhirbridge-&lt;env&gt;-gateway</td></tr>
-    <tr><td class="file-path">demoapp-portal</td><td class="file-path">:2010</td><td class="file-path">:3010</td><td class="file-path">:4010</td><td class="file-path">:6010</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-portal</td></tr>
-    <tr><td class="file-path">demoapp-api</td><td class="file-path">:2011</td><td class="file-path">:3011</td><td class="file-path">:4011</td><td class="file-path">:6011</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-api</td></tr>
-    <tr><td class="file-path">fhirbridge-worker</td><td class="file-path">:2020</td><td class="file-path">:3020</td><td class="file-path">:4020</td><td class="file-path">:6020</td><td class="file-path">fhirbridge-&lt;env&gt;-worker</td></tr>
-  </table>
-  <div class="callout warn">
-    <strong>The worker port is reserved, not bindable</strong>
-    <code>FHIRBridge.Worker</code> uses <code>Host.CreateApplicationBuilder</code>
-    (<code>src/Worker/FHIRBridge.Worker/Program.cs:14</code>) &mdash; there is no Kestrel, no HTTP
-    endpoint at all, in any environment. The worker port in the table above is kept for naming-scheme
-    consistency only; nothing listens on it.
-  </div>
-
-  <h3 id="envs-gateway-roles">Reusing Gateway.exe as a static portal host</h3>
   <p>
-  Every non-prod environment decouples the portal from Gateway &mdash; unlike production, where
-  Gateway serves the portal and proxies the API from the same origin/port, here
-  <code>fhirbridge-portal</code> and <code>demoapp-portal</code> are each independently reachable on
-  their own port. This needed <strong>zero new C# code</strong>: <code>FHIRBridge.Gateway</code>'s
-  existing <code>Program.cs</code> already does exactly two independent, config-driven things (see
-  <code>src/Gateway/FHIRBridge.Gateway/Program.cs:19-52</code>) &mdash; serve static files if
-  <code>StaticFiles:RootPath</code> is set, and proxy <code>/api/**</code>/<code>/swagger/**</code> via
-  YARP regardless. So the same published <code>FHIRBridge.Gateway.exe</code> is deployed
-  <strong>three times per environment</strong>, in three different config-only roles:
+  Each environment gets exactly the same shape production already uses &mdash; the same 6 deploy
+  folders, but only <strong>4 real Windows Services</strong>: Gateway serves the portal and proxies
+  the API on one port; the Demo app backend serves its own demo portal and its own API on one port.
+  <code>fhirbridge-portal</code> and <code>demoapp-portal</code> are plain static-file folders, not
+  services, exactly like production. Under <code>C:\inetpub\wwwroot\&lt;Environment&gt;\</code> and
+  <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\</code>:
   </p>
   <table class="file-table">
-    <tr><th>Deploy folder</th><th>Role</th><th>Config</th></tr>
-    <tr><td class="file-path">fhirbridge-portal</td><td class="why">Static-only</td><td class="why"><code>StaticFiles:RootPath</code> pointed at this folder's own <code>wwwroot\</code> subfolder (where the built portal lands); <code>ReverseProxy</code> left effectively unused.</td></tr>
-    <tr><td class="file-path">fhirbridge-gateway</td><td class="why">Proxy-only</td><td class="why"><code>StaticFiles:RootPath</code> left empty &mdash; Gateway already just logs a warning and skips static serving in that case; <code>ReverseProxy:Clusters:api-cluster:Destinations</code> points at this environment's own Api instance port.</td></tr>
-    <tr><td class="file-path">demoapp-portal</td><td class="why">Static-only</td><td class="why">Same as <code>fhirbridge-portal</code>, but serving the Demo app's portal build instead.</td></tr>
+    <tr><th>Folder</th><th>Staging</th><th>QA</th><th>Dev</th><th>Working</th><th>Windows Service name</th></tr>
+    <tr><td class="file-path">fhirbridge-portal</td><td class="why" colspan="4">served by fhirbridge-gateway, no port of its own</td><td class="why"><em>(no service)</em></td></tr>
+    <tr><td class="file-path">fhirbridge-api</td><td class="file-path">127.0.0.1:2002</td><td class="file-path">127.0.0.1:3002</td><td class="file-path">127.0.0.1:4002</td><td class="file-path">127.0.0.1:6002</td><td class="file-path">fhirbridge-&lt;env&gt;-api</td></tr>
+    <tr><td class="file-path">fhirbridge-gateway</td><td class="file-path">:2003</td><td class="file-path">:3003</td><td class="file-path">:4003</td><td class="file-path">:6003</td><td class="file-path">fhirbridge-&lt;env&gt;-gateway</td></tr>
+    <tr><td class="file-path">demoapp-portal</td><td class="why" colspan="4">served by demoapp-api, no port of its own</td><td class="why"><em>(no service)</em></td></tr>
+    <tr><td class="file-path">demoapp-api</td><td class="file-path">:2011</td><td class="file-path">:3011</td><td class="file-path">:4011</td><td class="file-path">:6011</td><td class="file-path">fhirbridge-&lt;env&gt;-demoapp-api</td></tr>
+    <tr><td class="file-path">fhirbridge-worker</td><td class="why" colspan="4">no HTTP endpoint</td><td class="file-path">fhirbridge-&lt;env&gt;-worker</td></tr>
   </table>
-  <p><code>deploy/windows/Deploy-FHIRBridge-Environment.ps1</code> (sibling to the production-only
-  <code>Deploy-FHIRBridge.ps1</code>, which it does not modify) implements this via two functions:
-  <code>Deploy-Service</code> (the regular, one-executable-per-service case &mdash; used for Api,
-  Worker, DemoApi, and the proxy-only Gateway) and <code>Deploy-StaticPortal</code> (mirrors the
-  Gateway artifact <em>and</em> a built Angular site into a <code>wwwroot\</code> subfolder alongside
-  it, for the two static-only roles). Both reuse the same <code>robocopy</code> mirror +
-  ConfigRoot-overlay pattern as the production script.</p>
+  <div class="callout warn">
+    <strong>Same-origin, same as production &mdash; no cross-origin config needed</strong>
+    Because the portal is served by Gateway itself (and the demo portal by the Demo app backend
+    itself), both call their own API as relative, same-origin paths &mdash; exactly like production.
+    That means the portal/Demo frontend builds use the ordinary <code>production</code> Angular
+    configuration for every environment; no per-environment build, no CORS configuration for the
+    portal's own calls, no <code>Portal:AllowedOrigins</code>/<code>AllowedFrontendOrigin</code>
+    entry needed just to make the UI work.
+  </div>
+
+  <h3 id="envs-script">Deploy script internals</h3>
+  <p>
+  <code>deploy/windows/Deploy-FHIRBridge-Environment.ps1</code> (sibling to the production-only
+  <code>Deploy-FHIRBridge.ps1</code>, which it does not modify) is a direct parameterization of the
+  production script &mdash; same two functions, same order of operations, same
+  <code>robocopy</code>-mirror-then-ConfigRoot-overlay pattern, just driven by an internal
+  environment/port lookup table instead of fixed values:
+  </p>
+  <table class="file-table">
+    <tr><th>Function</th><th>Used for</th></tr>
+    <tr><td class="file-path">Deploy-StaticFiles</td><td class="why">Mirrors a built Angular site straight into its deploy folder &mdash; used for <code>fhirbridge-portal</code> and <code>demoapp-portal</code>, run first (same reasoning as production: Gateway/DemoApi only wire up static-file serving if the folder already exists when the process starts).</td></tr>
+    <tr><td class="file-path">Deploy-Service</td><td class="why">Stop (if running) &rarr; mirror published files &rarr; config overlay &rarr; create the Windows Service if missing &rarr; set its environment variables &rarr; start &rarr; wait for Running. Used for all 4 real services.</td></tr>
+  </table>
+  <p>
+  Unlike the production script, environment variables are <strong>not</strong> a manual services.msc
+  step here &mdash; each service's port is already known from the environment's own port table, so
+  <code>Set-ServiceEnvironment</code> writes them straight to that Windows Service's registry
+  <code>Environment</code> value (<code>REG_MULTI_SZ</code>) every deploy, right before
+  <code>Start-Service</code>:
+  </p>
+  <ul class="feature-list">
+    <li><strong>fhirbridge-api</strong> &mdash; <code>ASPNETCORE_URLS=http://127.0.0.1:&lt;port&gt;</code> (loopback-only, matching production's security posture).</li>
+    <li><strong>fhirbridge-gateway</strong> &mdash; <code>ASPNETCORE_URLS=http://+:&lt;port&gt;</code>.</li>
+    <li><strong>demoapp-api</strong> &mdash; <code>ASPNETCORE_URLS=http://+:&lt;port&gt;</code> <em>and</em> <code>DEMOAPP_PORTAL_PATH=&lt;path to the demoapp-portal folder&gt;</code>, set automatically the same way &mdash; both env vars this app needs to serve its own demo portal same-origin.</li>
+    <li><strong>fhirbridge-worker</strong> &mdash; none; it has no HTTP endpoint to bind.</li>
+  </ul>
+  <p>Health checks match production exactly too: <code>fhirbridge-gateway</code> is checked via
+  <code>/</code> (the portal's own <code>index.html</code>), <code>fhirbridge-api</code> via
+  <code>/health</code> on its loopback address, and <code>demoapp-api</code> via <code>/</code> as
+  well &mdash; no extra YARP health-route workaround needed, since Gateway is genuinely serving
+  content on <code>/</code> again.</p>
   <div class="callout">
-    <strong>The proxy-only Gateway's health check needs one added config route</strong>
-    Gateway has no <code>/health</code> endpoint of its own, and its YARP config only proxies
-    <code>/api/**</code> and <code>/swagger/**</code> by default &mdash; neither reaches Api's
-    <code>/health</code>. Add a third route to this instance's <code>appsettings.Production.json</code>
-    matching <code>/health</code> to the same <code>api-cluster</code>, so
-    <code>Deploy-FHIRBridge-Environment.ps1</code>'s health check
-    (<code>http://localhost:&lt;gateway-port&gt;/health</code>) has something real to hit.
+    <strong>Optional: make the port visible in config too, via Kestrel:Endpoints</strong>
+    <code>ASPNETCORE_URLS</code> is written to the <em>Windows Service's</em> registry entry, so it
+    only applies when the Service Control Manager starts the process &mdash; running the
+    <code>.exe</code> directly in a console (e.g. to see the real exception behind a generic SCM
+    error, per the gotcha below) bypasses it entirely and falls back to Kestrel's built-in
+    <code>5000</code>/<code>5001</code>, which is why that can look like a regression when it isn't.
+    If you want the port to apply no matter how the process is started, add a
+    <code>Kestrel:Endpoints:Http:Url</code> entry directly to that service's own
+    <code>appsettings.Production.json</code> under <code>ConfigRoot</code>, e.g. for Dev's
+    <code>demoapp-api</code>:
+    <pre><code>{ "Kestrel": { "Endpoints": { "Http": { "Url": "http://+:4011" } } } }</code></pre>
+    <strong>Important precedence note:</strong> if a <code>Kestrel:Endpoints</code> section is present
+    in the effective config at all, Kestrel uses <em>only</em> that and ignores
+    <code>ASPNETCORE_URLS</code> completely &mdash; there's no partial fallback. This is deliberately
+    <strong>not</strong> added to the checked-in base <code>appsettings.json</code> files (that would
+    risk breaking production, which relies solely on <code>ASPNETCORE_URLS</code> today and has no
+    <code>Kestrel:Endpoints</code> override on its own VM config) &mdash; only add this key to a
+    specific environment's own <code>ConfigRoot</code> file if you want it, with the real port
+    value, never a placeholder.
   </div>
 
   <h3 id="envs-triggers">Triggers &amp; chained approval gates</h3>
@@ -917,7 +942,7 @@ git push origin develop   # (or main / quality / any branch, depending on the en
   <h3 id="envs-workflows">Workflow structure</h3>
   <table class="file-table">
     <tr><th>File</th><th>Role</th></tr>
-    <tr><td class="file-path">.github/workflows/deploy-environment.yml</td><td class="why">Reusable engine (<code>workflow_call</code>, input: <code>environment</code>). Builds all 4 backends + both frontends (the frontend builds use that environment's own Angular configuration &mdash; see below), packages one artifact, then runs <code>Deploy-FHIRBridge-Environment.ps1 -Environment &lt;name&gt;</code> on the same self-hosted runner (<code>fhirbridge-vm</code>) production already uses.</td></tr>
+    <tr><td class="file-path">.github/workflows/deploy-environment.yml</td><td class="why">Reusable engine (<code>workflow_call</code>, input: <code>environment</code>). Builds all 4 backends + both frontends (ordinary <code>production</code> Angular configuration, same as production &mdash; see above), packages one artifact, then runs <code>Deploy-FHIRBridge-Environment.ps1 -Environment &lt;name&gt;</code> on the same self-hosted runner (<code>fhirbridge-vm</code>) production already uses.</td></tr>
     <tr><td class="file-path">.github/workflows/deploy-staging.yml</td><td class="why">"Deploy_Staging" &mdash; branch <code>main</code>, guard, 2 gates, calls the engine with <code>environment: Staging</code>.</td></tr>
     <tr><td class="file-path">.github/workflows/deploy-qa.yml</td><td class="why">"Deploy_QA" &mdash; branch <code>quality</code>, guard, 2 gates, <code>environment: QA</code>.</td></tr>
     <tr><td class="file-path">.github/workflows/deploy-dev.yml</td><td class="why">"Deploy_Dev" &mdash; branch <code>develop</code>, guard, 1 gate, <code>environment: Dev</code>.</td></tr>
@@ -928,42 +953,24 @@ git push origin develop   # (or main / quality / any branch, depending on the en
   <code>workflow_dispatch</code>) to confirm the commit is genuinely blank before setting a
   <code>proceed</code> output that every later job in that file gates on.</p>
 
-  <h3 id="envs-angular">Angular build configurations &amp; CORS</h3>
-  <p>
-  Production's <code>apiBase</code>/<code>fhirbridgeBase</code> are intentionally empty
-  (<code>environment.prod.ts</code> in both <code>portal/</code> and
-  <code>Demo_TestApp/frontend/</code>) because the portal is same-origin with its API there. Since
-  every non-prod environment's portal is now genuinely cross-origin from its own API (different
-  port), each got its own new Angular build configuration and environment file, mirroring the
-  existing <code>production</code>/<code>development</code> pattern in both apps'
-  <code>angular.json</code>:
-  </p>
-  <table class="file-table">
-    <tr><th>New file</th><th>Sets</th></tr>
-    <tr><td class="file-path">portal/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>apiBase</code> &rarr; that environment's own Gateway origin (e.g. Staging: <code>http://localhost:2003</code>)</td></tr>
-    <tr><td class="file-path">Demo_TestApp/frontend/src/environments/environment.{staging,qa,dev,working}.ts</td><td class="why"><code>healthAppBase</code> &rarr; that environment's own demo backend origin, <code>fhirbridgeBase</code> &rarr; that environment's own Gateway origin</td></tr>
-  </table>
-  <div class="callout bad">
-    <strong>CORS must be configured per environment or the portal can't call its API</strong>
-    <code>FHIRBridge.Api</code>'s CORS is already dynamic and config/DB-driven
-    (<code>DynamicPortalCorsPolicyProvider</code>, reads <code>Portal:AllowedOrigins</code> &mdash;
-    <code>src/Api/FHIRBridge.Api/Program.cs:159-167</code> &mdash; and can be edited live via the
-    admin UI with no restart), so no code change is needed, but each environment's Api instance
-    <strong>must</strong> have that environment's portal origin (e.g.
-    <code>http://localhost:2000</code> for Staging) added to its allow-list, or the portal will fail
-    every API call with a CORS error. Same idea for the Demo app backend's
-    <code>AllowedFrontendOrigin</code>.
-  </div>
-
   <h3 id="envs-setup">Manual setup checklist</h3>
   <div class="flow-steps">
     <div class="flow-step"><div class="step-num">1</div><div class="step-body"><strong>Create the branches</strong><span><code>quality</code> and <code>develop</code>, both from <code>main</code> (already done for this rollout).</span></div></div>
     <div class="flow-step"><div class="step-num">2</div><div class="step-body"><strong>Create 9 GitHub Environments</strong><span>Settings &rarr; Environments: <code>staging-approval-1</code>, <code>staging-approval-2</code>, <code>Staging</code>, <code>qa-approval-1</code>, <code>qa-approval-2</code>, <code>QA</code>, <code>dev-approval-1</code>, <code>Dev</code>, <code>Working</code>. Assign the actual required reviewer (a real person) to each <code>-approval-N</code> environment.</span></div></div>
-    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Open firewall ports</strong><span>2000/2002/2003/2010/2011/2020, 3000/3002/3003/3010/3011/3020, 4000/4002/4003/4010/4011/4020, 6000/6002/6003/6010/6011/6020.</span></div></div>
-    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 24 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one per folder per environment, with the roles described above (static-only Gateway vs. proxy-only Gateway vs. Api vs. Worker vs. DemoApi).</span></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-body"><strong>Open firewall ports</strong><span>Only the 4 real bindable ports per environment: 2002/2003/2011 (Staging), 3002/3003/3011 (QA), 4002/4003/4011 (Dev), 6002/6003/6011 (Working). <code>fhirbridge-api</code> binds loopback-only so its port never needs an inbound rule &mdash; only Gateway's and demoapp-api's ports need to be reachable from wherever you're testing from.</span></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-body"><strong>Provision 16 appsettings.Production.json files</strong><span>Under <code>C:\inetpub\FHIRBridge_Configurations\&lt;Environment&gt;\&lt;folder&gt;\</code> &mdash; one each for <code>fhirbridge-api</code>, <code>fhirbridge-gateway</code>, <code>demoapp-api</code>, <code>fhirbridge-worker</code>, per environment (<code>fhirbridge-portal</code>/<code>demoapp-portal</code> are plain static folders with no runtime config of their own). Each <code>fhirbridge-api</code> one must override <code>GeneratedFileDownload:PublicBaseUrl</code> (ships as a dummy <code>REPLACE_WITH_PUBLIC_URL</code> placeholder in the checked-in base <code>appsettings.json</code> &mdash; left unset, every environment would generate download links pointing at a nonsense host) with that environment's Gateway origin. Each <code>fhirbridge-gateway</code> one must set <code>ApiBaseUrl</code> (a single flat setting, e.g. <code>http://127.0.0.1:3002/</code> for QA &mdash; <code>Program.cs</code> builds the fixed <code>/api/**</code>/<code>/swagger/**</code> routes in code and only reads the destination address from this key, defaulting to production's own address if unset) and <code>StaticFiles:RootPath</code> at this environment's own Api port and portal folder.</span></div></div>
     <div class="flow-step"><div class="step-num">5</div><div class="step-body"><strong>Provision separate databases</strong><span>Recommended: a distinct <code>FHIRBridgeDb</code> and demo-app database per environment, so Staging/QA/Dev/Working don't share data with each other or with production.</span></div></div>
-    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Set ASPNETCORE_URLS per service</strong><span>Same one-time-manual pattern as production &mdash; via each Windows Service's Environment tab in <code>services.msc</code>, once each service exists after its first deploy.</span></div></div>
-    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (24 total) now run alongside production's 4 on the same VM.</span></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-body"><strong>Confirm VM headroom</strong><span>4 more environments' worth of services (16 total) now run alongside production's 4 on the same VM.</span></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-body"><strong>Set each environment's admin-configurable Settings after first login</strong><span>The Demo app's Workflow Settings row (<code>PatientBaseUrl</code> etc.) seeds as empty for a brand-new database &mdash; set the real per-environment values via the Settings UI, not appsettings.</span></div></div>
+  </div>
+  <div class="callout warn">
+    <strong>Cleaning up from the earlier split-port design</strong>
+    If any environment was already deployed under the previous design (separate
+    <code>fhirbridge-&lt;env&gt;-portal</code> / <code>fhirbridge-&lt;env&gt;-demoapp-portal</code>
+    services on their own ports), those services are no longer created or managed by this script and
+    will be left running stale code indefinitely unless removed by hand:
+    <code>Stop-Service fhirbridge-&lt;env&gt;-portal; sc.exe delete fhirbridge-&lt;env&gt;-portal</code>
+    (and the same for <code>-demoapp-portal</code>).
   </div>
 
   <h2 id="gotchas"><span class="num">5.</span>Known Gotchas &amp; Lessons Learned</h2>

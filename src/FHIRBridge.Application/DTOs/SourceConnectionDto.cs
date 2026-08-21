@@ -12,4 +12,8 @@ public sealed record SourceConnectionDto(
     bool IsEnabled,
     ApplicationType? ApplicationType = null,
     SourceInteractiveConfigurationDto? Interactive = null,
-    SourceRetrievalConfigurationDto? Retrieval = null);
+    SourceRetrievalConfigurationDto? Retrieval = null,
+    DateTime? CreatedOnUtc = null,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null);

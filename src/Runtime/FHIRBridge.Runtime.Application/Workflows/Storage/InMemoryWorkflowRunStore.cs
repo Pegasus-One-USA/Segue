@@ -45,4 +45,12 @@ public sealed class InMemoryWorkflowRunStore : IWorkflowRunStore
 
         return Task.FromResult(runs);
     }
+
+    public Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyDictionary<WorkflowRunStatus, int> counts = Enum.GetValues<WorkflowRunStatus>()
+            .ToDictionary(status => status, status => _runs.Values.Count(run => run.Status == status));
+
+        return Task.FromResult(counts);
+    }
 }

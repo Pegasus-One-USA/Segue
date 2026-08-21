@@ -1,3 +1,8 @@
+// Destination-TYPE rows (dest-sqlserver, dest-fhir, ...) no longer live in TRANSFORMS/this model —
+// they, and their permission codes, come from the canonical Node Catalog (node-catalog.model.ts)
+// instead. This interface now only describes pipeline steps (Field Mapping, Validation, Normalize,
+// Terminology, De-identification, Audit & Lineage, HEDIS, Anomaly, Patient Aggregation, ...), which
+// have no SourceSystemType/DestinationType backing and stay outside the Node Catalog consolidation.
 export interface Transform {
   id: string;
   rank: number;

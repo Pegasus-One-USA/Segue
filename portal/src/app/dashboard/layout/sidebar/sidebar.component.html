@@ -3,7 +3,13 @@
     @if (branding.effectiveLogoUrl()) {
       <img class="logo-image" [src]="branding.effectiveLogoUrl()" [alt]="branding.current().companyName" />
     } @else {
-      <span class="logo-hex">&#11041;</span>
+      <span class="logo-hex" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="var(--color-primary)"/>
+          <path d="M10 18h16M18 10v16" stroke="var(--color-on-primary)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="5" stroke="var(--color-on-primary)" stroke-width="2"/>
+        </svg>
+      </span>
     }
     @if (!collapsed()) {
       <span class="logo-text">{{ branding.current().companyName }}</span>
@@ -26,7 +32,35 @@
           [routerLinkActiveOptions]="{ exact: entry.exact ?? false }"
           [title]="collapsed() ? entry.label : ''"
         >
-          <span class="nav-icon">{{ entry.icon }}</span>
+          <span class="nav-icon">
+            @switch (entry.route) {
+              @case ('/dashboard') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+                  <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+                  <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+                  <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+                </svg>
+              }
+              @case ('/workflows') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="6" height="6" rx="1.5"/>
+                  <rect x="15" y="3" width="6" height="6" rx="1.5"/>
+                  <rect x="9" y="15" width="6" height="6" rx="1.5"/>
+                  <path d="M6 9v2a3 3 0 0 0 3 3h.5M18 9v2a3 3 0 0 1-3 3h-.5"/>
+                </svg>
+              }
+              @case ('/governance') {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 21s7.5-3.5 7.5-9V6l-7.5-3-7.5 3v6c0 5.5 7.5 9 7.5 9Z"/>
+                  <path d="m9 11.5 2 2 4-4.5"/>
+                </svg>
+              }
+              @default {
+                {{ entry.icon }}
+              }
+            }
+          </span>
           @if (!collapsed()) {
             <span class="nav-label">{{ entry.label }}</span>
           }

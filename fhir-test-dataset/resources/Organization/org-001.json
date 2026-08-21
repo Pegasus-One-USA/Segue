@@ -1,0 +1,52 @@
+{
+  "resourceType": "Organization",
+  "id": "org-001",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:organization",
+      "value": "ORG-001"
+    }
+  ],
+  "active": true,
+  "type": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+          "code": "prov",
+          "display": "Healthcare Provider"
+        }
+      ],
+      "text": "Healthcare Provider"
+    }
+  ],
+  "name": "Segue General Hospital",
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "+1-555-0100",
+      "use": "work"
+    }
+  ],
+  "address": [
+    {
+      "line": [
+        "100 Health Way"
+      ],
+      "city": "Boston",
+      "state": "MA",
+      "postalCode": "02115",
+      "country": "US"
+    }
+  ]
+}

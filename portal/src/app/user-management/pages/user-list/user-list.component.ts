@@ -8,13 +8,11 @@ import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 
 import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -31,9 +29,10 @@ import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/as
 import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/invite-result-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
-import { DisableWithoutPermissionDirective } from '../../../auth/directives/disable-without-permission.directive';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string }> = {
   'SuperAdmin': { label: 'Super Admin', color: '#5B21B6', bg: '#EDE9FE' },
@@ -49,7 +48,7 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     CommonModule,
     FormsModule,
     MatTableModule,
-    MatPaginatorModule,
+    PaginationBarComponent,
     MatSortModule,
     MatButtonModule,
     MatIconModule,
@@ -59,7 +58,6 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
     MatProgressSpinnerModule,
     MatDividerModule,
     HideWithoutPermissionDirective,
-    DisableWithoutPermissionDirective,
   ],
   templateUrl: './user-list.component.html',
   styleUrls: ['./user-list.component.scss'],
@@ -68,7 +66,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(IUserService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
 
@@ -95,9 +93,11 @@ export class UserListComponent implements OnInit, OnDestroy {
   inactiveUsers      = computed(() => this.users().filter(u => u.status !== 'active').length);
   mustChangePwdUsers = computed(() => this.users().filter(u => u.mustChangePassword).length);
 
-  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actions'];
+  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actionBy', 'actionOn', 'actions'];
 
-  readonly roleOptions: UserRole[] = ['SuperAdmin', 'Admin', 'Operations', 'Audit'];
+  // Seeded with the 4 built-ins so the dropdown isn't empty while getRoles() is in flight —
+  // replaced with the real role list (including any custom roles) once it loads, see ngOnInit.
+  readonly roleOptions = signal<UserRole[]>(['SuperAdmin', 'Admin', 'Operations', 'Audit']);
 
   readonly statusOptions: UserStatus[] = ['active', 'inactive', 'pending'];
   readonly roleConfig = ROLE_CONFIG;
@@ -120,6 +120,15 @@ export class UserListComponent implements OnInit, OnDestroy {
   hasRowMenu   = (): boolean =>
     this.canEdit() || this.canAssignRole() || this.canToggle() || this.canInvite() || this.canDelete();
 
+  // Compared by email, not id: the list's user.id is the real database GUID, but
+  // authService.currentUser().id is derived from the JWT's external/oid claim (see
+  // buildUserFromJwt) — a different identity space that never matches the GUID. Email is the
+  // one identifier populated consistently on both sides.
+  isSelf = (user: User): boolean => {
+    const email = this.authService.currentUser()?.email;
+    return !!email && email.toLowerCase() === user.email?.toLowerCase();
+  };
+
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
     this.searchSubject.pipe(
@@ -133,6 +142,13 @@ export class UserListComponent implements OnInit, OnDestroy {
     });
 
     this.loadUsers();
+
+    this.userService.getRoles()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: roles => this.roleOptions.set(roles.map(r => r.name)),
+        error: () => { /* keep the built-in fallback list */ },
+      });
   }
 
   ngOnDestroy(): void {
@@ -168,7 +184,7 @@ export class UserListComponent implements OnInit, OnDestroy {
           const msg = err?.status === 403
             ? 'You do not have permission to view users.'
             : err?.message ?? 'Failed to load users.';
-          this.snackBar.open(msg, 'Dismiss', { duration: 4000 });
+          this.toast.error(msg);
         },
       });
   }
@@ -181,7 +197,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.loadUsers();
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.page.set(e.pageIndex + 1);
     this.perPage.set(e.pageSize);
     this.loadUsers();
@@ -217,17 +233,29 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   openAssignRolesDialog(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
-    const ref = this.dialog.open(AssignRolesDialogComponent, {
-      width: '680px', disableClose: true, restoreFocus: false, data: { user },
+    // The list row's User (mapListDto) never carries full Role objects (id/permissions) — only
+    // the role name string — so the dialog can't tell which role is currently assigned. Fetch the
+    // full detail (mapDetailDto) first so isAssigned()/the allocation preview have real role ids.
+    this.userService.getUser(user.id).subscribe({
+      next: fullUser => {
+        const ref = this.dialog.open(AssignRolesDialogComponent, {
+          width: '820px', maxWidth: '95vw', disableClose: true, restoreFocus: false, data: { user: fullUser },
+        });
+        ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
+      },
+      error: () => this.toast.error('Failed to load user details.'),
     });
-    ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
   }
 
   // ─── User actions ─────────────────────────────────────────────────────────
   deleteUser(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
+    if (this.isSelf(user)) {
+      this.toast.error('You cannot delete your own account.');
+      return;
+    }
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '420px', restoreFocus: false,
+      width: '400px', restoreFocus: false,
       data: {
         title:        'Delete user',
         message:      `Are you sure you want to delete "${user.fullName}"? This action cannot be undone.`,
@@ -242,11 +270,11 @@ export class UserListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
-            this.snackBar.open(`User "${user.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`User "${user.fullName}" deleted.`);
             this.loadUsers();
           },
           error: (err: { status?: number; message?: string }) => {
-            this.snackBar.open(this.errMsg(err, 'Failed to delete user.'), 'Dismiss', { duration: 4000 });
+            this.toast.error(this.errMsg(err, 'Failed to delete user.'));
           },
         });
     });
@@ -254,6 +282,10 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   toggleStatus(user: User, action: 'enable' | 'disable'): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Deactivate), 'You do not have permission to activate or deactivate users.')) return;
+    if (action === 'disable' && this.isSelf(user)) {
+      this.toast.error('You cannot deactivate your own account.');
+      return;
+    }
     const call$ = action === 'enable'
       ? this.userService.enableUser(user.id)
       : this.userService.disableUser(user.id);
@@ -261,11 +293,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     call$.pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         const label = action === 'enable' ? 'activated' : 'deactivated';
-        this.snackBar.open(`User "${user.fullName}" ${label}.`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`User "${user.fullName}" ${label}.`);
         this.loadUsers();
       },
       error: (err: { status?: number; message?: string }) => {
-        this.snackBar.open(this.errMsg(err, `Failed to ${action} user.`), 'Dismiss', { duration: 4000 });
+        this.toast.error(this.errMsg(err, `Failed to ${action} user.`));
       },
     });
   }
@@ -276,20 +308,20 @@ export class UserListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: res => {
-          this.snackBar.open(`Invitation resent to "${user.email}".`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`Invitation resent to "${user.email}".`);
           this.dialog.open(InviteResultDialogComponent, {
             width: '540px', restoreFocus: false, data: res,
           });
         },
         error: (err: { status?: number; message?: string }) => {
-          this.snackBar.open(this.errMsg(err, 'Failed to resend invitation.'), 'Dismiss', { duration: 4000 });
+          this.toast.error(this.errMsg(err, 'Failed to resend invitation.'));
         },
       });
   }
 
-  private errMsg(err: { status?: number; message?: string; error?: { message?: string } }, fallback: string): string {
+  private errMsg(err: { status?: number; message?: string }, fallback: string): string {
     if (err?.status === 403) return 'You do not have permission to perform this action.';
-    return err?.error?.message ?? err?.message ?? fallback;
+    return err?.message ?? fallback;
   }
 
   navigateToDetail(user: User): void {
@@ -306,7 +338,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   getStatusLabel(status: string): string {
     const map: Record<string, string> = {
       active:   'Active',
-      inactive: 'Inactive',
+      inactive: 'Deactivated',
       pending:  'Invited',
     };
     return map[status] ?? status;

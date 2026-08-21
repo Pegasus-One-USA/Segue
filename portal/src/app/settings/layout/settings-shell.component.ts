@@ -1,0 +1,62 @@
+import { Component, inject, computed } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { AuthStore } from '../../auth/store/auth.store';
+
+interface SettingsTab {
+  label: string;
+  route: string;
+  icon: string;
+  /** Omit for tabs every authenticated user with settings access may see. */
+  permissions?: string[];
+  /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a
+   *  regular Admin also satisfies via isAdmin(). Takes precedence over `permissions`. */
+  superAdminOnly?: boolean;
+}
+
+const SETTINGS_TABS: SettingsTab[] = [
+  { label: 'Branding', route: 'branding', icon: 'palette', permissions: ['configuration.write'] },
+  // Merged tab covering the former standalone Source Connections / Destination Connections / Mapping
+  // Profiles / Transformation Rules tabs — see settings.routes.ts's 'workflow-configurations' route
+  // for the sections underneath. Kept in sync with that route's own OR-list (each of the four moved
+  // to its own dedicated View permission — this used to only list two of them, which hid this tab
+  // from e.g. a Destination-Connections-only role even though the route itself would let them in).
+  { label: 'Workflow Configurations', route: 'workflow-configurations', icon: 'account_tree', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
+  { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['ehrendpoints.view'] },
+  { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
+  // Merged tab covering the former standalone Email Settings / System Security / System Settings /
+  // Terminology Codes tabs — see settings.routes.ts's 'system-settings' route for the sections
+  // underneath. NOT superAdminOnly: Email and the four Terminology Codes systems are independently
+  // permission-controlled and must be reachable without the SuperAdmin role; General/Security are
+  // still SuperAdmin-role-only, but that's enforced by their OWN route guards and by
+  // system-settings-shell.component.ts's own section filtering, not by hiding this whole tab.
+  {
+    label: 'System Settings', route: 'system-settings', icon: 'tune',
+    permissions: [
+      'configuration.view', 'configuration.write',
+      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+    ],
+  },
+];
+
+@Component({
+  selector: 'app-settings-shell',
+  standalone: true,
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule],
+  templateUrl: './settings-shell.component.html',
+  styleUrl: './settings-shell.component.scss',
+})
+export class SettingsShellComponent {
+  private readonly store = inject(AuthStore);
+
+  // Same visibility rule as the sidebar (sidebar.component.ts) — kept in sync deliberately so a
+  // tab only appears here if the user could also reach it from the sidebar's old direct links.
+  readonly tabs = computed<SettingsTab[]>(() =>
+    SETTINGS_TABS.filter(tab => {
+      if (tab.superAdminOnly) return this.store.hasRole('SuperAdmin');
+      if (!tab.permissions?.length) return true;
+      if (this.store.isAdmin()) return true;
+      return tab.permissions.some(p => this.store.hasPermission(p));
+    })
+  );
+}

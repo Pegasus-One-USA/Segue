@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -9,7 +10,9 @@ namespace FHIRBridge.Application.Services;
 /// <summary>
 /// First-run setup. "Requires setup" is simply "no user exists yet". Creating the first SuperAdmin reuses the normal
 /// local-user creation + login paths, then signs the caller in. The empty-database guard is re-checked here so the
-/// endpoint is self-guarding even though it is anonymous.
+/// endpoint is self-guarding even though it is anonymous. Also saves the outbound SMTP configuration collected on
+/// the same screen (forced enabled) and requires Terms &amp; Conditions acceptance — this deployment ships as a
+/// package with no separate "configure email first" step.
 /// </summary>
 public sealed class SetupService : ISetupService
 {
@@ -17,17 +20,20 @@ public sealed class SetupService : ISetupService
     private readonly IUserManagementService _userManagement;
     private readonly ILocalAuthService _localAuth;
     private readonly IExternalTokenValidator _externalTokenValidator;
+    private readonly INotificationSettingsService _notificationSettings;
 
     public SetupService(
         IUserAccessRepository repository,
         IUserManagementService userManagement,
         ILocalAuthService localAuth,
-        IExternalTokenValidator externalTokenValidator)
+        IExternalTokenValidator externalTokenValidator,
+        INotificationSettingsService notificationSettings)
     {
         _repository = repository;
         _userManagement = userManagement;
         _localAuth = localAuth;
         _externalTokenValidator = externalTokenValidator;
+        _notificationSettings = notificationSettings;
     }
 
     public async Task<bool> RequiresSetupAsync(CancellationToken cancellationToken)
@@ -46,6 +52,25 @@ public sealed class SetupService : ISetupService
             throw new InvalidOperationException("Setup has already been completed.");
         }
 
+        if (!request.AcceptTerms)
+        {
+            throw new InvalidOperationException("You must accept the Terms and Conditions to continue.");
+        }
+
+        // Forced enabled: this deployment ships as a self-hosted package, so email is always on once the
+        // first admin exists rather than requiring a separate "configure email" step beforehand.
+        await _notificationSettings.UpdateAsync(
+            new UpdateNotificationSettingsRequest(
+                IsEnabled: true,
+                request.EmailSettings.Host,
+                request.EmailSettings.Port,
+                request.EmailSettings.EnableSsl,
+                request.EmailSettings.Username ?? string.Empty,
+                request.EmailSettings.FromAddress,
+                request.EmailSettings.FromName,
+                request.EmailSettings.Password),
+            cancellationToken);
+
         await _userManagement.CreateLocalUserAsync(
             new CreateLocalUserRequest(
                 request.Email,
@@ -54,7 +79,10 @@ public sealed class SetupService : ISetupService
                 [UnifiedRoles.SuperAdmin],
                 RequirePasswordChange: false,
                 request.FirstName,
-                request.LastName),
+                request.LastName,
+                // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin — hardcoded true, not
+                // caller-controlled like the general create-user/invite paths.
+                RequireMfa: true),
             cancellationToken);
 
         return await _localAuth.LoginAsync(new LocalLoginRequest(request.Email, request.Password), cancellationToken);
@@ -75,9 +103,11 @@ public sealed class SetupService : ISetupService
         // Create the SuperAdmin directly from the external identity: active, no password, SSO-linked.
         var user = new User(identity.Subject, identity.Email, identity.Name);
         user.LinkExternalIdentity(identity.Subject, request.Provider);
+        // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin, same as the local-password path.
+        user.SetMustSetupMfa(true);
 
         var role = await _repository.GetRoleByNameAsync(UnifiedRoles.SuperAdmin, cancellationToken)
-            ?? throw new InvalidOperationException("The SuperAdmin role is not configured.");
+            ?? throw new InvalidOperationException("Setup could not complete. Please contact support.");
 
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);

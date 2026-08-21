@@ -1,0 +1,66 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Log Settings</h1>
+    <p class="page-sub">What's actually enforced today — read-only. Not a configuration form.</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">A reference page describing what logging protections are genuinely active today, and which log category writes to which table — nothing on this page is editable, and there's nothing to save or change here.</p>
+
+      <p class="info-note">If you're looking for a place to turn logging categories on/off, this isn't it — this page only reports the current, fixed state.</p>
+    </div>
+  </details>
+
+  @if (loading()) {
+    <div class="empty-state">Loading…</div>
+  }
+
+  @if (!loading() && settings(); as s) {
+    <div class="fact-grid">
+      <div class="fact-card">
+        <div class="fact-label">PHI masking</div>
+        <div class="fact-value">
+          <span class="status-badge status-locked">{{ s.phiMaskingEnabled ? 'Always on — no disable switch' : 'Disabled' }}</span>
+        </div>
+        <p class="fact-note">Every log write passes through the PHI-masking Serilog enricher. There is deliberately no toggle to turn this off — that would itself be a compliance regression.</p>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-label">Payload logging (per-tenant opt-in)</div>
+        <div class="fact-value">
+          <span class="status-badge" [class.status-implemented]="s.payloadLoggingImplemented" [class.status-not-implemented]="!s.payloadLoggingImplemented">
+            {{ s.payloadLoggingImplemented ? 'Implemented' : 'Not implemented' }}
+          </span>
+        </div>
+        <p class="fact-note">No per-tenant payload-logging opt-in exists yet. Reported honestly rather than as a toggle with no backing behavior.</p>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="s.categories" class="data-table">
+
+          <ng-container matColumnDef="category">
+            <th mat-header-cell *matHeaderCellDef>Category</th>
+            <td mat-cell *matCellDef="let r">{{ r.category }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="writesTo">
+            <th mat-header-cell *matHeaderCellDef>Writes To</th>
+            <td mat-cell *matCellDef="let r"><code class="mono">{{ r.writesTo }}</code></td>
+          </ng-container>
+
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let r">{{ r.description }}</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+        </table>
+      </div>
+    </div>
+  }
+</div>

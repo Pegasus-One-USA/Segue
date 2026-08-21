@@ -14,6 +14,9 @@ public interface IGeneratedFileDownloadLinkService
     /// deletes the file, if found, past its expiry) for an invalid, tampered, or expired token.
     /// </summary>
     Task<GeneratedFileDownloadResolution?> TryResolveAsync(string token, CancellationToken cancellationToken);
+
+    /// <summary>Decrypts the resolved file's on-disk ciphertext back to raw bytes for streaming to the caller.</summary>
+    Task<byte[]> ReadDecryptedAsync(string physicalPath, CancellationToken cancellationToken);
 }
 
 public sealed record GeneratedFileDownloadResolution(string PhysicalPath, string ContentType, string DisplayFileName);

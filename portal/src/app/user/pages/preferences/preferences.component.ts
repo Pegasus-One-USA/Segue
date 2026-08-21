@@ -4,6 +4,8 @@ import { FormsModule }          from '@angular/forms';
 import { UserSettingsNavComponent } from '../../components/user-settings-nav/user-settings-nav.component';
 import { UserProfileService }   from '../../services/user-profile.service';
 import { AppTheme }             from '../../models/user-profile.model';
+import { HasUnsavedChanges }    from '../../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 
 @Component({
   selector:    'app-preferences',
@@ -12,11 +14,16 @@ import { AppTheme }             from '../../models/user-profile.model';
   templateUrl: './preferences.component.html',
   styleUrl:    './preferences.component.scss',
 })
-export class PreferencesComponent {
+export class PreferencesComponent implements HasUnsavedChanges {
   private readonly router  = inject(Router);
   protected readonly profSvc = inject(UserProfileService);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   protected readonly saved = signal(false);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges());
+  }
 
   protected readonly profile = this.profSvc.profile;
   protected readonly theme   = this.profSvc.theme;
@@ -53,5 +60,17 @@ export class PreferencesComponent {
     this.profSvc.updateNotifications(this.emailNotif, this.inAppNotif);
     this.saved.set(true);
     setTimeout(() => this.saved.set(false), 3000);
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  // updateProfile()/updateNotifications() are synchronous local writes — no in-flight save state,
+  // just whether these locally-edited fields still differ from what's actually stored.
+  hasUnsavedChanges(): boolean {
+    const p = this.profile();
+    return this.selectedLanguage !== p.language
+      || this.selectedDateFmt !== p.dateFormat
+      || this.selectedTimeFmt !== p.timeFormat
+      || this.emailNotif !== p.emailNotifications
+      || this.inAppNotif !== p.inAppNotifications;
   }
 }

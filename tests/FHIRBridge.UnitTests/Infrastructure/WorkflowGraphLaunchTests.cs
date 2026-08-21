@@ -214,14 +214,21 @@ public sealed class WorkflowGraphLaunchTests
         }
 
         public Task<IReadOnlyList<SourceConnection>> GetSourceConnectionsAsync(CancellationToken ct) => Task.FromResult(_sources);
+        public Task<PagedResult<SourceConnection>> GetSourceConnectionsPagedAsync(SourceConnectionFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
+            Task.FromResult(new PagedResult<SourceConnection>(_sources, _sources.Count, page, pageSize));
         public Task<SourceConnection?> GetSourceConnectionAsync(Guid id, CancellationToken ct) => Task.FromResult(_sources.FirstOrDefault(x => x.Id == id));
         public Task<IReadOnlyList<DestinationConfiguration>> GetDestinationsAsync(CancellationToken ct) => Task.FromResult(_destinations);
-        public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, CancellationToken ct) =>
+        public Task<PagedResult<DestinationConfiguration>> GetDestinationsPagedAsync(DestinationFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
             Task.FromResult(new PagedResult<DestinationConfiguration>(_destinations, _destinations.Count, page, pageSize));
         public Task<DestinationConfiguration?> GetDestinationAsync(Guid id, CancellationToken ct) => Task.FromResult(_destinations.FirstOrDefault(x => x.Id == id));
         public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken ct) => Task.FromResult(false);
         public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesAsync(CancellationToken ct) => Task.FromResult(_mappings);
+        public Task<PagedResult<MappingProfile>> GetMappingProfilesPagedAsync(MappingProfileFilter filter, int page, int pageSize, string? sortBy, string? sortOrder, CancellationToken ct) =>
+            Task.FromResult(new PagedResult<MappingProfile>(_mappings, _mappings.Count, page, pageSize));
         public Task<MappingProfile?> GetMappingProfileAsync(Guid id, CancellationToken ct) => Task.FromResult(_mappings.FirstOrDefault(x => x.Id == id));
+        public Task<MappingProfile?> FindMappingProfileAsync(string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct) =>
+            Task.FromResult(_mappings.FirstOrDefault(x =>
+                x.ResourceType == resourceType && x.SourceConnectionId == sourceConnectionId && x.DestinationId == destinationId));
         public Task<IReadOnlyList<ResourcePipelineRoute>> GetRoutesAsync(CancellationToken ct) => Task.FromResult(_routes);
         public Task<ResourcePipelineRoute?> GetRouteAsync(Guid id, CancellationToken ct) => Task.FromResult(_routes.FirstOrDefault(x => x.Id == id));
 
@@ -231,15 +238,22 @@ public sealed class WorkflowGraphLaunchTests
 
         public Task<EhrEndpoint?> GetEhrEndpointAsync(Guid id, CancellationToken ct) => Task.FromResult<EhrEndpoint?>(null);
 
+        public Task<IConfigurationTransaction> BeginTransactionAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct) => throw new NotSupportedException();
         public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> ExistsWithNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<SourceConfiguration>> GetSourceConfigurationsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<SourceConfiguration?> GetSourceConfigurationAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        public Task AddSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct) => throw new NotSupportedException();
+        public Task UpdateSourceConfigurationAsync(SourceConfiguration e, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteSourceConfigurationAsync(SourceConfiguration sourceConfiguration, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task RemoveDestinationAsync(DestinationConfiguration e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
+        public Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct) => throw new NotSupportedException();
         public Task UpdateRouteAsync(ResourcePipelineRoute e, CancellationToken ct) => throw new NotSupportedException();
         public Task AddWebhookAsync(WebhookConfiguration e, CancellationToken ct) => throw new NotSupportedException();

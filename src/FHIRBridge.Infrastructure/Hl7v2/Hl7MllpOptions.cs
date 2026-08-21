@@ -11,4 +11,13 @@ public sealed class Hl7MllpOptions
 
     /// <summary>Webhook configuration that maps the ingested resources to a pipeline.</summary>
     public Guid WebhookConfigurationId { get; set; }
+
+    /// <summary>
+    /// PFX/PEM certificate path for the mandatory TLS handshake. Required whenever <see cref="Enabled"/> is true —
+    /// HIPAA #8: this listener must never accept plaintext HL7 v2 traffic.
+    /// </summary>
+    public string? CertificatePath { get; set; }
+
+    /// <summary>Password for <see cref="CertificatePath"/>, if the certificate file is password-protected.</summary>
+    public string? CertificatePassword { get; set; }
 }

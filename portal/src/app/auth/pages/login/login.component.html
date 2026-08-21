@@ -3,199 +3,242 @@
   class="auth-page"
   role="main"
   [class.auth-page--custom-bg]="branding.current().assets.loginBackgroundUrl"
-  [style.background-image]="branding.current().assets.loginBackgroundUrl ? 'url(' + branding.current().assets.loginBackgroundUrl + ')' : null"
+  [style.background-image]="
+    branding.current().assets.loginBackgroundUrl
+      ? 'url(' + branding.current().assets.loginBackgroundUrl + ')'
+      : null
+  "
 >
-
   <!-- Decorative background orbs — only shown over the default gradient, not a tenant's photo background -->
   @if (!branding.current().assets.loginBackgroundUrl) {
     <div class="auth-orb auth-orb--primary" aria-hidden="true"></div>
-    <div class="auth-orb auth-orb--indigo"  aria-hidden="true"></div>
+    <div class="auth-orb auth-orb--indigo" aria-hidden="true"></div>
   }
 
   <div class="auth-layout">
-
     @if (branding.current().assets.loginIllustrationUrl) {
       <div class="auth-illustration" aria-hidden="true">
         <img [src]="branding.current().assets.loginIllustrationUrl" alt="" />
       </div>
     }
 
-    <div class="auth-card" role="region" [attr.aria-label]="'Sign in to ' + branding.current().companyName">
+    <div
+      class="auth-card"
+      role="region"
+      [attr.aria-label]="'Sign in to ' + branding.current().companyName"
+    >
+      <!-- ── Brand / Logo ──────────────────────────────────────────── -->
+      <app-auth-brand-header />
 
-    <!-- ── Brand / Logo ──────────────────────────────────────────── -->
-    <app-auth-brand-header />
-
-    <!-- ── Heading ───────────────────────────────────────────────── -->
-    <p class="auth-sub">
-      @if (stage() === 'credentials') {
-        Sign in to your account to continue
-      } @else {
-        Enter the 6-digit code from your authenticator app
-      }
-    </p>
-
-    <!-- ── Account activated banner ─────────────────────────────── -->
-    @if (activated() && stage() === 'credentials') {
-      <div class="auth-alert auth-alert--success" role="status" aria-live="polite">
-        <mat-icon class="alert-icon" aria-hidden="true">check_circle</mat-icon>
-        <span>Your account has been activated successfully. Please sign in.</span>
-      </div>
-    }
-
-    <!-- ── Global error ─────────────────────────────────────────── -->
-    @if (error()) {
-      <div class="auth-alert" role="alert" aria-live="assertive">
-        <mat-icon class="alert-icon" aria-hidden="true">error_outline</mat-icon>
-        <span>{{ error() }}</span>
-      </div>
-    }
-
-    <!-- ── MFA code stage ───────────────────────────────────────── -->
-    @if (stage() === 'mfa') {
-      <form [formGroup]="mfaForm" (ngSubmit)="submitMfa()" novalidate>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Authentication code</mat-label>
-          <mat-icon matPrefix class="field-icon" aria-hidden="true">shield</mat-icon>
-          <input
-            matInput
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            formControlName="code"
-            aria-required="true"
-          />
-          @if (mfaFieldError('required')) {
-            <mat-error>A code is required</mat-error>
-          } @else if (mfaFieldError('minlength')) {
-            <mat-error>Enter your 6-digit code or a backup code</mat-error>
-          }
-        </mat-form-field>
-
-        <button
-          mat-flat-button
-          color="primary"
-          type="submit"
-          class="submit-btn"
-          [disabled]="isLoading()"
-          aria-label="Verify code"
-        >
-          @if (isLoading()) {
-            <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
-            <span>Verifying…</span>
-          } @else {
-            <span>Verify</span>
-          }
-        </button>
-
-        <div class="mfa-back-row">
-          <button
-            type="button"
-            class="forgot-link"
-            (click)="backToCredentials()"
-            [disabled]="isLoading()"
-          >
-            Back to sign in
-          </button>
-        </div>
-      </form>
-    }
-
-    <!-- ── Form ──────────────────────────────────────────────────── -->
-    @if (stage() === 'credentials') {
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate autocomplete="on">
-
-      <!-- Email -->
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Email address</mat-label>
-        <mat-icon matPrefix class="field-icon" aria-hidden="true">email</mat-icon>
-        <input
-          matInput
-          type="email"
-          formControlName="email"
-          autocomplete="email"
-          (keydown)="onKeydown($event)"
-          aria-required="true"
-        />
-        @if (fieldError('email', 'required')) {
-          <mat-error>Email is required</mat-error>
-        } @else if (fieldError('email', 'email')) {
-          <mat-error>Enter a valid email address</mat-error>
-        }
-      </mat-form-field>
-
-      <!-- Password -->
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Password</mat-label>
-        <mat-icon matPrefix class="field-icon" aria-hidden="true">lock</mat-icon>
-        <input
-          matInput
-          [type]="showPassword() ? 'text' : 'password'"
-          formControlName="password"
-          autocomplete="current-password"
-          (keydown)="onKeydown($event)"
-          aria-required="true"
-        />
-        <button
-          type="button"
-          mat-icon-button
-          matSuffix
-          class="pw-toggle"
-          (click)="togglePassword()"
-          [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
-        >
-          <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
-        </button>
-        @if (fieldError('password', 'required')) {
-          <mat-error>Password is required</mat-error>
-        } @else if (fieldError('password', 'minlength')) {
-          <mat-error>Password must be at least 8 characters</mat-error>
-        }
-      </mat-form-field>
-
-      <!-- Caps Lock warning -->
-      @if (capsLockOn()) {
-        <div class="caps-warning" role="status" aria-live="polite">
-          <mat-icon aria-hidden="true">keyboard_capslock</mat-icon>
-          <span>Caps Lock is on</span>
-        </div>
-      }
-
-      <!-- Remember Me + Forgot Password -->
-      <div class="form-options">
-        <mat-checkbox formControlName="rememberMe" color="primary">
-          Remember me
-        </mat-checkbox>
-        <a routerLink="/auth/forgot-password" class="forgot-link">Forgot password?</a>
-      </div>
-
-      <!-- Submit -->
-      <button
-        mat-flat-button
-        color="primary"
-        type="submit"
-        class="submit-btn"
-        [disabled]="isLoading()"
-        aria-label="Sign in"
-      >
-        @if (isLoading()) {
-          <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>
-          <span>Signing in…</span>
+      <!-- ── Heading ───────────────────────────────────────────────── -->
+      <p class="auth-sub">
+        @if (stage() === "credentials") {
+          Sign in to your account to continue
         } @else {
-          <span>Sign In</span>
+          Enter the 6-digit code from your authenticator app
         }
-      </button>
+      </p>
 
-    </form>
+      <!-- ── Account activated banner ─────────────────────────────── -->
+      @if (activated() && stage() === "credentials") {
+        <div
+          class="auth-alert auth-alert--success"
+          role="status"
+          aria-live="polite"
+        >
+          <mat-icon class="alert-icon" aria-hidden="true"
+            >check_circle</mat-icon
+          >
+          <span
+            >Your account has been activated successfully. Please sign in.</span
+          >
+        </div>
+      }
 
-      <!-- ── SSO ─────────────────────────────────────────────────── -->
-      <app-sso-buttons
-        verb="Continue"
-        [disabled]="isLoading() || ssoBusy()"
-        (authenticated)="onSsoAuthenticated($event)"
-        (failed)="onSsoFailed($event)"
-      />
-    }
+      <!-- ── Global error ─────────────────────────────────────────── -->
+      @if (error()) {
+        <div class="auth-alert" role="alert" aria-live="assertive">
+          <mat-icon class="alert-icon" aria-hidden="true"
+            >error_outline</mat-icon
+          >
+          <span>{{ error() }}</span>
+        </div>
+      }
 
+      <!-- ── MFA code stage ───────────────────────────────────────── -->
+      @if (stage() === "mfa") {
+        <form [formGroup]="mfaForm" (ngSubmit)="submitMfa()" novalidate>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Authentication code</mat-label>
+            <mat-icon matPrefix class="field-icon" aria-hidden="true"
+              >shield</mat-icon
+            >
+            <input
+              matInput
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              formControlName="code"
+              aria-required="true"
+            />
+            @if (mfaFieldError("required")) {
+              <mat-error>A code is required</mat-error>
+            } @else if (mfaFieldError("minlength")) {
+              <mat-error>Enter your 6-digit code or a backup code</mat-error>
+            }
+          </mat-form-field>
+
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            class="submit-btn"
+            [disabled]="isLoading()"
+            aria-label="Verify code"
+          >
+            @if (isLoading()) {
+              <mat-spinner
+                diameter="20"
+                strokeWidth="2"
+                class="btn-spinner"
+              ></mat-spinner>
+              <span>Verifying…</span>
+            } @else {
+              <span>Verify</span>
+            }
+          </button>
+
+          <div class="mfa-back-row">
+            <button
+              type="button"
+              class="forgot-link"
+              (click)="backToCredentials()"
+              [disabled]="isLoading()"
+            >
+              Back to sign in
+            </button>
+          </div>
+        </form>
+      }
+
+      <!-- ── Form ──────────────────────────────────────────────────── -->
+      @if (stage() === "credentials") {
+        <form
+          [formGroup]="form"
+          (ngSubmit)="submit()"
+          novalidate
+          autocomplete="on"
+        >
+          <!-- Email -->
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Email address</mat-label>
+            <mat-icon matPrefix class="field-icon" aria-hidden="true"
+              >email</mat-icon
+            >
+            <input
+              matInput
+              type="email"
+              formControlName="email"
+              autocomplete="email"
+              (keydown)="onKeydown($event)"
+              aria-required="true"
+            />
+            @if (fieldError("email", "required")) {
+              <mat-error>Email is required</mat-error>
+            } @else if (fieldError("email", "email")) {
+              <mat-error>Enter a valid email address</mat-error>
+            }
+          </mat-form-field>
+
+          <!-- Password -->
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Password</mat-label>
+            <mat-icon matPrefix class="field-icon" aria-hidden="true"
+              >lock</mat-icon
+            >
+            <input
+              matInput
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="current-password"
+              (keydown)="onKeydown($event)"
+              aria-required="true"
+            />
+            <button
+              type="button"
+              mat-icon-button
+              matSuffix
+              class="pw-toggle"
+              (click)="togglePassword()"
+              [attr.aria-label]="
+                showPassword() ? 'Hide password' : 'Show password'
+              "
+            >
+              <mat-icon>{{
+                showPassword() ? "visibility_off" : "visibility"
+              }}</mat-icon>
+            </button>
+            @if (fieldError("password", "required")) {
+              <mat-error>Password is required</mat-error>
+            }
+          </mat-form-field>
+
+          <!-- Caps Lock warning -->
+          @if (capsLockOn()) {
+            <div class="caps-warning" role="status" aria-live="polite">
+              <mat-icon aria-hidden="true">keyboard_capslock</mat-icon>
+              <span>Caps Lock is on</span>
+            </div>
+          }
+
+          <!-- Remember Me + Forgot Password -->
+          <div class="form-options">
+            <mat-checkbox formControlName="rememberMe" color="primary">
+              Remember me
+            </mat-checkbox>
+            <a routerLink="/auth/forgot-password" class="forgot-link"
+              >Forgot password?</a
+            >
+          </div>
+
+          <!-- Submit -->
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            class="submit-btn"
+            [disabled]="isLoading()"
+            aria-label="Sign in"
+          >
+            @if (isLoading()) {
+              <mat-spinner
+                diameter="20"
+                strokeWidth="2"
+                class="btn-spinner"
+              ></mat-spinner>
+              <span>Signing in…</span>
+            } @else {
+              <span>Sign In</span>
+            }
+          </button>
+        </form>
+
+        <!-- ── SSO ─────────────────────────────────────────────────── -->
+        <app-sso-buttons
+          verb="Continue"
+          [disabled]="isLoading() || ssoBusy()"
+          (authenticated)="onSsoAuthenticated($event)"
+          (failed)="onSsoFailed($event)"
+        />
+
+        @if (magicLinkEnabled()) {
+          <p class="auth-footer">
+            <a routerLink="/auth/magic-link" class="forgot-link">
+              Sign in with an email link instead
+            </a>
+          </p>
+        }
+      }
     </div>
   </div>
 

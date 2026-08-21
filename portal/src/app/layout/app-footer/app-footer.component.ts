@@ -1,5 +1,6 @@
 import { Component, input, inject } from '@angular/core';
 import { BrandingService } from '../../services/branding.service';
+import { AuthStore } from '../../auth/store/auth.store';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -10,10 +11,11 @@ import { environment } from '../../../environments/environment';
 })
 export class AppFooterComponent {
   /** 'full' — global shell footer (company · powered-by · version · support · website).
-   *  'compact' — auth pages: just "Powered by FHIRBridge". */
+   *  'compact' — auth pages: just "Powered by Segue". */
   readonly variant = input<'full' | 'compact'>('full');
 
   protected readonly branding      = inject(BrandingService);
+  protected readonly authStore     = inject(AuthStore);
   protected readonly appVersion    = '1.0';
   protected readonly copyrightYear = new Date().getFullYear();
 

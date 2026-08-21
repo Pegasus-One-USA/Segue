@@ -1,0 +1,73 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">SNOMED CT Terminology</h1>
+    <p class="page-sub">Configure automatic twice-yearly synchronization with the National Library of Medicine, or upload a release manually.</p>
+  </div>
+
+  @if (loadingConfig()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form">
+      <section class="settings-card">
+        <h2 class="card-title">Connection</h2>
+        <p class="card-sub">
+          UMLS Terminology Services (UTS) API key. If you've already entered one on the RxNorm tab, it's reused
+          automatically here — re-entering it below is optional.
+        </p>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="snomed-apiKey">UTS API Key</label>
+            <input id="snomed-apiKey" type="password" formControlName="apiKey" autocomplete="off"
+                   [placeholder]="apiKeySet() ? 'Leave blank to keep current key' : 'UTS API key (optional if already set on RxNorm)'" />
+          </div>
+        </div>
+      </section>
+
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="SNOMED CT (US Edition) releases in March and September. Schedule automatic imports, or run one on demand below."
+        [showRetryFields]="true"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid || !canWrite"
+        [syncDisabled]="!canWrite"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </form>
+
+    <section class="settings-card">
+      <h2 class="card-title">Import Release</h2>
+      <p class="card-sub">Accepts the SNOMED CT RF2 Snapshot release archive — a fallback for when auto-sync above is off or unavailable.</p>
+
+      <div class="upload-row">
+        <label class="file-input">
+          <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading() || !canWrite" />
+          <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
+        </label>
+        <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading() || !canWrite" (click)="import()">
+          {{ uploading() ? 'Uploading…' : 'Import' }}
+        </button>
+      </div>
+
+      @if (uploading()) {
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+        </div>
+        <p class="card-sub">Uploading… {{ uploadProgress() }}% — the import itself will continue in the background once the upload completes.</p>
+      }
+    </section>
+
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent SNOMED CT release imports — manual and automatic runs share one history."
+      emptyMessage="No SNOMED CT release has been imported yet."
+      countColumnLabel="Concepts"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
+  }
+</div>

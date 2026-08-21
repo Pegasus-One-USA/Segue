@@ -1,0 +1,45 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">ICD-10-PCS Terminology</h1>
+    <p class="page-sub">CMS publishes no version-check API for procedure codes — this stays upload-driven, with a lightweight freshness check.</p>
+  </div>
+
+  <app-terminology-freshness-card
+    [freshness]="freshness()"
+    [checking]="checking()"
+    [downloading]="downloading()"
+    (checkForUpdates)="checkForUpdates()"
+    (downloadAndImport)="downloadAndImport()"
+  />
+
+  <section class="settings-card">
+    <h2 class="card-title">Import Release</h2>
+    <p class="card-sub">Accepts the CMS ICD-10-PCS code-table release archive (guidelines, index, and tables).</p>
+
+    <div class="upload-row">
+      <label class="file-input">
+        <input type="file" accept=".zip" (change)="onFileSelected($event)" [disabled]="uploading()" />
+        <span>{{ selectedFile()?.name ?? 'Choose release .zip…' }}</span>
+      </label>
+      <button class="btn-primary" type="button" [disabled]="!selectedFile() || uploading()" (click)="import()">
+        {{ uploading() ? 'Uploading…' : 'Import' }}
+      </button>
+    </div>
+
+    @if (uploading()) {
+      <div class="progress-track">
+        <div class="progress-fill" [style.width.%]="uploadProgress()"></div>
+      </div>
+      <p class="card-sub">Uploading… {{ uploadProgress() }}%</p>
+    }
+  </section>
+
+  <app-terminology-import-history
+    title="Import History"
+    subtitle="The most recent ICD-10-PCS release imports."
+    emptyMessage="No ICD-10-PCS release has been imported yet."
+    countColumnLabel="Codes"
+    [history]="history()"
+    [loading]="historyLoading()"
+  />
+</div>

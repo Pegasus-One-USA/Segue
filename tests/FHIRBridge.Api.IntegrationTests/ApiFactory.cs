@@ -41,7 +41,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:FHIRBridgeDb"]           = "",
-                ["Authentication:SigningKey"]               = "IntegrationTest-HS256-SigningKey-MustBeAtLeast32Chars!",
+                // No Authentication:SigningKey here on purpose — AppSecretProvisioner auto-generates one via
+                // the in-memory secret store (empty connection string above) on first use within this run.
                 ["Authentication:TokenLifetimeMinutes"]     = "60",
                 ["Authentication:RefreshTokenLifetimeDays"] = "7",
                 ["LocalAuth:ExposeResetTokens"]             = "true",

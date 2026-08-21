@@ -1,0 +1,37 @@
+{
+  "resourceType": "Practitioner",
+  "id": "practitioner-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:practitioner",
+      "value": "PRACTITIONER-002"
+    },
+    {
+      "system": "http://hl7.org/fhir/sid/us-npi",
+      "value": "1245319599"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "family": "Okafor",
+      "given": [
+        "Daniel"
+      ],
+      "prefix": [
+        "Dr"
+      ]
+    }
+  ],
+  "gender": "male"
+}

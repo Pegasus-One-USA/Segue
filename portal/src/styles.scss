@@ -23,6 +23,28 @@ html {
   --mat-sys-outline:              var(--color-border);
   --mat-sys-outline-variant:      var(--color-border-input);
 
+  /* Outlined text field (mat-form-field appearance="outline") doesn't
+     consistently pick up --mat-sys-outline for its per-state border/label
+     colors across Material versions — every dialog in this app was
+     re-implementing these as local !important overrides on the rendered
+     .mdc-notched-outline/.mat-mdc-floating-label DOM instead, and some of
+     those copies also bumped border-width on focus (1.5px -> 2px), which
+     creates a stray extra stroke near an icon-prefix's leading edge on an
+     already-painted outline. Bridging the MDC tokens directly here — color
+     only, no width change — makes every outlined field sitewide consistent
+     for free, with no DOM-class hacks. */
+  --mdc-outlined-text-field-outline-color:                var(--color-border-input);
+  --mdc-outlined-text-field-hover-outline-color:           #9CA3AF;
+  --mdc-outlined-text-field-focus-outline-color:           var(--color-primary);
+  --mdc-outlined-text-field-error-outline-color:           var(--color-error);
+  --mdc-outlined-text-field-error-hover-outline-color:     var(--color-error);
+  --mdc-outlined-text-field-error-focus-outline-color:     var(--color-error);
+  --mdc-outlined-text-field-label-text-color:              var(--color-muted);
+  --mdc-outlined-text-field-hover-label-text-color:        var(--color-muted);
+  --mdc-outlined-text-field-focus-label-text-color:        var(--color-primary);
+  --mdc-outlined-text-field-error-label-text-color:        var(--color-error);
+  --mdc-outlined-text-field-error-focus-label-text-color:  var(--color-error);
+
   /* Checkbox/radio label text doesn't consistently key off --mat-sys-on-surface
      across Material versions — bridge the MDC token directly too (e.g. the
      "Remember me" checkbox was unreadably dim in dark mode without this). */
@@ -79,6 +101,10 @@ html {
   --ref-red-50: #FEF2F2;  --ref-red-500: #EF4444;
 
   --ref-coral-50: #FFF0EE;  --ref-coral-500: #FF5A4F;
+
+  /* Canvas rank-color palette (design-spec §14.2) — only these 6 hues have no primitive above yet. */
+  --ref-indigo-500: #6366F1;  --ref-violet-500: #8B5CF6;  --ref-pink-500:   #EC4899;
+  --ref-orange-500: #F97316;  --ref-royal-500:  #2563EB;  --ref-purple-500: #7C3AED;
 
   /* Strong status foregrounds (accessible text/icon on *-soft backgrounds) */
   --ref-green-900: #065F46;  --ref-red-900:   #991B1B;
@@ -140,6 +166,11 @@ html {
   --color-info:         var(--ref-blue-500);
   --color-info-soft:    var(--ref-blue-50);
 
+  /* "Workflow" scope badge (transformation-rules scope chip) — not brand-overridable, same rationale
+     as --color-info: a fixed platform accent rather than a tenant-facing brand color. */
+  --color-workflow-soft:   color-mix(in srgb, var(--ref-purple-500) 12%, white);
+  --color-workflow-strong: color-mix(in srgb, var(--ref-purple-500) 65%, black);
+
   /* Strong foreground — text/icon on the matching *-soft background (badges,
      table-action buttons). Derived from the brand tone (not a fixed ref-*-900)
      so a tenant's actual color choice carries through here too. */
@@ -197,6 +228,22 @@ html {
   --epic:        var(--ref-coral-500);
   --epic-soft:   var(--ref-coral-50);
 
+  /* ── Canvas rank-color palette (design-spec §14.2) — cycled per top-level group in the field-mapping
+     canvas via a scoped --fm-group-color, e.g. `var(--fm-rank-3)`. Order matches the spec's rank table:
+     source-Epic, source-other, validation, normalize, terminology, de-identify, map/reshape,
+     dest-SQL, dest-CSV, audit, analytics. */
+  --fm-rank-1:  var(--ref-coral-500);
+  --fm-rank-2:  var(--ref-blue-500);
+  --fm-rank-3:  var(--ref-indigo-500);
+  --fm-rank-4:  var(--ref-violet-500);
+  --fm-rank-5:  var(--ref-pink-500);
+  --fm-rank-6:  var(--ref-orange-500);
+  --fm-rank-7:  var(--ref-teal-500);
+  --fm-rank-8:  var(--ref-royal-500);
+  --fm-rank-9:  var(--ref-green-500);
+  --fm-rank-10: var(--ref-neutral-500);
+  --fm-rank-11: var(--ref-purple-500);
+
   /* ── Border Radius ── */
   --radius-sm:    6px;
   --radius-base:  8px;
@@ -241,8 +288,12 @@ html {
   --z-backdrop: 50;
   --z-modal:    200;
   /* Toasts sit above every modal — a confirmation for an action taken inside a dialog (e.g. "Copied" on the
-     Launch URL modal) must stay visible, not be hidden behind the dialog it was triggered from. */
-  --z-toast:    300;
+     Launch URL modal, "Step saved" on the Transformation Rules dialog) must stay visible, not be hidden
+     behind the dialog it was triggered from. 300 clears every custom app modal using --z-modal above, but
+     NOT Angular Material's own MatDialog/MatMenu/etc. — those render into .cdk-overlay-container, a
+     separate layer Angular CDK defaults to z-index: 1000 regardless of this app's own scale, so a toast at
+     300 still lost to any open MatDialog. 1100 clears that CDK default with headroom to spare. */
+  --z-toast:    1100;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -296,12 +347,14 @@ html[data-theme='dark'] {
   --color-error:        color-mix(in srgb, var(--brand-error) 78%, white);
   --color-error-soft:   color-mix(in srgb, var(--brand-error) 35%, var(--color-surface));
   --color-info:         #60A5FA;  --color-info-soft:    #0E2A47;
+  --color-workflow-soft:   color-mix(in srgb, var(--ref-purple-500) 35%, var(--color-surface));
 
   /* Strong status foregrounds — lifted further for AA on the dark soft backgrounds */
   --color-success-strong: color-mix(in srgb, var(--brand-success) 55%, white);
   --color-warning-strong: color-mix(in srgb, var(--brand-warning) 55%, white);
   --color-error-strong:   color-mix(in srgb, var(--brand-error) 55%, white);
   --color-info-strong:    #93C5FD;
+  --color-workflow-strong: color-mix(in srgb, var(--ref-purple-500) 55%, white);
 
   /* Shadows read stronger on dark backgrounds */
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.40);
@@ -980,7 +1033,10 @@ input:-webkit-autofill:active {
    shadow, color) via the notched-outline elements — not via the raw <input>.
    The global input-field block above adds a conflicting border + error shadow
    that produce a duplicate rectangle inside every mat-form-field. This block
-   resets those overrides for any input that lives inside a mat-form-field. */
+   resets those overrides for any input that lives inside a mat-form-field.
+   .mat-mdc-input-element (matInput's own class) is included alongside the
+   type-attribute list because an <input matInput> with no explicit type=""
+   attribute (defaults to text) won't match input[type='text']. */
 .mat-mdc-form-field {
   input[type='text'],
   input[type='email'],
@@ -989,6 +1045,7 @@ input:-webkit-autofill:active {
   input[type='search'],
   input[type='url'],
   input[type='tel'],
+  .mat-mdc-input-element,
   select,
   textarea {
     border:        none        !important;
@@ -1007,6 +1064,47 @@ input:-webkit-autofill:active {
       box-shadow: none !important;
     }
   }
+}
+
+/* ─── Angular Material Form Field — Icon Prefix ────────────────────────────── */
+/* matPrefix/matIcon prefixes reserve Material's own default top-padding on
+   their wrapping container, which pushes the icon above the label/input's
+   true center — every dialog that used an icon prefix was re-fixing this
+   locally. Centralized here, plus a matching color tint on focus/error since
+   Material has no system token for prefix-icon color. */
+.mat-mdc-form-field-icon-prefix {
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+
+  mat-icon, .mat-icon {
+    margin-right: 6px;
+  }
+}
+
+/* MDC's line-ripple underline is redundant on outlined fields (the outline
+   already shows focus) — every auth page and dialog was hiding this
+   individually. */
+.mat-mdc-form-field .mdc-line-ripple {
+  display: none !important;
+}
+
+.mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix mat-icon,
+.mat-mdc-form-field.mat-focused .mat-mdc-form-field-icon-prefix .mat-icon {
+  color: var(--color-primary) !important;
+}
+
+.mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix mat-icon,
+.mat-mdc-form-field.mat-form-field-invalid .mat-mdc-form-field-icon-prefix .mat-icon {
+  color: var(--color-error) !important;
+}
+
+/* Only the resting (unfocused + empty) label sits low relative to an icon
+   prefix — Material's own transform for that state already carries the
+   horizontal offset that clears the icon, so only `top` is safe to touch;
+   overriding `transform` here would wipe that horizontal offset out too. */
+.mat-mdc-form-field-icon-prefix ~ .mat-mdc-form-field-infix .mdc-floating-label:not(.mdc-floating-label--float-above) {
+  top: 50% !important;
 }
 
 /* ─── Sidebar Utility Classes ─────────────────────────────────────────────── */
@@ -1062,6 +1160,70 @@ input:-webkit-autofill:active {
   color:        var(--color-primary);
   font-weight:  600;
   border-left-color: var(--color-primary);
+}
+
+// Shared icon-chip tab grid for feature shells with many child screens (Operations, Governance,
+// Settings). Each screen is a small rounded chip (icon + label) rather than a plain text link —
+// reads as a cohesive grid and wraps cleanly onto additional rows instead of a ragged text list.
+.shell-tabs {
+  display:       flex;
+  flex-wrap:     wrap;
+  gap:           var(--space-2);
+  padding:       var(--space-8) var(--space-10);
+  border-bottom: 1px solid var(--color-border);
+  background:    var(--color-surface);
+}
+
+.shell-tab {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           var(--space-2);
+  padding:       7px 14px 7px 10px;
+  font-size:     12.5px;
+  font-weight:   600;
+  color:         var(--color-muted);
+  text-decoration: none;
+  white-space:   nowrap;
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background:    var(--color-surface);
+  transition:    color var(--transition-base),
+                 background var(--transition-base),
+                 border-color var(--transition-base);
+
+  mat-icon {
+    width:     16px;
+    height:    16px;
+    font-size: 16px;
+  }
+
+  &:hover {
+    color:       var(--color-ink);
+    background:  var(--color-bg);
+    border-color: var(--color-muted-2);
+  }
+
+  &.active {
+    color:       var(--color-primary);
+    background:  var(--color-primary-soft);
+    border-color: var(--color-primary-mid);
+  }
+}
+
+// A section blocked on something external (e.g. CPT's AMA license) — still navigable (its page explains why),
+// just visually muted so it doesn't read as an equally-available option next to the working sections.
+.shell-tab--locked {
+  color: var(--color-muted-2);
+
+  &:hover {
+    color: var(--color-muted);
+  }
+
+  &.active {
+    color: var(--color-muted);
+    background: var(--color-side);
+    border-color: var(--color-border);
+  }
 }
 
 .topbar {
@@ -1226,6 +1388,23 @@ input:-webkit-autofill:active {
   }
 }
 
+/* mat-menu class is placed ON the panel element, so no descendant combinator (same convention as
+   .user-action-menu above). Backs the Execution History field-lineage panel's resource-tree popover
+   (see field-lineage-panel.component.html's #resourceMenu) — its own content (.resource-tree etc.) is
+   styled normally from that component's scoped stylesheet; only the CDK-overlay-owned panel chrome
+   needs a global rule + !important to beat MDC's own generated width/padding. */
+.mat-mdc-menu-panel.resource-menu-panel {
+  min-width: 280px !important;
+  max-width: 320px !important;
+  max-height: min(60vh, 480px) !important;
+
+  .mat-mdc-menu-content {
+    padding: 8px !important;
+    max-height: min(60vh, 480px);
+    overflow-y: auto;
+  }
+}
+
 /* ─── Animation Utility Classes ───────────────────────────────────────────── */
 .spin {
   animation: spin 0.6s linear infinite;
@@ -1248,4 +1427,148 @@ input:-webkit-autofill:active {
 
 .slide-up {
   animation: slide-up var(--transition-slow) ease both;
+}
+
+/* ─── Shared "What am I looking at?" info panel ───────────────────────────── */
+/* Collapsed-by-default explainer used on list-page headers (Operations/Governance
+   screens) — a native <details>/<summary> so no component state is needed:
+   <details class="info-panel">
+     <summary>What am I looking at?</summary>
+     <div class="info-body"> ...page-specific content using .info-lead/.info-section/etc... </div>
+   </details> */
+.info-panel {
+  border:        1px solid var(--color-border);
+  border-radius: 8px;
+  background:    var(--color-surface-2, var(--color-surface));
+  font-size:     13px;
+
+  summary {
+    cursor:      pointer;
+    padding:     10px 14px;
+    font-weight: 600;
+    color:       var(--color-primary);
+    list-style:  none;
+  }
+
+  summary::-webkit-details-marker { display: none; }
+
+  summary::before {
+    content:      '▸';
+    display:      inline-block;
+    margin-right: 8px;
+    transition:   transform 0.15s ease;
+  }
+
+  &[open] summary::before { transform: rotate(90deg); }
+
+  .info-body {
+    padding:     4px 16px 16px 16px;
+    color:       var(--color-ink-2, var(--color-muted));
+    line-height: 1.5;
+
+    code {
+      font-family:   monospace;
+      font-size:     12px;
+      background:    var(--color-primary-soft);
+      color:         var(--color-primary-dark);
+      padding:       1px 6px;
+      border-radius: 4px;
+    }
+  }
+
+  .info-lead {
+    margin:         0 0 16px;
+    padding-bottom: 14px;
+    border-bottom:  1px solid var(--color-border);
+    color:          var(--color-ink-2);
+  }
+
+  .info-section { margin-bottom: 16px; }
+  .info-section:last-of-type { margin-bottom: 0; }
+
+  .info-heading {
+    margin:         0 0 10px;
+    font-size:      11px;
+    font-weight:    700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color:          var(--color-muted);
+  }
+
+  .info-heading-hint {
+    font-weight:    500;
+    text-transform: none;
+    letter-spacing: 0;
+    color:          var(--color-muted-2, var(--color-muted));
+  }
+
+  .info-defs {
+    margin:  0;
+    display: grid;
+    gap:     8px;
+  }
+
+  .info-def {
+    display:               grid;
+    grid-template-columns: 150px 1fr;
+    gap:                   12px;
+    align-items:           start;
+  }
+
+  .info-tag {
+    display:       inline-block;
+    padding:       3px 10px;
+    border-radius: 999px;
+    background:    var(--color-primary-soft);
+    color:         var(--color-primary-dark);
+    border:        1px solid var(--color-primary-mid);
+    font-size:     12px;
+    font-weight:   600;
+    white-space:   nowrap;
+  }
+
+  .info-def dd { margin: 2px 0 0; }
+
+  .info-metrics {
+    display:               grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap:                   8px;
+  }
+
+  .info-metric {
+    display:        flex;
+    flex-direction: column;
+    gap:            2px;
+    padding:        10px 12px;
+    border:         1px solid var(--color-border);
+    border-radius:  8px;
+    background:     var(--color-surface);
+    font-size:      12px;
+  }
+
+  .info-metric-key {
+    font-weight: 700;
+    color:       var(--color-ink);
+  }
+
+  .info-statuses {
+    display:   flex;
+    flex-wrap: wrap;
+    gap:       10px 16px;
+  }
+
+  .info-status {
+    display:     inline-flex;
+    align-items: center;
+    gap:         6px;
+    font-size:   12px;
+  }
+
+  .info-note {
+    margin:       16px 0 0;
+    padding-top:  12px;
+    border-top:   1px dashed var(--color-border);
+    color:        var(--color-muted);
+    font-size:    12px;
+  }
 }

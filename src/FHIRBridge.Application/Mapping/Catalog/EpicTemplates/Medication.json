@@ -1,0 +1,98 @@
+{
+  "resourceType": "Medication",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "version": "<String · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "status": "<Code · 0..1>",
+  "manufacturer": {
+    "reference": "<String · 0..1>",
+    "type": "<Uri · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "form": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "amount": {
+    "numerator": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>",
+      "system": "<Uri · 0..1>",
+      "code": "<Code · 0..1>"
+    },
+    "denominator": {
+      "value": "<Decimal · 0..1>",
+      "unit": "<String · 0..1>",
+      "system": "<Uri · 0..1>",
+      "code": "<Code · 0..1>"
+    }
+  },
+  "ingredient": [
+    {
+      "itemCodeableConcept": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "itemReference": {
+        "reference": "<String · 0..1>",
+        "display": "<String · 0..1>"
+      },
+      "isActive": "<boolean · 0..1>",
+      "strength": {
+        "numerator": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>"
+        },
+        "denominator": {
+          "value": "<Decimal · 0..1>",
+          "unit": "<String · 0..1>",
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>"
+        }
+      }
+    }
+  ],
+  "batch": {
+    "lotNumber": "<String · 0..1>",
+    "expirationDate": "<DateTime · 0..1>"
+  }
+}

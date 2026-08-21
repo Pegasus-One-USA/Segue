@@ -7,5 +7,9 @@ namespace FHIRBridge.Runtime.Application.Abstractions.Sources;
 /// </summary>
 public interface ISourceConnectionSyncCursorStore
 {
-    Task RecordSuccessfulSyncAsync(Guid sourceConnectionId, DateTime syncedAtUtc, CancellationToken cancellationToken);
+    Task RecordSuccessfulSyncAsync(
+        Guid sourceConnectionId,
+        IReadOnlyCollection<string> resourceTypes,
+        DateTime syncedAtUtc,
+        CancellationToken cancellationToken);
 }

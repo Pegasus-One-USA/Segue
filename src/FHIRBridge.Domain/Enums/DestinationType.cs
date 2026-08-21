@@ -22,5 +22,7 @@ public enum DestinationType
     Pdf = 17,
     Avro = 18,
     Protobuf = 19,
-    Databricks = 20
+    Databricks = 20,
+    Mongo = 21,
+    Medplum = 22
 }

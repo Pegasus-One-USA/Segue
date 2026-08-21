@@ -7,4 +7,8 @@ public sealed record CreateLocalUserRequest(
     IReadOnlyCollection<string> RoleNames,
     bool RequirePasswordChange,
     string? FirstName = null,
-    string? LastName = null);
+    string? LastName = null,
+    // HIPAA hardening: defaults true, same as InviteUserRequest — an admin has to deliberately opt a
+    // directly-created user OUT of MFA. The first-run SuperAdmin path (SetupService) hardcodes this to
+    // true regardless of caller input — MFA is compulsory there, not just default-on.
+    bool RequireMfa = true);

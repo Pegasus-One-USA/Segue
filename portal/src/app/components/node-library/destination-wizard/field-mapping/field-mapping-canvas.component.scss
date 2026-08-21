@@ -1,0 +1,278 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+// No scroll at this level, ever — the pan/zoom viewport's own content now has a single, dedicated
+// vertical scrollbar (.fm-scrollbar-track/.fm-scrollbar-thumb below), and the mapping list has its own
+// bounded internal scroll (.fm-list-body's max-height). A second scroll region here would just be a
+// confusing, differently-styled native scrollbar layered on top of the real one.
+.fm-canvas { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: hidden; }
+
+.fm-viewport {
+  position: relative;
+  flex: 1;
+  // A concrete floor, not 0 — the old .fm-canvas-inner's `min-height: max(100%, 900px)` used to be the
+  // one definite size anchoring this whole chain of ancestors (:host, .fm-canvas, .dw-mapping-canvas-full,
+  // .dw-body, ...), all of which are themselves just `flex: 1; min-height: 0`. Switching .fm-canvas-inner
+  // to `position: absolute` (needed so it stops contributing to flow-based sizing at all, since panning
+  // replaces it) removed that anchor, so without this the whole chain has nothing to resolve a height
+  // from and collapses. flex: 1 still lets it grow beyond this floor whenever more space is available.
+  // MUST match FieldMappingListComponent's MIN_CANVAS_HEIGHT constant — that's what the mapping list's
+  // own resize clamp assumes this can shrink to; a mismatch here means the two panels stop summing to
+  // the full available height (overflow or a gap, depending on which direction it's off by).
+  min-height: 150px;
+  overflow: hidden;
+  background: var(--color-bg);
+  background-image: radial-gradient(color-mix(in srgb, var(--color-primary) 15%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  cursor: grab;
+  touch-action: none;
+
+  &.fm-viewport--panning { cursor: grabbing; }
+}
+
+// Fixed, ample virtual-canvas size (matches the main workflow canvas's .flow) — panning covers the
+// rest, so this never needs to grow with content the way the old min-width/min-height did.
+.fm-canvas-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4000px;
+  height: 2600px;
+  transform-origin: 0 0;
+}
+
+// Custom vertical scrollbar — not a native overflow scrollbar, since .fm-canvas-inner's transform-scale
+// can't be relied on cross-browser to size a native scroll area correctly. Reads/writes the same pan.y
+// the drag-pan and wheel-scroll already use (see FieldMappingAnchorService), so all three interaction
+// methods stay in perfect sync.
+.fm-scrollbar-track {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  z-index: 15;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  transition: background var(--transition-base, 150ms ease);
+
+  &:hover { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+}
+
+.fm-scrollbar-thumb {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  min-height: 32px;
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover, &:active { background: color-mix(in srgb, var(--color-ink) 38%, transparent); }
+}
+
+// Fixed chrome — top-right of the viewport, not the pannable/zoomable content, so it's always in the
+// same reachable spot regardless of how many tables have been added or the current pan/zoom state.
+// Used to stack below the zoom dock (moved up to the dialog's own mapping toolbar — see
+// node-library-dialog.component.html), so this now owns the top-right corner alone.
+.fm-add-table-slot {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  width: 260px;
+}
+
+.fm-add-table-select {
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  box-shadow: 0 12px 28px rgba(18, 20, 27, .11);
+  border: 1.5px dashed var(--color-border-input);
+  border-radius: var(--radius-card);
+  padding: var(--space-6) var(--space-8);
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+
+  &:hover { border-color: var(--color-primary); color: var(--color-primary-dark); background: var(--color-primary-soft); }
+  &:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-mid); }
+
+  &--open { border-color: var(--color-primary); color: var(--color-primary-dark); background: var(--color-primary-soft); }
+}
+
+// Renders position: fixed at coordinates computed in toggleAddTableMenu() from real
+// getBoundingClientRect() measurements (trigger button + .fm-viewport) — NOT position: absolute
+// within .fm-add-table-slot — so it's never clipped by .fm-viewport's own overflow: hidden and its
+// max-height genuinely tracks the canvas's actual visible size rather than growing to fit however
+// many tables the connected database happens to have. Same technique as workflow-list.component.scss's
+// .row-menu-panel, which solves an analogous "clipped by an overflow ancestor" problem.
+.fm-add-table-panel {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 28px rgba(18, 20, 27, .18);
+  overflow: hidden;
+}
+
+.fm-add-table-search-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fm-add-table-search {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: var(--space-4) var(--space-6);
+  border: none;
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+
+  &::placeholder { color: var(--color-muted); }
+  &::-webkit-search-cancel-button { display: none; }
+  &:focus-visible { outline: none; background: var(--color-primary-soft); }
+}
+
+.fm-add-table-search-clear {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: var(--space-6);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+
+  &:hover { background: var(--color-primary); color: var(--color-on-primary); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-add-table-options {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fm-add-table-option {
+  appearance: none;
+  flex-shrink: 0;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: var(--space-4) var(--space-6);
+  border: none;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover, &:focus-visible { outline: none; background: var(--color-primary-soft); color: var(--color-primary-dark); }
+}
+
+.fm-add-table-no-match {
+  padding: var(--space-6);
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+// Same affordance as .fm-add-table-select, but a real <button> (no live schema to pick an existing
+// table from yet, so this is the only "add a table" entry point) — reset UA button chrome so it reads
+// identically to the dropdown it stands in for.
+.fm-add-table-createbtn {
+  appearance: none;
+  text-align: left;
+}
+
+/* ── Confirm before removing an extra table ─────────────────────────────────── */
+.fm-remove-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.fm-remove-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.fm-remove-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+
+  &--danger { color: var(--color-error); }
+}
+
+.fm-remove-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.fm-remove-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.fm-remove-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-add-table-select { transition: none; }
+}

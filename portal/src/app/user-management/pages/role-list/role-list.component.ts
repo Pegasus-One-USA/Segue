@@ -4,17 +4,21 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../../services/toast.service';
+import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { AuthService } from '../../../auth/services/auth.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 @Component({
   selector: 'app-role-list',
@@ -25,18 +29,29 @@ import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dia
     MatTableModule,
     MatButtonModule,
     MatIconModule,
-    MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    PaginationBarComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './role-list.component.html',
   styleUrls: ['./role-list.component.scss'],
 })
 export class RoleListComponent implements OnInit {
-  private readonly svc    = inject(IRoleService);
-  private readonly dialog = inject(MatDialog);
-  private readonly snack  = inject(MatSnackBar);
-  private readonly router = inject(Router);
+  private readonly svc         = inject(IRoleService);
+  private readonly dialog      = inject(MatDialog);
+  private readonly toast       = inject(ToastService);
+  private readonly router      = inject(Router);
+  readonly authService         = inject(AuthService);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating — mirrors user-list.component.ts's established pattern exactly. Exposed
+  // as instance fields (template expressions can't reach an imported enum/function directly) and
+  // consumed via *appHideWithoutPermission in the template rather than local canX() wrappers, since
+  // nothing here needs an isAdmin() OR beyond what the directive already does internally. ──────
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
 
   readonly searchQuery = signal('');
   readonly pageIndex   = signal(0);
@@ -45,28 +60,36 @@ export class RoleListComponent implements OnInit {
 
   readonly roles = signal<Role[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actions'];
+  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actionBy', 'actionOn', 'actions'];
+
+  /** Only one sortable column today — "Action on" (createdAt, or modifiedOnUtc when later). */
+  readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  toggleActionOnSort(): void {
+    this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+  }
+
+  private static actionOnOf(r: Role): number {
+    const value = r.modifiedOnUtc || r.createdAt;
+    return value ? new Date(value).getTime() : 0;
+  }
 
   readonly filtered = computed(() => {
     const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.roles();
-    return this.roles().filter(r =>
+    const rows = !q ? this.roles() : this.roles().filter(r =>
       r.displayName.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
     );
+
+    const direction = this.actionOnSortDirection();
+    if (!direction) return rows;
+    const sorted = [...rows].sort((a, b) => RoleListComponent.actionOnOf(a) - RoleListComponent.actionOnOf(b));
+    return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
   readonly paginated = computed(() => {
     const start = this.pageIndex() * this.pageSize();
     return this.filtered().slice(start, start + this.pageSize());
   });
-
-  readonly showingFrom = computed(() =>
-    this.filtered().length === 0 ? 0 : this.pageIndex() * this.pageSize() + 1
-  );
-
-  readonly showingTo = computed(() =>
-    Math.min((this.pageIndex() + 1) * this.pageSize(), this.filtered().length)
-  );
 
   ngOnInit(): void {
     this.loadRoles();
@@ -79,9 +102,9 @@ export class RoleListComponent implements OnInit {
         this.roles.set(roles);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.snack.open('Failed to load roles.', 'Dismiss', { duration: 4000 });
+        this.toast.error(err.message || 'Failed to load roles.');
       },
     });
   }
@@ -96,12 +119,13 @@ export class RoleListComponent implements OnInit {
     this.pageIndex.set(0);
   }
 
-  onPageChange(e: PageEvent): void {
+  onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
   }
 
   openAdd(): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Create), 'You do not have permission to create roles.')) return;
     this.dialog
       .open(RoleDialogComponent, {
         width: '560px',
@@ -112,13 +136,14 @@ export class RoleListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('Role added successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('Role added successfully.');
           this.loadRoles();
         }
       });
   }
 
   openEdit(role: Role): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Edit), 'You do not have permission to edit roles.')) return;
     this.dialog
       .open(RoleDialogComponent, {
         width: '560px',
@@ -129,7 +154,7 @@ export class RoleListComponent implements OnInit {
       .afterClosed()
       .subscribe(res => {
         if (res) {
-          this.snack.open('Role updated successfully.', 'Dismiss', { duration: 3000 });
+          this.toast.success('Role updated successfully.');
           this.loadRoles();
         }
       });
@@ -140,6 +165,7 @@ export class RoleListComponent implements OnInit {
   }
 
   confirmDelete(role: Role): void {
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Delete), 'You do not have permission to delete roles.')) return;
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',
@@ -156,12 +182,12 @@ export class RoleListComponent implements OnInit {
         if (!confirmed) return;
         this.svc.deleteRole(role.id).subscribe({
           next: () => {
-            this.snack.open(`Role "${role.displayName}" deleted.`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`Role "${role.displayName}" deleted.`);
             this.loadRoles();
           },
           error: (err: HttpErrorResponse) => {
-            const message = err.error?.title ?? 'Failed to delete role.';
-            this.snack.open(message, 'Dismiss', { duration: 5000 });
+            const message = typeof err.error?.title === 'string' ? err.error.title : err.message || 'Failed to delete role.';
+            this.toast.error(message);
           },
         });
       });

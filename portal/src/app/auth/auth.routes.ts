@@ -28,6 +28,18 @@ export const AUTH_ROUTES: Routes = [
       import('./pages/reset-password/reset-password.component').then(m => m.ResetPasswordComponent),
   },
   {
+    path: 'magic-link',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./pages/magic-link-request/magic-link-request.component').then(m => m.MagicLinkRequestComponent),
+  },
+  {
+    path: 'magic-link/redeem',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./pages/magic-link-redeem/magic-link-redeem.component').then(m => m.MagicLinkRedeemComponent),
+  },
+  {
     path: 'change-password',
     canActivate: [authGuard],
     loadComponent: () =>

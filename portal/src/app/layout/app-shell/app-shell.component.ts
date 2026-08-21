@@ -1,13 +1,14 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, HostListener } from '@angular/core';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.component';
 import { UserMenuComponent } from '../../user/components/user-menu/user-menu.component';
 import { AppFooterComponent } from '../app-footer/app-footer.component';
+import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
-  '/workflow-builder':             'Pipeline Builder',
+  '/workflow-builder':             'Workflow Builder',
   '/user-management':              'User Management',
   '/user-management/tenants':      'Tenant',
   '/user-management/roles':        'Role',
@@ -34,9 +35,22 @@ const PAGE_TITLES: Record<string, string> = {
 })
 export class AppShellComponent implements OnInit {
   private readonly router = inject(Router);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   protected readonly sidebarCollapsed = signal(false);
   protected readonly pageTitle        = signal('Dashboard');
+
+  // Tab close, refresh, or browser Back/Forward moving past the SPA's own history entirely — the
+  // in-app CanDeactivate guard (unsaved-changes.guard.ts) can't intercept any of those. Browsers
+  // ignore any custom message here and show their own generic prompt; that's a platform constraint,
+  // not something we can override.
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.unsavedChangesRegistry.hasAnyUnsavedChanges()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
 
   ngOnInit(): void {
     this.updateTitle(this.router.url);
@@ -52,7 +66,7 @@ export class AppShellComponent implements OnInit {
       return;
     }
     const base = '/' + cleanUrl.split('/')[1];
-    this.pageTitle.set(PAGE_TITLES[base] ?? 'FHIRBridge');
+    this.pageTitle.set(PAGE_TITLES[base] ?? 'Segue');
   }
 
   toggleSidebar(): void {

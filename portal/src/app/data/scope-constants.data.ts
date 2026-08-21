@@ -1,15 +1,29 @@
+// MVP1 resource set — keep in sync with SupportedFhirResourceTypes.All
+// (src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs) minus Immunization, which the backend
+// still supports but MVP1's resource picker deliberately does not surface. Provenance was added so the
+// source-extraction picker matches the mapping-profile/destination pickers, which already support it.
 export const FHIR_RESOURCES: string[] = [
-  'Patient', 'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
-  'Encounter', 'Procedure', 'Immunization', 'DiagnosticReport', 'DocumentReference',
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation',
+  'Condition', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
+  'MedicationRequest', 'MedicationAdministration', 'Provenance',
 ];
 
-export const DEFAULT_RESOURCES: string[] = [
-  'Patient', 'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
+/** FHIR resource types Epic sources/destinations support — the canonical list surfaced in the Epic
+ *  source wizard's scope generation and the destination wizard's data-group picker. Keep in sync with
+ *  SupportedFhirResourceTypes.All (backend) — the original MVP1 11 plus the resources added once their
+ *  Epic templates (src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates) existed to catalog them. */
+export const SUPPORTED_RESOURCE_TYPES: string[] = [
+  'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
+  'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
+  'Appointment', 'Binary', 'CarePlan', 'CareTeam', 'Communication', 'CommunicationRequest', 'Device',
+  'DocumentReference', 'FamilyMemberHistory', 'Goal', 'ImagingStudy', 'Immunization', 'Location', 'Medication',
+  'MedicationDispense', 'MedicationStatement', 'Organization', 'PractitionerRole', 'Provenance',
+  'Questionnaire', 'QuestionnaireResponse', 'RelatedPerson', 'Schedule', 'Slot', 'Specimen', 'Task',
 ];
 
 export const CODED_RESOURCES: string[] = [
-  'Observation', 'Condition', 'MedicationRequest', 'AllergyIntolerance',
-  'Procedure', 'Immunization', 'DiagnosticReport',
+  'Observation', 'Condition', 'MedicationRequest', 'MedicationAdministration',
+  'AllergyIntolerance', 'Procedure', 'ServiceRequest', 'DiagnosticReport',
 ];
 
 export const CTX_TRANSFORMS: Record<string, string[]> = {

@@ -32,6 +32,7 @@ public sealed class GeneratedFileDownloadsController : ControllerBase
             return NotFound();
         }
 
-        return PhysicalFile(resolution.PhysicalPath, resolution.ContentType, resolution.DisplayFileName);
+        var bytes = await _downloadLinkService.ReadDecryptedAsync(resolution.PhysicalPath, cancellationToken);
+        return File(bytes, resolution.ContentType, resolution.DisplayFileName);
     }
 }

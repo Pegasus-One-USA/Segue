@@ -1,14 +1,23 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
 
 namespace FHIRBridge.Worker;
 
 /// <summary>
 /// Processor worker role for webhook ingestion: consumes <see cref="WebhookIngestionCommand"/> messages and runs each
-/// via the scoped <see cref="IWebhookIngestionCommandHandler"/>. Active when the webhook API enqueues asynchronously
-/// over a shared transport (RabbitMQ / Azure Service Bus). With the in-process transport, run the API and Worker in
-/// the same process for the queue to be shared.
+/// via the scoped <see cref="IWebhookIngestionCommandHandler"/>. Intended to be active when the webhook API enqueues
+/// asynchronously over a shared transport (RabbitMQ / Azure Service Bus). With the in-process transport, the API and
+/// Worker would need to run in the same process for the queue to be shared.
 /// </summary>
+/// <remarks>
+/// <b>Live (2026-07-18 migration).</b> Registered in <c>Program.cs</c>, closing a previously-silent gap:
+/// <c>WebhookIngestionController</c> (Api host) enqueues a <see cref="WebhookIngestionCommand"/> via
+/// <c>IWebhookIngestionDispatcher</c> on every inbound webhook call; before this, nothing consumed it in any
+/// transport configuration, so a webhook-triggered run was accepted (200/202) and then silently never executed.
+/// Note the in-memory transport still can't cross the Api↔Worker process boundary — this consumer only sees
+/// messages end-to-end when <c>Messaging:Provider</c> is RabbitMQ or Azure Service Bus.
+/// </remarks>
 public sealed class WebhookIngestionCommandProcessor : BackgroundService
 {
     private readonly IMessageConsumer<WebhookIngestionCommand> _consumer;
@@ -35,6 +44,19 @@ public sealed class WebhookIngestionCommandProcessor : BackgroundService
     {
         using var scope = _serviceScopeFactory.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IWebhookIngestionCommandHandler>();
-        await handler.HandleAsync(command, cancellationToken);
+
+        try
+        {
+            await handler.HandleAsync(command, cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+            await exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(Module: "Webhook Ingestion", CorrelationId: command.CorrelationId),
+                CancellationToken.None);
+            throw;
+        }
     }
 }

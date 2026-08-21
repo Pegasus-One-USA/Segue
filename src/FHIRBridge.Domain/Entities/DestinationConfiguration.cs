@@ -4,7 +4,7 @@ using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
 
-public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
+public sealed class DestinationConfiguration : AuditableChildEntity<Guid>, IHasAuditDisplayName
 {
     private DestinationConfiguration()
     {
@@ -27,6 +27,7 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
     }
 
     public string Name { get; private set; } = default!;
+    string? IHasAuditDisplayName.AuditDisplayName => Name;
     public DestinationType DestinationType { get; private set; }
     public SecretReference SecretReference { get; private set; } = default!;
     public string? Target { get; private set; }
@@ -40,6 +41,19 @@ public sealed class DestinationConfiguration : AuditableChildEntity<Guid>
     /// </summary>
     public string? ConnectionMetadataJson { get; private set; }
     public bool IsEnabled { get; private set; }
+
+    /// <summary>
+    /// HIPAA #2: when set, resources routed to this destination are run through this <see cref="DeIdentificationProfile"/>'s
+    /// pre-mapping rules before delivery. Null (the default) is identical behavior to before profiles existed — no
+    /// existing destination changes behavior until a tenant admin explicitly assigns a profile. Different destinations
+    /// can point at different profiles, so redaction depth is not one-size-fits-all for a tenant.
+    /// </summary>
+    public Guid? DeIdentificationProfileId { get; private set; }
+
+    public void SetDeIdentificationProfile(Guid? deIdentificationProfileId)
+    {
+        DeIdentificationProfileId = deIdentificationProfileId;
+    }
 
     public void Update(
         string name,

@@ -1,0 +1,654 @@
+:host { display: block; }
+
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  width: 640px;
+  max-width: 95vw;
+  overflow: hidden;
+
+  // Fills whatever size dialogRef.updateSize() just gave the overlay pane (see toggleMaximize() — a
+  // bounded min(92vw,1100px)/min(88vh,740px), not the full viewport), rather than hardcoding a size
+  // here that would fight the pane's own.
+  &--maximized {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
+}
+
+// ─── Header (mirrors assign-roles-dialog conventions) ──────────────────────
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+
+  // The same gradient the dashboard's own KPI phase-badges use (design-spec §17,
+  // linear-gradient(135deg,#00A89D,#0076A8)) — tokenized as primary→secondary rather than the flat
+  // teal-soft square this used to be, so the header reads as a deliberate accent rather than a plain
+  // icon tile.
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    // White-on-teal only clears WCAG AA at icon/large-text size (design-spec §21.1) — this is exactly
+    // that case, never small body text.
+    mat-icon { color: var(--color-on-primary); font-size: 22px; height: 22px; width: 22px; }
+  }
+
+  &__text {
+    flex: 1;
+    min-width: 0;
+
+    h2 {
+      font-size: 18px;
+      line-height: 1.3;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+  }
+}
+
+// A short breadcrumb of what this dialog's rules apply to — source system › resource › destination —
+// replacing the old plain "Patient — SqlServer — from Epic" text line. These three values are exactly
+// what scopes every rule below (see TransformRulesDialogData), so surfacing them as a connected trail
+// reads as "the path this data takes" rather than an incidental caption.
+.header-trail {
+  display: flex;
+  align-items: center;
+  // 2px read as pills and chevrons crowded right up against each other with no breathing room, rather
+  // than a clean, evenly-spaced trail — 6px gives each segment its own visual space.
+  gap: 6px;
+  margin-top: 3px;
+
+  &__pill {
+    // A pill is its own tiny flex row (not just inline text) with an explicit line-height, not the
+    // browser's own default for 12px/700 text (which varies by font metrics) — so every pill's text sits
+    // dead-center in its own padding box by a known number, the same reasoning as the checkbox label fix
+    // elsewhere in this file, rather than each pill (and the chevron beside it) landing at a slightly
+    // different baseline.
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 600;
+    color: var(--color-ink-2);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 3px 10px;
+    white-space: nowrap;
+
+    &--dest { color: var(--color-primary-dark); background: var(--color-primary-soft); border-color: var(--color-primary-mid); }
+  }
+
+  &__sep { font-size: 14px; height: 14px; width: 14px; color: var(--color-muted-2); flex-shrink: 0; }
+}
+
+.dialog-close {
+  color: var(--color-muted) !important;
+  &:hover { background: var(--color-bg) !important; }
+}
+
+.dialog-maximize {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+.dialog-maximize-ico {
+  width: 18px;
+  height: 18px;
+}
+
+mat-dialog-content {
+  padding: 4px 24px 16px !important;
+  overflow-y: auto;
+  // flex: 1 lets this grow to fill whatever room .dialog-container actually has — bounded by its own
+  // max-height: 88vh normally, and by 100vh once maximized (see .dialog-container--maximized).
+  flex: 1;
+  min-height: 0;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+// ─── Rule rows ───────────────────────────────────────────────────────────
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: 8px 0;
+}
+
+// A real card per field (design-spec §17 card treatment: rest shadow-xs, hover shadow-sm + lift) — was a
+// flat border-bottom-separated row, which read as one continuous list rather than distinct, individually
+// actionable fields each carrying their own rule chain.
+.rule-row {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--transition-slow), transform var(--transition-slow);
+
+  &:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+
+    .column-name { font-weight: 600; font-size: 14px; color: var(--color-ink); }
+    .table-name { font-size: 11.5px; color: var(--color-muted); }
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  // A compact "try it" console strip — a bordered pill standing in for the old bare input+button row,
+  // with a prompt chevron on the left and the resolved value rendered as its own pill on the right
+  // instead of plain "→ text". Same shape as transformation-rule-list.component.scss's .list-header
+  // filter pill (border-radius 999px), reused here for the same "one small self-contained control"
+  // reading rather than three loosely-related pieces sitting in a row.
+  &__preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 4px 4px 4px 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    transition: border-color var(--transition-base, 150ms ease);
+
+    // Focus moves to the plain-borderless input inside; ringing the whole pill (not just the input)
+    // keeps the focus indicator visible without reintroducing the input's own boxed border that this
+    // console treatment deliberately removed (design-spec §21.3 — never remove the indicator entirely).
+    &:focus-within {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+
+    .preview-prompt-ico { font-size: 15px; height: 15px; width: 15px; color: var(--color-primary); flex-shrink: 0; }
+
+    .preview-input {
+      flex: 1;
+      min-width: 0;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12.5px;
+      padding: 6px 4px;
+      border: none;
+      background: none;
+      color: var(--color-ink);
+
+      &::placeholder { color: var(--color-muted-2); font-family: var(--brand-font); }
+      &:focus-visible { outline: none; }
+    }
+
+    .preview-btn {
+      min-width: 92px;
+      flex-shrink: 0;
+
+      mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+    }
+
+    .preview-output {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-primary-dark);
+      background: var(--color-primary-soft);
+      border-radius: var(--radius-pill);
+      padding: 4px 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+
+      &__ico { font-size: 13px; height: 13px; width: 13px; }
+    }
+  }
+
+  &__editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+}
+
+// Vertical label-above-input — the app's own form spec (§8.3) — matches
+// transformation-rule-list.component.scss's identical rule (this dialog mirrors that page's step chain,
+// see the doc comment on .step-card below) rather than Material's floating-label outline appearance.
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  // display: block + min-height (not just font-size) — see transformation-rule-list.component.scss's
+  // identical rule: a two-line label otherwise pushes only its own input down relative to a neighbor
+  // with a shorter, one-line label in the same wrapping row.
+  label {
+    display: block;
+    min-height: 34px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-ink-2);
+  }
+
+  select, input {
+    height: 42px;
+    padding: 0 12px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    font-size: 13.5px;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    box-sizing: border-box;
+    transition: border-color var(--transition-base, 150ms ease);
+
+    &:hover { border-color: var(--color-muted); }
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+  }
+
+  // A native <select> otherwise renders the browser's own dropdown arrow — Chromium, Firefox, and Safari
+  // each draw it slightly differently, and its reserved width isn't identical to a plain <input>'s. This
+  // one custom chevron applies everywhere a select shows up (this field, RuleConfigFormComponent's own
+  // fields, the advanced row below), so "Node type"/"Target type"/"Decimal separator"/etc. all show the
+  // exact same glyph in the exact same position — nothing left to the browser's own rendering to drift.
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    padding-right: 32px;
+    // A data: URI SVG can't reference a CSS custom property, so this one hex is unavoidable — it's
+    // --color-muted's own value (#64748B), not a stand-in for a token that could be used instead.
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748B' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 10px 7px;
+  }
+}
+
+// Visualizes the actual ordered node chain currently resolved for this field (or its single inherited
+// node when there's no field-level chain of its own to enumerate) as a strip of small colored badges —
+// see nodeAccentVar()/nodeAbbr() (transform-node-classifier.ts) for where each chip's color and glyph
+// come from: the same design-spec §14.2 rank palette the pipeline canvas itself already cycles through
+// (--fm-rank-N), so a step here ties back to the same taxonomy a user sees elsewhere in the app instead
+// of an arbitrary new color. Sits directly beside the scope chip in .rule-row__status.
+.chain-trail {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chain-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tn-accent, var(--color-primary));
+  background: color-mix(in srgb, var(--tn-accent, var(--color-primary)) 14%, white);
+  border: 1px solid color-mix(in srgb, var(--tn-accent, var(--color-primary)) 30%, white);
+
+  // The inherited-default case shows one chip standing in for a chain whose full length isn't known yet
+  // (see the template's @else if) — a touch of opacity is the only cue that this is a preview of
+  // something broader, not the exhaustive list a field-level chain's chips are.
+  &--inherited { opacity: 0.85; }
+}
+
+.chain-arrow {
+  font-size: 14px;
+  height: 14px;
+  width: 14px;
+  color: var(--color-muted-2);
+  flex-shrink: 0;
+}
+
+// Ghost/text-link button per the app's own "Danger"/text-link button spec (was mat-button color="warn").
+.btn-text-danger {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-error);
+  cursor: pointer;
+  border-radius: var(--radius-base);
+  transition: background var(--transition-base, 150ms ease);
+
+  &:hover:not(:disabled) { background: var(--color-error-soft); }
+  &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
+}
+
+// ─── One step in a field's rule chain (shared shape with the Transformation Rules page's own step
+// chain, see transformation-rule-list.component.scss) ────────────────────────────────────────────────
+// NOT a separate order/reorder sidebar column anymore — the step number now sits inline in the "Node
+// type" label, and the reorder arrows sit inline inside that one field (see .node-select__input-row
+// below), so this is just a plain padded/bordered box around .step-card__content.
+.step-card {
+  position: relative;
+  padding: var(--space-9);
+  background: var(--color-side);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  // --tn-accent is set inline per step (see the template's [style.--tn-accent] binding) to that step's
+  // own node-category color — the same rank palette .chain-chip reads from — so this card's left edge
+  // and its .step-number badge (below) visually agree with the chain-trail chip representing it above.
+  border-left: 3px solid var(--tn-accent, var(--color-primary));
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
+// A short dashed connector between two stacked steps — reads as "step 1 feeds into step 2" without a
+// real SVG edge like the canvas's own connections. ::before is unreachable by assistive tech and adds no
+// content, so it never competes with Remove step/Save step/Add another step for keyboard focus. Sized to
+// sit inside .rule-row__editor's own 10px gap (see below) rather than adding extra margin that would
+// stack with it.
+.step-card + .step-card::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 20px;
+  width: 0;
+  height: 8px;
+  border-left: 2px dashed var(--color-border);
+}
+
+// A plain flex row (NOT an inline badge sitting inside the label's own text, and NOT position: absolute
+// either — that positioned the badge relative to whatever ancestor actually ended up establishing the
+// positioning context, which wasn't reliably this field once other rules were in play, and it drifted
+// outside the field entirely) — the badge is a normal sibling of the label here, sized well under one
+// text line (15px, vs. ~17px for 13px/1.3 text) so align-items: center on the row just centers it against
+// the label without either of them forcing the other taller. Two elements in normal flow, one flex rule,
+// nothing fighting a positioning context.
+.node-select__label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Colored via the same --tn-accent as the .step-card it lives in (cascades down automatically — no
+// extra binding needed here) rather than a flat teal, so the badge agrees with this step's own chip in
+// the chain-trail above and its card's own left-edge accent.
+.step-number {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  // Plain, unconditional tokens — not color-mix()/--tn-accent — the earlier accent-matched version
+  // rendered with invisible "1" text in testing; this trades the nice-to-have per-node-type tint for a
+  // badge that's guaranteed to actually show its number.
+  border: 1px solid var(--color-primary-mid);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// Reorder arrows sit inside the Node type field itself, immediately left of its own select — not in a
+// separate sidebar spanning the whole card's height, per the field's own compact "aligned in one row"
+// treatment.
+.node-select__input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  select { flex: 1; min-width: 0; }
+
+  .step-reorder {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+}
+
+// Plain buttons (NOT mat-icon-button) — Material's own icon-button directive enforces a minimum touch
+// target (40-48px) via its own internal sizing that a plain width/height override on the host doesn't
+// fully suppress, so these used to render taller than the 20px this rule asks for. That extra height,
+// centered by .node-select__input-row's align-items: center, is exactly what pushed "Node type"'s select
+// down out of line with its neighbors despite every other value here matching them exactly.
+.step-reorder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+
+  mat-icon { font-size: 14px; height: 14px; width: 14px; }
+
+  &:hover:not(:disabled) { background: var(--color-bg); color: var(--color-ink-2); }
+  &:disabled { color: var(--color-border); cursor: not-allowed; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.step-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+// Two genuinely separate rows — Node type on its own, the selected node's own schema fields on the row
+// below — rather than one flex-wrap row where a break between them depended on the row's available width
+// (or, before that, an invisible flex-basis:100% spacer forcing a break inside the row). Two sibling block
+// divs (each its own flex container) stack unconditionally; there's no width math that can put them back
+// on the same line. See transformation-rule-list.component.scss's identical rule for why.
+.step-card__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-card__fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 12px;
+}
+
+.step-card__fields-row--node {
+  // .node-select's basis is 186px (160px + 26px) — NOT the same 160px as the config row's fields. The
+  // 26px isn't an arbitrary nudge: it's exactly .node-select__input-row's reorder-arrow column (20px, see
+  // .step-reorder-btn) plus its 6px gap to the select. Those two elements live INSIDE .node-select's own
+  // flex-item box, sharing its width budget with the <select> — so without this compensation, the select
+  // itself would render 26px narrower than its config-row counterparts even though the outer .node-select
+  // column measured the same total width as them.
+  .node-select { flex: 1 1 186px; width: auto; min-width: 0; max-width: 340px; }
+}
+
+.step-card__fields-row--config {
+  // app-rule-config-form now owns its own CSS Grid internally (see RuleConfigFormComponent's styles) —
+  // it's the row's only child, so this just needs to let that grid have the row's full width rather than
+  // sizing itself to content.
+  display: block;
+
+  app-rule-config-form { display: block; width: 100%; }
+}
+
+.step-card__advanced {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border);
+
+  .config-control { flex: 1 1 160px; }
+}
+
+.add-step-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}
+
+.override-btn {
+  font-size: 12.5px;
+  white-space: nowrap;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}
+
+// ─── Scope / node chips ──────────────────────────────────────────────────
+.scope-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 100px;
+  white-space: nowrap;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+
+  &--workflow { background: var(--color-workflow-soft); color: var(--color-workflow-strong); }
+  &--resourcetype { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &--destinationtype { background: var(--color-info-soft); color: var(--color-info-strong); }
+  // Global and Field both use the base teal-soft treatment above — see transformation-rule-list
+  // .component.scss's identical note; Global used to get a neutral grey chip that read as "unscoped"
+  // rather than the deliberate, broadest-reach scope it actually is.
+  &--none { background: var(--color-bg); color: var(--color-muted); }
+
+  &--clickable {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+
+    &:hover { filter: brightness(0.95); }
+  }
+
+  &__caret { font-size: 14px; height: 14px; width: 14px; }
+}
+
+.inherited-view {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--color-muted);
+  }
+
+  &__hint {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0;
+  }
+}
+
+.inherited-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &__config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+}
+
+.config-pair {
+  font-size: 12px;
+  font-family: 'Roboto Mono', monospace;
+  color: var(--color-ink-2);
+
+  &--empty { color: var(--color-muted); font-style: italic; }
+}
+
+.node-chip {
+  font-size: 10.5px;
+  font-family: 'Roboto Mono', monospace;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+
+// .dialog-actions (the "Done" footer) removed per request — the dialog now ends right after the last
+// step's own Remove step/Save step row (or "+ Add another step"), with no separate footer chrome below
+// it. Closing this dialog is the header's own ✕ button (see .dialog-close above).

@@ -9,14 +9,42 @@ public static class SupportedFhirResourceTypes
     public static readonly IReadOnlyList<string> All =
     [
         "Patient",
+        "Practitioner",
         "Observation",
         "Condition",
         "MedicationRequest",
+        "MedicationAdministration",
         "AllergyIntolerance",
         "Encounter",
         "DiagnosticReport",
         "Procedure",
-        "Immunization"
+        "ServiceRequest",
+        "Immunization",
+        "Appointment",
+        "Binary",
+        "CarePlan",
+        "CareTeam",
+        "Communication",
+        "CommunicationRequest",
+        "Device",
+        "DocumentReference",
+        "FamilyMemberHistory",
+        "Goal",
+        "ImagingStudy",
+        "Location",
+        "Medication",
+        "MedicationDispense",
+        "MedicationStatement",
+        "Organization",
+        "PractitionerRole",
+        "Provenance",
+        "Questionnaire",
+        "QuestionnaireResponse",
+        "RelatedPerson",
+        "Schedule",
+        "Slot",
+        "Specimen",
+        "Task"
     ];
 
     private static readonly IReadOnlyDictionary<string, string> Normalized =

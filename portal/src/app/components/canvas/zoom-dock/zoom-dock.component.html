@@ -1,6 +1,9 @@
-<div class="zoom-dock">
-  <button type="button" (click)="zoomOut.emit()">−</button>
+<div class="zoom-dock" [class.zoom-dock--top-right]="corner() === 'top-right'" [class.zoom-dock--inline]="corner() === 'inline'">
+  <button type="button" aria-label="Zoom out" (click)="zoomOut.emit()">−</button>
   <span>{{ zoomPercent() }}</span>
-  <button type="button" (click)="zoomIn.emit()">+</button>
-  <button type="button" title="Reset" (click)="reset.emit()">⤢</button>
+  <button type="button" aria-label="Zoom in" (click)="zoomIn.emit()">+</button>
+  <button type="button" title="Reset zoom" aria-label="Reset zoom" (click)="reset.emit()">⤢</button>
+  @if (showFit()) {
+    <button type="button" title="Fit to view" aria-label="Fit to view" (click)="fit.emit()">⛶</button>
+  }
 </div>

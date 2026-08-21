@@ -123,14 +123,25 @@ public static class RbacSeedData
     [
         // Original platform permissions.
         new("Manage source, destination, mapping, webhook, and route configuration.", PermissionGroupCode.Configuration, PermissionActionCode.Write),
+        new("View terminology, notification, and other platform configuration.", PermissionGroupCode.Configuration, PermissionActionCode.View),
         new("Execute configured pipeline routes.", PermissionGroupCode.Pipeline, PermissionActionCode.Execute),
         new("Test source system connectivity.", PermissionGroupCode.SourceConnections, PermissionActionCode.Test),
         new(
             "Add or edit a source connection for a vendor with no dedicated permission group of its own.",
             PermissionGroupCode.SourceConnections,
             PermissionActionCode.Edit),
+        new("Create a new source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
         new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
         new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
+        // Execute a workflow whose source vendor / destination type has no dedicated permission group of its own
+        // (anything that falls back to the generic SourceConnections group). The workflow /run endpoint checks an
+        // Execute permission per source/destination node; the dynamic-discovery loop deliberately skips this generic
+        // fallback group, so its Execute permission must be seeded here by hand like the Edit one above — without it
+        // the "HasPermission:sourceconnections.execute" policy is never registered and /run throws "No policy found".
+        new(
+            "Execute a workflow using a source connection or destination with no dedicated permission group of its own.",
+            PermissionGroupCode.SourceConnections,
+            PermissionActionCode.Execute),
 
         // User module permissions.
         new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),
@@ -173,6 +184,16 @@ public static class RbacSeedData
         new("View Cerner source connection configuration.", PermissionGroupCode.Cerner, PermissionActionCode.Read),
         new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
         new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),
+
+        // Governance module permissions.
+        new(
+            "View the governance audit trail, authentication logs, data access logs, and security events.",
+            PermissionGroupCode.Governance,
+            PermissionActionCode.Read),
+        new(
+            "Resolve/reopen captured errors and manage alert rules.",
+            PermissionGroupCode.Governance,
+            PermissionActionCode.Write),
     ];
 
     /// <summary>
@@ -191,7 +212,7 @@ public static class RbacSeedData
     [
         new(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
         new(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
-        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs pipeline configurations, and reviews data and audit output."),
+        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output."),
         new(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."),
     ];
 

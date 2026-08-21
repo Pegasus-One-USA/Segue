@@ -19,12 +19,16 @@
     <Content Include="Mapping\Catalog\fhir-r4-catalog.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Mapping\Catalog\fhir-r4-catalog.epic.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
     <ProjectReference Include="..\Runtime\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
     <ProjectReference Include="..\BuildingBlocks\FHIRBridge.SharedKernel\FHIRBridge.SharedKernel.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
   </ItemGroup>
 
   <ItemGroup>

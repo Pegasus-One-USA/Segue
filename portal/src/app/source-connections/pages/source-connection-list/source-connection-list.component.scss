@@ -1,9 +1,11 @@
 @use '../../../_list-page' as *;
 
-// ─── Epic Configuration modal ──────────────────────────────────────────────────
-// <app-epic-audience-form> assumes it's sitting inside NodeLibraryDialogComponent's sized shell (.nld /
-// .nld-detail--form): its sticky topbar/footer only pin correctly within a bounded, independently-scrolling
-// box. Reproduce that sizing here rather than relying on a generic unsized modal wrapper.
+// ─── Source Connection modal (any per-vendor form — Epic, Cerner, Athenahealth, ...) ───────────────────────────
+// Each wrapper hosts EhrVendorSourceFormComponent, which assumes it's sitting inside a sized shell (originally
+// NodeLibraryDialogComponent's .nld / .nld-detail--form): its sticky topbar/footer only pin correctly within a
+// bounded, independently-scrolling box. Reproduce that sizing here rather than relying on a generic unsized modal
+// wrapper. Each wrapper's own host styles (e.g. epic-source-form.component.scss) already set flex/min-height on
+// their own tag; the duplicate rule below is defense-in-depth for this specific modal shell, not load-bearing.
 .sc-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -25,7 +27,15 @@
   flex-direction: column;
   overflow: hidden;
 
-  app-epic-audience-form {
+  app-epic-source-form,
+  app-cerner-source-form,
+  app-athenahealth-source-form,
+  app-allscripts-source-form,
+  app-healow-source-form,
+  app-meditech-source-form,
+  app-sample-source-form {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -51,13 +61,6 @@
   &:hover:not([disabled]) { background: var(--color-primary-dark); }
   &:active:not([disabled]) { background: var(--color-primary-dark); }
   &[disabled] { opacity: 0.5; cursor: not-allowed; }
-}
-
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 72px 0;
 }
 
 // ─── Column widths ────────────────────────────────────────────────────────────

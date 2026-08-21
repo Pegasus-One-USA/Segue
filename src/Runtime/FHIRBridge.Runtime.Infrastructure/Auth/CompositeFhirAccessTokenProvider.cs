@@ -1,3 +1,4 @@
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
@@ -20,29 +21,68 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 /// (RS384 JWT) and a client secret implies OAuth 2.0 client-credentials. Sources with neither are unauthenticated.
 /// </para>
 /// </summary>
-public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
+public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider, IFhirGrantedScopeProvider
 {
     private readonly ISourceApplicationStrategyRegistry _applicationStrategies;
     private readonly EpicAccessTokenProvider _smartBackendServices;
     private readonly OAuth2ClientCredentialsTokenProvider _clientCredentials;
     private readonly HealowAuthorizationCodeTokenProvider _healow;
     private readonly MeditechGreenfieldTokenProvider _meditechGreenfield;
+    private readonly IGovernanceLogger _governanceLogger;
 
     public CompositeFhirAccessTokenProvider(
         ISourceApplicationStrategyRegistry applicationStrategies,
         EpicAccessTokenProvider smartBackendServices,
         OAuth2ClientCredentialsTokenProvider clientCredentials,
         HealowAuthorizationCodeTokenProvider healow,
-        MeditechGreenfieldTokenProvider meditechGreenfield)
+        MeditechGreenfieldTokenProvider meditechGreenfield,
+        IGovernanceLogger governanceLogger)
     {
         _applicationStrategies = applicationStrategies;
         _smartBackendServices = smartBackendServices;
         _clientCredentials = clientCredentials;
         _healow = healow;
         _meditechGreenfield = meditechGreenfield;
+        _governanceLogger = governanceLogger;
     }
 
-    public Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        // This is the single dispatch point every vendor/grant-type token acquisition (fresh mint or refresh
+        // on a cache miss — see DistributedFhirAccessTokenCache, which wraps this provider) funnels through,
+        // so logging here once covers all of them instead of touching each per-vendor provider.
+        var grantType = DetermineGrantType(source);
+
+        try
+        {
+            var token = await ResolveTokenAsync(source, grantType, cancellationToken);
+
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry(
+                    $"OAuth:{grantType}", Success: !string.IsNullOrEmpty(token), source.Name, DescribeTokenKey(source)),
+                cancellationToken);
+
+            return token;
+        }
+        catch (Exception exception)
+        {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry(
+                    $"OAuth:{grantType}", Success: false, source.Name, $"{exception.Message} {DescribeTokenKey(source)}"),
+                cancellationToken);
+            throw;
+        }
+    }
+
+    // Appended to the Authentication Logs reason field (even on success, where there was previously no reason at
+    // all) so the Governance portal shows which token-cache slot this attempt actually used — without a schema
+    // change or a new log sink. Never includes the raw CallerId/patientId values, only presence/shape, matching
+    // SmartAuthorizationCodeTokenProvider's own PHI-safe logging discipline.
+    private static string DescribeTokenKey(FhirSourceConfiguration source) =>
+        $"[hasCallerId={!string.IsNullOrWhiteSpace(source.CallerId)} applicationType={source.ApplicationType} " +
+        $"sourceConnectionId={source.SourceConnectionId}]";
+
+    private Task<string> ResolveTokenAsync(FhirSourceConfiguration source, string grantType, CancellationToken cancellationToken)
     {
         // Application-type axis (composition): resolve the strategy from the registry — no switch on ApplicationType.
         if (source.ApplicationType is { } applicationType)
@@ -51,25 +91,47 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         }
 
         // Legacy inference (no application type set): vendor-pinned grants first, then credential-based.
-        switch (source.SourceType)
+        return grantType switch
         {
-            case RuntimeSourceType.Healow:
-                return _healow.GetAccessTokenAsync(source, cancellationToken);
-            case RuntimeSourceType.MeditechGreenfield:
-                return _meditechGreenfield.GetAccessTokenAsync(source, cancellationToken);
+            "Healow" => _healow.GetAccessTokenAsync(source, cancellationToken),
+            "MeditechGreenfield" => _meditechGreenfield.GetAccessTokenAsync(source, cancellationToken),
+            "BackendServices" => _smartBackendServices.GetAccessTokenAsync(source, cancellationToken),
+            "ClientCredentials" => _clientCredentials.GetAccessTokenAsync(source, cancellationToken),
+            _ => Task.FromResult(string.Empty)
+        };
+    }
+
+    // Labels the grant type for the governance log — mirrors ResolveTokenAsync's own dispatch order exactly,
+    // computed once up front so both the success and failure log entries (and ResolveTokenAsync's own legacy
+    // branch) agree on the same label.
+    private static string DetermineGrantType(FhirSourceConfiguration source)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return $"ApplicationType:{applicationType}";
+        }
+
+        if (source.SourceType == RuntimeSourceType.Healow)
+        {
+            return "Healow";
+        }
+
+        if (source.SourceType == RuntimeSourceType.MeditechGreenfield)
+        {
+            return "MeditechGreenfield";
         }
 
         if (!string.IsNullOrWhiteSpace(source.PrivateKeyPem))
         {
-            return _smartBackendServices.GetAccessTokenAsync(source, cancellationToken);
+            return "BackendServices";
         }
 
         if (!string.IsNullOrWhiteSpace(source.ClientSecret))
         {
-            return _clientCredentials.GetAccessTokenAsync(source, cancellationToken);
+            return "ClientCredentials";
         }
 
-        return Task.FromResult(string.Empty);
+        return "None";
     }
 
     /// <summary>
@@ -113,5 +175,27 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Resolves the actually-granted SMART scope via the same registry dispatch as token acquisition: application-
+    /// type strategies each read it back from their own token provider. Legacy vendor-pinned/credential-based
+    /// inference (no application type set) dispatches to whichever underlying provider supports it; a source with
+    /// neither (e.g. unauthenticated) has nothing to report.
+    /// </summary>
+    public Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+    {
+        if (source.ApplicationType is { } applicationType)
+        {
+            return _applicationStrategies.Resolve(applicationType).GetGrantedScopeAsync(source, cancellationToken);
+        }
+
+        var grantType = DetermineGrantType(source);
+        return grantType switch
+        {
+            "BackendServices" => _smartBackendServices.GetGrantedScopeAsync(source, cancellationToken),
+            "ClientCredentials" => _clientCredentials.GetGrantedScopeAsync(source, cancellationToken),
+            _ => Task.FromResult<string?>(null)
+        };
     }
 }

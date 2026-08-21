@@ -1,12 +1,19 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { Observable, catchError, of, throwError } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
 import {
+  FieldLineageChain,
+  FieldLineageFilter,
+  LineageSummary,
+  NodeRunHistoryEntry,
+  NodeRunPayloadDetail,
   PagedResult,
   ResourceHistoryEntry,
+  ResourceTypeSummary,
   RouteExecution,
   RouteExecutionFilter,
+  WorkflowRunStatusCounts,
 } from '../models/execution-history.model';
 
 @Injectable({ providedIn: 'root' })
@@ -22,6 +29,8 @@ export class ExecutionHistoryApiService {
     if (filter.source) params = params.set('source', filter.source);
     if (filter.triggeredBy) params = params.set('triggeredBy', filter.triggeredBy);
     if (filter.search) params = params.set('search', filter.search);
+    if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);
+    if (filter.sortDirection) params = params.set('sortDirection', filter.sortDirection);
 
     return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params });
   }
@@ -33,5 +42,54 @@ export class ExecutionHistoryApiService {
   resources(id: string, page = 1, pageSize = 25): Observable<PagedResult<ResourceHistoryEntry>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<ResourceHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.resources(id), { params });
+  }
+
+  /** One row per node that actually started this run — success, failure, or cancellation always shown,
+   *  unlike resources() which is silent about anything that didn't succeed. */
+  nodeRuns(id: string, page = 1, pageSize = 25): Observable<PagedResult<NodeRunHistoryEntry>> {
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    return this.http.get<PagedResult<NodeRunHistoryEntry>>(EXECUTION_HISTORY_ENDPOINTS.nodeRuns(id), { params });
+  }
+
+  /** One node run's decrypted output — fetched lazily when its row is expanded, so the list above never pays
+   *  the decryption cost for a node the user hasn't looked at. A 404 (node run never recorded a payload —
+   *  still running, failed before producing output, or a None-contract node) resolves to null rather than
+   *  erroring, since that's an expected, normal outcome here. */
+  nodeRunPayload(id: string, nodeRunId: string): Observable<NodeRunPayloadDetail | null> {
+    return this.http.get<NodeRunPayloadDetail>(EXECUTION_HISTORY_ENDPOINTS.nodeRunPayload(id, nodeRunId)).pipe(
+      catchError((error: HttpErrorResponse) => error.status === 404 ? of(null) : throwError(() => error)),
+    );
+  }
+
+  /** One row per (resource, destination field) touched by this run's transform-rule chain, each carrying its
+   *  full source -> node -> node -> destination hop chain. filter backs the Group-by-Field/Patient/Node toggle
+   *  and free-text search — all the same endpoint, just filtered differently. */
+  fieldLineage(
+    id: string, page = 1, pageSize = 25, filter?: FieldLineageFilter,
+  ): Observable<PagedResult<FieldLineageChain>> {
+    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    if (filter?.resourceType) params = params.set('resourceType', filter.resourceType);
+    if (filter?.destinationField) params = params.set('destinationField', filter.destinationField);
+    if (filter?.resourceId) params = params.set('resourceId', filter.resourceId);
+    if (filter?.nodeType) params = params.set('nodeType', filter.nodeType);
+    if (filter?.search) params = params.set('search', filter.search);
+
+    return this.http.get<PagedResult<FieldLineageChain>>(EXECUTION_HISTORY_ENDPOINTS.fieldLineage(id), { params });
+  }
+
+  /** Run-wide field-lineage totals — backs the Lineage panel's stat strip. */
+  lineageSummary(id: string): Observable<LineageSummary> {
+    return this.http.get<LineageSummary>(EXECUTION_HISTORY_ENDPOINTS.lineageSummary(id));
+  }
+
+  /** Every resource type touched by this run's field lineage, with the destination fields under it — backs
+   *  the Lineage panel's resource-tree sidebar. */
+  lineageResourceTree(id: string): Observable<ResourceTypeSummary[]> {
+    return this.http.get<ResourceTypeSummary[]>(EXECUTION_HISTORY_ENDPOINTS.lineageResourceTree(id));
+  }
+
+  /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles. */
+  statusCounts(): Observable<WorkflowRunStatusCounts> {
+    return this.http.get<WorkflowRunStatusCounts>(EXECUTION_HISTORY_ENDPOINTS.statusCounts);
   }
 }

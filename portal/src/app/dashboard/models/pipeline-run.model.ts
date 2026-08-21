@@ -22,11 +22,13 @@ export interface PipelineRun {
 
 // Runtime Plane workflow-run status (WorkflowRunStatus enum) → the table's badge vocabulary.
 const STATUS_MAP: Record<ExecutionStatus, PipelineRunStatus> = {
-  Pending:   'queued',
-  Running:   'running',
-  Succeeded: 'completed',
-  Failed:    'failed',
-  Cancelled: 'cancelled',
+  Pending:            'queued',
+  Running:            'running',
+  Succeeded:          'completed',
+  Failed:             'failed',
+  Cancelled:          'cancelled',
+  PartialSuccess:     'completedWithErrors',
+  AwaitingBulkExport: 'running',
 };
 
 /**

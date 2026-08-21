@@ -87,6 +87,38 @@ public sealed class DestinationConfigurationTests(ApiFixture f)
         Assert.Equal(1, JsonDocument.Parse(await rightTypeResp.Content.ReadAsStringAsync()).RootElement.GetProperty("totalCount").GetInt32());
     }
 
+    // Regression test: DestinationType values with no dedicated PermissionGroupCode (e.g. Snowflake —
+    // unlike SqlServer/AzureSql/.../BlobStorage, it was never given its own View/Create/Edit/Delete/
+    // Execute permission set) used to make ListDestinations' per-type View filter crash with
+    // "No policy found: HasPermission:sourceconnections.execute" instead of just treating the type as
+    // ungated — SourceSystemPermissionGroups.GroupFor's generic fallback resolved to a permission that
+    // was deliberately never auto-discovered/registered as a policy. See
+    // ControllerAuthorizationExtensions.HasPermissionAsync(Enum, PermissionActionCode) and
+    // SourceSystemPermissionGroups.TryGroupFor for the fix: such a value is now treated as always
+    // allowed (ungated), exactly as it behaved before any RBAC existed for it.
+    [Fact]
+    public async Task List_destinations__includes_a_type_with_no_dedicated_permission_group__does_not_throw()
+    {
+        var name = $"Snowflake-{Guid.NewGuid():N}";
+        var createResp = await f.AdminClient.PostAsJsonAsync("/api/v1/destinations", new
+        {
+            Name            = name,
+            DestinationType = "Snowflake",
+            KeyVaultName    = "test-vault",
+            SecretName      = $"secret-{Guid.NewGuid():N}",
+            Target          = (string?)null
+        });
+        createResp.EnsureSuccessStatusCode();
+
+        var listResp = await f.AdminClient.GetAsync("/api/v1/destinations");
+        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
+
+        var doc = JsonDocument.Parse(await listResp.Content.ReadAsStringAsync()).RootElement;
+        Assert.Contains(
+            doc.EnumerateArray(),
+            d => d.GetProperty("name").GetString() == name);
+    }
+
     [Fact]
     public async Task Has_execution_history__reports_false_for_a_fresh_destination()
     {

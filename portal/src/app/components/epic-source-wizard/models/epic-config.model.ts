@@ -39,6 +39,10 @@ export interface AuthValues {
   jwksUrl: string;
   keyId: string;
   keyVaultRef: string;
+  /** Key Vault secret name for the private key PEM — set from generateSigningKey() for 'gen', or typed by the
+   *  admin for an externally-managed key. Required alongside keyVaultRef for the private key to actually resolve
+   *  (ConfigurationMapper only builds a SecretReference when both are present). */
+  secretName: string;
   jwksMethod: string;
 }
 
@@ -69,8 +73,17 @@ export const RUNTIME_CHECKS: CheckItem[] = [
   { label: 'FHIR resource request returned 200', status: 'pending' },
 ];
 
+// Kept in sync with the backend's SupportedFhirResourceTypes.All (src/FHIRBridge.Domain/Fhir and
+// src/Runtime/FHIRBridge.Runtime.Domain/Fhir — two hand-synced copies there already, no shared reference
+// between them or this list) — no shared reference between frontend and backend either, so a newly
+// backend-supported resource type doesn't automatically become selectable here; this array must be updated
+// by hand to match whenever that list changes.
 export const WIZARD_RESOURCES: string[] = [
-  'Patient', 'Encounter', 'Observation', 'Condition', 'MedicationRequest',
-  'AllergyIntolerance', 'Immunization', 'Procedure', 'DiagnosticReport',
-  'DocumentReference', 'Practitioner', 'PractitionerRole',
+  'Patient', 'Practitioner', 'Observation', 'Condition', 'MedicationRequest',
+  'MedicationAdministration', 'AllergyIntolerance', 'Encounter', 'DiagnosticReport',
+  'Procedure', 'ServiceRequest', 'Immunization', 'Appointment', 'CarePlan', 'CareTeam',
+  'Communication', 'CommunicationRequest', 'Device', 'DocumentReference', 'FamilyMemberHistory',
+  'ImagingStudy', 'Location', 'Medication', 'MedicationDispense', 'MedicationStatement',
+  'Organization', 'PractitionerRole', 'Provenance', 'Questionnaire', 'QuestionnaireResponse',
+  'RelatedPerson', 'Schedule', 'Slot', 'Specimen', 'Task',
 ];

@@ -14,10 +14,14 @@ public sealed record ResourceGovernanceContext(
     string? ResourceId,
     string Action,
     string? TriggeredBy,
-    string? CorrelationId);
+    string? CorrelationId,
+    Guid? DestinationConfigurationId = null);
 
 public sealed record ResourceGovernanceDecision(
     bool IsAllowed,
-    bool RequiresDeIdentification,
+    Guid? DeIdentificationProfileId,
     string? DenialReason,
-    IReadOnlyCollection<string> AppliedPolicies);
+    IReadOnlyCollection<string> AppliedPolicies)
+{
+    public bool RequiresDeIdentification => DeIdentificationProfileId is not null;
+}

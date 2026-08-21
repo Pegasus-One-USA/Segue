@@ -2,6 +2,8 @@ using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.Logging;
@@ -19,6 +21,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     private const string EpicSourceNodeType = "EpicSourceNode";
     private const string SourceConnectionIdConfigKey = "sourceConnectionId";
     private const string DestinationResourcesConfigKey = "dest_resources";
+    private const string AutoFetchMissingReferencesConfigKey = "dest_autoFetchMissingReferences";
 
     private readonly IWorkflowDefinitionStore _workflowStore;
     private readonly IConfigurationRepository _configurationRepository;
@@ -40,17 +43,35 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     public async Task<IReadOnlyList<string>?> SyncAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var sourceConnection = await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
-        if (sourceConnection is null || sourceConnection.Interactive is null)
+        if (sourceConnection is null)
         {
-            // Backend Services sources have no Interactive configuration and aren't driven by a destination
-            // resource picker the same way — leave their scopes exactly as configured.
+            return null;
+        }
+
+        // athenahealth is exempt from the Interactive-only gate below: unlike every other vendor here, its Backend
+        // System connections ALSO need their resource-type selection kept in sync with what's actually consumed
+        // downstream — SourceConnectionRuntimeResolver regenerates scopes fresh from Retrieval.ResourceTypes on
+        // every run (never trusting a stored Authentication.Scopes snapshot for a connection with retrieval
+        // config), specifically because a broad/stale resource list gets the WHOLE token request rejected by
+        // athenahealth's authorization server. This is what makes "create a connection, then reuse it as Existing
+        // Source in a workflow" actually work for athenahealth — this sync already runs unconditionally on every
+        // sourceConnectionId a build references (WorkflowEndpoints' /workflows/build handler), whether that node
+        // built a fresh connection or pointed at an existing one, so it's the correct place to keep an existing
+        // connection's Retrieval current too, not just its Scopes.
+        var isAthenahealthBackend = sourceConnection.SourceSystemType == SourceSystemType.Athenahealth;
+        if (sourceConnection.Interactive is null && !isAthenahealthBackend)
+        {
+            // Every other vendor's Backend Services sources have no Interactive configuration and aren't driven by
+            // a destination resource picker the same way — leave their scopes exactly as configured.
             return null;
         }
 
         var workflows = await _workflowStore.ListAsync(cancellationToken);
         var usedResourceTypes = GetUsedResourceTypes(workflows, sourceConnectionId);
 
-        var scopeVersion = DetectScopeVersionFromExistingScopes(sourceConnection.Authentication.Scopes);
+        var scopeVersion = isAthenahealthBackend
+            ? "v1"
+            : DetectScopeVersionFromExistingScopes(sourceConnection.Authentication.Scopes);
         var generated = _scopeGenerator.Generate(
             sourceConnection.ApplicationType,
             usedResourceTypes,
@@ -58,19 +79,59 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
             scopeVersionDetected: false,
             supportedScopes: null);
 
-        if (sourceConnection.Authentication.Scopes.SequenceEqual(generated.Scopes, StringComparer.Ordinal))
+        var retrievalChanged = false;
+        if (isAthenahealthBackend && usedResourceTypes.Count > 0)
+        {
+            var existingRetrieval = sourceConnection.Retrieval;
+            if (existingRetrieval is null || !existingRetrieval.ResourceTypes.SequenceEqual(usedResourceTypes, StringComparer.OrdinalIgnoreCase))
+            {
+                sourceConnection.Update(
+                    sourceConnection.Name,
+                    sourceConnection.SourceSystemType,
+                    sourceConnection.BaseUrl,
+                    sourceConnection.Authentication,
+                    sourceConnection.ApplicationType,
+                    sourceConnection.Interactive,
+                    new SourceRetrievalConfiguration(
+                        existingRetrieval?.RetrievalMethod ?? "search-rest",
+                        [.. usedResourceTypes],
+                        existingRetrieval?.SearchCriteria,
+                        existingRetrieval?.IncrementalSyncEnabled ?? false,
+                        existingRetrieval?.PageSize,
+                        existingRetrieval?.SortOrder,
+                        existingRetrieval?.IncludeParameters,
+                        existingRetrieval?.RevIncludeParameters,
+                        existingRetrieval?.RetryPolicy,
+                        existingRetrieval?.TimeoutSeconds,
+                        existingRetrieval?.MaxRecordsPerRun,
+                        existingRetrieval?.LastSuccessfulSyncUtcByResourceType,
+                        existingRetrieval?.ExportScope,
+                        existingRetrieval?.GroupId,
+                        existingRetrieval?.PatientIds,
+                        existingRetrieval?.OutputFormat));
+                retrievalChanged = true;
+            }
+        }
+
+        var scopesChanged = !sourceConnection.Authentication.Scopes.SequenceEqual(generated.Scopes, StringComparer.Ordinal);
+        if (!scopesChanged && !retrievalChanged)
         {
             return generated.Scopes;
         }
 
         var previousScopes = string.Join(' ', sourceConnection.Authentication.Scopes);
-        sourceConnection.UpdateScopes([.. generated.Scopes]);
+        if (scopesChanged)
+        {
+            sourceConnection.UpdateScopes([.. generated.Scopes]);
+        }
+
         await _configurationRepository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
 
         _logger.LogInformation(
-            "Synced Epic source connection {SourceConnectionId} scopes to match actual pipeline usage. " +
-            "Used resource types: [{ResourceTypes}]. Previous scopes: \"{PreviousScopes}\". New scopes: \"{NewScopes}\".",
-            sourceConnectionId, string.Join(", ", usedResourceTypes), previousScopes, generated.ScopeString);
+            "Synced source connection {SourceConnectionId} scopes/retrieval to match actual pipeline usage. " +
+            "Used resource types: [{ResourceTypes}]. Previous scopes: \"{PreviousScopes}\". New scopes: \"{NewScopes}\". " +
+            "Retrieval.ResourceTypes updated: {RetrievalChanged}.",
+            sourceConnectionId, string.Join(", ", usedResourceTypes), previousScopes, generated.ScopeString, retrievalChanged);
 
         return generated.Scopes;
     }
@@ -80,7 +141,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         var connections = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
         var changed = new List<Guid>();
 
-        foreach (var connection in connections.Where(c => c.Interactive is not null))
+        foreach (var connection in connections.Where(c => c.Interactive is not null || c.SourceSystemType == SourceSystemType.Athenahealth))
         {
             var before = string.Join(' ', connection.Authentication.Scopes);
             var after = await SyncAsync(connection.Id, cancellationToken);
@@ -129,15 +190,42 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         return value is not null && Guid.TryParse(value, out var parsed) ? parsed : null;
     }
 
+    // "Automatically fetch a missing reference from the source" (dest_autoFetchMissingReferences) pulls whatever
+    // resource type a written record happens to reference (e.g. a Patient's managingOrganization/generalPractitioner)
+    // — discovered reactively at write time by parsing each record's FHIR JSON, never known ahead of from config
+    // alone. Scoping only for the explicitly selected/mapped types therefore isn't enough: a destination scoped for
+    // Patient-only with auto-fetch on can 403 the moment it tries to pull a referenced Organization/Practitioner
+    // that was never selected (see the athena-aidbox Brand/CSG/PG/Provider 403s).
+    //
+    // A wildcard resource scope ("system/*.read") would sidestep needing to enumerate anything, but athenahealth's
+    // authorization server rejects the ENTIRE token request (401 access_denied, verified live against the sandbox)
+    // the moment a wildcard resource scope appears — not just the extra access, the whole run's auth. So the
+    // widened set has to stay a concrete, enumerated list of resource types, not "*". ReferenceTargetTypes below is
+    // sourced from FHIR R4's own StructureDefinitions (which resource types each reference-typed element on a given
+    // resource can point to) rather than hand-maintained per vendor surprise — it only needs revisiting on a FHIR
+    // version change, not every time a new vendor-specific reference pattern turns up.
     private static IEnumerable<string> GetDestinationResourceTypes(WorkflowNode node)
     {
         var raw = TryGetConfigValue(node, DestinationResourcesConfigKey);
-        if (string.IsNullOrWhiteSpace(raw))
+        var selected = string.IsNullOrWhiteSpace(raw)
+            ? []
+            : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (!string.Equals(TryGetConfigValue(node, AutoFetchMissingReferencesConfigKey), "true", StringComparison.OrdinalIgnoreCase))
         {
-            return [];
+            return selected;
         }
 
-        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var widened = new SortedSet<string>(selected, StringComparer.OrdinalIgnoreCase);
+        foreach (var type in selected)
+        {
+            foreach (var referenced in FhirReferenceTargets.For(type))
+            {
+                widened.Add(referenced);
+            }
+        }
+
+        return widened;
     }
 
     private static string? TryGetConfigValue(WorkflowNode node, string key)

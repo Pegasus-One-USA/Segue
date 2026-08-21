@@ -1,21 +1,23 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { PermissionService } from '../../auth/services/permission.service';
+import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
+import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStore } from '../../services/pipeline.store';
-import { WizardService } from '../../services/wizard.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { WorkflowApiService, WorkflowBuildRequest, WorkflowTriggerRequest } from '../../services/workflow-api.service';
+import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
 import { WorkflowGraphMapperService } from '../../services/workflow-graph-mapper.service';
 import { WorkflowBuildAssemblerService } from '../../services/workflow-build-assembler.service';
-import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
-import { Source } from '../../models/source.model';
+import { NodeCatalogService } from '../../services/node-catalog.service';
+import { NodeCatalogEntry, actionCode } from '../../models/node-catalog.model';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../../data/node-catalog-legacy-ids';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
+import { environment } from '../../../environments/environment';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
-import { EpicSourceWizardComponent } from '../../components/epic-source-wizard/epic-source-wizard.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
-import { ToastComponent } from '../../components/shared/toast/toast.component';
 import {
   NodeLibraryDialogComponent,
   LibraryMode,
@@ -28,26 +30,46 @@ import {
   standalone: true,
   imports: [
     CanvasComponent,
-    EpicSourceWizardComponent,
     PayloadPreviewComponent,
-    ToastComponent,
     NodeLibraryDialogComponent,
   ],
   templateUrl: './workflow-builder.component.html',
   styleUrl: './workflow-builder.component.scss',
 })
-export class WorkflowBuilderComponent implements OnInit {
+export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
   private readonly store  = inject(PipelineStore);
-  private readonly wiz    = inject(WizardService);
   private readonly toast  = inject(ToastService);
   private readonly appSvc = inject(ApplicabilityService);
   private readonly workflowApi = inject(WorkflowApiService);
   private readonly graphMapper = inject(WorkflowGraphMapperService);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly permissions = inject(PermissionService);
+  private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly nodeCatalog = inject(NodeCatalogService);
+
+  constructor() {
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+    this.nodeCatalog.ensureLoaded();
+  }
 
   // ── page state ─────────────────────────────────────────────────────────────
   protected readonly scenarioName = signal('Grouped-node pipeline (Normalize group + merge)');
+
+  // ── RBAC: view vs. mutate ───────────────────────────────────────────────────
+  // workflow.view only grants VIEW access — reaching this page and loading an existing workflow onto the
+  // canvas. Actually changing anything (adding/editing/deleting a module, Save) needs the action-specific
+  // permission: workflow.create while building a brand-new workflow (no ?id=), workflow.edit once editing
+  // one that already exists — mirrors exactly the branch WorkflowEndpoints' POST /workflows/build now
+  // checks server-side, so the UI and the backend can never disagree about which permission a given save
+  // needs. Set synchronously from the route's ?id= in ngOnInit (not derived from currentWorkflowId, which
+  // stays null until the async load resolves) so canMutate is correct from the very first render.
+  protected readonly isEditingExistingWorkflow = signal(false);
+  protected readonly canMutate = computed(() =>
+    this.isEditingExistingWorkflow()
+      ? this.permissions.hasPermission('workflow.edit')
+      : this.permissions.hasPermission('workflow.create'));
 
   // ── node library dialog (unified — replaces source + transform pickers) ────
   protected readonly libraryOpen      = signal(false);
@@ -57,10 +79,14 @@ export class WorkflowBuilderComponent implements OnInit {
 
   // ── other modals ───────────────────────────────────────────────────────────
   protected readonly payloadOpen  = signal(false);
-  protected readonly wizardOpen   = this.wiz.isOpen;
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
   protected readonly workflowName = signal('');
+  // True once the name field has been blurred or a save was attempted while empty — gates the invalid
+  // (red border + inline message) state so it doesn't show before the user has had a chance to type.
+  protected readonly nameTouched = signal(false);
+  protected readonly nameInvalid = computed(() => this.nameTouched() && !this.workflowName().trim());
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
@@ -142,16 +168,17 @@ export class WorkflowBuilderComponent implements OnInit {
     const wizardFields = this.backendRetrievalFields();
     if (wizardFields) {
       // Bulk export: System/Group run on the calendar Repeat (compiled cron); a Patient id list is a one-off (manual).
+      const timeZoneId = wizardFields['Full refresh time zone'] || 'UTC';
       if (wizardFields['Retrieval method key'] === 'bulk-export') {
         return wizardFields['Export scope'] === 'patient'
           ? { type: 'Manual' }
-          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          : { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
       }
       switch (wizardFields['Run mode']) {
         case 'incremental':
           return { type: 'Poll', intervalMinutes: this.pollFrequencyToMinutes(wizardFields['Schedule / poll frequency']) };
         case 'full':
-          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *' };
+          return { type: 'Schedule', scheduleExpression: wizardFields['Full refresh schedule (cron)'] || '0 2 * * *', timeZoneId };
         default:
           return { type: 'Manual' };
       }
@@ -174,6 +201,7 @@ export class WorkflowBuilderComponent implements OnInit {
     // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
     // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
     const editId = this.route.snapshot.queryParamMap.get('id');
+    this.isEditingExistingWorkflow.set(!!editId);
 
     // The PipelineStore is a root singleton, so its canvas state outlives this component (e.g. an abandoned,
     // unsaved edit/creation left nodes on it). A fresh "New Workflow" navigation must always start blank rather
@@ -196,6 +224,10 @@ export class WorkflowBuilderComponent implements OnInit {
 
   // ── topbar ─────────────────────────────────────────────────────────────────
   onReset(): void {
+    // Defense in depth — the trigger button is already hidden whenever !canMutate() (see the
+    // template), same rule as Save: workflow.create for a new workflow, workflow.edit for an
+    // existing one.
+    if (!this.canMutate()) { this.confirmReset.set(false); return; }
     this.store.reset();
     this.toast.show('Canvas reset', 'All nodes removed.');
     this.confirmReset.set(false);
@@ -207,6 +239,15 @@ export class WorkflowBuilderComponent implements OnInit {
 
   onWorkflowNameInput(value: string): void {
     this.workflowName.set(value);
+  }
+
+  onWorkflowNameBlur(): void {
+    this.nameTouched.set(true);
+  }
+
+  clearWorkflowName(): void {
+    this.workflowName.set('');
+    this.nameInput()?.nativeElement.focus();
   }
 
   /**
@@ -221,24 +262,84 @@ export class WorkflowBuilderComponent implements OnInit {
    * path activates when a launch source id is present).
    */
   onSave(): void {
+    // Defense in depth — the Save button is already hidden whenever !canMutate() (see the template), and
+    // the backend independently rejects the underlying build/save call with 403 regardless of this check.
+    if (!this.canMutate()) {
+      return;
+    }
+
+    if (!this.workflowName().trim()) {
+      this.nameTouched.set(true);
+      this.nameInput()?.nativeElement.focus();
+      this.toast.error('Name required', 'Workflow name is missing — give this workflow a name before saving.');
+      return;
+    }
+
+    if (this.store.nodes().length === 0) {
+      this.toast.error('Nothing to save', 'Add at least one node to the canvas before saving.');
+      return;
+    }
+
     if (this.workflowApi.catalog().length === 0) {
       this.workflowStatus.set('Catalog is not loaded yet.');
       return;
     }
 
-    const name = this.workflowName().trim() || 'Untitled workflow';
+    const name = this.workflowName().trim();
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
 
-    const request = this.buildAssembler.assemble(name, this.buildTrigger());
-    const hasSpecs = (request.sources?.length ?? 0) > 0 || (request.destinations?.length ?? 0) > 0;
-    if (hasSpecs) {
+    let request: WorkflowBuildRequest;
+    try {
+      request = this.buildAssembler.assemble(name, this.buildTrigger());
+    } catch (err) {
+      // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
+      // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
+      const msg = err instanceof Error ? err.message : 'Workflow configuration is invalid.';
+      this.workflowStatus.set(msg);
+      this.toast.error('Cannot save workflow', msg);
+      return;
+    }
+    // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
+    // connections (sourceConnectionResolved/destinationResolved both "true") has zero source/destination
+    // specs to create, but can still carry new/changed mapping rows that need a MappingProfile created and
+    // stamped onto the Field Mapping node — skipping the build call in that case silently left the mapping
+    // node's config empty (no mappingProfileId), so every run mapped zero records despite "succeeding".
+    const hasSpecs = (request.sources?.length ?? 0) > 0
+      || (request.destinations?.length ?? 0) > 0
+      || (request.mappings?.length ?? 0) > 0;
+    // Belt-and-suspenders: assemble() already includes any unresolved source/destination in hasSpecs, but the
+    // plain design save (saveWorkflow → PUT /workflows/{id}) never provisions secrets at all — it just serializes
+    // whatever's on the canvas as-is. If a node is still carrying a raw, unresolved secret for any reason (e.g. a
+    // future gap in assemble()'s own detection), routing it to the plain save would silently persist the secret
+    // in plaintext node config while leaving the backing connection's Key Vault reference untouched. Never let
+    // that happen — force the provisioning path whenever an unresolved secret is present, regardless of hasSpecs.
+    if (hasSpecs || this.hasUnresolvedSecrets()) {
       this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
       return;
     }
 
     // No wizard-drawn specs → plain design save.
     this.saveWorkflow(name, existingId, isLaunch);
+  }
+
+  /** True if any canvas node holds a freshly typed secret (source Client Secret, destination password/secret/
+   *  token/connection-string) whose backing connection hasn't been resolved/provisioned yet. See onSave(). */
+  private hasUnresolvedSecrets(): boolean {
+    const destSecretKeys = [
+      'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
+      'dest_blobSecret', 'dest_medplumSecret',
+    ];
+    return this.store.nodes().some(node => {
+      const fields = node.fields ?? {};
+      if (fields['sourceConnectionResolved'] !== 'true' && (fields['Client Secret'] ?? '').trim()) {
+        return true;
+      }
+      if (fields['destinationResolved'] !== 'true' && destSecretKeys.some(key => (fields[key] ?? '').trim())) {
+        return true;
+      }
+      return false;
+    });
   }
 
   private buildWorkflow(request: WorkflowBuildRequest): void {
@@ -259,13 +360,22 @@ export class WorkflowBuilderComponent implements OnInit {
         this.workflowStatus.set(`${verb} ${synced} config(s) + saved workflow.${caveat}`);
         this.toast.success('Workflow saved', `Configs ${isUpdate ? 'synced' : 'provisioned'} and saved. You can Run it now.${caveat}`);
         this.announceSyncedScopes(result.syncedScopesBySourceConnectionId);
-        this.workflowBusy.set(false);
-        this.resetCanvasAndWorkflowState();
+        this.stampBuildResultIds(result);
+        this.reconcileGeneratedJwksUrls(result.workflowId, request.name, result.sourceConnectionIds);
       },
       error: err => {
-        const msg = err?.error?.error ?? err?.error ?? err?.message ?? 'Create-on-save failed.';
-        this.workflowStatus.set(typeof msg === 'string' ? msg : 'Create-on-save failed.');
-        this.toast.show('Create-on-save failed', typeof msg === 'string' ? msg : 'See status for details.');
+        const msg = typeof err?.error?.error === 'string'
+          ? err.error.error
+          : 'Something went wrong while saving this workflow. Please contact your admin.';
+        // A structured validation rejection (RequestValidationException / WorkflowEndpoints' ValidationBadRequest
+        // helper) carries per-field messages alongside the flat `error` string — surface all of them rather than
+        // just the generic top-level message, since `msg` alone ("Validation failed.") isn't actionable on its own.
+        const fieldErrors = err?.error?.fieldErrors as Record<string, string[]> | null | undefined;
+        const detail = fieldErrors && Object.keys(fieldErrors).length
+          ? Object.values(fieldErrors).flat().join(' ')
+          : msg;
+        this.workflowStatus.set(detail);
+        this.toast.error('Create-on-save failed', detail);
         this.workflowBusy.set(false);
       },
     });
@@ -288,10 +398,74 @@ export class WorkflowBuilderComponent implements OnInit {
       if (resourceTypes.length) {
         this.toast.show(
           'Epic scopes synced',
-          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every pipeline currently using it).`,
+          `This connection's requested scopes now include: ${resourceTypes.join(', ')} (based on every workflow currently using it).`,
         );
       }
     }
+  }
+
+  /**
+   * The "Private Key / JWKS URL" field a Backend System + JWT source shows is never actually sent to the backend
+   * SourceConnection (no such column exists there) — the only durable place it CAN live is this node's own
+   * ConfigurationJson, which the workflow definition already persists on every save. For a node whose signing key
+   * FHIRBridge generated/imported, the real URL is only knowable once this build assigns a sourceConnectionId — so
+   * it's wrong (a stale placeholder) on the save that just happened. Corrects it here, in the still-live canvas
+   * node (before resetCanvasAndWorkflowState() would otherwise throw that state away), then persists the
+   * correction with a plain definition save (PUT /workflows/{id} — NOT another /workflows/build) so it doesn't
+   * re-touch the source/destinations/mappings just created/synced above, or re-trigger capability discovery.
+   */
+  private reconcileGeneratedJwksUrls(
+    workflowId: string,
+    workflowName: string,
+    sourceConnectionIds: Record<string, string>,
+  ): void {
+    let anyCorrected = false;
+
+    for (const [nodeId, sourceConnectionId] of Object.entries(sourceConnectionIds)) {
+      const node = this.store.byId(nodeId);
+      if (!node) continue;
+
+      const fields = node.fields;
+      const isGeneratedOrImportedBackendKey =
+        fields['Auth method'] === 'jwt' &&
+        fields['Epic audience'] === 'backend-system' &&
+        (fields['Signing key source'] === 'gen' || fields['Signing key source'] === 'import');
+
+      if (!isGeneratedOrImportedBackendKey) continue;
+
+      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      if (fields['JWKS URL'] !== jwksUrl) {
+        this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
+        anyCorrected = true;
+      }
+
+      this.toast.show(
+        `JWKS URL for "${fields['__name'] || 'this source'}"`,
+        `Register this URL in Epic's app configuration: ${jwksUrl}`,
+        'info',
+        20000,
+      );
+    }
+
+    if (!anyCorrected) {
+      this.workflowBusy.set(false);
+      this.finishSave();
+      return;
+    }
+
+    const definitionRequest = this.graphMapper.toRequest(workflowName, this.buildTrigger());
+    this.workflowApi.save(definitionRequest, workflowId).subscribe({
+      next: () => {
+        this.workflowBusy.set(false);
+        this.finishSave();
+      },
+      error: () => {
+        // Best-effort: the original build already succeeded and is fully durable — only this cosmetic
+        // JWKS-URL correction failed to re-save. Not worth blocking or re-prompting the user over.
+        this.workflowBusy.set(false);
+        this.finishSave();
+      },
+    });
   }
 
   onLoadWorkflow(): void {
@@ -316,32 +490,75 @@ export class WorkflowBuilderComponent implements OnInit {
   }
 
   // ── canvas events (unchanged API — canvas.component stays untouched) ───────
+  // canvas.component itself already hides the "+ Add module" FAB/context-menu entry when
+  // [readOnly]="!canMutate()" (see the template), and onTransformSelected/onSourceSelected/
+  // onMergeSelected below re-check canMutate() as the actual gate — every path that adds a node
+  // ends in one of those three, however the dialog was opened, and the node-library dialog's own
+  // "edit an existing node" flow reuses the same three (see onOpenWizard), which VIEWING a node's
+  // config must still be able to reach for a workflow.view-only role. These two guards are just
+  // the entry points that skip opening the dialog for a brand-new add at all.
   onOpenSourcePicker(): void {
+    if (!this.canMutate()) return;
     this.libraryMode.set('source');
     this.libraryOriginId.set(null);
     this.libraryOpen.set(true);
   }
 
   onOpenTransformPicker(nodeId: string): void {
+    if (!this.canMutate()) return;
     this.libraryMode.set('transform');
     this.libraryOriginId.set(nodeId);
     this.libraryOpen.set(true);
   }
 
   // ── node library dialog outputs ────────────────────────────────────────────
+  // 'epic' never reaches here — node-library-dialog's addSelected() opens the Epic form
+  // inline and returns before emitting sourceSelected for that id.
+  //
+  // canMutate() is re-checked here (not just at the dialog's open-triggers above) because this is
+  // also where the dialog's "edit an existing node" submit lands (see onOpenWizard, which opens the
+  // same dialog to let a view-only role look at a node's configuration) — without this check, that
+  // dialog's own submit button could still write the edited fields onto the canvas even though
+  // nothing that led here was itself blocked.
   onSourceSelected(id: string): void {
-    if (id === 'epic') {
-      this.wiz.open();
+    if (!this.canMutate()) return;
+    const type = SOURCE_ID_TO_TYPE[id];
+    const src = type ? this.nodeCatalog.find('Source', type) : undefined;
+    if (!src) return;
+    // Always adds a brand-new stub node (see addStubSource) — this path never edits an existing one,
+    // so it's always the vendor's Create permission, never Edit.
+    const code = actionCode(src, 'Create');
+    if (code && !this.permissions.hasPermission(code)) {
+      this.toast.error('Not permitted', `You don't have permission to add a new ${src.displayName} source.`);
       return;
     }
-    const src = SOURCES.find(s => s.id === id);
-    if (!src) return;
     this.addStubSource(src);
   }
 
   onTransformSelected(e: AddTransformEvent): void {
-    const t = TRANSFORMS.find(x => x.id === e.transformId);
-    if (!t) return;
+    if (!this.canMutate()) return;
+
+    // Destination-TYPE rows resolve through the canonical Node Catalog; every other transform (a
+    // pipeline step with no SourceSystemType/DestinationType backing) still comes from TRANSFORMS,
+    // unaffected by the Node Catalog consolidation.
+    const destType = DESTINATION_ID_TO_TYPE[e.transformId];
+    const destEntry = destType ? this.nodeCatalog.find('Destination', destType) : undefined;
+    const t = destEntry ? undefined : TRANSFORMS.find(x => x.id === e.transformId);
+    if (!destEntry && !t) return;
+    const name = destEntry?.displayName ?? t!.name;
+
+    // Same View/Create/Edit split as onSourceSelected — editNodeId present means this is the dest
+    // wizard's edit flow (Edit), absent means it's adding a brand-new destination node (Create).
+    // 'medplum'/'fhir' now resolve to their own dedicated fhirrepository.*/medplum.* permissions —
+    // never sourceconnections.*, an unrelated Settings-screen permission.
+    if (destEntry) {
+      const requiredAction: 'Edit' | 'Create' = e.editNodeId ? 'Edit' : 'Create';
+      const code = actionCode(destEntry, requiredAction);
+      if (code && !this.permissions.hasPermission(code)) {
+        this.toast.error('Not permitted', `You don't have permission to ${requiredAction.toLowerCase()} a ${name} destination.`);
+        return;
+      }
+    }
 
     // Editing an existing destination node's configuration (dest wizard edit flow). Merge onto the node's existing
     // fields rather than replacing them outright — server-injected machine keys (destinationId, mappingProfileId,
@@ -349,9 +566,9 @@ export class WorkflowBuilderComponent implements OnInit {
     if (e.editNodeId) {
       const previousFields = this.store.byId(e.editNodeId)?.fields ?? {};
       this.store.updateNode(e.editNodeId, {
-        fields: { ...previousFields, '__name': t.name, ...(e.config ?? {}) },
+        fields: { ...previousFields, '__name': name, ...(e.config ?? {}) },
       });
-      this.toast.show('Updated', `${t.name} configuration updated.`);
+      this.toast.show('Updated', `${name} configuration updated.`);
       return;
     }
 
@@ -366,13 +583,13 @@ export class WorkflowBuilderComponent implements OnInit {
       statusAtAdd: e.status,
       x:           attachNode.x + 300,
       y:           attachNode.y + siblings * 170,
-      fields:      { '__name': t.name, ...(e.config ?? {}) },
+      fields:      { '__name': name, ...(e.config ?? {}) },
     };
     this.store.addNode(node);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: attachNode.id, to: node.id });
     this.toast.show(
       'Step added',
-      e.status === 'caveat' ? `${t.name} added with caveat.` : `${t.name} added.`,
+      e.status === 'caveat' ? `${name} added with caveat.` : `${name} added.`,
     );
   }
 
@@ -396,6 +613,16 @@ export class WorkflowBuilderComponent implements OnInit {
    */
   private resolveDestinationAttachPoint(attachNode: CanvasNode, transformId: string): CanvasNode {
     if (!transformId.startsWith('dest-')) return attachNode;
+
+    // FhirRepositoryDestination is exempt from the Runtime DAG's upstream-Mapping-node requirement
+    // (WorkflowGraphValidator.DestinationRequiresMappedRecords — unconditional, both modes) — a Field Mapping node
+    // has no configuration screen and no way to receive the FHIR-specific signal it would need. Both "passthrough"
+    // and "customize" modes are handled directly by MappingNodeExecutor/FhirFieldTransformApplier against the raw
+    // resource batch, neither goes through a real Mapping node's field-mapping engine — so wire the destination
+    // directly to its source/transform parent in both cases instead of forcing one in.
+    if (transformId === 'dest-fhir') {
+      return attachNode;
+    }
 
     const isMappingNode = attachNode.kind === 'transform' && (attachNode as TransformNode).transformId === 'field-mapping';
     if (!isMappingNode) {
@@ -434,11 +661,16 @@ export class WorkflowBuilderComponent implements OnInit {
       .map(edge => this.store.byId(edge.to))
       .filter(n => n?.kind === 'transform' && (n as TransformNode).transformId === 'field-mapping').length;
 
+    // Strip mappingProfileId — the clone needs its OWN mapping profile (its own destination/resource
+    // mapping), never the original's. Left in place, a build before the clone's own field-mapping wizard
+    // save would send the ORIGINAL's real profile id as this clone's existingId too, and /workflows/build
+    // would overwrite the original's profile with the clone's (different) fields — silently corrupting it.
+    const { mappingProfileId: _clonedMappingProfileId, ...clonedFields } = original.fields;
     const clone: TransformNode = {
       ...(original as TransformNode),
       id:     this.store.nextTransformId(),
       y:      original.y + siblingMappingCount * 170,
-      fields: { ...original.fields },
+      fields: clonedFields,
     };
     this.store.addNode(clone);
     this.store.addEdge({ id: this.store.nextEdgeId(), from: parent.id, to: clone.id });
@@ -450,6 +682,7 @@ export class WorkflowBuilderComponent implements OnInit {
   }
 
   onMergeSelected(e: MergeEvent): void {
+    if (!this.canMutate()) return;
     const opt = e.opt;
     let members: CanvasNode[];
 
@@ -482,31 +715,29 @@ export class WorkflowBuilderComponent implements OnInit {
   }
 
   // ── wizard (node-circle click on source or transform node) ──────────────────
-  onOpenWizard(nodeId?: string): void {
-    if (nodeId) {
-      const node = this.store.byId(nodeId);
-      if (node?.kind === 'transform') {
-        const tId = (node as TransformNode).transformId;
-        if (tId === 'dest-sqlserver' || tId === 'dest-csv') {
-          // Edit destination node — open library in transform mode with parent as origin.
-          const parent = this.store.parentOf(nodeId);
-          this.editingNodeId.set(nodeId);
-          this.libraryMode.set('transform');
-          this.libraryOriginId.set(parent?.id ?? null);
-          this.libraryOpen.set(true);
-        } else {
-          this.toast.show('Nothing to configure', "This module type doesn't have a configuration screen yet.");
-        }
-        return;
+  // canvas.component's openWizard event always emits a real nodeId (see onNodeConfigure),
+  // so the no-nodeId case (formerly opening the legacy epic-source-wizard directly) is unreachable.
+  onOpenWizard(nodeId: string): void {
+    const node = this.store.byId(nodeId);
+    if (node?.kind === 'transform') {
+      const tId = (node as TransformNode).transformId;
+      if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum') {
+        // Edit destination node — open library in transform mode with parent as origin.
+        const parent = this.store.parentOf(nodeId);
+        this.editingNodeId.set(nodeId);
+        this.libraryMode.set('transform');
+        this.libraryOriginId.set(parent?.id ?? null);
+        this.libraryOpen.set(true);
+      } else {
+        this.toast.show('Nothing to configure', "This module type doesn't have a configuration screen yet.");
       }
-      // Edit Epic source node → open Node Library with Epic form pre-populated.
-      this.editingNodeId.set(nodeId);
-      this.libraryMode.set('source');
-      this.libraryOriginId.set(null);
-      this.libraryOpen.set(true);
-    } else {
-      this.wiz.open();
+      return;
     }
+    // Edit Epic source node → open Node Library with Epic form pre-populated.
+    this.editingNodeId.set(nodeId);
+    this.libraryMode.set('source');
+    this.libraryOriginId.set(null);
+    this.libraryOpen.set(true);
   }
 
   onLibraryClosed(): void {
@@ -520,7 +751,7 @@ export class WorkflowBuilderComponent implements OnInit {
   onCopyCheckpointUrl(nodeId: string): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) {
-      this.toast.show('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
+      this.toast.warning('Save first', 'Save the workflow before copying a checkpoint URL — the node needs a saved id.');
       return;
     }
 
@@ -528,12 +759,12 @@ export class WorkflowBuilderComponent implements OnInit {
       next: ({ checkpointUrl }) => {
         navigator.clipboard?.writeText(checkpointUrl).then(
           () => this.toast.success('Copied', 'Checkpoint URL copied to clipboard.'),
-          () => this.toast.show('Copy failed', checkpointUrl),
+          () => this.toast.error('Copy failed', checkpointUrl),
         );
       },
       error: err => {
         const msg = err?.error?.error_description ?? err?.error?.error ?? 'Could not generate a checkpoint URL.';
-        this.toast.show('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
+        this.toast.error('Checkpoint URL failed', typeof msg === 'string' ? msg : 'Save the workflow again and retry.');
       },
     });
   }
@@ -567,7 +798,7 @@ export class WorkflowBuilderComponent implements OnInit {
               this.workflowStatus.set(`Saved ${saved.name}.`);
               this.toast.success('Workflow saved', `"${saved.name}" was saved.`);
               this.workflowBusy.set(false);
-              this.resetCanvasAndWorkflowState();
+              this.finishSave();
               return;
             }
 
@@ -576,7 +807,7 @@ export class WorkflowBuilderComponent implements OnInit {
                 this.workflowStatus.set(`Saved and activated ${active.name}.`);
                 this.toast.success('Workflow saved', `"${active.name}" was saved and activated.`);
                 this.workflowBusy.set(false);
-                this.resetCanvasAndWorkflowState();
+                this.finishSave();
               },
               error: () => {
                 this.workflowStatus.set('Saved workflow, but activation failed.');
@@ -598,18 +829,59 @@ export class WorkflowBuilderComponent implements OnInit {
     });
   }
 
-  /** Blanks the canvas and workflow identity after a successful save, so the builder is ready for the next one. */
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  hasUnsavedChanges(): boolean {
+    return this.store.dirty();
+  }
+
+  isSaveInProgress(): boolean {
+    return this.workflowBusy();
+  }
+
+  /** Post-save wrap-up — always returns to the Workflows list, where the save (new or updated) is now
+   *  visible, instead of leaving you staring at a blanked-out or unchanged canvas. markSaved() first,
+   *  or the unsaved-changes guard (which only ever saw the canvas reset itself clean via reset() before)
+   *  intercepts this very navigation and asks "Leave this page?" right after a successful save. */
+  private finishSave(): void {
+    this.store.markSaved();
+    this.router.navigate(['/workflows']);
+  }
+
+  // Writes each node's real, server-created id back onto its own fields instead of wiping the canvas —
+  // the wizards read these fields (findLaunchSourceId(), destination-wizard's resolvedDestinationId) so
+  // the Mapping JSON gets non-null sourceConnectionId/destinationId right after Save, no reload needed.
+  // Also stamps mappingProfileId so the next Save updates these records in place rather than duplicating
+  // them (workflow-build-assembler.service.ts reads these same three field names as each spec's existingId).
+  private stampBuildResultIds(result: WorkflowBuildResult): void {
+    const stamp = (ids: Record<string, string>, field: string) => {
+      for (const [nodeId, id] of Object.entries(ids)) {
+        const node = this.store.byId(nodeId);
+        if (!node) continue;
+        this.store.updateNode(nodeId, { fields: { ...node.fields, [field]: id } });
+      }
+    };
+    stamp(result.sourceConnectionIds, 'sourceConnectionId');
+    stamp(result.destinationIds, 'destinationId');
+    stamp(result.mappingProfileIds, 'mappingProfileId');
+  }
+
+  /** Blanks the canvas and workflow identity — used when explicitly starting a new workflow (see
+   *  ngOnInit/onReset), not after a save (see finishSave). */
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
     this.currentWorkflowId.set(null);
     this.workflowName.set('');
+    // Otherwise the freshly-blanked name field reads as invalid immediately — nameTouched stays true from
+    // whatever earlier interaction/failed-save-attempt set it, and nameInvalid() only checks
+    // nameTouched() && !workflowName().trim(), which is now true again on a field nobody has touched yet.
+    this.nameTouched.set(false);
     this.workflowIdInput.set('');
     this.triggerType.set('Manual');
     this.cronExpression.set('0 0 * * *');
     this.pollMinutes.set(15);
   }
 
-  private addStubSource(s: Source): void {
+  private addStubSource(s: NodeCatalogEntry): void {
     const count = this.store.nodes().filter(n => !n.kind).length;
     const node: SourceNode = {
       id:             this.store.nextNodeId(),
@@ -617,18 +889,18 @@ export class WorkflowBuilderComponent implements OnInit {
       x:              360 + count * 70,
       y:              300 + count * 60,
       connected:      true,
-      abbr:           s.abbr,
-      color:          s.color,
-      connectorLabel: s.name,
+      abbr:           s.icon ?? 'SRC',
+      color:          s.color ?? '#5b6573',
+      connectorLabel: s.displayName,
       fields: {
-        '__name':         s.name,
-        'App context':    s.context,
+        '__name':         s.displayName,
+        'App context':    s.category ?? '',
         'Ingestion mode': 'search',
-        'Connector':      s.name,
+        'Connector':      s.displayName,
       },
     };
     this.store.addNode(node);
-    this.toast.show('Source added', `${s.name} added to the canvas.`);
+    this.toast.show('Source added', `${s.displayName} added to the canvas.`);
   }
 
   private _nodeDisplayName(n: CanvasNode): string {

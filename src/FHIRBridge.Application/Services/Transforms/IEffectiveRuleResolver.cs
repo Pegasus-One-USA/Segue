@@ -1,0 +1,142 @@
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
+
+namespace FHIRBridge.Application.Services.Transforms;
+
+/// <summary>
+/// Answers "for this destination field, which transform rule(s) actually apply right now?" by walking the
+/// 5-level scope chain — Workflow → Field → ResourceType → DestinationType → Global — most specific wins,
+/// falling back up the chain when a tier has nothing configured. Whichever tier has at least one matching row
+/// wins outright: tiers are never merged, so a Field-scoped rule fully replaces a broader ResourceType default
+/// rather than combining with it.
+/// </summary>
+public interface IEffectiveRuleResolver
+{
+    Task<IReadOnlyList<TransformationRule>> ResolveAsync(
+        DestinationType destinationType,
+        string resourceType,
+        string destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem,
+        string? sourceField,
+        CancellationToken cancellationToken);
+}
+
+public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
+{
+    private readonly ITransformationRuleRepository _repository;
+
+    public EffectiveRuleResolver(ITransformationRuleRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<IReadOnlyList<TransformationRule>> ResolveAsync(
+        DestinationType destinationType,
+        string resourceType,
+        string destinationField,
+        Guid? resourcePipelineRouteId,
+        string? sourceSystem,
+        string? sourceField,
+        CancellationToken cancellationToken)
+    {
+        if (resourcePipelineRouteId is not null)
+        {
+            var workflowRules = PreferSourceFieldSpecific(
+                PreferSourceSpecific(
+                    await _repository.GetWorkflowScopedAsync(
+                        resourcePipelineRouteId.Value, resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                    sourceSystem),
+                sourceField);
+            if (workflowRules.Count > 0)
+            {
+                return Order(workflowRules);
+            }
+        }
+
+        var fieldRules = PreferSourceFieldSpecific(
+            PreferSourceSpecific(
+                PreferResourceTypeSpecific(
+                    PreferFieldSpecific(
+                        await _repository.GetFieldScopedAsync(resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                        destinationField),
+                    resourceType),
+                sourceSystem),
+            sourceField);
+        if (fieldRules.Count > 0)
+        {
+            return Order(fieldRules);
+        }
+
+        var resourceTypeRules = PreferFieldSpecific(
+            await _repository.GetResourceTypeScopedAsync(resourceType, destinationField, cancellationToken), destinationField);
+        if (resourceTypeRules.Count > 0)
+        {
+            return Order(resourceTypeRules);
+        }
+
+        var destinationTypeRules = PreferFieldSpecific(
+            await _repository.GetDestinationTypeScopedAsync(destinationType, destinationField, cancellationToken), destinationField);
+        if (destinationTypeRules.Count > 0)
+        {
+            return Order(destinationTypeRules);
+        }
+
+        var globalRules = PreferFieldSpecific(
+            await _repository.GetGlobalScopedAsync(destinationField, cancellationToken), destinationField);
+        return Order(globalRules);
+    }
+
+    /// <summary>Within one tier, a row that names this exact field takes priority over a blanket
+    /// (DestinationField == null) row for the same tier.</summary>
+    private static IReadOnlyList<TransformationRule> PreferFieldSpecific(
+        IReadOnlyList<TransformationRule> rules, string destinationField)
+    {
+        var fieldSpecific = rules.Where(r => r.DestinationField == destinationField).ToList();
+        return fieldSpecific.Count > 0 ? fieldSpecific : rules;
+    }
+
+    /// <summary>Field-tier-only counterpart to <see cref="PreferFieldSpecific"/>'s field-name preference — a
+    /// row naming this exact resource type takes priority over a blanket (ResourceType == null, "any
+    /// resource") row within the Field tier, same "specific beats blanket" pattern.</summary>
+    private static IReadOnlyList<TransformationRule> PreferResourceTypeSpecific(
+        IReadOnlyList<TransformationRule> rules, string resourceType)
+    {
+        var resourceTypeSpecific = rules.Where(r => r.ResourceType == resourceType).ToList();
+        return resourceTypeSpecific.Count > 0 ? resourceTypeSpecific : rules;
+    }
+
+    /// <summary>Within Field/Workflow tier rows, a row naming this exact source system takes priority over a
+    /// blanket (SourceSystem == null, "any source") row — same "specific beats blanket" pattern as
+    /// <see cref="PreferFieldSpecific"/>, just on the source-system dimension instead of the field dimension.</summary>
+    private static IReadOnlyList<TransformationRule> PreferSourceSpecific(
+        IReadOnlyList<TransformationRule> rules, string? sourceSystem)
+    {
+        if (sourceSystem is null)
+        {
+            return rules;
+        }
+
+        var sourceSpecific = rules.Where(r => r.SourceSystem == sourceSystem).ToList();
+        return sourceSpecific.Count > 0 ? sourceSpecific : rules;
+    }
+
+    /// <summary>Same "specific beats blanket" preference as <see cref="PreferSourceSpecific"/>, on the source
+    /// *field* dimension (e.g. "identifier.value") instead of the source *system* dimension (e.g. "Epic") —
+    /// the two are independent and both narrow the same Field/Workflow tier row set.</summary>
+    private static IReadOnlyList<TransformationRule> PreferSourceFieldSpecific(
+        IReadOnlyList<TransformationRule> rules, string? sourceField)
+    {
+        if (sourceField is null)
+        {
+            return rules;
+        }
+
+        var sourceFieldSpecific = rules.Where(r => r.SourceField == sourceField).ToList();
+        return sourceFieldSpecific.Count > 0 ? sourceFieldSpecific : rules;
+    }
+
+    private static IReadOnlyList<TransformationRule> Order(IReadOnlyList<TransformationRule> rules) =>
+        rules.Where(r => r.IsEnabled).OrderBy(r => r.Order).ToList();
+}

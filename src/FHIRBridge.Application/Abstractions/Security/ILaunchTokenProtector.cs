@@ -7,15 +7,19 @@ namespace FHIRBridge.Application.Abstractions.Security;
 /// </summary>
 public interface ILaunchTokenProtector
 {
-    /// <summary>Encrypts the routeId (and, optionally, a hospital/organization EhrEndpoint id to launch against, and
-    /// a caller-supplied callerId — the URL to redirect to on completion instead of the source's static
-    /// PostLaunchRedirectUri) into an opaque, URL-safe token for the registered launch URL.</summary>
-    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null);
+    /// <summary>Encrypts the routeId (and, optionally, a hospital/organization EhrEndpoint id to launch against, a
+    /// caller-supplied callerId — the URL to redirect to on completion instead of the source's static
+    /// PostLaunchRedirectUri — a caller-supplied sessionId, see <see cref="LaunchContext.SessionId"/>, and a
+    /// caller-supplied userIdentity, see <see cref="LaunchContext.UserIdentity"/>) into an opaque, URL-safe token for
+    /// the registered launch URL.</summary>
+    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
 
-    /// <summary>Encrypts a workflowId (and, optionally, a hospital/organization EhrEndpoint id to launch against, and
-    /// a caller-supplied callerId — the URL to redirect to on completion instead of the source's static
-    /// PostLaunchRedirectUri) into an opaque launch token (launch runs the referenced workflow graph).</summary>
-    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null);
+    /// <summary>Encrypts a workflowId (and, optionally, a hospital/organization EhrEndpoint id to launch against, a
+    /// caller-supplied callerId — the URL to redirect to on completion instead of the source's static
+    /// PostLaunchRedirectUri — a caller-supplied sessionId, see <see cref="LaunchContext.SessionId"/>, and a
+    /// caller-supplied userIdentity, see <see cref="LaunchContext.UserIdentity"/>) into an opaque launch token
+    /// (launch runs the referenced workflow graph).</summary>
+    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
 
     /// <summary>Encrypts a (workflowId, targetNodeId) pair into an opaque checkpoint-launch token — hitting it runs
     /// only that node's ancestor closure, not the full workflow graph.</summary>
@@ -37,5 +41,14 @@ public interface ILaunchTokenProtector
 /// directory) to launch against instead of the bound source connection's own configured base URL — set when a
 /// third-party app carries a user's hospital selection through the launch. <see cref="CallerId"/> optionally carries
 /// the caller-supplied return URL (e.g. the third-party app that requested this launch URL) to redirect to on
-/// completion instead of the source's static PostLaunchRedirectUri.</summary>
-public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null, string? CallerId = null);
+/// completion instead of the source's static PostLaunchRedirectUri — a UI concern, distinct from
+/// <see cref="SessionId"/>. <see cref="SessionId"/> optionally carries an opaque identifier minted by FHIRBridge
+/// (echoed back by the caller on this and every later token-status/run/discard-token call for the same browser
+/// session) that the Patient Standalone token cache keys on instead of SourceConnectionId — letting every pipeline
+/// sharing one real patient's session reuse the one token their authorization already covers. Unlike CallerId, this
+/// is never a URL and is never used for a redirect. <see cref="UserIdentity"/> optionally carries a stable identifier
+/// for the end user driving this launch (e.g. a third-party app's own logged-in account email) — distinct from
+/// SessionId (an opaque, per-browser token) and CallerId (a redirect URL): this is what a user-to-FHIR-context
+/// binding is permanently keyed on, so it must identify the same real person across every launch, not just one
+/// browser session.</summary>
+public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null, string? CallerId = null, string? SessionId = null, string? UserIdentity = null);

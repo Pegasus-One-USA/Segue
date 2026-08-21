@@ -1,0 +1,102 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">Email Settings</h1>
+    <p class="page-sub">Configure the outbound SMTP server Segue uses to send notification emails.</p>
+  </div>
+
+  @if (loading()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">SMTP Server</h2>
+            <p class="card-sub">Enable email and configure the server Segue connects to for sending it.</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="isEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="es-host">Host <span class="req">*</span></label>
+            <input id="es-host" type="text" formControlName="host" placeholder="smtp.example.com" />
+            @if (form.controls.host.touched && form.controls.host.invalid) {
+              <p class="field-error">Host is required.</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="es-port">Port <span class="req">*</span></label>
+            <input id="es-port" type="number" formControlName="port" placeholder="587" />
+            @if (form.controls.port.touched && form.controls.port.invalid) {
+              <p class="field-error">Enter a valid port (1–65535).</p>
+            }
+          </div>
+
+          <label class="toggle-field toggle-field--inline">
+            <input type="checkbox" formControlName="enableSsl" />
+            <span>Use SSL/TLS</span>
+          </label>
+
+          <div class="form-field">
+            <label for="es-username">Username</label>
+            <input id="es-username" type="text" formControlName="username" autocomplete="off" />
+          </div>
+
+          <div class="form-field">
+            <label for="es-password">Password</label>
+            <input id="es-password" type="password" formControlName="password" autocomplete="new-password"
+                   [placeholder]="hasPasswordConfigured() ? 'Leave blank to keep the current password' : 'Enter a password'" />
+          </div>
+
+          <div class="form-field">
+            <label for="es-fromAddress">From Address <span class="req">*</span></label>
+            <input id="es-fromAddress" type="email" formControlName="fromAddress" placeholder="no-reply@example.com" />
+            @if (form.controls.fromAddress.touched && form.controls.fromAddress.invalid) {
+              <p class="field-error">Enter a valid email address.</p>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="es-fromName">From Name <span class="req">*</span></label>
+            <input id="es-fromName" type="text" formControlName="fromName" placeholder="Segue" />
+          </div>
+        </div>
+
+        @if (canWrite) {
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Saving…' : 'Save Email Settings' }}
+            </button>
+          </div>
+        }
+      </section>
+    </form>
+
+    @if (canWrite) {
+      <section class="settings-card">
+        <h2 class="card-title">Send a Test Email</h2>
+        <p class="card-sub">Sends using the currently saved settings above — save your changes first if you just edited them.</p>
+        <div class="inline-form">
+          <div class="form-field">
+            <label for="es-testEmail">Send to</label>
+            <input id="es-testEmail" type="email" placeholder="you@example.com"
+                   [value]="testEmailAddress()"
+                   (input)="testEmailAddress.set($any($event.target).value)" />
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-outline" [disabled]="testing()" (click)="sendTestEmail()">
+              {{ testing() ? 'Sending…' : 'Send Test Email' }}
+            </button>
+          </div>
+        </div>
+      </section>
+    }
+  }
+</div>

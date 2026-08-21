@@ -18,6 +18,8 @@
   <ItemGroup>
     <ProjectReference Include="..\FHIRBridge.Runtime.Domain\FHIRBridge.Runtime.Domain.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.SharedKernel\FHIRBridge.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
   </ItemGroup>
 
 </Project>

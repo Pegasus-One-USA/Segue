@@ -45,11 +45,90 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
+        var statusUrl = await KickOffExportAsync(request, source, cancellationToken);
+
+        IReadOnlyList<BulkExportFile> files;
+        for (var attempt = 0; ; attempt++)
+        {
+            var pollResult = await PollOnceAsync(statusUrl, source, cancellationToken);
+            if (pollResult.Status == BulkExportPollStatus.Completed)
+            {
+                files = pollResult.Files ?? [];
+                break;
+            }
+
+            if (pollResult.Status == BulkExportPollStatus.Failed)
+            {
+                throw new InvalidOperationException(pollResult.ErrorMessage ?? "Bulk export status poll failed.");
+            }
+
+            if (attempt + 1 >= _options.MaxPollAttempts)
+            {
+                throw new TimeoutException(
+                    $"Bulk export did not complete after {_options.MaxPollAttempts} status polls.");
+            }
+
+            await _delay(pollResult.RetryAfter ?? TimeSpan.FromSeconds(Math.Max(1, _options.DefaultPollIntervalSeconds)), cancellationToken);
+        }
+
+        var resources = await DownloadResultsAsync(files, source, cancellationToken);
+
+        _logger.LogInformation(
+            "Bulk export produced {ResourceCount} resources across {FileCount} NDJSON files.",
+            resources.Count, files.Count);
+
+        return resources;
+    }
+
+    public async Task<string> KickOffExportAsync(
+        FhirBulkExportRequest request,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
         var baseUrl = RequireBaseUrl(source);
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        return await KickOffAsync(baseUrl, request, accessToken, cancellationToken);
+    }
 
-        var statusUrl = await KickOffAsync(baseUrl, request, accessToken, cancellationToken);
-        var files = await PollUntilCompleteAsync(statusUrl, accessToken, cancellationToken);
+    public async Task<BulkExportPollResult> PollOnceAsync(
+        string statusUrl,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, statusUrl);
+        SetBearer(httpRequest, accessToken);
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.OK)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            return new BulkExportPollResult(
+                BulkExportPollStatus.Completed,
+                Files: ParseManifest(body, "output"),
+                ErrorFiles: ParseManifest(body, "error"));
+        }
+
+        if (response.StatusCode == HttpStatusCode.Accepted)
+        {
+            return new BulkExportPollResult(BulkExportPollStatus.InProgress, RetryAfter: ResolvePollDelay(response));
+        }
+
+        var errorBody = await SafeReadAsync(response, cancellationToken);
+        return new BulkExportPollResult(
+            BulkExportPollStatus.Failed,
+            ErrorMessage: $"Bulk export status poll returned {(int)response.StatusCode} ({response.ReasonPhrase}). {errorBody}");
+    }
+
+    public async Task<IReadOnlyList<ResourceEnvelope>> DownloadResultsAsync(
+        IReadOnlyList<BulkExportFile> files,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
 
         var resources = new List<ResourceEnvelope>();
         foreach (var file in files)
@@ -57,11 +136,104 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
             resources.AddRange(await DownloadNdjsonAsync(file, accessToken, cancellationToken));
         }
 
-        _logger.LogInformation(
-            "Bulk export produced {ResourceCount} resources across {FileCount} NDJSON files.",
-            resources.Count, files.Count);
-
         return resources;
+    }
+
+    public async Task<IReadOnlyList<BulkExportPartialFailure>> DownloadPartialFailuresAsync(
+        IReadOnlyList<BulkExportFile> errorFiles,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (errorFiles.Count == 0)
+        {
+            return [];
+        }
+
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+
+        var failures = new List<BulkExportPartialFailure>();
+        foreach (var file in errorFiles)
+        {
+            failures.AddRange(await DownloadOperationOutcomesAsync(file, accessToken, cancellationToken));
+        }
+
+        return failures;
+    }
+
+    private async Task<IReadOnlyList<BulkExportPartialFailure>> DownloadOperationOutcomesAsync(
+        BulkExportFile file,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, file.Url);
+        SetBearer(httpRequest, accessToken);
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+ndjson"));
+
+        using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            // An error-file itself failing to download must not fail the whole (otherwise successful) export —
+            // log and move on rather than throw, since the primary output data is unaffected.
+            _logger.LogWarning(
+                "Bulk export partial-failure file download returned {StatusCode} for {Url}; skipping.",
+                (int)response.StatusCode, file.Url);
+            return [];
+        }
+
+        var failures = new List<BulkExportPartialFailure>();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            failures.AddRange(ParseOperationOutcome(line));
+        }
+
+        return failures;
+    }
+
+    /// <summary>Extracts every <c>issue</c> entry from one OperationOutcome NDJSON line. The FHIR Bulk Data spec's
+    /// manifest <c>error</c> array has no structured field for which resource type an issue is about — Epic (and
+    /// most servers) name it in <c>diagnostics</c> free text instead, so that's surfaced as-is rather than parsed
+    /// further.</summary>
+    private static IReadOnlyList<BulkExportPartialFailure> ParseOperationOutcome(string line)
+    {
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("issue", out var issues) ||
+            issues.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var failures = new List<BulkExportPartialFailure>();
+        foreach (var issue in issues.EnumerateArray())
+        {
+            var diagnostics = GetString(issue, "diagnostics");
+            if (string.IsNullOrWhiteSpace(diagnostics))
+            {
+                diagnostics = issue.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Object
+                    ? GetString(details, "text")
+                    : null;
+            }
+
+            if (string.IsNullOrWhiteSpace(diagnostics))
+            {
+                continue;
+            }
+
+            failures.Add(new BulkExportPartialFailure(GetString(issue, "severity"), GetString(issue, "code"), diagnostics));
+        }
+
+        return failures;
     }
 
     private async Task<string> KickOffAsync(
@@ -89,8 +261,13 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         if (response.StatusCode != HttpStatusCode.Accepted)
         {
             var body = await SafeReadAsync(response, cancellationToken);
+            // Keep only a short snippet of the response body — some servers (e.g. Epic) return a full HTML error
+            // page, which is noise in logs and must never reach the UI. The status + reason are what matter.
+            var snippet = string.IsNullOrWhiteSpace(body)
+                ? string.Empty
+                : $" {(body.Length > 300 ? body[..300] + "…" : body)}";
             throw new InvalidOperationException(
-                $"Bulk export kick-off returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {kickOffUrl}. {body}");
+                $"Bulk export kick-off returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {kickOffUrl}.{snippet}");
         }
 
         var statusUrl = response.Headers.Location?.ToString()
@@ -103,39 +280,6 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         _logger.LogInformation("Bulk export kicked off; polling status at {StatusUrl}.", statusUrl);
 
         return statusUrl;
-    }
-
-    private async Task<IReadOnlyList<BulkExportFile>> PollUntilCompleteAsync(
-        string statusUrl,
-        string accessToken,
-        CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; attempt < _options.MaxPollAttempts; attempt++)
-        {
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Get, statusUrl);
-            SetBearer(httpRequest, accessToken);
-            httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                return ParseManifest(body);
-            }
-
-            if (response.StatusCode != HttpStatusCode.Accepted)
-            {
-                var body = await SafeReadAsync(response, cancellationToken);
-                throw new InvalidOperationException(
-                    $"Bulk export status poll returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}");
-            }
-
-            await _delay(ResolvePollDelay(response), cancellationToken);
-        }
-
-        throw new TimeoutException(
-            $"Bulk export did not complete after {_options.MaxPollAttempts} status polls.");
     }
 
     private async Task<IReadOnlyList<ResourceEnvelope>> DownloadNdjsonAsync(
@@ -194,13 +338,13 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         return TimeSpan.FromSeconds(Math.Max(1, _options.DefaultPollIntervalSeconds));
     }
 
-    private static IReadOnlyList<BulkExportFile> ParseManifest(string body)
+    private static IReadOnlyList<BulkExportFile> ParseManifest(string body, string arrayPropertyName)
     {
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
 
         if (root.ValueKind != JsonValueKind.Object ||
-            !root.TryGetProperty("output", out var output) ||
+            !root.TryGetProperty(arrayPropertyName, out var output) ||
             output.ValueKind != JsonValueKind.Array)
         {
             return [];

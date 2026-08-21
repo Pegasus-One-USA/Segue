@@ -215,21 +215,6 @@
   overflow-y: hidden;
 }
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-
-  ::ng-deep .mat-mdc-progress-spinner circle {
-    stroke: var(--color-primary);
-  }
-}
-
 // ─── Material table overrides ────────────────────────────────────────────────
 .users-table {
   width: 100%;
@@ -452,11 +437,13 @@
 }
 
 .btn-more {
-  color:         var(--color-muted) !important;
-  width:         32px !important;
-  height:        32px !important;
-  border-radius: var(--radius-base) !important;
-  transition:    background var(--transition-base), color var(--transition-base) !important;
+  // --mat-icon-button-state-layer-size drives Material's own width/height/padding/ripple-diameter
+  // calculations together (see .mat-mdc-icon-button in @angular/material/icon-button) — border-radius
+  // already defaults to 50% from the same token chain, so setting just this one custom property shrinks
+  // the whole button (including its ripple/focus circle) to match, with no per-property overrides needed.
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
 
   &:hover {
     background: var(--color-side) !important;
@@ -502,14 +489,3 @@
 }
 
 // ─── Paginator ────────────────────────────────────────────────────────────────
-.table-paginator {
-  border-top: 1px solid var(--color-border);
-  background: var(--color-side);
-
-  ::ng-deep {
-    .mat-mdc-paginator-container { padding: 8px 16px; }
-    .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
-    .mat-mdc-icon-button { color: var(--color-ink-2) !important; }
-    .mat-mdc-icon-button[disabled] { color: var(--color-border) !important; }
-  }
-}

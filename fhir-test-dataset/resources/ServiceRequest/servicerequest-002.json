@@ -1,0 +1,45 @@
+{
+  "resourceType": "ServiceRequest",
+  "id": "servicerequest-002",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:servicerequest",
+      "value": "SERVICEREQUEST-002"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "36643-5",
+        "display": "Chest X-ray"
+      }
+    ],
+    "text": "Chest X-ray"
+  },
+  "subject": {
+    "reference": "Patient/patient-003",
+    "display": "Maria Delgado"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-002",
+    "display": "encounter-002"
+  },
+  "requester": {
+    "reference": "Practitioner/practitioner-003",
+    "display": "Dr Yuki Tanaka"
+  },
+  "authoredOn": "2026-05-04T09:20:00Z"
+}

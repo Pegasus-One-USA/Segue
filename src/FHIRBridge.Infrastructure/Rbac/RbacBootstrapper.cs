@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -182,6 +183,16 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
                 if (!existing.IsActive)
                 {
                     existing.Activate();
+                }
+
+                // Ownership handoff: appearing in RbacSeedData.Permissions this boot is proof code now
+                // curates this permission as a built-in, even if it started out as a hand-authored
+                // PermissionSource.Migration row (see PermissionSource's own doc comment) — promote it so a
+                // later removal from this list correctly deactivates it via the orphan pass below instead of
+                // leaving it permanently exempt.
+                if (existing.Source != PermissionSource.Code)
+                {
+                    existing.MarkAsCodeManaged();
                 }
 
                 actualPermissionIdBySeedId[seed.Id] = existing.Id;

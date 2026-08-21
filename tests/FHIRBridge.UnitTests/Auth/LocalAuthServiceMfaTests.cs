@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -5,6 +6,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -19,7 +21,21 @@ public sealed class LocalAuthServiceMfaTests
     private readonly Mock<ICurrentUserService> _currentUser = new();
     private readonly Mock<IEmailSender> _email = new();
     private readonly Mock<ITotpService> _totp = new();
+    private readonly Mock<IGovernanceLogger> _governanceLogger = new();
+    private readonly Mock<ISystemSettingsCache> _settingsCache = PassThroughSettingsCache();
     private readonly LocalAuthOptions _options = new();
+
+    private static Mock<ISystemSettingsCache> PassThroughSettingsCache()
+    {
+        var mock = new Mock<ISystemSettingsCache>();
+        mock.Setup(x => x.GetIntAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, int defaultValue, CancellationToken _) => defaultValue);
+        mock.Setup(x => x.GetBoolAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, bool defaultValue, CancellationToken _) => defaultValue);
+        mock.Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
+        return mock;
+    }
 
     private LocalAuthService Service() => new(
         _repository.Object,
@@ -28,6 +44,8 @@ public sealed class LocalAuthServiceMfaTests
         _currentUser.Object,
         _email.Object,
         _totp.Object,
+        _governanceLogger.Object,
+        _settingsCache.Object,
         Options.Create(_options));
 
     private const string Email = "mfa-user@x.io";
@@ -65,7 +83,7 @@ public sealed class LocalAuthServiceMfaTests
         response.AccessToken.Should().BeNull();
         user.FailedLoginCount.Should().Be(0);
         user.MfaChallengeTokenHash.Should().Be("challenge-hash");
-        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }
 
     [Fact]
@@ -80,7 +98,7 @@ public sealed class LocalAuthServiceMfaTests
         _repository.Setup(x => x.GetUserByMfaChallengeTokenHashAsync(challengeToken, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _totp.Setup(x => x.ValidateCode("SECRET", "123456")).Returns(true);
-        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()))
+        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>()))
             .Returns(new AccessTokenDto("access-token", "Bearer", DateTime.UtcNow.AddHours(1)));
         _accessTokenIssuer.Setup(x => x.IssueRefreshToken()).Returns(("refresh-hash", DateTime.UtcNow.AddDays(30)));
         _repository.Setup(x => x.GetUserRolesAsync(user.Id, It.IsAny<CancellationToken>()))

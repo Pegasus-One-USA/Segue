@@ -53,7 +53,7 @@
                 {{ getRoleConfig(user()!.role).label }}
               </span>
               <span class="status-badge" [ngClass]="getStatusClass(user()!.status)">
-                {{ user()!.status | titlecase }}
+                {{ getStatusLabel(user()!.status) }}
               </span>
               @if (user()!.department) {
                 <span class="hero-dept">
@@ -67,51 +67,59 @@
 
         <!-- Action buttons -->
         <div class="header-actions">
-          <button mat-stroked-button class="btn-secondary" (click)="openEditDialog()">
+          <button mat-stroked-button class="btn-secondary" *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="openEditDialog()">
             <mat-icon>edit</mat-icon>
             Edit
           </button>
 
-          <button mat-stroked-button [matMenuTriggerFor]="statusMenu" class="btn-secondary">
-            <mat-icon>settings</mat-icon>
-            Status
-            <mat-icon>arrow_drop_down</mat-icon>
-          </button>
-          <mat-menu #statusMenu="matMenu">
-            @if (user()!.status !== 'active') {
-              <button mat-menu-item (click)="toggleStatus('enable')">
-                <mat-icon class="icon-enable">check_circle</mat-icon>
-                Enable User
-              </button>
-            }
-            @if (user()!.status === 'active') {
-              <button mat-menu-item (click)="toggleStatus('disable')">
-                <mat-icon class="icon-disable">remove_circle</mat-icon>
-                Disable User
-              </button>
-            }
-            @if (user()!.status !== 'suspended') {
-              <button mat-menu-item (click)="toggleStatus('suspend')">
-                <mat-icon class="icon-suspend">block</mat-icon>
-                Suspend User
-              </button>
-            }
-            <mat-divider></mat-divider>
-            <button mat-menu-item (click)="resetPassword()">
-              <mat-icon>lock_reset</mat-icon>
-              Reset Password
+          @if (hasStatusMenu()) {
+            <button mat-stroked-button [matMenuTriggerFor]="statusMenu" class="btn-secondary">
+              <mat-icon>settings</mat-icon>
+              Status
+              <mat-icon>arrow_drop_down</mat-icon>
             </button>
-            @if (user()!.status === 'pending') {
-              <button mat-menu-item (click)="resendInvitation()">
-                <mat-icon>send</mat-icon>
-                Resend Invitation
-              </button>
-            }
-          </mat-menu>
+            <mat-menu #statusMenu="matMenu">
+              <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Deactivate)">
+                @if (user()!.status !== 'active') {
+                  <button mat-menu-item (click)="toggleStatus('enable')">
+                    <mat-icon class="icon-enable">check_circle</mat-icon>
+                    Enable User
+                  </button>
+                }
+                @if (user()!.status === 'active' && !isSelf()) {
+                  <button mat-menu-item (click)="toggleStatus('disable')">
+                    <mat-icon class="icon-disable">remove_circle</mat-icon>
+                    Disable User
+                  </button>
+                }
+                @if (user()!.status !== 'suspended' && !isSelf()) {
+                  <button mat-menu-item (click)="toggleStatus('suspend')">
+                    <mat-icon class="icon-suspend">block</mat-icon>
+                    Suspend User
+                  </button>
+                }
+              </ng-container>
+              <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)">
+                <mat-divider></mat-divider>
+                <button mat-menu-item (click)="resetPassword()">
+                  <mat-icon>lock_reset</mat-icon>
+                  Reset Password
+                </button>
+              </ng-container>
+              @if (user()!.status === 'pending') {
+                <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Invite)" (click)="resendInvitation()">
+                  <mat-icon>send</mat-icon>
+                  Resend Invitation
+                </button>
+              }
+            </mat-menu>
+          }
 
-          <button mat-icon-button class="btn-delete" (click)="deleteUser()" matTooltip="Delete user">
-            <mat-icon>delete_outline</mat-icon>
-          </button>
+          @if (!isSelf()) {
+            <button mat-icon-button class="btn-delete" *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)" (click)="deleteUser()" matTooltip="Delete user">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          }
         </div>
       </div>
     </div>
@@ -225,7 +233,7 @@
                 <mat-icon>badge</mat-icon>
                 <h3>Assigned Roles</h3>
               </div>
-              <button mat-stroked-button class="btn-secondary btn-sm" (click)="openAssignRolesDialog()">
+              <button mat-stroked-button class="btn-secondary btn-sm" *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Assign)" (click)="openAssignRolesDialog()">
                 <mat-icon>edit</mat-icon>
                 Manage Roles
               </button>
@@ -451,7 +459,7 @@
 
             <!-- Reset password / MFA recovery actions -->
             <div class="section-card__footer">
-              <button mat-stroked-button class="btn-secondary" (click)="resetPassword()">
+              <button mat-stroked-button class="btn-secondary" *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="resetPassword()">
                 <mat-icon>lock_reset</mat-icon>
                 Send Password Reset Email
               </button>
@@ -464,7 +472,7 @@
               <!-- Once 2FA is actually enabled, requiring it is moot — only offer the toggle
                    while it's still off, so it's obvious which state you're changing. -->
               @if (!user()!.twoFactorEnabled) {
-                <button mat-stroked-button class="btn-secondary" (click)="toggleMfaRequirement()">
+                <button mat-stroked-button class="btn-secondary" *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="toggleMfaRequirement()">
                   <mat-icon>policy</mat-icon>
                   {{ user()!.mfaRequired ? 'Stop Requiring 2FA' : 'Require 2FA' }}
                 </button>

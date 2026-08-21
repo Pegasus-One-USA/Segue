@@ -1,4 +1,5 @@
 using FHIRBridge.Infrastructure.Workflows;
+using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,8 @@ public static class WorkflowPersistenceServiceCollectionExtensions
         services.AddScoped<IWorkflowDefinitionStore, SqlWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowRunStore, SqlWorkflowRunStore>();
         services.AddScoped<IWorkflowNodeResourceHistoryRecorder, EfWorkflowNodeResourceHistoryRecorder>();
+        // HIPAA #4: durable, append-only workflow audit trail — overrides AddWorkflowCore()'s in-memory default.
+        services.AddScoped<IWorkflowAuditRecorder, EfWorkflowAuditRecorder>();
 
         // Scenario B: gate + project + resolve the launch graph. Registered here so ILaunchWorkflowResolver's
         // dependency on the (SQL) IWorkflowDefinitionStore is always satisfiable; hosts that don't opt into

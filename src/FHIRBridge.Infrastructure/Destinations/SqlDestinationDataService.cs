@@ -57,27 +57,37 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
             return new DestinationDataDto(target, [], [], 0, ex.Message);
         }
 
-        if (pipelineRunIds.Count == 0)
-        {
-            return new DestinationDataDto(target, [], [], 0,
-                "This workflow has not completed any runs yet — nothing has been written to the destination.");
-        }
-
         var boundedTop = Math.Clamp(top, 1, 500);
+        var targetName = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
         var runIds = pipelineRunIds.ToList();
 
         try
         {
             var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
             await using var connection = await OpenConnectionAsync(destination.DestinationType, connectionString, cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText = BuildSelect(destination.DestinationType, schema, table, boundedTop, runIds.Count);
-            for (var i = 0; i < runIds.Count; i++)
+
+            // Scope the preview to this workflow's own runs when the table carries PipelineRunId; otherwise (a
+            // customer-owned table with only mapped business columns) read the whole table — nothing to filter on.
+            var runScoped = await HasColumnAsync(connection, schema, table, "PipelineRunId", cancellationToken);
+            if (runScoped && runIds.Count == 0)
             {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = "@runId" + i;
-                parameter.Value = runIds[i].ToString();
-                command.Parameters.Add(parameter);
+                return new DestinationDataDto(targetName, [], [], 0,
+                    "This workflow hasn't produced any runs yet — nothing has been written to preview.");
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = runScoped
+                ? BuildSelect(destination.DestinationType, schema, table, boundedTop, runIds.Count)
+                : BuildSelect(destination.DestinationType, schema, table, boundedTop);
+            if (runScoped)
+            {
+                for (var i = 0; i < runIds.Count; i++)
+                {
+                    var parameter = command.CreateParameter();
+                    parameter.ParameterName = "@runId" + i;
+                    parameter.Value = runIds[i];
+                    command.Parameters.Add(parameter);
+                }
             }
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -202,6 +212,14 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
         }
     }
 
+    private static string BuildSelect(DestinationType type, string schema, string table, int top)
+    {
+        var qualified = QualifiedName(type, schema, table);
+        return type is DestinationType.SqlServer or DestinationType.AzureSql
+            ? $"SELECT TOP {top} * FROM {qualified}"
+            : $"SELECT * FROM {qualified} LIMIT {top}";
+    }
+
     private static string BuildSelect(DestinationType type, string schema, string table, int top, int runIdCount)
     {
         var qualified = QualifiedName(type, schema, table);
@@ -210,6 +228,38 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
         return type is DestinationType.SqlServer or DestinationType.AzureSql
             ? $"SELECT TOP {top} * FROM {qualified} {where}"
             : $"SELECT * FROM {qualified} {where} LIMIT {top}";
+    }
+
+    /// <summary>True when the target table declares the given column (INFORMATION_SCHEMA), so we only try to
+    /// scope by PipelineRunId on tables that actually have it.</summary>
+    private static async Task<bool> HasColumnAsync(
+        DbConnection connection,
+        string schema,
+        string table,
+        string column,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var sql = "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @t AND COLUMN_NAME = @c";
+        AddParameter(command, "@t", table);
+        AddParameter(command, "@c", column);
+        if (!string.IsNullOrEmpty(schema))
+        {
+            sql += " AND TABLE_SCHEMA = @s";
+            AddParameter(command, "@s", schema);
+        }
+
+        command.CommandText = sql;
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is not null and not DBNull;
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 
     private static string Quote(DestinationType type, string id) => type switch
@@ -222,14 +272,18 @@ public sealed partial class SqlDestinationDataService : IDestinationDataService
     private static string QualifiedName(DestinationType type, string schema, string table)
         => string.IsNullOrEmpty(schema) ? Quote(type, table) : $"{Quote(type, schema)}.{Quote(type, table)}";
 
-    /// <summary>Splits a destination object ("Table", "schema.Table", optionally with a <c>?mode=…</c> query) into parts.</summary>
+    /// <summary>
+    /// Splits a destination object ("Table" / "schema.Table") into parts, first stripping any trailing
+    /// write-directive or query suffix. The stored target may carry a <c>;mode=&lt;writeMode&gt;</c> hint
+    /// (e.g. "dbo.Patient;mode=upsert") or a <c>?…</c> query string; neither is part of the SQL identifier.
+    /// </summary>
     private static (string Schema, string Table) ParseTarget(string destinationObject)
     {
         var name = destinationObject.Trim();
-        var queryIndex = name.IndexOf('?', StringComparison.Ordinal);
-        if (queryIndex >= 0)
+        var suffixIndex = name.IndexOfAny([';', '?']);
+        if (suffixIndex >= 0)
         {
-            name = name[..queryIndex];
+            name = name[..suffixIndex];
         }
 
         var parts = name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

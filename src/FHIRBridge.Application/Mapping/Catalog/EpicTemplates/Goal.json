@@ -1,0 +1,136 @@
+{
+  "resourceType": "Goal",
+  "id": "<Id · 0..1>",
+  "meta": {
+    "versionId": "<Id · 0..1>",
+    "lastUpdated": "<Instant · 0..1>",
+    "source": "<Uri · 0..1>"
+  },
+  "text": {
+    "status": "<Code · 1..1 · required>",
+    "div": "<string · 1..1 · required>"
+  },
+  "identifier": [
+    {
+      "use": "<Code · 0..1>",
+      "system": "<Uri · 0..1>",
+      "value": "<String · 0..1>"
+    }
+  ],
+  "lifecycleStatus": "<Code · 1..1 · required>",
+  "achievementStatus": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "priority": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "description": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 1..1 · required>"
+  },
+  "subject": {
+    "reference": "<String · 1..1 · required>",
+    "display": "<String · 0..1>"
+  },
+  "startDate": "<Date · 0..1>",
+  "startCodeableConcept": {
+    "coding": [
+      {
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>",
+        "display": "<String · 0..1>"
+      }
+    ],
+    "text": "<String · 0..1>"
+  },
+  "target": [
+    {
+      "measure": {
+        "coding": [
+          {
+            "system": "<Uri · 0..1>",
+            "code": "<Code · 0..1>",
+            "display": "<String · 0..1>"
+          }
+        ],
+        "text": "<String · 0..1>"
+      },
+      "detailQuantity": {
+        "value": "<Decimal · 0..1>",
+        "unit": "<String · 0..1>",
+        "system": "<Uri · 0..1>",
+        "code": "<Code · 0..1>"
+      },
+      "dueDate": "<Date · 0..1>"
+    }
+  ],
+  "statusDate": "<Date · 0..1>",
+  "statusReason": "<String · 0..1>",
+  "expressedBy": {
+    "reference": "<String · 0..1>",
+    "display": "<String · 0..1>"
+  },
+  "addresses": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ],
+  "note": [
+    {
+      "authorString": "<String · 0..1>",
+      "time": "<DateTime · 0..1>",
+      "text": "<Markdown · 1..1 · required>"
+    }
+  ],
+  "outcomeCode": [
+    {
+      "coding": [
+        {
+          "system": "<Uri · 0..1>",
+          "code": "<Code · 0..1>",
+          "display": "<String · 0..1>"
+        }
+      ],
+      "text": "<String · 0..1>"
+    }
+  ],
+  "outcomeReference": [
+    {
+      "reference": "<String · 0..1>",
+      "display": "<String · 0..1>"
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <div class="fullscreen-shell__actions">
+      <button type="button" class="btn-clear-data" [disabled]="clearingData()" (click)="clearData()">
+        {{ clearingData() ? 'Clearing…' : 'Clear Data' }}
+      </button>
+      <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+        <mat-icon>logout</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="backend-system-page">
+    @if (clearDataMessage()) {
+      <p class="success-banner">{{ clearDataMessage() }}</p>
+    }
+    @if (clearDataError()) {
+      <p class="error-banner">{{ clearDataError() }}</p>
+    }
+
+    <nav class="bs-view-nav" aria-label="Backend System view">
+      <button type="button" class="bs-view-nav__item" [class.active]="view() === 'patients'" (click)="selectView('patients')">Patient List</button>
+      <button type="button" class="bs-view-nav__item" [class.active]="view() === 'practitioners'" (click)="selectView('practitioners')">Practitioners</button>
+    </nav>
+
+    @if (view() === 'patients') {
+    @if (selectedPatient(); as patient) {
+      <app-patient-details
+        [patientId]="patient.patientId"
+        [patientName]="patient.fullName"
+        [dataSource]="dataSource()"
+        (back)="backToList()"
+      ></app-patient-details>
+    } @else {
+      <div class="data-source-toggle" role="radiogroup" aria-label="Data source" hidden>
+        <span class="data-source-toggle__label">Data Source:</span>
+        @for (option of dataSourceOptions; track option.value) {
+          <label class="data-source-toggle__option">
+            <input
+              type="radio"
+              name="dataSource"
+              [value]="option.value"
+              [checked]="dataSource() === option.value"
+              (change)="selectDataSource(option.value)"
+            />
+            {{ option.label }}
+          </label>
+        }
+      </div>
+
+      @if (isLoading()) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      } @else if (loadError()) {
+        <p class="error-banner">{{ loadError() }}</p>
+      } @else if (patients().length === 0) {
+        <p class="empty-state">No patients found.</p>
+      } @else {
+        <p class="bs-result-meta">{{ patients().length }} patient{{ patients().length === 1 ? '' : 's' }} &middot; select a row to view details</p>
+        <div class="table-scroll">
+          <table class="bs-table">
+            <thead>
+              <tr>
+                <th>Patient ID</th>
+                <th>Patient Name</th>
+                <th>MRN</th>
+                <th>Identifier</th>
+                <th>Gender</th>
+                <th>DOB</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of patients(); track row.patientId) {
+                <tr class="bs-row-click" (click)="openPatient(row)">
+                  <td>{{ row.patientId }}</td>
+                  <td>{{ row.fullName ?? '-' }}</td>
+                  <td>{{ row.mrn ?? '-' }}</td>
+                  <td>{{ row.identifier ?? '-' }}</td>
+                  <td>{{ row.gender ?? '-' }}</td>
+                  <td>{{ row.birthDate ? (row.birthDate | date: 'mediumDate') : '-' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+    } @else {
+      <header class="page-header">
+        <h1>Practitioners</h1>
+        <p class="subtitle">Practitioners stored in HealthDB. Enter practitioner IDs and import them from FHIRBridge into the Practitioner table.</p>
+      </header>
+
+      <section class="import-panel">
+        <label class="import-panel__label" for="practitioner-ids-input">Practitioner IDs (comma-separated)</label>
+        <textarea
+          id="practitioner-ids-input"
+          class="import-panel__input"
+          rows="3"
+          placeholder="e.g. eM5CWtq15N0WJeuCet5bJlQ3, eGFvWfvIz2Cp0Wb0dGrGDg3"
+          [value]="practitionerIdsInput()"
+          (input)="practitionerIdsInput.set($any($event.target).value)"
+        ></textarea>
+
+        @if (referenced().length > 0) {
+          <div class="import-panel__refs">
+            <span class="import-panel__refs-label">
+              {{ referenced().length }} practitioner{{ referenced().length === 1 ? '' : 's' }} referenced across the Default tables:
+            </span>
+            <ul class="ref-chips">
+              @for (ref of referenced(); track ref.practitionerId) {
+                <li
+                  class="ref-chip"
+                  [class.ref-chip--imported]="ref.imported"
+                  [title]="ref.imported ? 'Already imported' : 'Not imported yet'"
+                >
+                  {{ ref.name ?? ref.practitionerId }}
+                  @if (ref.imported) {
+                    <span class="ref-chip__tick">✓</span>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <div class="import-panel__actions">
+          <button type="button" class="btn-primary" [disabled]="importing()" (click)="importPractitioners()">
+            {{ importing() ? 'Importing…' : 'Import Practitioner' }}
+          </button>
+        </div>
+
+        @if (importError()) {
+          <p class="error-banner">{{ importError() }}</p>
+        }
+        @if (importMessage()) {
+          <p class="success-banner">{{ importMessage() }}</p>
+        }
+      </section>
+
+      @if (practitionersLoading()) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      } @else if (practitionersError()) {
+        <p class="error-banner">{{ practitionersError() }}</p>
+      } @else if (practitioners().length === 0) {
+        <p class="empty-state">No practitioners in the table yet. Import some above.</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="practitioner-table">
+            <thead>
+              <tr>
+                @for (col of practitionerColumns; track col.key) {
+                  <th>{{ col.label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of practitioners(); track row.practitionerId) {
+                <tr>
+                  @for (col of practitionerColumns; track col.key) {
+                    <td>{{ practitionerCell(row, col.key) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+</div>

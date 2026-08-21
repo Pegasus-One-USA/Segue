@@ -1,0 +1,137 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Alert Rules</h1>
+    <p class="page-sub">Real, evaluated conditions — count of a SecurityEvent type within a time window exceeding a threshold. Evaluated every few minutes; firing sends a real email and records the alert.</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">Each rule you create here is a real, running condition: "if event type X happens more than N times within Y minutes, email these recipients." A background job genuinely checks every enabled rule on a schedule — this isn't a mockup.</p>
+
+      <p class="info-note">Rules can only watch Security Events today — not Errors, Pipeline Executions, or any other log type.</p>
+
+      <section class="info-section">
+        <h4 class="info-heading">Event types — what each one actually means</h4>
+        <table class="event-type-table">
+          <thead>
+            <tr>
+              <th>Event type</th>
+              <th>Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Login attempt while locked</td>
+              <td>Someone tried to log in to an account that's already locked out from too many prior failed attempts.</td>
+            </tr>
+            <tr>
+              <td>Account locked (threshold reached)</td>
+              <td>A user account just got locked out because it hit the failed-login limit — the lockout is happening right now, not just being attempted against.</td>
+            </tr>
+            <tr>
+              <td>App secret regenerated</td>
+              <td>An internal signing secret (e.g. the key that signs login tokens or password-reset links) was replaced — anything signed with the old value stops working immediately.</td>
+            </tr>
+            <tr>
+              <td>Audit chain broken</td>
+              <td>The tamper-evident audit log's hash chain no longer verifies — a critical signal that audit history may have been altered outside the application (e.g. a direct database edit).</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <button class="btn" type="button" (click)="toggleForm()">{{ showForm() ? 'Cancel' : '+ New Rule' }}</button>
+  </div>
+
+  @if (showForm()) {
+    <div class="form-card">
+      <div class="field-row">
+        <label>Name<input type="text" [ngModel]="form().name" (ngModelChange)="updateForm('name', $event)" /></label>
+        <label>Event Type
+          <select [ngModel]="form().eventTypeFilter" (ngModelChange)="updateForm('eventTypeFilter', $event)">
+            <option value="" disabled>Select an event type…</option>
+            @for (type of eventTypes; track type.value) {
+              <option [value]="type.value">{{ type.label }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label>Threshold Count<input type="number" [ngModel]="form().thresholdCount" (ngModelChange)="updateForm('thresholdCount', $event)" /></label>
+        <label>Window (minutes)<input type="number" [ngModel]="form().windowMinutes" (ngModelChange)="updateForm('windowMinutes', $event)" /></label>
+        <label>Severity
+          <select [ngModel]="form().severity" (ngModelChange)="updateForm('severity', $event)">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="wide">Recipients (comma-separated emails)<input type="text" [ngModel]="form().recipients" (ngModelChange)="updateForm('recipients', $event)" /></label>
+      </div>
+      @if (errorMessage()) {
+        <p class="error-message">{{ errorMessage() }}</p>
+      }
+      <button class="btn" type="button" (click)="submit()">Create</button>
+    </div>
+  }
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="rules()" class="data-table">
+
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Rule</th>
+          <td mat-cell *matCellDef="let r">{{ r.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="eventTypeFilter">
+          <th mat-header-cell *matHeaderCellDef>Condition</th>
+          <td mat-cell *matCellDef="let r">count({{ r.eventTypeFilter }}, {{ r.windowMinutes }}min) &gt;= {{ r.thresholdCount }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="threshold">
+          <th mat-header-cell *matHeaderCellDef>Threshold</th>
+          <td mat-cell *matCellDef="let r">{{ r.thresholdCount }} / {{ r.windowMinutes }}m</td>
+        </ng-container>
+
+        <ng-container matColumnDef="severity">
+          <th mat-header-cell *matHeaderCellDef>Severity</th>
+          <td mat-cell *matCellDef="let r">{{ r.severity }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="recipients">
+          <th mat-header-cell *matHeaderCellDef>Recipients</th>
+          <td mat-cell *matCellDef="let r">{{ r.recipients }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="isEnabled">
+          <th mat-header-cell *matHeaderCellDef>Enabled</th>
+          <td mat-cell *matCellDef="let r">
+            <mat-slide-toggle
+              [checked]="r.isEnabled"
+              [matTooltip]="r.isEnabled ? 'On — click to disable' : 'Off — click to enable'"
+              (change)="toggleEnabled(r)"
+            ></mat-slide-toggle>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (rules().length === 0 && !loading()) {
+      <div class="empty-state">No alert rules configured.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+  </div>
+</div>

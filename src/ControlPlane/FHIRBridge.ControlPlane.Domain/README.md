@@ -1,6 +1,6 @@
 # FHIRBridge.ControlPlane.Domain
 
-> The domain model for FHIRBridge's future **Control Plane** bounded context — the management/configuration plane that defines *what* the platform should do, kept separate from the Runtime plane that executes it.
+> The domain model for Segue's future **Control Plane** bounded context — the management/configuration plane that defines *what* the platform should do, kept separate from the Runtime plane that executes it.
 
 **Layer:** ControlPlane Domain · **SDK:** Microsoft.NET.Sdk · **Target:** net9.0
 

@@ -15,13 +15,15 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-azuresql':    { abbr: 'AZS', color: '#0078D4' },
   'dest-postgres':    { abbr: 'PG',  color: '#336791' },
   'dest-mysql':       { abbr: 'MY',  color: '#4479A1' },
+  'dest-mongo':       { abbr: 'MDB', color: '#47A248' },
   'dest-snowflake':   { abbr: 'SNW', color: '#29B5E8' },
   'dest-powerbi':     { abbr: 'PBI', color: '#F2C811' },
   'dest-tableau':     { abbr: 'TAB', color: '#E97627' },
   'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
-  'dest-fhir':        { abbr: 'FHR', color: '#00A89D' },
+  'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
+  'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },
@@ -48,6 +50,12 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
 })
 export class TransformNodeComponent {
   readonly node = input.required<CanvasNode>();
+  /** Hides the delete/add-next buttons — set by canvas.component from the builder's canMutate(). */
+  readonly readOnly = input(false);
+  /** Further hides just the delete button (add-next/configure stay available) — set by canvas.component
+   *  from canDeleteNode(), the vendor's own `{prefix}.delete` permission. Defaults true so a node type
+   *  with no resolvable vendor (or the Field Mapping node, already excluded via isMapping()) is unaffected. */
+  readonly canDelete = input(true);
 
   readonly delete    = output<string>();
   readonly addNext   = output<string>();
@@ -83,29 +91,14 @@ export class TransformNodeComponent {
     return (this.node() as TransformNode).statusAtAdd === 'caveat';
   }
 
-  protected typeTag(): string {
-    const id = this.transformId();
-    if (id.startsWith('dest-'))                                      return 'Destination';
-    if (id === 'audit-lineage' || id === 'hedis' || id === 'anomaly' || id === 'patient-agg') return 'Analytics';
-    return 'Transform';
-  }
-
-  protected typeTagColor(): string {
-    const t = this.typeTag();
-    if (t === 'Destination') return '#1D4ED8';
-    if (t === 'Analytics')   return '#7C3AED';
-    return '#007A72';
-  }
-
   protected isDestination(): boolean {
     return this.transformId().startsWith('dest-');
   }
 
-  protected typeTagBg(): string {
-    const t = this.typeTag();
-    if (t === 'Destination') return '#EFF6FF';
-    if (t === 'Analytics')   return '#F5F3FF';
-    return '#E6F9F7';
+  /** Field Mapping nodes aren't independently removable from the canvas via this button — by product
+   *  decision, not a technical restriction. */
+  protected isMapping(): boolean {
+    return this.transformId() === 'field-mapping';
   }
 
   onAddNextClick(e: MouseEvent): void {

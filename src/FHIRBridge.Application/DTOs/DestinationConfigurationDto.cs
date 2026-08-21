@@ -12,4 +12,9 @@ public sealed record DestinationConfigurationDto(
     bool IsEnabled,
     // Non-secret connection fields as a flat JSON object — see DestinationConfiguration.ConnectionMetadataJson.
     // Lets a caller reusing this row via "Existing" repopulate its form without ever seeing the actual secret.
-    string? ConnectionMetadataJson = null);
+    string? ConnectionMetadataJson = null,
+    DateTime? CreatedOnUtc = null,
+    string? CreatedBy = null,
+    DateTime? ModifiedOnUtc = null,
+    string? ModifiedBy = null,
+    Guid? DeIdentificationProfileId = null);

@@ -22,7 +22,7 @@
     <form [formGroup]="form" (ngSubmit)="submit()" class="invite-form">
 
       <!-- Email -->
-      <mat-form-field appearance="outline" class="form-field form-field--full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field form-field--full">
         <mat-label>Email Address</mat-label>
         <mat-icon matPrefix>email</mat-icon>
         <input
@@ -38,19 +38,19 @@
 
       <!-- First + Last name (optional) -->
       <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>First Name (optional)</mat-label>
           <input matInput formControlName="firstName" placeholder="Jane" autocomplete="off" />
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
           <mat-label>Last Name (optional)</mat-label>
           <input matInput formControlName="lastName" placeholder="Smith" autocomplete="off" />
         </mat-form-field>
       </div>
 
       <!-- Role -->
-      <mat-form-field appearance="outline" class="form-field form-field--full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field form-field--full">
         <mat-label>Assigned Role</mat-label>
         <mat-icon matPrefix>badge</mat-icon>
         <mat-select formControlName="roleId" [disabled]="rolesLoading()">
@@ -67,7 +67,7 @@
       <!-- Invitation note -->
       <div class="invite-notice">
         <mat-icon>info_outline</mat-icon>
-        <p>An invitation email will be sent to the user with a secure link to set up their account and password.</p>
+        <p>An invitation email will be sent to the user with a secure link to set up their account and password. Two-factor authentication (MFA) setup will be required before they can sign in.</p>
       </div>
 
     </form>
@@ -88,11 +88,15 @@
         [disabled]="loading()"
       >
         @if (loading()) {
-          <mat-spinner diameter="18" color="accent"></mat-spinner>
-          Sending...
+          <span class="btn-submit__content">
+            <mat-spinner diameter="18" color="accent"></mat-spinner>
+            <span>Sending...</span>
+          </span>
         } @else {
-          <mat-icon>send</mat-icon>
-          Send Invitation
+          <span class="btn-submit__content">
+            <mat-icon>send</mat-icon>
+            <span>Send Invitation</span>
+          </span>
         }
       </button>
     </div>

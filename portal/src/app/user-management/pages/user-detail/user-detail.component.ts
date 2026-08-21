@@ -1,6 +1,6 @@
 // user-management/pages/user-detail/user-detail.component.ts
 import {
-  Component, OnInit, OnDestroy, signal, computed, inject, Input,
+  Component, OnInit, OnDestroy, signal, computed, inject, Input, ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -12,7 +12,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -31,6 +30,11 @@ import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/as
 import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-link-dialog/reset-password-link-dialog.component';
 import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
+import { ToastService } from '../../../services/toast.service';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -67,19 +71,44 @@ interface StatusCategory {
     MatCardModule,
     MatBadgeModule,
     UserPermissionOverridesComponent,
+    HideWithoutPermissionDirective,
   ],
   templateUrl: './user-detail.component.html',
   styleUrls: ['./user-detail.component.scss'],
 })
-export class UserDetailComponent implements OnInit, OnDestroy {
+export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   @Input() id!: string;
+
+  // Direct-Permission-Overrides is rendered eagerly inside a mat-tab (not lazy), so this resolves
+  // as soon as the view initializes regardless of which tab is active.
+  @ViewChild(UserPermissionOverridesComponent) private overridesComponent?: UserPermissionOverridesComponent;
 
   private readonly userService = inject(IUserService);
   private readonly roleService = inject(IRoleService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
-  private readonly snackBar    = inject(MatSnackBar);
+  private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
+  private readonly actionGuard = inject(PermissionActionGuard);
+
+  // ─── Permission gating ──────────────────────────────────────────────────────
+  // Mirrors user-list.component.ts's canX() pattern exactly — this page reaches the exact same
+  // dialogs/API calls (Edit, Assign Roles, Enable/Disable/Suspend, Resend Invitation, Delete) via a
+  // second entry point, so it must be gated identically or a role.view-only reachable-by-URL detail
+  // page would silently bypass the list page's RBAC.
+  protected readonly PermissionGroup = PermissionGroup;
+  protected readonly PermissionAction = PermissionAction;
+  protected readonly permissionCode = permissionCode;
+
+  private isAdmin(): boolean    { return this.authService.isAdmin(); }
+  canEdit       = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Edit));
+  canToggle     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Deactivate));
+  canInvite     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Invite));
+  canDelete     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Delete));
+  canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.Role, PermissionAction.Assign));
+  // The "Status" dropdown trigger itself has no single permission of its own — hide it unless at
+  // least one item inside it (Enable/Disable/Suspend, Reset Password, Resend Invitation) would show.
+  hasStatusMenu = (): boolean => this.canToggle() || this.canEdit() || this.canInvite();
 
   private readonly destroy$ = new Subject<void>();
 
@@ -90,6 +119,14 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   activeTab = signal(0);
 
   readonly roleConfig = ROLE_CONFIG;
+
+  // Compared by email, not id: user().id is the real database GUID, but authService.currentUser().id
+  // is derived from the JWT's external/oid claim (see buildUserFromJwt) — a different identity space
+  // that never matches the GUID. Email is the one identifier populated consistently on both sides.
+  isSelf = computed(() => {
+    const email = this.authService.currentUser()?.email;
+    return !!email && email.toLowerCase() === this.user()?.email?.toLowerCase();
+  });
 
   // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
   // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
@@ -146,7 +183,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: catalog => this.catalog.set(catalog),
-        error: () => this.snackBar.open('Failed to load the permission catalog.', 'Dismiss', { duration: 4000 }),
+        error: () => this.toast.error('Failed to load the permission catalog.'),
       });
 
     if (this.id) {
@@ -157,6 +194,18 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
+  // Delegates to the Direct-Permission-Overrides tab — the only editable, unsaved state this
+  // route can carry (every other edit here goes through a MatDialog, which is closed/cancelled
+  // independently of router navigation).
+  hasUnsavedChanges(): boolean {
+    return this.overridesComponent?.hasUnsavedChanges() ?? false;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.overridesComponent?.isSaveInProgress() ?? false;
   }
 
   // ─── Data loading ─────────────────────────────────────────────────────────
@@ -171,7 +220,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
         },
         error: (err: {message?: string}) => {
           this.loading.set(false);
-          this.snackBar.open(err?.message ?? 'Failed to load user.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to load user.');
         },
       });
   }
@@ -180,6 +229,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   openEditDialog(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
     const ref = this.dialog.open(EditUserDialogComponent, {
       width: '640px',
       disableClose: true,
@@ -193,8 +243,10 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   openAssignRolesDialog(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
     const ref = this.dialog.open(AssignRolesDialogComponent, {
-      width: '680px',
+      width: '820px',
+      maxWidth: '95vw',
       disableClose: true,
       data: { user: u },
     });
@@ -207,6 +259,12 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   toggleStatus(action: 'enable' | 'disable' | 'suspend'): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Deactivate), 'You do not have permission to activate or deactivate users.')) return;
+
+    if (action !== 'enable' && this.isSelf()) {
+      this.toast.error(`You cannot ${action} your own account.`);
+      return;
+    }
 
     const call$ =
       action === 'enable'  ? this.userService.enableUser(u.id)  :
@@ -217,10 +275,10 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       next: updated => {
         this.user.set(updated);
         const label = action === 'enable' ? 'enabled' : action === 'disable' ? 'disabled' : 'suspended';
-        this.snackBar.open(`User "${u.fullName}" ${label}.`, 'Dismiss', { duration: 3000 });
+        this.toast.success(`User "${u.fullName}" ${label}.`);
       },
       error: err => {
-        this.snackBar.open(err?.message ?? `Failed to ${action} user.`, 'Dismiss', { duration: 4000 });
+        this.toast.error(err?.message ?? `Failed to ${action} user.`);
       },
     });
   }
@@ -228,6 +286,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   resetPassword(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to reset user passwords.')) return;
     this.userService.resetUserPassword(u.id, u.email)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -237,7 +296,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
           });
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to reset password.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to reset password.');
         },
       });
   }
@@ -248,7 +307,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
     if (!u) return;
 
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '440px', restoreFocus: false,
+      width: '400px', restoreFocus: false,
       data: {
         title:        'Disable two-factor authentication',
         message:      `This removes 2FA from "${u.fullName}"'s account without requiring a code — ` +
@@ -266,10 +325,10 @@ export class UserDetailComponent implements OnInit, OnDestroy {
         .subscribe({
           next: (updated) => {
             this.user.set(updated);
-            this.snackBar.open(`Two-factor authentication disabled for "${u.fullName}".`, 'Dismiss', { duration: 3000 });
+            this.toast.success(`Two-factor authentication disabled for "${u.fullName}".`);
           },
           error: (err: {message?: string}) => {
-            this.snackBar.open(err?.message ?? 'Failed to disable two-factor authentication.', 'Dismiss', { duration: 4000 });
+            this.toast.error(err?.message ?? 'Failed to disable two-factor authentication.');
           },
         });
     });
@@ -279,6 +338,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   toggleMfaRequirement(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to change the MFA requirement.')) return;
     const required = !u.mfaRequired;
 
     this.userService.setUserMfaRequirement(u.id, required)
@@ -286,15 +346,14 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (updated) => {
           this.user.set(updated);
-          this.snackBar.open(
+          this.toast.success(
             required
               ? `Two-factor authentication is now required for "${u.fullName}". They'll be prompted to set it up on next login.`
               : `Two-factor authentication is no longer required for "${u.fullName}".`,
-            'Dismiss', { duration: 4000 },
           );
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to update the MFA requirement.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to update the MFA requirement.');
         },
       });
   }
@@ -302,14 +361,15 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   resendInvitation(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
     this.userService.resendInvitation(u.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.snackBar.open(`Invitation resent to "${u.email}".`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`Invitation resent to "${u.email}".`);
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to resend invitation.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to resend invitation.');
         },
       });
   }
@@ -317,6 +377,11 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   deleteUser(): void {
     const u = this.user();
     if (!u) return;
+    if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Delete), 'You do not have permission to delete users.')) return;
+    if (this.isSelf()) {
+      this.toast.error('You cannot delete your own account.');
+      return;
+    }
     const confirmed = window.confirm(
       `Are you sure you want to delete "${u.fullName}"? This action cannot be undone.`,
     );
@@ -326,11 +391,11 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          this.snackBar.open(`User "${u.fullName}" deleted.`, 'Dismiss', { duration: 3000 });
+          this.toast.success(`User "${u.fullName}" deleted.`);
           this.router.navigate(['/user-management']);
         },
         error: (err: {message?: string}) => {
-          this.snackBar.open(err?.message ?? 'Failed to delete user.', 'Dismiss', { duration: 4000 });
+          this.toast.error(err?.message ?? 'Failed to delete user.');
         },
       });
   }
@@ -383,5 +448,15 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       pending:   'status-pending',
     };
     return map[status] ?? 'status-inactive';
+  }
+
+  getStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      active:    'Active',
+      inactive:  'Deactivated',
+      suspended: 'Suspended',
+      pending:   'Invited',
+    };
+    return map[status] ?? status;
   }
 }

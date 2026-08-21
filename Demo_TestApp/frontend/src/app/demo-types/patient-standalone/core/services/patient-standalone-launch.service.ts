@@ -9,9 +9,9 @@ import { environment } from '../../../../../environments/environment';
 // below still take an explicit workflowId parameter (rather than always using one resolved field), since the list
 // fetch and the per-patient detail fetch run against two different workflows (see launch-standalone-patient.ts).
 
-/** Matches FHIRBridge's PublicEhrEpicEndpointDto shape (GET /api/v1/ehr-mychart-endpoints) — anonymous,
- *  EndpointType.MyChart rows only (a specific customer/hospital's own branded production instance, never Epic's
- *  shared sandbox — that stays behind Provider Standalone's own picker). */
+/** Matches FHIRBridge's PublicEhrEndpointDto shape (GET /api/v1/ehr-public-endpoints?endpointType=MyChart) —
+ *  anonymous, scoped to EndpointType.MyChart rows only (a real customer's own branded instance), never the shared
+ *  Epic sandbox rows Provider Standalone's picker lists. */
 export interface MyChartEndpoint {
   id: string;
   name: string;
@@ -19,12 +19,16 @@ export interface MyChartEndpoint {
   status: string;
 }
 
-/** Matches PatientStandaloneLaunchController's response shape. */
+/** Matches PatientStandaloneLaunchController's response shape. sessionId is FHIRBridge-minted (or echoed back, if
+ *  one was supplied to mintLaunchUrl) — persist it and echo it back on every later hasValidToken/run/discardToken
+ *  call for this same browser session (see launch-standalone-patient.ts's sessionId field), NOT pageCallerId, which
+ *  is only ever the OAuth redirect-back URL and is shared by every visitor to this page. */
 export interface PublicPatientStandaloneUrlResponse {
   launchUrl: string;
   mode: string;
   opensDirectly: boolean;
   applicationType: string | null;
+  sessionId: string;
 }
 
 /** Matches WorkflowEndpoints' GET /workflows/{id}/token-status — a cheap, no-pipeline check of whether a real /run
@@ -96,11 +100,22 @@ export interface EpicSessionStatusResponse {
 /** Matches Demo_TestApp/backend's GET /api/patient-standalone-settings — the admin-configured FHIRBridge workflow
  *  ids + base URL for this flow (see WorkflowSettingsEntity.PatientWorkflowId/PatientDetailWorkflowId/PatientBaseUrl),
  *  formerly a gitignored per-developer local file (standalone-launch.config.ts). workflowId is the list fetch's
- *  workflow; detailWorkflowId is the separate workflow used only for the per-patient detail fetch. */
+ *  workflow; detailWorkflowId is the separate workflow used only for the per-patient detail fetch.
+ *  csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
+ *  buttons — formerly the hardcoded CSV_EXPORT_WORKFLOW_ID/CSV_EMAIL_EXPORT_WORKFLOW_ID constants in
+ *  standalone-launch.config.ts, now admin-configurable via WorkflowSettingsEntity.PatientCsvExportWorkflowId/
+ *  PatientCsvEmailExportWorkflowId. athenaWorkflowId/athenaBaseUrl/athenaEhrEndpointId back the athenahealth side of
+ *  this screen's Epic/athenahealth vendor toggle (see launch-standalone-patient.ts) — connect/list step only, no
+ *  detail/CSV-export counterpart. */
 export interface PatientStandaloneSettingsResponse {
   workflowId: string;
   detailWorkflowId: string;
   baseUrl: string;
+  csvExportWorkflowId: string;
+  csvEmailExportWorkflowId: string;
+  athenaWorkflowId: string;
+  athenaBaseUrl: string;
+  athenaEhrEndpointId: string;
 }
 
 // HealthApp's own backend (Demo_TestApp), not FHIRBridge — remembers which patient/workflow this HealthApp user
@@ -114,7 +129,7 @@ const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
  *  typically resolves to exactly one patient (the signed-in user), but this stays list-shaped in case more than one
  *  Patient resource ever comes back. */
 export function extractFetchedPatients(result: WorkflowRunResponse): FetchedPatient[] {
-  const sourceOutput = Object.values(result.outputsByNodeId ?? {}).find(output => output.nodeType === 'EpicSourceNode');
+  const sourceOutput = Object.values(result.outputsByNodeId ?? {}).find(output => output.nodeType.endsWith('SourceNode'));
   const resources = sourceOutput?.payload?.resources ?? [];
   return resources
     .filter(resource => resource.resourceType === 'Patient')
@@ -150,7 +165,7 @@ function referenceMatchesPatientId(reference: string | undefined, patientId: str
  *  defensively rather than assumed). Returns null if the response didn't include a matching Patient resource at
  *  all (e.g. a malformed or empty run). */
 export function extractPatientDetail(result: WorkflowRunResponse, patientId: string): PatientDetail | null {
-  const sourceOutput = Object.values(result.outputsByNodeId ?? {}).find(output => output.nodeType === 'EpicSourceNode');
+  const sourceOutput = Object.values(result.outputsByNodeId ?? {}).find(output => output.nodeType.endsWith('SourceNode'));
   const resources = sourceOutput?.payload?.resources ?? [];
 
   const patientResource = resources.find(resource => resource.resourceType === 'Patient' && resource.resourceId === patientId)
@@ -262,55 +277,115 @@ export class PatientStandaloneLaunchService {
 
   async loadHospitals(search?: string): Promise<MyChartEndpoint[]> {
     const url = search
-      ? `${this.baseUrl}/api/v1/ehr-mychart-endpoints?search=${encodeURIComponent(search)}`
-      : `${this.baseUrl}/api/v1/ehr-mychart-endpoints`;
+      ? `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=MyChart&search=${encodeURIComponent(search)}`
+      : `${this.baseUrl}/api/v1/ehr-public-endpoints?endpointType=MyChart`;
     return firstValueFrom(this.http.get<MyChartEndpoint[]>(url));
   }
 
-  async hasValidToken(workflowId: string, patientId: string | null): Promise<boolean> {
+  // callerId identifies this HealthApp session/page to FHIRBridge's Patient Standalone token cache — omitting it
+  // (as this method used to) makes every check fall back to the pre-CallerId per-SourceConnection key, so a token
+  // FHIRBridge already has cached under the CallerId-keyed slot from redirectToMyChart's mintLaunchUrl call would
+  // look invalid here even though it's genuinely usable. Must match whatever callerId mintLaunchUrl used for this
+  // same page/session (see launch-standalone-patient.ts's pageCallerId).
+  // baseUrlOverride: defaults to the resolved Epic/MyChart baseUrl (this.baseUrl) exactly as before — pass the
+  // admin-configured Athena base URL explicitly for the athenahealth vendor toggle branch (see
+  // launch-standalone-patient.ts), never touching this.baseUrl itself, since detail/CSV-export calls elsewhere
+  // still need the Epic value unconditionally.
+  async hasValidToken(workflowId: string, patientId: string | null, callerId?: string, baseUrlOverride?: string): Promise<boolean> {
+    const params: Record<string, string> = {};
+    if (patientId) {
+      params['patientId'] = patientId;
+    }
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
     const status = await firstValueFrom(
-      this.http.get<TokenStatusResponse>(
-        `${this.baseUrl}/api/v1/workflows/${workflowId}/token-status`,
-        { params: patientId ? { patientId } : {} },
-      ),
+      this.http.get<TokenStatusResponse>(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/token-status`, { params }),
     );
     return status.hasValidToken;
   }
 
-  async run(workflowId: string, patientId: string | null): Promise<WorkflowRunResponse> {
+  // Same callerId requirement as hasValidToken above — without it, this workflow's own token-cache lookup at run
+  // time misses the CallerId-keyed slot and the run fails with "no authorized token" even when a valid one exists.
+  // baseUrlOverride: see hasValidToken's own remarks.
+  async run(workflowId: string, patientId: string | null, callerId?: string, baseUrlOverride?: string): Promise<WorkflowRunResponse> {
     return firstValueFrom(
-      this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${workflowId}/run`, {
+      this.http.post<WorkflowRunResponse>(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/run`, {
         patientId,
         patientSearchCriteria: null,
+        callerId: callerId ?? null,
       }),
     );
   }
 
-  async mintLaunchUrl(workflowId: string, ehrEndpointId: string, callerId?: string): Promise<PublicPatientStandaloneUrlResponse> {
+  // callerId here is the OAuth redirect-back URL (unrelated to the token cache) — see redirectToMyChart's own
+  // remarks. sessionId is the separate, opaque identifier that becomes the actual token-cache key: pass whatever
+  // this browser already has persisted (a returning session) so FHIRBridge reuses it instead of minting a new one;
+  // omit it on a first-ever visit and persist whatever comes back in the response. userIdentity is HealthApp's own
+  // logged-in account email (e.g. patient@healthapp.local) — distinct from sessionId (an opaque per-browser cache
+  // key): FHIRBridge permanently binds this identity to the one MyChart patient its first authorization returns,
+  // rejecting a later authorization under the same identity that returns a different patient.
+  // baseUrlOverride: see hasValidToken's own remarks.
+  async mintLaunchUrl(
+    workflowId: string, ehrEndpointId: string, callerId?: string, sessionId?: string, userIdentity?: string,
+    baseUrlOverride?: string,
+  ): Promise<PublicPatientStandaloneUrlResponse> {
+    const params: Record<string, string> = { ehrEndpointId };
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
+    if (sessionId) {
+      params['sessionId'] = sessionId;
+    }
+    if (userIdentity) {
+      params['userIdentity'] = userIdentity;
+    }
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(
-        `${this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
-        { params: callerId ? { ehrEndpointId, callerId } : { ehrEndpointId } },
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
+        { params },
       ),
     );
   }
 
-  async discardToken(workflowId: string, patientId: string | null): Promise<void> {
+  // baseUrlOverride: see hasValidToken's own remarks.
+  async discardToken(workflowId: string, patientId: string | null, callerId?: string, baseUrlOverride?: string): Promise<void> {
+    const params: Record<string, string> = {};
+    if (patientId) {
+      params['patientId'] = patientId;
+    }
+    if (callerId) {
+      params['callerId'] = callerId;
+    }
     await firstValueFrom(
-      this.http.post(
-        `${this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`,
-        {},
-        { params: patientId ? { patientId } : {} },
-      ),
+      this.http.post(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`, {}, { params }),
     );
   }
 
-  async loadLaunchResultPatientId(workflowRunId: string): Promise<LaunchResultResponse> {
+  // baseUrlOverride: see hasValidToken's own remarks.
+  async loadLaunchResultPatientId(workflowRunId: string, baseUrlOverride?: string): Promise<LaunchResultResponse> {
     return firstValueFrom(
       this.http.get<LaunchResultResponse>(
-        `${this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
       ),
     );
+  }
+
+  /** Account-linking check against Demo_TestApp's OWN backend (not FHIRBridge) — see
+   *  HealthAppDbContext.AccountContextLinkEntity's remarks for what this enforces and why. Never throws: a
+   *  failed check must never block a launch that would otherwise have succeeded, so callers get { ok: true }
+   *  on any network/server error, exactly as if the check had found nothing to object to. */
+  async checkAccountContextLink(workflowRunId: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      return await firstValueFrom(
+        this.http.get<{ ok: boolean; message?: string }>(
+          `${HEALTHAPP_BACKEND_BASE_URL}/api/account-context-link/check`,
+          { params: { workflowRunId, audienceType: 'patientStandalone' }, withCredentials: true },
+        ),
+      );
+    } catch {
+      return { ok: true };
+    }
   }
 
   async checkRememberedSession(): Promise<EpicSessionStatusResponse> {

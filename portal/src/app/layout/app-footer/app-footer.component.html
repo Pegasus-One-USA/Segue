@@ -4,11 +4,13 @@
     <span class="af-sep" aria-hidden="true">&middot;</span>
   }
 
-  <span class="af-powered">Powered by FHIRBridge</span>
+  <span class="af-powered">Powered by Segue</span>
 
   @if (variant() === 'full') {
-    <span class="af-sep" aria-hidden="true">&middot;</span>
-    <span class="af-version">Version {{ appVersion }}</span>
+    @if (authStore.isAuthenticated()) {
+      <span class="af-sep" aria-hidden="true">&middot;</span>
+      <span class="af-version">Version {{ appVersion }}</span>
+    }
 
     @if (branding.current().supportEmail) {
       <span class="af-sep" aria-hidden="true">&middot;</span>

@@ -17,6 +17,14 @@ public interface ILocalAuthService
 
     Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Requests a passwordless sign-in link email. Always reports success (no user enumeration),
+    /// mirroring <see cref="ForgotPasswordAsync"/>.</summary>
+    Task<MagicLinkResponse> RequestMagicLinkAsync(MagicLinkRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Redeems a magic-link token. Same MFA branch as <see cref="LoginAsync"/>: returns an MFA
+    /// challenge instead of a full session when the account has MFA enabled.</summary>
+    Task<LocalLoginResponse> RedeemMagicLinkAsync(MagicLinkRedeemRequest request, CancellationToken cancellationToken);
+
     Task<LocalLoginResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken);
 
     /// <summary>

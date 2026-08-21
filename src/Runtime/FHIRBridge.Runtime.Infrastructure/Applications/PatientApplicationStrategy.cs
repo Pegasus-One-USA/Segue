@@ -23,6 +23,9 @@ public sealed class PatientApplicationStrategy : SourceApplicationStrategyBase
 
     public override ApplicationType Handles => ApplicationType.Patient;
 
+    // The sign-in establishes a patient context (the token response's `patient` claim, self-only scope).
+    public override FhirContextBindingKind BindingResourceType => FhirContextBindingKind.Patient;
+
     public override SourceApplicationDescriptor Describe() => new(
         ApplicationType.Patient,
         SmartOAuthFlows.AuthorizationCode,
@@ -46,10 +49,14 @@ public sealed class PatientApplicationStrategy : SourceApplicationStrategyBase
     public override Task DiscardTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.DiscardTokenAsync(source, cancellationToken);
 
+    public override Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
+        _interactive.GetGrantedScopeAsync(source, cancellationToken);
+
     protected override void ValidateCore(FhirSourceConfiguration source, List<string> errors)
     {
         RequireClientId(source, errors);
         RequireAuthorizationEndpoint(source, errors);
         RequireTokenEndpoint(source, errors);
+        RequirePracticeIdForAthenahealth(source, errors);
     }
 }

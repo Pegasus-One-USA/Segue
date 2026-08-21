@@ -7,7 +7,21 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// synchronous, non-bulk branch sets this true — schedules, webhooks, and queued/bulk runs never do), and the
 /// remaining fields supply the placeholder values ({{RouteName}}, {{RunDate}}) for email delivery templates.
 /// </summary>
+/// <param name="FetchMissingReferenceAsync">
+/// Optional, source-agnostic hook a writer can call to fetch one specific resource by type/id directly from
+/// whatever EHR source fed this run — e.g. <c>MappedFhirRepositoryDestinationWriter</c> uses it to resolve a
+/// reference confirmed missing from both the batch and the destination, instead of only blocking the referencing
+/// record (see its opt-in <c>dest_autoFetchMissingReferences</c> flag). Returns the raw FHIR JSON for the requested
+/// resource, or null if it couldn't be fetched (not found, unauthorized, transient failure, or no such hook wired
+/// up for this run — e.g. more than one source node feeds this destination). Deliberately typed in plain
+/// primitives (not a Runtime-layer resource type) so this stays constructible without <c>FHIRBridge.Application</c>
+/// ever depending on the separate Runtime.* layering stack — the Runtime.Infrastructure caller that populates this
+/// closes over its own source client/connection internally. Null by default: every destination/writer that never
+/// opts into this behaves exactly as before.
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
-    DateTimeOffset RunStartedAtUtc);
+    DateTimeOffset RunStartedAtUtc,
+    string? CorrelationId = null,
+    Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null);

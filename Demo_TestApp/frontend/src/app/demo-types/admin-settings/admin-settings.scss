@@ -29,6 +29,34 @@
   background: #ffffff;
 }
 
+// Pill tabs — used both for the Default | New 11 section switch and the New 11 per-role sub-menu.
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+
+  &__item {
+    padding: 7px 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-ink-2);
+    font-size: 13px;
+    font-weight: 600;
+
+    &:hover:not(.active) {
+      background: var(--color-side);
+    }
+
+    &.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-on-primary);
+    }
+  }
+}
+
 .page-header {
   margin-bottom: 24px;
 
@@ -61,6 +89,31 @@
 
   .field:last-child {
     margin-bottom: 0;
+  }
+}
+
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.field-warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  border-radius: var(--radius-base);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 4px 0 0;
+
+  code {
+    font-size: 11px;
   }
 }
 

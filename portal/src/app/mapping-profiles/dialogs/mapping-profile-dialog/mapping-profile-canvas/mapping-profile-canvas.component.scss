@@ -1,0 +1,138 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mpc {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-6, 8px);
+}
+
+/* ── toolbar ──────────────────────────────────────────────────────────────── */
+.mpc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-6, 8px);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+// Was its own row in the host dialog (mpd-mapping-head, alongside a hint that's been removed) — moved in
+// here so "Field mappings" / File name / the action buttons all share this one toolbar row instead of two.
+.mpc-toolbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  flex-shrink: 0;
+}
+
+.mpc-toolbar-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4, 6px);
+  flex-wrap: wrap;
+
+  label { font-size: 12.5px; font-weight: 600; color: var(--color-ink-2); white-space: nowrap; }
+}
+
+.mpc-select, .mpc-input {
+  height: 32px;
+  padding: 0 var(--space-6, 8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  font-size: 13px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  min-width: 220px;
+}
+
+.mpc-error {
+  font-size: 12.5px;
+  color: var(--color-error);
+}
+
+.mpc-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4, 6px);
+}
+
+.mpc-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base, 8px);
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+
+  &:hover:not(:disabled) { background: var(--color-primary-soft); border-color: var(--color-primary-mid); color: var(--color-primary-dark); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.mpc-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 2px;
+}
+
+.mpc-zoom-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base, 8px);
+  color: var(--color-ink-2);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+
+  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary-mid); color: var(--color-primary-dark); }
+}
+
+.mpc-zoom-pct {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  min-width: 38px;
+  text-align: center;
+}
+
+.mpc-hint {
+  font-size: 12.5px;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* ── the real field-mapping canvas fills whatever's left ─────────────────── */
+.mpc-canvas-wrap {
+  flex: 1;
+  min-height: 420px;
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  overflow: hidden;
+
+  // NOT `display: block` — see mapping-profile-dialog.component.scss's identical note: a plain tag
+  // selector here would outrank FieldMappingCanvasComponent's own `:host { display: flex }`, flattening
+  // it to block and collapsing its internal `.fm-canvas`/`.fm-viewport` flex:1 chain down to content
+  // height, leaving a large empty block-level gap below it instead of the canvas filling this box.
+  app-field-mapping-canvas {
+    height: 100%;
+  }
+}

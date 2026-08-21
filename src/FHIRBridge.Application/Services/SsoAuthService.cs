@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 
 namespace FHIRBridge.Application.Services;
 
@@ -10,20 +11,45 @@ public sealed class SsoAuthService : ISsoAuthService
     private readonly IExternalTokenValidator _tokenValidator;
     private readonly IUserAccessRepository _repository;
     private readonly ILocalAuthService _localAuth;
+    private readonly IGovernanceLogger _governanceLogger;
 
     public SsoAuthService(
         IExternalTokenValidator tokenValidator,
         IUserAccessRepository repository,
-        ILocalAuthService localAuth)
+        ILocalAuthService localAuth,
+        IGovernanceLogger governanceLogger)
     {
         _tokenValidator = tokenValidator;
         _repository = repository;
         _localAuth = localAuth;
+        _governanceLogger = governanceLogger;
     }
 
     public async Task<LocalLoginResponse> LoginAsync(SsoLoginRequest request, CancellationToken cancellationToken)
     {
-        var identity = await _tokenValidator.ValidateAsync(request.Provider, request.Token, cancellationToken);
+        var authenticationType = $"SSO:{request.Provider}";
+
+        ExternalIdentity identity;
+        try
+        {
+            identity = await _tokenValidator.ValidateAsync(request.Provider, request.Token, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Token rejected before we know who it claims to be — no user identity to attach yet, but the
+            // attempt itself (provider, failure reason, IP/correlation via ambient context) is still logged.
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry(authenticationType, Success: false, FailureReason: exception.Message),
+                cancellationToken);
+            throw;
+        }
+
+        return await LoginWithIdentityAsync(identity, cancellationToken);
+    }
+
+    public async Task<LocalLoginResponse> LoginWithIdentityAsync(ExternalIdentity identity, CancellationToken cancellationToken)
+    {
+        var authenticationType = $"SSO:{identity.Provider}";
 
         // Prefer the stable external subject; fall back to the verified email for first-time SSO of a
         // user that was provisioned locally (e.g. invited) but not yet linked to this identity.
@@ -35,19 +61,30 @@ public sealed class SsoAuthService : ISsoAuthService
 
         if (user is null || !user.IsEnabled)
         {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry(
+                    authenticationType, Success: false, identity.Email, "No enabled account is linked to this identity."),
+                cancellationToken);
+
             // 401 — no enabled account matches this external identity.
-            throw new UnauthorizedAccessException("No enabled FHIRBridge account is linked to this identity.");
+            throw new UnauthorizedAccessException("No enabled Segue account is linked to this identity.");
         }
 
         // Ensure the identity is linked so subsequent logins resolve by subject.
         if (!string.Equals(user.ExternalUserId, identity.Subject, StringComparison.Ordinal) ||
-            user.LoginProvider != request.Provider ||
+            user.LoginProvider != identity.Provider ||
             user.IsLocalLoginEnabled)
         {
-            user.LinkExternalIdentity(identity.Subject, request.Provider);
+            user.LinkExternalIdentity(identity.Subject, identity.Provider);
             await _repository.UpdateUserAsync(user, cancellationToken);
         }
 
-        return await _localAuth.IssueSessionAsync(user, cancellationToken);
+        var response = await _localAuth.IssueSessionAsync(user, cancellationToken);
+
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry(authenticationType, Success: true, user.Email),
+            cancellationToken);
+
+        return response;
     }
 }

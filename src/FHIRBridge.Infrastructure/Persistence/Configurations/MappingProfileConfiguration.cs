@@ -14,16 +14,24 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
+        builder.Property(x => x.SourceConfigurationId);
         builder.Property(x => x.DestinationId).IsRequired();
         builder.Property(x => x.DestinationObject).HasMaxLength(300).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.MappingJson);
 
         builder.HasIndex(x => x.SourceConnectionId);
+        builder.HasIndex(x => x.SourceConfigurationId);
         builder.HasIndex(x => x.DestinationId);
 
         builder.HasOne<SourceConnection>()
             .WithMany()
             .HasForeignKey(x => x.SourceConnectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<SourceConfiguration>()
+            .WithMany()
+            .HasForeignKey(x => x.SourceConfigurationId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.OwnsMany(x => x.Fields, field =>
@@ -47,6 +55,14 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
             field.Property(x => x.ArrayPolicy).HasConversion<string>().HasMaxLength(50).IsRequired().HasDefaultValue(Domain.Enums.ArrayPolicy.Scalar);
             field.Property(x => x.Cardinality).HasMaxLength(100);
             field.Property(x => x.ArrayAncestors).HasMaxLength(2000);
+            field.Property(x => x.IsUpsertKey).IsRequired().HasDefaultValue(false);
+            field.Property(x => x.CorrelationCodeJsonPath).HasMaxLength(500);
+            field.Property(x => x.CorrelationCodeValue).HasMaxLength(100);
+            field.Property(x => x.ParentTable).HasMaxLength(300);
+            field.Property(x => x.ParentKeyColumn).HasMaxLength(200);
+            field.Property(x => x.ForeignKeyColumn).HasMaxLength(200);
+            field.Property(x => x.ReferenceLookupTable).HasMaxLength(300);
+            field.Property(x => x.ReferenceLookupKeyColumn).HasMaxLength(200);
         });
 
         builder.Navigation(x => x.Fields)

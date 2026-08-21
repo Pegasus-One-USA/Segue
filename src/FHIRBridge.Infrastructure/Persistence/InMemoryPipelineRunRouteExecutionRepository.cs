@@ -39,6 +39,7 @@ public sealed class InMemoryPipelineRunRouteExecutionRepository : IPipelineRunRo
                 0,
                 0,
                 0,
+                null,
                 null));
         }
 

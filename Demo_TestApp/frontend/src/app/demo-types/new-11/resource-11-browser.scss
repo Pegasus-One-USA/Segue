@@ -1,0 +1,286 @@
+.fullscreen-shell {
+  min-height: 100vh;
+  background: #fff;
+
+  &__topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--color-border, #d0d7de);
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0d47a1;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-type-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border, #d0d7de);
+  background: #fff;
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+}
+
+.r11-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.page-header {
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0;
+    color: #0d47a1;
+    font-weight: 600;
+    font-size: 28px;
+  }
+
+  .subtitle {
+    margin: 4px 0 0;
+    color: #607d8b;
+
+    code {
+      background: #eceff1;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+  }
+}
+
+.r11-resource-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+
+  &__item {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border, #d0d7de);
+    background: #fff;
+    color: #37474f;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+      background: #f5f9ff;
+    }
+
+    &.active {
+      background: #0d47a1;
+      border-color: #0d47a1;
+      color: #fff;
+    }
+  }
+}
+
+.r11-resource-nav--tabs {
+  border-bottom: 1px solid #eceff1;
+  padding-bottom: 12px;
+}
+
+.r11-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.r11-back {
+  border: 1px solid var(--color-border, #d0d7de);
+  background: #fff;
+  color: #0d47a1;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+
+  &:hover {
+    background: #f5f9ff;
+  }
+}
+
+.r11-detail-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0d47a1;
+}
+
+.r11-result-meta {
+  margin-bottom: 12px;
+  color: #607d8b;
+  font-size: 14px;
+
+  strong {
+    color: #37474f;
+  }
+}
+
+.r11-row-click {
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f9ff;
+  }
+}
+
+// Practitioner tab: "import referenced-but-missing practitioners via the role's workflow" panel.
+.r11-import {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #ffe0b2;
+  background: #fff8ec;
+  border-radius: 8px;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: #8a5a00;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  &__btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 999px;
+    background: #0d47a1;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background: #093775;
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+
+  &__list {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    color: #5d4037;
+    font-size: 13px;
+
+    li {
+      margin: 2px 0;
+    }
+  }
+
+  &__id {
+    color: #a1887f;
+    font-size: 11px;
+    margin-left: 6px;
+  }
+
+  &__ok {
+    margin: 0;
+    color: #2e7d32;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  &__msg {
+    margin: 10px 0 0;
+    color: #2e7d32;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.error-banner {
+  color: #c62828;
+}
+
+.empty-state {
+  color: #607d8b;
+  padding: 24px 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid #eceff1;
+  border-radius: 8px;
+}
+
+.r11-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eceff1;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #37474f;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+  }
+
+  tbody tr:hover {
+    background: #f5f9ff;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}

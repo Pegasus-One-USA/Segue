@@ -4,9 +4,6 @@
       <h1 class="page-title">Branding</h1>
       <p class="page-sub">Customize how {{ branding.current().companyName }} looks across the platform — changes preview live before you save.</p>
     </div>
-    @if (saved()) {
-      <div class="save-toast">&#10003; Branding saved</div>
-    }
   </div>
 
   <form class="settings-body" [formGroup]="form" (ngSubmit)="save()">
@@ -119,7 +116,7 @@
       <!-- Images -->
       <section class="settings-card">
         <h2 class="card-title">Logos &amp; Images</h2>
-        <p class="card-sub">Paste a URL or upload a file. Leave blank to keep the FHIRBridge default.</p>
+        <p class="card-sub">Paste a URL or upload a file. Leave blank to keep the Segue default.</p>
 
         <div class="bs-asset-grid">
           <app-brand-asset-field label="Company Logo" formControlName="logoUrl" hint="Sidebar, auth pages" />
@@ -155,7 +152,7 @@
           </div>
           <div class="form-field form-field--full">
             <label for="bs-emailFooterText">Email Footer Text</label>
-            <input id="bs-emailFooterText" type="text" formControlName="emailFooterText" placeholder="e.g. Acme Health — a FHIRBridge customer" />
+            <input id="bs-emailFooterText" type="text" formControlName="emailFooterText" placeholder="e.g. Acme Health — a Segue customer" />
           </div>
         </div>
       </section>
@@ -187,6 +184,42 @@
               }
             </div>
           </div>
+          <div class="form-field form-field--full">
+            <span class="field-heading" id="bs-loaderStyle">Loading Indicator</span>
+            <div class="mode-pills" role="group" aria-labelledby="bs-loaderStyle">
+              @for (opt of loaderStyleOptions; track opt.id) {
+                <button
+                  type="button"
+                  class="mode-pill mode-pill--loader"
+                  [class.active]="form.value.loaderStyle === opt.id"
+                  (click)="form.controls.loaderStyle.setValue(opt.id)"
+                >
+                  <span class="loader-preview" aria-hidden="true">
+                    @switch (opt.id) {
+                      @case ('bar') {
+                        <span class="loader-preview__bar-track"><span class="loader-preview__bar-fill"></span></span>
+                      }
+                      @case ('spinner') {
+                        <span class="loader-preview__spinner"></span>
+                      }
+                      @case ('list') {
+                        <span class="loader-preview__list">
+                          <span class="loader-preview__list-row"></span>
+                          <span class="loader-preview__list-row"></span>
+                          <span class="loader-preview__list-row"></span>
+                        </span>
+                      }
+                      @case ('none') {
+                        <span class="loader-preview__none">&mdash;</span>
+                      }
+                    }
+                  </span>
+                  {{ opt.label }}
+                </button>
+              }
+            </div>
+            <p class="field-hint">Shown automatically while any API call is in progress, anywhere in the app.</p>
+          </div>
         </div>
       </section>
 
@@ -217,12 +250,14 @@
         </div>
       </section>
 
-      <div class="save-row">
-        <button type="submit" class="btn-primary" [disabled]="saving()">
-          {{ saving() ? 'Saving…' : 'Save Branding' }}
-        </button>
-        <button type="button" class="btn-secondary" (click)="resetToDefault()">Reset to Default</button>
-      </div>
+      @if (canWrite) {
+        <div class="save-row">
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            {{ saving() ? 'Saving…' : 'Save Branding' }}
+          </button>
+          <button type="button" class="btn-secondary" (click)="resetToDefault()">Reset to Default</button>
+        </div>
+      }
 
   </form>
 </div>

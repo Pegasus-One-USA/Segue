@@ -22,29 +22,41 @@
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
     </div>
   </main>
-} @else if (isProviderInAppLaunch || role() === 'ProviderInApp') {
+} @else if (isRealEhrLaunch) {
+  <!-- Live Epic EHR launch (iss/launch on the URL) hands off directly — no menu, regardless of role. -->
   <app-launch-provider-in-app
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-provider-in-app>
-} @else if (role() === 'ProviderStandalone') {
-  <app-launch-standalone-provider
+} @else if (role() === 'ProviderInApp') {
+  <app-provider-in-app-new11
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
-  ></app-launch-standalone-provider>
+  ></app-provider-in-app-new11>
+} @else if (role() === 'ProviderStandalone') {
+  <app-provider-standalone-new11
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-provider-standalone-new11>
 } @else if (role() === 'Patient' && isOnPatientStandaloneLaunchPath) {
+  <!-- Patient's "Connect Get Data" launch sub-flow — reached via full-page nav, kept menu-free. -->
   <app-launch-standalone-patient
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-launch-standalone-patient>
+} @else if (role() === 'BackendSystem') {
+  <app-backend-system-new11
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-backend-system-new11>
 } @else if (role() === 'Admin') {
   <app-admin-settings
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-admin-settings>
 } @else {
-  <app-patient-standalone
+  <app-patient-new11
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
-  ></app-patient-standalone>
+  ></app-patient-new11>
 }

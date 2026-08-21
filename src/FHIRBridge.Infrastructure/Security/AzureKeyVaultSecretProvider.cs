@@ -2,6 +2,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Security;
@@ -25,7 +26,12 @@ public sealed class AzureKeyVaultSecretProvider : ISecretProvider
 
         if (string.IsNullOrWhiteSpace(secret.Value.Value))
         {
-            throw new InvalidOperationException(
+            // Deliberately NOT InvalidOperationException: that gets message-substring-classified as a 4xx by
+            // Program.cs's MapException and skips ErrorLogs as a "routine" outcome — but an empty vault secret is
+            // a genuine deployment/configuration fault, the same class of bug ConfigurationSecretProvider had.
+            throw new SecretNotConfiguredException(
+                secretReference.SecretName,
+                secretReference.KeyVaultName,
                 $"Secret '{secretReference.SecretName}' in vault '{secretReference.KeyVaultName}' is empty.");
         }
 

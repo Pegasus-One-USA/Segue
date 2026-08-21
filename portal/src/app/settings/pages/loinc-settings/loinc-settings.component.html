@@ -1,0 +1,69 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">LOINC Terminology</h1>
+    <p class="page-sub">Configure the official LOINC release service and synchronize the local terminology database.</p>
+  </div>
+
+  @if (loading()) {
+    <section class="settings-card">
+      <p class="card-sub">Loading…</p>
+    </section>
+  } @else {
+    <div class="settings-body" [formGroup]="form">
+      <section class="settings-card">
+        <h2 class="card-title">Connection</h2>
+        <p class="card-sub">Credentials and endpoints used to authenticate with and download from the official LOINC release service.</p>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="loinc-downloadApiUrl">Download API URL <span class="req">*</span></label>
+            <input id="loinc-downloadApiUrl" type="text" formControlName="downloadApiUrl" placeholder="https://loinc.regenstrief.org/api/v1" />
+            @if (form.controls.downloadApiUrl.touched && form.controls.downloadApiUrl.invalid) {
+              <p class="field-error">Download API URL is required.</p>
+            }
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="loinc-fhirApiUrl">FHIR API URL</label>
+            <input id="loinc-fhirApiUrl" type="text" formControlName="fhirApiUrl" placeholder="https://fhir.loinc.org" />
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-username">Username</label>
+            <input id="loinc-username" type="text" formControlName="username" autocomplete="off"
+                   [placeholder]="usernameSet() ? 'Leave blank to keep current username' : 'LOINC username'" />
+          </div>
+
+          <div class="form-field">
+            <label for="loinc-password">Password</label>
+            <input id="loinc-password" type="password" formControlName="password" autocomplete="new-password"
+                   [placeholder]="passwordSet() ? 'Leave blank to keep current password' : 'LOINC password'" />
+          </div>
+        </div>
+      </section>
+
+      <app-terminology-scheduler-card
+        [form]="form"
+        subtitle="Schedule automatic LOINC release imports, or run one on demand below."
+        [frequencyOptions]="['Monthly', 'Weekly']"
+        [showRetryFields]="true"
+        [showDownloadTimeout]="true"
+        [saving]="saving()"
+        [syncing]="syncing()"
+        [saveDisabled]="saving() || form.invalid || !canWrite"
+        [syncDisabled]="!canWrite"
+        (save)="save()"
+        (synchronize)="synchronize()"
+      />
+    </div>
+
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent LOINC synchronization runs."
+      emptyMessage="LOINC has not been synchronized yet."
+      countColumnLabel="Terms"
+      [history]="history()"
+      [loading]="historyLoading()"
+    />
+  }
+</div>

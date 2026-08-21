@@ -12,12 +12,12 @@ public interface IEhrEndpointRepository
 {
     Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken);
 
-    /// <summary>Filtered at the query level (not GetAllAsync + in-memory filter) — the MyChart directory alone is
-    /// already in the hundreds of rows, and callers of this (e.g. the anonymous ehr-epic-endpoints listing) only
-    /// ever want the handful of Epic-sandbox rows. <paramref name="search"/>, when given, is a case-insensitive
-    /// contains-match on Name, applied in the same query (not an in-memory filter after the fact) so it still scales
-    /// once this is pointed at a larger directory.</summary>
-    Task<IReadOnlyList<EhrEndpoint>> GetByEndpointTypeAsync(
+    /// <summary>Filtered at the query level (not GetAllAsync + in-memory filter) — the directory can be in the
+    /// hundreds of rows. <paramref name="endpointType"/> scopes the anonymous public listing to one audience (Epic
+    /// sandbox rows for Provider Standalone, MyChart rows for Patient Standalone — see EhrPublicEndpointsController)
+    /// so the two flows can never surface each other's rows. <paramref name="search"/>, when given, is a
+    /// case-insensitive contains-match on Name.</summary>
+    Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken);
 
     Task<EhrEndpoint?> GetByIdAsync(Guid id, CancellationToken cancellationToken);

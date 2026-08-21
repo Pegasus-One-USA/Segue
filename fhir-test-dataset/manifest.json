@@ -1,0 +1,1713 @@
+[
+  {
+    "resourceType": "Organization",
+    "id": "org-001",
+    "filePath": "resources/Organization/org-001.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Organization",
+    "id": "org-002",
+    "filePath": "resources/Organization/org-002.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Location",
+    "id": "location-001",
+    "filePath": "resources/Location/location-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Location",
+    "id": "location-002",
+    "filePath": "resources/Location/location-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Practitioner",
+    "id": "practitioner-001",
+    "filePath": "resources/Practitioner/practitioner-001.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Practitioner",
+    "id": "practitioner-002",
+    "filePath": "resources/Practitioner/practitioner-002.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Practitioner",
+    "id": "practitioner-003",
+    "filePath": "resources/Practitioner/practitioner-003.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "PractitionerRole",
+    "id": "practitionerrole-001",
+    "filePath": "resources/PractitionerRole/practitionerrole-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Location/location-001",
+        "target": "Location/location-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Practitioner/practitioner-001",
+      "Organization/org-001",
+      "Location/location-001"
+    ]
+  },
+  {
+    "resourceType": "PractitionerRole",
+    "id": "practitionerrole-002",
+    "filePath": "resources/PractitionerRole/practitionerrole-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-003",
+        "target": "Practitioner/practitioner-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Location/location-001",
+        "target": "Location/location-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Practitioner/practitioner-003",
+      "Organization/org-001",
+      "Location/location-001"
+    ]
+  },
+  {
+    "resourceType": "Medication",
+    "id": "medication-001",
+    "filePath": "resources/Medication/medication-001.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Medication",
+    "id": "medication-002",
+    "filePath": "resources/Medication/medication-002.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Medication",
+    "id": "medication-003",
+    "filePath": "resources/Medication/medication-003.json",
+    "testCategory": "valid",
+    "references": [],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Device",
+    "id": "device-001",
+    "filePath": "resources/Device/device-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "Device",
+    "id": "device-002",
+    "filePath": "resources/Device/device-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003"
+    ]
+  },
+  {
+    "resourceType": "Patient",
+    "id": "patient-001",
+    "filePath": "resources/Patient/patient-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Patient",
+    "id": "patient-002",
+    "filePath": "resources/Patient/patient-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Patient",
+    "id": "patient-003",
+    "filePath": "resources/Patient/patient-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Patient",
+    "id": "patient-004",
+    "filePath": "resources/Patient/patient-004.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "Patient",
+    "id": "patient-005",
+    "filePath": "resources/Patient/patient-005.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Organization/org-001"
+    ]
+  },
+  {
+    "resourceType": "RelatedPerson",
+    "id": "relatedperson-001",
+    "filePath": "resources/RelatedPerson/relatedperson-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "RelatedPerson",
+    "id": "relatedperson-002",
+    "filePath": "resources/RelatedPerson/relatedperson-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004"
+    ]
+  },
+  {
+    "resourceType": "Coverage",
+    "id": "coverage-001",
+    "filePath": "resources/Coverage/coverage-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-002",
+        "target": "Organization/org-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Organization/org-002"
+    ]
+  },
+  {
+    "resourceType": "Coverage",
+    "id": "coverage-002",
+    "filePath": "resources/Coverage/coverage-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-002",
+        "target": "Organization/org-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-002",
+      "Organization/org-002"
+    ]
+  },
+  {
+    "resourceType": "Coverage",
+    "id": "coverage-003",
+    "filePath": "resources/Coverage/coverage-003.json",
+    "testCategory": "reference-style",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "logical-identifier",
+        "reference": "urn:segue:test:organization|ORG-002",
+        "target": null,
+        "resolves": "n/a (resolved by identifier)"
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004"
+    ]
+  },
+  {
+    "resourceType": "Encounter",
+    "id": "encounter-001",
+    "filePath": "resources/Encounter/encounter-001.json",
+    "testCategory": "reference-style",
+    "references": [
+      {
+        "style": "absolute",
+        "reference": "https://segue.pegasusone.com:7011/fhir/Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Location/location-001",
+        "target": "Location/location-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Practitioner/practitioner-001",
+      "Organization/org-001",
+      "Location/location-001"
+    ]
+  },
+  {
+    "resourceType": "Encounter",
+    "id": "encounter-002",
+    "filePath": "resources/Encounter/encounter-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-003",
+        "target": "Practitioner/practitioner-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Location/location-001",
+        "target": "Location/location-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Practitioner/practitioner-003",
+      "Organization/org-001",
+      "Location/location-001"
+    ]
+  },
+  {
+    "resourceType": "Encounter",
+    "id": "encounter-003",
+    "filePath": "resources/Encounter/encounter-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Location/location-002",
+        "target": "Location/location-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Practitioner/practitioner-002",
+      "Organization/org-001",
+      "Location/location-002"
+    ]
+  },
+  {
+    "resourceType": "Condition",
+    "id": "condition-001",
+    "filePath": "resources/Condition/condition-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "Condition",
+    "id": "condition-002",
+    "filePath": "resources/Condition/condition-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-002"
+    ]
+  },
+  {
+    "resourceType": "Condition",
+    "id": "condition-003",
+    "filePath": "resources/Condition/condition-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002"
+    ]
+  },
+  {
+    "resourceType": "Condition",
+    "id": "condition-004",
+    "filePath": "resources/Condition/condition-004.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "Condition",
+    "id": "condition-005",
+    "filePath": "resources/Condition/condition-005.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-001",
+    "filePath": "resources/Observation/observation-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-002",
+    "filePath": "resources/Observation/observation-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-003",
+    "filePath": "resources/Observation/observation-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-004",
+    "filePath": "resources/Observation/observation-004.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-002"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-005",
+    "filePath": "resources/Observation/observation-005.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-002"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-006",
+    "filePath": "resources/Observation/observation-006.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-007",
+    "filePath": "resources/Observation/observation-007.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-008",
+    "filePath": "resources/Observation/observation-008.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-009",
+    "filePath": "resources/Observation/observation-009.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "observation-010",
+    "filePath": "resources/Observation/observation-010.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-005",
+        "target": "Patient/patient-005",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-005"
+    ]
+  },
+  {
+    "resourceType": "DiagnosticReport",
+    "id": "diagnosticreport-001",
+    "filePath": "resources/DiagnosticReport/diagnosticreport-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-001",
+        "target": "Observation/observation-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-002",
+        "target": "Observation/observation-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001",
+      "Organization/org-001",
+      "Observation/observation-001",
+      "Observation/observation-002"
+    ]
+  },
+  {
+    "resourceType": "DiagnosticReport",
+    "id": "diagnosticreport-002",
+    "filePath": "resources/DiagnosticReport/diagnosticreport-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-006",
+        "target": "Observation/observation-006",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002",
+      "Organization/org-001",
+      "Observation/observation-006"
+    ]
+  },
+  {
+    "resourceType": "DiagnosticReport",
+    "id": "diagnosticreport-003",
+    "filePath": "resources/DiagnosticReport/diagnosticreport-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Organization/org-001",
+        "target": "Organization/org-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-008",
+        "target": "Observation/observation-008",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-009",
+        "target": "Observation/observation-009",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003",
+      "Organization/org-001",
+      "Observation/observation-008",
+      "Observation/observation-009"
+    ]
+  },
+  {
+    "resourceType": "Procedure",
+    "id": "procedure-001",
+    "filePath": "resources/Procedure/procedure-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003",
+      "Practitioner/practitioner-002"
+    ]
+  },
+  {
+    "resourceType": "Procedure",
+    "id": "procedure-002",
+    "filePath": "resources/Procedure/procedure-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-003",
+        "target": "Practitioner/practitioner-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002",
+      "Practitioner/practitioner-003"
+    ]
+  },
+  {
+    "resourceType": "Procedure",
+    "id": "procedure-003",
+    "filePath": "resources/Procedure/procedure-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001",
+      "Practitioner/practitioner-001"
+    ]
+  },
+  {
+    "resourceType": "MedicationRequest",
+    "id": "medicationrequest-001",
+    "filePath": "resources/MedicationRequest/medicationrequest-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Medication/medication-001",
+        "target": "Medication/medication-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Medication/medication-001",
+      "Patient/patient-001",
+      "Practitioner/practitioner-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "MedicationRequest",
+    "id": "medicationrequest-002",
+    "filePath": "resources/MedicationRequest/medicationrequest-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Medication/medication-002",
+        "target": "Medication/medication-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Medication/medication-002",
+      "Patient/patient-002",
+      "Practitioner/practitioner-001"
+    ]
+  },
+  {
+    "resourceType": "MedicationRequest",
+    "id": "medicationrequest-003",
+    "filePath": "resources/MedicationRequest/medicationrequest-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Medication/medication-003",
+        "target": "Medication/medication-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Medication/medication-003",
+      "Patient/patient-004",
+      "Practitioner/practitioner-002",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "AllergyIntolerance",
+    "id": "allergyintolerance-001",
+    "filePath": "resources/AllergyIntolerance/allergyintolerance-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "AllergyIntolerance",
+    "id": "allergyintolerance-002",
+    "filePath": "resources/AllergyIntolerance/allergyintolerance-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003"
+    ]
+  },
+  {
+    "resourceType": "AllergyIntolerance",
+    "id": "allergyintolerance-003",
+    "filePath": "resources/AllergyIntolerance/allergyintolerance-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004"
+    ]
+  },
+  {
+    "resourceType": "CarePlan",
+    "id": "careplan-001",
+    "filePath": "resources/CarePlan/careplan-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Condition/condition-001",
+        "target": "Condition/condition-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Condition/condition-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "CarePlan",
+    "id": "careplan-002",
+    "filePath": "resources/CarePlan/careplan-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-002",
+        "target": "Patient/patient-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Condition/condition-002",
+        "target": "Condition/condition-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-002",
+      "Condition/condition-002"
+    ]
+  },
+  {
+    "resourceType": "CarePlan",
+    "id": "careplan-003",
+    "filePath": "resources/CarePlan/careplan-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Condition/condition-003",
+        "target": "Condition/condition-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Condition/condition-003",
+      "Encounter/encounter-002"
+    ]
+  },
+  {
+    "resourceType": "ServiceRequest",
+    "id": "servicerequest-001",
+    "filePath": "resources/ServiceRequest/servicerequest-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001",
+      "Practitioner/practitioner-001"
+    ]
+  },
+  {
+    "resourceType": "ServiceRequest",
+    "id": "servicerequest-002",
+    "filePath": "resources/ServiceRequest/servicerequest-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-003",
+        "target": "Practitioner/practitioner-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Encounter/encounter-002",
+      "Practitioner/practitioner-003"
+    ]
+  },
+  {
+    "resourceType": "ServiceRequest",
+    "id": "servicerequest-003",
+    "filePath": "resources/ServiceRequest/servicerequest-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003",
+      "Practitioner/practitioner-002"
+    ]
+  },
+  {
+    "resourceType": "Immunization",
+    "id": "immunization-001",
+    "filePath": "resources/Immunization/immunization-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-005",
+        "target": "Patient/patient-005",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-005"
+    ]
+  },
+  {
+    "resourceType": "Immunization",
+    "id": "immunization-002",
+    "filePath": "resources/Immunization/immunization-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-005",
+        "target": "Patient/patient-005",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-005"
+    ]
+  },
+  {
+    "resourceType": "Immunization",
+    "id": "immunization-003",
+    "filePath": "resources/Immunization/immunization-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-005",
+        "target": "Patient/patient-005",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-005"
+    ]
+  },
+  {
+    "resourceType": "DocumentReference",
+    "id": "documentreference-001",
+    "filePath": "resources/DocumentReference/documentreference-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "DocumentReference",
+    "id": "documentreference-002",
+    "filePath": "resources/DocumentReference/documentreference-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "DocumentReference",
+    "id": "documentreference-003",
+    "filePath": "resources/DocumentReference/documentreference-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-005",
+        "target": "Patient/patient-005",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-005"
+    ]
+  },
+  {
+    "resourceType": "CareTeam",
+    "id": "careteam-001",
+    "filePath": "resources/CareTeam/careteam-001.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-001",
+        "target": "Practitioner/practitioner-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-001",
+        "target": "Encounter/encounter-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001",
+      "Practitioner/practitioner-001",
+      "Practitioner/practitioner-002",
+      "Encounter/encounter-001"
+    ]
+  },
+  {
+    "resourceType": "CareTeam",
+    "id": "careteam-002",
+    "filePath": "resources/CareTeam/careteam-002.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-003",
+        "target": "Patient/patient-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-003",
+        "target": "Practitioner/practitioner-003",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-002",
+        "target": "Encounter/encounter-002",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-003",
+      "Practitioner/practitioner-003",
+      "Encounter/encounter-002"
+    ]
+  },
+  {
+    "resourceType": "CareTeam",
+    "id": "careteam-003",
+    "filePath": "resources/CareTeam/careteam-003.json",
+    "testCategory": "valid",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-004",
+        "target": "Patient/patient-004",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-002",
+        "target": "Practitioner/practitioner-002",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-003",
+        "target": "Encounter/encounter-003",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-004",
+      "Practitioner/practitioner-002",
+      "Encounter/encounter-003"
+    ]
+  },
+  {
+    "resourceType": "Observation",
+    "id": "neg-observation-001",
+    "filePath": "negative/neg-observation-001.json",
+    "testCategory": "negative",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-999-missing",
+        "target": "Patient/patient-999-missing",
+        "resolves": false
+      }
+    ],
+    "dependencies": []
+  },
+  {
+    "resourceType": "Condition",
+    "id": "neg-condition-001",
+    "filePath": "negative/neg-condition-001.json",
+    "testCategory": "negative",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Encounter/encounter-999-missing",
+        "target": "Encounter/encounter-999-missing",
+        "resolves": false
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "DiagnosticReport",
+    "id": "neg-diagnosticreport-001",
+    "filePath": "negative/neg-diagnosticreport-001.json",
+    "testCategory": "negative",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Observation/observation-999-missing",
+        "target": "Observation/observation-999-missing",
+        "resolves": false
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "MedicationRequest",
+    "id": "neg-medicationrequest-001",
+    "filePath": "negative/neg-medicationrequest-001.json",
+    "testCategory": "negative",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Medication/medication-999-missing",
+        "target": "Medication/medication-999-missing",
+        "resolves": false
+      },
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  },
+  {
+    "resourceType": "Encounter",
+    "id": "neg-encounter-001",
+    "filePath": "negative/neg-encounter-001.json",
+    "testCategory": "negative",
+    "references": [
+      {
+        "style": "relative",
+        "reference": "Patient/patient-001",
+        "target": "Patient/patient-001",
+        "resolves": true
+      },
+      {
+        "style": "relative",
+        "reference": "Practitioner/practitioner-999-missing",
+        "target": "Practitioner/practitioner-999-missing",
+        "resolves": false
+      }
+    ],
+    "dependencies": [
+      "Patient/patient-001"
+    ]
+  }
+]

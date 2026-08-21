@@ -95,6 +95,39 @@
   width: 100%;
 }
 
+.vendor-toggle {
+  display: flex;
+  width: 100%;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+  gap: 3px;
+
+  &__btn {
+    flex: 1;
+    padding: 6px 10px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-base), color var(--transition-base);
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    &--active {
+      background: var(--color-primary);
+      color: var(--color-surface);
+    }
+  }
+}
+
 .loading-container {
   display: flex;
   justify-content: center;
@@ -205,12 +238,25 @@
   gap: 6px;
   text-align: left;
 
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__row-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   &__row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: 10px 14px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-base);
@@ -245,6 +291,20 @@
     font-size: 12px;
     color: var(--color-muted);
     white-space: nowrap;
+  }
+
+  // Inline Download/Email icon actions, one per fetched row — act on that row's own patientId directly, with no
+  // dependency on viewPatientDetail/selectedPatientId (see downloadPatientInformation/emailPatientInformation).
+  &__actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  &__action-message {
+    margin: 0;
+    font-size: 12px;
+    padding: 6px 10px;
   }
 }
 

@@ -1,5 +1,29 @@
+// No :host rule here previously meant <app-destination-wizard> (this component's own host element)
+// stayed a default inline/auto-sized box inside .nld-detail's flex column — so .dw's `height: 100%`
+// below had nothing definite to resolve against, and that "no real bound" propagated all the way down
+// to .fm-canvas, which is why its overflow-y: auto never actually had anything to trigger on. flex: 1 +
+// min-height: 0 here is what makes the whole chain a real, bounded height instead of "grow to content".
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* ── Wrapper ──────────────────────────────────────────────────────────────── */
+// Without this, the host stays sized to its own content (default flex-item sizing), so a short
+// step (e.g. Configure with few fields) leaves the footer floating above blank space instead of
+// pinned to the modal's actual bottom — .dw-body's flex:1 + overflow-y:auto below has nothing to
+// grow into unless the host itself is stretched to fill nld-detail's available height first.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .dw {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -28,8 +52,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   background: var(--color-primary-soft);
   border-radius: 8px;
   color: var(--color-primary);
@@ -42,6 +66,12 @@
   color: var(--color-ink);
 }
 
+.dw-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .dw-back-btn {
   font-size: 12.5px;
   font-weight: 600;
@@ -52,6 +82,47 @@
   padding: 5px 10px;
   border-radius: 6px;
   white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
+/* The dialog-level maximize/restore toggle, relocated here next to "← Back to library" now that
+   the outer Node Library header (which used to show it) is hidden while these steps are showing —
+   see NodeLibraryDialogComponent's .nld-header. Same icon/markup as that header's own .nld-maximize
+   used, just under this component's own class names (view encapsulation means .nld-maximize's CSS
+   can't reach into this template). */
+.dw-maximize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+
+  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
+}
+
+.dw-maximize-ico {
+  width: 16px;
+  height: 16px;
+}
+
+/* The dialog-level "✕" (fully closes Node Library), relocated here next to "← Back to library"
+   now that the outer Node Library header is gone. */
+.dw-close-btn {
+  background: none;
+  border: none;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
   transition: background 0.12s, color 0.12s;
 
   &:hover { background: var(--color-bg); color: var(--color-ink-2); }
@@ -125,6 +196,7 @@
 /* ── Body ─────────────────────────────────────────────────────────────────── */
 .dw-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
   display: flex;
@@ -134,6 +206,14 @@
   &::-webkit-scrollbar { width: 5px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+}
+
+// The full-canvas mapping view has no other step content sharing .dw-body — the default 20px top
+// padding just shows up as a bare empty strip above the canvas's own toolbar. Trimmed way down here so
+// the canvas (flex: 1 below) claims that space instead, without affecting the other steps' spacing.
+.dw-body--canvas {
+  padding: 4px 16px 8px;
+  overflow-y: hidden;
 }
 
 /* ── Section head ─────────────────────────────────────────────────────────── */
@@ -171,13 +251,91 @@
   padding-left: 36px;
 }
 
+.dw-section-spacer { flex: 1; }
+
+.dw-group-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 260px;
+  max-width: 100%;
+}
+
+.dw-group-search-input {
+  width: 100%;
+  padding: 7px 28px 7px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--color-ink);
+  background: var(--color-surface);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+}
+
+.dw-group-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+
+  &:hover { color: var(--color-ink); }
+}
+
 /* ── Form ─────────────────────────────────────────────────────────────────── */
 .dw-form { width: 100%; }
+
+/* Keeps the dynamically-loaded connection form component (see destination-forms/) alive across all four
+   steps — visually hidden outside Step 1 — instead of destroying/recreating it, so Steps 2-4 can keep
+   reading live values off it (mapping canvas connectionInfo/csvDelimiterKey, Step 4 review). */
+.dw-hidden { display: none; }
 
 .dw-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.dw-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* ── Existing connection row (select + clear button) ─────────────────────── */
+.dw-existing-connection-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+
+  .dw-select-wrap { flex: 1; }
+}
+
+.dw-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover { color: var(--color-ink); border-color: var(--color-primary); }
 }
 
 .dw-field {
@@ -313,11 +471,19 @@
   }
 }
 
+.dw-rc-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .dw-rc-name {
   display: block;
   font-size: 13px;
   font-weight: 700;
   color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dw-rc-scope {
@@ -326,6 +492,292 @@
   color: var(--color-muted-2);
   font-family: ui-monospace, Consolas, monospace;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */
+.dw-snapshot-load-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt, transparent);
+}
+
+.dw-snapshot-load-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.dw-snapshot-load-error {
+  font-size: 12px;
+  color: var(--color-error);
+  margin: -6px 0 14px;
+}
+
+.dw-snapshot-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* ── Data group selection screen (Step 3, before a group is chosen) ─────────── */
+.dw-groups-table {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dw-groups-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-groups-actions-col { width: 100px; }
+.dw-groups-drag-col { width: 32px; }
+
+.dw-groups-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-muted-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+
+  &:hover { background: var(--color-side); color: var(--color-ink-2); }
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+// Every row in this table transitions transform (the FLIP slide-into-place, driven from TS) and
+// background/opacity (the dragging-state fade below) — scoped to just this table, not the shared
+// .data-table__row class used elsewhere in the app.
+.dw-groups-table .data-table__row {
+  transition: transform 180ms ease, background-color 150ms ease, opacity 150ms ease;
+}
+
+.dw-groups-row--dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.6;
+  background: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.dw-groups-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dw-groups-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+/* The mapping canvas itself, once a group is chosen — fills the remaining Step 3 space. */
+.dw-mapping-canvas-full {
+  flex: 1;
+  min-height: 0;
+}
+
+
+/* ── Confirm before discarding an in-progress group mapping ─────────────────── */
+.dw-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.dw-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dw-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.dw-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.dw-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.dw-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ── FHIR passthrough / customize choice (step 3) ────────────────────────────── */
+.dw-fhir-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: var(--color-primary); }
+  &.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  input[type='radio'] { margin-top: 3px; accent-color: var(--color-primary); }
+}
+
+.dw-fhir-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dw-fhir-choice-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-fhir-choice-pill {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.dw-fhir-resource-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.dw-fhir-resource-tab {
+  padding: 6px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-muted-2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+  &:hover { border-color: var(--color-primary); }
+  &.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-ink);
+  }
+}
+
+.dw-fhir-rules {
+  margin: 4px 0 0 0;
+}
+
+.dw-fhir-rule-card {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 40px 10px 12px;
+  margin-bottom: 10px;
+  background: var(--color-surface);
+
+  .dw-clear-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+}
+
+.dw-fhir-rule-row,
+.dw-fhir-rule-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  .dw-select-wrap,
+  .dw-input { flex: 1 1 180px; min-width: 150px; }
+}
+
+.dw-fhir-rule-preview {
+  font-size: 12px;
+  color: var(--color-muted-2);
+  font-style: italic;
+}
+
+.dw-fhir-lookup-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.dw-fhir-lookup-pair-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  span { color: var(--color-muted-2); flex-shrink: 0; }
+  .dw-input { flex: 1 1 auto; min-width: 0; }
 }
 
 /* ── Mapping table ────────────────────────────────────────────────────────── */
@@ -333,8 +785,16 @@
   border: 1px solid var(--color-border);
   border-radius: 10px;
   overflow: hidden;
+  // Without this, dw-body's flex column shrinks each group below its content height to fit the
+  // now-bounded modal (overflow: hidden above gives it an automatic min-height of 0, so flexbox is
+  // free to compress it) instead of letting dw-body scroll — clipping row content instead of
+  // showing a scrollbar.
+  flex-shrink: 0;
 }
 
+/* The whole row toggles the accordion (role="button" in the template) — the target select/input and the
+   Add Fields/+ Add field buttons stop click propagation so they keep their own behavior instead of also
+   toggling. */
 .dw-mapping-group-head {
   display: flex;
   align-items: center;
@@ -345,6 +805,39 @@
   font-weight: 700;
   color: var(--color-ink);
   border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+
+  &:hover { background: var(--color-bg); }
+}
+
+.dw-mapping-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dw-mapping-chevron {
+  display: inline-block;
+  font-size: 15px;
+  color: var(--color-muted-2);
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  &.collapsed { transform: rotate(0deg); }
+}
+
+.dw-mapping-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dw-mapping-target-label {
@@ -418,6 +911,74 @@
 }
 
 .dw-map-col-actions { width: 32px; }
+
+.dw-mapping-key-hint {
+  display: block;
+  padding: 6px 14px;
+  background: var(--color-side);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-map-key-col {
+  width: 44px;
+  text-align: center;
+
+  input[type='checkbox'] {
+    accent-color: var(--color-primary);
+  }
+}
+
+.dw-map-row--id td,
+.dw-map-row--parent-ref td {
+  background: var(--color-primary-soft);
+}
+
+.dw-parent-refs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--color-side);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-parent-refs-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-muted-2);
+}
+
+.dw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: var(--color-primary); }
+
+  &.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    font-weight: 600;
+  }
+}
+
+.dw-map-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
 
 .dw-row-remove {
   width: 22px;
@@ -519,6 +1080,10 @@
   font-weight: 600;
   line-height: 1.5;
 
+  &.dw-parent-refs-warn {
+    margin: 10px 14px;
+  }
+
   &--info {
     background: var(--color-info-soft);
     border: 1px solid color-mix(in srgb, var(--color-info) 35%, white);
@@ -529,6 +1094,59 @@
     border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white);
     color: var(--color-warning-strong);
   }
+}
+
+.dw-recommend-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dw-recommend-label {
+  flex-shrink: 0;
+}
+
+.dw-recommend-chip {
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-info) 45%, white);
+  background: var(--color-surface);
+  color: var(--color-info-strong);
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--color-info-soft); }
+}
+
+.dw-recommend-add-all {
+  font: inherit;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-info);
+  background: var(--color-info-soft);
+  color: var(--color-info-strong);
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: color-mix(in srgb, var(--color-info-soft) 60%, var(--color-info)); }
+}
+
+.dw-recommend-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 13px;
+  line-height: 1;
+
+  &:hover { opacity: 1; }
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
@@ -578,11 +1196,9 @@
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary-dark));
     }
-  }
-}
 
-.dw-conn-mode {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+    /* Still clickable (unlike :disabled) — clicking while invalid marks the active step's form touched so
+       the user sees exactly which field is missing, instead of the button just silently doing nothing. */
+    &.dw-btn--invalid { opacity: 0.5; }
+  }
 }

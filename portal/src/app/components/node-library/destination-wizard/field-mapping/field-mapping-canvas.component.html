@@ -1,0 +1,287 @@
+<div class="fm-canvas">
+  <div
+    class="fm-viewport"
+    id="fm-viewport"
+    #viewport
+    [class.fm-viewport--panning]="panning()"
+    (pointerdown)="onViewportPointerDown($event)"
+    (pointermove)="onViewportPointerMove($event)"
+    (pointerup)="onViewportPointerUp($event)"
+    (pointercancel)="onViewportPointerUp($event)"
+    (wheel)="onViewportWheel($event)"
+  >
+    <div class="fm-canvas-inner" #canvasInner [style.transform]="transformStyle()">
+      <app-field-mapping-source-tree
+        [forest]="forest()"
+        [isCollapsed]="isCollapsedFn"
+        [isMapped]="isMappedFn"
+        [isArmed]="isArmedFn"
+        [x]="sourcePosition().x"
+        [y]="sourcePosition().y"
+        (toggleCollapse)="onToggleCollapse($event)"
+        (armToggle)="onArmToggle($event)"
+        (dragStart)="onSourceDragStart($event)"
+        (dragMove)="onSourceDragMove($event)"
+        (dragEnd)="onSourceDragEnd($event)"
+        (positionChange)="onSourcePositionChange($event)"
+      />
+
+      @for (card of targetCards(); track card.tableName; let i = $index) {
+        <app-field-mapping-target-card
+          [resource]="card.resource"
+          [tableName]="card.tableName"
+          [isExtra]="card.isExtra"
+          [destType]="destType()"
+          [targetValue]="targetFor(card.resource)"
+          [hasSqlTables]="hasSqlTables()"
+          [sqlTableOptions]="sqlTableOptions()"
+          [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
+          [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
+          [columnDataType]="columnTypeOn(card.tableName)"
+          [columnKeyInfo]="columnKeyInfoOn(card.tableName)"
+          [isUpsertKeyColumn]="isUpsertKeyColumnOn(card.resource, card.tableName)"
+          [relation]="relationFor(card.tableName)"
+          [isArmed]="!!armedId()"
+          [isApproximated]="isApproximatedFn"
+          [schemaAuthoringEnabled]="schemaAuthoringEnabled()"
+          [x]="positionForKey(card.tableName, i).x"
+          [y]="positionForKey(card.tableName, i).y"
+          (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
+          (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+          (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+          (positionChange)="onCardPositionChange(card.tableName, $event)"
+          (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+          (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
+          (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
+          (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
+          (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+        />
+      }
+
+      <app-field-mapping-wires
+        [rows]="mappingRows()"
+        [resourceColorVar]="resourceColorVarFn"
+        [isApproximated]="isApproximatedFn"
+        [tempWire]="dragTempWire()"
+        [suggestions]="suggestions()"
+        (wireClick)="onWireClick($event)"
+        (suggestionClick)="onSuggestionClick($event)"
+      />
+    </div>
+
+    <!-- ── Chrome that must stay a constant screen size regardless of canvas zoom — siblings of the
+         transformed .fm-canvas-inner, never descendants of it. ── -->
+    @if (popoverRow(); as row) {
+      <app-field-mapping-join-popover
+        [row]="row"
+        [allResources]="allResources()"
+        (save)="onPopoverSave($event)"
+        (remove)="onPopoverRemove()"
+        (closed)="closePopover()"
+      />
+    }
+
+    <!-- No real "table" concept for a CSV destination — the create-table modal it opens asks for SQL
+         data types (uniqueidentifier, bigint, …) that don't apply to a flat file's columns. -->
+    @if (resources()[0]; as primaryResource) {
+      <!-- Nothing to offer here at all when there's neither a real probed schema to pick an existing
+           table from, nor authoring rights to create a new one. -->
+      @if (!drawerOpen() && destType() !== 'csv' && (hasSqlTables() || schemaAuthoringEnabled())) {
+      <div class="fm-add-table-slot">
+        @if (hasSqlTables()) {
+          <button
+            type="button"
+            class="fm-add-table-select fm-add-table-createbtn"
+            [class.fm-add-table-select--open]="addTableMenuOpen()"
+            (click)="$event.stopPropagation(); toggleAddTableMenu($event)"
+          >＋ Add a table from your database…</button>
+
+          @if (addTableMenuOpen() && addTableMenuStyle(); as pos) {
+            <div
+              class="fm-add-table-panel"
+              [style.top.px]="pos.top"
+              [style.bottom.px]="pos.bottom"
+              [style.left.px]="pos.left"
+              [style.width.px]="pos.width"
+              [style.max-height.px]="pos.maxHeight"
+            >
+              <div class="fm-add-table-search-wrap">
+                <input
+                  #addTableSearchInput
+                  type="search"
+                  class="fm-add-table-search"
+                  placeholder="Search tables…"
+                  aria-label="Search tables"
+                  [value]="addTableSearchQuery()"
+                  (input)="onAddTableSearchInput($any($event.target).value)"
+                />
+                @if (addTableSearchQuery()) {
+                  <button type="button" class="fm-add-table-search-clear" aria-label="Clear search" (click)="clearAddTableSearch()">✕</button>
+                }
+              </div>
+              <div class="fm-add-table-options">
+                @if (schemaAuthoringEnabled()) {
+                  <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, createNewTableOption)">
+                    ✎ Create a new table…
+                  </button>
+                }
+                @if (addTableSearchQuery() && filteredTablesToAdd(primaryResource).length === 0) {
+                  <div class="fm-add-table-no-match">No tables match "{{ addTableSearchQuery() }}".</div>
+                }
+                @for (t of filteredTablesToAdd(primaryResource); track t) {
+                  <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, t)">{{ t }}</button>
+                }
+              </div>
+            </div>
+          }
+        } @else {
+          <button
+            type="button"
+            class="fm-add-table-select fm-add-table-createbtn"
+            (click)="openCreateTableModal(primaryResource)"
+          >＋ Create a new table…</button>
+        }
+      </div>
+      }
+    }
+
+    @if (scrollThumbFraction() < 1) {
+      <div
+        class="fm-scrollbar-track"
+        tabindex="0"
+        role="scrollbar"
+        aria-orientation="vertical"
+        aria-label="Scroll canvas vertically"
+        aria-controls="fm-viewport"
+        aria-valuemin="0"
+        [attr.aria-valuemax]="maxScrollY()"
+        [attr.aria-valuenow]="scrollY()"
+        (click)="onScrollTrackClick($event)"
+        (keydown)="onScrollTrackKeydown($event)"
+      >
+        <div
+          class="fm-scrollbar-thumb"
+          [style.height.%]="scrollThumbFraction() * 100"
+          [style.top.%]="scrollThumbTopFraction() * 100"
+          (pointerdown)="onScrollThumbPointerDown($event)"
+          (pointermove)="onScrollThumbPointerMove($event)"
+          (pointerup)="onScrollThumbPointerUp($event)"
+          (pointercancel)="onScrollThumbPointerUp($event)"
+        ></div>
+      </div>
+    }
+  </div>
+
+  <app-field-mapping-list
+    [rows]="mappingRows()"
+    [resources]="resources()"
+    [allResources]="allResources()"
+    [forest]="forest()"
+    [tablesForResource]="tablesForResourceFn"
+    [columnsFor]="columnsForResourceTableFn"
+    [targetByResource]="targetByResource()"
+    [isApproximated]="isApproximatedFn"
+    (addRow)="onListAddRow($event)"
+    (removeRow)="onListRemoveRow($event)"
+    (editRow)="onEditRow($event)"
+    (delimiterChanged)="onListDelimiterChange($event)"
+    (instanceChanged)="onListInstanceChange($event)"
+    (referenceResourceChanged)="onListReferenceResourceChange($event)"
+  />
+
+  <app-field-mapping-preview-drawer
+    [open]="drawerOpen()"
+    [resources]="resources()"
+    [rows]="mappingRows()"
+    [destType]="destType()"
+    [targetByResource]="targetByResource()"
+    [csvDelimiterKey]="csvDelimiterKey()"
+    (closed)="closeDrawer()"
+  />
+
+  @if (creatingNewTable()) {
+    <app-field-mapping-create-table-modal
+      [existingTables]="sqlTableOptions()"
+      [columnsForTable]="columnsForTable()"
+      [submitting]="creatingTableSubmitting()"
+      [error]="creatingTableError()"
+      (submitted)="submitCreateTable($event)"
+      (cancelled)="closeCreateTableModal()"
+    />
+  }
+
+  @if (addColumnTarget(); as t) {
+    <app-field-mapping-add-column-modal
+      [tableName]="t.tableName"
+      [submitting]="addColumnSubmitting()"
+      [error]="addColumnError()"
+      (submitted)="submitAddColumn($event)"
+      (cancelled)="closeAddColumnModal()"
+    />
+  }
+
+  @if (editColumnTarget(); as t) {
+    <app-field-mapping-edit-column-modal
+      [tableName]="t.tableName"
+      [currentColumnName]="t.columnName"
+      [currentDataType]="dataTypeForTable()(t.tableName, t.columnName)"
+      [submitting]="editColumnSubmitting()"
+      [error]="editColumnError()"
+      (submitted)="submitEditColumn($event)"
+      (cancelled)="closeEditColumnModal()"
+    />
+  }
+
+  @if (loadPayloadOpen()) {
+    <app-field-mapping-load-payload-modal
+      [resource]="resources()[0]"
+      [error]="loadPayloadError()"
+      (submitted)="submitLoadPayload($event)"
+      (cancelled)="closeLoadPayloadModal()"
+    />
+  }
+
+  @if (pendingRemoveTable(); as pending) {
+    <div
+      class="fm-remove-confirm-backdrop"
+      tabindex="0"
+      (click)="cancelRemoveTable()"
+      (keydown.escape)="cancelRemoveTable()"
+    >
+      <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+        <div class="fm-remove-confirm-icon">⚠</div>
+        <h3 class="fm-remove-confirm-title">Remove {{ pending.tableName || pending.resource }}?</h3>
+        <p class="fm-remove-confirm-body">
+          Any mappings already made onto this table will be discarded.
+        </p>
+        <div class="fm-remove-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelRemoveTable()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmRemoveTable()">Remove table</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (pendingDropColumn(); as target) {
+    <div
+      class="fm-remove-confirm-backdrop"
+      tabindex="0"
+      (click)="cancelDropColumn()"
+      (keydown.escape)="cancelDropColumn()"
+    >
+      <div class="fm-remove-confirm-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+        <div class="fm-remove-confirm-icon fm-remove-confirm-icon--danger">🗑</div>
+        <h3 class="fm-remove-confirm-title">Remove "{{ target.column }}"?</h3>
+        <p class="fm-remove-confirm-body">
+          This queues a real <strong>ALTER TABLE ... DROP COLUMN</strong> against {{ target.tableName }},
+          which runs when you click "Add to Pipeline" — at that point the column and any data in it will
+          be gone for good.
+        </p>
+        <div class="fm-remove-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelDropColumn()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmDropColumn()">Remove column</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

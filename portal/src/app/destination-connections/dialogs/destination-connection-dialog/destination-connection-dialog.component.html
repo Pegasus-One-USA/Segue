@@ -34,17 +34,27 @@
     @if (!chosenType()) {
       <p class="dcd-hint">Choose a connection type to continue.</p>
       <div class="dcd-type-choice">
-        <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
-          <strong>SQL Server</strong>
-          <span>Write mapped records into a relational table.</span>
-        </button>
-        <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
-          <strong>CSV</strong>
-          <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
-        </button>
+        @if (permissions.hasPermission('sqlserver.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
+            <strong>SQL</strong>
+            <span>Write mapped records into a relational table (SQL Server, MySQL, or PostgreSQL).</span>
+          </button>
+        }
+        @if (permissions.hasPermission('csv.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
+            <strong>CSV</strong>
+            <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
+          </button>
+        }
+        @if (permissions.hasPermission('sourceconnections.create')) {
+          <button type="button" class="dcd-type-card" (click)="chooseType('fhir')">
+            <strong>Aidbox (FHIR)</strong>
+            <span>Write FHIR resources to a FHIR-native store (Aidbox).</span>
+          </button>
+        }
       </div>
     } @else {
-      <app-destination-connection-form [destType]="chosenType()!" mode="create" />
+      <app-destination-connection-form [destType]="formDestinationType()!" mode="create" />
     }
 
   } @else {
@@ -78,7 +88,7 @@
           Enter the full connection details below — they'll replace the existing secret. Leaving this
           collapsed keeps the current connection secret unchanged.
         </p>
-        <app-destination-connection-form [destType]="chosenType()!" mode="edit" />
+        <app-destination-connection-form [destType]="formDestinationType()!" mode="edit" />
       }
     }
   }
@@ -96,7 +106,7 @@
       mat-flat-button
       color="primary"
       type="button"
-      [disabled]="saving() || (isCreate && !chosenType())"
+      [disabled]="saving() || (isCreate && !chosenType()) || fhirTestPending()"
       (click)="save()"
     >
       {{ saving() ? 'Saving…' : 'Save' }}

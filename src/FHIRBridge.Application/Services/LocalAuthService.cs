@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
@@ -17,6 +19,8 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly ICurrentUserService _currentUserService;
     private readonly IEmailSender _emailSender;
     private readonly ITotpService _totpService;
+    private readonly IGovernanceLogger _governanceLogger;
+    private readonly ISystemSettingsCache _settingsCache;
     private readonly LocalAuthOptions _localAuthOptions;
 
     public LocalAuthService(
@@ -26,6 +30,8 @@ public sealed class LocalAuthService : ILocalAuthService
         ICurrentUserService currentUserService,
         IEmailSender emailSender,
         ITotpService totpService,
+        IGovernanceLogger governanceLogger,
+        ISystemSettingsCache settingsCache,
         IOptions<LocalAuthOptions> localAuthOptions)
     {
         _repository = repository;
@@ -34,7 +40,19 @@ public sealed class LocalAuthService : ILocalAuthService
         _currentUserService = currentUserService;
         _emailSender = emailSender;
         _totpService = totpService;
+        _governanceLogger = governanceLogger;
+        _settingsCache = settingsCache;
         _localAuthOptions = localAuthOptions.Value;
+    }
+
+    private async Task<(int MaxFailedAttempts, int LockoutMinutes)> ResolveLockoutPolicyAsync(
+        CancellationToken cancellationToken)
+    {
+        var maxFailedAttempts = await _settingsCache.GetIntAsync(
+            "LocalAuth:Lockout:MaxFailedAttempts", _localAuthOptions.Lockout.MaxFailedAttempts, cancellationToken);
+        var lockoutMinutes = await _settingsCache.GetIntAsync(
+            "LocalAuth:Lockout:LockoutMinutes", _localAuthOptions.Lockout.LockoutMinutes, cancellationToken);
+        return (maxFailedAttempts, lockoutMinutes);
     }
 
     public async Task<LocalLoginResponse> LoginAsync(
@@ -48,6 +66,10 @@ public sealed class LocalAuthService : ILocalAuthService
         // repeated attempts don't extend the window silently.
         if (user is not null && user.IsLockedOut(DateTime.UtcNow))
         {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("Local", Success: false, email, "Account is locked out"), cancellationToken);
+            await _governanceLogger.LogSecurityEventAsync(
+                new SecurityEventEntry("LoginAttemptWhileLocked", "Medium", email), cancellationToken);
             throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
         }
 
@@ -61,11 +83,21 @@ public sealed class LocalAuthService : ILocalAuthService
             // Count the failed attempt against a real, local-login account so the lockout threshold engages.
             if (user is not null && accountUsable)
             {
-                user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
-                    TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+                var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+                user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
                 await _repository.UpdateUserAsync(user, cancellationToken);
+
+                if (user.IsLockedOut(DateTime.UtcNow))
+                {
+                    await _governanceLogger.LogSecurityEventAsync(
+                        new SecurityEventEntry("AccountLockedThresholdReached", "High", email,
+                            $"{maxFailedAttempts} consecutive failed login attempts"),
+                        cancellationToken);
+                }
             }
 
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("Local", Success: false, email, "Invalid email or password"), cancellationToken);
             throw new InvalidOperationException("Invalid email or password.");
         }
 
@@ -119,9 +151,11 @@ public sealed class LocalAuthService : ILocalAuthService
         if (!IsMfaSatisfied(user, request.Code))
         {
             // A guess against a live challenge is a real failed attempt, unlike the code-less first step.
-            user.RegisterFailedLogin(_localAuthOptions.Lockout.MaxFailedAttempts,
-                TimeSpan.FromMinutes(_localAuthOptions.Lockout.LockoutMinutes));
+            var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+            user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
             await _repository.UpdateUserAsync(user, cancellationToken);
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MFA", Success: false, user.Email, "Invalid MFA code"), cancellationToken);
             throw new InvalidOperationException("A valid MFA code is required.");
         }
 
@@ -129,11 +163,16 @@ public sealed class LocalAuthService : ILocalAuthService
         return await FinishSuccessfulLoginAsync(user, cancellationToken);
     }
 
-    /// <summary>Shared tail of a successful local login: records the login and issues a session.</summary>
-    private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(User user, CancellationToken cancellationToken)
+    /// <summary>Shared tail of a successful local/magic-link login: records the login and issues a session.</summary>
+    private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(
+        User user,
+        CancellationToken cancellationToken,
+        string authenticationType = "Local")
     {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry(authenticationType, Success: true, user.Email), cancellationToken);
 
         return await CreateLoginResponseAsync(user, cancellationToken);
     }
@@ -147,7 +186,7 @@ public sealed class LocalAuthService : ILocalAuthService
         var externalUserId = _currentUserService.CurrentUser.ExternalUserId;
         if (string.IsNullOrWhiteSpace(externalUserId))
         {
-            throw new InvalidOperationException("Authenticated user id claim is missing.");
+            throw new InvalidOperationException("Your session is no longer valid. Please sign in again.");
         }
 
         var user = await _repository.GetUserByExternalIdAsync(externalUserId, cancellationToken)
@@ -184,7 +223,7 @@ public sealed class LocalAuthService : ILocalAuthService
 
         await _emailSender.SendAsync(
             email,
-            "Reset your FHIRBridge password",
+            "Reset your Segue password",
             BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
             cancellationToken);
 
@@ -211,6 +250,84 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
+    }
+
+    public async Task<MagicLinkResponse> RequestMagicLinkAsync(
+        MagicLinkRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
+        if (user is null || !user.IsLocalLoginEnabled || !user.IsEnabled)
+        {
+            return new MagicLinkResponse(true);
+        }
+
+        var token = GenerateToken();
+        var expiresOnUtc = DateTime.UtcNow.AddMinutes(15);
+        user.SetMagicLinkToken(_passwordHasher.Hash(token), expiresOnUtc);
+        await _repository.UpdateUserAsync(user, cancellationToken);
+
+        await _emailSender.SendAsync(
+            email,
+            "Your Segue sign-in link",
+            BuildMagicLinkEmailBody(user.DisplayName, BuildMagicLink(email, token), expiresOnUtc),
+            cancellationToken);
+
+        return new MagicLinkResponse(true);
+    }
+
+    public async Task<LocalLoginResponse> RedeemMagicLinkAsync(
+        MagicLinkRedeemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = await _repository.GetUserByEmailAsync(email, cancellationToken);
+
+        if (user is not null && user.IsLockedOut(DateTime.UtcNow))
+        {
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MagicLink", Success: false, email, "Account is locked out"), cancellationToken);
+            throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
+        }
+
+        var tokenValid = user is not null &&
+                          user.IsEnabled &&
+                          user.IsLocalLoginEnabled &&
+                          !string.IsNullOrWhiteSpace(user.MagicLinkTokenHash) &&
+                          user.MagicLinkTokenExpiresOnUtc is { } expiresOnUtc &&
+                          expiresOnUtc >= DateTime.UtcNow &&
+                          _passwordHasher.Verify(request.Token, user.MagicLinkTokenHash);
+
+        if (!tokenValid)
+        {
+            if (user is not null)
+            {
+                var (maxFailedAttempts, lockoutMinutes) = await ResolveLockoutPolicyAsync(cancellationToken);
+                user.RegisterFailedLogin(maxFailedAttempts, TimeSpan.FromMinutes(lockoutMinutes));
+                await _repository.UpdateUserAsync(user, cancellationToken);
+            }
+
+            await _governanceLogger.LogAuthenticationAsync(
+                new AuthenticationEntry("MagicLink", Success: false, email, "Invalid or expired sign-in link"), cancellationToken);
+            throw new InvalidOperationException("This sign-in link is invalid or has expired.");
+        }
+
+        user!.ClearMagicLinkToken();
+
+        // Same second-factor branch as password login: the link alone satisfies only the first factor.
+        if (user.MfaEnabled)
+        {
+            var (challengeToken, _) = _accessTokenIssuer.IssueRefreshToken();
+            var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
+            user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
+            await _repository.UpdateUserAsync(user, cancellationToken);
+
+            return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
+        }
+
+        await _repository.UpdateUserAsync(user, cancellationToken);
+        return await FinishSuccessfulLoginAsync(user, cancellationToken, "MagicLink");
     }
 
     public async Task<LocalLoginResponse> RefreshTokenAsync(
@@ -269,6 +386,8 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.ClearRefreshToken();
         await _repository.UpdateUserAsync(user, cancellationToken);
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry("Logout", Success: true, user.Email), cancellationToken);
     }
 
     private async Task<LocalLoginResponse> CreateLoginResponseAsync(
@@ -280,7 +399,9 @@ public sealed class LocalAuthService : ILocalAuthService
 
         var permissionCodes = await GetPermissionCodesAsync(user.Id, roles.Select(r => r.Id).ToArray(), cancellationToken);
 
-        var token = _accessTokenIssuer.Issue(user, roleNames, permissionCodes);
+        // permissionCodes is still returned in the login response's Profile (below) for the frontend's
+        // immediate use — it's just no longer embedded as JWT claims (see IUserPermissionsProvider).
+        var token = _accessTokenIssuer.Issue(user, roleNames);
 
         var (refreshHash, refreshExpiry) = _accessTokenIssuer.IssueRefreshToken();
         user.SetRefreshToken(refreshHash, refreshExpiry);
@@ -293,13 +414,16 @@ public sealed class LocalAuthService : ILocalAuthService
             AccessToken: token.AccessToken,
             TokenType: token.TokenType,
             ExpiresOnUtc: token.ExpiresOnUtc,
-            RequiresPasswordChange: user.MustChangePassword,
+            RequiresPasswordChange: user.RequiresPasswordChange,
             Profile: new UserProfileDto(
                 user.Id,
                 user.ExternalUserId,
                 user.Email,
                 user.DisplayName,
-                roleNames),
+                roleNames,
+                permissionCodes,
+                user.RequiresPasswordChange,
+                user.IsMfaSetupRequired),
             RefreshToken: BuildRawRefreshToken(refreshHash),
             RefreshTokenExpiresOnUtc: refreshExpiry,
             RequiresMfaSetup: user.IsMfaSetupRequired);
@@ -368,9 +492,32 @@ public sealed class LocalAuthService : ILocalAuthService
     {
         return $"""
             <p>Hi {displayName},</p>
-            <p>We received a request to reset your FHIRBridge password. Use the link/token below to continue:</p>
+            <p>We received a request to reset your Segue password. Use the link/token below to continue:</p>
             <p><a href="{resetLinkOrToken}">{resetLinkOrToken}</a></p>
             <p>This reset request expires at {expiresOnUtc:u}. If you did not request a password reset, you can ignore this email.</p>
+            """;
+    }
+
+    private string BuildMagicLink(string email, string token)
+    {
+        var template = _localAuthOptions.MagicLinkUrlTemplate;
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return token;
+        }
+
+        return template
+            .Replace("{token}", Uri.EscapeDataString(token))
+            .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private static string BuildMagicLinkEmailBody(string? displayName, string magicLinkOrToken, DateTime expiresOnUtc)
+    {
+        return $"""
+            <p>Hi {displayName},</p>
+            <p>Use the link below to sign in to Segue:</p>
+            <p><a href="{magicLinkOrToken}">{magicLinkOrToken}</a></p>
+            <p>This sign-in link expires at {expiresOnUtc:u} and can only be used once. If you did not request this, you can ignore this email.</p>
             """;
     }
 

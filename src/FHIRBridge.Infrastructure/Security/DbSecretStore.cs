@@ -12,7 +12,7 @@ namespace FHIRBridge.Infrastructure.Security;
 /// DataProtection. The composite secret provider checks this store before configuration/Key Vault, so a secret
 /// provisioned via <see cref="WriteSecretAsync"/> resolves through the normal <c>ISecretProvider</c> path.
 /// </summary>
-public sealed class DbSecretStore : ISecretWriter
+public sealed class DbSecretStore : ISecretWriter, IAppSecretMetadataProvider
 {
     private const string ProtectorPurpose = "FHIRBridge.Secrets.v1";
 
@@ -59,5 +59,20 @@ public sealed class DbSecretStore : ISecretWriter
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Whether a value exists and when it was last written — never decrypts <c>ProtectedValue</c>.</summary>
+    public async Task<ProvisionedSecretMetadata> GetMetadataAsync(
+        SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        var row = await _dbContext.ProvisionedSecrets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                s => s.KeyVaultName == secretReference.KeyVaultName && s.SecretName == secretReference.SecretName,
+                cancellationToken);
+
+        return row is null
+            ? new ProvisionedSecretMetadata(false, null)
+            : new ProvisionedSecretMetadata(true, row.ModifiedOnUtc);
     }
 }

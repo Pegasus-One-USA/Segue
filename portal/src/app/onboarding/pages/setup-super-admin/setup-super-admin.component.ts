@@ -10,15 +10,17 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog } from '@angular/material/dialog';
 
 import { AppInitService } from '../../services/app-init.service';
+import { TermsAndConditionsDialogComponent } from '../../components/terms-and-conditions-dialog/terms-and-conditions-dialog.component';
+import { ToastService } from '../../../services/toast.service';
 import { PasswordPolicyService } from '../../../auth/services/password-policy.service';
 import { PasswordValidation } from '../../../auth/models/password-policy.model';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { SessionService } from '../../../auth/services/session.service';
-import { TokenService } from '../../../auth/services/token.service';
-import { buildUserFromJwt } from '../../../auth/services/jwt-user.mapper';
+import { buildUserFromProfile } from '../../../auth/services/jwt-user.mapper';
 import { SsoButtonsComponent } from '../../../auth/components/sso-buttons/sso-buttons.component';
 import { SsoAuthApiService } from '../../../auth/services/sso-auth-api.service';
 import { SsoResult } from '../../../auth/services/sso.service';
@@ -37,7 +39,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
+    MatCheckboxModule,
     SsoButtonsComponent,
   ],
   templateUrl: './setup-super-admin.component.html',
@@ -48,13 +50,13 @@ export class SetupSuperAdminComponent {
   private readonly fb        = inject(FormBuilder);
   private readonly appInit   = inject(AppInitService);
   private readonly policySvc = inject(PasswordPolicyService);
-  private readonly snackBar  = inject(MatSnackBar);
+  private readonly toast     = inject(ToastService);
   private readonly ssoApi    = inject(SsoAuthApiService);
+  private readonly dialog    = inject(MatDialog);
 
   // Login success handling — reuse the exact login pattern (see AuthService.login).
   private readonly store    = inject(AuthStore);
   private readonly session  = inject(SessionService);
-  private readonly tokens   = inject(TokenService);
 
   protected readonly ssoBusy = signal(false);
 
@@ -70,6 +72,16 @@ export class SetupSuperAdminComponent {
     email:           ['', [Validators.required, Validators.email]],
     password:        ['', [Validators.required, Validators.minLength(12), Validators.maxLength(64)]],
     confirmPassword: ['', Validators.required],
+    // SMTP settings — collected here and saved enabled (IsEnabled forced true server-side) so this
+    // deployable package leaves setup with email already configured, not as a separate later step.
+    smtpHost:        ['', Validators.required],
+    smtpPort:        [587, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    smtpEnableSsl:   [true],
+    smtpUsername:    [''],
+    smtpPassword:    [''],
+    smtpFromAddress: ['', [Validators.required, Validators.email]],
+    smtpFromName:    ['FHIRBridge', Validators.required],
+    acceptTerms:     [false, Validators.requiredTrue],
   }, { validators: matchPasswords });
 
   // Signal-backed live values for reactive computed
@@ -95,8 +107,17 @@ export class SetupSuperAdminComponent {
     this.form.get('lastName')!.valid &&
     this.form.get('email')!.valid &&
     this.pwValidation().allMet &&
-    this.passwordsMatch()
+    this.passwordsMatch() &&
+    this.form.get('smtpHost')!.valid &&
+    this.form.get('smtpPort')!.valid &&
+    this.form.get('smtpFromAddress')!.valid &&
+    this.form.get('smtpFromName')!.valid &&
+    this.form.get('acceptTerms')!.valid
   );
+
+  protected openTermsDialog(): void {
+    this.dialog.open(TermsAndConditionsDialogComponent, { autoFocus: false, restoreFocus: true });
+  }
 
   protected togglePw():  void { this.showPw.update(v => !v); }
   protected toggleCfm(): void { this.showCfm.update(v => !v); }
@@ -110,20 +131,34 @@ export class SetupSuperAdminComponent {
       return;
     }
 
-    const { firstName, lastName, email, password } = this.form.getRawValue();
+    const {
+      firstName, lastName, email, password, acceptTerms,
+      smtpHost, smtpPort, smtpEnableSsl, smtpUsername, smtpPassword, smtpFromAddress, smtpFromName,
+    } = this.form.getRawValue();
     const displayName = `${firstName} ${lastName}`.trim();
 
     this.isLoading.set(true);
 
-    this.appInit.createSuperAdmin({ email, displayName, password, firstName, lastName }).subscribe({
+    this.appInit.createSuperAdmin({
+      email, displayName, password, firstName, lastName, acceptTerms,
+      emailSettings: {
+        host: smtpHost.trim(),
+        port: smtpPort,
+        enableSsl: smtpEnableSsl,
+        username: smtpUsername.trim() || null,
+        password: smtpPassword.trim() || null,
+        fromAddress: smtpFromAddress.trim(),
+        fromName: smtpFromName.trim(),
+      },
+    }).subscribe({
       next: (res) => {
-        // Reuse the exact login success handling: store tokens + rebuild user from the JWT.
-        const payload = this.tokens.decodePayload<Record<string, unknown>>(res.accessToken) ?? {};
-        const user = buildUserFromJwt(payload);
+        // Reuse the exact login success handling: rebuild user from the profile DTO. Tokens are
+        // already set as HttpOnly cookies by the backend (see AuthController.IssueTokenCookiesAndStrip).
+        const user = buildUserFromProfile(res.profile!);
         user.mustChangePassword = res.requiresPasswordChange ?? false;
 
         this.store.setUser(user);
-        this.session.start(user.id, res.accessToken, res.refreshToken ?? '', false);
+        this.session.start(user.id, false);
         this.isLoading.set(false);
         this.router.navigate(['/dashboard']);
       },
@@ -132,13 +167,12 @@ export class SetupSuperAdminComponent {
         if (err?.status === 409) {
           const msg = 'Setup already completed — please go to the sign-in page.';
           this.serverError.set(msg);
-          this.snackBar.open(msg, 'Go to Sign In', { duration: 8000, panelClass: ['snack-error'] })
-            .onAction().subscribe(() => this.router.navigate(['/auth/login']));
+          this.toast.error(msg);
           return;
         }
         const message = err?.error?.message ?? 'Setup failed. Please try again.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }
@@ -159,13 +193,12 @@ export class SetupSuperAdminComponent {
         if (err?.status === 409) {
           const msg = 'Setup already completed — please go to the sign-in page.';
           this.serverError.set(msg);
-          this.snackBar.open(msg, 'Go to Sign In', { duration: 8000, panelClass: ['snack-error'] })
-            .onAction().subscribe(() => this.router.navigate(['/auth/login']));
+          this.toast.error(msg);
           return;
         }
         const message = err?.error?.message ?? 'Setup failed. Please try again.';
         this.serverError.set(message);
-        this.snackBar.open(message, 'Dismiss', { duration: 6000, panelClass: ['snack-error'] });
+        this.toast.error(message);
       },
     });
   }

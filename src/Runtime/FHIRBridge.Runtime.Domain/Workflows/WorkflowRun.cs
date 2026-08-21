@@ -11,7 +11,8 @@ public sealed class WorkflowRun
         string? triggeredBy = null,
         string? triggerType = null,
         Guid? targetNodeId = null,
-        int workflowDefinitionVersion = 1)
+        int workflowDefinitionVersion = 1,
+        string? correlationId = null)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -26,6 +27,7 @@ public sealed class WorkflowRun
         TriggeredBy = triggeredBy;
         TriggerType = triggerType;
         TargetNodeId = targetNodeId;
+        CorrelationId = correlationId;
     }
 
     public Guid Id { get; }
@@ -54,9 +56,21 @@ public sealed class WorkflowRun
     /// full-graph run. Lets the checkpoint-result endpoint resolve which node to read back from just the run id.</summary>
     public Guid? TargetNodeId { get; }
 
+    /// <summary>Shared execution-tracking id for this run — the same value flows into audit records, captured
+    /// errors, and correlation search so every artifact of this run can be found from one id.</summary>
+    public string? CorrelationId { get; }
+
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 
     public void AddNodeRun(WorkflowNodeRun nodeRun) => _nodeRuns.Add(nodeRun);
+
+    /// <summary>Pauses the run at a source node that deferred to an async bulk-export job — deliberately does not
+    /// set <see cref="CompletedAt"/>, since this is not a terminal state; <see cref="Succeed"/>/<see cref="Fail"/>
+    /// are still called once the poller resumes execution and the run actually finishes.</summary>
+    public void AwaitBulkExport()
+    {
+        Status = WorkflowRunStatus.AwaitingBulkExport;
+    }
 
     public void Succeed(DateTimeOffset completedAt)
     {
@@ -69,5 +83,23 @@ public sealed class WorkflowRun
         ErrorMessage = errorMessage;
         CompletedAt = completedAt;
         Status = WorkflowRunStatus.Failed;
+    }
+
+    /// <summary>Every node ran, but one or more non-parent resource types were skipped for lack of authorization —
+    /// distinct from <see cref="Fail"/> since the rest of the run's output is still valid and was written.</summary>
+    public void PartialSucceed(string summaryMessage, DateTimeOffset completedAt)
+    {
+        ErrorMessage = summaryMessage;
+        CompletedAt = completedAt;
+        Status = WorkflowRunStatus.PartialSuccess;
+    }
+
+    /// <summary>The run never reached extraction of anything downstream: a parent/cohort-seeding resource type
+    /// (e.g. Patient) wasn't authorized, so the whole run was aborted up front rather than left to fail node-by-node.</summary>
+    public void Cancel(string reason, DateTimeOffset completedAt)
+    {
+        ErrorMessage = reason;
+        CompletedAt = completedAt;
+        Status = WorkflowRunStatus.Cancelled;
     }
 }

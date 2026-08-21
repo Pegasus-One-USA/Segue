@@ -16,7 +16,7 @@ public sealed class DefaultGovernancePolicyService : IGovernancePolicyService
 
         return Task.FromResult(new ResourceGovernanceDecision(
             true,
-            false,
+            null,
             null,
             policies));
     }

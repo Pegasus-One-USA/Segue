@@ -1,0 +1,45 @@
+{
+  "resourceType": "ServiceRequest",
+  "id": "servicerequest-003",
+  "meta": {
+    "source": "urn:segue:test-dataset",
+    "tag": [
+      {
+        "system": "urn:segue:test:dataset",
+        "code": "synthetic",
+        "display": "Synthetic test data"
+      }
+    ]
+  },
+  "identifier": [
+    {
+      "system": "urn:segue:test:servicerequest",
+      "value": "SERVICEREQUEST-003"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "600-7",
+        "display": "Bacteria identified in Blood by Culture"
+      }
+    ],
+    "text": "Bacteria identified in Blood by Culture"
+  },
+  "subject": {
+    "reference": "Patient/patient-004",
+    "display": "Robert Brooks"
+  },
+  "encounter": {
+    "reference": "Encounter/encounter-003",
+    "display": "encounter-003"
+  },
+  "requester": {
+    "reference": "Practitioner/practitioner-002",
+    "display": "Dr Daniel Okafor"
+  },
+  "authoredOn": "2026-05-04T09:20:00Z"
+}

@@ -28,6 +28,7 @@ public static class MessagingServiceCollectionExtensions
         }));
         services.AddScoped<IPipelineRunCommandHandler, PipelineRunCommandHandler>();
         services.AddScoped<IWebhookIngestionCommandHandler, WebhookIngestionCommandHandler>();
+        services.AddScoped<ILineageCaptureCommandHandler, LineageCaptureCommandHandler>();
 
         var provider = configuration["Messaging:Provider"];
 
@@ -84,7 +85,9 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<AzureServiceBusPublisher>();
         services.AddSingleton<IPipelineRunDispatcher, AzureServiceBusPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, AzureServiceBusWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, AzureServiceBusLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(AzureServiceBusMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, AzureServiceBusQueueMonitorProvider>();
 
         return services;
     }
@@ -96,22 +99,46 @@ public static class MessagingServiceCollectionExtensions
         {
             HostName = section["HostName"] ?? "localhost",
             Port = int.TryParse(section["Port"], out var port) ? port : 5672,
+            ManagementPort = int.TryParse(section["ManagementPort"], out var managementPort) ? managementPort : 15672,
             UserName = section["UserName"] ?? "fhirbridge",
             Password = section["Password"] ?? "fhirbridge",
             VirtualHost = section["VirtualHost"] ?? "/",
             PipelineRunsQueue = section["PipelineRunsQueue"] ?? "pipeline-runs",
             WebhookIngestionQueue = section["WebhookIngestionQueue"] ?? "webhook-ingestion",
-            PrefetchCount = ushort.TryParse(section["PrefetchCount"], out var prefetch) ? prefetch : (ushort)10
+            PrefetchCount = ushort.TryParse(section["PrefetchCount"], out var prefetch) ? prefetch : (ushort)10,
+            UseTls = bool.TryParse(section["UseTls"], out var useTls) && useTls
         };
+
+        // HIPAA #15: fail fast rather than silently carrying PHI over plaintext AMQP outside Development.
+        if (!options.UseTls && !IsDevelopmentEnvironment())
+        {
+            throw new InvalidOperationException(
+                "Messaging:RabbitMq:UseTls must be true outside Development — refusing to start with a plaintext AMQP connection.");
+        }
 
         services.AddSingleton(Options.Create(options));
         services.AddSingleton<RabbitMqConnection>();
         services.AddSingleton<RabbitMqPublisher>();
         services.AddSingleton<IPipelineRunDispatcher, RabbitMqPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, RabbitMqWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, RabbitMqLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(RabbitMqMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, RabbitMqQueueMonitorProvider>();
 
         return services;
+    }
+
+    /// <summary>
+    /// No <see cref="IHostEnvironment"/> is threaded through this far into DI registration, so the environment
+    /// name is read directly from the same env vars ASP.NET Core/Generic Host resolve it from at startup.
+    /// </summary>
+    internal static bool IsDevelopmentEnvironment()
+    {
+        var environmentName =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+        return string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IServiceCollection AddInMemoryMessaging(IServiceCollection services)
@@ -119,7 +146,9 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton(typeof(InMemoryMessageChannel<>));
         services.AddSingleton<IPipelineRunDispatcher, InMemoryPipelineRunDispatcher>();
         services.AddSingleton<IWebhookIngestionDispatcher, InMemoryWebhookIngestionDispatcher>();
+        services.AddSingleton<ILineageCaptureDispatcher, InMemoryLineageCaptureDispatcher>();
         services.AddSingleton(typeof(IMessageConsumer<>), typeof(InMemoryMessageConsumer<>));
+        services.AddSingleton<IQueueMonitorProvider, NullQueueMonitorProvider>();
 
         return services;
     }

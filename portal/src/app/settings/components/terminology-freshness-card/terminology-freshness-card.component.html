@@ -1,0 +1,30 @@
+<section class="settings-card">
+  <div class="card-row">
+    <div>
+      <h2 class="card-title">Release Freshness</h2>
+      @if (freshness(); as f) {
+        <p class="card-sub">
+          Last checked {{ f.checkedOnUtc | date: 'short' }}
+          @if (f.latestKnownFileName) {
+            — most recent file seen: <span class="mono">{{ f.latestKnownFileName }}</span>
+          }
+          @if (f.newerReleaseFound) {
+            <span class="freshness-flag freshness-flag--new">Newer release found</span>
+          }
+        </p>
+      } @else {
+        <p class="card-sub">Never checked yet.</p>
+      }
+    </div>
+    <div class="actions">
+      <button class="btn-outline" type="button" [disabled]="checking() || writeDisabled()" (click)="checkForUpdates.emit()">
+        {{ checking() ? 'Checking…' : 'Check for Updates' }}
+      </button>
+      @if (freshness()?.latestKnownFileName) {
+        <button class="btn-primary" type="button" [disabled]="downloading() || writeDisabled()" (click)="downloadAndImport.emit()">
+          {{ downloading() ? 'Downloading…' : 'Download & Import' }}
+        </button>
+      }
+    </div>
+  </div>
+</section>

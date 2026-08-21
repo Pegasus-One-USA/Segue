@@ -1,0 +1,436 @@
+.page {
+  padding: 24px;
+  // Matches the shared list-page convention's own container width (see _list-page.scss, used by every
+  // sibling tab under Workflow Configurations) — this used to cap at 960px, which read as a big empty
+  // gutter next to the other tabs on anything wider than a laptop screen.
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 20px;
+
+  h1 { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0 0 4px; }
+  // NOT max-width: 70ch — that was sized for the page's old 960px cap and wrapped this into 3 short
+  // lines even after the page itself was widened to 1400px (see .page above), leaving most of the row's
+  // actual width unused instead of the text just flowing across it.
+  p { font-size: 13.5px; color: var(--color-muted); margin: 0; }
+}
+
+// The title + "New rule target" button used to sit in the same flex row as the (multi-line) description
+// paragraph, with align-items: flex-start — that aligns the button to the top of the WHOLE row, which
+// happened to line up with the h1's top edge only by coincidence of both starting flush at the row's
+// own top; the button's own line-height/padding made it read a few pixels high next to the heading text.
+// Splitting the button into its own row with just the h1 — and centering that row — lines the button up
+// against the heading's actual vertical center regardless of how tall the paragraph below happens to be.
+.page-header__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+
+  h1 { margin: 0; }
+}
+
+.form-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+
+  h3 { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0 0 14px; }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 14px;
+}
+
+// Vertical label-above-input — the app's own form spec (§8.3), used everywhere a plain field is needed
+// on this page (the "New rule target" form here, and the step editor's own fields further down) instead
+// of Angular Material's mat-form-field, whose floating-label-in-outline appearance reserves vertical
+// room this app's spec doesn't call for and doesn't match the label-above-input look used elsewhere
+// (e.g. mapping-profile-dialog's .mpd-meta-field).
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  // display: block + min-height (not just font-size) — a label that wraps to two lines (e.g. "Default
+  // value when nothing present (optional)") otherwise pushes only ITS OWN input down, while a neighbor
+  // with a short one-line label (e.g. "Node type") stays higher — the two inputs end up at different Y
+  // positions in the same wrapping row instead of lining up. Reserving the same height for every label
+  // regardless of how many lines it actually needs keeps every input flush at the same row.
+  label {
+    display: block;
+    min-height: 34px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-ink-2);
+  }
+
+  select, input {
+    height: 42px;
+    padding: 0 12px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    font-size: 13.5px;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    box-sizing: border-box;
+    transition: border-color var(--transition-base, 150ms ease);
+
+    &:hover { border-color: var(--color-muted); }
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+  }
+
+  // Same custom chevron as RuleConfigFormComponent's own .config-control select (see that file) — this
+  // page's "Node type" field is styled here, its "Target type"/"Decimal separator" siblings are styled
+  // there; keeping both selects' arrow treatment identical is what actually makes them read as one
+  // consistent row instead of each browser drawing its own native dropdown glyph.
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    padding-right: 32px;
+    // A data: URI SVG can't reference a CSS custom property, so this one hex is unavoidable — it's
+    // --color-muted's own value (#64748B), not a stand-in for a token that could be used instead.
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748B' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 10px 7px;
+  }
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+// A compact, single-line pill (inline label + plain <select>) instead of a bare mat-form-field floated
+// to the far right — the outline mat-form-field reserves vertical room above the value for its floating
+// label, which put the filter icon out of line with the actual "All" text next to it and made the whole
+// control read as an oddly tall, empty box for one small choice. This sizes to its own content instead.
+.list-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 6px 10px 6px 14px;
+  margin-bottom: 14px;
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink-2);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  &__ico {
+    flex-shrink: 0;
+    color: var(--color-muted);
+    font-size: 16px;
+    height: 16px;
+    width: 16px;
+  }
+}
+
+.scope-filter-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  select {
+    height: 32px;
+    min-width: 130px;
+    padding: 0 30px 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-bg);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink);
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: border-color var(--transition-base);
+
+    &:hover { border-color: var(--color-muted); }
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+  }
+
+  &__chevron {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-muted);
+    font-size: 16px;
+    height: 16px;
+    width: 16px;
+    pointer-events: none;
+  }
+}
+
+// NOT redefined here — the global .empty-state (styles.scss) already gives the icon/title/body/action
+// layout every other list page's empty state uses (see mapping-profile-list.component.html for the same
+// pattern); a component-local override of the same class name would just win on specificity and flatten
+// it back to a single small muted line with no icon, which is what made this page's "nothing configured"
+// state read as one stray sentence lost in a lot of dead space.
+
+.groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.group-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 14px 18px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__target {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+
+    .target-label { font-weight: 600; font-size: 14px; color: var(--color-ink); }
+    .tag {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      color: var(--color-primary);
+      background: var(--color-primary-soft);
+      padding: 2px 7px;
+      border-radius: 100px;
+      margin-left: 6px;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  &__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+}
+
+.scope-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 100px;
+  white-space: nowrap;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+
+  &--resourcetype { background: var(--color-warning-soft); color: var(--color-warning-strong); }
+  &--destinationtype { background: var(--color-info-soft); color: var(--color-info-strong); }
+  // Global and Field both use the base teal-soft treatment above — no override needed. Global used to
+  // get a neutral grey chip instead, which read as "unscoped"/disabled rather than the deliberate,
+  // broadest-reach scope it actually is.
+}
+
+// ─── Step chain (shared shape with the per-field Rules dialog) ────────────
+// NOT a separate order/reorder sidebar column anymore — the step number now sits inline in the "Node
+// type" label, and the reorder arrows sit inline inside that one field (see .node-select__input-row
+// below), so this is just a plain padded/bordered box around .step-card__content.
+.step-card {
+  padding: var(--space-9);
+  background: var(--color-side);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  // Two genuinely separate rows — Node type on its own, the selected node's own schema fields on the row
+  // below — rather than one flex-wrap row where the break between them depended on the row's available
+  // width. Two sibling block divs (each its own flex container) stack unconditionally; there's no width
+  // math that can put them back on the same line. See transform-rules-dialog.component.scss's identical
+  // rule for why (the two entry points are kept structurally identical, not just visually similar).
+  &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  &__fields-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px 12px;
+  }
+
+  &__fields-row--node {
+    // .node-select's basis is 160px + 26px, not the same 160px as the config row's fields — see
+    // transform-rules-dialog.component.scss's identical rule for why: the 26px is exactly the reorder
+    // arrows' own footprint (20px column + 6px gap, both living inside .node-select's own flex-item box,
+    // see .node-select__input-row below), added back so that budget goes to the arrows specifically and
+    // the <select> itself still gets the same 160px (plus its even share of grown space) as its
+    // counterparts in the config row — an equal-width dropdown BOX, not just an equal-width outer
+    // wrapper that happens to hide a narrower select inside it.
+    .node-select { flex: 1 1 186px; width: auto; min-width: 0; max-width: 340px; }
+  }
+
+  &__fields-row--config {
+    // app-rule-config-form now owns its own CSS Grid internally (see RuleConfigFormComponent's styles) —
+    // it's the row's only child, so this just needs to let that grid have the row's full width rather
+    // than sizing itself to content.
+    display: block;
+
+    app-rule-config-form { display: block; width: 100%; }
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  &__advanced {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--color-border);
+
+    .config-control { flex: 1 1 160px; }
+  }
+}
+
+// A plain flex row (NOT an inline badge inside the label's text, and NOT position: absolute either —
+// see transform-rules-dialog.component.scss's identical note: absolute positioning drifted outside the
+// field once other rules were in play, rather than reliably anchoring to it). The badge is a normal
+// sibling of the label, sized well under one text line (15px, vs. ~17px for 13px/1.3 text) so
+// align-items: center on the row just centers it against the label without either forcing the other
+// taller.
+.node-select__label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-number {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-primary-mid);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// Reorder arrows sit inside the Node type field itself, immediately left of its own select — not in a
+// separate sidebar spanning the whole card's height, per the field's own compact "aligned in one row"
+// treatment.
+.node-select__input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  select { flex: 1; min-width: 0; }
+
+  .step-reorder {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+}
+
+// Plain buttons (NOT mat-icon-button) — see transform-rules-dialog.component.scss's identical note:
+// Material's own icon-button directive enforces a minimum touch target that a plain width/height
+// override on the host doesn't fully suppress, so these rendered taller than intended — exactly what
+// pushed "Node type"'s select out of line with its neighbors.
+.step-reorder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+
+  mat-icon { font-size: 14px; height: 14px; width: 14px; }
+
+  &:hover:not(:disabled) { background: var(--color-bg); color: var(--color-ink-2); }
+  &:disabled { color: var(--color-border); cursor: not-allowed; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+// Ghost/text-link button per the app's own "Danger"/text-link button spec — transparent, no chrome,
+// just colored text (was mat-button color="warn", which is close but not token-driven).
+.btn-text-danger {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-error);
+  cursor: pointer;
+  border-radius: var(--radius-base);
+  transition: background var(--transition-base, 150ms ease);
+
+  &:hover:not(:disabled) { background: var(--color-error-soft); }
+  &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
+}
+
+.add-step-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; margin-right: 2px; }
+}

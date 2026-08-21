@@ -9,6 +9,7 @@ import { CreateRoleRequest, UpdateRoleRequest } from '../../auth/models/auth-req
 import {
   Role, Permission, RoleDto, PermissionDto, PermissionCategory, PermissionCatalogCategoryDto,
 } from '../../auth/models/user.model';
+import { NodeCatalogEntry, NodeCatalogEntryDto, mapNodeCatalogEntryDto } from '../../models/node-catalog.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiRoleService extends IRoleService {
@@ -58,6 +59,13 @@ export class ApiRoleService extends IRoleService {
   getPermissionCatalog(): Observable<PermissionCategory[]> {
     return this.http.get<PermissionCatalogCategoryDto[]>(PERMISSIONS_ENDPOINTS.catalog).pipe(
       map(dtos => (dtos ?? []).map(mapPermissionCatalogDto)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  getNodeCatalog(): Observable<NodeCatalogEntry[]> {
+    return this.http.get<NodeCatalogEntryDto[]>(PERMISSIONS_ENDPOINTS.nodeCatalog).pipe(
+      map(dtos => (dtos ?? []).map(mapNodeCatalogEntryDto)),
       catchError(err => throwError(() => err))
     );
   }

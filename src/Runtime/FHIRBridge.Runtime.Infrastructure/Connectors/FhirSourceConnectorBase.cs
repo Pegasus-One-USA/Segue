@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
+using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.ValueObjects;
@@ -57,8 +59,112 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
-        var searchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
-        searchParameters = ApplyDefaultObservationCategory(resourceType, searchParameters);
+        var scopedSearchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
+        scopedSearchParameters = MergeAdditionalQueryParameters(scopedSearchParameters, source);
+
+        // Some default parameters (category, status) list several values for the resource type — Epic (confirmed;
+        // likely other EHRs too) doesn't OR multiple comma-joined tokens together in one request the way a single
+        // combined query would assume, and silently returns an empty bundle instead of erroring. Splitting into one
+        // request per value and merging/deduping the results is the only way to actually get the full breadth of
+        // data — see GetDefaultParameterValuesToSplit for which resource types/values this applies to.
+        var valuesToSplit = GetDefaultParameterValuesToSplit(resourceType, scopedSearchParameters);
+        if (valuesToSplit is null)
+        {
+            var searchParameters = ApplyDefaultSearchParameters(resourceType, scopedSearchParameters);
+            searchParameters = ApplyAdditionalRequiredParameters(resourceType, searchParameters);
+            return await SearchPagesAsync(resourceType, source, searchParameters, accessToken, cancellationToken);
+        }
+
+        var seenResourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var mergedResources = new List<ResourceEnvelope>();
+        foreach (var (parameterName, value) in valuesToSplit)
+        {
+            var query = string.IsNullOrWhiteSpace(scopedSearchParameters)
+                ? $"{parameterName}={value}"
+                : $"{scopedSearchParameters}&{parameterName}={value}";
+            query = ApplyAdditionalRequiredParameters(resourceType, query);
+
+            IReadOnlyList<ResourceEnvelope> page;
+            try
+            {
+                page = await SearchPagesAsync(resourceType, source, query, accessToken, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // One split value (e.g. one category token) rejected by the source shouldn't discard every other
+                // value's results — Epic in particular can reject a single category/status token for reasons
+                // unrelated to the rest of the split set (a business rule specific to that one code) while every
+                // other value in the same list succeeds. Skip and keep going; the resource type as a whole is
+                // still reported as at least partially successful instead of wholly failing on one bad value.
+                _logger.LogWarning(
+                    exception,
+                    "{Source} search for {ResourceType} with {Parameter}={Value} failed and was skipped; " +
+                    "continuing with the remaining values.",
+                    SourceDisplayName, resourceType, parameterName, value);
+                continue;
+            }
+
+            foreach (var resource in page)
+            {
+                // The FHIR id alone is enough to dedupe within one resource type — the same resource can legitimately
+                // appear under more than one category value (e.g. an Observation tagged both "vital-signs" and
+                // "smartdata").
+                if (!string.IsNullOrWhiteSpace(resource.ResourceId) && !seenResourceIds.Add(resource.ResourceId))
+                {
+                    continue;
+                }
+
+                mergedResources.Add(resource);
+            }
+        }
+
+        return mergedResources;
+    }
+
+    public async Task<ResourceEnvelope?> ReadByIdAsync(
+        string resourceType,
+        string id,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(source.BaseUrl))
+        {
+            throw new InvalidOperationException($"{SourceDisplayName} base URL is required.");
+        }
+
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        var requestUrl = $"{source.BaseUrl.TrimEnd('/')}/{resourceType}/{Uri.EscapeDataString(id)}";
+        var readQuery = MergeAdditionalQueryParameters(null, source);
+        if (!string.IsNullOrWhiteSpace(readQuery))
+        {
+            requestUrl = $"{requestUrl}?{readQuery}";
+        }
+
+        _logger.LogInformation("{Source} read request: {RequestUrl}", SourceDisplayName, requestUrl);
+
+        using var response = await SendWithRetryAsync(requestUrl, accessToken, source, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(BuildFailureMessage(requestUrl, response, body));
+        }
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        return FhirResourceParser.ParseResource(json);
+    }
+
+    private async Task<IReadOnlyList<ResourceEnvelope>> SearchPagesAsync(
+        string resourceType,
+        FhirSourceConfiguration source,
+        string? searchParameters,
+        string accessToken,
+        CancellationToken cancellationToken)
+    {
         var resources = new List<ResourceEnvelope>();
         var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
@@ -75,11 +181,32 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
                 page + 1,
                 nextUrl);
 
+            // TEMP DEBUG — remove before committing.
+            Console.WriteLine($"===== {SourceDisplayName} search request for {resourceType} (page {page + 1}): {nextUrl}");
+
             using var response = await SendWithRetryAsync(nextUrl, accessToken, source, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var message = await BuildFailureMessageAsync(nextUrl, response, cancellationToken);
-                throw new InvalidOperationException(message);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                var message = BuildFailureMessage(nextUrl, response, body);
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceAuthorizationException(
+                        resourceType, (int)response.StatusCode, message);
+                }
+
+                if (IsNotSupportedOutcome(body))
+                {
+                    throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceNotSupportedException(
+                        resourceType, (int)response.StatusCode, message);
+                }
+
+                // Any other non-success response (e.g. a 400 because this resource type's search parameters
+                // don't satisfy what the server requires) is isolated to this one resource type's request the
+                // same way the two cases above are — skip just this type (or cancel the run, if it's the
+                // cohort-seeding type) rather than failing the whole run over one resource type's bad request.
+                throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException(
+                    resourceType, (int)response.StatusCode, message);
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -97,6 +224,44 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     protected virtual void ConfigureRequestHeaders(HttpRequestMessage request)
     {
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/fhir+json"));
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> NoAdditionalQueryParameters = new Dictionary<string, string>();
+
+    /// <summary>
+    /// Extra query parameters every outbound request (search and read-by-id alike) must carry — e.g. athenahealth's
+    /// mandatory tenant-scoping <c>ah-practice</c> reference. The base adds none; vendor connectors override when
+    /// their FHIR server requires request-level scoping beyond the standard search parameters.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, string> AdditionalQueryParameters(FhirSourceConfiguration source) =>
+        NoAdditionalQueryParameters;
+
+    /// <summary>
+    /// Appends <see cref="AdditionalQueryParameters"/> onto an existing (possibly null) query string, skipping any
+    /// key the caller already supplied. Used by both the search path (merged into the parameters that flow into
+    /// <see cref="BuildSearchUrl"/>) and <see cref="ReadByIdAsync"/> (which otherwise builds no query string at all).
+    /// </summary>
+    private string? MergeAdditionalQueryParameters(string? searchParameters, FhirSourceConfiguration source)
+    {
+        var additional = AdditionalQueryParameters(source);
+        if (additional.Count == 0)
+        {
+            return searchParameters;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        foreach (var (key, value) in additional)
+        {
+            if (ContainsQueryParameter(query, key))
+            {
+                continue;
+            }
+
+            var assignment = $"{key}={value}";
+            query = string.IsNullOrWhiteSpace(query) ? assignment : $"{query}&{assignment}";
+        }
+
+        return string.IsNullOrWhiteSpace(query) ? null : query;
     }
 
     private async Task<HttpResponseMessage> SendWithRetryAsync(
@@ -260,8 +425,14 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// <c>SourceNodeExecutor</c>) OR'd together via a comma-separated reference list. Without either, a provider such
     /// as Epic rejects an unscoped <c>Patient</c> search but every other resource type is left unscoped (pre-existing
     /// behavior — see <c>No_patient_context_leaves_the_query_unscoped</c>). The known patient(s) target their own
-    /// resource(s) by <c>_id</c>; every other resource type is filtered by <c>patient</c>. Caller-supplied parameters
-    /// that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left untouched.
+    /// resource(s) by <c>_id</c>; every other patient-compartment resource type is filtered by <c>patient</c>.
+    /// Resource types outside the patient compartment entirely (see <see cref="PatientCompartmentResourceTypes"/> —
+    /// Practitioner, Organization, Location, ...) reach this method with a clean, already-scrubbed source
+    /// (<c>SourceNodeExecutors</c> clears SearchParameters/PatientIds/PatientSearchCriteria before calling in for
+    /// these), since a <c>patient=</c> search parameter is never meaningful for them — the branch below passes
+    /// their (already-null) SearchParameters through untouched, producing a single bare, unscoped request.
+    /// Caller-supplied parameters that already pin the patient (<c>patient</c>/<c>_id</c>/<c>subject</c>) are left
+    /// untouched.
     /// </summary>
     private async Task<string?> ApplyPatientScopeAsync(
         string resourceType,
@@ -270,6 +441,23 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     {
         var query = source.SearchParameters?.Trim().TrimStart('?') ?? string.Empty;
         var isPatientResource = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase);
+        // Device is not a genuine FHIR-spec patient-compartment member (see PatientCompartmentResourceTypes' own
+        // doc comment) — but Epic's own business-rule validator (code 59108, "A patient is required") rejects an
+        // unscoped Device search anyway. Scoped as an Epic-only addition here rather than added to the shared
+        // domain-level list, since that list is also relied on elsewhere for spec-accurate compartment membership.
+        var requiresEpicPatientScopeBeyondCompartment = source.SourceType == RuntimeSourceType.Epic
+            && string.Equals(resourceType, "Device", StringComparison.OrdinalIgnoreCase);
+        var isCompartmentResource = isPatientResource
+            || PatientCompartmentResourceTypes.IsSupported(resourceType)
+            || requiresEpicPatientScopeBeyondCompartment;
+
+        if (!isCompartmentResource)
+        {
+            // Non-patient-compartment types can't be patient-scoped — connection-level
+            // FhirSourceConfiguration.SearchParameters pass through untouched (SourceNodeExecutors already scrubs
+            // any leftover Patient-search criteria before calling in for one of these, so this is typically null).
+            return source.SearchParameters;
+        }
 
         // A request-time raw search criteria string (e.g. "active=true", "identifier=MRN12345",
         // "family=Smith&given=John", "birthdate=1990-01-01" — from a third-party app's own free-text search box,
@@ -318,29 +506,129 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     }
 
     /// <summary>
-    /// Epic (enforcing the underlying US Core profile) rejects an <c>Observation</c> search with neither
-    /// <c>category</c> nor <c>code</c> present — "Must have either code or category." Defaults to every standard US
-    /// Core Observation category so an otherwise-unscoped Observation fetch still succeeds and returns the full
-    /// breadth of a patient's observations, rather than requiring every caller to separately know and supply this
-    /// Epic/US-Core-specific requirement. A caller-supplied <c>category</c> or <c>code</c> (however that search
-    /// parameter reached <paramref name="searchParameters"/> — connection-level SearchParameters, PatientSearchCriteria,
-    /// etc.) is left untouched. Every other resource type is unaffected.
+    /// Epic (enforcing the underlying US Core profile) rejects an <c>Observation</c> or <c>Condition</c> search with
+    /// neither <c>category</c> nor <c>code</c> present — "Must have either code or category." This table defaults
+    /// every standard US Core category for the resource types that require one, so an otherwise-unscoped fetch still
+    /// succeeds and returns the full breadth of a patient's data, rather than requiring every caller to separately
+    /// know and supply this Epic/US-Core-specific requirement. Medication resource types default to a <c>status</c>
+    /// filter instead, to avoid Epic returning an unbounded/ambiguous set of historical orders. A caller-supplied
+    /// parameter of the same kind (however it reached <paramref name="searchParameters"/> — connection-level
+    /// SearchParameters, PatientSearchCriteria, etc.) is left untouched. Resource types with no entry here are
+    /// unaffected — registry lookup, not a switch/if-chain, so adding a new default is a table entry, not a branch.
     /// </summary>
-    private static string? ApplyDefaultObservationCategory(string resourceType, string? searchParameters)
+    private static readonly IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> EpicDefaultSearchParametersByResourceType =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Observation"] = ("category", "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity,smartdata,core-characteristics"),
+            // The original 4-category default silently missed real US-Core data Epic categorizes under the other
+            // four (infection, medical-history, reason-for-visit, dental) — a Condition search scoped to only the
+            // first four never surfaces them at all, regardless of the single-request-vs-split-per-value fix below.
+            ["Condition"] = ("category", "problem-list-item,health-concern,encounter-diagnosis,genomics,infection,medical-history,reason-for-visit,dental"),
+            ["MedicationRequest"] = ("status", "active,completed,stopped"),
+            ["MedicationAdministration"] = ("status", "completed,in-progress,stopped"),
+            // Epic rejects CarePlan searches with no category at all (business-rule 59159); cover every
+            // category Epic documents so an uncategorized-in-code-but-valid-in-Epic plan is never dropped.
+            ["CarePlan"] = ("category", "38717003,734163000,736271009,736353004,738906000,736378000,719091000000102,inpatient-pathway,409073007,care-path"),
+        };
+
+    /// <summary>
+    /// Per-resource-type default search parameter, applied only when the caller hasn't already supplied that
+    /// parameter (or <c>code</c>) themselves — registry lookup, not a switch/if-chain, so adding a new default is a
+    /// table entry. The base table encodes Epic's US-Core category/status requirements; vendor connectors with
+    /// different per-resource requirements (e.g. athenahealth's <c>MedicationRequest</c> needing <c>intent=order</c>
+    /// instead) override this property with their own table.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType =>
+        EpicDefaultSearchParametersByResourceType;
+
+    /// <summary>
+    /// A second, non-splitting required parameter for a resource type that already has a splitting default above
+    /// — e.g. CarePlan needs both a category (business-rule 59159, split per value — see
+    /// <see cref="DefaultSearchParametersByResourceType"/>) AND a date (business-rule 59108: "activity-date has not
+    /// been provided") on every request. Unlike category/status, a date requirement has no enum of values to split
+    /// by — Epic only requires it be present — so it's applied once, unconditionally, alongside whichever category
+    /// value a given split request is using, rather than being another axis to split on.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> EpicAdditionalRequiredParametersByResourceType =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            // ge1900-01-01 is a deliberately wide-open lower bound — satisfies Epic's presence requirement
+            // (its own internal name for this parameter is "activity-date") without narrowing the result the
+            // way a real, meaningful date range would.
+            ["CarePlan"] = ("date", "ge1900-01-01"),
+        };
+
+    /// <summary>See <see cref="EpicAdditionalRequiredParametersByResourceType"/>. Vendor connectors with different
+    /// per-resource requirements override this property with their own table, same as
+    /// <see cref="DefaultSearchParametersByResourceType"/>.</summary>
+    protected virtual IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> AdditionalRequiredParametersByResourceType =>
+        EpicAdditionalRequiredParametersByResourceType;
+
+    /// <summary>Unconditionally appends this resource type's additional required parameter (see
+    /// <see cref="AdditionalRequiredParametersByResourceType"/>) when the caller hasn't already supplied it —
+    /// applied to both the non-split path and every individual request the category/status split produces, since
+    /// it's a presence requirement independent of whatever value is being split on.</summary>
+    private string? ApplyAdditionalRequiredParameters(string resourceType, string? searchParameters)
     {
-        if (!string.Equals(resourceType, "Observation", StringComparison.OrdinalIgnoreCase))
+        if (!AdditionalRequiredParametersByResourceType.TryGetValue(resourceType, out var required))
         {
             return searchParameters;
         }
 
         var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
-        if (ContainsQueryParameter(query, "category") || ContainsQueryParameter(query, "code"))
+        if (ContainsQueryParameter(query, required.ParameterName))
         {
             return searchParameters;
         }
 
-        const string defaultCategories = "social-history,vital-signs,imaging,laboratory,procedure,survey,exam,therapy,activity";
-        return string.IsNullOrWhiteSpace(query) ? $"category={defaultCategories}" : $"{query}&category={defaultCategories}";
+        var assignment = $"{required.ParameterName}={required.DefaultValue}";
+        return string.IsNullOrWhiteSpace(query) ? assignment : $"{query}&{assignment}";
+    }
+
+    private string? ApplyDefaultSearchParameters(string resourceType, string? searchParameters)
+    {
+        if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))
+        {
+            return searchParameters;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, defaultParameter.ParameterName) ||
+            ContainsQueryParameter(query, "code"))
+        {
+            return searchParameters;
+        }
+
+        var defaultAssignment = $"{defaultParameter.ParameterName}={defaultParameter.DefaultValue}";
+        return string.IsNullOrWhiteSpace(query) ? defaultAssignment : $"{query}&{defaultAssignment}";
+    }
+
+    /// <summary>
+    /// Returns one <c>(parameterName, value)</c> pair per value in this resource type's default parameter (see
+    /// <see cref="DefaultSearchParametersByResourceType"/>), so <see cref="SearchAsync"/> can issue a separate
+    /// request per value and merge the results — instead of one request with every value comma-joined, which Epic
+    /// (and potentially other EHRs) doesn't OR together the way a single combined query would assume. Returns null
+    /// when this resource type has no default parameter, or the caller already supplied that parameter (or
+    /// <c>code</c>) themselves — same "don't override caller-supplied criteria" rule <see cref="ApplyDefaultSearchParameters"/>
+    /// already follows, just checked here first since the split path bypasses that method entirely.
+    /// </summary>
+    private IReadOnlyList<(string ParameterName, string Value)>? GetDefaultParameterValuesToSplit(
+        string resourceType, string? searchParameters)
+    {
+        if (!DefaultSearchParametersByResourceType.TryGetValue(resourceType, out var defaultParameter))
+        {
+            return null;
+        }
+
+        var query = searchParameters?.Trim().TrimStart('?') ?? string.Empty;
+        if (ContainsQueryParameter(query, defaultParameter.ParameterName) ||
+            ContainsQueryParameter(query, "code"))
+        {
+            return null;
+        }
+
+        var values = defaultParameter.DefaultValue.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return values.Select(value => (defaultParameter.ParameterName, value)).ToList();
     }
 
     /// <summary>
@@ -368,12 +656,11 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
     }
 
-    private async Task<string> BuildFailureMessageAsync(
+    private string BuildFailureMessage(
         string requestUrl,
         HttpResponseMessage response,
-        CancellationToken cancellationToken)
+        string body)
     {
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var message = $"{SourceDisplayName} request returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {RedactRequestUrl(requestUrl)}.";
 
         if (string.IsNullOrWhiteSpace(body))
@@ -381,13 +668,55 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             return message;
         }
 
-        body = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
-        if (body.Length > 1000)
+        var redactedBody = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
+        if (redactedBody.Length > 1000)
         {
-            body = body[..1000] + "...";
+            redactedBody = redactedBody[..1000] + "...";
         }
 
-        return $"{message} Response body: {body}";
+        return $"{message} Response body: {redactedBody}";
+    }
+
+    /// <summary>
+    /// True when the failed response body is a FHIR <c>OperationOutcome</c> carrying a <c>not-supported</c> issue
+    /// code — e.g. Epic returning 400 for a resource type the tenant's app registration doesn't expose. Distinct
+    /// from a 401/403 (this app isn't authorized) so callers can isolate "this resource type doesn't exist here"
+    /// without treating it as a transient failure worth retrying.
+    /// </summary>
+    private static bool IsNotSupportedOutcome(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("issue", out var issues) ||
+                issues.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var issue in issues.EnumerateArray())
+            {
+                if (issue.TryGetProperty("code", out var code) &&
+                    code.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    string.Equals(code.GetString(), "not-supported", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 
     private static string RedactRequestUrl(string requestUrl)

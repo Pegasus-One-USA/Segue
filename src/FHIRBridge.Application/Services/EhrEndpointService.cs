@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
@@ -10,43 +11,66 @@ namespace FHIRBridge.Application.Services;
 public sealed class EhrEndpointService : IEhrEndpointService
 {
     private readonly IEhrEndpointRepository _repository;
+    private readonly IUserDisplayNameResolver _userDisplayNameResolver;
 
-    public EhrEndpointService(IEhrEndpointRepository repository)
+    public EhrEndpointService(IEhrEndpointRepository repository, IUserDisplayNameResolver userDisplayNameResolver)
     {
         _repository = repository;
+        _userDisplayNameResolver = userDisplayNameResolver;
     }
 
     public async Task<IReadOnlyList<EhrEndpointDto>> GetAllAsync(CancellationToken cancellationToken)
     {
         var endpoints = await _repository.GetAllAsync(cancellationToken);
-        return endpoints.Select(EhrEndpointMapper.ToDto).ToArray();
+        var dtos = endpoints.Select(EhrEndpointMapper.ToDto).ToArray();
+        return await ResolveDisplayNamesAsync(dtos, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<PublicEhrEpicEndpointDto>> GetPublicEpicEndpointsAsync(
-        string? search, CancellationToken cancellationToken)
+    /// <summary>Resolves each DTO's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/system string
+    /// predating that) to a display name, in one batched lookup rather than one per row.</summary>
+    private async Task<IReadOnlyList<EhrEndpointDto>> ResolveDisplayNamesAsync(
+        IReadOnlyList<EhrEndpointDto> dtos, CancellationToken cancellationToken)
     {
-        var endpoints = await _repository.GetByEndpointTypeAsync(EhrEndpointType.Epic, search, cancellationToken);
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
+
+        return dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+            ModifiedBy = dto.ModifiedBy is { } modifiedBy ? names.GetValueOrDefault(modifiedBy, modifiedBy) : null,
+        }).ToArray();
+    }
+
+    public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
+        EhrEndpointType endpointType, string? search, CancellationToken cancellationToken)
+    {
+        var endpoints = await _repository.GetPublicAsync(endpointType, search, cancellationToken);
         return endpoints
-            .Take(PublicEpicEndpointsResultCap)
-            .Select(x => new PublicEhrEpicEndpointDto(x.Id, x.Name, x.FhirBaseUrl, x.Status))
+            .Take(PublicEndpointsResultCap)
+            .Select(x => new PublicEhrEndpointDto(x.Id, x.Name, x.FhirBaseUrl, x.Status))
             .ToArray();
     }
 
-    // The Epic-type set is a handful of rows today, but this same anonymous listing/search path would also serve a
-    // much larger directory (e.g. MyChart's 480+ rows) if ever pointed at it — cap the response instead of assuming
-    // "small" stays true.
-    private const int PublicEpicEndpointsResultCap = 50;
+    // The directory can be in the hundreds of rows (e.g. the MyChart set alone) — cap the response rather than
+    // assume "small" stays true.
+    private const int PublicEndpointsResultCap = 50;
 
     public async Task<EhrEndpointDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         var endpoint = await _repository.GetByIdAsync(id, cancellationToken);
-        return endpoint is null ? null : EhrEndpointMapper.ToDto(endpoint);
+        if (endpoint is null)
+        {
+            return null;
+        }
+
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
-    public async Task<bool> IsEpicEndpointAsync(Guid ehrEndpointId, CancellationToken cancellationToken)
+    public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken)
     {
         var endpoint = await _repository.GetByIdAsync(ehrEndpointId, cancellationToken);
-        return endpoint is not null && endpoint.EndpointType == EhrEndpointType.Epic;
+        return endpoint is not null && endpoint.EndpointType == endpointType;
     }
 
     public async Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken)
@@ -63,7 +87,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
 
         await _repository.AddAsync(endpoint, cancellationToken);
 
-        return EhrEndpointMapper.ToDto(endpoint);
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
     public async Task<EhrEndpointDto> UpdateAsync(Guid id, CreateEhrEndpointRequest request, CancellationToken cancellationToken)
@@ -81,7 +106,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
 
         await _repository.UpdateAsync(endpoint, cancellationToken);
 
-        return EhrEndpointMapper.ToDto(endpoint);
+        var resolved = await ResolveDisplayNamesAsync([EhrEndpointMapper.ToDto(endpoint)], cancellationToken);
+        return resolved[0];
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)

@@ -1,0 +1,406 @@
+import { Component, inject, signal, computed, effect, untracked, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { CommonModule } from '@angular/common';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
+import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
+import { MappingProfileService } from '../../services/mapping-profile.service';
+import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
+import {
+  ArrayPolicyType,
+  CreateMappingProfileRequest,
+  MappingFieldDto,
+  MappingProfileDto,
+  MappingValueType,
+} from '../../models/mapping-profile.model';
+import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
+import { DestinationType } from '../../../destination-connections/models/destination-configuration.model';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+
+export interface MappingProfileDialogData {
+  mode: 'create' | 'edit' | 'view';
+  mappingProfile?: MappingProfileDto;
+}
+
+interface NamedEntity {
+  id: string;
+  name: string;
+  destinationType?: DestinationType;
+}
+
+/** Which of MappingProfileFormComponent's destType branches a saved destination's real (22-value) DestinationType
+ *  should render as — mirrors destination-connection-dialog.component.ts's toFormType/toEngine, widened to cover
+ *  Mongo too. Every type this screen has no dedicated branch for (Snowflake, S3, Ndjson, ...) falls back to
+ *  'csv' — free-text target-field entry, no live column verification, which is what those types get in the
+ *  destination wizard today as well (§2 of the plan: "Mapping-owned ... free text").
+ */
+function toDestKind(t: DestinationType | undefined): 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' {
+  if (t === 'SqlServer' || t === 'AzureSql') return 'sql';
+  if (t === 'MySql') return 'mysql';
+  if (t === 'PostgreSql') return 'postgres';
+  if (t === 'Mongo') return 'mongo';
+  return 'csv';
+}
+
+/** MappingFieldDto -> MappingRow (docs/backend/14-mapping-profile-master-screen-plan.md §3.2 translation table). */
+function toMappingRow(resourceType: string, destinationObject: string, f: MappingFieldDto): MappingRow {
+  const rawPath = f.jsonPath.replace(/^\$\.?/, '').replace(/\[\*\]/g, '');
+  const fhirPath = rawPath ? `${resourceType}.${rawPath}` : `${resourceType}.${f.targetField}`;
+  const fieldLabel = rawPath
+    ? rawPath.split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')
+    : f.targetField;
+
+  return {
+    resource: resourceType,
+    fieldLabel,
+    fhirPath,
+    targetName: f.targetField,
+    tableName: destinationObject,
+    jsonPath: f.jsonPath,
+    valueType: f.valueType,
+    arrays: f.arrayAncestors ?? undefined,
+    isUpsertKey: f.isUpsertKey ?? false,
+    isRequired: f.isRequired,
+    defaultValue: f.defaultValue ?? undefined,
+    format: f.format ?? undefined,
+    normalizationType: f.normalizationType ?? undefined,
+    terminologySystemJsonPath: f.terminologySystemJsonPath ?? undefined,
+    terminologyCodeJsonPath: f.terminologyCodeJsonPath ?? undefined,
+    arrayPolicy: f.arrayPolicy,
+    cardinality: f.cardinality ?? undefined,
+    correlationCodeJsonPath: f.correlationCodeJsonPath ?? undefined,
+    correlationCodeValue: f.correlationCodeValue ?? undefined,
+    isEnabled: f.isEnabled,
+  };
+}
+
+/** Reverse of toMappingRow — MappingRow -> MappingFieldDto for the save request. */
+function toMappingFieldDto(row: MappingRow): MappingFieldDto {
+  return {
+    targetField: row.targetName,
+    jsonPath: row.jsonPath ?? '',
+    valueType: (row.valueType as MappingValueType) ?? 'String',
+    isRequired: row.isRequired ?? row.isUpsertKey,
+    defaultValue: row.defaultValue ?? null,
+    format: row.format ?? null,
+    normalizationType: row.normalizationType ?? null,
+    terminologySystemJsonPath: row.terminologySystemJsonPath ?? null,
+    terminologyCodeJsonPath: row.terminologyCodeJsonPath ?? null,
+    arrayPolicy: (row.arrayPolicy as ArrayPolicyType) ?? 'Scalar',
+    cardinality: row.cardinality ?? null,
+    arrayAncestors: row.arrays && row.arrays.length > 0 ? row.arrays : null,
+    isUpsertKey: row.isUpsertKey,
+    correlationCodeJsonPath: row.correlationCodeJsonPath ?? null,
+    correlationCodeValue: row.correlationCodeValue ?? null,
+    isEnabled: row.isEnabled ?? true,
+  };
+}
+
+/**
+ * Create/edit/view dialog for a single MappingProfile — embeds MappingProfileFormComponent for the field-level
+ * editing (docs/backend/14-mapping-profile-master-screen-plan.md §5.1/§5.2), the same viewChild()+read-signals
+ * pattern DestinationConnectionDialogComponent uses for its own embedded form. This screen is the ONE place the
+ * advanced MappingFieldDto members (IsRequired, DefaultValue, ArrayPolicy, CorrelateByCode, ...) are reachable —
+ * the destination wizard has no UI for them.
+ *
+ * No live schema probe here (unlike the wizard's SQL step, this dialog never has decrypted destination
+ * credentials to test a connection with) — Destination Object is always free text, and MappingProfileFormComponent
+ * renders every destination type's mapping table in its no-live-schema fallback mode.
+ */
+@Component({
+  selector: 'app-mapping-profile-dialog',
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileCanvasComponent],
+  templateUrl: './mapping-profile-dialog.component.html',
+  styleUrl: './mapping-profile-dialog.component.scss',
+})
+export class MappingProfileDialogComponent {
+  private readonly fb = inject(FormBuilder);
+  private readonly http = inject(HttpClient);
+  private readonly svc = inject(MappingProfileService);
+  private readonly schemaSvc = inject(DestinationSchemaService);
+  private readonly dialogRef = inject(MatDialogRef<MappingProfileDialogComponent>);
+  private readonly actionGuard = inject(PermissionActionGuard);
+  readonly data = inject<MappingProfileDialogData>(MAT_DIALOG_DATA);
+
+  readonly mappingForm = viewChild(MappingProfileCanvasComponent);
+
+  /** Toggles the dialog between its normal size and true edge-to-edge fullscreen — same maximize
+   *  affordance NodeLibraryDialogComponent's own header offers, adapted to a MatDialogRef. updateSize()
+   *  alone would still leave Material's own dialog-surface padding/border-radius/box-shadow visible
+   *  (not truly fullscreen, just a bigger centered card) — the 'mpd-fullscreen' panel class (see this
+   *  component's .scss) strips those too. */
+  readonly isMaximized = signal(false);
+  toggleMaximize(): void {
+    const next = !this.isMaximized();
+    this.isMaximized.set(next);
+    this.dialogRef.updateSize(next ? '100vw' : 'min(92vw, 1100px)', next ? '100vh' : 'min(88vh, 740px)');
+    if (next) this.dialogRef.addPanelClass('mpd-fullscreen');
+    else this.dialogRef.removePanelClass('mpd-fullscreen');
+  }
+
+  readonly mode = this.data.mode;
+  readonly isCreate = this.mode === 'create';
+  readonly isView = this.mode === 'view';
+
+  // The dropdown used to be scoped to FHIR_RESOURCES (the MVP1 11-resource subset the source-connection
+  // scope picker still uses) — Mapping Profiles has no such scoping reason to hide the rest of what the
+  // backend actually catalogs a template for, so this offers every resource in SUPPORTED_RESOURCE_TYPES
+  // (kept in sync with SupportedFhirResourceTypes.All) instead.
+  readonly resourceTypeOptions = SUPPORTED_RESOURCE_TYPES;
+  readonly sourceOptions = signal<NamedEntity[]>([]);
+  readonly destinationOptions = signal<NamedEntity[]>([]);
+
+  readonly metaForm = this.fb.group({
+    name: [this.data.mappingProfile?.name ?? '', [Validators.required]],
+    resourceType: [this.data.mappingProfile?.resourceType ?? '', [Validators.required]],
+    sourceConnectionId: [this.data.mappingProfile?.sourceConnectionId ?? '', [Validators.required]],
+    destinationId: [this.data.mappingProfile?.destinationId ?? '', [Validators.required]],
+    destinationObject: [this.data.mappingProfile?.destinationObject ?? '', [Validators.required]],
+    isEnabled: [this.data.mappingProfile?.isEnabled ?? true],
+  });
+
+  // Reactive-forms values aren't signals — reading metaForm.controls.destinationId.value directly inside a
+  // computed() would never re-trigger it on a later selection change (computed only tracks signal reads taken
+  // during its own evaluation, and a plain FormControl getter isn't one). toSignal() bridges valueChanges into
+  // a real signal so selectedDestinationType/destType actually update when the dropdown changes.
+  private readonly destinationIdValue = toSignal(this.metaForm.controls.destinationId.valueChanges, {
+    initialValue: this.metaForm.controls.destinationId.value,
+  });
+
+  readonly selectedDestinationType = computed<DestinationType | undefined>(() =>
+    this.destinationOptions().find(d => d.id === this.destinationIdValue())?.destinationType,
+  );
+  readonly destType = computed(() => toDestKind(this.selectedDestinationType()));
+
+  /** Human-readable label for the header's destination-type badge — a handful of common types get a real
+   *  display name (matching how the destination wizard itself labels them); anything else (Snowflake,
+   *  BlobStorage, ...) falls back to space-separating the PascalCase DestinationType value itself rather
+   *  than needing an entry for all 22. */
+  private static readonly DEST_TYPE_LABELS: Partial<Record<DestinationType, string>> = {
+    SqlServer: 'SQL Server', AzureSql: 'Azure SQL', MySql: 'MySQL', PostgreSql: 'PostgreSQL',
+    Mongo: 'MongoDB', Csv: 'CSV', Sftp: 'SFTP', RestApi: 'REST API', FhirRepository: 'FHIR Repository',
+  };
+  readonly destTypeLabel = computed<string | null>(() => {
+    const t = this.selectedDestinationType();
+    if (!t) return null;
+    return MappingProfileDialogComponent.DEST_TYPE_LABELS[t] ?? t.replace(/([a-z])([A-Z])/g, '$1 $2');
+  });
+
+  /** Live field-mapping count for the header badge — reads straight off the embedded canvas's own row
+   *  state (already public, see MappingProfileCanvasComponent.rowsRich) rather than duplicating it here. */
+  readonly mappingCount = computed(() => this.mappingForm()?.rowsRich().length ?? 0);
+
+  /** Live tables/columns of the selected destination, introspected server-side from its stored secret — empty
+   *  for a non-relational destination type or before one is selected. Feeds MappingProfileFormComponent's
+   *  [sqlTables] so the SQL column pickers show real columns instead of always falling back to free text. */
+  readonly sqlTables = signal<DestinationTable[]>([]);
+
+  readonly initialRows = computed<MappingRow[]>(() => {
+    const profile = this.data.mappingProfile;
+    if (!profile) return [];
+    return profile.fields.map(f => toMappingRow(profile.resourceType, profile.destinationObject, f));
+  });
+
+  /** Seeds MappingProfileFormComponent's per-resource table/target picker with whatever Destination Object
+   *  already holds (edit mode's saved value), so the picker starts aligned with the meta field instead of blank. */
+  readonly initialTargets = computed<Record<string, string>>(() => {
+    const profile = this.data.mappingProfile;
+    return profile ? { [profile.resourceType]: profile.destinationObject } : {};
+  });
+
+  readonly saving = signal(false);
+  readonly errorMessage = signal<string | null>(null);
+  /** Per-row problems found by validateMappingForSave, rendered as a blocking list right above the
+   *  canvas — kept separate from errorMessage (a single generic line) since there can be several of
+   *  these at once and each names the exact field/table at fault. */
+  readonly mappingErrors = signal<string[]>([]);
+
+  constructor() {
+    this.http.get<NamedEntity[]>(SOURCE_CONNECTIONS_ENDPOINTS.list).subscribe({
+      next: sources => this.sourceOptions.set(sources),
+      error: () => this.sourceOptions.set([]),
+    });
+    this.http.get<NamedEntity[]>(DESTINATION_ENDPOINTS.list).subscribe({
+      next: destinations => this.destinationOptions.set(destinations),
+      error: () => this.destinationOptions.set([]),
+    });
+
+    if (this.isView) {
+      this.metaForm.disable({ emitEvent: false });
+    }
+
+    effect(() => {
+      const destinationId = this.destinationIdValue();
+      untracked(() => this._loadSchemaFor(destinationId));
+    });
+  }
+
+  private _loadSchemaFor(destinationId: string | null | undefined): void {
+    if (!destinationId) {
+      this.sqlTables.set([]);
+      return;
+    }
+    this.schemaSvc.getSchema(destinationId).subscribe({
+      next: res => this.sqlTables.set(res.tables),
+      error: () => this.sqlTables.set([]),
+    });
+  }
+
+  cancel(): void {
+    this.dialogRef.close(false);
+  }
+
+  save(): void {
+    // Defense-in-depth: MappingProfileListComponent.openNew()/openEdit() already checked before this
+    // dialog opened — re-checked here against a permission change landing mid-edit.
+    const requiredCode = this.isCreate ? 'mappingprofiles.create' : 'mappingprofiles.edit';
+    if (!this.actionGuard.ensure(requiredCode, `You do not have permission to ${this.isCreate ? 'create' : 'edit'} mapping profiles.`)) return;
+    this.errorMessage.set(null);
+    this.mappingErrors.set([]);
+
+    if (this.metaForm.invalid) {
+      this.metaForm.markAllAsTouched();
+      return;
+    }
+
+    const rows = this.mappingForm()?.getRows() ?? [];
+    if (rows.length === 0) {
+      this.errorMessage.set('Map at least one field before saving.');
+      return;
+    }
+
+    const mappingErrors = this.validateMappingForSave();
+    if (mappingErrors.length > 0) {
+      this.mappingErrors.set(mappingErrors);
+      return;
+    }
+
+    const v = this.metaForm.getRawValue();
+    // For a SQL-family destination, MappingProfileFormComponent's own per-resource table dropdown (fed by
+    // sqlTables()) is the authoritative pick — it can differ from whatever is still typed in the Destination
+    // Object field above if the user picked a table there instead of editing that field directly.
+    const pickedTarget = this.mappingForm()?.targetByResource()[v.resourceType!];
+    const request: CreateMappingProfileRequest = {
+      name: v.name!,
+      resourceType: v.resourceType!,
+      sourceConnectionId: v.sourceConnectionId!,
+      destinationId: v.destinationId!,
+      destinationObject: pickedTarget || v.destinationObject!,
+      fields: rows.map(toMappingFieldDto),
+    };
+
+    this.saving.set(true);
+    const action = this.isCreate
+      ? this.svc.create(request)
+      : this.svc.update(this.data.mappingProfile!.id, request);
+
+    action.subscribe({
+      next: result => {
+        this.saving.set(false);
+        this.dialogRef.close(result);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.errorMessage.set(err.error?.message ?? 'Failed to save the mapping profile.');
+      },
+    });
+  }
+
+  /** Mirrors DestinationWizardComponent.validateMappingForSave — the same class of mistakes (a target
+   *  row never actually wired to a source, a row left pointed at a table/column the live schema no
+   *  longer has, a row targeting an identity/computed or foreign-key column, two fields both writing the
+   *  same column) checked there before its own canvas's "Save" is allowed through. This dialog hosts the
+   *  identical FieldMappingCanvasComponent (see
+   *  MappingProfileCanvasComponent's own doc comment) so it's exposed to exactly the same failure modes,
+   *  just with no equivalent check of its own until now. Reads the canvas's rich rows (rowsRich(), not
+   *  getRows()'s already-flattened output) because "no source wired" and "no source group picked" are
+   *  properties of the rich row's mode/sources/childNodeId — information serializeRowsFlat has already
+   *  collapsed away by the time getRows() returns. */
+  private validateMappingForSave(): string[] {
+    const errors: string[] = [];
+    const rows = this.mappingForm()?.rowsRich() ?? [];
+    if (rows.length === 0) return errors;
+
+    const isSqlFamily = this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres';
+    const tables = this.sqlTables();
+    const knownTables = isSqlFamily && tables.length > 0 ? new Set(tables.map(t => t.fullName)) : null;
+    const targetCounts = new Map<string, number>();
+
+    for (const row of rows) {
+      const label = row.targetName || '(unnamed field)';
+      const table = row.tableName || 'the destination';
+
+      if (row.mode === 'value' && row.sources.length === 0) {
+        errors.push(`"${label}" on ${table} has no source field selected.`);
+        continue;
+      }
+      if (row.mode === 'childJson' && !row.childNodeId) {
+        errors.push(`"${label}" on ${table} has no source group selected.`);
+        continue;
+      }
+      if (!row.targetName) {
+        errors.push(`A mapped field on ${table} has no destination column selected.`);
+        continue;
+      }
+
+      if (knownTables && !knownTables.has(row.tableName)) {
+        errors.push(`${row.tableName} no longer exists in the destination database — remove or retarget "${label}".`);
+        continue;
+      }
+      if (knownTables) {
+        const schemaTable = tables.find(t => t.fullName === row.tableName);
+        const schemaColumn = schemaTable?.columns.find(c => c.name === row.targetName);
+        if (schemaTable && !schemaColumn) {
+          errors.push(`"${label}" no longer exists in ${row.tableName}'s columns.`);
+          continue;
+        }
+        // Belt-and-suspenders for a row wired before FieldMappingCanvasComponent.completeMapping
+        // started guarding against these (or restored from an older/legacy snapshot) — the column's
+        // value is filled in automatically regardless (by the database for isAutoGenerated, by the
+        // mapping engine's own child-table relationship resolution for isForeignKey), so a direct
+        // write to it is never valid.
+        if (schemaColumn?.isAutoGenerated) {
+          errors.push(`"${label}" is an identity or computed column in ${row.tableName} and cannot be a mapping write target — remove or retarget this field.`);
+          continue;
+        }
+        if (schemaColumn?.isForeignKey) {
+          errors.push(`"${label}" is a foreign key on ${row.tableName}${schemaColumn.references ? ` (→ ${schemaColumn.references})` : ''} — it's populated automatically from that relationship and cannot be a mapping write target. Remove or retarget this field.`);
+          continue;
+        }
+        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
+        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
+        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
+        // mismatch is caught on this dialog's own Save instead of only surfacing once the whole workflow is
+        // saved. childJson rows are exempt — their value is always written as JSON text, a distinct concern
+        // from a scalar field's own type.
+        if (schemaColumn?.mappingValueType && row.mode === 'value') {
+          const sourceValueType = row.sources[0]?.valueType;
+          if (sourceValueType && sourceValueType.toLowerCase() !== schemaColumn.mappingValueType.toLowerCase()) {
+            errors.push(
+              `"${label}" on ${row.tableName} is a ${schemaColumn.dataType} column (expects ${schemaColumn.mappingValueType}), ` +
+                `but "${row.sources[0]?.label ?? label}" is mapped as ${sourceValueType} — pick a compatible ` +
+                `source field or retarget to a ${sourceValueType}-compatible column.`,
+            );
+            continue;
+          }
+        }
+      }
+
+      const key = `${row.tableName}::${row.targetName}`;
+      targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
+    }
+
+    for (const [key, count] of targetCounts) {
+      if (count <= 1) continue;
+      const [tableName, targetName] = key.split('::');
+      errors.push(`${tableName}.${targetName} is mapped ${count} times — only one mapping would actually be written.`);
+    }
+
+    return errors;
+  }
+}

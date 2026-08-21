@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Infrastructure.Security;
@@ -10,7 +11,7 @@ namespace FHIRBridge.Infrastructure.Security;
 /// path) -- same read-then-config-fallback shape as <see cref="CompositeSecretProvider"/>, without the
 /// <c>FHIRBridgeDbContext</c> dependency that path doesn't register. Not durable across restarts.
 /// </summary>
-public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider
+public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider, IAppSecretMetadataProvider
 {
     private readonly ConcurrentDictionary<(string KeyVaultName, string SecretName), string> _secrets = new();
     private readonly IConfiguration _configuration;
@@ -36,10 +37,20 @@ public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider
         var configured = _configuration[$"Secrets:{secretReference.KeyVaultName}:{secretReference.SecretName}"];
         if (string.IsNullOrEmpty(configured))
         {
-            throw new InvalidOperationException(
-                $"No secret configured for '{secretReference.KeyVaultName}/{secretReference.SecretName}'.");
+            // Must match what AppSecretProvisioner.EnsureSecretAsync catches to auto-generate a first-boot value —
+            // this store's whole reason for existing (see the class remarks) is standing in for DbSecretStore on
+            // the InMemory path, so a "not found" here has to look like the same "not found" DbSecretStore's
+            // CompositeSecretProvider path reports, not a distinct exception type the provisioner never catches.
+            throw new SecretNotConfiguredException(secretReference.SecretName, secretReference.KeyVaultName);
         }
 
         return Task.FromResult(configured);
+    }
+
+    /// <summary>No write timestamps are tracked in-process, so only presence is reported.</summary>
+    public Task<ProvisionedSecretMetadata> GetMetadataAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        var provisioned = _secrets.ContainsKey((secretReference.KeyVaultName, secretReference.SecretName));
+        return Task.FromResult(new ProvisionedSecretMetadata(provisioned, null));
     }
 }

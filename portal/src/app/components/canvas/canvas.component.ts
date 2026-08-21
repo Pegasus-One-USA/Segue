@@ -5,12 +5,17 @@ import { PipelineStore } from '../../services/pipeline.store';
 import { CanvasService } from '../../services/canvas.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityService } from '../../services/applicability.service';
-import { CanvasNode } from '../../models/node.model';
+import { CanvasNode, TransformNode } from '../../models/node.model';
 import { SourceNodeComponent } from '../nodes/source-node/source-node.component';
 import { TransformNodeComponent } from '../nodes/transform-node/transform-node.component';
 import { MergeNodeComponent } from '../nodes/merge-node/merge-node.component';
 import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors.component';
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
+import { PermissionService } from '../../auth/services/permission.service';
+import { sourceFormKeyForNode } from '../node-library/source-node-vendor.util';
+import { NodeCatalogService } from '../../services/node-catalog.service';
+import { actionCode } from '../../models/node-catalog.model';
+import { SOURCE_ID_TO_TYPE, DESTINATION_ID_TO_TYPE } from '../../data/node-catalog-legacy-ids';
 
 @Component({
   selector: 'app-canvas',
@@ -26,13 +31,19 @@ import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
   styleUrl: './canvas.component.scss',
 })
 export class CanvasComponent {
-  protected readonly store   = inject(PipelineStore);
-  protected readonly canvas  = inject(CanvasService);
-  protected readonly toast   = inject(ToastService);
-  protected readonly appSvc  = inject(ApplicabilityService);
+  protected readonly store       = inject(PipelineStore);
+  protected readonly canvas      = inject(CanvasService);
+  protected readonly toast       = inject(ToastService);
+  protected readonly appSvc      = inject(ApplicabilityService);
+  private readonly permissions   = inject(PermissionService);
+  private readonly nodeCatalog   = inject(NodeCatalogService);
+
+  constructor() {
+    this.nodeCatalog.ensureLoaded();
+  }
 
   // ── events upward ─────────────────────────────────────────────────────────
-  readonly openWizard          = output<string | undefined>();
+  readonly openWizard          = output<string>();
   readonly openTransformPicker = output<string>();
   readonly openSourcePicker    = output<void>();
   /** Node-level "Copy checkpoint URL" (Phase 1) — the parent owns the saved workflow id, so it makes the API call. */
@@ -40,6 +51,12 @@ export class CanvasComponent {
 
   /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
   readonly workflowSaved = input<boolean>(false);
+
+  /** True when the current role lacks the permission to mutate THIS workflow (workflow.create for a
+   *  brand-new one, workflow.edit for an existing one — see WorkflowBuilderComponent.canMutate). Hides
+   *  every canvas action that would change the graph (add/delete/paste/checkpoint-toggle); viewing and
+   *  panning/zooming/opening a node's config to look at it stay available either way. */
+  readonly readOnly = input<boolean>(false);
 
   // ── computed view helpers ─────────────────────────────────────────────────
   protected readonly nodes    = this.store.nodes;
@@ -149,8 +166,49 @@ export class CanvasComponent {
   // ── node delete (with confirmation) ──────────────────────────────────────
   protected readonly pendingDeleteId = signal<string | null>(null);
 
+  // Removing a node from the canvas requires BOTH workflow.edit/create (readOnly(), checked first) AND
+  // that node's own vendor `.delete` permission (epic.delete, sqlserver.delete, ...) — the same AND
+  // pattern Add/Edit already use (onSourceSelected/onTransformSelected in workflow-builder.component.ts
+  // each check canMutate() AND the vendor's create/edit). This is a DIFFERENT action from deleting the
+  // underlying stored Source/Destination Connection in Settings (SourceConnectionsController.cs/
+  // ConfigurationsController.cs's DELETE endpoints, which additionally require sourceconnections.delete/
+  // destinationconnections.delete) — the two share the same vendor code by design, not by accident: both
+  // are "can this role delete Epic-related things," just at two different scopes. See
+  // WorkflowEndpoints.cs's /workflows/build node-removal check for the backend half of this same rule.
   onNodeDelete(nodeId: string): void {
+    if (this.readOnly()) return;
+    // The template already hides this action's trigger when canDeleteNode() is false (see
+    // ctxNodeCanDelete()/each node component's own [canDelete] input) — this re-check is defense-in-depth
+    // against a permission revoked in another tab since the menu/icon last rendered, not the primary gate.
+    if (!this.canDeleteNode(nodeId)) {
+      this.toast.show('Not permitted', "You don't have permission to remove this node from the workflow.");
+      return;
+    }
     this.pendingDeleteId.set(nodeId);
+  }
+
+  /** Resolves the node's vendor (via source-node-vendor.util.ts for a source node, the Node Catalog for
+   *  a destination node) and checks its `.delete` permission. Merge nodes and any node whose vendor can't
+   *  be resolved have no vendor-level delete gate — always deletable once past readOnly(), same as before
+   *  this check existed. Kept public (not private) so the template can also use it to HIDE the Delete
+   *  affordance up front — this is a defense-in-depth re-check for the click itself (e.g. a permission
+   *  revoked in another tab since the menu was last rendered), not the primary gate. */
+  protected canDeleteNode(nodeId: string): boolean {
+    const node = this.store.byId(nodeId);
+    if (!node) return true;
+
+    let entry;
+    if (node.kind === 'transform') {
+      const type = DESTINATION_ID_TO_TYPE[(node as TransformNode).transformId];
+      entry = type ? this.nodeCatalog.find('Destination', type) : undefined;
+    } else if (node.kind === undefined) {
+      const type = SOURCE_ID_TO_TYPE[sourceFormKeyForNode(node)];
+      entry = type ? this.nodeCatalog.find('Source', type) : undefined;
+    }
+    if (!entry) return true;
+
+    const code = actionCode(entry, 'Delete');
+    return !code || this.permissions.hasPermission(code);
   }
 
   confirmDelete(): void {
@@ -176,6 +234,7 @@ export class CanvasComponent {
 
   // ── add transform picker ──────────────────────────────────────────────────
   onAddNext(nodeId: string): void {
+    if (this.readOnly()) return;
     this.openTransformPicker.emit(nodeId);
   }
 
@@ -203,6 +262,9 @@ export class CanvasComponent {
     const nodeEl = el.closest('[data-node-id]') as HTMLElement | null;
     if (nodeEl?.dataset['nodeId']) {
       this.ctxMenu.set({ type: 'node', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y, nodeId: nodeEl.dataset['nodeId'] });
+    } else if (this.readOnly()) {
+      // Empty-canvas menu has nothing but "Add module"/"Paste", both mutating — skip opening it
+      // rather than popping up an empty menu.
     } else {
       this.ctxMenu.set({ type: 'canvas', x: e.clientX, y: e.clientY, flowX: flow.x, flowY: flow.y });
     }
@@ -221,6 +283,7 @@ export class CanvasComponent {
   }
 
   ctxPaste(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const node = this.clipboard();
     const menu = this.ctxMenu();
     if (!node || !menu) return;
@@ -233,11 +296,13 @@ export class CanvasComponent {
   }
 
   ctxAddModule(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     this.openSourcePicker.emit();
     this.ctxMenu.set(null);
   }
 
   ctxDelete(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const id = this.ctxMenu()?.nodeId;
     if (id) this.onNodeDelete(id);
     this.ctxMenu.set(null);
@@ -258,7 +323,24 @@ export class CanvasComponent {
     return node?.kind === 'merge';
   }
 
+  /** The Field Mapping transform node can't be deleted from the context menu — every destination node
+   *  downstream of it depends on its mapping to actually write anything, so removing it silently breaks
+   *  the pipeline instead of prompting the usual "delete this and its connections" confirmation. */
+  protected ctxNodeIsFieldMapping(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    return node?.kind === 'transform' && node.transformId === 'field-mapping';
+  }
+
+  /** Drives whether the context menu's Delete item renders at all for the node currently under it —
+   *  see canDeleteNode() for the actual vendor `.delete` check. */
+  protected ctxNodeCanDelete(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    return !!id && this.canDeleteNode(id);
+  }
+
   ctxToggleCheckpoint(): void {
+    if (this.readOnly()) { this.ctxMenu.set(null); return; }
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     if (!id || !node) { this.ctxMenu.set(null); return; }

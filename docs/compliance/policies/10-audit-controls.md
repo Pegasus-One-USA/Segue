@@ -14,7 +14,9 @@ This policy establishes the hardware, software, and procedural mechanisms that r
 
 ## 2. Scope
 
-This policy applies to all FHIRBridge audit and logging mechanisms, including the tamper-evident application audit trail (`UserActivityAuditLog`), structured application logs (Serilog), and authentication/access/data-access events.
+This policy applies to all FHIRBridge audit and logging mechanisms, including the tamper-evident application audit trail (`AuditLog`, hash-chained), its companion governance tables (`AuthenticationLog`, `SmartLaunchLog`, `DataAccessLog`, `SecurityEvent`, and the Operations log tables — see `docs/backend/08-governance-logging-status.md` for the full inventory and current implementation status), structured application logs (Serilog), and authentication/access/data-access events.
+
+> **Implementation note:** the table named in this policy as of a prior revision (`UserActivityAuditLog`) was replaced by `AuditLog` (2026-07). See the status doc above before assuming any specific table/mechanism named here still matches the code — that doc is the source of truth for what's actually implemented versus planned.
 
 ## 3. Policy Statements
 
@@ -26,9 +28,9 @@ FHIRBridge records security-relevant events, including at minimum:
 - Security-control events: rate-limiting triggers, HMAC webhook validation failures, and administrative actions.
 
 ### 3.2 Tamper-Evidence and Append-Only Integrity
-- The `UserActivityAuditLog` is **append-only and hash-chained**: each record is cryptographically linked to the prior record so that any insertion, modification, or deletion breaks the chain and is detectable.
+- The `AuditLog` table is **append-only and hash-chained**: each record is cryptographically linked to the prior record (`AuditLog.ComputeHash`/`VerifyOwnHash`) so that any insertion, modification, or deletion breaks the chain and is detectable. `AuditLog`, `AuthenticationLog`, `SmartLaunchLog`, and `DataAccessLog` are all enforced append-only at the persistence layer (`IAppendOnlyEntity` + a `SaveChanges` interceptor guard that throws on any Modify/Delete attempt). `SecurityEvent` is deliberately the one exception — its `Resolved` flag must stay mutable for triage.
 - Modification or deletion of audit records is **prohibited and technically prevented**. Audit records are exempt from the standard deletion paths and are retained through end-of-retention regardless of other data lifecycle actions (see POL-013).
-- The hash chain is verified on a **[ORGANIZATION TO COMPLETE — e.g., weekly]** cadence and after any restore; verification results are recorded. A verification failure is treated as a potential security incident (POL-006).
+- Full-chain hash verification (`IAuditChainVerificationService`, walking the entire `AuditLog` table, not just a window) runs in two ways: **on demand**, as part of generating the HIPAA/SOC2 compliance report (`GET /api/v1/governance/reports/hipaa-audit`); and **on a schedule**, via `AuditChainVerificationWorker` (Worker host), enabled by default at a **24-hour** cadence (configurable via `AuditChainVerification:IntervalHours`) — satisfying this policy's verification-cadence requirement without relying on someone remembering to pull a report. A verification failure raises a `Critical` `SecurityEvent` (`EventType = "AuditChainBroken"`) and is treated as a security incident (POL-006).
 
 ### 3.3 PHI Protection in Logs
 - Application logs must **not contain PHI**. PHI is masked before write by the platform's PHI-masking log enricher. Introducing PHI into logs is prohibited; any discovered exposure is handled as an incident.
