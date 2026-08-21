@@ -426,12 +426,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  both go through clampPanY/setScrollY. Zoom still works no matter what's under the cursor.
    *
    *  Plain wheel used to defer to the browser's native scroll instead whenever hovering a card's own
-   *  field/column list (.fm-source-rows/.fm-target-rows) — but neither ever actually grows a real
-   *  scrollbar of its own (both cards are deliberately auto-height/uncapped, see
-   *  field-mapping-source-tree.component.scss's own "this never actually clips/scrolls" note), so that
-   *  exemption just silently ate the wheel event over a long list (e.g. a 70+-field resource) with
-   *  nothing picking it up — the one place in the canvas a user would most naturally try to scroll. Still
-   *  deferred for .fm-add-table-options, which is a real, genuinely-scrollable dropdown panel. */
+   *  field/column list (.fm-source-rows/.fm-target-rows), but was removed because neither ever actually
+   *  grew a real scrollbar of its own (both cards were deliberately auto-height/uncapped) — that exemption
+   *  just silently ate the wheel event over a long list with nothing picking it up. Now that both cards'
+   *  "fit to screen" toggle (see FieldMappingSourceTreeComponent/FieldMappingTargetCardComponent's
+   *  fitMode) can cap their height and make that row region genuinely scrollable, the exemption is
+   *  restored — but conditioned on the row region actually having overflow right now (scrollHeight >
+   *  clientHeight), so it only ever activates when there's really something to scroll. Without that
+   *  condition, hovering the same region in "expand" mode (or a list short enough to fit) would
+   *  reintroduce the exact dead-zone bug this history describes. Still unconditionally deferred for
+   *  .fm-add-table-options, a real, always-genuinely-scrollable dropdown panel. */
   onViewportWheel(ev: WheelEvent): void {
     if (ev.ctrlKey || ev.metaKey) {
       ev.preventDefault();
@@ -439,6 +443,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
     if ((ev.target as HTMLElement).closest('.fm-add-table-options')) {
+      return;
+    }
+    const rows = (ev.target as HTMLElement).closest<HTMLElement>('.fm-source-rows, .fm-target-rows');
+    if (rows && rows.scrollHeight > rows.clientHeight) {
       return;
     }
     ev.preventDefault();

@@ -10,6 +10,9 @@ export interface FmTreeLeafField {
   jsonPath?: string;
   valueType?: string;
   arrays?: string[];
+  /** Resource types this field may reference (e.g. ["Patient"] for Observation.subject) — see
+   *  ResourceFieldDef.referenceTargetTypes. */
+  referenceTargetTypes?: string[];
 }
 
 export interface FmTreeNode {
@@ -78,7 +81,10 @@ export function buildResourceTree(resource: string, fields: ResourceFieldDef[]):
       kind: 'leaf',
       isArray: false,
       children: [],
-      field: { fhirPath: f.path, jsonPath: f.jsonPath, valueType: f.valueType, arrays: f.arrays },
+      field: {
+        fhirPath: f.path, jsonPath: f.jsonPath, valueType: f.valueType, arrays: f.arrays,
+        referenceTargetTypes: f.referenceTargetTypes,
+      },
     });
   }
 
@@ -95,16 +101,20 @@ export function buildForest(
 
 /**
  * Filters a tree for a case-insensitive substring match against a node's label (leaf paths also match
- * on their raw fhirPath, so e.g. "coding.code" finds it even though that's not in the display label).
- * If a GROUP's own label matches, its entire subtree is kept as-is — searching "address" should surface
- * every Address field, not just the ones whose own label also happens to contain "address".
+ * on their raw fhirPath, so e.g. "coding.code" finds it even though that's not in the display label;
+ * a reference leaf also matches on any resource type it may point at, e.g. "patient" finds
+ * Observation's "Subject › Reference" even though neither word appears in that label — see
+ * ResourceFieldDef.referenceTargetTypes). If a GROUP's own label matches, its entire subtree is kept
+ * as-is — searching "address" should surface every Address field, not just the ones whose own label
+ * also happens to contain "address".
  */
 export function filterTree(node: FmTreeNode, query: string): FmTreeNode | null {
   const q = query.trim().toLowerCase();
   if (!q) return node;
 
   const ownMatch = node.label.toLowerCase().includes(q)
-    || (node.kind === 'leaf' && !!node.field?.fhirPath.toLowerCase().includes(q));
+    || (node.kind === 'leaf' && !!node.field?.fhirPath.toLowerCase().includes(q))
+    || (node.kind === 'leaf' && !!node.field?.referenceTargetTypes?.some(t => t.toLowerCase().includes(q)));
 
   if (node.kind === 'leaf') return ownMatch ? node : null;
   if (ownMatch) return node;
