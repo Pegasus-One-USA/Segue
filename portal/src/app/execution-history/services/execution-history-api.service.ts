@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of, throwError } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import {
   FieldLineageChain,
   FieldLineageFilter,
@@ -20,7 +21,10 @@ import {
 export class ExecutionHistoryApiService {
   private readonly http = inject(HttpClient);
 
-  list(filter: RouteExecutionFilter): Observable<PagedResult<RouteExecution>> {
+  // `silent` is opt-in and defaults to false — every existing caller (the real Execution History list
+  // page included) keeps showing the global loader exactly as before. Only a background/periodic
+  // refetch (Dashboard's auto-refresh, SignalR-triggered refresh) should ever pass true.
+  list(filter: RouteExecutionFilter, options?: { silent?: boolean }): Observable<PagedResult<RouteExecution>> {
     let params = new HttpParams()
       .set('page', filter.page)
       .set('pageSize', filter.pageSize);
@@ -32,7 +36,8 @@ export class ExecutionHistoryApiService {
     if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);
     if (filter.sortDirection) params = params.set('sortDirection', filter.sortDirection);
 
-    return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params });
+    const context = options?.silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params, context });
   }
 
   byId(id: string): Observable<RouteExecution> {
@@ -88,8 +93,10 @@ export class ExecutionHistoryApiService {
     return this.http.get<ResourceTypeSummary[]>(EXECUTION_HISTORY_ENDPOINTS.lineageResourceTree(id));
   }
 
-  /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles. */
-  statusCounts(): Observable<WorkflowRunStatusCounts> {
-    return this.http.get<WorkflowRunStatusCounts>(EXECUTION_HISTORY_ENDPOINTS.statusCounts);
+  /** All-time run count per status, across every workflow — backs the Dashboard's status stat tiles.
+   *  See list()'s comment above re: `silent`. */
+  statusCounts(options?: { silent?: boolean }): Observable<WorkflowRunStatusCounts> {
+    const context = options?.silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<WorkflowRunStatusCounts>(EXECUTION_HISTORY_ENDPOINTS.statusCounts, { context });
   }
 }

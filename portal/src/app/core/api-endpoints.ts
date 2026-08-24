@@ -36,6 +36,24 @@ export const AUTH_ENDPOINTS = {
   samlLogin: `${API_V1_BASE}/auth/saml/login`,
 };
 
+// ─── Tenants (TenantsController — api/v1/tenants) ───────────────────────────────
+// SuperAdmin-only. The real backend for the Tenant Management screens (tenant-list, tenant-dialog,
+// tenant-tab), previously backed only by an in-memory, non-persistent mock (TenantRoleService).
+export const TENANT_ENDPOINTS = {
+  list:   `${API_V1_BASE}/tenants`,
+  byId:   (id: string) => `${API_V1_BASE}/tenants/${id}`,
+  create: `${API_V1_BASE}/tenants`,
+  update: (id: string) => `${API_V1_BASE}/tenants/${id}`,
+  delete: (id: string) => `${API_V1_BASE}/tenants/${id}`,
+};
+
+// ─── Branding (BrandingController — api/v1/branding) ────────────────────────────
+// GET is anonymous (login page needs it before any session exists); PUT requires configuration.write.
+export const BRANDING_ENDPOINTS = {
+  get: `${API_V1_BASE}/branding`,
+  update: `${API_V1_BASE}/branding`,
+};
+
 // ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────
 export const MFA_ENDPOINTS = {
   status:  `${API_V1_BASE}/auth/mfa/status`,

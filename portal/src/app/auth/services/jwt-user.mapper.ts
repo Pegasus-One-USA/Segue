@@ -54,6 +54,11 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     // The JWT's permissions claim is already the backend's merged (role ∪ overrides) set — there's
     // no separate override list to carry here.
     directPermissionAllocations: [],
+    // buildUserFromJwt is unused dead code today (confirmed: no live call site) — HIPAA #7 moved every
+    // real login/session path to buildUserFromProfile (below), which now carries the real, DB-sourced
+    // tenantId. There is no tenant claim on the raw JWT itself (deliberately — see JwtAccessTokenIssuer/
+    // ICurrentTenantResolver's remarks), so this placeholder is left as-is rather than wired to a
+    // nonexistent claim; if this function is ever revived, it needs a real tenant source first.
     orgId: 'org',
     status: 'active',
     loginType: 'local',
@@ -112,7 +117,9 @@ export function buildUserFromProfile(profile: AuthProfileDto): User {
     roles,
     permissions,
     directPermissionAllocations: [],
-    orgId: 'org',
+    // Real, DB-sourced tenant id (see UserProfileDto.TenantId) — was hardcoded to the literal string
+    // 'org' for every user before real Tenant support existed; every user always has one now.
+    orgId: profile.tenantId ?? '',
     status: 'active',
     loginType: 'local',
     mustChangePassword: profile.requiresPasswordChange ?? false,

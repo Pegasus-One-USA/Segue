@@ -41,6 +41,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
     public DbSet<LoincConcept> LoincConcepts => Set<LoincConcept>();

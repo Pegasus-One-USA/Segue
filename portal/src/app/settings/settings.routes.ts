@@ -103,6 +103,11 @@ export const SETTINGS_ROUTES: Routes = [
           {
             path: '',
             pathMatch: 'full',
+            // children: [] is never actually reached — settingsLandingGuard always returns a
+            // redirect UrlTree — it's here purely to satisfy Angular's router config validator
+            // (NG04014), which requires component/loadComponent/redirectTo/children/loadChildren
+            // on every route regardless of what its guard does.
+            children: [],
             canActivate: [settingsLandingGuard('/settings/workflow-configurations', [
               { path: 'source-connections', permissions: ['sourceconnections.view'] },
               { path: 'destination-connections', permissions: ['destinationconnections.view'] },
@@ -221,6 +226,8 @@ export const SETTINGS_ROUTES: Routes = [
               {
                 path: '',
                 pathMatch: 'full',
+                // See the workflow-configurations landing route above for why children: [] is here.
+                children: [],
                 canActivate: [settingsLandingGuard('/settings/system-settings/terminology', [
                   { path: 'loinc', permissions: ['loinc.view', 'loinc.write'] },
                   { path: 'snomed-ct', permissions: ['snomedct.view', 'snomedct.write'] },
@@ -250,6 +257,8 @@ export const SETTINGS_ROUTES: Routes = [
           {
             path: '',
             pathMatch: 'full',
+            // See the workflow-configurations landing route above for why children: [] is here.
+            children: [],
             canActivate: [settingsLandingGuard('/settings/system-settings', [
               { path: 'email', permissions: ['configuration.view', 'configuration.write'] },
               { path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS },
@@ -268,6 +277,8 @@ export const SETTINGS_ROUTES: Routes = [
       {
         path: '',
         pathMatch: 'full',
+        // See the workflow-configurations landing route above for why children: [] is here.
+        children: [],
         canActivate: [settingsLandingGuard('/settings', [
           { path: 'branding', permissions: ['configuration.write'] },
           { path: 'workflow-configurations', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },

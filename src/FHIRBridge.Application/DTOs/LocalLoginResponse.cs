@@ -20,7 +20,12 @@ public sealed record LocalLoginResponse(
     // True when an admin has required this account to have MFA enabled but it isn't enrolled yet —
     // the session is issued, but the client should be routed straight to MFA enrollment; the
     // server-side gate middleware blocks everything else until enrolled.
-    bool RequiresMfaSetup = false)
+    bool RequiresMfaSetup = false,
+    // Echoes the "Remember me" choice that actually backs the issued RefreshToken (see
+    // LocalAuthService.CreateLoginResponseAsync) so AuthController.IssueTokenCookiesAndStrip knows
+    // whether to make the refresh/CSRF cookies persistent or session-only. Meaningless (and unread)
+    // when RefreshToken is null, e.g. the MfaRequired branch below.
+    bool RememberMe = false)
 {
     public static LocalLoginResponse MfaRequired(string mfaChallengeToken, DateTime mfaChallengeExpiresOnUtc) =>
         new(RequiresMfa: true,

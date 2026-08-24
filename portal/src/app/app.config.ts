@@ -6,8 +6,9 @@ import {
 import { provideRouter, withComponentInputBinding, withRouterConfig, Router } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { of, switchMap, firstValueFrom } from 'rxjs';
+import { of, switchMap, firstValueFrom, tap } from 'rxjs';
 import { routes } from './app.routes';
+import { BrandingService } from './services/branding.service';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
 import { loadingInterceptor } from './core/loading.interceptor';
@@ -38,6 +39,7 @@ function initApp(
   sso: SsoService,
   ssoAuthApi: SsoAuthApiService,
   router: Router,
+  branding: BrandingService,
 ) {
   // Runs on EVERY app boot, including the one where the browser has just come back from Entra's
   // loginRedirect (see sso.service.ts) — handleRedirectResponse() resolves to null on a normal
@@ -68,6 +70,17 @@ function initApp(
   // decoded client-side anymore) — it MUST be subscribed to, not just constructed and discarded,
   // or the app boots with no user ever restored. switchMap (not tap) is what actually does that.
   return async () => {
+    // Resolved and applied HERE — as part of the initializer chain the router's initialNavigation
+    // actually waits on — rather than fire-and-forget in BrandingService's own constructor. That used
+    // to race every other startup path: nothing gated component creation on it, so a route (including
+    // one landing directly on a refresh) could render, and read BrandingService.current(), before this
+    // GET had completed — briefly, or in observed cases persistently, seeing DEFAULT_BRANDING instead
+    // of the tenant's real saved configuration. Awaiting it here makes exactly one resolution the
+    // authoritative one for this boot, with every component's first render guaranteed to see its
+    // result. resolve() already falls back to DEFAULT_BRANDING internally on any network/server error
+    // (see BrandingService), so this can never fail or hang boot indefinitely.
+    await firstValueFrom(branding.resolve().pipe(tap(config => branding.applyToDocument(config))));
+
     const handledViaSso = await completeEntraRedirectIfReturning();
     if (handledViaSso) return;
 
@@ -122,7 +135,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initApp,
-      deps: [AuthService, AppInitService, SsoService, SsoAuthApiService, Router],
+      deps: [AuthService, AppInitService, SsoService, SsoAuthApiService, Router, BrandingService],
       multi: true,
     },
   ],

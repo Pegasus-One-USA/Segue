@@ -39,7 +39,7 @@ public sealed class AcceptInviteViaSsoTests
 
     private static User InvitedUser(string email)
     {
-        var user = new User($"local:{email}", email, null);
+        var user = new User($"local:{email}", email, null, Guid.NewGuid());
         user.SetInvited("hashed-token", DateTime.UtcNow.AddHours(1));
         return user;
     }
@@ -61,7 +61,10 @@ public sealed class AcceptInviteViaSsoTests
 
         // ArgumentException -> HTTP 400 via the API exception mapper.
         await act.Should().ThrowAsync<ArgumentException>();
-        _localAuth.Verify(x => x.IssueSessionAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+        // Expression trees can't contain a call relying on an omitted optional argument (CS0854) —
+        // rememberMe must be passed explicitly here now that IssueSessionAsync has one; It.IsAny<bool>()
+        // keeps this assertion about call count, not about the specific value, same as before.
+        _localAuth.Verify(x => x.IssueSessionAsync(It.IsAny<User>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
@@ -83,6 +86,7 @@ public sealed class AcceptInviteViaSsoTests
         user.LoginProvider.Should().Be(LoginProvider.Google);
         user.ExternalUserId.Should().Be("sub-1");
         user.IsLocalLoginEnabled.Should().BeFalse();
-        _localAuth.Verify(x => x.IssueSessionAsync(user, It.IsAny<CancellationToken>()), Times.Once);
+        // Same CS0854 reasoning as the test above — It.IsAny<bool>() rather than the omitted default.
+        _localAuth.Verify(x => x.IssueSessionAsync(user, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
     }
 }

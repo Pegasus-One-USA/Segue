@@ -31,8 +31,10 @@ public interface ILocalAuthService
     /// Mints a FHIRBridge session (access + refresh token, roles, permissions) for an already-authenticated
     /// user, without a password check. Used by the SSO token-exchange endpoints after an external IdP token
     /// has been validated. Records the login and returns the same <see cref="LocalLoginResponse"/> shape.
+    /// SSO/SAML have no "Remember me" UI today, so <paramref name="rememberMe"/> defaults to true —
+    /// preserving the existing always-persistent-cookie behavior for those flows unchanged.
     /// </summary>
-    Task<LocalLoginResponse> IssueSessionAsync(User user, CancellationToken cancellationToken);
+    Task<LocalLoginResponse> IssueSessionAsync(User user, CancellationToken cancellationToken, bool rememberMe = true);
 
     Task LogoutAsync(CancellationToken cancellationToken);
 }

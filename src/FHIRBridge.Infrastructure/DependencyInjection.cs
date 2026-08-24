@@ -176,6 +176,8 @@ public static class DependencyInjection
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
+            services.AddSingleton<IBrandConfigurationRepository, InMemoryBrandConfigurationRepository>();
+            services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -245,6 +247,8 @@ public static class DependencyInjection
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
+            services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();
+            services.AddScoped<ITenantRepository, EfTenantRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<ISchemaMappingRepository, EfSchemaMappingRepository>();
@@ -333,6 +337,11 @@ public static class DependencyInjection
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+        services.AddScoped<Application.Abstractions.Branding.IBrandConfigurationService, Application.Services.BrandConfigurationService>();
+        services.AddScoped<Application.Abstractions.Tenancy.ITenantsService, Application.Services.TenantsService>();
+        // Singleton, same reasoning as IUserPermissionsProvider/CachedUserPermissionsProvider — resolves
+        // IUserAccessRepository lazily through a scope, so it works with either repository registration.
+        services.AddSingleton<Application.Abstractions.Tenancy.ICurrentTenantResolver, Security.CachedCurrentTenantResolver>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
         services.AddHttpClient(nameof(BackendAuthScopeProbeService));

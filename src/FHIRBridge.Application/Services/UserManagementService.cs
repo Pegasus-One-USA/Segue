@@ -76,7 +76,7 @@ public sealed class UserManagementService : IUserManagementService
             throw new InvalidOperationException("A user with this email already exists.");
         }
 
-        var user = new User(LocalExternalId(email), email, request.DisplayName);
+        var user = new User(LocalExternalId(email), email, request.DisplayName, request.TenantId);
         user.UpdateName(request.FirstName, request.LastName);
         user.EnableLocalLogin(_passwordHasher.Hash(request.Password), request.RequirePasswordChange);
         user.SetMustSetupMfa(request.RequireMfa);
@@ -145,7 +145,7 @@ public sealed class UserManagementService : IUserManagementService
         var tokenHash = _passwordHasher.Hash(rawToken);
         var expiresOnUtc = DateTime.UtcNow.AddHours(InvitationTokenLifetimeHours);
 
-        var user = new User(LocalExternalId(email), email, null);
+        var user = new User(LocalExternalId(email), email, null, request.TenantId);
         user.UpdateName(request.FirstName, request.LastName);
         user.SetInvited(tokenHash, expiresOnUtc);
         // HIPAA hardening: MFA is compulsory for every invited user — hardcoded true, not an admin choice.

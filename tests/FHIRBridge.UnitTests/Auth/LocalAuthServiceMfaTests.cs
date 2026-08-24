@@ -23,6 +23,7 @@ public sealed class LocalAuthServiceMfaTests
     private readonly Mock<ITotpService> _totp = new();
     private readonly Mock<IGovernanceLogger> _governanceLogger = new();
     private readonly Mock<ISystemSettingsCache> _settingsCache = PassThroughSettingsCache();
+    private readonly Mock<ITenantRepository> _tenantRepository = new();
     private readonly LocalAuthOptions _options = new();
 
     private static Mock<ISystemSettingsCache> PassThroughSettingsCache()
@@ -37,6 +38,13 @@ public sealed class LocalAuthServiceMfaTests
         return mock;
     }
 
+    public LocalAuthServiceMfaTests()
+    {
+        // Safe default — no test here cares about tenant display name specifically.
+        _tenantRepository.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Tenant?)null);
+    }
+
     private LocalAuthService Service() => new(
         _repository.Object,
         _passwordHasher.Object,
@@ -46,7 +54,8 @@ public sealed class LocalAuthServiceMfaTests
         _totp.Object,
         _governanceLogger.Object,
         _settingsCache.Object,
-        Options.Create(_options));
+        Options.Create(_options),
+        _tenantRepository.Object);
 
     private const string Email = "mfa-user@x.io";
     private const string Password = "Correct-Password-123!";
@@ -54,7 +63,7 @@ public sealed class LocalAuthServiceMfaTests
 
     private static User MfaEnabledUser()
     {
-        var user = new User("local:mfa-user", Email, "MFA User");
+        var user = new User("local:mfa-user", Email, "MFA User", Guid.NewGuid());
         user.EnableLocalLogin(PasswordHash, mustChangePassword: false);
         user.BeginMfaEnrollment("SECRET");
         user.ConfirmMfaEnrollment(["backup-hash-1"]);

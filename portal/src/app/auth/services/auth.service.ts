@@ -9,6 +9,7 @@ import { AuthStore } from '../store/auth.store';
 import { PermissionService } from './permission.service';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
+import { BrandingService } from '../../services/branding.service';
 import { User, UserRole, MessageResponse } from '../models/user.model';
 import {
   LoginRequest, LoginResponse, LoginResult,
@@ -30,6 +31,7 @@ export class AuthService {
   private readonly security   = inject(AccountSecurityService);
   private readonly emailSvc   = inject(EmailNotificationService);
   private readonly permission = inject(PermissionService);
+  private readonly branding   = inject(BrandingService);
 
   // ─── Expose store signals directly ────────────────────────────────────────
   readonly currentUser     = this.store.currentUser;
@@ -66,6 +68,7 @@ export class AuthService {
           this.security.clearAttempts(req.email, res.user.id);
           this.store.setUser(res.user);
           this.session.start(res.user.id, req.rememberMe ?? false);
+          this.resolveBrandingForNewSession();
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -94,12 +97,13 @@ export class AuthService {
     this.store.setLoading(true);
     this.store.setError(null);
 
-    return this.api.verifyMfaLogin(challengeToken, code).pipe(
+    return this.api.verifyMfaLogin(challengeToken, code, rememberMe).pipe(
       tap({
         next: (res) => {
           this.security.clearAttempts(email, res.user.id);
           this.store.setUser(res.user);
           this.session.start(res.user.id, rememberMe);
+          this.resolveBrandingForNewSession();
           this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
@@ -131,6 +135,7 @@ export class AuthService {
 
           this.store.setUser(res.user);
           this.session.start(res.user.id, false);
+          this.resolveBrandingForNewSession();
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -252,5 +257,23 @@ export class AuthService {
   discardSession(): void {
     this.tokens.clearTokens();
     this.store.clear();
+  }
+
+  // ─── Re-resolve branding once a session is authenticated ─────────────────────
+  // BrandingService.resolve() otherwise only ever runs once, in its own constructor at app
+  // bootstrap — before this session existed. If that bootstrap call happened while logged out
+  // (e.g. the tab was refreshed after a logout), GET /api/v1/branding was anonymous and returned
+  // the built-in default, and nothing re-fetched it afterward: logging back in as the same tenant
+  // would otherwise leave that stale default applied indefinitely, even though the database was
+  // never wrong. Calling it again here — now that the access-token cookie is set — lets the
+  // backend resolve the real tenant (uid claim -> User.TenantId -> ICurrentTenantResolver) instead.
+  //
+  // A single call per successful session-establishing flow (login / MFA completion / magic-link
+  // redeem each call this once, from their own success handler) — never concurrent, never
+  // duplicated. resolve() already swallows its own HTTP errors internally (falls back to the
+  // built-in default rather than erroring — see BrandingService), so this is fire-and-forget by
+  // design: a branding hiccup can never fail or delay a login that has already succeeded.
+  private resolveBrandingForNewSession(): void {
+    this.branding.resolve().subscribe(config => this.branding.applyToDocument(config));
   }
 }
