@@ -107,7 +107,7 @@ export class TenantListComponent {
         restoreFocus: false,
         data: {
           title: 'Delete Tenant',
-          message: `Are you sure you want to delete tenant "${tenant.name}"? All associated roles will also be permanently removed.`,
+          message: `Are you sure you want to delete tenant "${tenant.name}"? This cannot be undone. A tenant that still has users cannot be deleted.`,
           confirmLabel: 'Delete',
           danger: true,
         },
@@ -115,8 +115,11 @@ export class TenantListComponent {
       .afterClosed()
       .subscribe(confirmed => {
         if (!confirmed) return;
-        this.svc.deleteTenant(tenant.id);
-        this.toast.success(`Tenant "${tenant.name}" deleted.`);
+        this.svc.deleteTenant(tenant.id).subscribe({
+          next: () => this.toast.success(`Tenant "${tenant.name}" deleted.`),
+          error: (err) => this.toast.error(
+            'Delete failed', err?.error?.message ?? `Could not delete tenant "${tenant.name}".`),
+        });
       });
   }
 

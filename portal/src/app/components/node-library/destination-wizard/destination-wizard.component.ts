@@ -1029,6 +1029,61 @@ export class DestinationWizardComponent implements OnInit {
     this.groupSearchQuery.set('');
   }
 
+  /** Every resource currently visible (respects an active search filter) that isn't selected yet.
+   *  Exposed for the template so the "Select all" action can show/disable itself accurately instead
+   *  of always claiming there's something left to add. */
+  readonly allFilteredSelected = computed(() => {
+    const filtered = this.filteredGroups();
+    return filtered.length > 0 && filtered.every((r) => this.isResourceSelected(r));
+  });
+
+  /** True when at least one currently-visible (filtered) resource is selected — drives the "Clear"
+   *  action's disabled state the same way allFilteredSelected() drives "Select all"'s. */
+  readonly anyFilteredSelected = computed(() => {
+    const selected = new Set(this.selectedResources());
+    return this.filteredGroups().some((r) => selected.has(r));
+  });
+
+  /** Selects every currently-visible (filtered) resource in one action — snapshots the target list
+   *  first, same reasoning as addAllRecommendedResources(): toggleResource() mutates
+   *  selectedResources(), which filteredGroups() doesn't depend on but this method's own loop
+   *  shouldn't re-read mid-iteration regardless. Goes through toggleResource() (never a direct
+   *  selectedResources.set(...)) so nothing already selected gets double-added and so this stays the
+   *  single place resource selection is mutated. Respects an active search — "Select all" while
+   *  filtered to "Medication" only selects the Medication* resources actually shown, not the full
+   *  SUPPORTED_RESOURCE_TYPES universe. */
+  selectAllFilteredResources(): void {
+    const toAdd = this.filteredGroups().filter((r) => !this.isResourceSelected(r));
+    for (const r of toAdd) {
+      this.toggleResource(r);
+    }
+  }
+
+  /** Deselects every currently-visible (filtered) resource — via toggleResource() so each one still
+   *  gets its mappingRows/targetByResource/extraTablesByGroup/payloadFieldsByResource cleanup (see
+   *  toggleResource's own comment on why that pruning matters). Scoped to the filtered set, not all
+   *  of selectedResources(), so clearing while searched to "Medication" doesn't silently drop an
+   *  unrelated resource the user picked earlier and can no longer even see. */
+  clearAllFilteredResources(): void {
+    const toRemove = this.filteredGroups().filter((r) => this.isResourceSelected(r));
+    for (const r of toRemove) {
+      this.toggleResource(r);
+    }
+  }
+
+  /** Backs the single "Select all" checkbox in the Step 2 header — a controlled checkbox (its
+   *  [checked]/[indeterminate] come from allFilteredSelected()/anyFilteredSelected(), never the
+   *  native DOM state), so this decides the action from that same current signal value rather than
+   *  reading $event.target.checked: fully selected -> clear the filtered set; anything else
+   *  (partial or empty) -> select the rest of it. */
+  toggleSelectAllFiltered(): void {
+    if (this.allFilteredSelected()) {
+      this.clearAllFilteredResources();
+    } else {
+      this.selectAllFilteredResources();
+    }
+  }
+
   // ── mapping rows ──────────────────────────────────────────────────────────
   readonly mappingRows = signal<MappingRow[]>([]);
 

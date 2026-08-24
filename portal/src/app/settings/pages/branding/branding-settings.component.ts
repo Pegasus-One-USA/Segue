@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, OnDestroy, DestroyRef, signal } from '@angular/core';
+import { Component, effect, inject, OnInit, OnDestroy, DestroyRef, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs';
@@ -47,6 +47,20 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
       () => this.hasUnsavedChanges() || this.isSaveInProgress(),
       this.destroyRef,
     );
+
+    // BrandingService.current() only reflects the real, persisted branding once its own bootstrap-time
+    // resolve() GET (fired from AppComponent) actually returns — on a hard refresh landing directly on
+    // this page, that GET can still be in flight when this component constructs. A one-time ngOnInit()
+    // snapshot could therefore capture DEFAULT_BRANDING instead of the saved values, and nothing would
+    // ever re-populate the form once the real response arrived a moment later — exactly the "branding
+    // reverts after refresh" bug. Reacting to every change instead fixes both cases (already resolved,
+    // or resolving later) — guarded by form.dirty so a later update never clobbers an edit in progress.
+    effect(() => {
+      const cfg = this.branding.current();
+      if (this.form.dirty) return;
+      this.originalConfig = cfg;
+      this.populateForm(cfg);
+    });
   }
 
   protected readonly themeModeOptions: { id: BrandThemeMode; label: string }[] = [
@@ -96,9 +110,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   private savedThisSession = false;
 
   ngOnInit(): void {
-    this.originalConfig    = this.branding.current();
     this.originalThemeMode = this.themeService.mode();
-    this.populateForm(this.originalConfig);
     if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
     // The pills reflect what's actually on screen right now, not just whatever
     // was last saved into the branding record — avoids showing "Light" active
@@ -132,13 +144,21 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify branding.')) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.saving.set(true);
-    this.branding.save(this.buildConfig()).subscribe(saved => {
-      this.originalConfig    = saved;
-      this.originalThemeMode = saved.defaultThemeMode;
-      this.savedThisSession  = true;
-      this.saving.set(false);
-      this.form.markAsPristine();
-      this.toast.success('Branding saved');
+    this.branding.save(this.buildConfig()).subscribe({
+      next: (saved) => {
+        this.originalConfig    = saved;
+        this.originalThemeMode = saved.defaultThemeMode;
+        this.savedThisSession  = true;
+        this.saving.set(false);
+        this.form.markAsPristine();
+        this.toast.success('Branding saved');
+      },
+      // Now that save() actually round-trips to the backend, it can genuinely fail (validation, network,
+      // permission) — previously the mock implementation never errored, so there was no error path here.
+      error: (e) => {
+        this.saving.set(false);
+        this.toast.error('Save failed', e?.error?.message ?? 'Could not save branding. Please try again.');
+      },
     });
   }
 

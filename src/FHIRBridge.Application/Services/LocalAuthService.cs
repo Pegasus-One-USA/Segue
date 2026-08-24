@@ -22,6 +22,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ISystemSettingsCache _settingsCache;
     private readonly LocalAuthOptions _localAuthOptions;
+    private readonly ITenantRepository _tenantRepository;
 
     public LocalAuthService(
         IUserAccessRepository repository,
@@ -32,7 +33,8 @@ public sealed class LocalAuthService : ILocalAuthService
         ITotpService totpService,
         IGovernanceLogger governanceLogger,
         ISystemSettingsCache settingsCache,
-        IOptions<LocalAuthOptions> localAuthOptions)
+        IOptions<LocalAuthOptions> localAuthOptions,
+        ITenantRepository tenantRepository)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -43,6 +45,7 @@ public sealed class LocalAuthService : ILocalAuthService
         _governanceLogger = governanceLogger;
         _settingsCache = settingsCache;
         _localAuthOptions = localAuthOptions.Value;
+        _tenantRepository = tenantRepository;
     }
 
     private async Task<(int MaxFailedAttempts, int LockoutMinutes)> ResolveLockoutPolicyAsync(
@@ -117,7 +120,7 @@ public sealed class LocalAuthService : ILocalAuthService
             return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
         }
 
-        return await FinishSuccessfulLoginAsync(user, cancellationToken);
+        return await FinishSuccessfulLoginAsync(user, cancellationToken, rememberMe: request.RememberMe);
     }
 
     public async Task<LocalLoginResponse> CompleteMfaLoginAsync(
@@ -160,21 +163,26 @@ public sealed class LocalAuthService : ILocalAuthService
         }
 
         user.ClearMfaChallengeToken();
-        return await FinishSuccessfulLoginAsync(user, cancellationToken);
+        // request.RememberMe is the client's resend of the ORIGINAL LoginAsync/RedeemMagicLinkAsync
+        // call's choice — no tokens/session existed yet at that point to store it against, so the
+        // client carries it across the MFA round-trip itself (see login.component.ts's own
+        // this.rememberMe field, kept exactly for this reason).
+        return await FinishSuccessfulLoginAsync(user, cancellationToken, rememberMe: request.RememberMe);
     }
 
     /// <summary>Shared tail of a successful local/magic-link login: records the login and issues a session.</summary>
     private async Task<LocalLoginResponse> FinishSuccessfulLoginAsync(
         User user,
         CancellationToken cancellationToken,
-        string authenticationType = "Local")
+        string authenticationType = "Local",
+        bool rememberMe = false)
     {
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
         await _governanceLogger.LogAuthenticationAsync(
             new AuthenticationEntry(authenticationType, Success: true, user.Email), cancellationToken);
 
-        return await CreateLoginResponseAsync(user, cancellationToken);
+        return await CreateLoginResponseAsync(user, rememberMe, cancellationToken);
     }
 
     public async Task<LocalLoginResponse> ChangePasswordAsync(
@@ -202,7 +210,10 @@ public sealed class LocalAuthService : ILocalAuthService
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
 
-        return await CreateLoginResponseAsync(user, cancellationToken);
+        // Re-issuing a session mid-change-password must not silently downgrade an already-remembered
+        // session to session-only — carry forward whatever this user's CURRENT refresh token was
+        // issued with, same reasoning as RefreshTokenAsync below.
+        return await CreateLoginResponseAsync(user, user.RefreshTokenRememberMe, cancellationToken);
     }
 
     public async Task<ForgotPasswordResponse> ForgotPasswordAsync(
@@ -221,11 +232,26 @@ public sealed class LocalAuthService : ILocalAuthService
         user.SetPasswordResetToken(_passwordHasher.Hash(token), expiresOnUtc);
         await _repository.UpdateUserAsync(user, cancellationToken);
 
-        await _emailSender.SendAsync(
-            email,
-            "Reset your Segue password",
-            BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
-            cancellationToken);
+        // The token is already persisted above — a delivery failure here must not change the response
+        // shape (that would itself be an enumeration oracle: only real, local-login-enabled accounts ever
+        // reach this line, so a distinct failure response would confirm the account exists). Swallow and
+        // log internally instead. SmtpEmailSender.SendAsync already logs the failure itself (subject +
+        // recipient only — never the raw token or password) before rethrowing; this only stops that
+        // exception from reaching the controller and turning into a 500.
+        try
+        {
+            await _emailSender.SendAsync(
+                email,
+                "Reset your Segue password",
+                BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _governanceLogger.LogSecurityEventAsync(
+                new SecurityEventEntry("PasswordResetEmailDeliveryFailed", "Medium", email, ex.GetType().Name),
+                cancellationToken);
+        }
 
         return new ForgotPasswordResponse(true, token, expiresOnUtc);
     }
@@ -249,6 +275,15 @@ public sealed class LocalAuthService : ILocalAuthService
         }
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
+        // SetPassword() already clears PasswordResetTokenHash/ExpiresOnUtc (see User.cs) — that alone
+        // makes the token single-use. What it does NOT do is touch the refresh token: a forgot-password
+        // reset is completed via an out-of-band emailed token, not an authenticated session, on the
+        // assumption the previous credential may be compromised — so any refresh token already issued
+        // under it (Remember Me or not) must stop working too. Reuses the existing invalidation method
+        // (the same one Logout uses) rather than adding a new one; the next login establishes a fresh
+        // session/Remember Me choice from scratch. Deliberately different from ChangePasswordAsync above,
+        // which runs inside an already-authenticated session and preserves it on purpose.
+        user.ClearRefreshToken();
         await _repository.UpdateUserAsync(user, cancellationToken);
     }
 
@@ -327,7 +362,10 @@ public sealed class LocalAuthService : ILocalAuthService
         }
 
         await _repository.UpdateUserAsync(user, cancellationToken);
-        return await FinishSuccessfulLoginAsync(user, cancellationToken, "MagicLink");
+        // Magic-link has no "Remember me" UI today — preserve its existing always-persistent
+        // behavior exactly (see LoginAsync's password-login path for the one flow that actually
+        // exposes the choice).
+        return await FinishSuccessfulLoginAsync(user, cancellationToken, "MagicLink", rememberMe: true);
     }
 
     public async Task<LocalLoginResponse> RefreshTokenAsync(
@@ -352,10 +390,17 @@ public sealed class LocalAuthService : ILocalAuthService
             throw new InvalidOperationException("Refresh token is invalid or expired.");
         }
 
-        return await CreateLoginResponseAsync(user, cancellationToken);
+        // Read the CURRENT token's rememberMe before CreateLoginResponseAsync rotates it away —
+        // this is what makes a remembered session's cookie stay persistent across every automatic
+        // access-token refresh instead of silently defaulting back to session-only on the very
+        // first one. The client never resends rememberMe here (the /refresh request carries only
+        // the token itself); the server is the sole source of truth for it, by design.
+        var rememberMe = user.RefreshTokenRememberMe;
+        return await CreateLoginResponseAsync(user, rememberMe, cancellationToken);
     }
 
-    public async Task<LocalLoginResponse> IssueSessionAsync(User user, CancellationToken cancellationToken)
+    public async Task<LocalLoginResponse> IssueSessionAsync(
+        User user, CancellationToken cancellationToken, bool rememberMe = true)
     {
         ArgumentNullException.ThrowIfNull(user);
 
@@ -367,7 +412,10 @@ public sealed class LocalAuthService : ILocalAuthService
         user.RecordLogin();
         await _repository.UpdateUserAsync(user, cancellationToken);
 
-        return await CreateLoginResponseAsync(user, cancellationToken);
+        // SSO/SAML have no "Remember me" UI today — rememberMe defaults to true so those flows keep
+        // their existing always-persistent-cookie behavior exactly, unless a future caller opts in
+        // to the real choice explicitly.
+        return await CreateLoginResponseAsync(user, rememberMe, cancellationToken);
     }
 
     public async Task LogoutAsync(CancellationToken cancellationToken)
@@ -390,8 +438,14 @@ public sealed class LocalAuthService : ILocalAuthService
             new AuthenticationEntry("Logout", Success: true, user.Email), cancellationToken);
     }
 
+    /// <summary>`rememberMe` decides whether the refresh token minted here backs a persistent or
+    /// session-only cookie (see AuthController.IssueTokenCookiesAndStrip, which reads it back off
+    /// the returned LocalLoginResponse) — it plays no other role: authentication itself, the access
+    /// token's own lifetime, and the refresh token's server-side validity window are all unaffected
+    /// by it.</summary>
     private async Task<LocalLoginResponse> CreateLoginResponseAsync(
         User user,
+        bool rememberMe,
         CancellationToken cancellationToken)
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
@@ -404,8 +458,18 @@ public sealed class LocalAuthService : ILocalAuthService
         var token = _accessTokenIssuer.Issue(user, roleNames);
 
         var (refreshHash, refreshExpiry) = _accessTokenIssuer.IssueRefreshToken();
-        user.SetRefreshToken(refreshHash, refreshExpiry);
+        user.SetRefreshToken(refreshHash, refreshExpiry, rememberMe);
         await _repository.UpdateUserAsync(user, cancellationToken);
+
+        // Real, DB-sourced tenant name for display — this is the ONLY place a local-login-family response
+        // (local login, MFA completion, refresh, magic link, change-password all funnel through this one
+        // method) builds its Profile, so this lookup is what makes tenant info correct on every one of
+        // those paths at once. Missing this initially meant every login response reported
+        // tenantId:00000000-... regardless of the user's real tenant — GetCurrentUserProfileAsync (the
+        // separate /auth/me path in UserAccessService) was fixed but this sibling path was not, since the
+        // two build UserProfileDto independently. Caught by an actual authenticated login test, not by
+        // code review — see the final report's honesty about what "verified" means.
+        var tenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
 
         return new LocalLoginResponse(
             RequiresMfa: false,
@@ -423,10 +487,13 @@ public sealed class LocalAuthService : ILocalAuthService
                 roleNames,
                 permissionCodes,
                 user.RequiresPasswordChange,
-                user.IsMfaSetupRequired),
+                user.IsMfaSetupRequired,
+                user.TenantId,
+                tenant?.Name ?? string.Empty),
             RefreshToken: BuildRawRefreshToken(refreshHash),
             RefreshTokenExpiresOnUtc: refreshExpiry,
-            RequiresMfaSetup: user.IsMfaSetupRequired);
+            RequiresMfaSetup: user.IsMfaSetupRequired,
+            RememberMe: rememberMe);
     }
 
     /// <summary>
