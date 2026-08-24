@@ -577,6 +577,10 @@ export class DestinationWizardComponent implements OnInit {
   // resource's node/profile context, which only this component has.
   readonly markAsMasterRequest = input<number>(0);
   private _lastMarkAsMasterTrigger: number | null = null;
+  /** Toolbar-level search (dialog header) — forwarded straight through to the canvas, which applies it
+   *  to both the payload tree and every destination table's columns. Not a "request" counter like the
+   *  actions above: this is live text, re-forwarded on every change rather than reacted to once here. */
+  readonly mappingSearchQuery = input<string>('');
   /** Mirrors the canvas's own suggestionCountChange/zoomPercentChange straight up to the dialog header,
    *  which renders the "Clear N suggestions" label and zoom-percent readout. */
   readonly suggestionCountChange = output<number>();

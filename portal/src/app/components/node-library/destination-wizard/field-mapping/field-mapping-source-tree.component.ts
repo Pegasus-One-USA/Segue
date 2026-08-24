@@ -36,6 +36,12 @@ export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy
   readonly isArmed = input.required<(id: string) => boolean>();
   readonly x = input.required<number>();
   readonly y = input.required<number>();
+  /** Toolbar-level search (see NodeLibraryDialogComponent's toolbar search box, forwarded through
+   *  FieldMappingCanvasComponent) — ANDed together with this card's own searchQuery below to actually
+   *  drive filtering (see effectiveQuery), but deliberately never written INTO searchQuery: typing in
+   *  the toolbar must filter this tree without visibly changing what's shown in this card's own box (and
+   *  vice versa — this card's own typing never echoes back up to the toolbar either). */
+  readonly externalQuery = input<string>('');
 
   readonly toggleCollapse = output<string>();
   readonly armToggle = output<FmTreeNode>();
@@ -51,24 +57,35 @@ export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy
   // memory). Kept local to this component: the parent's collapse-state map (isCollapsed) is only
   // consulted while NOT searching (see effectiveIsCollapsed) so it never has to know about this.
   readonly searchQuery = signal('');
+  /** Drives ONLY this card's own inline clear (✕) button — local text alone, so that button never
+   *  appears "clearable" over a filter that's actually coming from the toolbar (nothing here to clear). */
   readonly isSearching = computed(() => this.searchQuery().trim().length > 0);
+
+  /** What actually drives filtering: the toolbar query AND this card's own box, combined as extra AND
+   *  terms (filterForest/filterTree just re-split on whitespace) — so the toolbar narrows the whole
+   *  tree and this card's own box can further refine within that, without either overwriting the
+   *  other's displayed text. */
+  readonly effectiveQuery = computed(() => `${this.externalQuery()} ${this.searchQuery()}`.trim());
+  /** True whenever a filter is actually in effect, from either source — unlike isSearching (local-only,
+   *  for the clear button), this gates the "no match" empty-state and forces the tree open below. */
+  readonly hasActiveFilter = computed(() => this.effectiveQuery().length > 0);
 
   /** Filtered roots paired with their ORIGINAL forest index, so a resource's rank color never shifts
    *  as filtering changes which index it lands on within the filtered array. */
   readonly filteredRoots = computed(() => {
     const original = this.forest();
-    return filterForest(original, this.searchQuery())
+    return filterForest(original, this.effectiveQuery())
       .map(node => ({ node, colorIndex: original.findIndex(r => r.id === node.id) }));
   });
 
   readonly matchCount = computed(() =>
-    this.isSearching() ? this.filteredRoots().reduce((sum, r) => sum + flattenLeaves(r.node).length, 0) : 0,
+    this.hasActiveFilter() ? this.filteredRoots().reduce((sum, r) => sum + flattenLeaves(r.node).length, 0) : 0,
   );
 
   /** While searching, force every surviving node open so matches are actually visible — the caller's
    *  own fold/collapse state (isCollapsed) only applies when there's no active query. */
   readonly effectiveIsCollapsed = computed(() => {
-    if (!this.isSearching()) return this.isCollapsed();
+    if (!this.hasActiveFilter()) return this.isCollapsed();
     return () => false;
   });
 

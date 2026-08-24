@@ -18,6 +18,21 @@
         />
       </div>
 
+      <!-- Source filter -->
+      <div class="select-wrap">
+        <div class="select-box">
+          <select [value]="sourceFilter()" (change)="onSource($any($event.target).value)">
+            <option value="">All Sources</option>
+            @for (opt of sourceOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
       <!-- Status filter -->
       <div class="select-wrap">
         <div class="select-box">
@@ -101,7 +116,11 @@
             </span>
           </th>
           <td mat-cell *matCellDef="let r">
-            <span class="cell-muted">{{ sourceLabel(r) }}</span>
+            @if (sourceLabel(r) !== '—') {
+              <span class="tag">{{ sourceLabel(r) }}</span>
+            } @else {
+              <span class="cell-muted">—</span>
+            }
           </td>
         </ng-container>
 
@@ -183,14 +202,14 @@
           <mat-icon>bolt</mat-icon>
         </div>
         <h3 class="empty-state__title">
-          @if (searchQuery() || statusFilter() || triggerFilter()) {
+          @if (searchQuery() || statusFilter() || sourceFilter() || triggerFilter()) {
             No executions matched your filters
           } @else {
             No workflow runs yet
           }
         </h3>
         <p class="empty-state__sub">
-          @if (searchQuery() || statusFilter() || triggerFilter()) {
+          @if (searchQuery() || statusFilter() || sourceFilter() || triggerFilter()) {
             Try adjusting your search or filters.
           } @else {
             Execution history will appear here once a workflow runs.

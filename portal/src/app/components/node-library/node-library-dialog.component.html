@@ -93,6 +93,25 @@
           }
           <button type="button" class="nld-mapping-tool-btn" (click)="bumpMarkAsMasterTrigger()">★ Mark as Master</button>
         </div>
+
+        <!-- Global search across BOTH the payload source tree and every destination table's columns —
+             matches by name, full path, or real data type (int/string/boolean/... — see
+             field-mapping-tree.util.ts's matchesSearchTerms), not just plain text. Sits in the middle of
+             this space-between toolbar, between the left action group and the right zoom/load group. -->
+        <div class="nld-mapping-toolbar-search">
+          <input
+            type="search"
+            class="nld-mapping-search-input"
+            placeholder="Search fields, columns, or types…"
+            aria-label="Search payload fields and destination columns by name, path, or data type"
+            [value]="mappingSearchQuery()"
+            (input)="onMappingSearchInput($any($event.target).value)"
+          />
+          @if (mappingSearchQuery()) {
+            <button type="button" class="nld-mapping-search-clear" aria-label="Clear search" (click)="clearMappingSearch()">✕</button>
+          }
+        </div>
+
         <div class="nld-mapping-toolbar-actions">
           <app-zoom-dock
             [zoomPercent]="destZoomPercent()"
@@ -318,6 +337,7 @@
             [zoomOutRequest]="zoomOutTrigger()"
             [zoomResetRequest]="zoomResetTrigger()"
             [zoomFitRequest]="zoomFitTrigger()"
+            [mappingSearchQuery]="mappingSearchQuery()"
             [isMaximized]="isMaximized()"
             (saved)="onDestWizardSaved($event)"
             (cancelled)="onDestWizardCancelled()"
