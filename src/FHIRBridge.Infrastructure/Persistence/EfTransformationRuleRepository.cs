@@ -14,11 +14,19 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         _db = db;
     }
 
+    // All five scope tiers below back only IEffectiveRuleResolver's PostMapping resolution (the per-destination-
+    // field pass that runs automatically after every mapped row — see TransformNodeExecutors.ApplyTransformRulesAsync).
+    // PreMapping rules (e.g. the HIPAA Safe Harbor default profile, applied by SafeHarborDeIdentificationService
+    // against raw FHIR JSON via SourceField paths, only when a Compliance node runs) must never be returned here:
+    // they carry no DestinationField (they target a SourceField instead), so the "DestinationField == null is a
+    // wildcard" fallback below would otherwise match EVERY destination field for that resource type/scope,
+    // masking fields the rule was never meant to touch.
     public async Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
         Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
         string? sourceField, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Workflow &&
                 x.ResourcePipelineRouteId == resourcePipelineRouteId &&
                 x.ResourceType == resourceType &&
@@ -36,6 +44,7 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Field &&
                 (x.ResourceType == null || x.ResourceType == resourceType) &&
                 (x.DestinationField == null || x.DestinationField == destinationField) &&
@@ -47,6 +56,7 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         string resourceType, string? destinationField, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.ResourceType &&
                 x.ResourceType == resourceType &&
                 (x.DestinationField == null || x.DestinationField == destinationField))
@@ -56,6 +66,7 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         DestinationType destinationType, string? destinationField, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.DestinationType &&
                 x.DestinationType == destinationType &&
                 (x.DestinationField == null || x.DestinationField == destinationField))
@@ -65,6 +76,7 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         string? destinationField, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Global &&
                 (x.DestinationField == null || x.DestinationField == destinationField))
             .ToListAsync(cancellationToken);

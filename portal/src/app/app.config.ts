@@ -6,7 +6,7 @@ import {
 import { provideRouter, withComponentInputBinding, withRouterConfig, Router } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { switchMap, firstValueFrom } from 'rxjs';
+import { of, switchMap, firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
@@ -76,7 +76,9 @@ function initApp(
         switchMap(requiresSetup => {
           if (requiresSetup) {
             auth.discardSession();
-            return [];
+            // Must still emit — firstValueFrom on the outer pipe throws EmptyError if this
+            // inner observable completes without a value (an empty array does exactly that).
+            return of(undefined);
           }
           return auth.initFromToken();
         }),

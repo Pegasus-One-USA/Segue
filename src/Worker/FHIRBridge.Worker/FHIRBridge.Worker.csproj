@@ -28,5 +28,6 @@
     <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Application\FHIRBridge.Runtime.Application.csproj" />
     <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Infrastructure\FHIRBridge.Runtime.Infrastructure.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
+    <ProjectReference Include="..\..\FHIRBridge.Infrastructure.Migrations.PostgreSql\FHIRBridge.Infrastructure.Migrations.PostgreSql.csproj" />
   </ItemGroup>
 </Project>

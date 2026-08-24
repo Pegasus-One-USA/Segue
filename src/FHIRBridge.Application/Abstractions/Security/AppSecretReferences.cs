@@ -17,4 +17,10 @@ public static class AppSecretReferences
     /// install, auto-generated on first boot like the other app secrets, never persisted in a
     /// <see cref="Domain.Entities.TransformationRule.ConfigJson"/>.</summary>
     public static readonly SecretReference TransformHashingKey = new("app", "transform-hashing-key");
+
+    /// <summary>AES-256-GCM key backing <see cref="IPhiFieldEncryptor"/> (PHI-bearing execution-history
+    /// columns) — one key per install, auto-generated on first boot like the other app secrets. Deliberately
+    /// excluded from <c>AppSecretsAdminService</c>'s regeneration catalog: unlike the signing secrets,
+    /// rotating this key would leave every previously-encrypted row undecryptable.</summary>
+    public static readonly SecretReference PhiEncryptionKey = new("app", "phi-encryption-key");
 }

@@ -109,6 +109,11 @@ export const SETTINGS_ROUTES: Routes = [
               { path: 'mapping-profiles', permissions: ['mappingprofiles.view'] },
               { path: 'transformation-rules', permissions: ['transformationrules.view'] },
             ])],
+            // canActivate always returns a redirect UrlTree — nothing ever renders here — but the
+            // Angular Router still requires one of component/loadComponent/redirectTo/children/
+            // loadChildren declared on every route (NG04014). An empty array satisfies that check
+            // without changing behavior.
+            children: [],
           },
         ],
       },
@@ -222,6 +227,7 @@ export const SETTINGS_ROUTES: Routes = [
                   { path: 'rxnorm', permissions: ['rxnorm.view', 'rxnorm.write'] },
                   { path: 'icd-10', permissions: ['icd10.view', 'icd10.write'] },
                 ])],
+                children: [],
               },
             ],
           },
@@ -251,6 +257,7 @@ export const SETTINGS_ROUTES: Routes = [
               { path: 'security', superAdminOnly: true },
               { path: 'sso-configurations', superAdminOnly: true },
             ])],
+            children: [],
           },
         ],
       },
@@ -268,6 +275,7 @@ export const SETTINGS_ROUTES: Routes = [
           { path: 'system-settings', permissions: SYSTEM_SETTINGS_PERMISSIONS },
           { path: 'allowed-origins', superAdminOnly: true },
         ])],
+        children: [],
       },
     ],
   },

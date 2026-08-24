@@ -332,11 +332,14 @@ public sealed class ConfigurationService : IConfigurationService
     private async Task<Guid> AutoProvisionSourceConfigurationAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var connection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        // Clone, don't share, the owned Retrieval instance: connection.Retrieval is already tracked as owned
+        // by the SourceConnection entity, so handing that exact object to a new SourceConfiguration makes EF
+        // try to track the same CLR instance under two owners at once — see SourceRetrievalConfiguration.Clone.
         var configuration = new SourceConfiguration(
             connection.Id,
             connection.Name,
             connection.Authentication.Scopes,
-            connection.Retrieval);
+            connection.Retrieval?.Clone());
 
         await _repository.AddSourceConfigurationAsync(configuration, cancellationToken);
         return configuration.Id;

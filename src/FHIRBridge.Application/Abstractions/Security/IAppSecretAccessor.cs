@@ -15,6 +15,8 @@ public interface IAppSecretAccessor
 
     string TransformHashingKey { get; }
 
+    string PhiEncryptionKey { get; }
+
     /// <summary>
     /// Updates the cached value for one app secret in THIS process only, after <see cref="ISecretWriter"/> has
     /// already persisted it — see <c>AppSecretsAdminService</c>'s remarks on the cross-process caveat for
