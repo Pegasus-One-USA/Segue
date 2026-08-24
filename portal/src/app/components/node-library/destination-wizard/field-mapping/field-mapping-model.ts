@@ -269,8 +269,13 @@ export function isApproximated(row: MappingRow): boolean {
   return resolveArrayPolicy(row).approximated;
 }
 
-/** True when this row's primary source is a FHIR reference element (path ends in ".reference") — the
- *  only shape "referencesResource" (resolve against another mapped resource's table) is meaningful for. */
-export function isReferenceField(row: MappingRow): boolean {
-  return row.mode === 'value' && !!row.sources[0]?.fhirPath?.endsWith('.reference');
+/** True whenever this row could plausibly be designated as pointing at another mapped resource's table via
+ *  "referencesResource" — any single-value mapped field, not just one whose path happens to end in
+ *  ".reference". Not every source feed shapes its parent-id field as a FHIR Reference (e.g. some flatten
+ *  straight to a bare "patientId": "abc123" with no "Patient/" prefix) — ExtractReferenceId on the backend
+ *  already tolerates that (a value with no "/" is used as-is), so the UI shouldn't be pickier than the
+ *  engine actually is. childJson/array rows are excluded: their value is always written as JSON text (see
+ *  resolveArrayPolicy's StoreJson branch), a distinct concern from a scalar field pointing at another row. */
+export function isReferenceCandidate(row: MappingRow): boolean {
+  return row.mode === 'value' && !!row.sources[0]?.fhirPath;
 }

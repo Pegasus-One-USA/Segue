@@ -1020,4 +1020,52 @@
     </div>
   }
 
+  <!-- ── Confirm before saving despite a non-blocking mapping warning ────────── -->
+  @if (pendingSaveWarnings(); as warnings) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onSaveWarningsBackdropClick($event)"
+         (keydown.escape)="cancelSaveWithWarnings()">
+      <div class="dw-confirm-dialog dw-confirm-dialog--wide">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">Save {{ activeMappingGroup() }} mapping with {{ warnings.length }} warning{{ warnings.length === 1 ? '' : 's' }}?</h3>
+        <div class="dw-confirm-body">
+          @for (w of warnings; track w.parent) {
+            <div class="dw-ref-warning">
+              @if (w.message) {
+                <p>{{ w.message }}</p>
+              } @else {
+                <p>
+                  "{{ w.resource }}" requires a reference to "{{ w.parent }}"
+                  <br>
+                  —
+                  @if (w.existingRow) {
+                    <strong>{{ w.sourceFieldLabel }}</strong> is already mapped; point it at:
+                  } @else {
+                    map <strong>{{ w.sourceFieldLabel }}</strong> to:
+                  }
+                </p>
+                <div class="dw-ref-warning-fix">
+                  <select #destSelect class="dw-ref-warning-select">
+                    <option value="" [selected]="!w.selectedDestinationColumn">Select…</option>
+                    @for (col of w.destinationColumns; track col) {
+                      <option [value]="col" [selected]="col === w.selectedDestinationColumn">{{ col }}</option>
+                    }
+                  </select>
+                  <button type="button" class="btn btn-secondary"
+                          (click)="resolvePendingReferenceWarning(w, destSelect.value)">
+                    Map as {{ w.parent }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelSaveWithWarnings()">Keep editing</button>
+          <button type="button" class="btn btn-danger" (click)="confirmSaveWithWarnings()">Save anyway</button>
+        </div>
+      </div>
+    </div>
+  }
+
 </div>
