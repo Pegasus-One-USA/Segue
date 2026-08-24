@@ -23,8 +23,9 @@ export class AppComponent {
   // Instantiate eagerly so the cross-tab `storage` listener is registered from the
   // first paint, not only once some other component happens to inject it.
   private readonly crossTabAuthSync = inject(CrossTabAuthSyncService);
-  // Instantiate BrandingService at startup so tenant branding is resolved and
-  // applied before the router renders anything (including /auth/login).
+  // BrandingService's actual resolution now happens in app.config.ts's APP_INITIALIZER (awaited
+  // before the router renders anything) — this reference just keeps the singleton reachable here
+  // for consistency with the other startup services on this line; it triggers nothing on its own.
   private readonly branding = inject(BrandingService);
   private readonly loading = inject(LoadingService);
 

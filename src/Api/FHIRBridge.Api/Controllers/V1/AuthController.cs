@@ -479,22 +479,34 @@ public sealed class AuthController : ControllerBase
     /// HIPAA #7: moves the issued tokens out of the JSON body into HttpOnly cookies (mitigates XSS-driven token
     /// theft) and returns the same response with the raw token fields nulled out — everything else (Profile,
     /// RequiresMfa, etc.) is unchanged so existing frontend code that reads those fields keeps working.
+    ///
+    /// "Remember me" (response.RememberMe): the access-token cookie is ALWAYS persistent with its normal
+    /// short expiry, regardless — this only ever governs whether the refresh + CSRF cookies get an Expires
+    /// attribute at all. With one (isPersistent: true), the browser keeps the cookie across a full close,
+    /// exactly like every login before this feature existed. Without one (isPersistent: false), it's a
+    /// session cookie the browser discards on close — the refresh token's own server-side validity window
+    /// (Authentication:RefreshTokenLifetimeDays) is completely unchanged either way; this only changes
+    /// whether the cookie survives long enough on the client to ever present it again.
     /// </summary>
     private LocalLoginResponse IssueTokenCookiesAndStrip(LocalLoginResponse response)
     {
         if (response.AccessToken is not null && response.ExpiresOnUtc is not null)
         {
-            Response.Cookies.Append(AccessTokenCookieName, response.AccessToken, CookieOptionsFor(response.ExpiresOnUtc.Value));
+            Response.Cookies.Append(
+                AccessTokenCookieName, response.AccessToken, CookieOptionsFor(response.ExpiresOnUtc.Value, isPersistent: true));
         }
 
         if (response.RefreshToken is not null && response.RefreshTokenExpiresOnUtc is not null)
         {
-            Response.Cookies.Append(RefreshTokenCookieName, response.RefreshToken, CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value));
+            Response.Cookies.Append(
+                RefreshTokenCookieName, response.RefreshToken,
+                CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value, response.RememberMe));
 
             // Double-submit CSRF token: readable by the portal's JS (NOT HttpOnly) so it can echo it back as a
             // header on state-changing requests — cookie auth alone can't prove the request came from our own
-            // page, since browsers attach cookies to cross-site requests too.
-            var csrfOptions = CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value);
+            // page, since browsers attach cookies to cross-site requests too. Mirrors the refresh cookie's own
+            // persistence choice: no reason for the CSRF cookie to outlive (or vanish before) the session it protects.
+            var csrfOptions = CookieOptionsFor(response.RefreshTokenExpiresOnUtc.Value, response.RememberMe);
             csrfOptions.HttpOnly = false;
             Response.Cookies.Append(CsrfCookieName, Guid.NewGuid().ToString("N"), csrfOptions);
         }
@@ -509,14 +521,17 @@ public sealed class AuthController : ControllerBase
         Response.Cookies.Delete(CsrfCookieName, new CookieOptions { Path = "/" });
     }
 
-    private CookieOptions CookieOptionsFor(DateTime expiresOnUtc) => new()
+    private CookieOptions CookieOptionsFor(DateTime expiresOnUtc, bool isPersistent) => new()
     {
         HttpOnly = true,
         // Secure is required for SameSite=Strict cookies in modern browsers, but a hardcoded `true` would make
         // the cookie silently vanish on a plain-HTTP local `dotnet run` — tie it to the actual request scheme.
         Secure = Request.IsHttps,
         SameSite = SameSiteMode.Strict,
-        Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresOnUtc, DateTimeKind.Utc)),
+        // Omitting Expires entirely (leaving it null) is what makes a cookie a "session cookie" — the browser
+        // discards it when it fully closes, rather than keeping it around until this timestamp. isPersistent
+        // is the ONLY thing that decides which of the two this is; expiresOnUtc itself never changes.
+        Expires = isPersistent ? new DateTimeOffset(DateTime.SpecifyKind(expiresOnUtc, DateTimeKind.Utc)) : null,
         Path = "/",
     };
 }

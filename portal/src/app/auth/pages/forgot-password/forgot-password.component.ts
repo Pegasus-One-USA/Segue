@@ -35,8 +35,10 @@ export class ForgotPasswordComponent {
   protected readonly error     = signal<string | null>(null);
   protected readonly submitted = signal(false);
 
-  /** Keep a reference to the submitted email to show in success state */
-  protected submittedEmail = '';
+  /** The generic, enumeration-safe message from AuthApiService.forgotPassword() — "If an account exists
+   *  for X, a password reset link has been sent." Shown verbatim rather than re-worded in the template so
+   *  there's a single place this exact phrasing lives, not two copies that can drift apart. */
+  protected successMessage = '';
 
   protected readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -57,14 +59,22 @@ export class ForgotPasswordComponent {
     this.error.set(null);
 
     this.auth.forgotPassword({ email }).subscribe({
-      next: () => {
+      next: (res) => {
         this.loading.set(false);
-        this.submittedEmail = email;
+        this.successMessage = res.message;
         this.sent.set(true);
       },
       error: (e) => {
         this.loading.set(false);
-        this.error.set(e?.error?.message ?? 'Request failed. Please try again.');
+        // The backend only ever returns 202 here — a nonexistent email is NOT an error (see
+        // LocalAuthService.ForgotPasswordAsync). What reaches here is a rate limit (429) or a genuine
+        // network/server failure, so a generic message is correct; there's no "wrong email" case to
+        // special-case without reintroducing an enumeration signal.
+        this.error.set(
+          e?.status === 0
+            ? 'Network error. Please check your connection and try again.'
+            : (e?.error?.message ?? 'Request failed. Please try again.')
+        );
       },
     });
   }

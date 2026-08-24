@@ -83,6 +83,28 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.RefreshTokenHash)
             .HasMaxLength(500);
 
+        // Defaults existing rows (issued before this column existed, when every refresh cookie was
+        // unconditionally persistent) to true — the migration must not silently downgrade any
+        // already-remembered session to session-only. A plain CLR property initializer isn't enough
+        // on its own: EF's migration scaffolding reads the column's default from this Fluent
+        // configuration, not from the C# `= true` on the property itself.
+        builder.Property(x => x.RefreshTokenRememberMe)
+            .HasDefaultValue(true);
+
+        builder.Property(x => x.TenantId)
+            .IsRequired();
+
+        // No CLR navigation property on either side (User has none back to Tenant, Tenant has no
+        // ICollection<User>) — a pure FK-only relationship is fully supported by EF Core and avoids
+        // adding a collection navigation to Tenant that nothing actually needs today. RESTRICT (not
+        // Cascade) is deliberate: deleting a tenant must never silently delete its users — see
+        // TenantsService.DeleteAsync's explicit HasUsersAsync check, which is the intended way a
+        // tenant-with-users deletion is blocked; RESTRICT is the DB-level backstop behind that check.
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(x => x.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(x => x.ExternalUserId)
             .IsUnique();
 
@@ -91,5 +113,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(x => x.RefreshTokenHash);
 
         builder.HasIndex(x => x.MfaChallengeTokenHash);
+
+        builder.HasIndex(x => x.TenantId);
     }
 }

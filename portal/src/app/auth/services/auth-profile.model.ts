@@ -12,6 +12,10 @@ export interface AuthProfileDto {
   permissions?:   string[] | null;
   requiresPasswordChange?: boolean;
   requiresMfaSetup?:       boolean;
+  // Real, DB-sourced tenant membership (see UserProfileDto/UserAccessService.ToProfileDtoAsync) —
+  // replaces the portal's former hardcoded orgId:'org' placeholder.
+  tenantId?:   string;
+  tenantName?: string;
 }
 
 /** Mirrors the backend LocalLoginResponse with the raw token fields stripped (see AuthController.IssueTokenCookiesAndStrip). */
