@@ -83,6 +83,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
   readonly csvDelimiterKey = input<string>('comma');
+  /** Toolbar-level search (dialog header, see NodeLibraryDialogComponent) — live text, forwarded
+   *  straight through to both the payload source tree and every destination target card below, each of
+   *  which mirrors it into its own local searchQuery so it drives their existing filtering pipelines. */
+  readonly searchQuery = input<string>('');
 
   // Extra tables added alongside the resource's primary table — either picked from tables the SQL
   // probe already found, or (when typed as a new name) created for real via CreateTableAsync.

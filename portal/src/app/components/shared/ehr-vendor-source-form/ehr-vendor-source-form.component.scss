@@ -469,6 +469,8 @@
   font-size: 14px;
 
   &--error {
+    /* Hidden per request: keep markup/logic intact, just never show it. */
+    display: none;
     padding: 10px 14px;
     border-radius: 9px;
     background: var(--color-error-soft);

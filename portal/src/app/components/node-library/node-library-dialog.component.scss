@@ -186,6 +186,57 @@
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
 }
 
+/* Global search sitting between the toolbar's two action groups (space-between fills this middle slot
+   naturally) — filters both the payload tree and every destination table's columns at once by name,
+   path, or real data type. Ordinary surface input, unlike the "glass on dark header" treatment each
+   card's own small search box uses (see field-mapping-source-tree.component.scss) — this toolbar's
+   background is light (--color-side), not a card's dark head. */
+.nld-mapping-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 240px;
+  max-width: 420px;
+  min-width: 160px;
+}
+
+.nld-mapping-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--space-8, 12px);
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-family: inherit;
+
+  &::placeholder { color: var(--color-muted); }
+  &::-webkit-search-cancel-button { display: none; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary-mid);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+}
+
+.nld-mapping-search-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { color: var(--color-ink-2); background: var(--color-side); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
 .nld-maximize {
   width: 28px;
   height: 28px;

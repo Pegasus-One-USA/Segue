@@ -100,27 +100,75 @@ export function buildForest(
 }
 
 /**
- * Filters a tree for a case-insensitive substring match against a node's label (leaf paths also match
- * on their raw fhirPath, so e.g. "coding.code" finds it even though that's not in the display label;
- * a reference leaf also matches on any resource type it may point at, e.g. "patient" finds
- * Observation's "Subject › Reference" even though neither word appears in that label — see
- * ResourceFieldDef.referenceTargetTypes). If a GROUP's own label matches, its entire subtree is kept
- * as-is — searching "address" should surface every Address field, not just the ones whose own label
- * also happens to contain "address".
+ * Every string a node can be found by, lowercased once up front. Covers name/path, data type, and the
+ * "array" badge already shown in the UI — never a guessed type-label mapping, only what the field's own
+ * metadata (or the group's own array-ancestor flag) actually carries:
+ *  - leaf: display label, full resource-qualified fhirPath (so "meta.security" finds it even though
+ *    that dotted path isn't in the label), the real valueType off ResourceFieldDef/FhirElement (String,
+ *    Integer, Decimal, Boolean, Date, DateTime, Json, ... whatever the catalog sends — never hardcoded
+ *    to a fixed int/string list), any referenceTargetTypes (e.g. "patient" finds Observation's "Subject
+ *    › Reference"), and the literal word "array" when this leaf sits under a repeating ancestor.
+ *  - group: display label, its own relative groupPath, its full id (resource-qualified path), and
+ *    "array" when this group segment itself repeats (isArray) — same word as its on-screen badge.
+ */
+function nodeHaystack(node: FmTreeNode): string[] {
+  if (node.kind === 'leaf') {
+    const f = node.field;
+    return [
+      node.label,
+      f?.fhirPath ?? '',
+      f?.valueType ?? '',
+      ...(f?.referenceTargetTypes ?? []),
+      ...(f?.arrays?.length ? ['array'] : []),
+    ].map(s => s.toLowerCase());
+  }
+  return [
+    node.label,
+    node.groupPath ?? '',
+    node.id,
+    ...(node.isArray ? ['array'] : []),
+  ].map(s => s.toLowerCase());
+}
+
+/** Splits a raw query into whitespace-separated, trimmed, lowercased terms — shared by every
+ *  field-mapping search box (the payload tree here, and destination table columns in
+ *  field-mapping-target-card.component.ts) so "multiple terms AND together, each term OR's across a
+ *  candidate's own searchable strings" means exactly the same thing everywhere in this feature. */
+export function searchTerms(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/** True when every term matches SOMETHING in `haystack` (terms may each match a different entry — e.g.
+ *  "patient string" matches via a path entry for "patient" and a type entry for "string" on the same
+ *  candidate). AND across terms, OR across haystack entries per term. Lowercases defensively, so callers
+ *  may pass raw-case strings. */
+export function matchesSearchTerms(haystack: string[], terms: string[]): boolean {
+  if (!terms.length) return true;
+  const lower = haystack.map(h => h.toLowerCase());
+  return terms.every(t => lower.some(h => h.includes(t)));
+}
+
+/**
+ * Filters a tree by a whitespace-separated, case-insensitive, partial-match term list (see
+ * matchesSearchTerms/nodeHaystack for what a term can match against: name, full path, data type,
+ * reference target, or the "array" badge). If a GROUP's own text satisfies every term, its entire
+ * subtree is kept as-is — searching "meta" or "address" should surface the whole hierarchy, not just
+ * the children whose own label also happens to repeat the word. Otherwise each child is filtered
+ * independently and pruned parents are dropped, so a deep single-leaf match (e.g. "code" finding only
+ * Meta › Security › Code) still renders with its full parent chain intact rather than flattened.
  */
 export function filterTree(node: FmTreeNode, query: string): FmTreeNode | null {
-  const q = query.trim().toLowerCase();
-  if (!q) return node;
+  const terms = searchTerms(query);
+  if (!terms.length) return node;
+  return filterByTerms(node, terms);
+}
 
-  const ownMatch = node.label.toLowerCase().includes(q)
-    || (node.kind === 'leaf' && !!node.field?.fhirPath.toLowerCase().includes(q))
-    || (node.kind === 'leaf' && !!node.field?.referenceTargetTypes?.some(t => t.toLowerCase().includes(q)));
-
-  if (node.kind === 'leaf') return ownMatch ? node : null;
-  if (ownMatch) return node;
+function filterByTerms(node: FmTreeNode, terms: string[]): FmTreeNode | null {
+  if (node.kind === 'leaf') return matchesSearchTerms(nodeHaystack(node), terms) ? node : null;
+  if (matchesSearchTerms(nodeHaystack(node), terms)) return node;
 
   const children = node.children
-    .map(child => filterTree(child, q))
+    .map(child => filterByTerms(child, terms))
     .filter((child): child is FmTreeNode => child !== null);
   return children.length ? { ...node, children } : null;
 }

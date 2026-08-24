@@ -785,6 +785,7 @@
           [zoomOutRequest]="zoomOutRequest()"
           [zoomResetRequest]="zoomResetRequest()"
           [zoomFitRequest]="zoomFitRequest()"
+          [searchQuery]="mappingSearchQuery()"
           (suggestionCountChange)="suggestionCountChange.emit($event)"
           (zoomPercentChange)="zoomPercentChange.emit($event)"
           (mappingRowsChange)="mappingRows.set($event)"

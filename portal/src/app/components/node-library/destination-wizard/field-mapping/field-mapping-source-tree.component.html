@@ -32,8 +32,8 @@
     >{{ fitMode() ? '⤢' : '⤡' }}</button>
   </div>
   <div class="fm-source-rows" (scroll)="onRowsScroll()">
-    @if (isSearching() && matchCount() === 0) {
-      <div class="fm-source-no-match">No fields match "{{ searchQuery() }}".</div>
+    @if (hasActiveFilter() && matchCount() === 0) {
+      <div class="fm-source-no-match">No fields match "{{ effectiveQuery() }}".</div>
     }
     @for (r of filteredRoots(); track r.node.id; let i = $index) {
       <div class="fm-source-group" [style.--fm-group-color]="groupColorVar(r.colorIndex)">

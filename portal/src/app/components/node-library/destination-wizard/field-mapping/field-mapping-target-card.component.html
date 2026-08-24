@@ -82,8 +82,8 @@
         >Add</button>
       </div>
     }
-    @if (isSearching() && filteredColumns().length === 0) {
-      <div class="fm-target-no-match">No columns match "{{ searchQuery() }}".</div>
+    @if (hasActiveFilter() && filteredColumns().length === 0) {
+      <div class="fm-target-no-match">No columns match "{{ effectiveQuery() }}".</div>
     }
     @for (col of filteredColumns(); track col) {
       <div

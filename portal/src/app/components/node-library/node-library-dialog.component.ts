@@ -300,6 +300,14 @@ export class NodeLibraryDialogComponent {
   readonly destSuggestionCount = signal(0);
   readonly destZoomPercent = signal('100%');
 
+  // Toolbar-level search box (see .nld-mapping-toolbar-search) — live text forwarded straight down
+  // through DestinationWizardComponent -> FieldMappingCanvasComponent to both the payload source tree
+  // and every destination table's columns, each filtering by name/path/data type. Unlike the counters
+  // above this isn't a one-shot action, so there's no bump/trigger pair — just a plain read/write signal.
+  readonly mappingSearchQuery = signal('');
+  onMappingSearchInput(value: string): void { this.mappingSearchQuery.set(value); }
+  clearMappingSearch(): void { this.mappingSearchQuery.set(''); }
+
   // Whether the whole dialog is expanded to near-fullscreen (see .nld--maximized) — the maximize button
   // lives in several places (mapping-canvas header, floating controls, and each form's own topbar) but
   // they all toggle this one piece of state.
@@ -709,6 +717,7 @@ export class NodeLibraryDialogComponent {
     this.destMappingCount.set(0);
     this.destSuggestionCount.set(0);
     this.destZoomPercent.set('100%');
+    this.mappingSearchQuery.set('');
     this.showDestWizard.set(true);
   }
 
@@ -772,6 +781,7 @@ export class NodeLibraryDialogComponent {
     this.destMappingCount.set(0);
     this.destSuggestionCount.set(0);
     this.destZoomPercent.set('100%');
+    this.mappingSearchQuery.set('');
   }
 
   // ── add to pipeline (fallback for items without an auto-open form) ───────
@@ -850,6 +860,7 @@ export class NodeLibraryDialogComponent {
     this.destMappingCount.set(0);
     this.destSuggestionCount.set(0);
     this.destZoomPercent.set('100%');
+    this.mappingSearchQuery.set('');
     this.pendingDestSwitch.set(null);
     this.wiz.close();
   }

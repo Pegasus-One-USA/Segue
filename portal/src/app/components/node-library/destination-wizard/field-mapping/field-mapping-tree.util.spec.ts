@@ -1,4 +1,4 @@
-import { buildResourceTree, buildForest, flattenLeaves, findNode } from './field-mapping-tree.util';
+import { buildResourceTree, buildForest, flattenLeaves, findNode, filterTree, filterForest } from './field-mapping-tree.util';
 import { ResourceFieldDef } from '../destination-wizard.component';
 
 describe('buildResourceTree', () => {
@@ -90,5 +90,104 @@ describe('findNode', () => {
     expect(findNode(forest, 'Patient.name.given')?.label).toBe('Given');
     expect(findNode(forest, 'Patient.name')?.kind).toBe('group');
     expect(findNode(forest, 'nope')).toBeNull();
+  });
+});
+
+describe('filterTree / filterForest', () => {
+  const fields: ResourceFieldDef[] = [
+    { label: 'Given', path: 'Patient.name.given', sqlColumn: 'Given', csvColumn: 'Given', jsonPath: '$.name[*].given[*]', valueType: 'String', arrays: ['name'] },
+    { label: 'Family', path: 'Patient.name.family', sqlColumn: 'Family', csvColumn: 'Family', jsonPath: '$.name[*].family', valueType: 'String', arrays: ['name'] },
+    { label: 'Version Id', path: 'Patient.meta.versionId', sqlColumn: 'VersionId', csvColumn: 'VersionId', jsonPath: '$.meta.versionId', valueType: 'Integer', arrays: [] },
+    { label: 'System', path: 'Patient.meta.security.system', sqlColumn: 'SecuritySystem', csvColumn: 'SecuritySystem', jsonPath: '$.meta.security[*].system', valueType: 'String', arrays: ['meta.security'] },
+    { label: 'Code', path: 'Patient.meta.security.code', sqlColumn: 'SecurityCode', csvColumn: 'SecurityCode', jsonPath: '$.meta.security[*].code', valueType: 'String', arrays: ['meta.security'] },
+    { label: 'Active', path: 'Patient.active', sqlColumn: 'Active', csvColumn: 'Active', jsonPath: '$.active', valueType: 'Boolean', arrays: [] },
+  ];
+
+  function labelsOf(forest: ReturnType<typeof buildForest>): string[] {
+    return forest.flatMap(root => flattenLeaves(root).map(l => l.label));
+  }
+
+  it('an empty/blank query returns the forest unchanged', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    expect(filterForest(forest, '')).toBe(forest);
+    expect(filterForest(forest, '   ')).toBe(forest);
+  });
+
+  it('matches by field name/path, case-insensitively and partially ("pati" finds Patient)', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'pati');
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].label).toBe('Patient');
+  });
+
+  it('matches a group by label and keeps its entire subtree ("meta")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'meta');
+    expect(labelsOf(filtered).sort()).toEqual(['Code', 'System', 'Version Id']);
+  });
+
+  it('matches a nested group by label ("security") and keeps only its own subtree', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'security');
+    expect(labelsOf(filtered).sort()).toEqual(['Code', 'System']);
+  });
+
+  it('matches a full dotted field path ("meta.security.code") down to one leaf', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'meta.security.code');
+    expect(labelsOf(filtered)).toEqual(['Code']);
+  });
+
+  it('preserves hierarchy for a single deep match instead of flattening it ("code")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'code');
+    const metaGroup = filtered[0].children.find(c => c.label === 'Meta')!;
+    const securityGroup = metaGroup.children.find(c => c.label === 'Security')!;
+    expect(securityGroup.children.map(c => c.label)).toEqual(['Code']);
+  });
+
+  it('matches by real data type from field metadata, not by guessing from label text ("integer")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'integer');
+    expect(labelsOf(filtered)).toEqual(['Version Id']);
+  });
+
+  it('matches every string-typed field ("string")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'string');
+    expect(labelsOf(filtered).sort()).toEqual(['Code', 'Family', 'Given', 'System']);
+  });
+
+  it('matches every boolean-typed field ("boolean")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'boolean');
+    expect(labelsOf(filtered)).toEqual(['Active']);
+  });
+
+  it('is case-insensitive and whitespace-trimmed ("STRING" === "string" === "  string  ")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const upper = labelsOf(filterForest(forest, 'STRING')).sort();
+    const lower = labelsOf(filterForest(forest, 'string')).sort();
+    const padded = labelsOf(filterForest(forest, '  string  ')).sort();
+    expect(upper).toEqual(lower);
+    expect(padded).toEqual(lower);
+  });
+
+  it('treats multiple terms as AND, matching different fields on the same node ("meta integer")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const filtered = filterForest(forest, 'meta integer');
+    expect(labelsOf(filtered)).toEqual(['Version Id']);
+  });
+
+  it('AND across terms returns nothing when no single field satisfies every term ("name integer")', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    expect(labelsOf(filterForest(forest, 'name integer'))).toEqual([]);
+  });
+
+  it('does not mutate the original forest or its node objects', () => {
+    const forest = buildForest(['Patient'], () => fields);
+    const before = JSON.stringify(forest);
+    filterForest(forest, 'meta.security.code');
+    expect(JSON.stringify(forest)).toEqual(before);
   });
 });
