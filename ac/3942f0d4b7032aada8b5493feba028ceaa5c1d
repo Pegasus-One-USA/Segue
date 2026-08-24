@@ -1,0 +1,370 @@
+Documents/SSO-Login-Setup-Guide.html
+  h_9042ea4abaf2fc 1-755
+poc/Medplum.Poc/Program.cs
+  h_9042ea4abaf2fc 28,54-58,139-236
+portal/src/app/app.config.ts
+  h_9042ea4abaf2fc 6,9,20-21,35-60,70-83,85,123
+portal/src/app/app.routes.ts
+  h_9042ea4abaf2fc 43-49,56-59,62-65,76-77,144-145,148-149
+portal/src/app/auth/auth.routes.ts
+  h_9042ea4abaf2fc 30-41
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.html
+  h_9042ea4abaf2fc 57-71
+portal/src/app/auth/components/sso-buttons/sso-buttons.component.ts
+  h_9042ea4abaf2fc 16,41,57-65,75-84
+portal/src/app/auth/guards/permission.guard.ts
+  h_9042ea4abaf2fc 4,7-16,19-23
+portal/src/app/auth/models/auth-request.model.ts
+  h_9042ea4abaf2fc 62-75
+portal/src/app/auth/pages/login/login.component.html
+  h_9042ea4abaf2fc 233-240
+portal/src/app/auth/pages/login/login.component.ts
+  h_9042ea4abaf2fc 19,55-69
+portal/src/app/auth/pages/magic-link-redeem/magic-link-redeem.component.html
+  h_9042ea4abaf2fc 1-64
+portal/src/app/auth/pages/magic-link-redeem/magic-link-redeem.component.scss
+  h_9042ea4abaf2fc 1-174
+portal/src/app/auth/pages/magic-link-redeem/magic-link-redeem.component.ts
+  h_9042ea4abaf2fc 1-91
+portal/src/app/auth/pages/magic-link-request/magic-link-request.component.html
+  h_9042ea4abaf2fc 1-81
+portal/src/app/auth/pages/magic-link-request/magic-link-request.component.scss
+  h_9042ea4abaf2fc 1-226
+portal/src/app/auth/pages/magic-link-request/magic-link-request.component.ts
+  h_9042ea4abaf2fc 1-68
+portal/src/app/auth/services/auth-api.service.ts
+  h_9042ea4abaf2fc 20,114-134
+portal/src/app/auth/services/auth.service.ts
+  h_9042ea4abaf2fc 17,115-143
+portal/src/app/auth/services/i-auth.service.ts
+  h_9042ea4abaf2fc 7,22-25
+portal/src/app/auth/services/mock-auth.service.ts
+  h_9042ea4abaf2fc 10,22-26,182-223
+portal/src/app/auth/services/permission.service.ts
+  h_9042ea4abaf2fc 4-5,32-60
+portal/src/app/auth/services/sso-config.service.ts
+  h_9042ea4abaf2fc 20-21,28-35,37-45,47,49,78-80,86-87
+portal/src/app/auth/services/sso.service.ts
+  h_9042ea4abaf2fc 6,11-20,64-67,79-82,84,88-102
+portal/src/app/components/canvas/canvas.component.html
+  h_9042ea4abaf2fc 24-25,38-39,52,77-92,94,96-102,105,138-140
+portal/src/app/components/canvas/canvas.component.ts
+  h_9042ea4abaf2fc 8,14-17,33-37,49-54,163-171,173-180,184-203,227,255-257,276,289,295,325-331,333
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  h_9042ea4abaf2fc 102-109,136,183,245,248,260
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  h_9042ea4abaf2fc 20-22,77,86-87,187-188,191,225,278,328-330,354,397
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  h_9042ea4abaf2fc 9-10,18,153-154,341-346,354-357,385-398,419-423,579-580,582,588-594,596-604,663-697,699,719
+portal/src/app/components/node-library/source-node-vendor.util.ts
+  h_9042ea4abaf2fc 1-28
+portal/src/app/components/nodes/merge-node/merge-node.component.html
+  h_9042ea4abaf2fc 4-12,14-22
+portal/src/app/components/nodes/merge-node/merge-node.component.ts
+  h_9042ea4abaf2fc 19-20
+portal/src/app/components/nodes/source-node/source-node.component.html
+  h_9042ea4abaf2fc 4-12,14-22
+portal/src/app/components/nodes/source-node/source-node.component.ts
+  h_9042ea4abaf2fc 17-22
+portal/src/app/components/nodes/transform-node/transform-node.component.html
+  h_9042ea4abaf2fc 4,15
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  h_9042ea4abaf2fc 53-58
+portal/src/app/core/api-endpoints.ts
+  h_9042ea4abaf2fc 33-36,204-211
+portal/src/app/core/logs-compliance-nav.ts
+  h_9042ea4abaf2fc 21-23
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  h_9042ea4abaf2fc 5,18-23,34-40,44-68,89,98
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  h_9042ea4abaf2fc 12-14
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  h_9042ea4abaf2fc 13,50-57
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  h_9042ea4abaf2fc 2,44-54
+portal/src/app/data/transforms.data.ts
+  h_9042ea4abaf2fc 12-41
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  h_9042ea4abaf2fc 37-54
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  h_9042ea4abaf2fc 15-16,62-63,145-149,176-178
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  h_9042ea4abaf2fc 46,143-152,156
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  h_9042ea4abaf2fc 22-24,44,50-84,236,242,265
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  h_9042ea4abaf2fc 14,59,107-110
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  h_9042ea4abaf2fc 29,142,145
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  h_9042ea4abaf2fc 17-18,32,38-41,125,143,161
+portal/src/app/governance/layout/governance-shell.component.ts
+  h_9042ea4abaf2fc 8-9,16-19
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  h_9042ea4abaf2fc 22,127,259-262
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  h_9042ea4abaf2fc 46,132-141,145,167,173
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  h_9042ea4abaf2fc 21-23,48,54-59,192,197,232,247
+portal/src/app/models/source.model.ts
+  h_9042ea4abaf2fc 8-15
+portal/src/app/models/transform.model.ts
+  h_9042ea4abaf2fc 8-15
+portal/src/app/operations/pages/errors/errors.component.html
+  h_9042ea4abaf2fc 130,132
+portal/src/app/operations/pages/errors/errors.component.ts
+  h_9042ea4abaf2fc 9-10,23,31,90,96
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  h_9042ea4abaf2fc 67-82,91
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  h_9042ea4abaf2fc 3,47,57-70,201,224-227,262-267,308-314,323-341,490-496,498,505,514-519,521,524-529,534,538-547,670
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  h_9042ea4abaf2fc 14-19,162-165,167-168,171-181,183-196,198-207,219-220,222-230,278,310
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  h_9042ea4abaf2fc 15,53-61,356,367,471,496,523,555-557,559
+portal/src/app/services/workflow-build-assembler.service.ts
+  h_9042ea4abaf2fc 115-120,127-129
+portal/src/app/services/workflow-graph-mapper.service.ts
+  h_9042ea4abaf2fc 52
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.html
+  h_9042ea4abaf2fc 20,24
+portal/src/app/settings/components/terminology-freshness-card/terminology-freshness-card.component.ts
+  h_9042ea4abaf2fc 31-35
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.html
+  h_9042ea4abaf2fc 54
+portal/src/app/settings/components/terminology-scheduler-card/terminology-scheduler-card.component.ts
+  h_9042ea4abaf2fc 35-39
+portal/src/app/settings/guards/settings-landing.guard.ts
+  h_9042ea4abaf2fc 1-46
+portal/src/app/settings/layout/settings-shell.component.ts
+  h_9042ea4abaf2fc 20-25,27-39
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.html
+  h_9042ea4abaf2fc 2
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  h_9042ea4abaf2fc 1,4,10-14,17-19,21-32,43-54
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.html
+  h_9042ea4abaf2fc 2
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.ts
+  h_9042ea4abaf2fc 1,4,13-17,21-24,41-51
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.ts
+  h_9042ea4abaf2fc 14-18,21-23
+portal/src/app/settings/models/sso-configurations.model.ts
+  h_9042ea4abaf2fc 1-36
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  h_9042ea4abaf2fc 253-260
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  h_9042ea4abaf2fc 12-13,30-39,102,132,146
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  h_9042ea4abaf2fc 72-78,82-97,99-100
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  h_9042ea4abaf2fc 7-8,23-30,72,83,114
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.html
+  h_9042ea4abaf2fc 11,22,25
+portal/src/app/settings/pages/icd10-settings/icd10-settings.component.ts
+  h_9042ea4abaf2fc 8-9,23-24,27-30,47,63,90
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.html
+  h_9042ea4abaf2fc 53-54
+portal/src/app/settings/pages/loinc-settings/loinc-settings.component.ts
+  h_9042ea4abaf2fc 8-9,22-27,63,79,101
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.html
+  h_9042ea4abaf2fc 32-33,45,48
+portal/src/app/settings/pages/rxnorm-settings/rxnorm-settings.component.ts
+  h_9042ea4abaf2fc 9-10,23-28,61,77,97,124
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.html
+  h_9042ea4abaf2fc 35-36,48,51
+portal/src/app/settings/pages/snomed-settings/snomed-settings.component.ts
+  h_9042ea4abaf2fc 9-10,23-28,61,77,97,124
+portal/src/app/settings/pages/sso-configurations/sso-configurations.component.html
+  h_9042ea4abaf2fc 1-118
+portal/src/app/settings/pages/sso-configurations/sso-configurations.component.scss
+  h_9042ea4abaf2fc 1-98
+portal/src/app/settings/pages/sso-configurations/sso-configurations.component.ts
+  h_9042ea4abaf2fc 1-131
+portal/src/app/settings/services/sso-configurations.service.ts
+  h_9042ea4abaf2fc 1-18
+portal/src/app/settings/settings.routes.ts
+  h_9042ea4abaf2fc 5-21,42,52-55,58,76,85,94,100-112,125-132,134-135,143-144,151,159,167-170,172-173,179-207,214-225,228-254,257-271
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  h_9042ea4abaf2fc 56-77,203,211,220
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  h_9042ea4abaf2fc 27-28,55-60,118-144,294,305,317
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  h_9042ea4abaf2fc 16,157,249,314-315,322
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  h_9042ea4abaf2fc 24-26,122,132-133,159,318,329,413,459,470,506-508
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  h_9042ea4abaf2fc 23-24,75,173-176
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.ts
+  h_9042ea4abaf2fc 19-20,63,98-100
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  h_9042ea4abaf2fc 20-21,47,95-98
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  h_9042ea4abaf2fc 13-14,37-39,67-74
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  h_9042ea4abaf2fc 29-34,122-126,129-131,135-139
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  h_9042ea4abaf2fc 18-21,35,41-54,128,146,168
+portal/src/app/user-management/pages/role-permissions/permission-matrix-dependencies.ts
+  h_9042ea4abaf2fc 1-132
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  h_9042ea4abaf2fc 1-244
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  h_9042ea4abaf2fc 98-100,107-108,111-113,115,118,120-174,176,178-180,195
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  h_9042ea4abaf2fc 279-282,286,329-335,338-345,347,353,356-357,360-361,363-365,375,379,381,385,390-398,404,411-427,433,435,440,474-476,481-486
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  h_9042ea4abaf2fc 21-33,35-37,39-43,47-52,67,76-80,83-95,109-143,145-146,150,154-180,183-186,188,196-199,205-209,214-221,224,226-236,260,270-285,295-296,299-302,305,311-315,318-325,332-334,338-348,351,362-368,370,375-378,384,390-393,397-398,411
+portal/src/app/user-management/pages/user-detail/user-detail.component.html
+  h_9042ea4abaf2fc 70,75-79,81-116,119,236,462,475
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  h_9042ea4abaf2fc 35-37,74,92-111,232,246,262,289,341,364,380
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.html
+  h_9042ea4abaf2fc 15-17,58,101,104,113,132-136
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  h_9042ea4abaf2fc 41-44,82,104-116,267,284,309,346,377
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  h_9042ea4abaf2fc 14
+portal/src/app/user-management/user-management.routes.ts
+  h_9042ea4abaf2fc 3,20-23,25-26,31-36,38-39
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  h_9042ea4abaf2fc 1-3,5,7-12,16-17,31-45,52-57,64-68,148,150,153-157,162-165,167-170,175-355
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  h_9042ea4abaf2fc 1,20-24,26,33,38-39,44,48,66,94-98,100-101,108-117,129,153,162,180,206
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  h_9042ea4abaf2fc 3,25,32,38,48-59,61-62,68,177-185,187-188,194-196,203,210-212,222,237-238,246-259,267,279,295,310,325,352
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEndpointsController.cs
+  h_9042ea4abaf2fc 1,17,29,38,48,57,67
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  h_9042ea4abaf2fc 66,87
+src/Api/FHIRBridge.Api/Controllers/V1/LoincConfigurationController.cs
+  h_9042ea4abaf2fc 27,31,35,48
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  h_9042ea4abaf2fc 50,71
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  h_9042ea4abaf2fc 50,71
+src/Api/FHIRBridge.Api/Controllers/V1/SourceConnectionsController.cs
+  h_9042ea4abaf2fc 6,18-20,29,33-34,38,77,83-93,98,103-111
+src/Api/FHIRBridge.Api/Controllers/V1/SsoConfigurationsController.cs
+  h_9042ea4abaf2fc 1-51
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  h_9042ea4abaf2fc 46,66,73,86-87,100,113
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  h_9042ea4abaf2fc 23
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  h_9042ea4abaf2fc 15-16
+src/Api/FHIRBridge.Api/Program.cs
+  h_9042ea4abaf2fc 149,201-210,677-680,777-786,788
+src/Api/FHIRBridge.Api/Rbac/DynamicSourceSystemPermissionAttribute.cs
+  h_9042ea4abaf2fc 18-22
+src/Api/FHIRBridge.Api/Security/ControllerAuthorizationExtensions.cs
+  h_9042ea4abaf2fc 1,16-50,62-63,74,80-81
+src/Api/FHIRBridge.Api/Security/JwtAccessTokenIssuer.cs
+  h_9042ea4abaf2fc 29,73-75
+src/Api/FHIRBridge.Api/Security/PermissionAuthorizationHandler.cs
+  h_9042ea4abaf2fc 9,11-13,16,19-22,26-32
+src/Api/FHIRBridge.Api/Security/WorkflowModuleAccessAuthorizationHandler.cs
+  h_9042ea4abaf2fc 1-64
+src/Api/FHIRBridge.Api/Security/WorkflowModuleAccessRequirement.cs
+  h_9042ea4abaf2fc 1-18
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  h_9042ea4abaf2fc 3,23,56-58,67-68,81-82,85-96,129-177,186-198,223-232,421-422,452-464,472,474-475,479-480,625-627,782-783,791-803,808-811,815-846,850-851,869-870,903-915,927-936,1046-1050,1066-1068,1079-1081,1090-1126,1181-1185,1213-1214,1411-1413,1422-1423,1510-1513,1536-1538,1697-1700,1716-1717,1770-1772,2323-2338
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_9042ea4abaf2fc 18-22
+src/Api/FHIRBridge.Api/appsettings.json
+  h_9042ea4abaf2fc 19-27,34-37
+src/FHIRBridge.Application/Abstractions/Security/IAccessTokenIssuer.cs
+  h_9042ea4abaf2fc 8-10,13
+src/FHIRBridge.Application/Abstractions/Security/IUserPermissionsProvider.cs
+  h_9042ea4abaf2fc 1-18
+src/FHIRBridge.Application/DTOs/MagicLinkRequests.cs
+  h_9042ea4abaf2fc 1-13
+src/FHIRBridge.Application/DTOs/SsoConfigurationsRequests.cs
+  h_9042ea4abaf2fc 1-41
+src/FHIRBridge.Application/DTOs/SsoRequests.cs
+  h_9042ea4abaf2fc 25-27,37-42
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  h_9042ea4abaf2fc 9-13,64-153
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  h_9042ea4abaf2fc 136-144
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  h_9042ea4abaf2fc 5-10,12-15
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  h_9042ea4abaf2fc 13-22
+src/FHIRBridge.Application/Security/LocalAuthOptions.cs
+  h_9042ea4abaf2fc 11-13,16-24
+src/FHIRBridge.Application/Security/SamlAuthenticationOptions.cs
+  h_9042ea4abaf2fc 1-41
+src/FHIRBridge.Application/Services/ILocalAuthService.cs
+  h_9042ea4abaf2fc 20-27
+src/FHIRBridge.Application/Services/ISsoAuthService.cs
+  h_9042ea4abaf2fc 1,18-25
+src/FHIRBridge.Application/Services/ISsoConfigurationsService.cs
+  h_9042ea4abaf2fc 1-15
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  h_9042ea4abaf2fc 166-170,175,255-332,402-404,501-523
+src/FHIRBridge.Application/Services/SsoAuthService.cs
+  h_9042ea4abaf2fc 47-53,75,78
+src/FHIRBridge.Application/Services/SsoConfigurationsService.cs
+  h_9042ea4abaf2fc 1-131
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  h_9042ea4abaf2fc 13,17-18,22,75,79-83,89,91
+src/FHIRBridge.Domain/Entities/User.cs
+  h_9042ea4abaf2fc 64-67,278-291
+src/FHIRBridge.Domain/Enums/LoginProvider.cs
+  h_9042ea4abaf2fc 11-12
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  h_9042ea4abaf2fc 140-150,307-311
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  h_9042ea4abaf2fc 417-437,507-518
+src/FHIRBridge.Infrastructure/Destinations/MappedMedplumDestinationWriter.cs
+  h_9042ea4abaf2fc 19-25,49-68,166-192,245-248,251-252,498-507,509,520-542,551,577,622-661,665,674-677,683,694-695
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  h_9042ea4abaf2fc 14
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  h_9042ea4abaf2fc 5,23-46,143-153,201-203,284-288
+src/FHIRBridge.Infrastructure/Persistence/EfUserAccessRepository.cs
+  h_9042ea4abaf2fc 202-207,209,221-224,226
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818113324_AddSamlAndMagicLinkAuth.Designer.cs
+  h_9042ea4abaf2fc 1-5406
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260818113324_AddSamlAndMagicLinkAuth.cs
+  h_9042ea4abaf2fc 1-39
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  h_9042ea4abaf2fc 4057-4062
+src/FHIRBridge.Infrastructure/Security/CachedUserPermissionsProvider.cs
+  h_9042ea4abaf2fc 1-79
+src/FHIRBridge.Infrastructure/Security/CompositeExternalTokenValidator.cs
+  h_9042ea4abaf2fc 1,12-14,18-19,23,28-29,34,37,42,52,55,57
+src/FHIRBridge.Infrastructure/Security/EntraTokenValidator.cs
+  h_9042ea4abaf2fc 1,4,19-24,28-34,37-41,43-44,56-64,67,69-70,73,75-76,117-127,129-130,132
+src/FHIRBridge.Infrastructure/Security/SamlConfigurationProvider.cs
+  h_9042ea4abaf2fc 1-94
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  h_9042ea4abaf2fc 24,198-211,215-225,227-230,233
+src/FHIRBridge.Infrastructure/Sources/FhirReferenceTargets.cs
+  h_9042ea4abaf2fc 1-60
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/OAuth2ClientCredentialsTokenProvider.cs
+  h_9042ea4abaf2fc 7,46-62
+src/Worker/FHIRBridge.Worker/WorkerSecurityServices.cs
+  h_9042ea4abaf2fc 29
+tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs
+  h_9042ea4abaf2fc 86,101
+tests/FHIRBridge.UnitTests/Auth/MagicLinkAuthTests.cs
+  h_9042ea4abaf2fc 1-167
+tests/FHIRBridge.UnitTests/Auth/SamlConfigurationProviderTests.cs
+  h_9042ea4abaf2fc 1-82
+tests/FHIRBridge.UnitTests/Auth/SsoConfigurationsServiceTests.cs
+  h_9042ea4abaf2fc 1-122
+tests/FHIRBridge.UnitTests/Destinations/MappedMedplumDestinationWriterTests.cs
+  h_9042ea4abaf2fc 121-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "ac3942f0d4b7032aada8b5493feba028ceaa5c1d",
+  "prompts": {},
+  "humans": {
+    "h_9042ea4abaf2fc": {
+      "author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
