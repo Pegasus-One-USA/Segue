@@ -1,0 +1,86 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_5849c970b9c366::t_e3d449d6025e6e 580-583
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_c300f2c4dd13e3::t_f4c522f814f0b7 119-123
+  s_c300f2c4dd13e3::t_37aecfd8f73672 205,212
+  s_c300f2c4dd13e3::t_ac6515e2aa207a 21-35
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  s_5849c970b9c366::t_92b09663f97fab 39,44
+  s_5849c970b9c366::t_0574dc8a9ce3e2 72
+  s_5849c970b9c366::t_7f4d82aab1c5f7 88
+  s_5849c970b9c366::t_5c147551f1925d 40-43,60-61,64-71,77,82
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_5849c970b9c366::t_8df14ae6b10193 21
+  s_5849c970b9c366::t_c7e81fd730a9ef 50
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_5849c970b9c366::t_e2b84cea70155b 85-86
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_c300f2c4dd13e3::t_1786e46a4e72b6 37-45
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.ts
+  s_5849c970b9c366::t_807a23c73c6d28 103-112,114-131,139,151-152,154-160,162-164,166,171
+  s_5849c970b9c366::t_a0445b939f08aa 133-138,141-150,153,161,167-168
+  s_5849c970b9c366::t_6c12e8f17295bf 140
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_5849c970b9c366::t_2d259084d13b60 86-89
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_5849c970b9c366::t_9ad8af1898126f 788
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_5849c970b9c366::t_28889d3206a4ab 303-310
+  s_5849c970b9c366::t_4e2f4ca970b403 720,784,863
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_5849c970b9c366::t_7cda8f6aa68782 189-239
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_5849c970b9c366::t_8053db3bd9822e 153-154,156-164,171
+  s_5849c970b9c366::t_e75fe9b3bb878f 8
+  s_5849c970b9c366::t_9cc407425839a3 85-88
+  s_5849c970b9c366::t_a9a9b85d34f61d 84,89
+  s_5849c970b9c366::t_5f40f9d8329da5 165-169,172-174
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.spec.ts
+  s_5849c970b9c366::t_a2fedd13c7972b 95-193
+  s_5849c970b9c366::t_30cf5d5cad3d65 1
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_5849c970b9c366::t_ffc6a2f11c8dbe 340
+  s_5849c970b9c366::t_7646a388e37bce 96-114
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  s_8edd3c1e3e3de6::t_53306bfbed186e 472-473
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_c300f2c4dd13e3::t_75062ac88c1881 91
+  s_c300f2c4dd13e3::t_2d0fa7d0be6f53 162-164
+  s_c300f2c4dd13e3::t_91fbb8dfb7b0eb 15-29
+  s_c300f2c4dd13e3::t_049ebf0e8dfa49 110,116
+  s_c300f2c4dd13e3::t_400c3df31423c0 51-52,55
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.html
+  s_5849c970b9c366::t_70830833a3fcf2 35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "39137c05c3ff7ca8c156b4c077b55d91f96e606e",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_8edd3c1e3e3de6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "94d55805-903a-42ec-9d19-1bf1981a5546",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_c300f2c4dd13e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "77bdb523-6e22-41d0-b11e-da8c33598d27",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
