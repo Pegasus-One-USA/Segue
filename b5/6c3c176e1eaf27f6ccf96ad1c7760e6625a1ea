@@ -1,0 +1,314 @@
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TenantConfig.cs
+  s_e4f33bc5f787da::t_40fee0dabeea51 1-24
+src/FHIRBridge.Application/Services/SetupService.cs
+  s_e4f33bc5f787da::t_a93a8b88336103 111
+  s_e4f33bc5f787da::t_de35ecc14f618c 10-15
+  s_e4f33bc5f787da::t_9f72c513a39982 91-92
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821144035_AddBrandConfiguration.Designer.cs
+  s_e4f33bc5f787da::t_0870ef7333bb39 1-5606
+src/FHIRBridge.Application/Services/ILocalAuthService.cs
+  s_e4f33bc5f787da::t_f8b9c50be88e8e 34-35,37
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821144035_AddBrandConfiguration.cs
+  s_e4f33bc5f787da::t_0870ef7333bb39 1-60
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.scss
+  s_e4f33bc5f787da::t_2a48a0fa0dfb3f 67-95
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_e4f33bc5f787da::t_5fe89fee9b7336 482-489,495-496,501-503,507-509,524,531-534
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.html
+  s_e4f33bc5f787da::t_627a4d7098298d 66-71
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BrandConfigurationConfig.cs
+  s_e4f33bc5f787da::t_bbda62953891f4 14-29
+  s_e4f33bc5f787da::t_70085401367892 1-13,30-54
+portal/src/app/auth/pages/reset-password/reset-password.component.html
+  s_e4f33bc5f787da::t_6c9bac6dbdca7b 105
+  s_e4f33bc5f787da::t_0b6f237e38766b 147
+  s_e4f33bc5f787da::t_3c96a29d83e5d2 20,36-51
+portal/src/app/auth/pages/forgot-password/forgot-password.component.html
+  s_e4f33bc5f787da::t_1490eb39f7c08f 15
+portal/src/app/core/api-endpoints.ts
+  s_e4f33bc5f787da::t_5de5d9c6d8f97e 39-49
+  s_e4f33bc5f787da::t_3deaa27209358e 50-56
+tests/FHIRBridge.UnitTests/Tenancy/TenantsServiceTests.cs
+  s_e4f33bc5f787da::t_9f433ede90fc22 1-141
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_e4f33bc5f787da::t_6e4fc2610b60fe 295-301,303,305,310-311
+  s_e4f33bc5f787da::t_ce2c9c85b58198 302,304,306-309
+portal/src/app/app.config.ts
+  s_e4f33bc5f787da::t_4b8fefa3cb4afc 9,11
+  s_e4f33bc5f787da::t_4ac795e6738a42 42
+  s_e4f33bc5f787da::t_eeb7881faa3375 136
+  s_e4f33bc5f787da::t_77387a1a592332 73-83
+src/FHIRBridge.Application/DTOs/UpdateTenantRequest.cs
+  s_e4f33bc5f787da::t_74eb9bdc68be16 1-3
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_e4f33bc5f787da::t_968d50eb8ac282 67,72-75,82-83,87,90-91,94,97-98,104-108,110-111
+portal/src/app/auth/services/mock-auth.service.ts
+  s_e4f33bc5f787da::t_0371e8027ecdea 72-74
+src/FHIRBridge.Application/Services/TenantsService.cs
+  s_e4f33bc5f787da::t_291f3022bae94b 1-2,4-134
+  s_e4f33bc5f787da::t_8dc196132f6777 3
+portal/src/app/core/loading.interceptor.ts
+  s_e4f33bc5f787da::t_16a261593b976f 1,6-15,22-26,30-32
+  s_e4f33bc5f787da::t_d694fa2d02f7dd 29
+tests/FHIRBridge.UnitTests/Auth/RememberMeTests.cs
+  s_e4f33bc5f787da::t_a9a86dc6657956 68-69
+  s_e4f33bc5f787da::t_120d18fe1be530 208
+  s_e4f33bc5f787da::t_40aa556ea7d1fe 193-194
+  s_e4f33bc5f787da::t_0ce472e3f2a9af 77
+  s_e4f33bc5f787da::t_f31343f2c5fbbf 148,152,156
+  s_e4f33bc5f787da::t_044de35346dd2b 1-33,35-48,59-67,70-76,78-147,149-151,153-155,157-192,195-207,209-218
+  s_e4f33bc5f787da::t_82d13e9c90a6ca 34
+  s_e4f33bc5f787da::t_9848ce1b08f595 49-58
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  s_e4f33bc5f787da::t_d9ef83ab3e228f 33-37,46
+src/FHIRBridge.Application/DTOs/LocalLoginResponse.cs
+  s_e4f33bc5f787da::t_d1e795508a8289 23-28
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_e4f33bc5f787da::t_c001b7b24aa154 18-26,43-47
+portal/src/app/auth/pages/reset-password/reset-password.component.ts
+  s_e4f33bc5f787da::t_b86e52c4d13df3 11
+  s_e4f33bc5f787da::t_4145dea0e0c34b 39-41,46,48
+  s_e4f33bc5f787da::t_88fb15f7ce04fe 73-76,87-93
+  s_e4f33bc5f787da::t_d950f40dedd439 130,136-140,144-154
+src/FHIRBridge.Application/Abstractions/Persistence/ITenantRepository.cs
+  s_e4f33bc5f787da::t_1caf05cb9b3b0f 1-26
+src/FHIRBridge.Infrastructure/Persistence/InMemoryBrandConfigurationRepository.cs
+  s_e4f33bc5f787da::t_128243707c56b2 1,10,12-13,17
+  s_e4f33bc5f787da::t_eb41fbae56a257 2-9,11,14-16,18-20
+src/FHIRBridge.Application/DTOs/TenantDto.cs
+  s_e4f33bc5f787da::t_3fade49d480ef2 1-9
+src/FHIRBridge.Application/DTOs/InviteUserRequest.cs
+  s_e4f33bc5f787da::t_f145435587f9cd 7-11
+portal/src/app/auth/services/auth-profile.model.ts
+  s_e4f33bc5f787da::t_c3bfce5e32bb21 15-18
+portal/src/app/auth/services/token.service.ts
+  s_e4f33bc5f787da::t_53eccadc345f33 8-13
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_e4f33bc5f787da::t_21ad572cbee1c9 205-207,214-216,2699-2756,4330-4331,4344,4880-4886,5568-5574
+  s_e4f33bc5f787da::t_0870ef7333bb39 82-204,208-213,217-220
+  s_e4f33bc5f787da::t_8f06b654e38fbd 4316-4319
+  s_e4f33bc5f787da::t_e904cc530a493b 2757-2758,4320,4332,4345,4887-4888,5575-5576
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_e4f33bc5f787da::t_92609bdd27d681 301-309
+portal/src/app/auth/services/i-auth.service.ts
+  s_e4f33bc5f787da::t_3e61c3ab8991cf 12-15
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_e4f33bc5f787da::t_c88636cba0e968 169
+  s_e4f33bc5f787da::t_b844e41ac557f6 229
+  s_e4f33bc5f787da::t_1f4d98e32b09e7 230
+  s_e4f33bc5f787da::t_28bd29ee36be83 319
+  s_e4f33bc5f787da::t_8349f3e8a4e022 320-323
+  s_e4f33bc5f787da::t_a7db21be48bd89 170
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_e4f33bc5f787da::t_ae6ee4c4bed809 147-161
+  s_e4f33bc5f787da::t_c293d62b523d37 1
+  s_e4f33bc5f787da::t_6d8ae8a6bc7442 50-63
+src/FHIRBridge.Application/DTOs/CreateTenantRequest.cs
+  s_e4f33bc5f787da::t_fda9577240079b 1-3
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_e4f33bc5f787da::t_7db476e1a33248 120-122
+  s_e4f33bc5f787da::t_7cde36e46a0c98 57-61
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  s_e4f33bc5f787da::t_751163a43fcbce 14,19-20,25
+  s_e4f33bc5f787da::t_ff2d20ed35f241 91-96,105-107
+  s_e4f33bc5f787da::t_f01867b1d6d7f2 55-60
+portal/src/app/user-management/services/tenant-role.service.ts
+  s_e4f33bc5f787da::t_f983b816062714 1-4,10,14-23,33-43,46-47,51-52,55-62,65-69,72-93
+  s_e4f33bc5f787da::t_c00188c53f80ca 94
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_e4f33bc5f787da::t_d970237fe1d2ed 94-107,116-117
+  s_e4f33bc5f787da::t_9e51ea019c2c38 86-93
+src/FHIRBridge.Application/Abstractions/Tenancy/ICurrentTenantResolver.cs
+  s_e4f33bc5f787da::t_7ba3d8b7cdba4b 1-16
+portal/src/app/app.component.ts
+  s_e4f33bc5f787da::t_68f56ede10747d 26-28
+tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs
+  s_e4f33bc5f787da::t_6ac29125c8c152 26,41-47,57-58
+  s_e4f33bc5f787da::t_c99e16ab7f0fbf 66
+portal/src/app/auth/services/session.service.ts
+  s_e4f33bc5f787da::t_129138b6837b79 36-41
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_e4f33bc5f787da::t_9128814e608c6a 17
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_e4f33bc5f787da::t_87fdedb8cde74f 166-170,177-178,185
+  s_e4f33bc5f787da::t_b7c3013ce046c1 464-473,490-492
+  s_e4f33bc5f787da::t_d37d83c973d12b 393-399,402-403,415-418
+  s_e4f33bc5f787da::t_fbbd90f143e2c0 25,36-37,48
+  s_e4f33bc5f787da::t_6e747c0ef034e3 213-216
+  s_e4f33bc5f787da::t_cca6e0c9263156 123
+  s_e4f33bc5f787da::t_2c8caaaef01f6f 235-254
+  s_e4f33bc5f787da::t_504bfaf4beddc3 278-286
+  s_e4f33bc5f787da::t_18a113145c625d 441-445,448,461,495-496
+  s_e4f33bc5f787da::t_4a23f5e6075f67 365-368
+tests/FHIRBridge.UnitTests/Branding/BrandConfigurationServiceTests.cs
+  s_e4f33bc5f787da::t_8dfcb05f547151 1-11,16-18,22-37,42,44,46,48-55,57-58,60-61,63,65-71,126-130,132-136,138-149,152-156,158-168,170-172,174-198,200,202-213,215,217-224,226,228-234,236-237,239-245,247,249-255,257,259-262
+  s_e4f33bc5f787da::t_ba9f18cc8c0e9e 12-15,19-21,38-41,43,45,47,56,59,62,64,72-125,131,137,150-151,157,169,173,199,201,214,216,225,227,235,238,246,248,256,258
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_e4f33bc5f787da::t_52e45a6b056927 45-64
+src/FHIRBridge.Domain/Entities/User.cs
+  s_e4f33bc5f787da::t_9afa36be678fb7 372-376,380,388
+  s_e4f33bc5f787da::t_97c309a3207e7c 15-16,22,35-39
+  s_e4f33bc5f787da::t_be053d1cd692bf 40,134-141
+portal/src/app/services/branding.service.ts
+  s_e4f33bc5f787da::t_e05f07ea4ff0d1 103-104,106,115-117
+  s_e4f33bc5f787da::t_e9c47196712fcc 39-40,43-52
+  s_e4f33bc5f787da::t_be48523caabdf8 89-92,96-101,108
+  s_e4f33bc5f787da::t_e230bc30a2de38 1,7-36,41,54-57,65-70,88,102,110,112,141-144,146,149-151,153-156,159-160,162-164,167-185,188-204
+  s_e4f33bc5f787da::t_8a47d904e3e00d 93-95,105,107
+  s_e4f33bc5f787da::t_418cbbccd565b6 109,111
+  s_e4f33bc5f787da::t_120a6c7b5de60f 82-86
+  s_e4f33bc5f787da::t_773d9e854eaa32 2,6
+  s_e4f33bc5f787da::t_291b289d5bd0f8 161
+  s_e4f33bc5f787da::t_a0d605da9afd27 3
+  s_e4f33bc5f787da::t_0d9a7cf546a64a 42
+  s_e4f33bc5f787da::t_e46b4310913a65 87
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_e4f33bc5f787da::t_3219270da94931 1006-1013,1021-1047
+  s_e4f33bc5f787da::t_09cf15a7b565bd 1014-1020
+  s_e4f33bc5f787da::t_6d4e7b2700316e 1048-1060
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  s_e4f33bc5f787da::t_ba92552ba0ce35 38-41
+  s_e4f33bc5f787da::t_069c034f84d132 62,64,69-77
+src/Api/FHIRBridge.Api/Controllers/V1/TenantsController.cs
+  s_e4f33bc5f787da::t_d3315e7da56b9c 1-67
+src/FHIRBridge.Infrastructure/Security/CachedCurrentTenantResolver.cs
+  s_e4f33bc5f787da::t_6b69309e46d0b1 1-48
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821115750_AddRefreshTokenRememberMe.Designer.cs
+  s_e4f33bc5f787da::t_8f06b654e38fbd 1-5473
+tests/FHIRBridge.UnitTests/Auth/ForgotPasswordResetPasswordTests.cs
+  s_e4f33bc5f787da::t_3a313c80c7a793 32
+  s_e4f33bc5f787da::t_dc98135565d2e2 71
+  s_e4f33bc5f787da::t_c6ab92304e76b5 47-53,63-64
+  s_e4f33bc5f787da::t_172402e6c21666 1-31,33-46,54-62,65-70,72-294
+portal/src/app/auth/components/password-strength/password-strength.component.ts
+  s_e4f33bc5f787da::t_b44c15e3e82d75 20-22,26,28
+  s_e4f33bc5f787da::t_28e795fb4cdcd5 38-39,42-44,50-52,57,62-64
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_e4f33bc5f787da::t_cf839943d660db 44
+  s_e4f33bc5f787da::t_8b83a5d090b2ae 45
+src/FHIRBridge.Infrastructure/Persistence/EfTenantRepository.cs
+  s_e4f33bc5f787da::t_4e1dc860b2de2c 27
+  s_e4f33bc5f787da::t_eefd82f543d1f7 1-26,28-47
+portal/src/app/auth/services/auth-api.service.ts
+  s_e4f33bc5f787da::t_8555d8939cc72a 30-33,36-40,48-52,54
+src/FHIRBridge.Application/DTOs/LocalLoginRequest.cs
+  s_e4f33bc5f787da::t_bd49eb4b88fb94 3-6,9-12
+src/FHIRBridge.Infrastructure/Persistence/EfBrandConfigurationRepository.cs
+  s_e4f33bc5f787da::t_76684964c61be6 1-7,10-19,22-24,28-46
+  s_e4f33bc5f787da::t_157c098df175a3 8-9,20-21,25-27
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTenantRepository.cs
+  s_e4f33bc5f787da::t_fb2067865b3b0d 1-15,18-51
+  s_e4f33bc5f787da::t_d93e6bb57f5229 16-17
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821115750_AddRefreshTokenRememberMe.cs
+  s_e4f33bc5f787da::t_8f06b654e38fbd 1-13,22-38
+  s_e4f33bc5f787da::t_acae6228004c9e 14-21
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_e4f33bc5f787da::t_ec55679590ab78 79
+  s_e4f33bc5f787da::t_8feec5f4a12f00 148
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  s_e4f33bc5f787da::t_b5636784679066 92-93
+  s_e4f33bc5f787da::t_ca93a52396a9e8 2,17,19,22-35
+  s_e4f33bc5f787da::t_5777afbefc9f6d 66-67
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821155808_AddTenantAndScopeUsersAndBranding.Designer.cs
+  s_e4f33bc5f787da::t_21ad572cbee1c9 1-5695
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_e4f33bc5f787da::t_9d55fff894e5b0 24-27,39-40
+  s_e4f33bc5f787da::t_4c3d3fad2cff23 2,5
+  s_e4f33bc5f787da::t_8571235a79add0 96-100
+src/Api/FHIRBridge.Api/Controllers/V1/BrandingController.cs
+  s_e4f33bc5f787da::t_64df7631354551 49-56
+  s_e4f33bc5f787da::t_e5b2316fab4ecb 1-2,5-12,25-30,33,38-39,42-46,48,64-74,79,109-110
+  s_e4f33bc5f787da::t_05404d3e8505b0 3-4,13-24,31-32,34-37,40-41,47,57-63,75-78,80-108
+src/FHIRBridge.Application/Abstractions/Tenancy/ITenantsService.cs
+  s_e4f33bc5f787da::t_bc6a7a713a25d1 1-19
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.ts
+  s_e4f33bc5f787da::t_0be49c72300145 61,64-79
+  s_e4f33bc5f787da::t_277c05f8f4de12 26,37-40
+  s_e4f33bc5f787da::t_89a28c4c958861 3,9
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  s_e4f33bc5f787da::t_863f83dd77db4a 38,47
+src/FHIRBridge.Application/Services/BrandConfigurationService.cs
+  s_e4f33bc5f787da::t_2b433fd07ad4c1 1-20,26,28-31,33-37,39-41,43-105,107-115,117-123
+  s_e4f33bc5f787da::t_9dfcdf52e10149 21-25,27,32,38,42
+  s_e4f33bc5f787da::t_5df86d000d9b92 116
+  s_e4f33bc5f787da::t_4d378d73a0b99a 106
+src/FHIRBridge.Application/DTOs/UserProfileDto.cs
+  s_e4f33bc5f787da::t_77eca631f54ae9 13-18
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821155808_AddTenantAndScopeUsersAndBranding.cs
+  s_e4f33bc5f787da::t_369ec9b52e2760 11-16,20-23,45-53,56-73,86-90,92-93,97,100-101,105,134-136
+  s_e4f33bc5f787da::t_21ad572cbee1c9 1-10,17-19,24-44,74-85,91,94-96,98-99,102-104,106-133,137-139
+  s_e4f33bc5f787da::t_234191696dd90a 54-55
+portal/src/app/settings/settings.routes.ts
+  s_e4f33bc5f787da::t_0aa8d9a9830a4b 254-255
+  s_e4f33bc5f787da::t_f391752eaf8d81 106-110
+  s_e4f33bc5f787da::t_5b1e7d202e2418 273-274
+  s_e4f33bc5f787da::t_52c1c9c8229dca 224-225
+src/FHIRBridge.Domain/Entities/BrandConfiguration.cs
+  s_e4f33bc5f787da::t_1709f5f6e81b13 6-9,18
+  s_e4f33bc5f787da::t_62dd1125440916 1-5,10-17,19-39,41-61,64-133
+  s_e4f33bc5f787da::t_94ba67341f6442 40
+  s_e4f33bc5f787da::t_c88eb94df84c2b 62-63
+src/FHIRBridge.Application/Abstractions/Branding/IBrandConfigurationService.cs
+  s_e4f33bc5f787da::t_ad86b6e0b2ef80 1-12,16,19
+  s_e4f33bc5f787da::t_4bee25fed633f5 13-15,17-18
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.html
+  s_e4f33bc5f787da::t_1564c7be1936bb 72-77
+  s_e4f33bc5f787da::t_2ef1e0d0c76bc9 19-26
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.ts
+  s_e4f33bc5f787da::t_c325f3d10cdcd2 94-102
+  s_e4f33bc5f787da::t_9983fa41f65a4c 10,12
+  s_e4f33bc5f787da::t_8b60f2b73466a0 58,60-77
+  s_e4f33bc5f787da::t_62a5396a7087d1 25,31-33,40
+portal/src/app/auth/services/auth.service.ts
+  s_e4f33bc5f787da::t_a9ec7b4619c583 261-278
+  s_e4f33bc5f787da::t_97965a23ddad76 34
+  s_e4f33bc5f787da::t_21a8c8d9b5f364 100
+  s_e4f33bc5f787da::t_c536accdd2a7f7 71
+  s_e4f33bc5f787da::t_e09450d09f9db5 106
+  s_e4f33bc5f787da::t_2a6a39bbfcb879 138
+  s_e4f33bc5f787da::t_2fc171adb72800 12
+src/FHIRBridge.Application/Security/SeededSecurityIds.cs
+  s_e4f33bc5f787da::t_d3475356c98b8c 11-15
+src/FHIRBridge.Application/DTOs/BrandConfigurationDto.cs
+  s_e4f33bc5f787da::t_98dad6238b4b2f 33
+  s_e4f33bc5f787da::t_4791560ff04e00 14-16,34-48
+  s_e4f33bc5f787da::t_c4afcffec0a8f2 1-13,17-32
+src/FHIRBridge.Application/DTOs/UpdateBrandConfigurationRequest.cs
+  s_e4f33bc5f787da::t_eb956a20eb43bd 1-17
+tests/FHIRBridge.UnitTests/Auth/MagicLinkAuthTests.cs
+  s_e4f33bc5f787da::t_07ce2d38c1510b 26,41-47,57-58
+  s_e4f33bc5f787da::t_a6330fa4192025 140-141
+  s_e4f33bc5f787da::t_c8ebc484d94534 66
+  s_e4f33bc5f787da::t_d0d246d2f6b94c 105-108
+tests/FHIRBridge.UnitTests/Users/AcceptInviteViaSsoTests.cs
+  s_e4f33bc5f787da::t_f11472ee8e629f 42
+  s_e4f33bc5f787da::t_0750b0226009c9 89-90
+  s_e4f33bc5f787da::t_79eadad85aee31 64-67
+src/FHIRBridge.Domain/Entities/Tenant.cs
+  s_e4f33bc5f787da::t_f7edf4761c01ff 20-23,25
+  s_e4f33bc5f787da::t_b7c20945b09a1e 1-19,24,26-52
+src/FHIRBridge.Application/Abstractions/Persistence/IBrandConfigurationRepository.cs
+  s_e4f33bc5f787da::t_ac4fcf7a93e48f 1-5,8-10,14,16-17
+  s_e4f33bc5f787da::t_50cb96b10acc49 6-7,11-13,15
+src/FHIRBridge.Application/DTOs/CreateLocalUserRequest.cs
+  s_e4f33bc5f787da::t_31faae9b6cca62 14-19
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.ts
+  s_e4f33bc5f787da::t_e01fbd7e1ba7c1 110
+  s_e4f33bc5f787da::t_d908aa0e84a904 118-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b56c3c176e1eaf27f6ccf96ad1c7760e6625a1ea",
+  "prompts": {},
+  "sessions": {
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
