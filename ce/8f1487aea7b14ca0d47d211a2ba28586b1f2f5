@@ -1,0 +1,25 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_4eef1c0f046975::t_1b0fc75edb8517 552-558,560-563
+  s_4eef1c0f046975::t_d0bf6d8314e9fc 573-586,598,603-605
+  s_4eef1c0f046975::t_471616c2353176 1279-1528
+  s_4eef1c0f046975::t_5a7db7cbca9bc4 367-368,372,1278
+  s_4eef1c0f046975::t_3cc35edaf53bea 1223-1233
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorAthenaSearchTests.cs
+  s_4eef1c0f046975::t_44ea0eae80c143 1-295
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ce8f1487aea7b14ca0d47d211a2ba28586b1f2f5",
+  "prompts": {},
+  "sessions": {
+    "s_4eef1c0f046975": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37954b15-385c-4352-b879-ce187b1c8467",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
