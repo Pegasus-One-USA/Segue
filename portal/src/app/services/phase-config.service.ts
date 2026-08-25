@@ -25,32 +25,25 @@ export interface PhaseConfig {
 // Sources:      Epic only
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
-// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Azure Blob only
+// Destinations: SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, Aidbox
+//               (FhirRepository) only — everything else has a real writer
+//               (ConfiguredDestinationWriterFactory) but no way to configure a connection for it
+//               yet, so surfacing the node would be a dead end in the canvas.
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
-    'generic-fhir',
-    'athena',
-    // Phase 2+: 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
+    // Phase 2+: 'generic-fhir', 'athena', 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
-    // Destinations — Phase 1
-    'dest-sqlserver',
-    'dest-csv',
-    'dest-mysql',
-    'dest-mongo',
-    'dest-postgres',
-    'dest-medplum',
-    'dest-fhir',
-    'dest-blob',
+    // Destinations — SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, Aidbox
+    'dest-sqlserver', 'dest-azuresql', 'dest-csv', 'dest-blob',
+    'dest-postgres', 'dest-mysql', 'dest-mongo', 'dest-medplum', 'dest-fhir',
+    // Phase 2+ (writer exists, no admin form yet): 'dest-snowflake', 'dest-powerbi',
+    //   'dest-tableau', 'dest-databricks', 'dest-s3', 'dest-xlsx', 'dest-ndjson', 'dest-parquet',
+    //   'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp', 'dest-restapi', 'dest-inmemory'
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
-    // Phase 2+ destinations: 'dest-azuresql',
-    //   'dest-snowflake', 'dest-powerbi', 'dest-tableau', 'dest-databricks',
-    //   'dest-s3', 'dest-xlsx', 'dest-ndjson',
-    //   'dest-parquet', 'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp',
-    //   'dest-restapi', 'dest-inmemory'
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'
   ],
 

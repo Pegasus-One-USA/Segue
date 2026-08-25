@@ -697,6 +697,14 @@ static async Task SyncDiscoveredPermissionsAsync(
     var allRoles = await repository.GetRolesAsync(CancellationToken.None);
 
     // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
+    //
+    // GATED (Epic/SQL/CSV-only branch) exception: a permission that drops out of discovery here does so
+    // because SourceSystemPermissionGroups.AllGroupsFor now excludes its group (e.g. Cerner/Healow/
+    // MeditechGreenfield/GenericFhir/Hl7v2 edit permissions, or MySql/Mongo/PostgreSql/AzureSql/Sftp/
+    // BlobStorage edit permissions) — a code-driven "this type no longer exists on this branch" removal,
+    // not an operator unchecking a box via the Role Permissions screen. So existing role grants for it are
+    // revoked here too, not just the permission row deactivated; this doesn't conflict with the "never
+    // silently re-grant" guarantee on the grant loop below, which only governs brand-new permissions.
     foreach (var existingPermission in existingPermissions)
     {
         if (!existingPermission.IsActive)
@@ -713,6 +721,11 @@ static async Task SyncDiscoveredPermissionsAsync(
         {
             existingPermission.Deactivate();
             await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
+
+            foreach (var role in allRoles)
+            {
+                await repository.RemoveRolePermissionAsync(role.Id, existingPermission.Id, CancellationToken.None);
+            }
         }
     }
 

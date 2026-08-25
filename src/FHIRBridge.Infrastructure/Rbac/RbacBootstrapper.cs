@@ -200,11 +200,33 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
         // longer be newly granted. Scoped to IsSystem rows only: permissions discovered at runtime via
         // [StandardPermission] (IsSystem = false) have their own lifecycle in Program.cs and were never
         // declared in RbacSeedData.Permissions to begin with, so they'd always appear "missing" here.
+        //
+        // GATED (Epic/SQL/CSV-only branch) exception: a permission removed from RbacSeedData.Permissions
+        // because its source/destination type was pulled out of SourceSystemPermissionGroups.AllowedGroups
+        // (e.g. Athenahealth/Cerner) must also have its existing role grants revoked here, not just the
+        // permission row deactivated — this is a deliberate, code-driven "this type no longer exists on this
+        // branch" removal, not an operator unchecking a box via the Role Permissions screen (which only ever
+        // touches PermissionAllocation rows directly and never this deactivation path), so it doesn't
+        // conflict with that screen's "never silently re-grant" guarantee.
+        var deactivatedPermissionIds = new List<Guid>();
         foreach (var existing in existingPermissions.Values)
         {
             if (existing.IsSystem && existing.IsActive && !declaredPermissionIds.Contains(existing.Id))
             {
                 existing.Deactivate();
+                deactivatedPermissionIds.Add(existing.Id);
+            }
+        }
+
+        if (deactivatedPermissionIds.Count > 0)
+        {
+            var allocationsToRevoke = await _dbContext.PermissionAllocations
+                .Where(a => deactivatedPermissionIds.Contains(a.PermissionId))
+                .ToListAsync(cancellationToken);
+
+            if (allocationsToRevoke.Count > 0)
+            {
+                _dbContext.PermissionAllocations.RemoveRange(allocationsToRevoke);
             }
         }
 

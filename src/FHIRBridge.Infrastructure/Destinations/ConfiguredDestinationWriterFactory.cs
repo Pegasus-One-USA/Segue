@@ -39,13 +39,13 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
     /// </summary>
     public static IReadOnlyList<ConfiguredDestinationWriterRegistration> DefaultRegistrations { get; } =
     [
-        new(DestinationType.InMemory, typeof(MappedInMemoryDestinationWriter)),
         new(DestinationType.SqlServer, typeof(MappedSqlServerDestinationWriter)),
+        new(DestinationType.Csv, typeof(MappedCsvDestinationWriter)),
+        new(DestinationType.InMemory, typeof(MappedInMemoryDestinationWriter)),
         new(DestinationType.AzureSql, typeof(MappedSqlServerDestinationWriter)),
         new(DestinationType.BlobStorage, typeof(MappedBlobStorageDestinationWriter)),
         new(DestinationType.RestApi, typeof(MappedRestApiDestinationWriter)),
         new(DestinationType.FhirRepository, typeof(MappedFhirRepositoryDestinationWriter)),
-        new(DestinationType.Csv, typeof(MappedCsvDestinationWriter)),
         new(DestinationType.Excel, typeof(MappedExcelDestinationWriter)),
         new(DestinationType.Snowflake, typeof(MappedSnowflakeDestinationWriter)),
         new(DestinationType.PowerBi, typeof(MappedPowerBiDestinationWriter)),
