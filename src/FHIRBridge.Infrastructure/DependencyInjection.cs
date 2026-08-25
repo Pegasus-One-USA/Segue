@@ -410,6 +410,15 @@ public static class DependencyInjection
                 sp.GetRequiredService<IHttpClientFactory>(),
                 sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
 
+        services.AddHttpClient(nameof(Destinations.MedplumDestinationConnectionTestService));
+        services.AddScoped<IMedplumDestinationConnectionTestService>(sp =>
+            new Destinations.MedplumDestinationConnectionTestService(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IMedplumTokenProvider>()));
+
+        services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
+        services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
+
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);

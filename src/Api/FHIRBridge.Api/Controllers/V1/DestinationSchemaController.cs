@@ -19,15 +19,24 @@ public sealed class DestinationSchemaController : ControllerBase
     private readonly IDestinationSchemaService _schemaService;
     private readonly ICsvDestinationConnectionTestService _csvConnectionTestService;
     private readonly IFhirDestinationConnectionTestService _fhirConnectionTestService;
+    private readonly IMedplumDestinationConnectionTestService _medplumConnectionTestService;
+    private readonly IMongoDestinationConnectionTestService _mongoConnectionTestService;
+    private readonly IBlobDestinationConnectionTestService _blobConnectionTestService;
 
     public DestinationSchemaController(
         IDestinationSchemaService schemaService,
         ICsvDestinationConnectionTestService csvConnectionTestService,
-        IFhirDestinationConnectionTestService fhirConnectionTestService)
+        IFhirDestinationConnectionTestService fhirConnectionTestService,
+        IMedplumDestinationConnectionTestService medplumConnectionTestService,
+        IMongoDestinationConnectionTestService mongoConnectionTestService,
+        IBlobDestinationConnectionTestService blobConnectionTestService)
     {
         _schemaService = schemaService;
         _csvConnectionTestService = csvConnectionTestService;
         _fhirConnectionTestService = fhirConnectionTestService;
+        _medplumConnectionTestService = medplumConnectionTestService;
+        _mongoConnectionTestService = mongoConnectionTestService;
+        _blobConnectionTestService = blobConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -135,4 +144,40 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] FhirConnectionTestRequest request,
         CancellationToken cancellationToken)
         => Ok(await _fhirConnectionTestService.TestConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc Medplum connection for a not-yet-saved <c>Medplum</c> destination — mints an OAuth2 token
+    /// from the supplied credentials and does a real <c>GET {baseUrl}/metadata</c>. Always returns 200 —
+    /// connection failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("medplum-test")]
+    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestMedplumConnection(
+        [FromBody] MedplumConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _medplumConnectionTestService.TestConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc MongoDB connection for a not-yet-saved <c>Mongo</c> destination — opens a client on the
+    /// supplied connection string and runs a <c>ping</c>. Always returns 200 — connection failures come back as
+    /// <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("mongo-test")]
+    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestMongoConnection(
+        [FromBody] MongoConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _mongoConnectionTestService.TestConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc Azure Blob Storage connection for a not-yet-saved <c>BlobStorage</c> destination — builds
+    /// the container client for the supplied auth mode and does a real reachability round-trip. Always returns
+    /// 200 — connection failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("blob-test")]
+    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestBlobConnection(
+        [FromBody] BlobConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _blobConnectionTestService.TestConnectionAsync(request, cancellationToken));
 }
