@@ -9,8 +9,10 @@ import {
 
 export abstract class IAuthService {
   abstract login(req: LoginRequest): Observable<LoginResult>;
-  /** Completes a login that returned a challenge (`requiresMfa: true`) via login(). */
-  abstract verifyMfaLogin(challengeToken: string, code: string): Observable<LoginResponse>;
+  /** Completes a login that returned a challenge (`requiresMfa: true`) via login(). `rememberMe` must
+   *  be the same value passed to the original login() call — no session exists yet at that point to
+   *  store it against, so the caller (AuthService.completeMfaLogin) is responsible for resending it. */
+  abstract verifyMfaLogin(challengeToken: string, code: string, rememberMe?: boolean): Observable<LoginResponse>;
   abstract logout(): Observable<void>;
   abstract register(req: RegisterRequest): Observable<RegisterResponse>;
   abstract forgotPassword(req: ForgotPasswordRequest): Observable<MessageResponse>;

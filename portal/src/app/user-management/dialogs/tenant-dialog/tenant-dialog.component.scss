@@ -64,6 +64,35 @@ mat-dialog-content {
   overflow-y: auto;
 }
 
+// Mirrors role-dialog.component.scss's identical notice banner (component styles don't leak across
+// components, so this is duplicated rather than shared — same as that file's own copy of the pattern).
+.no-tenant-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  font-size: 13px;
+  color: #92400E;
+  margin-bottom: 12px;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+
+  &.error-notice {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #991B1B;
+
+    mat-icon { color: #DC2626; }
+  }
+}
+
 .dialog-form {
   display: flex;
   flex-direction: column;

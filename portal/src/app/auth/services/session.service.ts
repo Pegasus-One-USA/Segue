@@ -33,6 +33,12 @@ export class SessionService {
   // HIPAA #7: no raw token to carry here anymore — it's an HttpOnly cookie the backend already
   // set. `Session.token`/`refreshToken` are kept as empty strings purely so existing consumers of
   // the `Session` shape don't need touching; nothing reads them for authentication anymore.
+  //
+  // `rememberMe` is recorded on the Session object below purely as an in-memory UI-facing mirror of
+  // the choice already sent to (and now actually acted on by) the backend — it is NOT read back to
+  // make any client-side decision. The server, via whether the refresh/CSRF cookies it set carry an
+  // Expires attribute, is the sole source of truth for whether this session survives a browser
+  // restart (see AuthController.IssueTokenCookiesAndStrip); this client never re-derives that itself.
   start(userId: string, rememberMe = false): void {
     const expiresAt = new Date(Date.now() + 3600 * 1000);
     const session: Session = {
@@ -40,7 +46,6 @@ export class SessionService {
       rememberMe, lastActivity: new Date(),
     };
     this.store.setSession(session);
-    this.tokens.setRememberMe(rememberMe);
     this.tokens.markSessionActive();
     this.resetIdleTimer();
     this.startActivityListeners();

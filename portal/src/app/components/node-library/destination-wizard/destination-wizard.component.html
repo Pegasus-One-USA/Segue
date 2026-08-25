@@ -298,6 +298,15 @@
             <button type="button" class="dw-group-search-clear" (click)="clearGroupSearch()" aria-label="Clear search">✕</button>
           }
         </div>
+        <label class="dw-group-select-all">
+          <input
+            type="checkbox"
+            [checked]="allFilteredSelected()"
+            [indeterminate]="anyFilteredSelected() && !allFilteredSelected()"
+            (click)="toggleSelectAllFiltered()"
+          />
+          Select all{{ groupSearchQuery() ? ' (' + filteredGroups().length + ')' : '' }}
+        </label>
         <span class="dw-section-hint">
           @if (discoverProbeStatus() === 'probing') {
             Choose which FHIR resources to include in this destination. Checking which ones this source supports…
@@ -776,6 +785,7 @@
           [zoomOutRequest]="zoomOutRequest()"
           [zoomResetRequest]="zoomResetRequest()"
           [zoomFitRequest]="zoomFitRequest()"
+          [searchQuery]="mappingSearchQuery()"
           (suggestionCountChange)="suggestionCountChange.emit($event)"
           (zoomPercentChange)="zoomPercentChange.emit($event)"
           (mappingRowsChange)="mappingRows.set($event)"

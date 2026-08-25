@@ -1,10 +1,24 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, of, map, tap, catchError } from 'rxjs';
+import { TENANT_ENDPOINTS } from '../../core/api-endpoints';
 
 export interface Tenant {
   id: string;
   name: string;
   code: string;
+  isActive: boolean;
   createdAt: string;
+}
+
+/** Wire shape of GET/POST/PUT /api/v1/tenants — mirrors the backend's TenantDto field-for-field. */
+interface TenantDto {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  createdOnUtc: string;
+  createdBy: string | null;
 }
 
 export interface CustomRole {
@@ -16,35 +30,67 @@ export interface CustomRole {
   createdAt: string;
 }
 
+/**
+ * Tenant CRUD — the real backend for the Tenant Management screens (tenant-list, tenant-dialog,
+ * tenant-tab), via TenantsController. Previously entirely an in-memory, non-persistent mock (a plain
+ * signal<Tenant[]>([]) with no HttpClient and no localStorage) — every tenant created through this screen
+ * used to vanish on the next page refresh; the database is now the source of truth.
+ *
+ * The `roles`/`CustomRole` half below (tenant-scoped "custom roles") is UNCHANGED and still an in-memory
+ * mock — it doesn't correspond to anything in the real RBAC system (the real Role entity has no tenant
+ * scoping at all) and wiring it up is a separate, unrelated feature from Tenant CRUD; only role-tab.component.ts
+ * uses it, and that screen is left exactly as it was.
+ */
 @Injectable({ providedIn: 'root' })
 export class TenantRoleService {
+  private readonly http = inject(HttpClient);
+
   readonly tenants = signal<Tenant[]>([]);
   readonly roles   = signal<CustomRole[]>([]);
 
-  addTenant(data: Pick<Tenant, 'name' | 'code'>): Tenant {
-    const tenant: Tenant = {
-      id:        this._uid(),
-      name:      data.name.trim(),
-      code:      data.code.trim().toUpperCase(),
-      createdAt: new Date().toISOString(),
-    };
-    this.tenants.update(list => [...list, tenant]);
-    return tenant;
+  constructor() {
+    this.refreshTenants().subscribe();
   }
 
-  updateTenant(id: string, data: Pick<Tenant, 'name' | 'code'>): void {
-    this.tenants.update(list =>
-      list.map(t => t.id === id
-        ? { ...t, name: data.name.trim(), code: data.code.trim().toUpperCase() }
-        : t));
-    this.roles.update(list =>
-      list.map(r => r.tenantId === id ? { ...r, tenantName: data.name.trim() } : r));
+  /** Re-fetches the tenant list from the backend and refreshes the `tenants` signal. Called once eagerly
+   *  at construction; callers that need to react to a failed initial load can also call this directly. */
+  refreshTenants(): Observable<Tenant[]> {
+    return this.http.get<TenantDto[]>(TENANT_ENDPOINTS.list).pipe(
+      map(dtos => dtos.map(dto => this.fromDto(dto))),
+      tap(list => this.tenants.set(list)),
+      catchError(() => of(this.tenants())),
+    );
   }
 
-  deleteTenant(id: string): void {
-    this.tenants.update(list => list.filter(t => t.id !== id));
-    this.roles.update(list => list.filter(r => r.tenantId !== id));
+  addTenant(data: Pick<Tenant, 'name' | 'code'>): Observable<Tenant> {
+    return this.http.post<TenantDto>(TENANT_ENDPOINTS.create, { name: data.name, code: data.code }).pipe(
+      map(dto => this.fromDto(dto)),
+      tap(tenant => this.tenants.update(list => [...list, tenant])),
+    );
   }
+
+  updateTenant(id: string, data: Pick<Tenant, 'name' | 'code'>): Observable<Tenant> {
+    // The existing dialog/tab UI has no IsActive toggle — resend whatever this tenant's current value
+    // already is so a plain rename never silently flips it.
+    const isActive = this.tenants().find(t => t.id === id)?.isActive ?? true;
+    return this.http.put<TenantDto>(TENANT_ENDPOINTS.update(id), { name: data.name, code: data.code, isActive }).pipe(
+      map(dto => this.fromDto(dto)),
+      tap(updated => this.tenants.update(list => list.map(t => t.id === id ? updated : t))),
+    );
+  }
+
+  deleteTenant(id: string): Observable<void> {
+    return this.http.delete<void>(TENANT_ENDPOINTS.delete(id)).pipe(
+      tap(() => this.tenants.update(list => list.filter(t => t.id !== id))),
+    );
+  }
+
+  private fromDto(dto: TenantDto): Tenant {
+    return { id: dto.id, name: dto.name, code: dto.code, isActive: dto.isActive, createdAt: dto.createdOnUtc };
+  }
+
+  // ── Custom roles (mock, unchanged) ──────────────────────────────────────────
+  // See the class doc comment — this half is intentionally untouched.
 
   addRole(data: Pick<CustomRole, 'name' | 'description' | 'tenantId'>): CustomRole {
     const tenant = this.tenants().find(t => t.id === data.tenantId);

@@ -64,40 +64,51 @@ export class DashboardComponent {
   protected readonly runStatusCounts = signal<WorkflowRunStatusCounts>(EMPTY_RUN_STATUS_COUNTS);
 
   constructor() {
+    // Initial load — a normal, user-facing page load, so the global loader is allowed exactly as before.
     this.loadRunStatusCounts();
 
     // Fallback only — see AUTO_REFRESH_MS. SignalR below is what actually keeps this live; this interval just
     // guarantees the screen still catches up eventually if the hub never connects at all.
-    const handle = setInterval(() => this.refresh(), AUTO_REFRESH_MS);
+    // silent: true — this is background polling, not something the user asked for or is waiting on; it
+    // must not repeatedly flash the app-wide loading indicator every 15s while sitting on an already-
+    // loaded Dashboard. See loading.interceptor.ts's SKIP_LOADER.
+    const handle = setInterval(() => this.refresh(true), AUTO_REFRESH_MS);
     this.destroyRef.onDestroy(() => clearInterval(handle));
 
     // A RunStatusChangedEvent carries only ids/status, not a full RouteExecution row (pipeline name, source,
     // etc.) — a targeted refetch of the recent-runs page + stat counts is the correct, always-consistent
     // response to "something changed", not an attempt to hand-patch a row from a payload that can't fully
     // describe it. Still push-driven (near-instant) rather than waiting for the next 15s tick.
+    // Also silent — same reasoning as the interval above: this is a push-driven background refresh, not
+    // a user action.
     this.runStatusHub.ensureConnected();
     this.runStatusHub.runStatusChanged$
       .pipe(debounceTime(EVENT_REFRESH_DEBOUNCE_MS), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
+      .subscribe(() => this.refresh(true));
 
     // Reconciles anything missed while disconnected (initial connect included) — same reasoning as the debounced
-    // event handler above, just triggered by connection state instead of a specific event.
+    // event handler above, just triggered by connection state instead of a specific event. Silent for the
+    // same reason.
     this.runStatusHub.reconnected$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refresh());
+      .subscribe(() => this.refresh(true));
   }
 
-  private loadRunStatusCounts(): void {
-    this.executionHistoryApi.statusCounts().subscribe({
+  private loadRunStatusCounts(silent = false): void {
+    this.executionHistoryApi.statusCounts({ silent }).subscribe({
       next: counts => this.runStatusCounts.set(counts),
       error: () => this.runStatusCounts.set(EMPTY_RUN_STATUS_COUNTS),
     });
   }
 
-  refresh(): void {
+  // silent=true for background refreshes (15s interval, SignalR) — skips the global loading indicator
+  // for the HTTP calls this triggers. The manual "Refresh" button in the template calls this with no
+  // argument, so it defaults to false and keeps showing the loader exactly as before — a deliberate,
+  // user-initiated action should still give visible feedback.
+  refresh(silent = false): void {
     this.dashSvc.refresh();
-    this.runSvc.fetchRecent();
-    this.loadRunStatusCounts();
+    this.runSvc.fetchRecent(silent);
+    this.loadRunStatusCounts(silent);
   }
 
   onActionClick(_id: string): void {}
