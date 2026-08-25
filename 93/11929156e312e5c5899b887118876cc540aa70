@@ -1,0 +1,138 @@
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10Configurations.cs
+  s_f215120df6f22d::t_f88f2f916e5ed0 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10PcsConfigurations.cs
+  s_f215120df6f22d::t_46e790ead6d0da 15,37
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/FHIRBridgePostgreSqlDesignTimeFactory.cs
+  s_f215120df6f22d::t_eaf01f900afef5 1-30
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260824085732_RemoveExplicitNvarcharMaxColumnType.Designer.cs
+  s_f215120df6f22d::t_8e808d84c97964 1-5470
+portal/src/app/app.config.ts
+  s_f215120df6f22d::t_49f08d2492df09 9
+  s_f215120df6f22d::t_39425c110a0cac 79-81
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_f215120df6f22d::t_93ea8bbc814b10 17-23,29,47,59,69,79
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunResourceRecordConfiguration.cs
+  s_f215120df6f22d::t_c4c4bc22accab7 20-22,24-25
+src/FHIRBridge.Application/Abstractions/Security/AppSecretReferences.cs
+  s_a6de5f768bb2ac::t_1400e029ed3c3b 20-25
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  s_f215120df6f22d::t_7276ddef3c0d18 17,20,23-25
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260824092244_InitialCreate.cs
+  s_f215120df6f22d::t_9bc28266e17131 1-3309
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_f215120df6f22d::t_0674a780f799ef 44
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_f215120df6f22d::t_85ee630916049f 335-337,342
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_a6de5f768bb2ac::t_d61017c485caba 34-35,37
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f215120df6f22d::t_a6adcd582f8ad7 4694,4857,5082,5145,5169,5194,5244-5334,5338,5403
+  s_f215120df6f22d::t_8e808d84c97964 8,722-723,5335-5337
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_f215120df6f22d::t_00bdb127747a18 81,109,143,175,199-201,233-234
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_f215120df6f22d::t_6b0b183a559f12 145-146,166
+  s_f215120df6f22d::t_4f1ac71659b1e7 124-125,128
+  s_f215120df6f22d::t_447c1b2612bbf8 148-165
+  s_f215120df6f22d::t_40411277d8db97 198-204,206-228
+  s_f215120df6f22d::t_d3b1cf836932d7 181
+  s_f215120df6f22d::t_3ba87d491434b6 190-197
+  s_f215120df6f22d::t_ff0c3d306a9b60 205
+  s_f215120df6f22d::t_6c6fb7ef6e3825 147
+  s_f215120df6f22d::t_24cfee02f0b6c4 126-127
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_f215120df6f22d::t_20d41735d88272 38
+  s_f215120df6f22d::t_498cff50dbca4e 37
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretAccessor.cs
+  s_a6de5f768bb2ac::t_d10a2890ae4ea4 18-19
+src/FHIRBridge.Infrastructure/Health/PostgresConnectionHealthCheck.cs
+  s_f215120df6f22d::t_edb50b2553920b 1-41
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ProvisionedSecretConfiguration.cs
+  s_f215120df6f22d::t_b8486e213b8675 16
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/FHIRBridge.Infrastructure.Migrations.PostgreSql.csproj
+  s_f215120df6f22d::t_d476d541b1a19a 3-14
+  s_f215120df6f22d::t_375192c96d98f5 1-2,15-21
+portal/src/app/settings/settings.routes.ts
+  s_f215120df6f22d::t_be65a00f6b6e42 230
+  s_f215120df6f22d::t_a5cc087175ef79 278
+  s_f215120df6f22d::t_5aaa4dd0968fbe 260
+  s_f215120df6f22d::t_5cc403541fea6a 112-116
+src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj
+  s_f215120df6f22d::t_0674a780f799ef 31
+src/FHIRBridge.Infrastructure/Security/AesGcmPhiFieldEncryptor.cs
+  s_a6de5f768bb2ac::t_9a48c74d17ac2b 8-12,21,23
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/UcumConfigurations.cs
+  s_f215120df6f22d::t_a88b2c8930ad76 37
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f215120df6f22d::t_5680e97474a4d2 605,608-619
+  s_f215120df6f22d::t_1b3bd862198ac0 44-52,620
+  s_f215120df6f22d::t_ad12d16032ff92 165
+  s_f215120df6f22d::t_6b7b9370ef455f 218-229
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/LoincConfigurations.cs
+  s_f215120df6f22d::t_6a66a7ad9e87ab 81
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HcpcsConfigurations.cs
+  s_f215120df6f22d::t_dc192befd3b164 15,37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/CvxConfigurations.cs
+  s_f215120df6f22d::t_71e78f1b92b403 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ConfiguredPipelineRunRecordConfiguration.cs
+  s_f215120df6f22d::t_53a8a72d004069 19
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/NdcConfigurations.cs
+  s_f215120df6f22d::t_225886ac5a0255 38
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_a6de5f768bb2ac::t_81c02d02ff332e 23-27,34
+src/FHIRBridge.Application/DTOs/RefreshTokenRequest.cs
+  s_f215120df6f22d::t_c4247840dc9686 3-7
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_44b3eb0c92b6da 2-5,7
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f215120df6f22d::t_a6adcd582f8ad7 1715,1717,2339,2342,4092,4094,4226,4228
+  s_f215120df6f22d::t_e19aca8d7d494d 4367
+  s_f215120df6f22d::t_15840bdd33cfba 67,69-70,145-149,293,295-296,357-361,422-426,548-552,1501-1505,1580-1584,1660,1662-1663,1716,1718-1722,1790,1792-1793,1856,1858-1859,2105-2109,2191,2193-2194,2254-2258,2338,2340-2341,2343-2345,2394-2398,2461-2465,2518-2522,3923-3927,4093,4095-4099,4227,4229-4233
+  s_f215120df6f22d::t_b7a9fd90b1749a 76,447,1027,1736,2533,2641,2751,2942,2978,3272,3386,3496,3710,3820
+  s_f215120df6f22d::t_6e71f22de33234 1-66,68,71-75,77-144,150-292,294,297-356,362-421,427-446,448-547,553-1026,1028-1500,1506-1579,1585-1659,1661,1664-1714,1723-1735,1737-1789,1791,1794-1855,1857,1860-2104,2110-2190,2192,2195-2253,2259-2337,2346-2393,2399-2460,2466-2517,2523-2532,2534-2640,2642-2750,2752-2941,2943-2977,2979-3271,3273-3385,3387-3495,3497-3709,3711-3819,3821-3922,3928-4091,4100-4225,4234-4366,4368-5439
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260824092244_InitialCreate.Designer.cs
+  s_f215120df6f22d::t_9bc28266e17131 1-5442
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/SnomedConfigurations.cs
+  s_f215120df6f22d::t_c81d8d896f724c 73
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260824085732_RemoveExplicitNvarcharMaxColumnType.cs
+  s_f215120df6f22d::t_8e808d84c97964 1-22
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/RxNormConfigurations.cs
+  s_f215120df6f22d::t_a231e6dd94841f 37
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_f215120df6f22d::t_4355c3544ddbee 57-73
+FHIRBridge.sln
+  s_f215120df6f22d::t_b9c1a2bb0e3a58 54-55,282-293,321
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_f215120df6f22d::t_ce2bd300ff859c 137-148
+src/FHIRBridge.Infrastructure/Security/AppSecretAccessor.cs
+  s_a6de5f768bb2ac::t_861c3b46dac5b2 18-21,26,43-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9311929156e312e5c5899b887118876cc540aa70",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_a6de5f768bb2ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f406f2bc-5ad4-4eba-ab52-0bc9aa6357ea",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f215120df6f22d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09e7d900-90cc-4d28-b9ce-9932cc46c5d0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
