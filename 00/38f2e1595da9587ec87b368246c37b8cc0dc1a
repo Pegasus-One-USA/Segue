@@ -1,0 +1,107 @@
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_f52ebfc5bfb80e::t_8e63fdb841e6f8 41-57
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_f52ebfc5bfb80e::t_4479ce70a100f4 37-40
+portal/src/app/models/transform.model.ts
+  s_f52ebfc5bfb80e::t_456fec4eb9551a 1-2,10-15
+portal/src/app/data/transforms.data.ts
+  s_f52ebfc5bfb80e::t_b7f62a5fa04100 12-16,24-41
+portal/src/app/core/api-endpoints.ts
+  s_f52ebfc5bfb80e::t_380aee101773f7 117
+  s_f52ebfc5bfb80e::t_72b016f50a6c99 118
+  s_f52ebfc5bfb80e::t_a98310cafd7714 119
+src/FHIRBridge.Application/DTOs/MedplumConnectionTestRequest.cs
+  s_f52ebfc5bfb80e::t_b654a56b9fd56b 1-19
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_f19b9f5950263d 1-60
+src/FHIRBridge.Application/Abstractions/Destinations/IBlobDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_1067e8e4afd5b9 1-16
+src/FHIRBridge.Application/Abstractions/Destinations/IMongoDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_7f9ddee68d43a5 1-16
+src/FHIRBridge.Application/DTOs/BlobConnectionTestRequest.cs
+  s_f52ebfc5bfb80e::t_fb84b4bff446ba 1-20
+portal/src/app/settings/settings.routes.ts
+  s_f52ebfc5bfb80e::t_0108e59124e98f 224-225,232
+  s_f52ebfc5bfb80e::t_522b828de4bd3b 106-109,116
+  s_f52ebfc5bfb80e::t_de167ebc6accca 255-256,264
+  s_f52ebfc5bfb80e::t_bc33665617e5e7 275-276,284
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f52ebfc5bfb80e::t_bd870921b7a770 404-409
+  s_f52ebfc5bfb80e::t_b42394693e7d5d 410,412
+  s_f52ebfc5bfb80e::t_a27a105fc73f70 411
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.ts
+  s_f52ebfc5bfb80e::t_6b900306326697 1,5
+  s_f52ebfc5bfb80e::t_36397c3417d873 22-25
+  s_f52ebfc5bfb80e::t_607b1bfb27f727 124-164
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_f52ebfc5bfb80e::t_48939d46fcfd11 26
+  s_f52ebfc5bfb80e::t_a07c314f2f5363 60-63
+  s_f52ebfc5bfb80e::t_9cc24cba793bd1 18
+  s_f52ebfc5bfb80e::t_dc46a033566dd5 120-148
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.html
+  s_f52ebfc5bfb80e::t_ba387337faf4fc 242-258
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_f52ebfc5bfb80e::t_5514e51efc33ee 24-29
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.scss
+  s_f52ebfc5bfb80e::t_2445a1af420a37 22-23
+  s_f52ebfc5bfb80e::t_eecca51e265573 2-3
+  s_f52ebfc5bfb80e::t_a290c297fc9add 19-21
+src/FHIRBridge.Application/Abstractions/Destinations/IMedplumDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_e671081ffaaedb 1-17
+src/FHIRBridge.Infrastructure/Destinations/MedplumDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_e8f2991c2ebf22 1-75
+portal/src/app/components/node-library/destination-wizard/destination-forms/medplum-destination-form.component.ts
+  s_f52ebfc5bfb80e::t_555da6b350b48b 91,93-99,101-102,104-105,107
+  s_f52ebfc5bfb80e::t_da6dc1b5876d8d 100,103,106
+  s_f52ebfc5bfb80e::t_30638398da02b8 1,5
+  s_f52ebfc5bfb80e::t_a7d7a382c972b9 112-115
+  s_f52ebfc5bfb80e::t_0ab614a447f2fb 135-169
+  s_f52ebfc5bfb80e::t_2b17d32248a354 92
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_f52ebfc5bfb80e::t_a264a13ecb3493 21-24
+  s_f52ebfc5bfb80e::t_f89764fab743f9 41-68
+  s_f52ebfc5bfb80e::t_886fd4008cb7ff 1,5
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_f52ebfc5bfb80e::t_9dd6711c549937 141
+  s_f52ebfc5bfb80e::t_6c760c56abf9c6 210
+  s_f52ebfc5bfb80e::t_f6899d1f705ac3 25-50,53-60,64-69
+  s_f52ebfc5bfb80e::t_e9c7f897700038 149
+  s_f52ebfc5bfb80e::t_0300948e53033a 180
+  s_f52ebfc5bfb80e::t_1183a4a6720440 194-198
+  s_f52ebfc5bfb80e::t_6696931e694e07 95-100,104-120
+  s_f52ebfc5bfb80e::t_7ccca085db07e8 17-18
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_f52ebfc5bfb80e::t_d18052c5fbfd6a 171-182
+  s_f52ebfc5bfb80e::t_18abd0cbedecad 24,31-32,39
+  s_f52ebfc5bfb80e::t_1a402baabb0214 23,30,38
+  s_f52ebfc5bfb80e::t_d839a896dff85e 22,29,37
+  s_f52ebfc5bfb80e::t_ddf749d10b2520 147-158
+  s_f52ebfc5bfb80e::t_d5a365f8583f7b 159-170
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  s_f52ebfc5bfb80e::t_bd18de3763ecb7 1-10
+src/FHIRBridge.Infrastructure/Destinations/BlobDestinationConnectionTestService.cs
+  s_f52ebfc5bfb80e::t_e48479f2053682 1-137
+portal/src/app/services/destination-schema.service.ts
+  s_f52ebfc5bfb80e::t_0ad0700d7957d3 225-230
+  s_f52ebfc5bfb80e::t_99332fb29b79ad 231-236
+  s_f52ebfc5bfb80e::t_5f0c8fdec84fff 138-148
+  s_f52ebfc5bfb80e::t_0505f7fa64bd4a 154-167
+  s_f52ebfc5bfb80e::t_bbb9e9cde09295 149-153
+  s_f52ebfc5bfb80e::t_c45b5b4919f1b1 219-224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0038f2e1595da9587ec87b368246c37b8cc0dc1a",
+  "prompts": {},
+  "sessions": {
+    "s_f52ebfc5bfb80e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fdc974e-a979-48a0-9c21-8ca79fa7a50f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
