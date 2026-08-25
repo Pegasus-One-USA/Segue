@@ -14,15 +14,15 @@ public sealed class BulkExportJobConfiguration : IEntityTypeConfiguration<BulkEx
         builder.Property(x => x.SourcePath).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.SourceConnectionId).IsRequired();
-        builder.Property(x => x.ExportRequestJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.ExportRequestJson).IsRequired();
         builder.Property(x => x.StatusUrl).HasMaxLength(2000);
         builder.Property(x => x.KickedOffOnUtc).IsRequired();
-        builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.ErrorMessage);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
-        builder.Property(x => x.PriorNodeOutputsJson).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.ContextJson).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.RequestedResourceTypesJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.PriorNodeOutputsJson);
+        builder.Property(x => x.ContextJson);
+        builder.Property(x => x.RequestedResourceTypesJson);
 
         // Backs BulkExportPollWorker's due-job query.
         builder.HasIndex(x => new { x.Status, x.NextPollNotBeforeUtc });

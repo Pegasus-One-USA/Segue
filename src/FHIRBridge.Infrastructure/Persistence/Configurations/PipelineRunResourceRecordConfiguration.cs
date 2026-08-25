@@ -17,12 +17,12 @@ public sealed class PipelineRunResourceRecordConfiguration : IEntityTypeConfigur
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
 
         // Encrypted PHI payloads — ciphertext (base64) is longer than the source JSON, hence nvarchar(max).
-        builder.Property(x => x.FetchedJson).HasColumnType("nvarchar(max)").IsRequired();
-        builder.Property(x => x.NormalizedJson).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.MappedValuesJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.FetchedJson).IsRequired();
+        builder.Property(x => x.NormalizedJson);
+        builder.Property(x => x.MappedValuesJson);
 
-        builder.Property(x => x.AppliedProfiles).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.Warnings).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.AppliedProfiles);
+        builder.Property(x => x.Warnings);
         builder.Property(x => x.MasterPatientId).HasMaxLength(200);
         builder.Property(x => x.WriteStatus).HasMaxLength(50);
         builder.Property(x => x.FetchedAtUtc).IsRequired();

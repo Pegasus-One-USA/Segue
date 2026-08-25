@@ -41,6 +41,15 @@ using Microsoft.Extensions.Http.Resilience;
 
 namespace FHIRBridge.Infrastructure;
 
+/// <summary>EF Core provider backing <see cref="Persistence.FHIRBridgeDbContext"/>, selected via the
+/// "Database:Provider" config key. Defaults to <see cref="SqlServer"/> so every existing deployment
+/// (which has no such key set) keeps behaving exactly as before.</summary>
+public enum PersistenceProvider
+{
+    SqlServer,
+    PostgreSql
+}
+
 public static class DependencyInjection
 {
     public static IServiceCollection AddFHIRBridgeInfrastructure(
@@ -153,6 +162,7 @@ public static class DependencyInjection
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
 
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
+        var persistenceProvider = configuration.GetValue("Database:Provider", PersistenceProvider.SqlServer);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -207,7 +217,18 @@ public static class DependencyInjection
 
             services.AddDbContext<FHIRBridgeDbContext>((sp, options) =>
             {
-                options.UseSqlServer(connectionString);
+                switch (persistenceProvider)
+                {
+                    case PersistenceProvider.PostgreSql:
+                        options.UseNpgsql(
+                            connectionString,
+                            npgsql => npgsql.MigrationsAssembly("FHIRBridge.Infrastructure.Migrations.PostgreSql"));
+                        break;
+                    default:
+                        options.UseSqlServer(connectionString);
+                        break;
+                }
+
                 options.AddInterceptors(sp.GetRequiredService<AuditingSaveChangesInterceptor>());
             });
 
@@ -600,10 +621,21 @@ public static class DependencyInjection
         services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
-        services.AddHealthChecks()
-            .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
-            .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde")
+        var healthChecksBuilder = services.AddHealthChecks()
             .AddCheck<KeyVaultConfigurationHealthCheck>("keyvault");
+
+        // TDE (Transparent Data Encryption) is a SQL Server / Azure SQL-only concept — there is no PostgreSQL
+        // equivalent, so it's only registered on the SqlServer path.
+        if (persistenceProvider == PersistenceProvider.PostgreSql)
+        {
+            healthChecksBuilder.AddCheck<PostgresConnectionHealthCheck>("postgresql");
+        }
+        else
+        {
+            healthChecksBuilder
+                .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
+                .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde");
+        }
 
         return services;
     }

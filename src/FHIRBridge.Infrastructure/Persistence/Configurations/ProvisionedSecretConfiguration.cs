@@ -13,7 +13,7 @@ public sealed class ProvisionedSecretConfiguration : IEntityTypeConfiguration<Pr
 
         builder.Property(x => x.KeyVaultName).HasMaxLength(200).IsRequired();
         builder.Property(x => x.SecretName).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.ProtectedValue).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.ProtectedValue).IsRequired();
         builder.Property(x => x.CreatedOnUtc).IsRequired();
         builder.Property(x => x.ModifiedOnUtc).IsRequired();
 

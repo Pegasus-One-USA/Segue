@@ -3,7 +3,6 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Security;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -21,14 +20,18 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
     private GeneratedFileDownloadLinkService CreateService(string signingSecret = "test-secret")
     {
         var secretAccessor = new AppSecretAccessor();
-        secretAccessor.Initialize(jwtSigningKey: "unused", downloadLinkSigningSecret: signingSecret, transformHashingKey: "unused");
+        secretAccessor.Initialize(
+            jwtSigningKey: "unused",
+            downloadLinkSigningSecret: signingSecret,
+            transformHashingKey: "unused",
+            phiEncryptionKey: Convert.ToBase64String(new byte[32]));
 
         var settingsCache = new Mock<ISystemSettingsCache>();
         settingsCache
             .Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
 
-        var encryptor = new AesGcmPhiFieldEncryptor(new ConfigurationBuilder().Build());
+        var encryptor = new AesGcmPhiFieldEncryptor(secretAccessor);
 
         return new(Options.Create(new GeneratedFileDownloadOptions
         {

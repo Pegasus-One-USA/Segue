@@ -51,6 +51,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Api.IntegrationT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Governance", "src\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj", "{80DAA888-84BF-4979-A2E4-69B9685AD93B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Infrastructure.Migrations.PostgreSql", "src\FHIRBridge.Infrastructure.Migrations.PostgreSql\FHIRBridge.Infrastructure.Migrations.PostgreSql.csproj", "{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -277,6 +279,18 @@ Global
 		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x64.Build.0 = Release|Any CPU
 		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x86.ActiveCfg = Release|Any CPU
 		{80DAA888-84BF-4979-A2E4-69B9685AD93B}.Release|x86.Build.0 = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|x64.Build.0 = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Debug|x86.Build.0 = Debug|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x64.ActiveCfg = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x64.Build.0 = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x86.ActiveCfg = Release|Any CPU
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -304,6 +318,7 @@ Global
 		{BF4AAB9C-984B-4482-86D7-4E7B12E8E273} = {6306A8FB-679E-111F-6585-8F70E0EE6013}
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{80DAA888-84BF-4979-A2E4-69B9685AD93B} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
+		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3D3F029B-E6AC-4D16-9551-75C0409A78CD}
