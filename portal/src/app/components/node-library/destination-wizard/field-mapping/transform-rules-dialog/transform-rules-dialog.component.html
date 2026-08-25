@@ -234,6 +234,22 @@
                         </div>
                         <div
                           class="form-field config-control"
+                          matTooltip="What data type this step's output is expected to be — validated against the destination column when the mapping is saved, so a mismatch is caught here instead of failing during a pipeline run."
+                        >
+                          <label [for]="'trd-expected-type-' + stepIndex">Expected output type</label>
+                          <select [id]="'trd-expected-type-' + stepIndex" [ngModel]="step.expectedValueType ?? ''" (ngModelChange)="setExpectedValueType(step, $event)">
+                            <option value="">Not declared</option>
+                            <option value="String">String</option>
+                            <option value="Integer">Integer</option>
+                            <option value="Decimal">Decimal</option>
+                            <option value="Boolean">Boolean</option>
+                            <option value="Date">Date</option>
+                            <option value="DateTime">DateTime</option>
+                            <option value="Json">Json</option>
+                          </select>
+                        </div>
+                        <div
+                          class="form-field config-control"
                           matTooltip="For a FHIR-native destination (Aidbox, Medplum, ...) only — writes this step's output back into the source resource's own JSON at this path, instead of leaving it untouched. Leave blank unless this step builds a structure (e.g. CodeableConcept Builder) that needs to replace a parent element, not the bare field it read from."
                         >
                           <label [for]="'trd-fhir-writeback-' + stepIndex">FHIR write-back path (advanced)</label>

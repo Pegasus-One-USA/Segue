@@ -203,6 +203,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
   effective: `${API_V1_BASE}/transformation-rules/effective`,
+  impact: `${API_V1_BASE}/transformation-rules/impact`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──

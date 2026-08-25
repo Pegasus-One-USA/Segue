@@ -14,7 +14,9 @@ import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, NullPolicy, TransformErrorPolicy, TransformArrayMode,
+  TRANSFORM_NODE_DEFAULT_VALUE_TYPES,
 } from '../transformation-rules.service';
+import { MappingValueType } from '../../../../../mapping-profiles/models/mapping-profile.model';
 import { getApplicableNodeTypes, ALL_NODE_TYPE_OPTIONS, nodeAbbr, nodeAccentVar } from '../transform-node-classifier';
 import { RuleConfigFormComponent, applyNodeDefaults } from '../rule-config-form/rule-config-form.component';
 import { PermissionActionGuard } from '../../../../../auth/services/permission-action-guard.service';
@@ -47,6 +49,11 @@ interface RuleStep {
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
   fhirWriteBackJsonPath: string | null;
+  /** The data type this step's output is expected to be — pre-filled from TRANSFORM_NODE_DEFAULT_VALUE_TYPES
+   *  when the node type is set/changed, editable, and null for node types with no sensible default (their
+   *  output depends on data/config, not the node type alone). Validated against the destination column's
+   *  type at mapping-profile save time (see CreateMappingProfileRequestValidator). */
+  expectedValueType: MappingValueType | null;
 }
 
 interface ColumnRuleRow {
@@ -155,6 +162,7 @@ export class TransformRulesDialogComponent implements OnInit {
               errorPolicy: r.errorPolicy,
               arrayMode: r.arrayMode,
               fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
+              expectedValueType: r.expectedValueType ?? TRANSFORM_NODE_DEFAULT_VALUE_TYPES[r.nodeType] ?? null,
             }));
 
           return {
@@ -268,6 +276,7 @@ export class TransformRulesDialogComponent implements OnInit {
       errorPolicy: r.errorPolicy,
       arrayMode: r.arrayMode,
       fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
+      expectedValueType: r.expectedValueType ?? TRANSFORM_NODE_DEFAULT_VALUE_TYPES[r.nodeType] ?? null,
     }));
     row.editing = true;
     row.viewingInherited = false;
@@ -289,7 +298,13 @@ export class TransformRulesDialogComponent implements OnInit {
       errorPolicy: 'NullOut',
       arrayMode: 'Whole',
       fhirWriteBackJsonPath: null,
+      expectedValueType: TRANSFORM_NODE_DEFAULT_VALUE_TYPES[nodeType] ?? null,
     });
+    this.rows.set([...this.rows()]);
+  }
+
+  setExpectedValueType(step: RuleStep, value: string): void {
+    step.expectedValueType = (value || null) as MappingValueType | null;
     this.rows.set([...this.rows()]);
   }
 
@@ -321,6 +336,7 @@ export class TransformRulesDialogComponent implements OnInit {
   onNodeTypeChange(step: RuleStep, nodeType: TransformNodeType): void {
     step.nodeType = nodeType;
     step.config = applyNodeDefaults(this.schemaFor(nodeType), {});
+    step.expectedValueType = TRANSFORM_NODE_DEFAULT_VALUE_TYPES[nodeType] ?? null;
     this.rows.set([...this.rows()]);
   }
 
@@ -412,6 +428,7 @@ export class TransformRulesDialogComponent implements OnInit {
       errorPolicy: step.errorPolicy,
       arrayMode: step.arrayMode,
       fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
+      expectedValueType: step.expectedValueType,
     }).subscribe({
       next: saved => {
         step.id = saved.id;

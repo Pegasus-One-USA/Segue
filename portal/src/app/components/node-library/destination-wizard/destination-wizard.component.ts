@@ -2522,16 +2522,26 @@ export class DestinationWizardComponent implements OnInit {
       );
       return;
     }
-    // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
-    // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
-    // parent resource's mapping in another group, or resolve it later, so they're shown a
-    // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
-    const warnings = this.buildParentReferenceWarnings(group);
-    if (warnings.length > 0) {
-      this.pendingSaveWarnings.set(warnings);
-      return;
-    }
-    this.completeSaveGroupMapping(group);
+
+    this.validateRuleConflictsForSave(group).subscribe((ruleErrors) => {
+      if (ruleErrors.length > 0) {
+        this.toast.error(
+          `Fix ${ruleErrors.length} transform rule conflict${ruleErrors.length === 1 ? '' : 's'} before saving`,
+          ruleErrors.join(' '),
+        );
+        return;
+      }
+      // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
+      // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
+      // parent resource's mapping in another group, or resolve it later, so they're shown a
+      // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
+      const warnings = this.buildParentReferenceWarnings(group);
+      if (warnings.length > 0) {
+        this.pendingSaveWarnings.set(warnings);
+        return;
+      }
+      this.completeSaveGroupMapping(group);
+    });
   }
 
   /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
@@ -2776,6 +2786,59 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     return errors;
+  }
+
+  /** Mirrors CreateMappingProfileRequestValidator.ValidateApplicableRulesAsync (the backend's mapping-profile
+   *  save gate) client-side: a field can pass every check in validateMappingForSave above — the mapped value
+   *  itself matches the column's type — and still fail at pipeline-run time because a Global/ResourceType/
+   *  DestinationType-scoped TransformationRule applies to it and expects a different type than the column
+   *  actually is (e.g. a Global NumberCast rule hitting a text column). Async because it needs one
+   *  getEffectiveRules call per mapped field; returns [] immediately (no network calls) when there's no live
+   *  SQL schema to check column types against, same short-circuit validateMappingForSave uses. */
+  private validateRuleConflictsForSave(resource: string): Observable<string[]> {
+    if (!this.hasSqlTables()) return of([]);
+
+    const destinationType = this.resolveDestinationTypeForRules();
+    if (!destinationType) return of([]);
+
+    const rows = this
+      .mappingRows()
+      .filter((r) => r.resource === resource && r.mode === 'value');
+    if (rows.length === 0) return of([]);
+
+    const checks = rows.map((row) => {
+      const table = this.sqlTables().find((t) => t.fullName === row.tableName);
+      const column = table?.columns.find((c) => c.name === row.targetName);
+      if (!column?.mappingValueType) return of([] as string[]);
+
+      return this.transformationRulesSvc
+        .getEffectiveRules({
+          destinationType,
+          resourceType: resource,
+          destinationField: row.targetName,
+          sourceSystem: this.sourceVendor() || null,
+          sourceField: row.sources[0]?.fhirPath ?? null,
+        })
+        .pipe(
+          map((rules) =>
+            rules
+              .filter(
+                (rule) =>
+                  rule.expectedValueType &&
+                  rule.expectedValueType.toLowerCase() !== column.mappingValueType.toLowerCase(),
+              )
+              .map(
+                (rule) =>
+                  `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
+                  `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}). ` +
+                  `Add a workflow-level override for this field, or update the rule's expected type.`,
+              ),
+          ),
+          catchError(() => of([] as string[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
+        );
+    });
+
+    return forkJoin(checks).pipe(map((results) => results.flat()));
   }
 
   /** Soft, confirm-before-proceed checks shown via pendingSaveWarnings — distinct from

@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -59,7 +60,13 @@ public sealed class ConfigurationService : IConfigurationService
         var result = await validator.ValidateAsync(request, cancellationToken);
         if (!result.IsValid)
         {
-            throw new RequestValidationException(new Dictionary<string, string[]>(result.ToDictionary()));
+            var ruleConflicts = result.Errors
+                .Select(f => f.CustomState)
+                .OfType<TransformationRuleTypeConflict>()
+                .ToList();
+            throw new RequestValidationException(
+                new Dictionary<string, string[]>(result.ToDictionary()),
+                ruleConflicts.Count > 0 ? ruleConflicts : null);
         }
     }
 
