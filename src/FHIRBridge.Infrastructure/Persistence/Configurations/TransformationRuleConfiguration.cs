@@ -29,6 +29,7 @@ public sealed class TransformationRuleConfiguration : IEntityTypeConfiguration<T
             .HasDefaultValue(FHIRBridge.Domain.Enums.TransformExecutionPhase.PostMapping);
         builder.Property(x => x.DeIdentificationProfileId);
         builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.ExpectedValueType).HasConversion<string>().HasMaxLength(20);
 
         // Speeds up the resolver's per-tier lookups (GetFieldScopedAsync/GetResourceTypeScopedAsync/etc.).
         builder.HasIndex(x => new { x.Scope, x.ResourceType, x.DestinationField, x.SourceSystem, x.SourceField });

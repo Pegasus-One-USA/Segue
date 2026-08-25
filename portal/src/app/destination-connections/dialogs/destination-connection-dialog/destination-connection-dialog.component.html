@@ -34,22 +34,10 @@
     @if (!chosenType()) {
       <p class="dcd-hint">Choose a connection type to continue.</p>
       <div class="dcd-type-choice">
-        @if (permissions.hasPermission('sqlserver.create')) {
-          <button type="button" class="dcd-type-card" (click)="chooseType('sql')">
-            <strong>SQL</strong>
-            <span>Write mapped records into a relational table (SQL Server, MySQL, or PostgreSQL).</span>
-          </button>
-        }
-        @if (permissions.hasPermission('csv.create')) {
-          <button type="button" class="dcd-type-card" (click)="chooseType('csv')">
-            <strong>CSV</strong>
-            <span>Write mapped records as delimited files (local, SFTP, or blob storage).</span>
-          </button>
-        }
-        @if (permissions.hasPermission('sourceconnections.create')) {
-          <button type="button" class="dcd-type-card" (click)="chooseType('fhir')">
-            <strong>Aidbox (FHIR)</strong>
-            <span>Write FHIR resources to a FHIR-native store (Aidbox).</span>
+        @for (card of createTypeCards; track card.destinationType) {
+          <button type="button" class="dcd-type-card" (click)="chooseType(card.destinationType)">
+            <strong>{{ card.title }}</strong>
+            <span>{{ card.description }}</span>
           </button>
         }
       </div>

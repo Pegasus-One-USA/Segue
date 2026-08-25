@@ -35,7 +35,7 @@ public sealed class SetupServiceTests
     public async Task RequiresSetup_is_false_when_a_user_exists()
     {
         _repository.Setup(x => x.GetUsersAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new User("local:admin@x.io", "admin@x.io", "Admin")]);
+            .ReturnsAsync([new User("local:admin@x.io", "admin@x.io", "Admin", Guid.NewGuid())]);
 
         (await Service().RequiresSetupAsync(CancellationToken.None)).Should().BeFalse();
     }
@@ -44,7 +44,7 @@ public sealed class SetupServiceTests
     public async Task CreateFirstSuperAdmin_throws_and_creates_nothing_once_initialized()
     {
         _repository.Setup(x => x.GetUsersAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new User("local:admin@x.io", "admin@x.io", "Admin")]);
+            .ReturnsAsync([new User("local:admin@x.io", "admin@x.io", "Admin", Guid.NewGuid())]);
 
         var act = () => Service().CreateFirstSuperAdminAsync(
             new CreateFirstSuperAdminRequest("new@x.io", "New", "SuperAdmin@Pass123!", AcceptTerms: true, EmailSettings),

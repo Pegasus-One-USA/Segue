@@ -34,6 +34,6 @@ public sealed class UcumImportHistoryConfiguration : IEntityTypeConfiguration<Uc
     {
         builder.ToTable("UcumImportHistory", "terminology"); builder.HasKey(x => x.Id);
         builder.Property(x => x.Version).HasMaxLength(32); builder.Property(x => x.ChecksumSha256).HasMaxLength(64); builder.Property(x => x.Status).HasMaxLength(32).IsRequired();
-        builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)"); builder.HasIndex(x => x.StartedOnUtc);
+        builder.Property(x => x.ErrorMessage); builder.HasIndex(x => x.StartedOnUtc);
     }
 }

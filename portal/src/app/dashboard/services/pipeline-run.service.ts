@@ -30,7 +30,11 @@ export class PipelineRunService {
     this.fetchRecent();
   }
 
-  fetchRecent(): void {
+  // silent=true (Dashboard's 15s auto-refresh / SignalR-triggered refresh) skips the global loading
+  // indicator for this HTTP call — see ExecutionHistoryApiService.list()/loading.interceptor.ts. The
+  // local `loading` signal above is unaffected either way; it's this service's own concern, not the
+  // app-wide one.
+  fetchRecent(silent = false): void {
     this.loading.set(true);
 
     this.api
@@ -39,7 +43,7 @@ export class PipelineRunService {
         pageSize: RECENT_COUNT,
         sortColumn: 'lastRun',
         sortDirection: 'desc',
-      })
+      }, { silent })
       .pipe(
         catchError((err: HttpErrorResponse) => {
           // Dashboard is reachable by every authenticated role regardless of workflow.view (it's a

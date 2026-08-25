@@ -1,4 +1,4 @@
-<div class="fm-target-card" #card [style.left.px]="x()" [style.top.px]="y()">
+<div class="fm-target-card" [class.fm-target-card--fit]="fitMode()" #card [style.left.px]="x()" [style.top.px]="y()">
   <div
     class="fm-target-head"
     (pointerdown)="onHeadPointerDown($event)"
@@ -21,6 +21,13 @@
         <button type="button" class="fm-target-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
       }
     </div>
+    <button
+      type="button"
+      class="fm-target-fit-toggle"
+      [attr.aria-label]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      [title]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      (click)="toggleFit()"
+    >{{ fitMode() ? '⤢' : '⤡' }}</button>
     <button type="button" class="fm-target-remove" aria-label="Remove this table" title="Remove this table" (click)="removeTable.emit()">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
     </button>
@@ -34,7 +41,7 @@
   }
 
 
-  <div class="fm-target-rows">
+  <div class="fm-target-rows" (scroll)="onRowsScroll()">
     @if (destType() === 'sql' && hasSqlTables() && !schemaAuthoringEnabled()) {
       <!-- No live credentials to back a real ALTER TABLE here (see FieldMappingCanvasComponent.
            schemaAuthoringEnabled) — this table's real, already-probed columns are the only ones
@@ -75,8 +82,8 @@
         >Add</button>
       </div>
     }
-    @if (isSearching() && filteredColumns().length === 0) {
-      <div class="fm-target-no-match">No columns match "{{ searchQuery() }}".</div>
+    @if (hasActiveFilter() && filteredColumns().length === 0) {
+      <div class="fm-target-no-match">No columns match "{{ effectiveQuery() }}".</div>
     }
     @for (col of filteredColumns(); track col) {
       <div

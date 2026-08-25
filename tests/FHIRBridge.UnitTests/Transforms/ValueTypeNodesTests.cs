@@ -111,6 +111,23 @@ public sealed class ValueTypeNodesTests
     }
 
     [Fact]
+    public void UnitConversionNode_converts_a_pair_not_in_the_old_hardcoded_table()
+    {
+        var config = new Dictionary<string, string> { ["sourceUnit"] = "g", ["targetUnit"] = "[oz_av]", ["precision"] = "2" };
+        var result = new UnitConversionNode().Execute(100m, config, null);
+        var quantity = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        quantity["value"]!.GetValue<decimal>().Should().Be(3.53m);
+    }
+
+    [Fact]
+    public void UnitConversionNode_fails_for_dimensionally_incompatible_units()
+    {
+        var config = new Dictionary<string, string> { ["sourceUnit"] = "kg", ["targetUnit"] = "cm" };
+        var result = new UnitConversionNode().Execute(70m, config, null);
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
     public void QuantityRangeAssemblyNode_parses_a_leading_comparator()
     {
         var result = new QuantityRangeAssemblyNode().Execute("<0.5", new Dictionary<string, string> { ["unit"] = "mg/L" }, null);

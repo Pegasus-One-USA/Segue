@@ -39,7 +39,8 @@ public sealed class TransformationRuleServiceTests
             .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
             DestinationType.SqlServer, "Patient", "BirthDate", "03/14/2026"));
@@ -55,7 +56,8 @@ public sealed class TransformationRuleServiceTests
         var repository = new Mock<ITransformationRuleRepository>();
         SetupEmptyRepository(repository);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
             DestinationType.SqlServer, "Patient", "SomeUnconfiguredField", "raw-value"));
@@ -78,7 +80,8 @@ public sealed class TransformationRuleServiceTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
         SetupEmptyRepository(repository, exceptResourceType: true);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var rules = await service.GetEffectiveRulesAsync(DestinationType.SqlServer, "Patient", "BirthDate", null, null, null);
 
@@ -100,7 +103,8 @@ public sealed class TransformationRuleServiceTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
         SetupEmptyRepository(repository, exceptResourceType: true);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "BirthDate", null));
 
@@ -123,7 +127,8 @@ public sealed class TransformationRuleServiceTests
         secretAccessor.SetupGet(x => x.TransformHashingKey).Returns("vault-secret");
 
         var service = new TransformationRuleService(
-            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), secretAccessor.Object);
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(),
+            Mock.Of<IConfigurationRepository>(), secretAccessor.Object);
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "MRN", "A12345"));
 
@@ -142,7 +147,8 @@ public sealed class TransformationRuleServiceTests
             .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), "birthDate", It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
             DestinationType.SqlServer, "Practitioner", "DOB", "03/14/2026", SourceField: "birthDate"));
@@ -166,7 +172,8 @@ public sealed class TransformationRuleServiceTests
             .Setup(x => x.GetFieldScopedAsync("Patient", "BirthDate", It.IsAny<string?>(), "birthDate", It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[blanket, specific]);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
             DestinationType.SqlServer, "Patient", "BirthDate", null, SourceField: "birthDate"));
@@ -189,7 +196,8 @@ public sealed class TransformationRuleServiceTests
             .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(destinationType, "Observation", "Value", 38.9m));
 
@@ -214,7 +222,8 @@ public sealed class TransformationRuleServiceTests
             .Callback<TransformationRule, CancellationToken>((r, _) => added = r)
             .Returns(Task.CompletedTask);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var dto = await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: null,
@@ -236,7 +245,8 @@ public sealed class TransformationRuleServiceTests
         var existing = new TransformationRule(TransformScope.Global, TransformNodeType.DefaultNullHandling, "{}");
         repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: existing.Id,
@@ -257,7 +267,8 @@ public sealed class TransformationRuleServiceTests
         var existing = new TransformationRule(TransformScope.Global, TransformNodeType.DefaultNullHandling, "{}");
         repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
-        var service = new TransformationRuleService(repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry());
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
         await service.DeleteRuleAsync(existing.Id);
 
         repository.Verify(x => x.DeleteAsync(existing, It.IsAny<CancellationToken>()), Times.Once);

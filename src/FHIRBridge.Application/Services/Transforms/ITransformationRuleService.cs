@@ -43,4 +43,14 @@ public interface ITransformationRuleService
     /// <summary>The config schema for every node type — what keys it reads, what control to render, and its
     /// default — so the UI never has to hand-maintain a duplicate copy of this metadata.</summary>
     IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas();
+
+    /// <summary>Informational only (see <see cref="RuleImpactSummaryDto"/>) — how many workflows a
+    /// Global/ResourceType-scoped rule at this field would affect, and how many of those already have a more
+    /// specific Workflow/Field override and are therefore unaffected. Meaningless for other scopes, which
+    /// already name one specific field/workflow.</summary>
+    Task<RuleImpactSummaryDto> GetRuleImpactSummaryAsync(
+        TransformScope scope,
+        string? resourceType,
+        string? destinationField,
+        CancellationToken cancellationToken = default);
 }

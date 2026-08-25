@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
 [Route("api/v1/mapping")]
 public sealed class MappingController : ControllerBase
 {
@@ -32,6 +31,7 @@ public sealed class MappingController : ControllerBase
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(MappingTestResultDto), StatusCodes.Status200OK)]
     public IActionResult TestMapping([FromBody] TestMappingRequest request)
     {
@@ -47,6 +47,7 @@ public sealed class MappingController : ControllerBase
     // regression versus what it shows now. Field-level lookup (below) is the one that's vendor-aware,
     // with a fallback to generic per resource type, so this can follow once more resources are converted.
     [HttpGet("catalog/resources")]
+    [Authorize(Policy = AuthorizationPolicies.MappingCatalogAccess)]
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
     public IActionResult GetCatalogResources()
     {
@@ -64,6 +65,7 @@ public sealed class MappingController : ControllerBase
     /// cover yet, or when neither a source connection nor a vendor is given at all.
     /// </summary>
     [HttpGet("catalog/resources/{resourceType}/fields")]
+    [Authorize(Policy = AuthorizationPolicies.MappingCatalogAccess)]
     [ProducesResponseType(typeof(IReadOnlyList<FhirElementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalogFields(
         string resourceType,
@@ -84,7 +86,41 @@ public sealed class MappingController : ControllerBase
             return NotFound();
         }
 
+        if (!ReferenceEquals(catalog, _genericCatalog))
+        {
+            fields = FillMissingReferenceTargetTypes(fields, resourceType);
+        }
+
         return Ok(fields);
+    }
+
+    /// <summary>
+    /// A vendor-specific catalog (Epic today) doesn't always carry <see cref="FhirElementDto.ReferenceTargetTypes"/>
+    /// for a reference field even though FHIR's Reference semantics for that field (e.g. Observation.subject can
+    /// target Patient/Group/Device/Location) don't actually vary by vendor - only which fields/profiles the
+    /// vendor catalog happens to document does. Backfills any gap from the generic R4 catalog by FhirPath, so a
+    /// vendor source doesn't silently lose the mapping UI's "which resource does this reference?" auto-detection
+    /// (see the portal's ResourceFieldDef.referenceTargetTypes / DestinationWizardComponent.buildParentReferenceWarnings).
+    /// </summary>
+    private IReadOnlyList<FhirElementDto> FillMissingReferenceTargetTypes(
+        IReadOnlyList<FhirElementDto> fields, string resourceType)
+    {
+        var genericFields = _genericCatalog.Fields(resourceType);
+        if (genericFields.Count == 0)
+        {
+            return fields;
+        }
+
+        var genericByPath = genericFields.ToDictionary(f => f.FhirPath, StringComparer.Ordinal);
+
+        return fields
+            .Select(f => f.ReferenceTargetTypes.Count == 0
+                    && f.FhirPath.EndsWith(".reference", StringComparison.Ordinal)
+                    && genericByPath.TryGetValue(f.FhirPath, out var generic)
+                    && generic.ReferenceTargetTypes.Count > 0
+                ? f with { ReferenceTargetTypes = generic.ReferenceTargetTypes }
+                : f)
+            .ToList();
     }
 
     private async Task<IFhirElementCatalog> ResolveCatalogAsync(

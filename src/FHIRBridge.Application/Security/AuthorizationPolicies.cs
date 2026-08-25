@@ -20,6 +20,15 @@ public static class AuthorizationPolicies
     /// </summary>
     public const string WorkflowModuleAccess = nameof(WorkflowModuleAccess);
 
+    /// <summary>
+    /// Read access to the FHIR element catalog (resource types + fields) — reference metadata, not tenant
+    /// configuration, so it's gated more loosely than the rest of <c>MappingController</c>. Satisfied by
+    /// UnifiedAdmin OR the "transformationrules.write" permission (see
+    /// <c>MappingCatalogAccessAuthorizationHandler</c>), so the Transformation Rules editor's field picker
+    /// works for a user who can edit rules without being a full Admin.
+    /// </summary>
+    public const string MappingCatalogAccess = nameof(MappingCatalogAccess);
+
     /// <summary>Prefix used to construct permission-based policy names.</summary>
     public const string PermissionPolicyPrefix = "HasPermission:";
 

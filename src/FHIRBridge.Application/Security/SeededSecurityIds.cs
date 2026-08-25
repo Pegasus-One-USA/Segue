@@ -8,6 +8,11 @@ public static class SeededSecurityIds
     public static readonly Guid OperationsRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
     public static readonly Guid AuditRoleId = Guid.Parse("10000000-0000-0000-0000-000000000005");
 
+    // ── Default tenant (created by the AddTenant migration; every pre-existing user/branding row is
+    // assigned to it) ──────────────────────────────────────────────────────────────────────────────
+    public static readonly Guid DefaultTenantId = Guid.Parse("20000000-0000-0000-0000-000000000001");
+    public const string DefaultTenantCode = "default";
+
     // Category, group, and permission ids are no longer hand-picked here. A category's/group's id lives
     // directly on its enum member via [PermissionCategory]/[PermissionGroup] (see PermissionCategoryCode.cs /
     // PermissionGroupCode.cs) — adding a new one is a single-file change. A permission's id is derived

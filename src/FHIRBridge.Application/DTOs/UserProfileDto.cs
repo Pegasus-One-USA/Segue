@@ -10,4 +10,9 @@ public sealed record UserProfileDto(
     // the (now HttpOnly, unreadable) access-token JWT client-side.
     IReadOnlyList<string>? Permissions = null,
     bool RequiresPasswordChange = false,
-    bool RequiresMfaSetup = false);
+    bool RequiresMfaSetup = false,
+    // Real, DB-sourced tenant membership — replaces the portal's former hardcoded orgId:'org' placeholder.
+    // Always populated: every user has a required TenantId (see User.cs), defaulted to the well-known
+    // Default Tenant for pre-existing/JIT-provisioned/first-run users by the AddTenant migration/SetupService.
+    Guid TenantId = default,
+    string TenantName = "");

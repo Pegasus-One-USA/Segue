@@ -42,6 +42,14 @@ export interface LaunchResultResponse {
   patientId: string | null;
 }
 
+/** FHIRBridge's double-submit CSRF cookie is deliberately non-HttpOnly so a legitimate caller can read it and
+ *  echo it back as X-CSRF-Token on state-changing (/run, /discard-token) requests — see Program.cs's CSRF
+ *  middleware. Mirrors the main portal's TokenService.getCsrfToken(). */
+function getFhirBridgeCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )fhirbridge_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 // Matches RankedWorkflowOrchestrator's result shape — a 200 OK here is always a fully Succeeded run; any node/token
 // failure throws past the orchestrator before it ever returns, so it always lands in the caller's catch block
 // instead as an HttpErrorResponse with a bare {error: "..."} body.
@@ -304,7 +312,10 @@ export class PatientStandaloneLaunchService {
       params['callerId'] = callerId;
     }
     const status = await firstValueFrom(
-      this.http.get<TokenStatusResponse>(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/token-status`, { params }),
+      this.http.get<TokenStatusResponse>(
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/token-status`,
+        { params, withCredentials: true },
+      ),
     );
     return status.hasValidToken;
   }
@@ -314,11 +325,15 @@ export class PatientStandaloneLaunchService {
   // baseUrlOverride: see hasValidToken's own remarks.
   async run(workflowId: string, patientId: string | null, callerId?: string, baseUrlOverride?: string): Promise<WorkflowRunResponse> {
     return firstValueFrom(
-      this.http.post<WorkflowRunResponse>(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/run`, {
-        patientId,
-        patientSearchCriteria: null,
-        callerId: callerId ?? null,
-      }),
+      this.http.post<WorkflowRunResponse>(
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/run`,
+        {
+          patientId,
+          patientSearchCriteria: null,
+          callerId: callerId ?? null,
+        },
+        { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+      ),
     );
   }
 
@@ -362,7 +377,11 @@ export class PatientStandaloneLaunchService {
       params['callerId'] = callerId;
     }
     await firstValueFrom(
-      this.http.post(`${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`, {}, { params }),
+      this.http.post(
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`,
+        {},
+        { params, withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+      ),
     );
   }
 
@@ -371,6 +390,7 @@ export class PatientStandaloneLaunchService {
     return firstValueFrom(
       this.http.get<LaunchResultResponse>(
         `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+        { withCredentials: true },
       ),
     );
   }

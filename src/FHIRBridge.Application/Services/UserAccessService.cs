@@ -11,15 +11,18 @@ public sealed class UserAccessService : IUserAccessService
     private readonly IUserAccessRepository _repository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUserPermissionsProvider _permissionsProvider;
+    private readonly ITenantRepository _tenantRepository;
 
     public UserAccessService(
         IUserAccessRepository repository,
         ICurrentUserService currentUserService,
-        IUserPermissionsProvider permissionsProvider)
+        IUserPermissionsProvider permissionsProvider,
+        ITenantRepository tenantRepository)
     {
         _repository = repository;
         _currentUserService = currentUserService;
         _permissionsProvider = permissionsProvider;
+        _tenantRepository = tenantRepository;
     }
 
     public async Task<UserProfileDto> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
@@ -49,7 +52,12 @@ public sealed class UserAccessService : IUserAccessService
         var user = await _repository.GetUserByExternalIdAsync(currentUser.ExternalUserId, cancellationToken);
         if (user is null)
         {
-            user = new User(currentUser.ExternalUserId, currentUser.Email, currentUser.DisplayName);
+            // JIT-provisioned on first SSO/Entra login — there is no tenant-selection step in that flow
+            // (out of scope per this change; see SetupService's identical reasoning), so this assigns the
+            // well-known Default Tenant, same as every pre-existing user migrated into it.
+            user = new User(
+                currentUser.ExternalUserId, currentUser.Email, currentUser.DisplayName,
+                SeededSecurityIds.DefaultTenantId);
             await _repository.AddUserAsync(user, cancellationToken);
         }
         else
@@ -80,6 +88,12 @@ public sealed class UserAccessService : IUserAccessService
         // token no longer carries a "permissions" claim at all (see IUserPermissionsProvider).
         var permissions = await _permissionsProvider.GetEffectivePermissionCodesAsync(user.Id, cancellationToken);
 
+        // Real, DB-sourced tenant name for display — replaces the portal's former hardcoded orgId:'org'.
+        // Not cached the way permissions/tenant-id-only resolution is (see ICurrentTenantResolver) since
+        // this endpoint already does several other DB reads per call; a tenant name changing takes effect
+        // on this user's very next /auth/me call either way.
+        var tenant = await _tenantRepository.GetByIdAsync(user.TenantId, cancellationToken);
+
         return new UserProfileDto(
             user.Id,
             user.ExternalUserId,
@@ -88,6 +102,8 @@ public sealed class UserAccessService : IUserAccessService
             _currentUserService.CurrentUser.Roles,
             permissions,
             user.RequiresPasswordChange,
-            user.IsMfaSetupRequired);
+            user.IsMfaSetupRequired,
+            user.TenantId,
+            tenant?.Name ?? string.Empty);
     }
 }

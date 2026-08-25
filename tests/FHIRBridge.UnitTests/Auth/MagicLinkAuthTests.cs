@@ -23,6 +23,7 @@ public sealed class MagicLinkAuthTests
     private readonly Mock<ITotpService> _totp = new();
     private readonly Mock<IGovernanceLogger> _governanceLogger = new();
     private readonly Mock<ISystemSettingsCache> _settingsCache = PassThroughSettingsCache();
+    private readonly Mock<ITenantRepository> _tenantRepository = new();
     private readonly LocalAuthOptions _options = new();
 
     private static Mock<ISystemSettingsCache> PassThroughSettingsCache()
@@ -37,6 +38,13 @@ public sealed class MagicLinkAuthTests
         return mock;
     }
 
+    public MagicLinkAuthTests()
+    {
+        // Safe default — no test here cares about tenant display name specifically.
+        _tenantRepository.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Tenant?)null);
+    }
+
     private LocalAuthService Service() => new(
         _repository.Object,
         _passwordHasher.Object,
@@ -46,7 +54,8 @@ public sealed class MagicLinkAuthTests
         _totp.Object,
         _governanceLogger.Object,
         _settingsCache.Object,
-        Options.Create(_options));
+        Options.Create(_options),
+        _tenantRepository.Object);
 
     private const string Email = "magic-user@x.io";
     private const string Token = "raw-magic-link-token";
@@ -54,7 +63,7 @@ public sealed class MagicLinkAuthTests
 
     private static User LocalLoginUser()
     {
-        var user = new User("local:magic-user", Email, "Magic Link User");
+        var user = new User("local:magic-user", Email, "Magic Link User", Guid.NewGuid());
         user.EnableLocalLogin("password-hash", mustChangePassword: false);
         return user;
     }

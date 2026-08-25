@@ -14,6 +14,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Messaging;
@@ -147,6 +148,7 @@ builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandl
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, MappingCatalogAccessAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -206,6 +208,15 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new WorkflowModuleAccessRequirement());
+    });
+
+    // UnifiedAdmin OR "transformationrules.write" (see MappingCatalogAccessAuthorizationHandler) — the FHIR
+    // element catalog is read-only reference metadata, not tenant configuration, so it's gated more loosely
+    // than the rest of MappingController.
+    options.AddPolicy(AuthorizationPolicies.MappingCatalogAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new MappingCatalogAccessRequirement());
     });
 
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
@@ -350,7 +361,7 @@ app.UseExceptionHandler(errorApp =>
             .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
         if (feature?.Error is null) return;
 
-        var (status, message, trusted, fieldErrors) = MapException(feature.Error);
+        var (status, message, trusted, fieldErrors, ruleConflicts) = MapException(feature.Error);
 
         // A non-5xx message is shown to the client only if it's trusted (author-written UserMessage) or passes the
         // client-safe filter. Otherwise it's null and the manager emits a generic category message. This is the
@@ -361,6 +372,11 @@ app.UseExceptionHandler(errorApp =>
 
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";
+
+        if (feature.Error is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitError)
+        {
+            context.Response.Headers.RetryAfter = ((int)Math.Ceiling(concurrencyLimitError.RetryAfter.TotalSeconds)).ToString();
+        }
 
         // Below 500, MapException/FHIRBridgeException/NotFoundException already represent an expected, routine
         // domain outcome (wrong password, duplicate name, stale reference, expired token, RBAC-adjacent auth
@@ -397,6 +413,7 @@ app.UseExceptionHandler(errorApp =>
                 error = clientMessage ?? "The request could not be processed.",
                 message = clientMessage ?? "The request could not be processed.",
                 fieldErrors,
+                ruleConflicts,
             });
             return;
         }
@@ -794,19 +811,21 @@ static async Task SyncDiscoveredPermissionsAsync(
 // to show verbatim), and — only for RequestValidationException — the field-keyed messages a FluentValidation
 // check produced. Only FHIRBridgeException.UserMessage is trusted; every other message is derived from a raw
 // exception and MUST pass ClientSafeMessage before it can reach a client (see the exception handler).
-static (int status, string message, bool trusted, IReadOnlyDictionary<string, string[]>? fieldErrors) MapException(Exception ex)
+static (int status, string message, bool trusted, IReadOnlyDictionary<string, string[]>? fieldErrors, IReadOnlyList<TransformationRuleTypeConflict>? ruleConflicts) MapException(Exception ex)
 {
     // Field-shaped input validation (FluentValidation) — the only branch that carries fieldErrors, so the UI can
     // map a rejection back onto the specific control that caused it instead of just a flat message.
     if (ex is RequestValidationException rve)
-        return (StatusCodes.Status400BadRequest, rve.UserMessage, true, rve.FieldErrors);
+        return (StatusCodes.Status400BadRequest, rve.UserMessage, true, rve.FieldErrors, rve.RuleConflicts);
 
     // FHIRBridgeException subtypes are deliberate, client-safe domain failures. UserMessage (not Message) is the
     // author-written text intended for end users — Message keeps the entity name + raw id for logs only.
     if (ex is NotFoundException nfe)
-        return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null);
+        return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null, null);
+    if (ex is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitException)
+        return (StatusCodes.Status429TooManyRequests, concurrencyLimitException.UserMessage, true, null, null);
     if (ex is FHIRBridgeException fbe)
-        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null);
+        return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null, null);
 
     // A parent/cohort-seeding resource type (e.g. Patient) wasn't authorized for this app, so the whole workflow
     // run was cancelled up front — a short, author-written (trusted) message naming the resource type, rather
@@ -817,13 +836,14 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
             $"Workflow cancelled: this app is not authorized for '{workflowCancelled.ResourceType}', which is " +
             "required as the parent/cohort scope for this workflow. Check the correlation id for full details.",
             true,
+            null,
             null);
 
     if (ex is not InvalidOperationException and not UnauthorizedAccessException and not ArgumentException)
-        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true, null);
+        return (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", true, null, null);
 
     if (ex is UnauthorizedAccessException || ex is ArgumentException a && a.Message.Contains("unauthorized"))
-        return (StatusCodes.Status401Unauthorized, ex.Message, false, null);
+        return (StatusCodes.Status401Unauthorized, ex.Message, false, null, null);
 
     var msg = ex.Message;
 
@@ -832,17 +852,17 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
     // if its text happens to contain one of these substrings (e.g. an upstream HTML 404 page contains "not found").
     if (msg.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("does not exist", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status404NotFound, msg, false, null);
+        return (StatusCodes.Status404NotFound, msg, false, null, null);
 
     if (msg.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status409Conflict, msg, false, null);
+        return (StatusCodes.Status409Conflict, msg, false, null, null);
 
     if (msg.Contains("invalid or expired", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("email or password", StringComparison.OrdinalIgnoreCase) ||
         msg.Contains("Current password is invalid", StringComparison.OrdinalIgnoreCase))
-        return (StatusCodes.Status401Unauthorized, msg, false, null);
+        return (StatusCodes.Status401Unauthorized, msg, false, null, null);
 
-    return (StatusCodes.Status400BadRequest, msg, false, null);
+    return (StatusCodes.Status400BadRequest, msg, false, null, null);
 }
 
 // The single guardrail that makes raw exception text safe-by-construction — see FHIRBridge.Governance.SafeErrorText.

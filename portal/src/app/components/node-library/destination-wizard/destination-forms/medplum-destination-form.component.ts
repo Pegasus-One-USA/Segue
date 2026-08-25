@@ -1,7 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
+import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 
 /**
  * Medplum (FHIR R4 store) destination connection form — extracted from DestinationWizardComponent's inline
@@ -87,10 +88,31 @@ import { WizardDestinationFormApi } from './destination-form-api';
         </div>
       </div>
     </form>
+
+    <div class="sf-actions" style="margin-top: 20px;">
+      <button type="button" class="dw-btn"
+        [disabled]="probeState() === 'testing' || !canTest()"
+        (click)="testConnection()">
+        {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+      </button>
+    </div>
+    @if (probeState() === 'testing') {
+      <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Testing connection…</div>
+    }
+    @if (probeState() === 'error') {
+      <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">Connection failed: {{ probeError() }}</div>
+    }
+    @if (probeState() === 'ok') {
+      <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Connected — Medplum reachable and credentials accepted.</div>
+    }
   `,
 })
 export class MedplumDestinationFormComponent implements WizardDestinationFormApi {
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
+
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
 
   readonly medplumForm = this.fb.group({
     name: ['Medplum Production', [Validators.required]],
@@ -108,6 +130,41 @@ export class MedplumDestinationFormComponent implements WizardDestinationFormApi
 
   isValid(): boolean {
     return this.medplumForm.valid;
+  }
+
+  /** The Test Connection button needs the three fields the probe actually sends — base URL, client id, and the
+   *  secret / private key. (The full form has more required fields, e.g. name, but they aren't part of the probe.) */
+  canTest(): boolean {
+    const v = this.medplumForm.value;
+    return !!(v.baseUrl && v.clientId && v.secret);
+  }
+
+  /** Live connectivity check before saving: mints an OAuth2 token from the entered credentials and pings
+   *  {baseUrl}/metadata server-side (see MedplumDestinationConnectionTestService). Never blocks Save. */
+  testConnection(): void {
+    if (!this.canTest()) return;
+    const v = this.medplumForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc.testMedplum({
+      baseUrl: v.baseUrl ?? '',
+      clientId: v.clientId ?? '',
+      secret: v.secret ?? '',
+      authMethod: v.authMethod ?? 'client_secret',
+    }).subscribe({
+      next: res => {
+        if (res.connected) {
+          this.probeState.set('ok');
+        } else {
+          this.probeState.set('error');
+          this.probeError.set(res.error ?? 'Connection failed.');
+        }
+      },
+      error: err => {
+        this.probeState.set('error');
+        this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
+      },
+    });
   }
 
   getRawValue(): Record<string, unknown> {

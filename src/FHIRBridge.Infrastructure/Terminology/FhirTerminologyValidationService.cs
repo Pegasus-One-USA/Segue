@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.DTOs;
 using Microsoft.Extensions.Configuration;
@@ -9,22 +10,26 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FHIRBridge.Infrastructure.Terminology;
 
 /// <summary>
-/// Validates codes against a FHIR terminology server's <c>ValueSet/$validate-code</c> operation. Configured by
-/// <c>Terminology:BaseUrl</c>; returns null when unset or when the result cannot be determined.
+/// Validates codes against a FHIR terminology server's <c>ValueSet/$validate-code</c> operation. Configured
+/// by the "Terminology:BaseUrl" System Setting (falling back to <c>Terminology:BaseUrl</c> in appsettings);
+/// returns null when unset or when the result cannot be determined.
 /// </summary>
 public sealed class FhirTerminologyValidationService : ITerminologyValidationService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly ISystemSettingsCache _settings;
     private readonly ILogger<FhirTerminologyValidationService> _logger;
 
     public FhirTerminologyValidationService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
+        ISystemSettingsCache settings,
         ILogger<FhirTerminologyValidationService>? logger = null)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _settings = settings;
         _logger = logger ?? NullLogger<FhirTerminologyValidationService>.Instance;
     }
 
@@ -34,7 +39,8 @@ public sealed class FhirTerminologyValidationService : ITerminologyValidationSer
         string code,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _configuration["Terminology:BaseUrl"];
+        var baseUrl = await _settings.GetStringAsync(
+            "Terminology:BaseUrl", _configuration["Terminology:BaseUrl"] ?? string.Empty, cancellationToken);
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(valueSetUrl) || string.IsNullOrWhiteSpace(code))
         {
             return null;

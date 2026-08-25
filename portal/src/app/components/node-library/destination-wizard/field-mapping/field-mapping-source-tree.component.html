@@ -1,4 +1,4 @@
-<div class="fm-source-card" #card [style.left.px]="x()" [style.top.px]="y()">
+<div class="fm-source-card" [class.fm-source-card--fit]="fitMode()" #card [style.left.px]="x()" [style.top.px]="y()">
   <div
     class="fm-source-head"
     (pointerdown)="onHeadPointerDown($event)"
@@ -22,16 +22,25 @@
         <button type="button" class="fm-source-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
       }
     </div>
+    <button
+      type="button"
+      class="fm-source-fit-toggle"
+      [attr.aria-label]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      [title]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      (pointerdown)="$event.stopPropagation()"
+      (click)="toggleFit()"
+    >{{ fitMode() ? '⤢' : '⤡' }}</button>
   </div>
-  <div class="fm-source-rows">
-    @if (isSearching() && matchCount() === 0) {
-      <div class="fm-source-no-match">No fields match "{{ searchQuery() }}".</div>
+  <div class="fm-source-rows" (scroll)="onRowsScroll()">
+    @if (hasActiveFilter() && matchCount() === 0) {
+      <div class="fm-source-no-match">No fields match "{{ effectiveQuery() }}".</div>
     }
-    @for (r of filteredRoots(); track r.node.id) {
+    @for (r of filteredRoots(); track r.node.id; let i = $index) {
       <div class="fm-source-group" [style.--fm-group-color]="groupColorVar(r.colorIndex)">
         <app-field-mapping-tree-node
           [node]="r.node"
           [depth]="0"
+          [siblingIndex]="i"
           [isCollapsed]="effectiveIsCollapsed()"
           [isMapped]="isMapped()"
           [isArmed]="isArmed()"

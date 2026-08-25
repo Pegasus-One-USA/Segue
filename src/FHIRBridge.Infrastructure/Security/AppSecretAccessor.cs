@@ -15,11 +15,15 @@ public sealed class AppSecretAccessor : IAppSecretAccessor
 
     public string TransformHashingKey { get; private set; } = string.Empty;
 
-    public void Initialize(string jwtSigningKey, string downloadLinkSigningSecret, string transformHashingKey)
+    public string PhiEncryptionKey { get; private set; } = string.Empty;
+
+    public void Initialize(
+        string jwtSigningKey, string downloadLinkSigningSecret, string transformHashingKey, string phiEncryptionKey)
     {
         JwtSigningKey = jwtSigningKey;
         DownloadLinkSigningSecret = downloadLinkSigningSecret;
         TransformHashingKey = transformHashingKey;
+        PhiEncryptionKey = phiEncryptionKey;
     }
 
     public void Update(SecretReference secretReference, string newValue)
@@ -35,6 +39,10 @@ public sealed class AppSecretAccessor : IAppSecretAccessor
         else if (secretReference == AppSecretReferences.TransformHashingKey)
         {
             TransformHashingKey = newValue;
+        }
+        else if (secretReference == AppSecretReferences.PhiEncryptionKey)
+        {
+            PhiEncryptionKey = newValue;
         }
         else
         {

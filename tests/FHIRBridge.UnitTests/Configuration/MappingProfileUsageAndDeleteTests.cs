@@ -34,7 +34,10 @@ public sealed class MappingProfileUsageAndDeleteTests
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
             Mock.Of<IParentReferenceResolver>(),
-            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
+            new CreateMappingProfileRequestValidator(
+                new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService(),
+                _repository.Object,
+                new FHIRBridge.UnitTests.Validation.NoOpEffectiveRuleResolver()),
             new CreateDestinationConfigurationRequestValidator(),
             new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);

@@ -1,3 +1,5 @@
+import { DestinationType } from '../destination-connections/models/destination-configuration.model';
+
 export interface Transform {
   id: string;
   rank: number;
@@ -5,6 +7,12 @@ export interface Transform {
   category?: string;
   name: string;
   sub: string;
+  /** For Rank-7 destination nodes: the backend DestinationType this catalog entry maps to. This makes
+   *  transforms.data.ts the single source of truth for "which destinations exist" — the Destination
+   *  Connections list's type filter derives its options (and category grouping) from these entries
+   *  instead of keeping its own hand-maintained list, so a new destination added here shows up in both
+   *  the workflow builder and the filter automatically. Unset for non-destination steps. */
+  destinationType?: DestinationType;
   /** This destination type's PermissionGroupCode name, lowercased (e.g. "sqlserver") — the node has
    *  its own full View/Create/Edit/Delete/Execute permission set, all independent of one another. See
    *  node-library-dialog.component.ts's Rank 7 mapping (tile visibility = `{prefix}.view`) and

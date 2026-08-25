@@ -1,7 +1,8 @@
-import { Component, effect, inject, input, untracked } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
+import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 
 /**
  * Azure Blob Storage destination — five auth modes (connection string / account key / SAS / managed identity /
@@ -18,6 +19,10 @@ import { WizardDestinationFormApi } from './destination-form-api';
 })
 export class BlobStorageDestinationFormComponent implements WizardDestinationFormApi {
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
+
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
 
   // What Azure actually allows in a blob name: no backslash (not a supported path delimiter — "/" is), no
   // control characters, and (the second negative lookahead) not ending in "." or "/". Matches
@@ -114,6 +119,47 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
 
   isValid(): boolean {
     return this.blobForm.valid;
+  }
+
+  /** The probe needs a container plus a secret for every auth mode except Managed Identity (which resolves no
+   *  secret). Mode-specific extras (account name, tenant/client id) are validated server-side with clear errors. */
+  canTest(): boolean {
+    const v = this.blobForm.value;
+    if (!v.container) return false;
+    return v.authMode === 'managedIdentity' || !!v.secretValue;
+  }
+
+  /** Live connectivity check before saving: builds the container client for the chosen auth mode and does a
+   *  reachability round-trip server-side (see BlobDestinationConnectionTestService). Never blocks Save. */
+  testConnection(): void {
+    if (!this.canTest()) return;
+    const v = this.blobForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc.testBlob({
+      authMode: v.authMode ?? 'connectionString',
+      container: v.container ?? '',
+      secret: v.secretValue ?? '',
+      accountUrl: v.accountUrl ?? '',
+      accountName: v.accountName ?? '',
+      endpointSuffix: v.endpointSuffix ?? 'core.windows.net',
+      tenantId: v.tenantId ?? '',
+      clientId: v.clientId ?? '',
+      managedIdentityClientId: v.managedIdentityClientId ?? '',
+    }).subscribe({
+      next: res => {
+        if (res.connected) {
+          this.probeState.set('ok');
+        } else {
+          this.probeState.set('error');
+          this.probeError.set(res.error ?? 'Connection failed.');
+        }
+      },
+      error: err => {
+        this.probeState.set('error');
+        this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
+      },
+    });
   }
 
   getRawValue(): Record<string, unknown> {

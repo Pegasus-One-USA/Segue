@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -59,7 +60,13 @@ public sealed class ConfigurationService : IConfigurationService
         var result = await validator.ValidateAsync(request, cancellationToken);
         if (!result.IsValid)
         {
-            throw new RequestValidationException(new Dictionary<string, string[]>(result.ToDictionary()));
+            var ruleConflicts = result.Errors
+                .Select(f => f.CustomState)
+                .OfType<TransformationRuleTypeConflict>()
+                .ToList();
+            throw new RequestValidationException(
+                new Dictionary<string, string[]>(result.ToDictionary()),
+                ruleConflicts.Count > 0 ? ruleConflicts : null);
         }
     }
 
@@ -332,11 +339,14 @@ public sealed class ConfigurationService : IConfigurationService
     private async Task<Guid> AutoProvisionSourceConfigurationAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var connection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        // Clone, don't share, the owned Retrieval instance: connection.Retrieval is already tracked as owned
+        // by the SourceConnection entity, so handing that exact object to a new SourceConfiguration makes EF
+        // try to track the same CLR instance under two owners at once — see SourceRetrievalConfiguration.Clone.
         var configuration = new SourceConfiguration(
             connection.Id,
             connection.Name,
             connection.Authentication.Scopes,
-            connection.Retrieval);
+            connection.Retrieval?.Clone());
 
         await _repository.AddSourceConfigurationAsync(configuration, cancellationToken);
         return configuration.Id;

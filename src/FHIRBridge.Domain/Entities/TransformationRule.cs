@@ -32,7 +32,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         TransformArrayMode arrayMode = TransformArrayMode.Whole,
         string? fhirWriteBackJsonPath = null,
         TransformExecutionPhase executionPhase = TransformExecutionPhase.PostMapping,
-        Guid? deIdentificationProfileId = null)
+        Guid? deIdentificationProfileId = null,
+        MappingValueType? expectedValueType = null)
     {
         if (executionPhase == TransformExecutionPhase.PreMapping)
         {
@@ -72,6 +73,7 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         FhirWriteBackJsonPath = fhirWriteBackJsonPath;
         ExecutionPhase = executionPhase;
         DeIdentificationProfileId = deIdentificationProfileId;
+        ExpectedValueType = expectedValueType;
         IsEnabled = true;
     }
 
@@ -133,6 +135,14 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
 
     public bool IsEnabled { get; private set; } = true;
 
+    /// <summary>The data type this rule's output is expected to be, used to validate compatibility against
+    /// the destination column it writes to (see <c>CreateMappingProfileRequestValidator</c>). Null means "not
+    /// declared" — a legacy/unclassified rule that is silently excluded from that check rather than assumed
+    /// to conflict. Descriptive metadata, not a structural part of the rule's identity, so unlike
+    /// <see cref="NodeType"/>/<see cref="Scope"/>/<see cref="DestinationField"/> it may be corrected via
+    /// <see cref="Update"/> without recreating the rule.</summary>
+    public MappingValueType? ExpectedValueType { get; private set; }
+
     string? IHasAuditDisplayName.AuditDisplayName =>
         $"{Scope} {NodeType}" + (DestinationField is null ? string.Empty : $" → {DestinationField}");
 
@@ -143,7 +153,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         TransformErrorPolicy errorPolicy,
         string? onNullDefaultValue = null,
         TransformArrayMode arrayMode = TransformArrayMode.Whole,
-        string? fhirWriteBackJsonPath = null)
+        string? fhirWriteBackJsonPath = null,
+        MappingValueType? expectedValueType = null)
     {
         ConfigJson = configJson;
         Order = order;
@@ -152,6 +163,7 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         OnNullDefaultValue = onNullDefaultValue;
         ArrayMode = arrayMode;
         FhirWriteBackJsonPath = fhirWriteBackJsonPath;
+        ExpectedValueType = expectedValueType;
     }
 
     public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;

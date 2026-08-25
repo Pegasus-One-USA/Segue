@@ -1,7 +1,11 @@
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Validation;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
 using FluentAssertions;
 using Moq;
 
@@ -16,6 +20,8 @@ namespace FHIRBridge.UnitTests.Validation;
 public sealed class CreateMappingProfileRequestValidatorTests
 {
     private readonly Mock<IDestinationSchemaService> _schemaService = new();
+    private readonly Mock<IConfigurationRepository> _configurationRepository = new();
+    private readonly Mock<IEffectiveRuleResolver> _ruleResolver = new();
     private readonly CreateMappingProfileRequestValidator _sut;
 
     public CreateMappingProfileRequestValidatorTests()
@@ -26,7 +32,20 @@ public sealed class CreateMappingProfileRequestValidatorTests
             .Setup(s => s.GetSchemaAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DestinationSchemaDto(Guid.NewGuid(), []));
 
-        _sut = new CreateMappingProfileRequestValidator(_schemaService.Object);
+        _configurationRepository
+            .Setup(r => r.GetDestinationAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DestinationConfiguration(
+                "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "dbo"));
+
+        // Default: no applicable rules, so the rule-vs-column-type check no-ops for every pre-existing test.
+        _ruleResolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+
+        _sut = new CreateMappingProfileRequestValidator(
+            _schemaService.Object, _configurationRepository.Object, _ruleResolver.Object);
     }
 
     private static CreateMappingProfileRequest ValidRequest(
@@ -220,6 +239,66 @@ public sealed class CreateMappingProfileRequestValidatorTests
                 ArrayPolicy: ArrayPolicy.CorrelateByCode,
                 CorrelationCodeJsonPath: "$.identifier[*].system",
                 CorrelationCodeValue: "urn:oid:1.2.840.114350.1.72.1.7.7.10.696784.13260"),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    private void StubRule(TransformationRule rule) =>
+        _ruleResolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+    [Fact]
+    public async Task Global_rule_with_mismatched_expected_type_fails()
+    {
+        StubSchema(new DestinationColumnSchemaDto("PatientRefId", "varchar", "String", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Global, TransformNodeType.NumberCast, "{}",
+            expectedValueType: MappingValueType.Integer));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientRefId", "$.subject.reference", MappingValueType.String, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == "Fields[0].TargetField" &&
+            e.ErrorMessage.Contains("NumberCast") &&
+            e.CustomState is TransformationRuleTypeConflict);
+    }
+
+    [Fact]
+    public async Task Rule_without_a_declared_expected_type_does_not_fail_the_save()
+    {
+        StubSchema(new DestinationColumnSchemaDto("PatientRefId", "varchar", "String", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Global, TransformNodeType.NumberCast, "{}"));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientRefId", "$.subject.reference", MappingValueType.String, false, null, null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rule_with_matching_expected_type_passes()
+    {
+        StubSchema(new DestinationColumnSchemaDto("Age", "int", "Integer", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Global, TransformNodeType.DateMathAge, "{}",
+            expectedValueType: MappingValueType.Integer));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("Age", "$.birthDate", MappingValueType.Integer, false, null, null),
         ]);
 
         (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();

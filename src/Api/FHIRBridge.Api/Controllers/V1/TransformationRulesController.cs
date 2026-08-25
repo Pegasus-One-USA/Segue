@@ -125,4 +125,20 @@ public sealed class TransformationRulesController : ControllerBase
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
         return Ok(rules);
     }
+
+    /// <summary>Informational heads-up for the Global/ResourceType rule-save dialog — how many workflows a
+    /// rule at this scope/field would newly affect vs. already have a more specific override and are
+    /// therefore unaffected. Never blocks saving; purely advisory.</summary>
+    [HttpGet("impact")]
+    [StandardPermission(PermissionGroupCode.TransformationRules, PermissionActionCode.View, description: "View transformation rules.")]
+    [ProducesResponseType(typeof(RuleImpactSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRuleImpactSummary(
+        [FromQuery] TransformScope scope,
+        [FromQuery] string? resourceType,
+        [FromQuery] string? destinationField,
+        CancellationToken cancellationToken)
+    {
+        var summary = await _service.GetRuleImpactSummaryAsync(scope, resourceType, destinationField, cancellationToken);
+        return Ok(summary);
+    }
 }

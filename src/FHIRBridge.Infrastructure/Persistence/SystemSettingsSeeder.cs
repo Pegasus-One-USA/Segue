@@ -67,6 +67,62 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("Terminology:Loinc:RetryIntervalSeconds", Int("Terminology:Loinc:RetryIntervalSeconds", 60), "Seconds to wait between LOINC synchronization retries."),
             ("Terminology:Loinc:DownloadTimeoutSeconds", Int("Terminology:Loinc:DownloadTimeoutSeconds", 900), "Maximum time to download a LOINC release archive."),
 
+            // Shared by every vocabulary below and by FhirTerminologyLookupService/Translation/Validation/
+            // Expansion — one terminology server, one address, not a separate ServerBaseUrl per vocabulary.
+            ("Terminology:BaseUrl", _configuration.GetValue("Terminology:BaseUrl", "http://hapi-terminology:8080/fhir"), "Base URL of the FHIR terminology server — used both for pipeline code lookup/validation/translation/expansion, and as the upload target for every automatic vocabulary sync below."),
+
+            ("Terminology:Icd10Hapi:SchedulerEnabled", Bool("Terminology:Icd10Hapi:SchedulerEnabled", false), "Master switch for automatically downloading the official CMS/CDC ICD-10-CM release and loading it into the terminology server, on a schedule."),
+            ("Terminology:Icd10Hapi:Frequency", _configuration.GetValue("Terminology:Icd10Hapi:Frequency", "Monthly"), "ICD-10-CM terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:Icd10Hapi:ExecutionTime", _configuration.GetValue("Terminology:Icd10Hapi:ExecutionTime", "03:00"), "Local execution time for the scheduled ICD-10-CM terminology-server sync (HH:mm)."),
+
+            ("Terminology:CvxHapi:SchedulerEnabled", Bool("Terminology:CvxHapi:SchedulerEnabled", false), "Master switch for automatically downloading the official CDC CVX vaccine code table and loading it into the terminology server, on a schedule."),
+            ("Terminology:CvxHapi:Frequency", _configuration.GetValue("Terminology:CvxHapi:Frequency", "Monthly"), "CVX terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:CvxHapi:ExecutionTime", _configuration.GetValue("Terminology:CvxHapi:ExecutionTime", "03:15"), "Local execution time for the scheduled CVX terminology-server sync (HH:mm)."),
+
+            ("Terminology:NdcHapi:SchedulerEnabled", Bool("Terminology:NdcHapi:SchedulerEnabled", false), "Master switch for automatically downloading the official FDA NDC directory and loading it into the terminology server, on a schedule."),
+            ("Terminology:NdcHapi:Frequency", _configuration.GetValue("Terminology:NdcHapi:Frequency", "Monthly"), "NDC terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:NdcHapi:ExecutionTime", _configuration.GetValue("Terminology:NdcHapi:ExecutionTime", "03:30"), "Local execution time for the scheduled NDC terminology-server sync (HH:mm)."),
+
+            ("Terminology:HcpcsHapi:SchedulerEnabled", Bool("Terminology:HcpcsHapi:SchedulerEnabled", false), "Master switch for automatically downloading the latest official CMS HCPCS Level II quarterly release and loading it into the terminology server, on a schedule."),
+            ("Terminology:HcpcsHapi:Frequency", _configuration.GetValue("Terminology:HcpcsHapi:Frequency", "Monthly"), "HCPCS terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:HcpcsHapi:ExecutionTime", _configuration.GetValue("Terminology:HcpcsHapi:ExecutionTime", "03:45"), "Local execution time for the scheduled HCPCS terminology-server sync (HH:mm)."),
+
+            ("Terminology:UcumHapi:SchedulerEnabled", Bool("Terminology:UcumHapi:SchedulerEnabled", false), "Master switch for automatically downloading the official UCUM specification and loading it into the terminology server, on a schedule."),
+            ("Terminology:UcumHapi:Frequency", _configuration.GetValue("Terminology:UcumHapi:Frequency", "Monthly"), "UCUM terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:UcumHapi:ExecutionTime", _configuration.GetValue("Terminology:UcumHapi:ExecutionTime", "04:00"), "Local execution time for the scheduled UCUM terminology-server sync (HH:mm)."),
+
+            ("Terminology:LoincHapi:SchedulerEnabled", Bool("Terminology:LoincHapi:SchedulerEnabled", false), "Master switch for automatically downloading the credentialed LOINC release and loading it into the terminology server, on a schedule. Requires the same LOINC account already configured for Terminology:Loinc:* (loinc-basic-username/loinc-basic-password ProvisionedSecrets)."),
+            ("Terminology:LoincHapi:Frequency", _configuration.GetValue("Terminology:LoincHapi:Frequency", "Monthly"), "LOINC terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:LoincHapi:ExecutionTime", _configuration.GetValue("Terminology:LoincHapi:ExecutionTime", "04:15"), "Local execution time for the scheduled LOINC terminology-server sync (HH:mm)."),
+
+            ("Terminology:RxNormHapi:SchedulerEnabled", Bool("Terminology:RxNormHapi:SchedulerEnabled", false), "Master switch for automatically downloading the credentialed RxNorm release and loading it into the terminology server, on a schedule. Requires the same UMLS/UTS API key already configured on the RxNorm/SNOMED settings page (uts-api-key ProvisionedSecret)."),
+            ("Terminology:RxNormHapi:Frequency", _configuration.GetValue("Terminology:RxNormHapi:Frequency", "Monthly"), "RxNorm terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:RxNormHapi:ExecutionTime", _configuration.GetValue("Terminology:RxNormHapi:ExecutionTime", "04:30"), "Local execution time for the scheduled RxNorm terminology-server sync (HH:mm)."),
+
+            ("Terminology:SnomedHapi:SchedulerEnabled", Bool("Terminology:SnomedHapi:SchedulerEnabled", false), "Master switch for automatically downloading the credentialed SNOMED CT (US Edition) release and loading it into the terminology server, on a schedule. Requires the same UMLS/UTS API key already configured on the RxNorm/SNOMED settings page (uts-api-key ProvisionedSecret)."),
+            ("Terminology:SnomedHapi:Frequency", _configuration.GetValue("Terminology:SnomedHapi:Frequency", "Monthly"), "SNOMED CT terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:SnomedHapi:ExecutionTime", _configuration.GetValue("Terminology:SnomedHapi:ExecutionTime", "04:45"), "Local execution time for the scheduled SNOMED CT terminology-server sync (HH:mm)."),
+
+            ("Terminology:Icd10PcsHapi:SchedulerEnabled", Bool("Terminology:Icd10PcsHapi:SchedulerEnabled", false), "Master switch for automatically downloading the latest official CMS ICD-10-PCS order file and loading it into the terminology server, on a schedule."),
+            ("Terminology:Icd10PcsHapi:Frequency", _configuration.GetValue("Terminology:Icd10PcsHapi:Frequency", "Monthly"), "ICD-10-PCS terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:Icd10PcsHapi:ExecutionTime", _configuration.GetValue("Terminology:Icd10PcsHapi:ExecutionTime", "05:00"), "Local execution time for the scheduled ICD-10-PCS terminology-server sync (HH:mm)."),
+
+            ("Terminology:MeshHapi:SchedulerEnabled", Bool("Terminology:MeshHapi:SchedulerEnabled", false), "Master switch for automatically downloading the latest official NLM MeSH descriptor file and loading it into the terminology server, on a schedule."),
+            ("Terminology:MeshHapi:Frequency", _configuration.GetValue("Terminology:MeshHapi:Frequency", "Monthly"), "MeSH terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:MeshHapi:ExecutionTime", _configuration.GetValue("Terminology:MeshHapi:ExecutionTime", "05:15"), "Local execution time for the scheduled MeSH terminology-server sync (HH:mm)."),
+
+            ("Terminology:DcmHapi:SchedulerEnabled", Bool("Terminology:DcmHapi:SchedulerEnabled", false), "Master switch for automatically downloading the official DICOM Controlled Terminology (DCM) ontology and loading it into the terminology server, on a schedule."),
+            ("Terminology:DcmHapi:Frequency", _configuration.GetValue("Terminology:DcmHapi:Frequency", "Monthly"), "DCM terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:DcmHapi:ExecutionTime", _configuration.GetValue("Terminology:DcmHapi:ExecutionTime", "05:30"), "Local execution time for the scheduled DCM terminology-server sync (HH:mm)."),
+
+            ("Terminology:Icpc3Hapi:SchedulerEnabled", Bool("Terminology:Icpc3Hapi:SchedulerEnabled", false), "Master switch for automatically downloading the official ICPC-3 dataset and loading it into the terminology server, on a schedule."),
+            ("Terminology:Icpc3Hapi:Frequency", _configuration.GetValue("Terminology:Icpc3Hapi:Frequency", "Monthly"), "ICPC-3 terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:Icpc3Hapi:ExecutionTime", _configuration.GetValue("Terminology:Icpc3Hapi:ExecutionTime", "05:45"), "Local execution time for the scheduled ICPC-3 terminology-server sync (HH:mm)."),
+
+            ("Terminology:Icd11Hapi:SchedulerEnabled", Bool("Terminology:Icd11Hapi:SchedulerEnabled", false), "Master switch for automatically downloading the official WHO ICD-11 MMS linearization export and loading it into the terminology server, on a schedule."),
+            ("Terminology:Icd11Hapi:Frequency", _configuration.GetValue("Terminology:Icd11Hapi:Frequency", "Monthly"), "ICD-11 MMS terminology-server sync frequency: Weekly or Monthly."),
+            ("Terminology:Icd11Hapi:ExecutionTime", _configuration.GetValue("Terminology:Icd11Hapi:ExecutionTime", "06:00"), "Local execution time for the scheduled ICD-11 MMS terminology-server sync (HH:mm)."),
+
             ("RateLimiting:Enabled", Bool("RateLimiting:Enabled", true), "Master on/off for API rate limiting. Requires a restart to take effect."),
             ("RateLimiting:Auth:PermitPerWindow", Int("RateLimiting:Auth:PermitPerWindow", 10), "Auth endpoint rate-limit permit count. Requires a restart to take effect."),
             ("RateLimiting:Auth:WindowMinutes", Int("RateLimiting:Auth:WindowMinutes", 5), "Auth endpoint rate-limit window, in minutes. Requires a restart to take effect."),

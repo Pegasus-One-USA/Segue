@@ -13,6 +13,13 @@ import { SystemSettingDialogComponent } from '../../dialogs/system-setting-dialo
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 
+interface GroupHeaderRow {
+  isGroupHeader: true;
+  label: string;
+}
+
+type GroupedRow = SystemSetting | GroupHeaderRow;
+
 @Component({
   selector: 'app-system-setting-list',
   standalone: true,
@@ -117,6 +124,29 @@ export class SystemSettingListComponent implements OnInit {
   });
 
   readonly displayedCols = ['key', 'value', 'description', 'actionBy', 'modifiedOnUtc', 'actions'];
+
+  // ── Group headings ──────────────────────────────────────────────────────────
+  // Purely a display grouping — "Terminology:*" keys (LOINC/SNOMED/RxNorm/ICD-10/HAPI-sync settings,
+  // etc.) render under their own heading, ahead of every other setting, so the growing list of
+  // terminology-server config doesn't just blend into one undifferentiated table.
+  readonly groupedRows = computed<GroupedRow[]>(() => {
+    const rows = this.filtered();
+    const terminology = rows.filter(s => s.key.startsWith('Terminology:'));
+    const other = rows.filter(s => !s.key.startsWith('Terminology:'));
+
+    const result: GroupedRow[] = [];
+    if (terminology.length) {
+      result.push({ isGroupHeader: true, label: 'Terminology Settings' }, ...terminology);
+    }
+    if (other.length) {
+      result.push({ isGroupHeader: true, label: 'General Settings' }, ...other);
+    }
+    return result;
+  });
+
+  isGroupHeaderRow(_index: number, row: GroupedRow): row is GroupHeaderRow {
+    return 'isGroupHeader' in row;
+  }
 
   ngOnInit(): void {
     this.load();

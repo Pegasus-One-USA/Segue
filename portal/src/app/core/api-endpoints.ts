@@ -36,6 +36,24 @@ export const AUTH_ENDPOINTS = {
   samlLogin: `${API_V1_BASE}/auth/saml/login`,
 };
 
+// ─── Tenants (TenantsController — api/v1/tenants) ───────────────────────────────
+// SuperAdmin-only. The real backend for the Tenant Management screens (tenant-list, tenant-dialog,
+// tenant-tab), previously backed only by an in-memory, non-persistent mock (TenantRoleService).
+export const TENANT_ENDPOINTS = {
+  list:   `${API_V1_BASE}/tenants`,
+  byId:   (id: string) => `${API_V1_BASE}/tenants/${id}`,
+  create: `${API_V1_BASE}/tenants`,
+  update: (id: string) => `${API_V1_BASE}/tenants/${id}`,
+  delete: (id: string) => `${API_V1_BASE}/tenants/${id}`,
+};
+
+// ─── Branding (BrandingController — api/v1/branding) ────────────────────────────
+// GET is anonymous (login page needs it before any session exists); PUT requires configuration.write.
+export const BRANDING_ENDPOINTS = {
+  get: `${API_V1_BASE}/branding`,
+  update: `${API_V1_BASE}/branding`,
+};
+
 // ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────
 export const MFA_ENDPOINTS = {
   status:  `${API_V1_BASE}/auth/mfa/status`,
@@ -114,6 +132,9 @@ export const DESTINATION_ENDPOINTS = {
   schema:              (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
   sftpTest:            `${API_V1_BASE}/destinations/sftp-test`,
   fhirTest:            `${API_V1_BASE}/destinations/fhir-test`,
+  medplumTest:         `${API_V1_BASE}/destinations/medplum-test`,
+  mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
+  blobTest:            `${API_V1_BASE}/destinations/blob-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
@@ -182,6 +203,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
   effective: `${API_V1_BASE}/transformation-rules/effective`,
+  impact: `${API_V1_BASE}/transformation-rules/impact`,
 };
 
 // ─── Allowed CORS origins (AllowedCorsOriginsController — api/v1/system/allowed-origins) ──

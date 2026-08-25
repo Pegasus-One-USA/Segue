@@ -13,8 +13,9 @@ import { DeIdentificationProfileService } from '../../../destination-connections
 import { MappingCatalogService, FhirElement } from '../../../services/mapping-catalog.service';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformScope, TransformNodeSchema,
-  NullPolicy, TransformErrorPolicy, TransformArrayMode, TransformExecutionPhase,
+  NullPolicy, TransformErrorPolicy, TransformArrayMode, TransformExecutionPhase, TRANSFORM_NODE_DEFAULT_VALUE_TYPES,
 } from '../../../components/node-library/destination-wizard/field-mapping/transformation-rules.service';
+import { MappingValueType } from '../../../mapping-profiles/models/mapping-profile.model';
 import {
   ALL_NODE_TYPE_OPTIONS, getApplicableNodeTypes,
 } from '../../../components/node-library/destination-wizard/field-mapping/transform-node-classifier';
@@ -58,6 +59,7 @@ interface RuleStep {
   errorPolicy: TransformErrorPolicy;
   arrayMode: TransformArrayMode;
   fhirWriteBackJsonPath: string | null;
+  expectedValueType: MappingValueType | null;
 }
 
 /** One target (scope + whatever keys that scope uses) and its ordered chain of steps. Grouped from the
@@ -281,6 +283,7 @@ export class TransformationRuleListComponent implements OnInit {
             id: r.id, nodeType: r.nodeType, config: { ...(r.config ?? {}) }, order: r.order, saving: false,
             onNull: r.onNull, onNullDefaultValue: r.onNullDefaultValue ?? null, errorPolicy: r.errorPolicy, arrayMode: r.arrayMode,
             fhirWriteBackJsonPath: r.fhirWriteBackJsonPath ?? null,
+            expectedValueType: r.expectedValueType ?? TRANSFORM_NODE_DEFAULT_VALUE_TYPES[r.nodeType] ?? null,
           });
         }
         byKey.forEach(g => g.steps.sort((a, b) => a.order - b.order));
@@ -397,6 +400,7 @@ export class TransformationRuleListComponent implements OnInit {
         id: null, nodeType, config: initialConfig, order: 0, saving: false,
         onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
         fhirWriteBackJsonPath: null,
+        expectedValueType: TRANSFORM_NODE_DEFAULT_VALUE_TYPES[nodeType] ?? null,
       }],
       editing: true,
     };
@@ -420,6 +424,7 @@ export class TransformationRuleListComponent implements OnInit {
       id: null, nodeType, config, order: group.steps.length, saving: false,
       onNull: 'Skip', onNullDefaultValue: null, errorPolicy: 'NullOut', arrayMode: 'Whole',
       fhirWriteBackJsonPath: null,
+      expectedValueType: TRANSFORM_NODE_DEFAULT_VALUE_TYPES[nodeType] ?? null,
     });
     this.groups.set([...this.groups()]);
   }
@@ -427,6 +432,12 @@ export class TransformationRuleListComponent implements OnInit {
   onNodeTypeChange(step: RuleStep, nodeType: TransformNodeType): void {
     step.nodeType = nodeType;
     step.config = applyNodeDefaults(this.schemaFor(nodeType), {});
+    step.expectedValueType = TRANSFORM_NODE_DEFAULT_VALUE_TYPES[nodeType] ?? null;
+    this.groups.set([...this.groups()]);
+  }
+
+  setExpectedValueType(step: RuleStep, value: string): void {
+    step.expectedValueType = (value || null) as MappingValueType | null;
     this.groups.set([...this.groups()]);
   }
 
@@ -487,12 +498,16 @@ export class TransformationRuleListComponent implements OnInit {
       fhirWriteBackJsonPath: step.fhirWriteBackJsonPath,
       executionPhase: group.executionPhase,
       deIdentificationProfileId: group.deIdentificationProfileId,
+      expectedValueType: step.expectedValueType,
     }).subscribe({
       next: saved => {
         step.id = saved.id;
         step.saving = false;
         this.groups.set([...this.groups()]);
-        if (!opts.silent) this.toast.success('Rule saved.');
+        if (!opts.silent) {
+          this.toast.success('Rule saved.');
+          this.showRuleImpactSummary(group);
+        }
       },
       error: () => {
         step.saving = false;
@@ -500,6 +515,32 @@ export class TransformationRuleListComponent implements OnInit {
         if (!opts.silent) this.toast.error('Failed to save the rule.');
       },
     });
+  }
+
+  /** Non-blocking heads-up after a Global/ResourceType-scoped save — the rule already saved regardless of
+   *  what this shows; a lookup failure is swallowed rather than confusing the user right after a successful
+   *  save. No-op for Field/Workflow/DestinationType scope, which already name one specific field/workflow. */
+  private showRuleImpactSummary(group: RuleTargetGroup): void {
+    if (group.scope !== 'Global' && group.scope !== 'ResourceType') return;
+    if (!group.destinationField) return;
+
+    this.rulesService
+      .getRuleImpactSummary(group.scope, group.resourceType, group.destinationField)
+      .subscribe({
+        next: summary => {
+          const newlyAffected = summary.totalMatchingWorkflows - summary.workflowsWithMoreSpecificOverride;
+          if (summary.totalMatchingWorkflows === 0) return;
+          this.toast.info(
+            'Applies across workflows',
+            `This rule now applies to ${newlyAffected} of ${summary.totalMatchingWorkflows} matching workflow` +
+              `${summary.totalMatchingWorkflows === 1 ? '' : 's'}` +
+              (summary.workflowsWithMoreSpecificOverride > 0
+                ? ` (${summary.workflowsWithMoreSpecificOverride} already have a more specific override and are unaffected).`
+                : '.'),
+          );
+        },
+        error: () => {}, // Advisory only — a lookup failure here shouldn't read as the save having failed.
+      });
   }
 
   removeStep(group: RuleTargetGroup, step: RuleStep): void {

@@ -12,12 +12,14 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public User(
         string externalUserId,
         string? email,
-        string? displayName)
+        string? displayName,
+        Guid tenantId)
     {
         Id = Guid.NewGuid();
         ExternalUserId = externalUserId;
         Email = email;
         DisplayName = displayName;
+        TenantId = tenantId;
         Status = UserStatus.Active;
         IsEnabled = true;
         IsLocalLoginEnabled = false;
@@ -29,6 +31,12 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public string? Email { get; private set; }
     public string? DisplayName { get; private set; }
     string? IHasAuditDisplayName.AuditDisplayName => DisplayName ?? Email;
+
+    /// <summary>The Tenant (customer/company) this user belongs to — required. There is no user↔tenant
+    /// membership change API today; every user is assigned once, at creation, from the caller's own
+    /// tenant (or the Default Tenant for first-run/JIT-provisioned users) — see UserManagementService,
+    /// SetupService, UserAccessService.</summary>
+    public Guid TenantId { get; private set; }
 
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
@@ -123,6 +131,14 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     // Refresh token fields.
     public string? RefreshTokenHash { get; private set; }
     public DateTime? RefreshTokenExpiresOnUtc { get; private set; }
+    // Whether THIS refresh token was issued from a "Remember me" login — carried forward across
+    // every rotation (see LocalAuthService.RefreshTokenAsync, which reads this back in rather than
+    // defaulting to false) so a remembered session doesn't silently downgrade to a session-only
+    // cookie the first time its access token refreshes. Defaults to true so existing rows (issued
+    // before this column existed, when every refresh cookie was unconditionally persistent) keep
+    // behaving exactly as they do today after the migration backfills it — see the migration's own
+    // defaultValue for the DB-side half of that guarantee.
+    public bool RefreshTokenRememberMe { get; private set; } = true;
 
     /// <summary>True when the account is currently locked out (failed-login threshold reached).</summary>
     public bool IsLockedOut(DateTime utcNow) => LockoutEndUtc is { } end && end > utcNow;
@@ -353,11 +369,15 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         if (lastName is not null) LastName = lastName;
     }
 
-    /// <summary>Stores a hashed refresh token for the 30-day refresh flow.</summary>
-    public void SetRefreshToken(string refreshTokenHash, DateTime expiresOnUtc)
+    /// <summary>Stores a hashed refresh token for the 30-day refresh flow. `rememberMe` records whether
+    /// this specific token should back a persistent (survives browser close) or session-only refresh
+    /// cookie — see AuthController.CookieOptionsFor's `isPersistent` parameter, which reads this value
+    /// back via the login response.</summary>
+    public void SetRefreshToken(string refreshTokenHash, DateTime expiresOnUtc, bool rememberMe)
     {
         RefreshTokenHash = refreshTokenHash;
         RefreshTokenExpiresOnUtc = expiresOnUtc;
+        RefreshTokenRememberMe = rememberMe;
     }
 
     /// <summary>Clears the refresh token, effectively logging the user out of the refresh flow.</summary>
@@ -365,6 +385,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     {
         RefreshTokenHash = null;
         RefreshTokenExpiresOnUtc = null;
+        RefreshTokenRememberMe = true;
     }
 
     /// <summary>Records a failed login attempt, locking the account once the threshold is reached.</summary>

@@ -69,7 +69,9 @@ export class MockAuthService extends IAuthService {
   }
 
   // ─── Complete an MFA-gated login ────────────────────────────────────────────
-  override verifyMfaLogin(challengeToken: string, code: string): Observable<LoginResponse> {
+  // rememberMe accepted for signature parity with IAuthService/AuthApiService — this mock has no
+  // cookies/session persistence to vary by it, so it's otherwise unused here.
+  override verifyMfaLogin(challengeToken: string, code: string, _rememberMe = false): Observable<LoginResponse> {
     return of(null).pipe(
       delay(500),
       switchMap(() => {

@@ -12,17 +12,20 @@ public sealed class TransformationRuleService : ITransformationRuleService
     private readonly ITransformationRuleRepository _repository;
     private readonly IEffectiveRuleResolver _resolver;
     private readonly ITransformNodeRegistry _nodeRegistry;
+    private readonly IConfigurationRepository _configurationRepository;
     private readonly IAppSecretAccessor? _secretAccessor;
 
     public TransformationRuleService(
         ITransformationRuleRepository repository,
         IEffectiveRuleResolver resolver,
         ITransformNodeRegistry nodeRegistry,
+        IConfigurationRepository configurationRepository,
         IAppSecretAccessor? secretAccessor = null)
     {
         _repository = repository;
         _resolver = resolver;
         _nodeRegistry = nodeRegistry;
+        _configurationRepository = configurationRepository;
         _secretAccessor = secretAccessor;
     }
 
@@ -66,7 +69,8 @@ public sealed class TransformationRuleService : ITransformationRuleService
                 request.ArrayMode,
                 request.FhirWriteBackJsonPath,
                 request.ExecutionPhase,
-                request.DeIdentificationProfileId);
+                request.DeIdentificationProfileId,
+                request.ExpectedValueType);
             rule.SetEnabled(request.IsEnabled);
             await _repository.AddAsync(rule, cancellationToken);
             return ToDto(rule);
@@ -74,7 +78,8 @@ public sealed class TransformationRuleService : ITransformationRuleService
 
         existing.Update(
             configJson, request.Order, request.OnNull, request.ErrorPolicy,
-            request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath);
+            request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath,
+            request.ExpectedValueType);
         existing.SetEnabled(request.IsEnabled);
         await _repository.UpdateAsync(existing, cancellationToken);
         return ToDto(existing);
@@ -166,6 +171,50 @@ public sealed class TransformationRuleService : ITransformationRuleService
 
     public IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas() => TransformNodeConfigSchemas.All;
 
+    public async Task<RuleImpactSummaryDto> GetRuleImpactSummaryAsync(
+        TransformScope scope,
+        string? resourceType,
+        string? destinationField,
+        CancellationToken cancellationToken = default)
+    {
+        if (scope is not (TransformScope.Global or TransformScope.ResourceType) || destinationField is null)
+        {
+            return new RuleImpactSummaryDto(0, 0);
+        }
+
+        var routes = await _configurationRepository.GetRoutesAsync(cancellationToken);
+        var mappingProfilesById = (await _configurationRepository.GetMappingProfilesAsync(cancellationToken))
+            .ToDictionary(m => m.Id);
+
+        var matchingRoutes = routes
+            .Where(r => mappingProfilesById.TryGetValue(r.MappingProfileId, out var mp) &&
+                        (resourceType is null || mp.ResourceType == resourceType))
+            .ToList();
+
+        var withOverride = 0;
+        foreach (var route in matchingRoutes)
+        {
+            var mappingResourceType = mappingProfilesById[route.MappingProfileId].ResourceType;
+
+            var workflowRules = await _repository.GetWorkflowScopedAsync(
+                route.Id, mappingResourceType, destinationField, sourceSystem: null, sourceField: null, cancellationToken);
+            if (workflowRules.Count > 0)
+            {
+                withOverride++;
+                continue;
+            }
+
+            var fieldRules = await _repository.GetFieldScopedAsync(
+                mappingResourceType, destinationField, sourceSystem: null, sourceField: null, cancellationToken);
+            if (fieldRules.Count > 0)
+            {
+                withOverride++;
+            }
+        }
+
+        return new RuleImpactSummaryDto(matchingRoutes.Count, withOverride);
+    }
+
     private static TransformationRuleDto ToDto(TransformationRule rule) => new(
         rule.Id,
         rule.Scope,
@@ -185,5 +234,6 @@ public sealed class TransformationRuleService : ITransformationRuleService
         rule.ArrayMode,
         rule.FhirWriteBackJsonPath,
         rule.ExecutionPhase,
-        rule.DeIdentificationProfileId);
+        rule.DeIdentificationProfileId,
+        rule.ExpectedValueType);
 }

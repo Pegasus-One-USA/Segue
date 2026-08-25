@@ -43,6 +43,14 @@ interface LaunchResultResponse {
   patientId: string | null;
 }
 
+/** FHIRBridge's double-submit CSRF cookie is deliberately non-HttpOnly so a legitimate caller can read it and
+ *  echo it back as X-CSRF-Token on state-changing (/run, /discard-token) requests — see Program.cs's CSRF
+ *  middleware. Mirrors the main portal's TokenService.getCsrfToken(). */
+function getFhirBridgeCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )fhirbridge_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 /** Matches WorkflowEndpoints' GET /workflows/{id}/token-status — a cheap, no-pipeline check of whether a real /run
  *  would currently succeed authentication-wise (cache lookup, plus a silent refresh-token call only if the cached
  *  access token has actually expired). Lets the button decide redirect-vs-fetch up front instead of learning it
@@ -581,6 +589,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const result = await firstValueFrom(
         this.http.get<LaunchResultResponse>(
           `${this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+          { withCredentials: true },
         ),
       );
       if (result.patientId) {
@@ -629,11 +638,15 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
       const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/run`, {
-          patientId: this.patientId,
-          patientSearchCriteria: criteria || null,
-          callerId: this.sessionId,
-        }),
+        this.http.post<WorkflowRunResponse>(
+          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/run`,
+          {
+            patientId: this.patientId,
+            patientSearchCriteria: criteria || null,
+            callerId: this.sessionId,
+          },
+          { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+        ),
       );
 
       if (result.workflowRun.status === 'Succeeded') {
@@ -695,11 +708,15 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
 
       const result = await firstValueFrom(
-        this.http.post<WorkflowRunResponse>(`${this.baseUrl}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`, {
-          patientId: patient.id,
-          patientSearchCriteria: null,
-          callerId: this.sessionId,
-        }),
+        this.http.post<WorkflowRunResponse>(
+          `${this.baseUrl}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`,
+          {
+            patientId: patient.id,
+            patientSearchCriteria: null,
+            callerId: this.sessionId,
+          },
+          { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+        ),
       );
 
       if (result.workflowRun.status === 'Succeeded') {
@@ -755,7 +772,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
           `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
-          { params },
+          { params, withCredentials: true },
         ),
       );
       return status.hasValidToken;
@@ -933,7 +950,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         this.http.post(
           `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
           {},
-          { params },
+          { params, withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
         ),
       );
     } catch {

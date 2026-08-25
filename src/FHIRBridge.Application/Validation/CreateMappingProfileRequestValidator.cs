@@ -1,6 +1,8 @@
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
+using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 using FluentValidation;
@@ -24,10 +26,17 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
     private const string UpsertModeSuffix = ";mode=upsert";
 
     private readonly IDestinationSchemaService _schemaService;
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly IEffectiveRuleResolver _ruleResolver;
 
-    public CreateMappingProfileRequestValidator(IDestinationSchemaService schemaService)
+    public CreateMappingProfileRequestValidator(
+        IDestinationSchemaService schemaService,
+        IConfigurationRepository configurationRepository,
+        IEffectiveRuleResolver ruleResolver)
     {
         _schemaService = schemaService;
+        _configurationRepository = configurationRepository;
+        _ruleResolver = ruleResolver;
 
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.ResourceType).NotEmpty().MaximumLength(100);
@@ -121,6 +130,11 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
         var columnsByName = table.Columns.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
+        // Needed to resolve applicable TransformationRules below — a rule can be scoped to a DestinationType
+        // (e.g. "every SqlServer destination"), not just a specific field/resource type.
+        var destination = await _configurationRepository.GetDestinationAsync(request.DestinationId, cancellationToken);
+        var destinationType = destination?.DestinationType;
+
         for (var i = 0; i < request.Fields.Count; i++)
         {
             var field = request.Fields[i];
@@ -163,7 +177,58 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                     $"Fields[{i}].IsRequired",
                     $"'{column.Name}' does not allow NULLs — mark this field as required or supply a default value.");
             }
+
+            if (destinationType is not null)
+            {
+                await ValidateApplicableRulesAsync(request, field, i, column, destinationType.Value, context, cancellationToken);
+            }
         }
     }
 
+    /// <summary>
+    /// A field can pass the check above (its declared type matches the column) and still fail at run time,
+    /// because a Global/ResourceType/DestinationType-scoped <see cref="Domain.Entities.TransformationRule"/>
+    /// applies to it and expects a different type than the column actually is — e.g. a Global NumberCast rule
+    /// hitting a text column. Resolved with resourcePipelineRouteId: null deliberately: a MappingProfile can be
+    /// created before any ResourcePipelineRoute references it, so no Workflow-scoped override can exist yet at
+    /// this point — this check only ever sees the broader tiers a workflow-level override would need to beat.
+    /// </summary>
+    private async Task ValidateApplicableRulesAsync(
+        CreateMappingProfileRequest request,
+        MappingFieldDto field,
+        int fieldIndex,
+        DestinationColumnSchemaDto column,
+        DestinationType destinationType,
+        ValidationContext<CreateMappingProfileRequest> context,
+        CancellationToken cancellationToken)
+    {
+        var rules = await _ruleResolver.ResolveAsync(
+            destinationType,
+            request.ResourceType,
+            field.TargetField,
+            resourcePipelineRouteId: null,
+            sourceSystem: null,
+            sourceField: null,
+            cancellationToken);
+
+        foreach (var rule in rules)
+        {
+            if (rule.ExpectedValueType is not { } expectedValueType ||
+                string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var failure = new FluentValidation.Results.ValidationFailure(
+                $"Fields[{fieldIndex}].TargetField",
+                $"A {rule.Scope} rule ({rule.NodeType}) expects '{column.Name}' to be {expectedValueType}, " +
+                $"but it's a {column.DataType} column ({column.MappingValueType}). Add a workflow-level " +
+                "override for this field, or update the rule's expected type.")
+            {
+                CustomState = new TransformationRuleTypeConflict(
+                    rule.Id, rule.Scope, rule.NodeType, rule.DestinationField, expectedValueType, column.MappingValueType),
+            };
+            context.AddFailure(failure);
+        }
+    }
 }

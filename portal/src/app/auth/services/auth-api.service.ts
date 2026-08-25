@@ -27,9 +27,17 @@ export class AuthApiService extends IAuthService {
   private readonly http = inject(HttpClient);
 
   // ─── Login ─────────────────────────────────────────────────────────────────
+  // rememberMe used to be silently dropped here — LoginRequest carried it, but this call never put
+  // it in the request body, so the backend never saw it regardless of what the checkbox said. This
+  // is the actual fix for that: the backend now reads it and decides refresh/CSRF cookie persistence
+  // accordingly (see AuthController.IssueTokenCookiesAndStrip) — it never affects authentication itself.
   override login(req: LoginRequest): Observable<LoginResult> {
     return this.http
-      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.login, { email: req.email, password: req.password })
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.login, {
+        email: req.email,
+        password: req.password,
+        rememberMe: req.rememberMe ?? false,
+      })
       .pipe(
         map(dto => this.mapLoginResult(dto)),
         catchError(err => throwError(() => err)),
@@ -37,9 +45,13 @@ export class AuthApiService extends IAuthService {
   }
 
   // ─── Complete an MFA-gated login ────────────────────────────────────────────
-  override verifyMfaLogin(challengeToken: string, code: string): Observable<LoginResponse> {
+  // rememberMe here must be the same choice made on the original login() call — no session/tokens
+  // exist yet at that point to store it against, so the caller resends it (see
+  // AuthService.completeMfaLogin, which keeps it in the component's own in-memory state across the
+  // MFA round-trip).
+  override verifyMfaLogin(challengeToken: string, code: string, rememberMe = false): Observable<LoginResponse> {
     return this.http
-      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.loginMfa, { challengeToken, code })
+      .post<LocalLoginResponseDto>(AUTH_ENDPOINTS.loginMfa, { challengeToken, code, rememberMe })
       .pipe(
         map(dto => this.mapLoginResult(dto) as LoginResponse),
         catchError(err => throwError(() => err)),

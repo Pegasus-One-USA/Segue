@@ -134,4 +134,16 @@ public sealed class SourceRetrievalConfiguration
             IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun, merged,
             ExportScope, GroupId, PatientIds, OutputFormat);
     }
+
+    /// <summary>
+    /// A value-equal copy, distinct by reference. EF Core tracks an owned reference type by CLR instance
+    /// identity — reusing THIS instance as another entity's owned value (e.g. copying a SourceConnection's
+    /// Retrieval onto a new SourceConfiguration, see ConfigurationService.AutoProvisionSourceConfigurationAsync)
+    /// makes EF try to track the same instance under two different owners at once, which throws
+    /// "...is part of a key and so cannot be modified" during SaveChanges. Always clone at the boundary instead.
+    /// </summary>
+    public SourceRetrievalConfiguration Clone() => new(
+        RetrievalMethod, ResourceTypes, SearchCriteria, IncrementalSyncEnabled, PageSize, SortOrder,
+        IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun,
+        LastSuccessfulSyncUtcByResourceType, ExportScope, GroupId, PatientIds, OutputFormat);
 }

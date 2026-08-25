@@ -1,10 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TenantRoleService, Tenant } from '../../services/tenant-role.service';
 
 export interface TenantDialogData {
@@ -21,6 +23,7 @@ export interface TenantDialogData {
     MatInputModule,
     MatButtonModule,
     MatIconModule,
+    MatProgressSpinnerModule,
   ],
   templateUrl: './tenant-dialog.component.html',
   styleUrls: ['./tenant-dialog.component.scss'],
@@ -31,8 +34,10 @@ export class TenantDialogComponent {
   readonly dialogRef     = inject(MatDialogRef<TenantDialogComponent>);
   readonly data: TenantDialogData = inject(MAT_DIALOG_DATA);
 
-  readonly isEdit    = !!this.data?.tenant;
-  readonly submitted = signal(false);
+  readonly isEdit       = !!this.data?.tenant;
+  readonly submitted    = signal(false);
+  readonly saving       = signal(false);
+  readonly errorMessage = signal<string | null>(null);
 
   readonly form = this.fb.group({
     name: [this.data?.tenant?.name ?? '', [
@@ -53,13 +58,24 @@ export class TenantDialogComponent {
 
   save(): void {
     this.submitted.set(true);
+    this.errorMessage.set(null);
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     const { name, code } = this.form.value as { name: string; code: string };
-    if (this.isEdit) {
-      this.svc.updateTenant(this.data.tenant!.id, { name, code });
-    } else {
-      this.svc.addTenant({ name, code });
-    }
-    this.dialogRef.close(true);
+    this.saving.set(true);
+
+    const request$ = this.isEdit
+      ? this.svc.updateTenant(this.data.tenant!.id, { name, code })
+      : this.svc.addTenant({ name, code });
+
+    request$.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogRef.close(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.errorMessage.set(err.error?.message ?? 'Failed to save tenant. Please try again.');
+      },
+    });
   }
 }
