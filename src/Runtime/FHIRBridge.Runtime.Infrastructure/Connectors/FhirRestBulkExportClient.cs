@@ -236,6 +236,31 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         return failures;
     }
 
+    public async Task CancelExportAsync(
+        string statusUrl,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Delete, statusUrl);
+        SetBearer(httpRequest, accessToken);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+
+        // A 404 means the export is already gone (cancelled/deleted/expired) — the caller's desired end state
+        // already holds, so this is treated as success rather than an error, matching DELETE's idempotent semantics.
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogInformation("Bulk export cancelled at {StatusUrl} ({StatusCode}).", statusUrl, (int)response.StatusCode);
+            return;
+        }
+
+        var body = await SafeReadAsync(response, cancellationToken);
+        throw new InvalidOperationException(
+            $"Bulk export cancellation returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {statusUrl}. {body}");
+    }
+
     private async Task<string> KickOffAsync(
         string baseUrl,
         FhirBulkExportRequest request,

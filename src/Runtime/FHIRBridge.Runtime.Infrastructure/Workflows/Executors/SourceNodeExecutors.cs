@@ -24,8 +24,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -40,8 +41,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -56,8 +58,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -72,8 +75,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -88,8 +92,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -104,8 +109,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -120,8 +126,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -136,8 +143,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions)
     {
     }
 }
@@ -167,6 +175,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? _bulkExportJobRepository;
     private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly IFhirAccessTokenProvider? _accessTokenProvider;
+    private readonly FHIRBridge.Application.Services.BulkExportConcurrencyOptions _bulkExportConcurrencyOptions;
 
     protected SourceNodeExecutor(
         string nodeType,
@@ -178,7 +187,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         FHIRBridge.Application.Abstractions.Persistence.IBulkExportJobRepository? bulkExportJobRepository = null,
         IGlobalExceptionManager? exceptionManager = null,
-        IFhirAccessTokenProvider? accessTokenProvider = null)
+        IFhirAccessTokenProvider? accessTokenProvider = null,
+        Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         _sourceType = sourceType;
@@ -190,6 +200,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _bulkExportJobRepository = bulkExportJobRepository;
         _exceptionManager = exceptionManager;
         _accessTokenProvider = accessTokenProvider;
+        _bulkExportConcurrencyOptions = bulkExportConcurrencyOptions?.Value ?? new FHIRBridge.Application.Services.BulkExportConcurrencyOptions();
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -275,7 +286,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 RetrievalMethod = nodeRetrievalMethod,
                 ExportScope = string.IsNullOrWhiteSpace(nodeExportScope) ? null : nodeExportScope,
                 GroupId = string.Equals(nodeExportScope, "group", StringComparison.OrdinalIgnoreCase)
-                    ? ReadStringConfiguration(node, "Group ID")
+                    ? BulkExportGroupIds.ResolveAthenahealthGroupId(source.SourceType, ReadStringConfiguration(node, "Group ID"), source.PracticeId)
                     : null,
                 PatientIds = string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase) && nodePatientIds.Length > 0
                     ? nodePatientIds
@@ -428,6 +439,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             // the original blocking call, unchanged.
             if (_bulkExportJobRepository is not null && source.SourceConnectionId is { } deferrableSourceConnectionId)
             {
+                // Client-side concurrency guard: every Bulk Data server enforces its own per-connection concurrency
+                // cap server-side (e.g. athenahealth's 2/practice Preview, 5/practice Production) — checking the
+                // durable job table first means a caller at capacity finds out via a fast local check instead of
+                // only ever discovering it via a reactive 429 from the source server.
+                var activeJobCount = await _bulkExportJobRepository.CountActiveBySourceConnectionAsync(deferrableSourceConnectionId, cancellationToken);
+                if (activeJobCount >= _bulkExportConcurrencyOptions.MaxConcurrentJobsPerSourceConnection)
+                {
+                    throw new FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException(
+                        TimeSpan.FromSeconds(_bulkExportConcurrencyOptions.RetryAfterSeconds));
+                }
+
                 var statusUrl = await _bulkExportClient!.KickOffExportAsync(batchedRequest, source, cancellationToken);
                 var job = new FHIRBridge.Domain.Entities.BulkExportJob(
                     Guid.NewGuid(),

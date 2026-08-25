@@ -362,6 +362,11 @@ app.UseExceptionHandler(errorApp =>
         context.Response.StatusCode  = status;
         context.Response.ContentType = "application/json";
 
+        if (feature.Error is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitError)
+        {
+            context.Response.Headers.RetryAfter = ((int)Math.Ceiling(concurrencyLimitError.RetryAfter.TotalSeconds)).ToString();
+        }
+
         // Below 500, MapException/FHIRBridgeException/NotFoundException already represent an expected, routine
         // domain outcome (wrong password, duplicate name, stale reference, expired token, RBAC-adjacent auth
         // rejection) — not an unexpected system fault. These are everyday user behavior, not incidents: many are
@@ -805,6 +810,8 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
     // author-written text intended for end users — Message keeps the entity name + raw id for logs only.
     if (ex is NotFoundException nfe)
         return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null);
+    if (ex is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitException)
+        return (StatusCodes.Status429TooManyRequests, concurrencyLimitException.UserMessage, true, null);
     if (ex is FHIRBridgeException fbe)
         return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null);
 
