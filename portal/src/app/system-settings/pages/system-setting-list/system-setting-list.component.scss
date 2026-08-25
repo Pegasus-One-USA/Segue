@@ -30,6 +30,28 @@
   }
 }
 
+// ─── Group heading rows (e.g. "Terminology Settings") ────────────────────────
+// Same uppercase/letter-spaced micro-label treatment as the table's own header
+// cells (see _list-page.scss .mat-mdc-header-cell), so a group heading reads
+// as "more of this table", not a foreign UI element dropped into it.
+.group-header-row {
+  height: auto;
+
+  ::ng-deep .group-header-cell {
+    padding: var(--space-4) var(--space-8) var(--space-1);
+    font-family: var(--font-family, var(--brand-font));
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: var(--color-side);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &:hover { background: transparent; } // group headings never get the row-hover highlight
+}
+
 // ─── Column widths ────────────────────────────────────────────────────────────
 .col-actions {
   width: 100px;

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.DTOs;
 using Microsoft.Extensions.Configuration;
@@ -9,21 +10,25 @@ namespace FHIRBridge.Infrastructure.Terminology;
 
 /// <summary>
 /// Translates codes via a FHIR terminology server's <c>ConceptMap/$translate</c> operation. Configured by
-/// <c>Terminology:BaseUrl</c>; returns null when unset or when no match is found.
+/// the "Terminology:BaseUrl" System Setting (falling back to <c>Terminology:BaseUrl</c> in appsettings);
+/// returns null when unset or when no match is found.
 /// </summary>
 public sealed class FhirTerminologyTranslationService : ITerminologyTranslationService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly ISystemSettingsCache _settings;
     private readonly ILogger<FhirTerminologyTranslationService> _logger;
 
     public FhirTerminologyTranslationService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
+        ISystemSettingsCache settings,
         ILogger<FhirTerminologyTranslationService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -33,7 +38,8 @@ public sealed class FhirTerminologyTranslationService : ITerminologyTranslationS
         string targetSystem,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _configuration["Terminology:BaseUrl"];
+        var baseUrl = await _settings.GetStringAsync(
+            "Terminology:BaseUrl", _configuration["Terminology:BaseUrl"] ?? string.Empty, cancellationToken);
         if (string.IsNullOrWhiteSpace(baseUrl)
             || string.IsNullOrWhiteSpace(sourceSystem)
             || string.IsNullOrWhiteSpace(sourceCode)

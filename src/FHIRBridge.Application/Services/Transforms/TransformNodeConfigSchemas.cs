@@ -48,7 +48,7 @@ public static class TransformNodeConfigSchemas
     [
         "http://loinc.org", "http://snomed.info/sct", "http://hl7.org/fhir/sid/icd-10-cm",
         "http://www.nlm.nih.gov/research/umls/rxnorm", "http://hl7.org/fhir/sid/us-npi",
-        "urn:oid:2.16.840.1.113883.6.285", "http://hl7.org/fhir/sid/icd-10-pcs",
+        "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets", "http://www.cms.gov/Medicare/Coding/ICD10",
         "http://hl7.org/fhir/sid/ndc", "http://hl7.org/fhir/sid/cvx",
         "http://unitsofmeasure.org", "http://www.ama-assn.org/go/cpt",
     ];
