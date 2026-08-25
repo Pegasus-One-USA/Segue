@@ -1,0 +1,124 @@
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_ccc8e815db37bb::t_cee16cea798f19 174-217
+  s_ccc8e815db37bb::t_b73330f60ebb2e 72-73,81-82
+  s_ccc8e815db37bb::t_921852e0bbaa3a 237-238
+  s_ccc8e815db37bb::t_813658bb7c4897 15,22,28
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_ccc8e815db37bb::t_4d8c970c010d1b 2525-2544
+  s_ccc8e815db37bb::t_faa5dc187207ea 2791-2843
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_ccc8e815db37bb::t_745ddd0e4df33c 63-65
+  s_ccc8e815db37bb::t_a7bdcb09ad3e45 218-226
+  s_ccc8e815db37bb::t_6e725b2ddc77d5 160-166
+  s_ccc8e815db37bb::t_1e9d20317e7958 88,91-113
+  s_ccc8e815db37bb::t_3978bff65fded5 6,114
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  s_ccc8e815db37bb::t_d762c4c66fb2c8 37-40
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  s_ccc8e815db37bb::t_886e86fb339093 34-37
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_ccc8e815db37bb::t_921c1ae48bc39b 304-319
+src/FHIRBridge.Application/Exceptions/RequestValidationException.cs
+  s_ccc8e815db37bb::t_82cf847f9b21f7 1,13-15,19,24-29
+portal/src/app/core/api-endpoints.ts
+  s_ccc8e815db37bb::t_9719bf46d57d7b 206
+src/FHIRBridge.Application/Validation/TransformationRuleTypeConflict.cs
+  s_ccc8e815db37bb::t_7b9bee8aa97779 1-16
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_ccc8e815db37bb::t_9e954f13e335c1 301,306-307
+  s_ccc8e815db37bb::t_ef674707d22830 17,19,308-310
+  s_ccc8e815db37bb::t_5bbb273ca7b7c0 165
+  s_ccc8e815db37bb::t_d98a94937546e4 279
+  s_ccc8e815db37bb::t_7d6d6aa9d9076e 52-56
+  s_ccc8e815db37bb::t_c97f9b67b450d6 339
+  s_ccc8e815db37bb::t_1c6311ba707f8a 431
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_ccc8e815db37bb::t_4aafeb79b1fcb2 235-250
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_ccc8e815db37bb::t_7115ce1632e3d8 128-143
+src/Api/FHIRBridge.Api/Program.cs
+  s_ccc8e815db37bb::t_0f12b5941ad61a 354
+  s_ccc8e815db37bb::t_66bf808c5af9b8 804,809,814,818,829
+  s_ccc8e815db37bb::t_868be0b0db04ba 833,836,845,848,853,855
+  s_ccc8e815db37bb::t_4ac2c24d0662ec 406
+  s_ccc8e815db37bb::t_7d9e158a0a934c 17
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_ccc8e815db37bb::t_73536ca8de6101 49-53
+  s_ccc8e815db37bb::t_6c39d1119177b3 102-109
+  s_ccc8e815db37bb::t_61fba0c0c119e1 24-25
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileUsageAndDeleteTests.cs
+  s_ccc8e815db37bb::t_8833a90287875b 37-40
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  s_ccc8e815db37bb::t_80cd543c3adca5 34-37
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  s_ccc8e815db37bb::t_7496c90a45d3d2 138-145,156-157,166
+  s_ccc8e815db37bb::t_432c4c370729ce 76
+  s_ccc8e815db37bb::t_1b669bd0b2f13f 35-36
+src/FHIRBridge.Domain/Enums/TransformNodeTypeDefaults.cs
+  s_ccc8e815db37bb::t_b8acbdd0bca903 1-35
+tests/FHIRBridge.UnitTests/Configuration/ParentReferenceValidationTests.cs
+  s_ccc8e815db37bb::t_20129bbf58f04d 47-50
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_ccc8e815db37bb::t_3a69a7077b9eef 130-131
+  s_ccc8e815db37bb::t_95d6fdc46d57a0 42-43,59-60,83-84,106-107,150-151,175-176,199-200,225-226,248-249,270-271
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  s_ccc8e815db37bb::t_430ef7dcf24d0a 46-55
+tests/FHIRBridge.UnitTests/Configuration/SourceConfigurationAutoProvisionTests.cs
+  s_ccc8e815db37bb::t_1f07450d4b4ce5 35-38
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_ccc8e815db37bb::t_93690b855fa9e2 403
+  s_ccc8e815db37bb::t_90f2e232876ca5 507-510,520-545
+  s_ccc8e815db37bb::t_699a1d1dc59dc2 427,435-440
+  s_ccc8e815db37bb::t_bf5dc3e151af82 16,18
+  s_ccc8e815db37bb::t_fbed03d0be03e4 286
+  s_ccc8e815db37bb::t_cae59b9eaba1fb 501
+  s_ccc8e815db37bb::t_066a48a296c1c7 62
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  s_ccc8e815db37bb::t_c1624e40dd1f15 32
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  s_ccc8e815db37bb::t_9a13c46405c11c 43-46
+tests/FHIRBridge.UnitTests/Validation/NoOpEffectiveRuleResolver.cs
+  s_ccc8e815db37bb::t_14818446a9fb40 1-23
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_ccc8e815db37bb::t_59f9b7fa88f15b 2,4,6,8
+  s_ccc8e815db37bb::t_42db67d3f0fb24 23-24,35-48
+  s_ccc8e815db37bb::t_49ad79162d9163 246-305
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_ccc8e815db37bb::t_3ea7af2c2cf14f 63-69
+  s_ccc8e815db37bb::t_17db42c32a254e 8
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_ccc8e815db37bb::t_a459dac7bafdc2 29-30,32-35,38-39
+  s_ccc8e815db37bb::t_f1319be050c4f6 180-184,188-212,214-233
+  s_ccc8e815db37bb::t_3d5e5a6199bdb2 2,5,213
+  s_ccc8e815db37bb::t_9430ce752f4c7f 133-137
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260825130630_AddTransformationRuleExpectedValueType.Designer.cs
+  s_ccc8e815db37bb::t_cfc5875700e498 1-5699
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260825130630_AddTransformationRuleExpectedValueType.cs
+  s_ccc8e815db37bb::t_2d222b2d932e99 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_def493f5b3ce36::t_bf2d179bd6fcac 4106-4109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "6d1e18b5c3a61223ce97f6a6b5bb8cc241813179",
+  "prompts": {},
+  "sessions": {
+    "s_ccc8e815db37bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a6f24a8-0f11-4ac5-8902-fbfe9e9e0bb6",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_def493f5b3ce36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4bd70306-9187-4c31-824e-63e1a1b60c81",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
