@@ -148,6 +148,7 @@ builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandl
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, MappingCatalogAccessAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -207,6 +208,15 @@ builder.Services.AddAuthorization(options =>
     {
         policy.RequireAuthenticatedUser();
         policy.AddRequirements(new WorkflowModuleAccessRequirement());
+    });
+
+    // UnifiedAdmin OR "transformationrules.write" (see MappingCatalogAccessAuthorizationHandler) — the FHIR
+    // element catalog is read-only reference metadata, not tenant configuration, so it's gated more loosely
+    // than the rest of MappingController.
+    options.AddPolicy(AuthorizationPolicies.MappingCatalogAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new MappingCatalogAccessRequirement());
     });
 
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions

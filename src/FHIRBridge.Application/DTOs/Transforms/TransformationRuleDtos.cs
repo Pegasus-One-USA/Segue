@@ -85,7 +85,7 @@ public sealed record TransformPreviewResult(
 public sealed record TransformConfigFieldSchema(
     string Key,
     string Label,
-    string InputKind, // "text" | "select" | "checkbox"
+    string InputKind, // "text" | "number" | "select" | "combo" | "checkbox" | "keyvalue"
     IReadOnlyList<string>? Options,
     string? DefaultValue,
     // Shown as grey example text inside an empty text box — never submitted as the actual value, unlike

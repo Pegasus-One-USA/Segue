@@ -41,6 +41,7 @@
         <div class="form-field">
           <label for="ntf-resourceType">{{ newTarget().scope === 'ResourceType' ? 'Resource type' : 'Resource type (for field picker)' }}</label>
           <select id="ntf-resourceType" [ngModel]="newTarget().resourceType" (ngModelChange)="onResourceTypeChangeForNewTarget($event)">
+            <option value="">Choose a resource type…</option>
             @for (rt of resourceTypeOptions; track rt) {
               <option [value]="rt">{{ rt }}</option>
             }

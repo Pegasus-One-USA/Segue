@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
+using UnitsNet;
+using UnitsNet.Units;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
 
@@ -149,20 +151,35 @@ public sealed class BooleanConversionNode : ITransformNode
     }
 }
 
-/// <summary>4. Unit Conversion (UCUM) — a fixed conversion table covering the spec's worked examples, not a
-/// full UCUM engine (per the PDF: "library suggestions are examples, not mandates").</summary>
+/// <summary>4. Unit Conversion (UCUM) — dimensional conversions run through UnitsNet, mapped from UCUM codes
+/// to its unit enums; analyte-specific conversions (mg/dL &lt;-&gt; mmol/L, which need a molar-mass factor
+/// UnitsNet has no notion of) still go through the manual `factor`/`direction` override.</summary>
 public sealed class UnitConversionNode : ITransformNode
 {
-    private static readonly IReadOnlyDictionary<(string From, string To), Func<decimal, decimal>> Conversions =
-        new Dictionary<(string, string), Func<decimal, decimal>>
-        {
-            [("lb_av", "kg")] = v => v * 0.45359237m,
-            [("kg", "lb_av")] = v => v / 0.45359237m,
-            [("[in_i]", "cm")] = v => v * 2.54m,
-            [("cm", "[in_i]")] = v => v / 2.54m,
-            [("[degF]", "Cel")] = v => (v - 32m) / 1.8m,
-            [("Cel", "[degF]")] = v => v * 1.8m + 32m
-        };
+    // UCUM code -> UnitsNet unit enum, covering the clinical dimensions this pipeline sees most (weight,
+    // length, temperature, volume, pressure). Not exhaustive UCUM coverage — extend as new units show up.
+    private static readonly IReadOnlyDictionary<string, Enum> UcumUnitMap = new Dictionary<string, Enum>
+    {
+        ["kg"] = MassUnit.Kilogram,
+        ["g"] = MassUnit.Gram,
+        ["lb_av"] = MassUnit.Pound,
+        ["[lb_av]"] = MassUnit.Pound,
+        ["[oz_av]"] = MassUnit.Ounce,
+        ["m"] = LengthUnit.Meter,
+        ["cm"] = LengthUnit.Centimeter,
+        ["mm"] = LengthUnit.Millimeter,
+        ["[in_i]"] = LengthUnit.Inch,
+        ["[ft_i]"] = LengthUnit.Foot,
+        ["Cel"] = TemperatureUnit.DegreeCelsius,
+        ["[degF]"] = TemperatureUnit.DegreeFahrenheit,
+        ["K"] = TemperatureUnit.Kelvin,
+        ["L"] = VolumeUnit.Liter,
+        ["mL"] = VolumeUnit.Milliliter,
+        ["dL"] = VolumeUnit.Deciliter,
+        ["[foz_us]"] = VolumeUnit.UsOunce,
+        ["mm[Hg]"] = PressureUnit.MillimeterOfMercury,
+        ["kPa"] = PressureUnit.Kilopascal
+    };
 
     public TransformNodeType NodeType => TransformNodeType.UnitConversion;
 
@@ -184,9 +201,17 @@ public sealed class UnitConversionNode : ITransformNode
             // Analyte-specific mg/dL <-> mmol/L conversions supply their own molar-mass factor via config.
             converted = config.Get("direction", "multiply") == "divide" ? input / factor : input * factor;
         }
-        else if (Conversions.TryGetValue((sourceUnit, targetUnit), out var convert))
+        else if (UcumUnitMap.TryGetValue(sourceUnit, out var sourceEnum) && UcumUnitMap.TryGetValue(targetUnit, out var targetEnum))
         {
-            converted = convert(input);
+            try
+            {
+                converted = (decimal)Quantity.From((double)input, sourceEnum).As(targetEnum);
+            }
+            catch (ArgumentException)
+            {
+                // UnitsNet throws when the two units belong to different quantity kinds (e.g. mass vs length).
+                return TransformResult.Fail($"'{sourceUnit}' and '{targetUnit}' are not dimensionally compatible.");
+            }
         }
         else
         {

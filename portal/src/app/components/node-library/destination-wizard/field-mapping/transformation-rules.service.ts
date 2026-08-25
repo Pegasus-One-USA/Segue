@@ -124,7 +124,10 @@ export interface TransformPreviewRequest {
 
 // 'combo' = a dropdown of common presets that still allows a genuinely custom value (unlike 'select', which
 // forces the value back to a preset) — used for fields where "none of the above" is a legitimate answer.
-export type ConfigFieldInputKind = 'text' | 'select' | 'checkbox' | 'combo';
+// 'number' = a numeric input (rejects non-numeric keystrokes) for fields the node parses as int/decimal.
+// 'keyvalue' = a from/to lookup table (add row / key / value) for a config value that's a JSON object
+// string under the hood — lets the field hold structured data without a raw-JSON textarea.
+export type ConfigFieldInputKind = 'text' | 'number' | 'select' | 'checkbox' | 'combo' | 'keyvalue';
 
 export interface TransformConfigFieldSchema {
   key: string;
