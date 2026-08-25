@@ -132,6 +132,16 @@ public sealed class BulkExportJob : AuditableEntity<Guid>
         ErrorMessage = errorMessage;
         CompletedOnUtc = completedOnUtc;
     }
+
+    /// <summary>Marks this job cancelled by an operator (<c>DELETE [status url]</c> per the FHIR Bulk Data spec —
+    /// see <c>IFhirBulkExportClient.CancelExportAsync</c>). Excluded from <c>GetPollableAsync</c>'s
+    /// <c>Status == Polling</c> filter the same way <see cref="BulkExportJobStatus.Completed"/>/
+    /// <see cref="BulkExportJobStatus.Failed"/> already are, so a cancelled job is never picked up by a later poll tick.</summary>
+    public void MarkCancelled(DateTime cancelledOnUtc)
+    {
+        Status = BulkExportJobStatus.Cancelled;
+        CompletedOnUtc = cancelledOnUtc;
+    }
 }
 
 /// <summary>Values for <see cref="BulkExportJob.SourcePath"/>.</summary>
@@ -154,4 +164,5 @@ public static class BulkExportJobStatus
     public const string Polling = "Polling";
     public const string Completed = "Completed";
     public const string Failed = "Failed";
+    public const string Cancelled = "Cancelled";
 }

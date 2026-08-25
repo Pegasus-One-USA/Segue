@@ -46,6 +46,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IDeIdentificationService _deIdentificationService;
     private readonly IDataSetDeIdentificationService? _dataSetDeIdentificationService;
     private readonly IFhirBulkExportClient? _bulkExportClient;
+    private readonly IBulkExportJobRepository? _bulkExportJobRepository;
+    private readonly BulkExportConcurrencyOptions _bulkExportConcurrencyOptions;
     private readonly IPipelineMetrics? _pipelineMetrics;
     private readonly IncrementalSyncOptions _incrementalSyncOptions;
     private readonly ISystemSettingsCache? _settingsCache;
@@ -77,7 +79,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IFailureDiagnosisClassifier? diagnosisClassifier = null,
         ISystemSettingsCache? settingsCache = null,
         IDestinationSchemaService? destinationSchemaService = null,
-        IGlobalExceptionManager? exceptionManager = null)
+        IGlobalExceptionManager? exceptionManager = null,
+        IBulkExportJobRepository? bulkExportJobRepository = null,
+        Microsoft.Extensions.Options.IOptions<BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null)
     {
         _configurationRepository = configurationRepository;
         _sourceClientFactory = sourceClientFactory;
@@ -94,6 +98,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _governanceLogger = governanceLogger ?? new NullGovernanceLogger();
         _deIdentificationService = deIdentificationService ?? new PassThroughDeIdentificationService();
         _bulkExportClient = bulkExportClient;
+        _bulkExportJobRepository = bulkExportJobRepository;
+        _bulkExportConcurrencyOptions = bulkExportConcurrencyOptions?.Value ?? new BulkExportConcurrencyOptions();
         _pipelineMetrics = pipelineMetrics;
         _incrementalSyncOptions = incrementalSyncOptions ?? IncrementalSyncOptions.Default;
         _settingsCache = settingsCache;
@@ -333,9 +339,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                                 ? types
                                 : [resourceType];
 
-                            bulkExportTask = _bulkExportClient.ExportAsync(
-                                BuildBulkExportRequest(retrieval, batchedResourceTypes),
+                            var bulkExportRequest = BuildBulkExportRequest(
+                                retrieval, batchedResourceTypes, runtimeSourceConfiguration.SourceType, runtimeSourceConfiguration.PracticeId);
+
+                            bulkExportTask = RunTrackedBulkExportAsync(
+                                sourceConnection.Id,
+                                bulkExportRequest,
                                 runtimeSourceConfiguration,
+                                request.CorrelationId,
+                                request.TriggeredBy,
                                 cancellationToken);
                             bulkExportResultsByKey[routeGroup.Key] = bulkExportTask;
                         }
@@ -1189,14 +1201,68 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     // Projects the persisted bulk-export retrieval settings onto a runtime $export request for one resource type.
     // Scope defaults to System when unset (the historical behavior); group/patient carry their id list. The _since
     // cursor is applied only when incremental sync is enabled and a prior successful run recorded a timestamp.
-    internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, string resourceType)
-        => BuildBulkExportRequest(retrieval, (IReadOnlyList<string>)[resourceType]);
+    // Client-side concurrency guard (repository-backed, so it's shared with the Runtime DAG's WorkflowNode bulk
+    // export jobs against the same SourceConnection) plus a bookkeeping BulkExportJob row for the duration of the
+    // blocking ExportAsync call — this pipeline still polls the export inline (see docs/backend/16-...), so the row
+    // is created Pending and resolved directly to Completed/Failed rather than ever reaching Polling/being picked up
+    // by BulkExportPollWorker. No-op guard/tracking (falls straight through to ExportAsync) when no job repository
+    // is wired (e.g. the in-memory configuration path), matching every other optional-dependency fallback here.
+    private async Task<IReadOnlyList<ResourceEnvelope>> RunTrackedBulkExportAsync(
+        Guid sourceConnectionId,
+        FhirBulkExportRequest bulkExportRequest,
+        FhirSourceConfiguration runtimeSourceConfiguration,
+        string? correlationId,
+        string? triggeredBy,
+        CancellationToken cancellationToken)
+    {
+        if (_bulkExportJobRepository is null)
+        {
+            return await _bulkExportClient!.ExportAsync(bulkExportRequest, runtimeSourceConfiguration, cancellationToken);
+        }
+
+        var activeCount = await _bulkExportJobRepository.CountActiveBySourceConnectionAsync(sourceConnectionId, cancellationToken);
+        if (activeCount >= _bulkExportConcurrencyOptions.MaxConcurrentJobsPerSourceConnection)
+        {
+            throw new FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException(
+                TimeSpan.FromSeconds(_bulkExportConcurrencyOptions.RetryAfterSeconds));
+        }
+
+        var job = new BulkExportJob(
+            Guid.NewGuid(),
+            BulkExportJobSourcePath.ConfiguredPipeline,
+            sourceConnectionId,
+            sourceConfigurationId: null,
+            exportRequestJson: System.Text.Json.JsonSerializer.Serialize(bulkExportRequest),
+            kickedOffOnUtc: DateTime.UtcNow,
+            correlationId: correlationId,
+            triggeredBy: triggeredBy);
+        await _bulkExportJobRepository.AddAsync(job, cancellationToken);
+
+        try
+        {
+            var resources = await _bulkExportClient!.ExportAsync(bulkExportRequest, runtimeSourceConfiguration, cancellationToken);
+            job.MarkCompleted(DateTime.UtcNow);
+            await _bulkExportJobRepository.UpdateAsync(job, cancellationToken);
+            return resources;
+        }
+        catch (Exception exception)
+        {
+            job.MarkFailed(exception.Message, DateTime.UtcNow);
+            await _bulkExportJobRepository.UpdateAsync(job, cancellationToken);
+            throw;
+        }
+    }
+
+    internal static FhirBulkExportRequest BuildBulkExportRequest(
+        SourceRetrievalConfiguration? retrieval, string resourceType, RuntimeSourceType sourceType = default, string? practiceId = null)
+        => BuildBulkExportRequest(retrieval, (IReadOnlyList<string>)[resourceType], sourceType, practiceId);
 
     // Same projection, batched across every resource type a single $export job should cover (see
     // bulkExportResourceTypesByKey in StartAsync) — a Group/System job scoped to just one resource type (e.g.
     // _type=Patient alone) can trip an Epic Interconnect business rule that requires demographics/_id for a bare
     // Patient search, since Epic resolves Group membership via an internal Patient search for that type.
-    internal static FhirBulkExportRequest BuildBulkExportRequest(SourceRetrievalConfiguration? retrieval, IReadOnlyList<string> resourceTypes)
+    internal static FhirBulkExportRequest BuildBulkExportRequest(
+        SourceRetrievalConfiguration? retrieval, IReadOnlyList<string> resourceTypes, RuntimeSourceType sourceType = default, string? practiceId = null)
     {
         var scope = MapBulkExportScope(retrieval?.ExportScope);
 
@@ -1204,9 +1270,15 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             ? new DateTimeOffset(DateTime.SpecifyKind(syncedAt, DateTimeKind.Utc))
             : null;
 
+        // athenahealth's Group-level $export addresses the whole Practice as `a-1.C-{Practice}`, not a normal FHIR
+        // Group id — see BulkExportGroupIds. Every other vendor's GroupId is returned unchanged.
+        var groupId = scope == BulkExportScope.Group
+            ? BulkExportGroupIds.ResolveAthenahealthGroupId(sourceType, retrieval?.GroupId, practiceId)
+            : null;
+
         return new FhirBulkExportRequest(
             scope,
-            GroupId: scope == BulkExportScope.Group ? retrieval?.GroupId : null,
+            GroupId: groupId,
             ResourceTypes: BulkExportScopes.ResolveTypeParameter(scope, resourceTypes),
             Since: since,
             PatientIds: scope == BulkExportScope.Patient ? retrieval?.PatientIds : null,

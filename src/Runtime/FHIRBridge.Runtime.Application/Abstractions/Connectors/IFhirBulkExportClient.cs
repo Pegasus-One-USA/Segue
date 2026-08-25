@@ -43,4 +43,14 @@ public interface IFhirBulkExportClient
         IReadOnlyList<BulkExportFile> errorFiles,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken);
+
+    /// <summary>Cancels an in-flight (or already-completed) <c>$export</c> job via <c>DELETE</c> on its status URL —
+    /// the FHIR Bulk Data spec's cancellation flow. A DELETE against an already-completed export additionally
+    /// deletes its generated files on the source server. Idempotent from the caller's perspective: a 404 (already
+    /// cancelled/deleted) is treated as success, since the desired end state — nothing left running or downloadable
+    /// — already holds.</summary>
+    Task CancelExportAsync(
+        string statusUrl,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken);
 }

@@ -1,4 +1,5 @@
 using System.Linq;
+using FHIRBridge.Runtime.Domain.Enums;
 
 namespace FHIRBridge.Runtime.Application.DTOs;
 
@@ -92,5 +93,34 @@ public static class BulkExportScopes
         return resourceTypes is { Count: 1 } && resourceTypes.Any(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase))
             ? null
             : resourceTypes;
+    }
+}
+
+/// <summary>Vendor-specific reshaping of a Group <c>$export</c> GroupId — kept as a narrow, additive lookup (not a
+/// switch on <c>ApplicationType</c>, so it doesn't trip the architecture no-switch rule) rather than a strategy class,
+/// since today it's exactly one vendor's one quirk. athenahealth's Group-level bulk export targets a whole Practice,
+/// addressed as <c>a-1.C-{Practice}</c> (see athenahealth's FHIR Bulk Export guide) — not a normal FHIR Group
+/// resource id. Every other vendor's GroupId passes through completely unchanged.</summary>
+public static class BulkExportGroupIds
+{
+    /// <summary>
+    /// Resolves the GroupId to actually send for a Group-scoped export. For athenahealth: a bare numeric value
+    /// (the practice number, whether typed directly into the wizard's Group ID field or falling back to the
+    /// connection's own PracticeId when Group ID was left blank) is reformatted to <c>a-1.C-{Practice}</c>; a value
+    /// that isn't purely numeric (already in athenahealth's expected form, or hand-authored) is left untouched. Every
+    /// non-athenahealth source type returns <paramref name="groupId"/> verbatim — unchanged behavior for Epic and
+    /// every other vendor.
+    /// </summary>
+    public static string? ResolveAthenahealthGroupId(RuntimeSourceType sourceType, string? groupId, string? practiceId)
+    {
+        if (sourceType != RuntimeSourceType.Athenahealth)
+        {
+            return groupId;
+        }
+
+        var candidate = string.IsNullOrWhiteSpace(groupId) ? practiceId : groupId;
+        return candidate is { Length: > 0 } && candidate.All(char.IsDigit)
+            ? $"a-1.C-{candidate}"
+            : groupId;
     }
 }
