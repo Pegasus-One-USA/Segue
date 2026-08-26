@@ -1,0 +1,131 @@
+portal/src/app/app.config.ts
+  s_85d2fd9e5c6252::t_94b3fb7f0fddea 9,92-94
+portal/src/app/settings/settings.routes.ts
+  s_f215120df6f22d::t_e454f824d39d2d 116-119
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_61b57d66030a26::t_e60b015e0cdf0a 44
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_accb86a412bfda::t_7d73d3e0284f3b 2-5,7
+src/FHIRBridge.Application/Abstractions/Security/AppSecretReferences.cs
+  s_a6de5f768bb2ac::t_761cf4b6d3a1fe 20-25
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretAccessor.cs
+  s_a6de5f768bb2ac::t_32da8d03adb2b0 18-19
+src/FHIRBridge.Application/DTOs/RefreshTokenRequest.cs
+  s_f215120df6f22d::t_59fbed79105fc3 3-7
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_ccc8e815db37bb::t_d1cb6425a53b90 342-344,349
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_f215120df6f22d::t_2db74041de05d7 137-148
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_f215120df6f22d::t_f5d8459d8aefcd 44-52,165,220-231,624,627-639
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_f215120df6f22d::t_d29021fbc6811e 37-38
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_f215120df6f22d::t_7ef29803e9c709 57-73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  s_f215120df6f22d::t_493e71062922c9 17,20,23-25
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ConfiguredPipelineRunRecordConfiguration.cs
+  s_f215120df6f22d::t_f02aba70f3925c 19
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunResourceRecordConfiguration.cs
+  s_f215120df6f22d::t_cc4b549afafe07 20-22,24-25
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ProvisionedSecretConfiguration.cs
+  s_f215120df6f22d::t_0568c07db16f99 16
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/CvxConfigurations.cs
+  s_f215120df6f22d::t_8c5ac2b368dece 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HcpcsConfigurations.cs
+  s_f215120df6f22d::t_4963426de53c64 15,37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10Configurations.cs
+  s_f215120df6f22d::t_717997772b93a8 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10PcsConfigurations.cs
+  s_f215120df6f22d::t_a094d259affd8d 15,37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/LoincConfigurations.cs
+  s_f215120df6f22d::t_acc52a06bf0faf 81
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/NdcConfigurations.cs
+  s_f215120df6f22d::t_340587588b1adc 38
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/RxNormConfigurations.cs
+  s_f215120df6f22d::t_947a20db4cecfb 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/SnomedConfigurations.cs
+  s_f215120df6f22d::t_cd255f2a39dc5f 73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/UcumConfigurations.cs
+  s_f215120df6f22d::t_71945a7adb24f3 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_f215120df6f22d::t_6fb0ce91a63266 81,109,143,175,199-201,233-234
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_f215120df6f22d::t_70923f5d30cf76 17-23,29,47,59,69,79
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_f215120df6f22d::t_3bfe4cda3f3ea2 126-130,147-168,183,192-230
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_def493f5b3ce36::t_736eae717d36e0 8,861-862,4916,5079,5304,5367,5391,5416,5466-5560,5634
+src/FHIRBridge.Infrastructure/Security/AesGcmPhiFieldEncryptor.cs
+  s_a6de5f768bb2ac::t_2677491266d709 8-12,21,23
+src/FHIRBridge.Infrastructure/Security/AppSecretAccessor.cs
+  s_a6de5f768bb2ac::t_b9a292bc59097e 18-21,26,43-46
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_a6de5f768bb2ac::t_2ab5accffadd93 34-35,37
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  s_a6de5f768bb2ac::t_f023a5e0f51925 23-27,34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "f9b50fbbd7cb3ba26448cbed20a7036fa2ee6980",
+  "prompts": {},
+  "sessions": {
+    "s_61b57d66030a26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9647cbe4-23ae-47c4-bc3b-6af71933c3a8",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_85d2fd9e5c6252": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "360cd58e-d36f-4685-8caf-7958647793f4",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a6de5f768bb2ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f406f2bc-5ad4-4eba-ab52-0bc9aa6357ea",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_accb86a412bfda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9b6ceb5-337d-4157-88c7-1af578f823fb",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ccc8e815db37bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a6f24a8-0f11-4ac5-8902-fbfe9e9e0bb6",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_def493f5b3ce36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4bd70306-9187-4c31-824e-63e1a1b60c81",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_f215120df6f22d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09e7d900-90cc-4d28-b9ce-9932cc46c5d0",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

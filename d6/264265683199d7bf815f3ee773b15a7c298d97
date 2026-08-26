@@ -1,0 +1,596 @@
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  h_9042ea4abaf2fc 45-52,315-318,328-336,380-384,393
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  h_9042ea4abaf2fc 46-53,592,641-649,711-719,775,953
+FHIRBridge.sln
+  h_9042ea4abaf2fc 54-55,282-293,321
+docker-compose.yml
+  h_9042ea4abaf2fc 67-109,289
+docs/backend/16-athena-backend-bulkexport-integration-plan.md
+  h_9042ea4abaf2fc 1-150
+portal/src/app/app.component.ts
+  h_9042ea4abaf2fc 26-28
+portal/src/app/app.config.ts
+  h_9042ea4abaf2fc 9,11,42,73-83,92-94,138
+portal/src/app/auth/components/password-strength/password-strength.component.ts
+  h_9042ea4abaf2fc 20-22,26,28,38-39,42-44,50-52,57,62-64
+portal/src/app/auth/pages/forgot-password/forgot-password.component.html
+  h_9042ea4abaf2fc 15
+portal/src/app/auth/pages/forgot-password/forgot-password.component.ts
+  h_9042ea4abaf2fc 38-41,62,64,69-77
+portal/src/app/auth/pages/reset-password/reset-password.component.html
+  h_9042ea4abaf2fc 20,36-51,105,147
+portal/src/app/auth/pages/reset-password/reset-password.component.ts
+  h_9042ea4abaf2fc 11,39-41,46,48,73-76,87-93,130,136-140,144-154
+portal/src/app/auth/services/auth-api.service.ts
+  h_9042ea4abaf2fc 30-33,36-40,48-52,54
+portal/src/app/auth/services/auth-profile.model.ts
+  h_9042ea4abaf2fc 15-18
+portal/src/app/auth/services/auth.service.ts
+  h_9042ea4abaf2fc 12,34,71,100,106,138,261-278
+portal/src/app/auth/services/i-auth.service.ts
+  h_9042ea4abaf2fc 12-15
+portal/src/app/auth/services/jwt-user.mapper.ts
+  h_9042ea4abaf2fc 57-61,120-122
+portal/src/app/auth/services/mock-auth.service.ts
+  h_9042ea4abaf2fc 72-74
+portal/src/app/auth/services/session.service.ts
+  h_9042ea4abaf2fc 36-41
+portal/src/app/auth/services/token.service.ts
+  h_9042ea4abaf2fc 8-13
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.html
+  h_9042ea4abaf2fc 242-258
+portal/src/app/components/node-library/destination-wizard/destination-forms/blob-storage-destination-form.component.ts
+  h_9042ea4abaf2fc 1,5,22-25,124-164
+portal/src/app/components/node-library/destination-wizard/destination-forms/medplum-destination-form.component.ts
+  h_9042ea4abaf2fc 1,5,91-107,112-115,135-169
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  h_9042ea4abaf2fc 41-57
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  h_9042ea4abaf2fc 1,5,21-24,41-68
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  h_9042ea4abaf2fc 301-309,788,1024-1071
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  h_9042ea4abaf2fc 295-311,674-703
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  h_9042ea4abaf2fc 106,203-227,580-583,1036-1090,2019,2231-2232,2525-2634,2701,2791-2942
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-anchor.service.ts
+  h_9042ea4abaf2fc 120-144
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  h_9042ea4abaf2fc 21,50
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  h_9042ea4abaf2fc 86-89,433-442,452-455
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  h_9042ea4abaf2fc 49
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  h_9042ea4abaf2fc 3,87
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  h_9042ea4abaf2fc 80
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  h_9042ea4abaf2fc 2,215-216
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  h_9042ea4abaf2fc 272-280
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.html
+  h_9042ea4abaf2fc 1,25-32,34-36,38,43
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.scss
+  h_9042ea4abaf2fc 11-16,25,32-37,143-158,169-175,177,179-189
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-source-tree.component.ts
+  h_9042ea4abaf2fc 39-44,60-61,64-72,77,82,88,95-119
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  h_9042ea4abaf2fc 1,24-30,44,85-86
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  h_9042ea4abaf2fc 9-14,23,30-35,177-192,223-227,229,231-241
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  h_9042ea4abaf2fc 8,84-89,153-154,156-169,171-174,180-204
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.html
+  h_9042ea4abaf2fc 29,33,51,57,64-66
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.scss
+  h_9042ea4abaf2fc 30-40,62,84-89
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.ts
+  h_9042ea4abaf2fc 35-39,60-73
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.spec.ts
+  h_9042ea4abaf2fc 1,95-193
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree.util.ts
+  h_9042ea4abaf2fc 13-15,84-87,103-112,114-131,133-164,166-168,171
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  h_9042ea4abaf2fc 18-26,43-47,169-261
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  h_9042ea4abaf2fc 4,23-27,36,41-52,81-100,190-251
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  h_9042ea4abaf2fc 235-250
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  h_9042ea4abaf2fc 17,19,52-56,165,279,301,306-310,339,431
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  h_9042ea4abaf2fc 6,63-65,88,91-114,127-130,163-169,221-229
+portal/src/app/components/node-library/node-library-dialog.component.html
+  h_9042ea4abaf2fc 96-114,340
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  h_9042ea4abaf2fc 189-239
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  h_9042ea4abaf2fc 303-310,720,784,863
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  h_9042ea4abaf2fc 722,775,783-784
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  h_9042ea4abaf2fc 472-473
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  h_9042ea4abaf2fc 2-12,16-28,52-54,56-60,65-75,80-85,91-96,123-127,129,137-140,145-148,159-165,172-176,182-210,213-241,259-270,277-282,284-304,307-310,324-331,349-355,366,369-370,375-378,384,388-389,391,395,397-398,402-403,408-413,417-423,426-845,854-856,877,881,902-908,912-914,932-934,957-959,964-966,974-976,983-985,987-990,995-997,1002-1006,1009-1017,1021,1023-1024,1029-1032,1038-1039,1043-1046,1052-1054,1056-1059,1062,1064-1069,1071-1079,1081-1085,1087-1093,1100-1143,1146-1148,1166-1172,1177-1188,1192-1207,1209-1211,1214-1223,1268-1271,1273-1279,1286-1297,1301-1307,1356-1361,1369-1371,1378-1381,1383,1387-1389,1395-1401,1407-1409,1417-1419,1446-1451,1461-1463,1466-1469,1473-1476,1489-1493,1498-1500,1503-1546,1550-1559,1565-1567,1587-1592,1598-1605,1616-1618,1628-1632,1640-1642,1644-1649,1653-1656,1715-1733,1765-1769,1775-1777,1791-1793,1811-1816,1818-1819,1868-1871,1895-1897,1937-1940,2002-2006,2020-2022,2032-2035,2037-2039,2047-2049,2051-2054,2074-2076,2086-2091,2125-2128,2130-2133,2137-2143,2146-2151,2153-2157,2159-2162,2174-2177,2189-2193,2201-2205,2215-2219,2228-2231,2246-2266,2268-2274,2284-2287,2291-2297,2299-2303,2311-2314,2334-2337,2339-2344,2354-2355,2378-2385,2395-2398,2408-2416,2424,2441-2442,2445-2446,2453-2454,2458-2461,2466-2469,2472-2475,2488-2489,2500,2502-2507,2525-2527,2537-2545,2549-2554,2569-2573,2578-2582,2600-2605,2614-2619,2645-2648,2658,2679,2684-2687,2721-2724,2729-2753,2776-2782,2797-2800,2811-2812,2821-2825,2835-2837,2854-2857,2861-2870,2874-2875,2883-2889,2896-2900,2907-2912,2958-2971,2981-2989,2994-3001,3010-3013,3015-3016,3020-3031,3039-3042,3051-3055,3071-3074,3087-3090,3092-3095,3101-3104,3119-3126,3135-3161,3163-3164,3177-3180,3196-3199,3226-3227,3231,3234-3235,3240,3242-3246,3250,3254-3257,3268-3321,3339,3342-3346,3362-3364,3368-3369,3377-3381,3394-3396,3402-3405,3428-3432,3435-3444,3446,3459-3463,3470,3479-3482,3494,3525-3527,3529-3530
+portal/src/app/core/api-endpoints.ts
+  h_9042ea4abaf2fc 39-56,135-137,206
+portal/src/app/core/loading.interceptor.ts
+  h_9042ea4abaf2fc 1,6-15,22-26,29-32
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  h_9042ea4abaf2fc 67,72-75,82-83,87,90-91,94,97-98,104-108,110-111
+portal/src/app/dashboard/services/pipeline-run.service.ts
+  h_9042ea4abaf2fc 33-37,46
+portal/src/app/data/transforms.data.ts
+  h_9042ea4abaf2fc 12-16,24-41
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  h_9042ea4abaf2fc 37-40
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.scss
+  h_9042ea4abaf2fc 2-3,19-23
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  h_9042ea4abaf2fc 17-18,25-50,53-60,64-69,95-100,104-120,141,149,180,194-198,210
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  h_9042ea4abaf2fc 24-29
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  h_9042ea4abaf2fc 18,26,60-63,120-148
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  h_9042ea4abaf2fc 21-35,119-123,205,212
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  h_9042ea4abaf2fc 37-45
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  h_9042ea4abaf2fc 15-29,51-52,55,91,110,116,162-164
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  h_9042ea4abaf2fc 2,5,24-27,39-40,96-100
+portal/src/app/models/transform.model.ts
+  h_9042ea4abaf2fc 1-2,10-15
+portal/src/app/services/branding.service.ts
+  h_9042ea4abaf2fc 1-3,6-36,39-52,54-57,65-70,82-112,115-117,141-144,146,149-151,153-156,159-164,167-185,188-204
+portal/src/app/services/destination-schema.service.ts
+  h_9042ea4abaf2fc 138-167,219-236
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  h_9042ea4abaf2fc 17-19,24-33
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  h_9042ea4abaf2fc 1,50-63,147-161
+portal/src/app/settings/settings.routes.ts
+  h_9042ea4abaf2fc 106-109,116-120,228-229,236,259-260,268,279-280,288
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  h_9042ea4abaf2fc 45-64
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  h_9042ea4abaf2fc 84-91,96,101,109,115,121,132,138,140,143,151
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.scss
+  h_9042ea4abaf2fc 33-54
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  h_9042ea4abaf2fc 16-22,128-150
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  h_9042ea4abaf2fc 44,305-320
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  h_9042ea4abaf2fc 16,18,62,286,403,427,435-440,501,507-510,520-545
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.html
+  h_9042ea4abaf2fc 19-26,72-77
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.scss
+  h_9042ea4abaf2fc 67-95
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.ts
+  h_9042ea4abaf2fc 3,9,26,37-40,61,64-79
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.ts
+  h_9042ea4abaf2fc 110,118-122
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.html
+  h_9042ea4abaf2fc 66-71
+portal/src/app/user-management/pages/user-list/tabs/tenant-tab.component.ts
+  h_9042ea4abaf2fc 10,12,25,31-33,40,58,60-77,94-102
+portal/src/app/user-management/services/tenant-role.service.ts
+  h_9042ea4abaf2fc 1-4,10,14-23,33-43,46-47,51-52,55-62,65-69,72-94
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  h_9042ea4abaf2fc 482-489,495-496,501-503,507-509,524,531-534
+src/Api/FHIRBridge.Api/Controllers/V1/BrandingController.cs
+  h_9042ea4abaf2fc 1-110
+src/Api/FHIRBridge.Api/Controllers/V1/BulkExportJobsController.cs
+  h_9042ea4abaf2fc 1-87
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  h_9042ea4abaf2fc 22-24,29-32,37-39,147-182
+src/Api/FHIRBridge.Api/Controllers/V1/MappingController.cs
+  h_9042ea4abaf2fc 34,50,68,89-93,97-125
+src/Api/FHIRBridge.Api/Controllers/V1/TenantsController.cs
+  h_9042ea4abaf2fc 1-67
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  h_9042ea4abaf2fc 128-143
+src/Api/FHIRBridge.Api/Controllers/V1/UsersController.cs
+  h_9042ea4abaf2fc 2,17,19,22-35,66-67,92-93
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  h_9042ea4abaf2fc 44
+src/Api/FHIRBridge.Api/Program.cs
+  h_9042ea4abaf2fc 17,151,213-221,364,376-380,416,814,819,824-826,828,839,843,846,855,858,863,865
+src/Api/FHIRBridge.Api/Security/MappingCatalogAccessAuthorizationHandler.cs
+  h_9042ea4abaf2fc 1-55
+src/Api/FHIRBridge.Api/Security/MappingCatalogAccessRequirement.cs
+  h_9042ea4abaf2fc 1-14
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_9042ea4abaf2fc 2-5,7,21
+src/BuildingBlocks/FHIRBridge.SharedKernel/Exceptions/BulkExportConcurrencyLimitExceededException.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Application/Abstractions/Branding/IBrandConfigurationService.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Application/Abstractions/Destinations/IBlobDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-16
+src/FHIRBridge.Application/Abstractions/Destinations/IMedplumDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-17
+src/FHIRBridge.Application/Abstractions/Destinations/IMongoDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-16
+src/FHIRBridge.Application/Abstractions/Persistence/IBrandConfigurationRepository.cs
+  h_9042ea4abaf2fc 1-17
+src/FHIRBridge.Application/Abstractions/Persistence/IBulkExportJobRepository.cs
+  h_9042ea4abaf2fc 23-29
+src/FHIRBridge.Application/Abstractions/Persistence/ITenantRepository.cs
+  h_9042ea4abaf2fc 1-26
+src/FHIRBridge.Application/Abstractions/Security/AppSecretReferences.cs
+  h_9042ea4abaf2fc 20-25
+src/FHIRBridge.Application/Abstractions/Security/IAppSecretAccessor.cs
+  h_9042ea4abaf2fc 18-19
+src/FHIRBridge.Application/Abstractions/Tenancy/ICurrentTenantResolver.cs
+  h_9042ea4abaf2fc 1-16
+src/FHIRBridge.Application/Abstractions/Tenancy/ITenantsService.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Application/DTOs/BlobConnectionTestRequest.cs
+  h_9042ea4abaf2fc 1-20
+src/FHIRBridge.Application/DTOs/BrandConfigurationDto.cs
+  h_9042ea4abaf2fc 1-48
+src/FHIRBridge.Application/DTOs/CreateLocalUserRequest.cs
+  h_9042ea4abaf2fc 14-19
+src/FHIRBridge.Application/DTOs/CreateTenantRequest.cs
+  h_9042ea4abaf2fc 1-3
+src/FHIRBridge.Application/DTOs/InviteUserRequest.cs
+  h_9042ea4abaf2fc 7-11
+src/FHIRBridge.Application/DTOs/LocalLoginRequest.cs
+  h_9042ea4abaf2fc 3-6,9-12
+src/FHIRBridge.Application/DTOs/LocalLoginResponse.cs
+  h_9042ea4abaf2fc 23-28
+src/FHIRBridge.Application/DTOs/MedplumConnectionTestRequest.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  h_9042ea4abaf2fc 1-10
+src/FHIRBridge.Application/DTOs/RefreshTokenRequest.cs
+  h_9042ea4abaf2fc 3-7
+src/FHIRBridge.Application/DTOs/TenantDto.cs
+  h_9042ea4abaf2fc 1-9
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  h_9042ea4abaf2fc 24-25,49-53,88,102-109
+src/FHIRBridge.Application/DTOs/UpdateBrandConfigurationRequest.cs
+  h_9042ea4abaf2fc 1-17
+src/FHIRBridge.Application/DTOs/UpdateTenantRequest.cs
+  h_9042ea4abaf2fc 1-3
+src/FHIRBridge.Application/DTOs/UserProfileDto.cs
+  h_9042ea4abaf2fc 13-18
+src/FHIRBridge.Application/Exceptions/RequestValidationException.cs
+  h_9042ea4abaf2fc 1,13-15,19,24-29
+src/FHIRBridge.Application/FHIRBridge.Application.csproj
+  h_9042ea4abaf2fc 15-16
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  h_9042ea4abaf2fc 23-31
+src/FHIRBridge.Application/Security/SeededSecurityIds.cs
+  h_9042ea4abaf2fc 11-15
+src/FHIRBridge.Application/Services/BrandConfigurationService.cs
+  h_9042ea4abaf2fc 1-123
+src/FHIRBridge.Application/Services/BulkExportConcurrencyOptions.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  h_9042ea4abaf2fc 8,63-69,342-344,349
+src/FHIRBridge.Application/Services/ILocalAuthService.cs
+  h_9042ea4abaf2fc 34-35,37
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  h_9042ea4abaf2fc 25,36-37,48,123,166-170,177-178,185,213-216,235-254,278-286,365-368,393-399,402-403,415-418,441-445,448,461,464-473,490-492,495-496
+src/FHIRBridge.Application/Services/SetupService.cs
+  h_9042ea4abaf2fc 10-15,91-92,111
+src/FHIRBridge.Application/Services/TenantsService.cs
+  h_9042ea4abaf2fc 1-134
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  h_9042ea4abaf2fc 46-55
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  h_9042ea4abaf2fc 82-87
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  h_9042ea4abaf2fc 4,207-209,212-234,246-251,253,255-259,261,263-264,266,277-278,281-295,298-299,303,342-344,346-357
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  h_9042ea4abaf2fc 5-6,154-156,159-182,204,206-214
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  h_9042ea4abaf2fc 30-36,40-46,52-53,65,70-135,156-157,159,161,169-172,177,199,204,207,213-215,229,235-236,243,257,267,275-276,281
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  h_9042ea4abaf2fc 15,22,28,72-73,81-82,174-217,237-238
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  h_9042ea4abaf2fc 14,19-20,25,55-60,91-96,105-107
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  h_9042ea4abaf2fc 79,148
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  h_9042ea4abaf2fc 2,5,29-30,32-35,38-39,133-137,180-184,188-233
+src/FHIRBridge.Application/Validation/TransformationRuleTypeConflict.cs
+  h_9042ea4abaf2fc 1-16
+src/FHIRBridge.Domain/Entities/BrandConfiguration.cs
+  h_9042ea4abaf2fc 1-133
+src/FHIRBridge.Domain/Entities/BulkExportJob.cs
+  h_9042ea4abaf2fc 135-144,167
+src/FHIRBridge.Domain/Entities/Tenant.cs
+  h_9042ea4abaf2fc 1-52
+src/FHIRBridge.Domain/Entities/TransformationRule.cs
+  h_9042ea4abaf2fc 35-36,76,138-145,156-157,166
+src/FHIRBridge.Domain/Entities/User.cs
+  h_9042ea4abaf2fc 15-16,22,35-40,134-141,372-376,380,388
+src/FHIRBridge.Domain/Enums/TransformNodeTypeDefaults.cs
+  h_9042ea4abaf2fc 1-35
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  h_9042ea4abaf2fc 137-148
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/FHIRBridge.Infrastructure.Migrations.PostgreSql.csproj
+  h_9042ea4abaf2fc 1-21
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/FHIRBridgePostgreSqlDesignTimeFactory.cs
+  h_9042ea4abaf2fc 1-30
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260824092244_InitialCreate.Designer.cs
+  h_9042ea4abaf2fc 1-5442
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260824092244_InitialCreate.cs
+  h_9042ea4abaf2fc 1-3309
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  h_9042ea4abaf2fc 1-5439
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  h_9042ea4abaf2fc 44-52,165,179-180,220-231,250-251,261,341-345,435-443,624,627-639
+src/FHIRBridge.Infrastructure/Destinations/BlobDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-137
+src/FHIRBridge.Infrastructure/Destinations/MedplumDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-75
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  h_9042ea4abaf2fc 1-60
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  h_9042ea4abaf2fc 37-38
+src/FHIRBridge.Infrastructure/Health/PostgresConnectionHealthCheck.cs
+  h_9042ea4abaf2fc 1-41
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  h_9042ea4abaf2fc 57-73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BrandConfigurationConfig.cs
+  h_9042ea4abaf2fc 1-54
+src/FHIRBridge.Infrastructure/Persistence/Configurations/BulkExportJobConfiguration.cs
+  h_9042ea4abaf2fc 17,20,23-25
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ConfiguredPipelineRunRecordConfiguration.cs
+  h_9042ea4abaf2fc 19
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunResourceRecordConfiguration.cs
+  h_9042ea4abaf2fc 20-22,24-25
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ProvisionedSecretConfiguration.cs
+  h_9042ea4abaf2fc 16
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TenantConfig.cs
+  h_9042ea4abaf2fc 1-24
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/CvxConfigurations.cs
+  h_9042ea4abaf2fc 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HcpcsConfigurations.cs
+  h_9042ea4abaf2fc 15,37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10Configurations.cs
+  h_9042ea4abaf2fc 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/Icd10PcsConfigurations.cs
+  h_9042ea4abaf2fc 15,37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/LoincConfigurations.cs
+  h_9042ea4abaf2fc 81
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/NdcConfigurations.cs
+  h_9042ea4abaf2fc 38
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/RxNormConfigurations.cs
+  h_9042ea4abaf2fc 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/SnomedConfigurations.cs
+  h_9042ea4abaf2fc 73
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/UcumConfigurations.cs
+  h_9042ea4abaf2fc 37
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TransformationRuleConfiguration.cs
+  h_9042ea4abaf2fc 32
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  h_9042ea4abaf2fc 86-107,116-117
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  h_9042ea4abaf2fc 81,109,143,175,199-201,233-234
+src/FHIRBridge.Infrastructure/Persistence/EfBrandConfigurationRepository.cs
+  h_9042ea4abaf2fc 1-46
+src/FHIRBridge.Infrastructure/Persistence/EfBulkExportJobRepository.cs
+  h_9042ea4abaf2fc 51-57
+src/FHIRBridge.Infrastructure/Persistence/EfTenantRepository.cs
+  h_9042ea4abaf2fc 1-47
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  h_9042ea4abaf2fc 17-23,29,47,59,69,79
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  h_9042ea4abaf2fc 44-45,126-130,147-168,183,192-230
+src/FHIRBridge.Infrastructure/Persistence/InMemoryBrandConfigurationRepository.cs
+  h_9042ea4abaf2fc 1-20
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTenantRepository.cs
+  h_9042ea4abaf2fc 1-51
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821115750_AddRefreshTokenRememberMe.Designer.cs
+  h_9042ea4abaf2fc 1-5473
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821115750_AddRefreshTokenRememberMe.cs
+  h_9042ea4abaf2fc 1-38
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821144035_AddBrandConfiguration.Designer.cs
+  h_9042ea4abaf2fc 1-5606
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821144035_AddBrandConfiguration.cs
+  h_9042ea4abaf2fc 1-60
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821155808_AddTenantAndScopeUsersAndBranding.Designer.cs
+  h_9042ea4abaf2fc 1-5695
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260821155808_AddTenantAndScopeUsersAndBranding.cs
+  h_9042ea4abaf2fc 1-139
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260824085732_RemoveExplicitNvarcharMaxColumnType.Designer.cs
+  h_9042ea4abaf2fc 1-5470
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260824085732_RemoveExplicitNvarcharMaxColumnType.cs
+  h_9042ea4abaf2fc 1-22
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260825130630_AddTransformationRuleExpectedValueType.Designer.cs
+  h_9042ea4abaf2fc 1-5699
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260825130630_AddTransformationRuleExpectedValueType.cs
+  h_9042ea4abaf2fc 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  h_9042ea4abaf2fc 8,83-221,861-862,2701-2760,4108-4111,4322-4326,4336-4338,4350-4351,4886-4894,4916,5079,5304,5367,5391,5416,5466-5560,5574-5582,5634
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  h_9042ea4abaf2fc 70-125
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  h_9042ea4abaf2fc 49-50,82-84,101-102,342-347,349-350,1204-1258,1264-1265,1273-1278,1281
+src/FHIRBridge.Infrastructure/Security/AesGcmPhiFieldEncryptor.cs
+  h_9042ea4abaf2fc 8-12,21,23
+src/FHIRBridge.Infrastructure/Security/AppSecretAccessor.cs
+  h_9042ea4abaf2fc 18-21,26,43-46
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  h_9042ea4abaf2fc 34-35,37
+src/FHIRBridge.Infrastructure/Security/CachedCurrentTenantResolver.cs
+  h_9042ea4abaf2fc 1-48
+src/FHIRBridge.Infrastructure/Terminology/FhirTerminologyExpansionService.cs
+  h_9042ea4abaf2fc 2,12-14,20,26,31,37-38
+src/FHIRBridge.Infrastructure/Terminology/FhirTerminologyLookupService.cs
+  h_9042ea4abaf2fc 3,14,20,25,34-37
+src/FHIRBridge.Infrastructure/Terminology/FhirTerminologyTranslationService.cs
+  h_9042ea4abaf2fc 3,13-14,20,26,31,41-42
+src/FHIRBridge.Infrastructure/Terminology/FhirTerminologyValidationService.cs
+  h_9042ea4abaf2fc 3,13-15,21,27,32,42-43
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiCvxTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-135
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiDcmTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-134
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-184
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-158
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-159
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd11TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-155
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcpc3TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-118
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-152
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-174
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiNdcTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-144
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-160
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-211
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiUcumTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-117
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiCvxTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-12
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiDcmTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-13
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiHcpcsTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-12
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiIcd10PcsTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-12
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiIcd10TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-19
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiIcd11TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-14
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiIcpc3TerminologySyncService.cs
+  h_9042ea4abaf2fc 1-14
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiLoincTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-13
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiMeshTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-13
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiNdcTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-12
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiRxNormTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-13
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiSnomedTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-14
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiUcumTerminologySyncService.cs
+  h_9042ea4abaf2fc 1-13
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirBulkExportClient.cs
+  h_9042ea4abaf2fc 46-55
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  h_9042ea4abaf2fc 2,98-126
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  h_9042ea4abaf2fc 239-263
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  h_9042ea4abaf2fc 27-29,44-46,61-63,78-80,95-97,112-114,129-131,146-148,195,207-208,220,299,452-462
+src/Worker/FHIRBridge.Worker/CvxHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-64
+src/Worker/FHIRBridge.Worker/DcmHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-60
+src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj
+  h_9042ea4abaf2fc 31
+src/Worker/FHIRBridge.Worker/HcpcsHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-60
+src/Worker/FHIRBridge.Worker/Icd10HapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-68
+src/Worker/FHIRBridge.Worker/Icd10PcsHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-61
+src/Worker/FHIRBridge.Worker/Icd11HapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-60
+src/Worker/FHIRBridge.Worker/Icpc3HapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-59
+src/Worker/FHIRBridge.Worker/LoincHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-62
+src/Worker/FHIRBridge.Worker/MeshHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-60
+src/Worker/FHIRBridge.Worker/NdcHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-59
+src/Worker/FHIRBridge.Worker/Program.cs
+  h_9042ea4abaf2fc 7,116-151
+src/Worker/FHIRBridge.Worker/RxNormHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-61
+src/Worker/FHIRBridge.Worker/SnomedHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-61
+src/Worker/FHIRBridge.Worker/UcumHapiTerminologySyncWorker.cs
+  h_9042ea4abaf2fc 1-59
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  h_9042ea4abaf2fc 16-20
+tests/FHIRBridge.UnitTests/Auth/ForgotPasswordResetPasswordTests.cs
+  h_9042ea4abaf2fc 1-294
+tests/FHIRBridge.UnitTests/Auth/LocalAuthServiceMfaTests.cs
+  h_9042ea4abaf2fc 26,41-47,57-58,66
+tests/FHIRBridge.UnitTests/Auth/MagicLinkAuthTests.cs
+  h_9042ea4abaf2fc 26,41-47,57-58,66
+tests/FHIRBridge.UnitTests/Auth/RememberMeTests.cs
+  h_9042ea4abaf2fc 1-218
+tests/FHIRBridge.UnitTests/Branding/BrandConfigurationServiceTests.cs
+  h_9042ea4abaf2fc 1-262
+tests/FHIRBridge.UnitTests/Configuration/CompositeRouteTests.cs
+  h_9042ea4abaf2fc 34-37
+tests/FHIRBridge.UnitTests/Configuration/ConfigurationServiceMappingProfileLookupTests.cs
+  h_9042ea4abaf2fc 37-40
+tests/FHIRBridge.UnitTests/Configuration/DestinationExecutionHistoryGateTests.cs
+  h_9042ea4abaf2fc 43-46
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileCapabilityGatingTests.cs
+  h_9042ea4abaf2fc 34-37
+tests/FHIRBridge.UnitTests/Configuration/MappingProfileUsageAndDeleteTests.cs
+  h_9042ea4abaf2fc 37-40
+tests/FHIRBridge.UnitTests/Configuration/ParentReferenceValidationTests.cs
+  h_9042ea4abaf2fc 47-50
+tests/FHIRBridge.UnitTests/Configuration/SourceConfigurationAutoProvisionTests.cs
+  h_9042ea4abaf2fc 35-38
+tests/FHIRBridge.UnitTests/Destinations/GeneratedFileDownloadLinkServiceTests.cs
+  h_9042ea4abaf2fc 23-27,34
+tests/FHIRBridge.UnitTests/Infrastructure/EfBulkExportJobRepositoryTests.cs
+  h_9042ea4abaf2fc 156-201
+tests/FHIRBridge.UnitTests/Pipeline/BuildBulkExportRequestTests.cs
+  h_9042ea4abaf2fc 4,107-142
+tests/FHIRBridge.UnitTests/Setup/SetupServiceTests.cs
+  h_9042ea4abaf2fc 38,47
+tests/FHIRBridge.UnitTests/Tenancy/TenantsServiceTests.cs
+  h_9042ea4abaf2fc 1-141
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  h_9042ea4abaf2fc 77-102,112-127
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  h_9042ea4abaf2fc 42-43,59-60,83-84,106-107,130-131,150-151,175-176,199-200,225-226,248-249,270-271
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  h_9042ea4abaf2fc 113-129
+tests/FHIRBridge.UnitTests/Users/AcceptInviteViaSsoTests.cs
+  h_9042ea4abaf2fc 42,64-67,89-90
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  h_9042ea4abaf2fc 2,4,6,8,23-24,35-48,246-305
+tests/FHIRBridge.UnitTests/Validation/NoOpEffectiveRuleResolver.cs
+  h_9042ea4abaf2fc 1-23
+tools/TerminologyServerPoc/HapiTerminologyClient.cs
+  h_9042ea4abaf2fc 1-94
+tools/TerminologyServerPoc/Icd10FullDataSource.cs
+  h_9042ea4abaf2fc 1-70
+tools/TerminologyServerPoc/Icd10SampleCodeSystem.cs
+  h_9042ea4abaf2fc 1-68
+tools/TerminologyServerPoc/Program.cs
+  h_9042ea4abaf2fc 1-159
+tools/TerminologyServerPoc/README.md
+  h_9042ea4abaf2fc 1-98
+tools/TerminologyServerPoc/TerminologyServerPoc.csproj
+  h_9042ea4abaf2fc 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d6264265683199d7bf815f3ee773b15a7c298d97",
+  "prompts": {},
+  "humans": {
+    "h_9042ea4abaf2fc": {
+      "author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}

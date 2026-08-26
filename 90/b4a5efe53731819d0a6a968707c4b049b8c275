@@ -1,0 +1,65 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260825174225_SyncModelChanges.cs
+  s_6ccb0c8a939d1b::t_0373f81828f52c 1-10,16-32,37-57,73-175
+  s_6ccb0c8a939d1b::t_ee0b83bc4d14fa 59-61,64-65
+  s_6ccb0c8a939d1b::t_724dfae6341107 11-15,33-36,58,62-63,66-72
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260825174225_SyncModelChanges.Designer.cs
+  s_6ccb0c8a939d1b::t_0373f81828f52c 1-5671
+portal/src/app/services/phase-config.service.ts
+  s_6ccb0c8a939d1b::t_41423437da734e 43-44
+  s_6ccb0c8a939d1b::t_7932f04e9cc2d2 28-31,35,39-42
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_44b3eb0c92b6da 3,5-7
+  s_accb86a412bfda::t_13eee9bc24de7e 4
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_6ccb0c8a939d1b::t_24d62411d1d9a5 44
+  s_6ccb0c8a939d1b::t_883928d7ab9c34 43
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6ccb0c8a939d1b::t_0373f81828f52c 81-218,2676-2734,4081-4084,4294-4298,4307-4309,4321-4322,4856-4864,5544-5552
+src/Api/FHIRBridge.Api/Program.cs
+  s_85d2fd9e5c6252::t_abb329ba42cf15 700-707,724-728
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_85d2fd9e5c6252::t_4e8bb9ef53942f 178-182
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  s_85d2fd9e5c6252::t_1408f9bd20acb4 19-34,74
+src/FHIRBridge.Infrastructure/Rbac/RbacBootstrapper.cs
+  s_85d2fd9e5c6252::t_4bb41aa1e75b56 203-211,217-229
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceClientFactory.cs
+  s_85d2fd9e5c6252::t_59f4fecd924895 39-40,45-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "90b4a5efe53731819d0a6a968707c4b049b8c275",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_6ccb0c8a939d1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d91f6a0-d776-45cf-8087-637f3c5ce1ab",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_85d2fd9e5c6252": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "360cd58e-d36f-4685-8caf-7958647793f4",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_accb86a412bfda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9b6ceb5-337d-4157-88c7-1af578f823fb",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

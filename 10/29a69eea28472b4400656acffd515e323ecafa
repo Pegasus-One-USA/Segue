@@ -1,0 +1,81 @@
+src/Api/FHIRBridge.Api/Security/MappingCatalogAccessRequirement.cs
+  s_e5ee67f79a4360::t_95696c8207540d 1,13
+  s_e5ee67f79a4360::t_febbb28aab4211 2-12,14
+src/Api/FHIRBridge.Api/Program.cs
+  s_e5ee67f79a4360::t_a614f936eae90f 151
+  s_e5ee67f79a4360::t_c45bd5a1dc338b 213-221
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_e5ee67f79a4360::t_4353389f5724c4 154-156,159-178,180-182,204,206-214
+  s_e5ee67f79a4360::t_361523b79f28d6 179
+  s_e5ee67f79a4360::t_3d555d95f2da0e 5-6
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_e5ee67f79a4360::t_2f896f54a20398 77-102,112-127
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_e5ee67f79a4360::t_87060396e59c48 298-299,303
+  s_e5ee67f79a4360::t_811aff3b96239d 4,213,250,291
+  s_e5ee67f79a4360::t_e970993109b2bb 207-209,212,214-234,246-249,251,253,255-259,261,263-264,266,277-278,281-290,292-295
+  s_e5ee67f79a4360::t_5bf61b686839c9 342-344,346-357
+src/FHIRBridge.Application/FHIRBridge.Application.csproj
+  s_e5ee67f79a4360::t_0c7b6f5a00553b 15
+  s_e5ee67f79a4360::t_ff9692c75acd84 16
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_e5ee67f79a4360::t_9a2facc5daec8b 88
+src/Api/FHIRBridge.Api/Security/MappingCatalogAccessAuthorizationHandler.cs
+  s_e5ee67f79a4360::t_3c55cb5726bf1d 2
+  s_e5ee67f79a4360::t_ef8422ddc557d6 1,3-55
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_e5ee67f79a4360::t_392036410e0ee0 128-130
+  s_e5ee67f79a4360::t_054ce93d276de5 127
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_e5ee67f79a4360::t_242d14bfce6c75 113-129
+src/Api/FHIRBridge.Api/Controllers/V1/MappingController.cs
+  s_e5ee67f79a4360::t_5541fb844b1037 34
+  s_e5ee67f79a4360::t_e2859955cee86d 50
+  s_e5ee67f79a4360::t_fc0ed6d5d9dff3 68
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_e5ee67f79a4360::t_aa9d884b043cf2 44
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_e5ee67f79a4360::t_0ef524f5d7f000 41-52
+  s_e5ee67f79a4360::t_7bb4a20ba2201a 36
+  s_e5ee67f79a4360::t_bd5ca5259ad337 81-100
+  s_e5ee67f79a4360::t_ad6e90a291a3ea 23-27
+  s_e5ee67f79a4360::t_73940f5c49b3cf 4
+  s_e5ee67f79a4360::t_f506e0cb741696 190-251
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_e5ee67f79a4360::t_a057ea34984536 177
+  s_e5ee67f79a4360::t_bcb89d4493a492 267
+  s_e5ee67f79a4360::t_07c8da75a30c88 213-215
+  s_e5ee67f79a4360::t_3c88de6bc51506 159,161
+  s_e5ee67f79a4360::t_8677daf08ca209 199
+  s_e5ee67f79a4360::t_be883f8373ebee 70-135
+  s_e5ee67f79a4360::t_bfddf864417dd2 156-157
+  s_e5ee67f79a4360::t_f5dbdc7aab950b 204,207
+  s_e5ee67f79a4360::t_38cb303b7e0cd3 275-276,281
+  s_e5ee67f79a4360::t_c35c873454a098 169-172
+  s_e5ee67f79a4360::t_1d3a1e78e11fa5 52-53
+  s_e5ee67f79a4360::t_b09db7df033402 257
+  s_e5ee67f79a4360::t_b273b60515c48b 40-46
+  s_e5ee67f79a4360::t_02525c6d99e37b 243
+  s_e5ee67f79a4360::t_451a57ca60054c 30-36
+  s_e5ee67f79a4360::t_062dace6cf067f 229,235-236
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  s_e5ee67f79a4360::t_6e19e9e56ab2c1 23-31
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_e5ee67f79a4360::t_82346561ea9ed4 169-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "1029a69eea28472b4400656acffd515e323ecafa",
+  "prompts": {},
+  "sessions": {
+    "s_e5ee67f79a4360": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d120475-7f8c-4b7b-b286-2316514ca6ca",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
