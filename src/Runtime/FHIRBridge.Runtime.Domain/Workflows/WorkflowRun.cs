@@ -46,6 +46,13 @@ public sealed class WorkflowRun
 
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>The Global Exception Manager's <c>ERR-yyyyMMdd-NNNNNN</c> id for this run's terminal failure (or
+    /// the informational capture for a cancellation/partial-success), when one was actually persisted to
+    /// ErrorLogs — set via <see cref="SetErrorReference"/> after <c>Fail</c>/<c>Cancel</c>/<c>PartialSucceed</c>.
+    /// Null whenever no capture ran (no exception manager registered) or the capture itself failed to persist —
+    /// never a placeholder, so the portal only ever offers a reference id that Operations → Errors can resolve.</summary>
+    public string? ErrorReferenceId { get; private set; }
+
     /// <summary>Who/what launched the run (user audit name, scheduler, or interactive-launch source).</summary>
     public string? TriggeredBy { get; }
 
@@ -101,5 +108,16 @@ public sealed class WorkflowRun
         ErrorMessage = reason;
         CompletedAt = completedAt;
         Status = WorkflowRunStatus.Cancelled;
+    }
+
+    /// <summary>Records the Global Exception Manager's reference id for this run's Fail/Cancel/PartialSucceed
+    /// outcome. Called only after the capture call has actually returned — pass null (a no-op past the initial
+    /// state) when no exception manager was registered or the capture failed to persist.</summary>
+    public void SetErrorReference(string? referenceId)
+    {
+        if (referenceId is not null)
+        {
+            ErrorReferenceId = referenceId;
+        }
     }
 }

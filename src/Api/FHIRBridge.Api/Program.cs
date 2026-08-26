@@ -440,7 +440,15 @@ app.UseExceptionHandler(errorApp =>
                 SpanId: activity?.SpanId.ToString(),
                 UserFriendlyMessageOverride: clientMessage));
 
-        context.Response.Headers["X-Error-Reference-Id"] = report.ErrorReferenceId;
+        // report.ErrorReferenceId is null when every persistence attempt inside CaptureAsync failed (e.g. the
+        // database was unreachable) — nothing was actually written to ErrorLogs, so there is no id to offer the
+        // client or Operations → Errors could ever resolve. Omit the header/field entirely rather than quoting
+        // an orphaned id.
+        if (report.ErrorReferenceId is not null)
+        {
+            context.Response.Headers["X-Error-Reference-Id"] = report.ErrorReferenceId;
+        }
+
         // `error`/`message` keep the existing client contract (the Angular sanitizer reads them); the new
         // `errorReferenceId`/`correlationId`/`category` fields drive the Phase 6A friendly-error dialog.
         await context.Response.WriteAsJsonAsync(new

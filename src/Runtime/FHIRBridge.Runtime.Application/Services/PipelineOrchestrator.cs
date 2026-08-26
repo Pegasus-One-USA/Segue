@@ -234,7 +234,8 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
             _logger.LogError(exception, "Runtime bulk export run {PipelineRunId} failed.", pipelineRun.Id);
             pipelineRun.Fail(exception.Message);
 
-            await CaptureFailureAsync(pipelineRun, exception, cancellationToken);
+            var errorReferenceId = await CaptureFailureAsync(pipelineRun, exception, cancellationToken);
+            pipelineRun.SetErrorReference(errorReferenceId);
 
             await AddEventAsync(
                 pipelineRun,
@@ -251,21 +252,25 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
     }
 
     // Persists the failure into the shared ErrorLog store (via GlobalExceptionManager) so it surfaces on both the
-    // Errors screen and Correlation Search, not just as an ErrorMessage on this PipelineRun record.
-    private Task CaptureFailureAsync(PipelineRun pipelineRun, Exception exception, CancellationToken cancellationToken)
+    // Errors screen and Correlation Search, not just as an ErrorMessage on this PipelineRun record. Returns the
+    // real ErrorReferenceId (null if no manager is registered, or its persist attempts all failed) so the caller
+    // can store it on the run rather than discard it.
+    private async Task<string?> CaptureFailureAsync(PipelineRun pipelineRun, Exception exception, CancellationToken cancellationToken)
     {
         if (_exceptionManager is null)
         {
-            return Task.CompletedTask;
+            return null;
         }
 
-        return _exceptionManager.CaptureAsync(
+        var report = await _exceptionManager.CaptureAsync(
             exception,
             new ExceptionContext(
                 Module: "Pipeline Run",
                 CorrelationId: pipelineRun.CorrelationId,
                 ExecutionId: pipelineRun.Id.ToString()),
             cancellationToken);
+
+        return report.ErrorReferenceId;
     }
 
     // Records the bookkeeping for an already-completed (parallel) extraction. The source round-trip happens in the

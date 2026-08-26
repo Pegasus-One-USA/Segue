@@ -63,6 +63,15 @@
   font-size: 13px;
 }
 
+.error-banner .link {
+  display: block;
+  margin-top: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: inherit;
+  text-decoration: underline;
+}
+
 .section-title {
   margin: 8px 0 0;
   font-size: 15px;

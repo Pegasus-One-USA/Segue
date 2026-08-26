@@ -146,10 +146,11 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   }
 
-  /** This is the workflow run's own id, NOT the ErrorLogs ErrorReferenceId (the "ERR-YYYYMMDD-NNNNNN" a support
-   *  engineer looks up in Operations → Errors) — labeled "Execution ID" rather than "Reference" so it's not
-   *  mistaken for that different, unrelated identifier. Searchable in Operations → Errors via its "Execution ID"
-   *  filter, which resolves to the matching ErrorLogs row and its real ErrorReferenceId. */
+  /** Fallback only — used when this run's ErrorReferenceId is null (no capture ran, or the capture itself
+   *  failed to persist; see the backend's GlobalExceptionManager remarks). The template links straight to
+   *  Operations → Errors via ErrorReferenceId when one is present, so this text-only path is now the exception,
+   *  not the default. Shows the run's own Execution ID (not an ErrorLogs ErrorReferenceId) as a last-resort
+   *  manual lookup key, findable in Operations → Errors via its "Execution ID" filter. */
   errorDisplayMessage(): string {
     return `Something went wrong while running this workflow. Please contact your admin. (Execution ID: ${this.runId})`;
   }

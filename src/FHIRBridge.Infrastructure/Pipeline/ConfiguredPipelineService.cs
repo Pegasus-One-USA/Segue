@@ -112,7 +112,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
     // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
     // surfaces on both the Errors screen and Correlation Search, not just as a string in the run's `errors` list.
-    private Task CaptureFailureAsync(
+    // Returns the real ErrorReferenceId (null if no manager is registered, or its persist attempts all failed —
+    // see ErrorReport's remarks) so the caller can store it on the route execution row rather than discard it.
+    private async Task<string?> CaptureFailureAsync(
         Exception exception,
         Guid pipelineRunId,
         string? correlationId,
@@ -120,16 +122,18 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         if (_exceptionManager is null)
         {
-            return Task.CompletedTask;
+            return null;
         }
 
-        return _exceptionManager.CaptureAsync(
+        var report = await _exceptionManager.CaptureAsync(
             exception,
             new ExceptionContext(
                 Module: "Pipeline Run",
                 CorrelationId: correlationId,
                 ExecutionId: pipelineRunId.ToString()),
             cancellationToken);
+
+        return report.ErrorReferenceId;
     }
 
     /// <summary>
@@ -741,7 +745,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             var failureDescription = DescribeFailure(exception);
             errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
 
-            await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
+            var errorReferenceId = await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,
@@ -751,7 +755,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 0,
                 failureDescription,
                 DateTime.UtcNow,
-                cancellationToken);
+                cancellationToken,
+                errorReferenceId);
 
             return new RouteExecutionResult(0, 0);
         }

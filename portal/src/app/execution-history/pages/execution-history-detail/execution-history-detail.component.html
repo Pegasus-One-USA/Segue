@@ -77,7 +77,14 @@
       @if (ex.errorMessage) {
         <div class="error-banner">
           <mat-icon>error_outline</mat-icon>
-          <span>{{ errorDisplayMessage() }}</span>
+          @if (ex.errorReferenceId) {
+            <span>
+              Something went wrong while running this workflow.
+              <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: ex.errorReferenceId }" title="View this error in Operations → Errors">Reference: {{ ex.errorReferenceId }}</a>
+            </span>
+          } @else {
+            <span>{{ errorDisplayMessage() }}</span>
+          }
         </div>
       }
     </div>

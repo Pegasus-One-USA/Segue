@@ -141,6 +141,7 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.ErrorMessage);
+        builder.Property(x => x.ErrorReferenceId).HasMaxLength(50);
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
