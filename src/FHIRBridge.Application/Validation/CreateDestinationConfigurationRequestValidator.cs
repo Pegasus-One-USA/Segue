@@ -61,8 +61,12 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateCsvMetadata(context, metadata);
         }
-        else if (request.DestinationType == DestinationType.FhirRepository)
+        else if (request.DestinationType is DestinationType.FhirRepository or DestinationType.AzureFhirService)
         {
+            // Azure FHIR Service (Azure Health Data Services) is a standard FHIR R4 server, wire-compatible with
+            // the generic FhirRepository destination — same dest_fhirAuthType-driven metadata shape, so it shares
+            // this validation rather than duplicating it (see MappedFhirRepositoryDestinationWriter, which both
+            // destination types are registered to).
             ValidateFhirRepositoryMetadata(request, context, metadata);
         }
         else if (request.DestinationType == DestinationType.BlobStorage)
@@ -71,7 +75,7 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         }
     }
 
-    private static readonly string[] SupportedFhirAuthTypes = ["none", "bearer", "basic", "clientCredentials"];
+    private static readonly string[] SupportedFhirAuthTypes = ["none", "bearer", "basic", "clientCredentials", "managedIdentity"];
 
     private static void ValidateFhirRepositoryMetadata(
         CreateDestinationConfigurationRequest request,
@@ -84,7 +88,7 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             context.AddFailure(
                 "dest_fhirAuthType",
-                $"Unsupported FHIR auth type '{authType}'. Supported values: none, bearer, basic, clientCredentials.");
+                $"Unsupported FHIR auth type '{authType}'. Supported values: none, bearer, basic, clientCredentials, managedIdentity.");
             return;
         }
 

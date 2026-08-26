@@ -25,8 +25,8 @@ export interface PhaseConfig {
 // Sources:      Epic only
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
-// Destinations: SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, Aidbox
-//               (FhirRepository) only — everything else has a real writer
+// Destinations: SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, AzureFhirService,
+//               Aidbox (FhirRepository) only — everything else has a real writer
 //               (ConfiguredDestinationWriterFactory) but no way to configure a connection for it
 //               yet, so surfacing the node would be a dead end in the canvas.
 const PHASE_1_CONFIG: PhaseConfig = {
@@ -36,9 +36,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
   ],
 
   enabledTransformIds: [
-    // Destinations — SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, Aidbox
+    // Destinations — SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, AzureFhirService, Aidbox
     'dest-sqlserver', 'dest-azuresql', 'dest-csv', 'dest-blob',
-    'dest-postgres', 'dest-mysql', 'dest-mongo', 'dest-medplum', 'dest-fhir',
+    'dest-postgres', 'dest-mysql', 'dest-mongo', 'dest-medplum', 'dest-azurefhir', 'dest-fhir',
     // Phase 2+ (writer exists, no admin form yet): 'dest-snowflake', 'dest-powerbi',
     //   'dest-tableau', 'dest-databricks', 'dest-s3', 'dest-xlsx', 'dest-ndjson', 'dest-parquet',
     //   'dest-avro', 'dest-protobuf', 'dest-pdf', 'dest-sftp', 'dest-restapi', 'dest-inmemory'

@@ -128,6 +128,12 @@ export interface FhirConnectionTestRequest {
   username?: string;
   password?: string;
   bearerToken?: string;
+  // Azure FHIR Service only — when tenantId is supplied the backend computes the Entra ID token endpoint
+  // directly instead of discovering it from a SMART configuration document (see FhirConnectionTestRequest.cs).
+  tenantId?: string;
+  scope?: string;
+  managedIdentityClientId?: string;
+  authorityHost?: string;
 }
 
 export interface ConnectionTestResult {

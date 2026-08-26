@@ -16,7 +16,10 @@ public sealed class FhirRepositoryHealthCheckProviderTests
         new("FHIR Store", DestinationType.FhirRepository, new SecretReference("kv", "secret"), target, connectionMetadataJson);
 
     private static (FhirRepositoryHealthCheckProvider Provider, CapturingHandler Handler) CreateProvider(
-        string secretValue = "https://fhir.example.com", IFhirDestinationTokenProvider? tokenProvider = null)
+        string secretValue = "https://fhir.example.com",
+        IFhirDestinationTokenProvider? tokenProvider = null,
+        IAzureManagedIdentityFhirTokenProvider? managedIdentityTokenProvider = null,
+        DestinationType destinationType = DestinationType.FhirRepository)
     {
         var handler = new CapturingHandler(HttpStatusCode.OK);
         var httpClientFactory = new Mock<IHttpClientFactory>();
@@ -26,7 +29,11 @@ public sealed class FhirRepositoryHealthCheckProviderTests
         secretProvider.Setup(s => s.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>())).ReturnsAsync(secretValue);
 
         var provider = new FhirRepositoryHealthCheckProvider(
-            secretProvider.Object, httpClientFactory.Object, tokenProvider ?? Mock.Of<IFhirDestinationTokenProvider>());
+            destinationType,
+            secretProvider.Object,
+            httpClientFactory.Object,
+            tokenProvider ?? Mock.Of<IFhirDestinationTokenProvider>(),
+            managedIdentityTokenProvider ?? Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
 
         return (provider, handler);
     }
@@ -36,6 +43,33 @@ public sealed class FhirRepositoryHealthCheckProviderTests
     {
         var (provider, _) = CreateProvider();
         provider.DestinationType.Should().Be(DestinationType.FhirRepository);
+    }
+
+    [Fact]
+    public void Destination_type_can_be_azure_fhir_service()
+    {
+        // Registered a second time in DependencyInjection.cs, constructed with AzureFhirService — the same
+        // authenticated-metadata-check behavior applies since Azure Health Data Services is a standard FHIR R4
+        // server (see FhirRepositoryAuthResolver, shared by both destination types).
+        var (provider, _) = CreateProvider(destinationType: DestinationType.AzureFhirService);
+        provider.DestinationType.Should().Be(DestinationType.AzureFhirService);
+    }
+
+    [Fact]
+    public async Task ManagedIdentity_check_attaches_token_from_managed_identity_provider()
+    {
+        var managedIdentityTokenProvider = new Mock<IAzureManagedIdentityFhirTokenProvider>();
+        managedIdentityTokenProvider
+            .Setup(t => t.GetAccessTokenAsync(It.IsAny<string>(), null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("managed-identity-token");
+        var (provider, handler) = CreateProvider(
+            managedIdentityTokenProvider: managedIdentityTokenProvider.Object,
+            destinationType: DestinationType.AzureFhirService);
+        var destination = Destination("""{"dest_fhirAuthType":"managedIdentity"}""", "https://myfhirservice.fhir.azurehealthcareapis.com");
+
+        await provider.CheckAsync(destination, CancellationToken.None);
+
+        handler.LastRequest!.Headers.Authorization!.Parameter.Should().Be("managed-identity-token");
     }
 
     [Fact]
@@ -70,7 +104,9 @@ public sealed class FhirRepositoryHealthCheckProviderTests
         httpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(new HttpClient(handler));
         var secretProvider = new Mock<ISecretProvider>();
         secretProvider.Setup(s => s.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>())).ReturnsAsync("https://fhir.example.com");
-        var provider = new FhirRepositoryHealthCheckProvider(secretProvider.Object, httpClientFactory.Object, Mock.Of<IFhirDestinationTokenProvider>());
+        var provider = new FhirRepositoryHealthCheckProvider(
+            DestinationType.FhirRepository, secretProvider.Object, httpClientFactory.Object,
+            Mock.Of<IFhirDestinationTokenProvider>(), Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
 
         var result = await provider.CheckAsync(Destination(null, "https://fhir.example.com"), CancellationToken.None);
 

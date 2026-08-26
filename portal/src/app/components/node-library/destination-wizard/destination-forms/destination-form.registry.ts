@@ -15,6 +15,7 @@ import { PowerBiDestinationFormComponent } from './power-bi-destination-form.com
 import { SnowflakeDestinationFormComponent } from './snowflake-destination-form.component';
 import { FhirRepositoryDestinationFormComponent } from './fhir-repository-destination-form.component';
 import { MedplumDestinationFormComponent } from './medplum-destination-form.component';
+import { AzureFhirServiceDestinationFormComponent } from './azure-fhir-service-destination-form.component';
 import { S3DestinationFormComponent } from './s3-destination-form.component';
 import { NdjsonDestinationFormComponent } from './ndjson-destination-form.component';
 import { ParquetDestinationFormComponent } from './parquet-destination-form.component';
@@ -47,6 +48,7 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   Snowflake: SnowflakeDestinationFormComponent,
   FhirRepository: FhirRepositoryDestinationFormComponent,
   Medplum: MedplumDestinationFormComponent,
+  AzureFhirService: AzureFhirServiceDestinationFormComponent,
   S3: S3DestinationFormComponent,
   Ndjson: NdjsonDestinationFormComponent,
   Parquet: ParquetDestinationFormComponent,

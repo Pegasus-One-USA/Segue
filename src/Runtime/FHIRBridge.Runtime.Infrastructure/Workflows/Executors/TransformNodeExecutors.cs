@@ -188,12 +188,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         var (destinationType, destinationName) = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
         var (sourceSystem, sourceConnectionName) = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
 
-        // Whole-resource FHIR destinations (Medplum, FHIR repository) persist the source resource itself
-        // (MappedDestinationRecord.SourceJson), not a set of mapped relational columns — so they legitimately have
-        // NO field mappings, and the "needs at least one mapped Value" gates below (which exist to avoid writing
-        // bogus empty rows into a relational table) would otherwise drop every resource, silently landing zero
-        // records. For these destinations we always emit one carrier record per resource, carrying SourceJson.
-        var wholeResourceFhir = destinationType is DestinationType.Medplum or DestinationType.FhirRepository;
+        // Whole-resource FHIR destinations (Medplum, FHIR repository, Azure FHIR Service) persist the source
+        // resource itself (MappedDestinationRecord.SourceJson), not a set of mapped relational columns — so
+        // they legitimately have NO field mappings, and the "needs at least one mapped Value" gates below
+        // (which exist to avoid writing bogus empty rows into a relational table) would otherwise drop every
+        // resource, silently landing zero records. For these destinations we always emit one carrier record
+        // per resource, carrying SourceJson.
+        var wholeResourceFhir = destinationType is DestinationType.Medplum or DestinationType.FhirRepository or DestinationType.AzureFhirService;
         // Caches each field's resolved rule chain for the lifetime of this ExecuteAsync call — the same
         // (resourceType, destinationField, sourceField) combination recurs once per record in the batch, and
         // re-querying the resolver/repository for every single record would be wasted round trips for a rule

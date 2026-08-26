@@ -61,7 +61,8 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         new(DestinationType.Protobuf, typeof(MappedProtobufDestinationWriter)),
         new(DestinationType.Databricks, typeof(MappedDatabricksDestinationWriter)),
         new(DestinationType.Mongo, typeof(MappedMongoDestinationWriter)),
-        new(DestinationType.Medplum, typeof(MappedMedplumDestinationWriter))
+        new(DestinationType.Medplum, typeof(MappedMedplumDestinationWriter)),
+        new(DestinationType.AzureFhirService, typeof(MappedFhirRepositoryDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(
