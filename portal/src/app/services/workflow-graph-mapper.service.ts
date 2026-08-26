@@ -36,6 +36,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-mongo': 'MongoDestinationNode',
   'dest-medplum': 'MedplumDestinationNode',
   'dest-fhir': 'FhirRepositoryDestinationNode',
+  'dest-azurefhir': 'AzureFhirServiceDestinationNode',
   'dest-blob': 'BlobDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',

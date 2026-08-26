@@ -25,7 +25,8 @@ export interface PhaseConfig {
 // Sources:      Epic only
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
-// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Azure Blob only
+// Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
+//               Azure FHIR Service + Azure Blob only
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
@@ -43,6 +44,7 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-postgres',
     'dest-medplum',
     'dest-fhir',
+    'dest-azurefhir',
     'dest-blob',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
