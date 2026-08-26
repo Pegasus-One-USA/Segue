@@ -17,6 +17,16 @@ public sealed class FhirRepositoryAuthResolverTests
         return mock;
     }
 
+    private static Task<System.Net.Http.Headers.AuthenticationHeaderValue?> ResolveAsync(
+        string? metadataJson,
+        ISecretProvider secretProvider,
+        IFhirDestinationTokenProvider? tokenProvider = null,
+        IAzureManagedIdentityFhirTokenProvider? managedIdentityTokenProvider = null,
+        string? baseUrl = "https://fhir.example.com")
+        => FhirRepositoryAuthResolver.ResolveAsync(
+            metadataJson, Secret, secretProvider, tokenProvider ?? Mock.Of<IFhirDestinationTokenProvider>(),
+            managedIdentityTokenProvider ?? Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), baseUrl, CancellationToken.None);
+
     [Theory]
     [InlineData(null)]
     [InlineData("""{"dest_fhirAuthType":"none"}""")]
@@ -24,8 +34,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("should-never-be-read");
 
-        var header = await FhirRepositoryAuthResolver.ResolveAsync(
-            metadataJson, Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var header = await ResolveAsync(metadataJson, secretProvider.Object);
 
         header.Should().BeNull();
         secretProvider.Verify(s => s.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -36,8 +45,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("""{"token":"abc123"}""");
 
-        var header = await FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"bearer"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var header = await ResolveAsync("""{"dest_fhirAuthType":"bearer"}""", secretProvider.Object);
 
         header!.Scheme.Should().Be("Bearer");
         header.Parameter.Should().Be("abc123");
@@ -48,8 +56,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("""{"username":"svc-account","password":"s3cret"}""");
 
-        var header = await FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"basic"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var header = await ResolveAsync("""{"dest_fhirAuthType":"basic"}""", secretProvider.Object);
 
         header!.Scheme.Should().Be("Basic");
         var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(header.Parameter!));
@@ -61,8 +68,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("""{"username":"svc-account"}""");
 
-        var act = () => FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"basic"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var act = () => ResolveAsync("""{"dest_fhirAuthType":"basic"}""", secretProvider.Object);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -72,8 +78,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("""{}""");
 
-        var act = () => FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"bearer"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var act = () => ResolveAsync("""{"dest_fhirAuthType":"bearer"}""", secretProvider.Object);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -88,8 +93,7 @@ public sealed class FhirRepositoryAuthResolverTests
             .Setup(t => t.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
 
-        var header = await FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"clientCredentials"}""", Secret, secretProvider.Object, tokenProvider.Object, CancellationToken.None);
+        var header = await ResolveAsync("""{"dest_fhirAuthType":"clientCredentials"}""", secretProvider.Object, tokenProvider.Object);
 
         header!.Parameter.Should().Be("minted-token");
         tokenProvider.Verify(
@@ -109,8 +113,7 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider(secretJson);
 
-        var act = () => FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"clientCredentials"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var act = () => ResolveAsync("""{"dest_fhirAuthType":"clientCredentials"}""", secretProvider.Object);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -120,8 +123,58 @@ public sealed class FhirRepositoryAuthResolverTests
     {
         var secretProvider = SecretProvider("""{}""");
 
-        var act = () => FhirRepositoryAuthResolver.ResolveAsync(
-            """{"dest_fhirAuthType":"madeUp"}""", Secret, secretProvider.Object, Mock.Of<IFhirDestinationTokenProvider>(), CancellationToken.None);
+        var act = () => ResolveAsync("""{"dest_fhirAuthType":"madeUp"}""", secretProvider.Object);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    // ── managedIdentity (Azure FHIR Service) ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ManagedIdentity_never_touches_the_secret_and_defaults_scope_to_base_url_default()
+    {
+        var secretProvider = SecretProvider("should-never-be-read");
+        var managedIdentityTokenProvider = new Mock<IAzureManagedIdentityFhirTokenProvider>();
+        managedIdentityTokenProvider
+            .Setup(t => t.GetAccessTokenAsync(
+                "https://myfhirservice.fhir.azurehealthcareapis.com/.default", null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("mi-token");
+
+        var header = await ResolveAsync(
+            """{"dest_fhirAuthType":"managedIdentity"}""",
+            secretProvider.Object,
+            managedIdentityTokenProvider: managedIdentityTokenProvider.Object,
+            baseUrl: "https://myfhirservice.fhir.azurehealthcareapis.com");
+
+        header!.Scheme.Should().Be("Bearer");
+        header.Parameter.Should().Be("mi-token");
+        secretProvider.Verify(s => s.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ManagedIdentity_honors_an_explicit_scope_override_and_user_assigned_identity_client_id()
+    {
+        var secretProvider = SecretProvider("should-never-be-read");
+        var managedIdentityTokenProvider = new Mock<IAzureManagedIdentityFhirTokenProvider>();
+        managedIdentityTokenProvider
+            .Setup(t => t.GetAccessTokenAsync("api://custom-scope/.default", "user-assigned-client-id", "https://login.microsoftonline.us/", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("mi-token");
+
+        var header = await ResolveAsync(
+            """{"dest_fhirAuthType":"managedIdentity","dest_fhirAzureScope":"api://custom-scope/.default","dest_fhirManagedIdentityClientId":"user-assigned-client-id","dest_fhirAuthorityHost":"https://login.microsoftonline.us/"}""",
+            secretProvider.Object,
+            managedIdentityTokenProvider: managedIdentityTokenProvider.Object);
+
+        header!.Parameter.Should().Be("mi-token");
+    }
+
+    [Fact]
+    public async Task ManagedIdentity_without_scope_or_base_url_throws()
+    {
+        var secretProvider = SecretProvider("should-never-be-read");
+
+        var act = () => ResolveAsync(
+            """{"dest_fhirAuthType":"managedIdentity"}""", secretProvider.Object, baseUrl: null);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }

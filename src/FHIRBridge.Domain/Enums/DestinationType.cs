@@ -24,5 +24,6 @@ public enum DestinationType
     Protobuf = 19,
     Databricks = 20,
     Mongo = 21,
-    Medplum = 22
+    Medplum = 22,
+    AzureFhirService = 23
 }

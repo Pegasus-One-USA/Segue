@@ -15,6 +15,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
     private const string BaseUrl = "https://aidbox.example.com/fhir";
     private const string DiscoveryUrl = $"{BaseUrl}/.well-known/smart-configuration";
     private const string MetadataUrl = $"{BaseUrl}/metadata";
+    private const string ProbeUrl = $"{BaseUrl}/Basic/fhirbridge-connection-test-probe";
     private const string DiscoveredTokenEndpoint = "https://aidbox.example.com/auth/token";
 
     private static IHttpClientFactory FactoryFor(RoutingHandler handler) =>
@@ -27,13 +28,14 @@ public sealed class FhirDestinationConnectionTestServiceTests
         {
             DiscoveryUrl => (HttpStatusCode.OK, $$"""{"token_endpoint":"{{DiscoveredTokenEndpoint}}"}"""),
             MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
             _ => (HttpStatusCode.NotFound, ""),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -53,13 +55,14 @@ public sealed class FhirDestinationConnectionTestServiceTests
         {
             DiscoveryUrl => (HttpStatusCode.OK, $$"""{"token_endpoint":"{{DiscoveredTokenEndpoint}}"}"""),
             MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
             _ => (HttpStatusCode.NotFound, ""),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "clientcredentials", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -77,7 +80,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
             _ => (HttpStatusCode.OK, "{}"),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -96,7 +99,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
             _ => (HttpStatusCode.OK, "{}"),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -114,10 +117,11 @@ public sealed class FhirDestinationConnectionTestServiceTests
         var handler = new RoutingHandler(url => url switch
         {
             MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
             _ => (HttpStatusCode.NotFound, ""), // discovery would fail loudly if ever called
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, authType,
             ClientId: null, ClientSecret: null,
@@ -144,7 +148,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("invalid_client"));
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "wrong-secret", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -153,18 +157,155 @@ public sealed class FhirDestinationConnectionTestServiceTests
         result.Error.Should().Contain("invalid_client");
     }
 
+    // ── Azure FHIR Service: TenantId skips discovery; managedIdentity auth type ────────────────────────────
+
+    [Fact]
+    public async Task ClientCredentials_with_tenantId_skips_discovery_and_computes_the_entra_token_endpoint()
+    {
+        var handler = new RoutingHandler(url => url switch
+        {
+            MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
+            _ => (HttpStatusCode.NotFound, ""), // discovery would fail loudly if ever called
+        });
+        var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
+        tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("minted-token");
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
+            TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeTrue();
+        result.ResolvedTokenEndpoint.Should().Be("https://login.microsoftonline.com/d5ae9301-08f4-4e80-b0b0-1b8a97b7687f/oauth2/v2.0/token");
+        handler.RequestedUrls.Should().NotContain(DiscoveryUrl);
+        tokenProvider.Verify(p => p.GetAccessTokenAsync(
+            It.Is<FhirDestinationOAuth2Options>(o =>
+                o.TokenEndpoint == "https://login.microsoftonline.com/d5ae9301-08f4-4e80-b0b0-1b8a97b7687f/oauth2/v2.0/token"
+                && o.Scope == $"{BaseUrl}/.default"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ManagedIdentity_attaches_a_token_from_the_managed_identity_provider_and_needs_no_secret()
+    {
+        var handler = new RoutingHandler(url => url switch
+        {
+            MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
+            _ => (HttpStatusCode.NotFound, ""),
+        });
+        var managedIdentityProvider = new Mock<IAzureManagedIdentityFhirTokenProvider>();
+        managedIdentityProvider
+            .Setup(p => p.GetAccessTokenAsync($"{BaseUrl}/.default", null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("mi-token");
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), Mock.Of<IFhirDestinationTokenProvider>(), managedIdentityProvider.Object);
+        var request = new FhirConnectionTestRequest(BaseUrl, "managedIdentity", null, null, null, null, null);
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeTrue();
+        handler.RequestedUrls.Should().NotContain(DiscoveryUrl);
+    }
+
+    // ── Write-authorization probe: GET /metadata succeeding is not proof writes are authorized ────────────
+
+    [Fact]
+    public async Task Metadata_read_succeeding_but_write_forbidden_is_reported_as_a_connection_failure()
+    {
+        // Reproduces the exact real-world gap this probe exists for: Azure Health Data Services (and FHIR
+        // servers generally) often don't enforce write-level RBAC on GET /metadata, so a principal with no
+        // write role at all could otherwise pass Test Connection and only find out at the first real pipeline
+        // write. The probe below fails with 403, same as MappedFhirRepositoryDestinationWriter would.
+        var handler = new RoutingHandler(url => url switch
+        {
+            MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.Forbidden,
+                """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"forbidden","diagnostics":"Authorization failed."}]}"""),
+            _ => (HttpStatusCode.NotFound, ""),
+        });
+        var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
+        tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("minted-token");
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
+            TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeFalse();
+        result.Error.Should().Contain("Write check failed").And.Contain("403").And.Contain("Authorization failed");
+    }
+
+    [Fact]
+    public async Task Successful_write_check_PUTs_then_DELETEs_the_probe_resource()
+    {
+        var handler = new RoutingHandler(url => url switch
+        {
+            MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
+            _ => (HttpStatusCode.NotFound, ""),
+        });
+        var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
+        tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("minted-token");
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
+            TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeTrue();
+        handler.RequestedMethods.Should().Contain((HttpMethod.Put, ProbeUrl));
+        handler.RequestedMethods.Should().Contain((HttpMethod.Delete, ProbeUrl));
+    }
+
+    [Fact]
+    public async Task Cleanup_delete_failure_does_not_invalidate_an_otherwise_successful_write_check()
+    {
+        var handler = new RoutingHandler((url, method) => (url, method) switch
+        {
+            (MetadataUrl, _) => (HttpStatusCode.OK, "{}"),
+            (ProbeUrl, "PUT") => (HttpStatusCode.OK, ""),
+            (ProbeUrl, "DELETE") => (HttpStatusCode.InternalServerError, "boom"),
+            _ => (HttpStatusCode.NotFound, ""),
+        });
+        var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
+        tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("minted-token");
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
+            TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeTrue();
+    }
+
     private sealed class RoutingHandler : HttpMessageHandler
     {
-        private readonly Func<string, (HttpStatusCode Status, string Body)> _respond;
+        private readonly Func<string, string, (HttpStatusCode Status, string Body)> _respond;
         public List<string> RequestedUrls { get; } = [];
+        public List<(HttpMethod Method, string Url)> RequestedMethods { get; } = [];
 
-        public RoutingHandler(Func<string, (HttpStatusCode Status, string Body)> respond) => _respond = respond;
+        public RoutingHandler(Func<string, (HttpStatusCode Status, string Body)> respond)
+            : this((url, _) => respond(url))
+        {
+        }
+
+        public RoutingHandler(Func<string, string, (HttpStatusCode Status, string Body)> respond) => _respond = respond;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var url = request.RequestUri!.ToString();
             RequestedUrls.Add(url);
-            var (status, body) = _respond(url);
+            RequestedMethods.Add((request.Method, url));
+            var (status, body) = _respond(url, request.Method.Method);
             return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
         }
     }
