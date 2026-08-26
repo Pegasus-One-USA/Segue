@@ -1,0 +1,130 @@
+src/Runtime/FHIRBridge.Runtime.Application/Services/PipelineOrchestrator.cs
+  s_1de29626543182::t_0756636f6aa3c7 237-238
+  s_1de29626543182::t_de29e8726a5e8d 255-258,262,265,272-273
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_1de29626543182::t_abde6f5e5dd057 144
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.html
+  s_1de29626543182::t_51b05f2ae5826a 25-30
+portal/src/app/governance/pages/alerts/alerts.component.ts
+  s_1de29626543182::t_5ee5c539aaff2e 17
+  s_1de29626543182::t_151301163477f4 37-40
+  s_1de29626543182::t_8bd8cce631240c 6
+src/FHIRBridge.Application/DTOs/PipelineRunRouteExecutionDto.cs
+  s_1de29626543182::t_ddcd52bc92dcb5 19-20
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRunStatusNotifier.cs
+  s_1de29626543182::t_19fd5f68638c54 18-20,26-27
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_1de29626543182::t_0302e37e176ff2 263-271
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.html
+  s_1de29626543182::t_6ab12c86c60a94 113-121
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_1de29626543182::t_1022ff5ea6cf01 5
+  s_1de29626543182::t_adc7f9f0b69920 43
+  s_1de29626543182::t_590f284e3adb68 156
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826105004_AddWorkflowRunErrorReferenceId.cs
+  s_1de29626543182::t_73437942ef65c9 1-29
+src/FHIRBridge.Infrastructure/Persistence/EfPipelineRunRouteExecutionRepository.cs
+  s_1de29626543182::t_f75c96da92197e 191-192
+  s_1de29626543182::t_74a743ed7b5eb2 57-58,67
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_1de29626543182::t_064528181d8bfd 138-146
+src/Api/FHIRBridge.Api/Program.cs
+  s_1de29626543182::t_0b6bf29bfb60e8 443-451
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_1de29626543182::t_91a6e9430fce7f 149-153
+src/FHIRBridge.Infrastructure/Persistence/InMemoryPipelineRunRouteExecutionRepository.cs
+  s_1de29626543182::t_c4f7a9d29aad96 59-60,75
+  s_1de29626543182::t_cdd4be6cb17680 43-44
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunRouteExecutionConfiguration.cs
+  s_1de29626543182::t_ab65efb8abf8db 21
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_1de29626543182::t_6dae0fca6a426e 49-55
+  s_1de29626543182::t_46de2c25c69b8c 112-122
+portal/src/app/services/run-status-hub.service.ts
+  s_1de29626543182::t_0fb1bcc4371c5d 14-16
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_1de29626543182::t_ed635d76eec2a7 416,419,430-442
+  s_1de29626543182::t_92f146433bad5f 367,376,398
+  s_1de29626543182::t_e01aba5a3037fa 443,556-557,567
+  s_1de29626543182::t_599cb409ed374b 462-480,494-495
+portal/src/app/governance/pages/alert-rules/alert-rules.component.ts
+  s_1de29626543182::t_18cab2556d9e01 11
+  s_1de29626543182::t_d58d7c798ba889 37
+  s_1de29626543182::t_c380180df5492f 87-90
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/PipelineRunDto.cs
+  s_1de29626543182::t_7650771848e8a3 16-17
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_1de29626543182::t_46eb81a3a3350b 414-416
+src/Runtime/FHIRBridge.Runtime.Application/Mappings/PipelineDtoMapper.cs
+  s_1de29626543182::t_3b9cdd4341acc5 31-32
+portal/src/app/pipeline-executions/models/pipeline-execution.model.ts
+  s_1de29626543182::t_ae95595895728c 22-25
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.ts
+  s_1de29626543182::t_909a79d4b116c6 3
+  s_1de29626543182::t_04d9c8c8e2c697 12
+src/FHIRBridge.Domain/Entities/PipelineRunRouteExecution.cs
+  s_1de29626543182::t_c0448b43c3632c 72-76,83-84,91
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_1de29626543182::t_47bd6f6ae16540 97,102-105,132
+  s_1de29626543182::t_8bd9456a5afce1 46,49,51-53,79,94
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_44b3eb0c92b6da 5-7
+src/FHIRBridge.Application/Abstractions/Persistence/IPipelineRunRouteExecutionRepository.cs
+  s_1de29626543182::t_191f772f78628f 33-34
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826105004_AddWorkflowRunErrorReferenceId.Designer.cs
+  s_1de29626543182::t_73437942ef65c9 1-5705
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_1de29626543182::t_b0fdf603daec31 80-87
+src/Runtime/FHIRBridge.Runtime.Domain/Entities/PipelineRun.cs
+  s_1de29626543182::t_af51197e7b0942 36-40
+  s_1de29626543182::t_8d17cc6236bfdd 74-84
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_1de29626543182::t_9be57660fe67ca 605
+  s_1de29626543182::t_34fef51378266d 602
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_1de29626543182::t_6b6e973f9e4442 27-30
+portal/src/app/services/workflow-api.service.ts
+  s_1de29626543182::t_3aac0e9c9f8d8f 291-294
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_1de29626543182::t_ad041b08259105 17-18
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.scss
+  s_1de29626543182::t_2893ebc5475c36 140-142
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_1de29626543182::t_f09c0205b53cbb 748,758-759
+  s_1de29626543182::t_f8cf89144ca73e 115-117,125,128,135-136
+src/BuildingBlocks/FHIRBridge.Governance/IGlobalExceptionManager.cs
+  s_1de29626543182::t_b8600b26078d76 45-47,49
+  s_1de29626543182::t_b37757dc7e403d 18-21
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_1de29626543182::t_db326f8e64fa33 1578-1579
+  s_1de29626543182::t_11198cf884bc84 1472-1473
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_1de29626543182::t_85eccac3987da5 22-23
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.scss
+  s_1de29626543182::t_59f47123fb2fcc 66-74
+tests/FHIRBridge.UnitTests/Governance/GlobalExceptionManagerCaptureExpectedTests.cs
+  s_1de29626543182::t_9c030d9a2c1061 35,44-46,51
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_1de29626543182::t_73437942ef65c9 4850-4853,4920,5083,5308,5319-5412,5465,5489,5514,5564,5638
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "a3cc690ef9d9f930963f746a511c7333dffc875a",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_1de29626543182": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10c7672b-8b90-42c3-9b95-2c4bca23611b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
