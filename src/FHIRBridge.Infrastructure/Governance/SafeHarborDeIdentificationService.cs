@@ -29,11 +29,11 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         _logger = logger ?? NullLogger<SafeHarborDeIdentificationService>.Instance;
     }
 
-    public async Task<string> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
+    public async Task<DeIdentificationResult> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
     {
         if (request.ProfileId is not { } profileId)
         {
-            return request.RawJson;
+            return new DeIdentificationResult(request.RawJson, []);
         }
 
         JsonNode? root;
@@ -44,14 +44,15 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "De-identification skipped: {ResourceType} is not valid JSON.", request.ResourceType);
-            return request.RawJson;
+            return new DeIdentificationResult(request.RawJson, []);
         }
 
         if (root is not JsonObject resource)
         {
-            return request.RawJson;
+            return new DeIdentificationResult(request.RawJson, []);
         }
 
+        var hops = new List<DeIdentificationFieldHop>();
         var rules = await _ruleRepository.GetPreMappingRulesAsync(profileId, request.ResourceType, cancellationToken);
         foreach (var rule in rules)
         {
@@ -60,11 +61,64 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
                 continue;
             }
 
+            // Captured before mutating so the hop's "before" value reflects what this field actually held prior
+            // to this rule — TryReadValueAt returns null both for "path doesn't exist" and "value was itself
+            // null," which is fine here: either way there is nothing meaningful to redact or report as changed.
             var pathSegments = rule.SourceField.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var beforeValue = TryReadValueAt(resource, pathSegments, 0);
+            if (beforeValue is null)
+            {
+                continue;
+            }
+
             ApplyPath(resource, pathSegments, 0, strategy, rule.ConfigJson);
+            var afterValue = TryReadValueAt(resource, pathSegments, 0);
+
+            hops.Add(new DeIdentificationFieldHop(
+                rule.SourceField,
+                strategy.ToString(),
+                rule.ConfigJson,
+                beforeValue,
+                afterValue,
+                true,
+                null));
         }
 
-        return resource.ToJsonString();
+        return new DeIdentificationResult(resource.ToJsonString(), hops);
+    }
+
+    /// <summary>Best-effort read of the same path <see cref="ApplyPath"/> would mutate — used only to capture a
+    /// lineage hop's before/after value, so it deliberately mirrors ApplyPath's array-fan-out/object-descent
+    /// rules but returns a single serialized snapshot (the first match) rather than mutating every array element.</summary>
+    private static string? TryReadValueAt(JsonNode? node, IReadOnlyList<string> path, int index)
+    {
+        switch (node)
+        {
+            case JsonArray array:
+                foreach (var element in array)
+                {
+                    var value = TryReadValueAt(element, path, index);
+                    if (value is not null)
+                    {
+                        return value;
+                    }
+                }
+
+                return null;
+
+            case JsonObject obj when index == path.Count - 1:
+                return obj.TryGetPropertyValue(path[index], out var leaf) && leaf is not null
+                    ? leaf.ToJsonString()
+                    : null;
+
+            case JsonObject obj:
+                return obj.TryGetPropertyValue(path[index], out var child)
+                    ? TryReadValueAt(child, path, index + 1)
+                    : null;
+
+            default:
+                return null;
+        }
     }
 
     private static bool TryReadStrategy(string configJson, out DeIdentificationStrategy strategy)

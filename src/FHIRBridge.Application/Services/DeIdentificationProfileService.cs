@@ -65,7 +65,7 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
             new DeIdentificationRequest(request.ResourceType, null, request.SampleJson, [], profile.Id),
             cancellationToken);
 
-        return new DeIdentificationPreviewResult(redacted);
+        return new DeIdentificationPreviewResult(redacted.Json);
     }
 
     private static DeIdentificationProfileDto ToDto(DeIdentificationProfile profile) =>

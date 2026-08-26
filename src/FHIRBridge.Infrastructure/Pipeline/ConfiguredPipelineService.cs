@@ -856,14 +856,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             if (governanceDecision.DeIdentificationProfileId is { } deIdentificationProfileId)
             {
-                governedJson = await _deIdentificationService.DeIdentifyAsync(
+                governedJson = (await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
                         resourceType,
                         resource.ResourceId,
                         governedJson,
                         governanceDecision.AppliedPolicies,
                         deIdentificationProfileId),
-                    cancellationToken);
+                    cancellationToken)).Json;
             }
 
             preparedResources.Add(resource with { RawJson = governedJson });

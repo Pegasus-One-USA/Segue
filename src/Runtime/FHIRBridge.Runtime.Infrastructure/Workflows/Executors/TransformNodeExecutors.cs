@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Normalization;
@@ -199,6 +200,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // set that can't have changed mid-batch.
         var ruleCache = new Dictionary<string, IReadOnlyList<TransformationRule>>();
 
+        // Each resource's PreMapping de-identification redactions (see WorkflowNodeOutputMetadataKeys.
+        // PreMappingRedactions), keyed by resource id — attached by an upstream DeIdentification node so its
+        // hops can be merged into the same Field Lineage chain this node builds for its own PostMapping rules.
+        // Empty (not an error) whenever no upstream node produced any, or nothing was redacted.
+        var preMappingRedactionsByResourceId = inputs
+            .Select(input => input.Metadata?.TryGetValue(WorkflowNodeOutputMetadataKeys.PreMappingRedactions, out var value) == true
+                ? value as IReadOnlyDictionary<string, IReadOnlyList<DeIdentificationFieldHop>>
+                : null)
+            .FirstOrDefault(value => value is not null);
+
         var records = new List<MappedDestinationRecord>();
         // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
         var runTimestampUtc = DateTime.UtcNow;
@@ -269,6 +280,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                var preMappingHops = preMappingRedactionsByResourceId is not null
+                    && preMappingRedactionsByResourceId.TryGetValue(resource.ResourceId, out var resourceHops)
+                        ? resourceHops
+                        : (IReadOnlyList<DeIdentificationFieldHop>)[];
                 // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
                 // source FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
                 var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
@@ -311,7 +326,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
@@ -461,6 +476,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
         string resourceId,
         string? sourceJson,
+        IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
@@ -492,6 +508,34 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             sourceFieldByTarget.TryGetValue(destinationField, out var sourceField);
             var cacheKey = $"{resourceType}|{destinationField}|{sourceField}";
 
+            // PreMapping de-identification hops for this field, if any — prepended ahead of whatever runs below
+            // so the field's chain reads source-order: redaction first, then the PostMapping rule chain (or the
+            // plain pass-through hop). Continues the same NodeOrder sequence so the whole chain stays contiguous.
+            var nodeOrder = 0;
+            if (preMappingHops.Count > 0 && sourceField is not null)
+            {
+                foreach (var hop in preMappingHops)
+                {
+                    if (!string.Equals(hop.SourceField, sourceField, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    lineageEntries?.Add(new LineageHopEntryDto(
+                        destinationField,
+                        sourceField,
+                        nodeOrder++,
+                        "DeIdentification:" + hop.Strategy,
+                        hop.ConfigJson,
+                        hop.BeforeValueJson,
+                        hop.AfterValueJson,
+                        hop.Success,
+                        hop.ErrorMessage,
+                        null,
+                        DateTimeOffset.UtcNow));
+                }
+            }
+
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
@@ -501,12 +545,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
             if (rules.Count == 0)
             {
+                // No PostMapping rule chain for this field — still record a pass-through hop so every field the
+                // Mapping node actually writes has at least one lineage row (previously this `continue` meant a
+                // plain "Direct/write verbatim" mapping, the common case, never got any lineage at all).
+                lineageEntries?.Add(new LineageHopEntryDto(
+                    destinationField,
+                    sourceField,
+                    nodeOrder,
+                    "DirectMapping",
+                    "{}",
+                    SerializeLineageValue(value),
+                    SerializeLineageValue(value),
+                    true,
+                    null,
+                    null,
+                    DateTimeOffset.UtcNow));
                 continue;
             }
 
             var currentValue = value;
             string? writeBackPath = null;
-            var nodeOrder = 0;
             foreach (var rule in rules)
             {
                 var hopIndex = nodeOrder++;
