@@ -1,0 +1,25 @@
+poc/ecw-ehr-launch-poc/appsettings.json
+  s_cddc8f2857e289::t_215f38387c5489 1-17
+poc/ecw-ehr-launch-poc/Program.cs
+  s_cddc8f2857e289::t_51e71a540d38d0 1-271
+poc/ecw-ehr-launch-poc/ecw-ehr-launch-poc.csproj
+  s_cddc8f2857e289::t_211d57ca7e7461 1-11
+poc/ecw-ehr-launch-poc/README.md
+  s_cddc8f2857e289::t_7344cb68d4f155 1-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "90b98d0f1489ca7487f6d13a245965501e821607",
+  "prompts": {},
+  "sessions": {
+    "s_cddc8f2857e289": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05f8277d-d6c5-400e-805b-bd1d37d319d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
