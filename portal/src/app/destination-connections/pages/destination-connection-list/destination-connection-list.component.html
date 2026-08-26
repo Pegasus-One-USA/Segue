@@ -21,8 +21,12 @@
       <div class="type-filter-wrap">
         <select class="type-filter-select" [value]="typeFilter()" (change)="onTypeFilterChange($any($event.target).value)">
           <option value="">All types</option>
-          @for (t of typeOptions; track t.value) {
-            <option [value]="t.value">{{ t.label }}</option>
+          @for (g of typeGroups; track g.category) {
+            <optgroup [label]="g.category">
+              @for (t of g.options; track t.value) {
+                <option [value]="t.value">{{ t.label }}</option>
+              }
+            </optgroup>
           }
         </select>
       </div>

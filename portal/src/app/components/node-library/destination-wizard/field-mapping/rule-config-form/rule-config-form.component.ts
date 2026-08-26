@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
 import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformation-rules.service';
 
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
@@ -19,6 +20,11 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
 
 const CUSTOM_SENTINEL = '__custom__';
 
+interface KeyValueRow {
+  key: string;
+  value: string;
+}
+
 /**
  * Renders the right control (dropdown/text/checkbox/combo) per config key a node type reads, instead of a raw
  * JSON textarea — driven entirely by the schema TransformationRulesService.getNodeSchemas() returns, so a
@@ -27,11 +33,23 @@ const CUSTOM_SENTINEL = '__custom__';
 @Component({
   selector: 'app-rule-config-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatIconModule],
   template: `
     <div class="rule-config-form">
       @for (field of orderedFields(); track field.key) {
         @switch (field.inputKind) {
+          @case ('number') {
+            <div class="config-control">
+              <label [for]="'rcf-' + field.key">{{ field.label }}</label>
+              <input
+                type="number"
+                [id]="'rcf-' + field.key"
+                [ngModel]="config[field.key] ?? field.defaultValue ?? ''"
+                (ngModelChange)="setValue(field.key, $event)"
+                [placeholder]="field.placeholder ?? ''"
+              />
+            </div>
+          }
           @case ('select') {
             <div class="config-control">
               <label [for]="'rcf-' + field.key">{{ field.label }}</label>
@@ -58,6 +76,26 @@ const CUSTOM_SENTINEL = '__custom__';
                   [placeholder]="field.placeholder ?? ''"
                 />
               }
+            </div>
+          }
+          @case ('keyvalue') {
+            <div class="config-control config-control--keyvalue">
+              <label>{{ field.label }}</label>
+              <div class="keyvalue-table">
+                @for (row of mapRowsFor(field); track $index) {
+                  <div class="keyvalue-row">
+                    <input placeholder="From" [ngModel]="row.key" (ngModelChange)="setMapRowKey(field, $index, $event)" />
+                    <mat-icon class="keyvalue-arrow">arrow_forward</mat-icon>
+                    <input placeholder="To" [ngModel]="row.value" (ngModelChange)="setMapRowValue(field, $index, $event)" />
+                    <button type="button" class="keyvalue-remove" (click)="removeMapRow(field, $index)" aria-label="Remove row">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  </div>
+                }
+                <button type="button" class="keyvalue-add" (click)="addMapRow(field)">
+                  <mat-icon>add</mat-icon> Add row
+                </button>
+              </div>
             </div>
           }
           @case ('checkbox') {
@@ -148,5 +186,67 @@ export class RuleConfigFormComponent {
     }
     this.forcedCustomKeys.delete(field.key);
     this.setValue(field.key, value);
+  }
+
+  // Cached per field key alongside the raw JSON string it was parsed from, so a keystroke in one row
+  // doesn't reparse the whole table on every change detection pass, while an external change to
+  // config[field.key] (e.g. switching this step's node type, or loading a different saved rule into this
+  // same component instance) is still picked up — detected by the raw string no longer matching what's
+  // cached, which re-parses from scratch rather than silently showing stale rows.
+  private readonly mapRowsCache = new Map<string, { raw: string; rows: KeyValueRow[] }>();
+
+  mapRowsFor(field: TransformConfigFieldSchema): KeyValueRow[] {
+    const raw = this.config[field.key] ?? field.defaultValue ?? '{}';
+    const cached = this.mapRowsCache.get(field.key);
+    if (cached && cached.raw === raw) {
+      return cached.rows;
+    }
+
+    const rows = this.parseMapRows(raw);
+    this.mapRowsCache.set(field.key, { raw, rows });
+    return rows;
+  }
+
+  private parseMapRows(json: string): KeyValueRow[] {
+    try {
+      const parsed: unknown = JSON.parse(json);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return Object.entries(parsed as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value) }));
+      }
+    } catch {
+      // A previously-saved value that isn't valid JSON (shouldn't happen going forward, now that this
+      // field can only be edited through this table) starts fresh instead of crashing the form.
+    }
+    return [];
+  }
+
+  setMapRowKey(field: TransformConfigFieldSchema, index: number, key: string): void {
+    this.syncMapField(field, this.mapRowsFor(field).map((row, i) => (i === index ? { ...row, key } : row)));
+  }
+
+  setMapRowValue(field: TransformConfigFieldSchema, index: number, value: string): void {
+    this.syncMapField(field, this.mapRowsFor(field).map((row, i) => (i === index ? { ...row, value } : row)));
+  }
+
+  addMapRow(field: TransformConfigFieldSchema): void {
+    this.syncMapField(field, [...this.mapRowsFor(field), { key: '', value: '' }]);
+  }
+
+  removeMapRow(field: TransformConfigFieldSchema, index: number): void {
+    this.syncMapField(field, this.mapRowsFor(field).filter((_, i) => i !== index));
+  }
+
+  // A row whose "from" is still blank (freshly added, not yet typed into) is kept in the visible table but
+  // left out of the serialized JSON object — so a half-filled new row never becomes a stray `"": "..."`
+  // entry in the saved config.
+  private syncMapField(field: TransformConfigFieldSchema, rows: KeyValueRow[]): void {
+    const obj: Record<string, string> = {};
+    for (const row of rows) {
+      if (row.key !== '') obj[row.key] = row.value;
+    }
+
+    const raw = JSON.stringify(obj);
+    this.setValue(field.key, raw);
+    this.mapRowsCache.set(field.key, { raw, rows });
   }
 }

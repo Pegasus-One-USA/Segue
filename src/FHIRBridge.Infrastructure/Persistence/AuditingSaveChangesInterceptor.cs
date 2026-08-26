@@ -54,6 +54,23 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         var actor = _currentUserService.CurrentUser.AuditName;
         var now = DateTime.UtcNow;
 
+        // Pass 0 (PostgreSQL only): RowVersion has no store-generated value on this provider — see
+        // FHIRBridgeDbContext.OnModelCreating's Npgsql branch — so stamp a fresh value on every
+        // Added/Modified entry ourselves. This is what actually makes the column non-null on insert and
+        // makes a stale concurrent update's WHERE clause miss (triggering the same DbUpdateConcurrencyException
+        // SQL Server's native rowversion produces automatically).
+        if (context.Database.IsNpgsql())
+        {
+            foreach (var entry in context.ChangeTracker.Entries())
+            {
+                if (entry.State is EntityState.Added or EntityState.Modified
+                    && entry.Properties.FirstOrDefault(p => p.Metadata.Name == "RowVersion") is { } rowVersion)
+                {
+                    rowVersion.CurrentValue = Guid.NewGuid().ToByteArray();
+                }
+            }
+        }
+
         // Pass 1: never physically delete a soft-deletable root — flip it to a soft delete so audit/lineage
         // references stay resolvable.
         foreach (var entry in context.ChangeTracker.Entries())

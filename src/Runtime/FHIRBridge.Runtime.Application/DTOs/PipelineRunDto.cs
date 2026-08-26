@@ -13,4 +13,5 @@ public sealed record PipelineRunDto(
     string? FailureMessage,
     DateTime StartedOnUtc,
     DateTime? CompletedOnUtc,
-    IReadOnlyList<PipelineStepDto> Steps);
+    IReadOnlyList<PipelineStepDto> Steps,
+    string? ErrorReferenceId = null);

@@ -16,7 +16,7 @@ public sealed class ConfiguredPipelineRunRecordConfiguration : IEntityTypeConfig
         builder.Property(x => x.ExtractedResourceCount).IsRequired();
         builder.Property(x => x.MappedRecordCount).IsRequired();
         builder.Property(x => x.WrittenRecordCount).IsRequired();
-        builder.Property(x => x.Errors).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.Errors).IsRequired();
         builder.Property(x => x.StartedOnUtc).IsRequired();
         builder.Property(x => x.CompletedOnUtc).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();

@@ -288,6 +288,10 @@ export interface WorkflowSummary {
   edges: number;
   lastRun: string | null;           // WorkflowRunStatus name (Running | Succeeded | Failed) or null
   lastRunAt: string | null;
+  /** Populated live via RunStatusHub when lastRun becomes Failed (see WorkflowListComponent's constructor) —
+   *  not part of the initial /workflows/summary fetch, so it's absent until a failure event actually arrives
+   *  during this session. Null/absent means "no reference id to show," never a placeholder. */
+  lastRunErrorReferenceId?: string | null;
   action: WorkflowAction;
   actionEndpoint: string;
   sourceConnectionId: string | null;

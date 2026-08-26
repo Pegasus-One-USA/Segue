@@ -1,7 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
+import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 
 /**
  * MongoDB destination connection form — extracted from DestinationWizardComponent's inline mongoForm. This is
@@ -17,6 +18,10 @@ import { WizardDestinationFormApi } from './destination-form-api';
 })
 export class MongoDestinationFormComponent implements WizardDestinationFormApi {
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
+
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
 
   readonly mongoForm = this.fb.group({
     name: ['MongoDB Production', [Validators.required]],
@@ -31,6 +36,34 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
 
   isValid(): boolean {
     return this.mongoForm.valid;
+  }
+
+  /** The probe only needs the connection string (which embeds host/db/credentials); the other required fields
+   *  (name, collection) aren't part of the connectivity check. */
+  canTest(): boolean {
+    return !!this.mongoForm.value.connectionString;
+  }
+
+  /** Live connectivity check before saving: opens a Mongo client on the entered connection string and pings
+   *  the database server-side (see MongoDestinationConnectionTestService). Never blocks Save. */
+  testConnection(): void {
+    if (!this.canTest()) return;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.schemaSvc.testMongo({ connectionString: this.mongoForm.value.connectionString ?? '' }).subscribe({
+      next: res => {
+        if (res.connected) {
+          this.probeState.set('ok');
+        } else {
+          this.probeState.set('error');
+          this.probeError.set(res.error ?? 'Connection failed.');
+        }
+      },
+      error: err => {
+        this.probeState.set('error');
+        this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
+      },
+    });
   }
 
   getRawValue(): Record<string, unknown> {

@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 namespace FHIRBridge.Api.Controllers.V1;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
 [Route("api/v1/mapping")]
 public sealed class MappingController : ControllerBase
 {
@@ -32,6 +31,7 @@ public sealed class MappingController : ControllerBase
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
     [ProducesResponseType(typeof(MappingTestResultDto), StatusCodes.Status200OK)]
     public IActionResult TestMapping([FromBody] TestMappingRequest request)
     {
@@ -47,6 +47,7 @@ public sealed class MappingController : ControllerBase
     // regression versus what it shows now. Field-level lookup (below) is the one that's vendor-aware,
     // with a fallback to generic per resource type, so this can follow once more resources are converted.
     [HttpGet("catalog/resources")]
+    [Authorize(Policy = AuthorizationPolicies.MappingCatalogAccess)]
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
     public IActionResult GetCatalogResources()
     {
@@ -64,6 +65,7 @@ public sealed class MappingController : ControllerBase
     /// cover yet, or when neither a source connection nor a vendor is given at all.
     /// </summary>
     [HttpGet("catalog/resources/{resourceType}/fields")]
+    [Authorize(Policy = AuthorizationPolicies.MappingCatalogAccess)]
     [ProducesResponseType(typeof(IReadOnlyList<FhirElementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalogFields(
         string resourceType,

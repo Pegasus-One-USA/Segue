@@ -110,6 +110,15 @@
                   [class.status-neutral]="r.status === 'Running' || r.status === 'Skipped'">
               {{ r.status }}
             </span>
+            @if (r.errorReferenceId) {
+              <a
+                class="mono link error-reference-link"
+                [routerLink]="['/operations/errors']"
+                [queryParams]="{ errorReferenceId: r.errorReferenceId }"
+                (click)="$event.stopPropagation()"
+                title="View this error in Operations → Errors"
+              >{{ r.errorReferenceId }}</a>
+            }
           </td>
         </ng-container>
 

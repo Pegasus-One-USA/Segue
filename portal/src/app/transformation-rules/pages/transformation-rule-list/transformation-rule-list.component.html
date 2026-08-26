@@ -41,6 +41,7 @@
         <div class="form-field">
           <label for="ntf-resourceType">{{ newTarget().scope === 'ResourceType' ? 'Resource type' : 'Resource type (for field picker)' }}</label>
           <select id="ntf-resourceType" [ngModel]="newTarget().resourceType" (ngModelChange)="onResourceTypeChangeForNewTarget($event)">
+            <option value="">Choose a resource type…</option>
             @for (rt of resourceTypeOptions; track rt) {
               <option [value]="rt">{{ rt }}</option>
             }
@@ -299,6 +300,22 @@
                         <select [id]="'array-mode-' + stepIndex" [ngModel]="step.arrayMode" (ngModelChange)="setArrayMode(step, $event)">
                           <option value="Whole">Whole value</option>
                           <option value="PerItem">Per item</option>
+                        </select>
+                      </div>
+                      <div
+                        class="form-field config-control"
+                        matTooltip="What data type this step's output is expected to be — validated against the destination column when a workflow's mapping is saved, so a mismatch is caught there instead of failing during a pipeline run."
+                      >
+                        <label [for]="'expected-type-' + stepIndex">Expected output type</label>
+                        <select [id]="'expected-type-' + stepIndex" [ngModel]="step.expectedValueType ?? ''" (ngModelChange)="setExpectedValueType(step, $event)">
+                          <option value="">Not declared</option>
+                          <option value="String">String</option>
+                          <option value="Integer">Integer</option>
+                          <option value="Decimal">Decimal</option>
+                          <option value="Boolean">Boolean</option>
+                          <option value="Date">Date</option>
+                          <option value="DateTime">DateTime</option>
+                          <option value="Json">Json</option>
                         </select>
                       </div>
                       <div

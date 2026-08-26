@@ -43,12 +43,14 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             : context.UserFriendlyMessageOverride!;
 
         var referenceId = ErrorReference.New();
+        var persisted = false;
 
         // Capturing an error must never itself throw — a failure here (e.g. DB unreachable) must not mask the
-        // original exception or crash the host. Worst case the caller still gets a reference id to quote, even if
-        // every attempt below failed to persist. On failure, a fresh reference id is tried again (see remarks on
+        // original exception or crash the host. On failure, a fresh reference id is tried again (see remarks on
         // ErrorReference) rather than giving up after the first attempt — otherwise a same-day restart's first
-        // handful of captures would silently vanish instead of ending up in ErrorLogs.
+        // handful of captures would silently vanish instead of ending up in ErrorLogs. If every attempt still
+        // fails to persist, the returned report's ErrorReferenceId is null — a caller must never hand out an id
+        // that has no matching ErrorLogs row for Operations → Errors (or the caller) to ever find.
         for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
         {
             try
@@ -74,6 +76,7 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
                         diagnosis.Cause),
                     cancellationToken);
 
+                persisted = true;
                 break;
             }
             catch
@@ -88,15 +91,18 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             }
         }
 
-        return new ErrorReport(referenceId, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
+        return new ErrorReport(persisted ? referenceId : null, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
     }
 
-    public async Task<string> CaptureExpectedAsync(
+    public async Task<string?> CaptureExpectedAsync(
         ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
     {
         var referenceId = ErrorReference.New();
 
-        // Same never-throw guarantee as CaptureAsync: capturing must not itself fail the request.
+        // Same never-throw guarantee as CaptureAsync: capturing must not itself fail the request. Unlike
+        // CaptureAsync there's no retry-on-failure here (this path is best-effort/Informational already) —
+        // a single failed write simply means no reference id is returned, same "never hand out an orphaned
+        // id" guarantee.
         try
         {
             await _governanceLogger.LogErrorAsync(
@@ -123,6 +129,7 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
         catch
         {
             // Intentionally swallowed: see remarks above.
+            return null;
         }
 
         return referenceId;

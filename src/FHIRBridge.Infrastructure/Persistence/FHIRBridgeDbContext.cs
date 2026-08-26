@@ -41,6 +41,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
     public DbSet<LoincConcept> LoincConcepts => Set<LoincConcept>();
@@ -121,6 +123,11 @@ public sealed class FHIRBridgeDbContext : DbContext
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FHIRBridgeDbContext).Assembly);
 
+        // GETUTCDATE() is T-SQL only; Npgsql has no such function — timezone('utc', now()) is its equivalent.
+        // Database.IsNpgsql() is safe to call even when only the SqlServer provider is active at runtime.
+        var isNpgsql = Database.IsNpgsql();
+        var createdOnUtcDefaultSql = isNpgsql ? "timezone('utc', now())" : "GETUTCDATE()";
+
         // Cross-cutting conventions applied after the per-entity configurations:
         //  • soft-deletable entities get a global "hide deleted rows" query filter
         //  • every entity carrying a RowVersion gets it mapped as an optimistic-concurrency token
@@ -137,9 +144,28 @@ public sealed class FHIRBridgeDbContext : DbContext
 
             if (!entityType.IsOwned() && entityType.FindProperty(nameof(AuditableEntity<int>.RowVersion)) is not null)
             {
-                modelBuilder.Entity(clrType)
-                    .Property(nameof(AuditableEntity<int>.RowVersion))
-                    .IsRowVersion();
+                if (isNpgsql)
+                {
+                    // SQL Server's native "rowversion" type is DB-generated and auto-incrementing, so
+                    // .IsRowVersion() (== ValueGeneratedOnAddOrUpdate + IsConcurrencyToken) is enough there —
+                    // EF treats it as store-generated and never sends a value for it. Postgres has no
+                    // equivalent column type for a plain byte[]: nothing populates it, so treating it the same
+                    // way just means EF omits it from every INSERT and the NOT NULL constraint fails outright.
+                    // (The usual Npgsql substitute, mapping the "xmin" system column, doesn't work here either —
+                    // xmin can't be declared as a column in CREATE TABLE, Postgres reserves that name.)
+                    // Instead: mark it concurrency-token-only (no store generation) and let
+                    // AuditingSaveChangesInterceptor.Stamp stamp a fresh value on every Added/Modified entry —
+                    // the same trick EF Core itself relies on for providers with no native row-versioning.
+                    modelBuilder.Entity(clrType)
+                        .Property(nameof(AuditableEntity<int>.RowVersion))
+                        .IsConcurrencyToken();
+                }
+                else
+                {
+                    modelBuilder.Entity(clrType)
+                        .Property(nameof(AuditableEntity<int>.RowVersion))
+                        .IsRowVersion();
+                }
             }
 
             // CreatedOnUtc/CreatedBy are always stamped by AuditingSaveChangesInterceptor before a row is ever
@@ -154,7 +180,7 @@ public sealed class FHIRBridgeDbContext : DbContext
                 modelBuilder.Entity(clrType)
                     .Property(nameof(IAuditableEntity.CreatedOnUtc))
                     .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql(createdOnUtcDefaultSql);
 
                 modelBuilder.Entity(clrType)
                     .Property(nameof(IAuditableEntity.CreatedBy))
@@ -162,6 +188,45 @@ public sealed class FHIRBridgeDbContext : DbContext
                     .HasMaxLength(320)
                     .HasDefaultValue("system");
             }
+        }
+
+        // WorkflowDefinition doesn't implement IAuditableEntity — it's a Runtime-domain aggregate configured
+        // directly in WorkflowPersistenceConfigurations.cs, which sets its own CreatedOnUtc default — so the
+        // loop above never reaches it. Overriding it here (after ApplyConfigurationsFromAssembly has already
+        // run) keeps the same GETUTCDATE()-vs-Postgres split without duplicating the whole entity configuration.
+        modelBuilder.Entity<WorkflowDefinition>()
+            .Property(x => x.CreatedOnUtc)
+            .HasDefaultValueSql(createdOnUtcDefaultSql);
+
+        // A handful of entity configurations declare filtered-index/check-constraint predicates as raw SQL
+        // using T-SQL's "[Column]"-bracket identifier quoting and integer 0/1 boolean literals — neither
+        // parses on Postgres ("[" is a syntax error, and a boolean column can't be compared to an integer).
+        // Re-declaring the same index/constraint here (matched by the same property set / constraint name)
+        // overrides the predicate text from the per-entity configuration above, the same override pattern
+        // used for WorkflowDefinition.CreatedOnUtc just above.
+        if (isNpgsql)
+        {
+            modelBuilder.Entity<AllowedCorsOrigin>()
+                .HasIndex(x => x.OriginUrl).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<EhrEndpoint>()
+                .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<SystemSetting>()
+                .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<ErrorLog>()
+                .HasIndex(x => x.ErrorReferenceId).HasFilter("\"ErrorReferenceId\" IS NOT NULL");
+            modelBuilder.Entity<PermissionAllocation>().ToTable(tb => tb.HasCheckConstraint(
+                "CK_PermissionAllocations_RoleXorUser",
+                "(\"RoleId\" IS NOT NULL AND \"UserId\" IS NULL) OR (\"RoleId\" IS NULL AND \"UserId\" IS NOT NULL)"));
+
+            modelBuilder.Entity<CvxVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<HcpcsVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<Icd10PcsVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<Icd10Version>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<LoincVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<NdcVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<RxNormVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<SnomedVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+            modelBuilder.Entity<UcumVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
         }
     }
 

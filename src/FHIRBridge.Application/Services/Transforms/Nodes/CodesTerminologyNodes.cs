@@ -79,11 +79,12 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         ["ICD10"] = "http://hl7.org/fhir/sid/icd-10-cm",
         ["RXNORM"] = "http://www.nlm.nih.gov/research/umls/rxnorm",
         ["NPI"] = "http://hl7.org/fhir/sid/us-npi",
-        // Added alongside the terminology auto-poll work — HCPCS/ICD10PCS use the FHIR-registered "sid" URN
-        // pattern by convention; verify against https://www.hl7.org/fhir/terminologies-systems.html before
-        // treating these as gospel if a downstream consumer ever flags an unrecognized system.
-        ["HCPCS"] = "urn:oid:2.16.840.1.113883.6.285",
-        ["ICD10PCS"] = "http://hl7.org/fhir/sid/icd-10-pcs",
+        // Confirmed against HL7's official Terminology registry (terminology.hl7.org) — these are the
+        // canonical system URIs, and must match the url used when loading each CodeSystem into the
+        // terminology server (see HapiHcpcsTerminologySyncService/HapiIcd10PcsTerminologySyncService),
+        // or a lookup here silently misses even though the code is genuinely loaded.
+        ["HCPCS"] = "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets",
+        ["ICD10PCS"] = "http://www.cms.gov/Medicare/Coding/ICD10",
         ["NDC"] = "http://hl7.org/fhir/sid/ndc",
         ["CVX"] = "http://hl7.org/fhir/sid/cvx",
         ["UCUM"] = "http://unitsofmeasure.org",

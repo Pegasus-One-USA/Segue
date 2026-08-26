@@ -33,6 +33,11 @@ public sealed class PipelineRun
     public int ExtractedResourceCount { get; private set; }
     public int WrittenResourceCount { get; private set; }
     public string? FailureMessage { get; private set; }
+
+    /// <summary>The Global Exception Manager's <c>ERR-yyyyMMdd-NNNNNN</c> id for this run's failure, when one was
+    /// actually persisted to ErrorLogs — set via <see cref="SetErrorReference"/> after <see cref="Fail"/>. Null
+    /// whenever no capture ran or the capture itself failed to persist (never a placeholder).</summary>
+    public string? ErrorReferenceId { get; private set; }
     public DateTime StartedOnUtc { get; }
     public DateTime? CompletedOnUtc { get; private set; }
     public IReadOnlyCollection<PipelineRunStep> Steps => _steps.AsReadOnly();
@@ -65,5 +70,16 @@ public sealed class PipelineRun
         Status = PipelineRunStatus.Failed;
         FailureMessage = message;
         CompletedOnUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Records the Global Exception Manager's reference id for this run's failure. Called only after
+    /// the capture call has actually returned — pass null (a no-op) when no exception manager was registered or
+    /// the capture failed to persist.</summary>
+    public void SetErrorReference(string? referenceId)
+    {
+        if (referenceId is not null)
+        {
+            ErrorReferenceId = referenceId;
+        }
     }
 }

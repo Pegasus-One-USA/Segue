@@ -28,7 +28,8 @@ public static class PipelineDtoMapper
                     step.Message,
                     step.StartedOnUtc,
                     step.CompletedOnUtc))
-                .ToList());
+                .ToList(),
+            pipelineRun.ErrorReferenceId);
     }
 
     public static PipelineRunEventDto ToDto(PipelineRunEvent pipelineRunEvent)

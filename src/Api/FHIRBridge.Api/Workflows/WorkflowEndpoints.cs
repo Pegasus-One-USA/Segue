@@ -1470,7 +1470,8 @@ public static class WorkflowEndpoints
                     run.NodeRuns.Count,
                     run.ErrorMessage,
                     run.WorkflowDefinitionVersion,
-                    run.CorrelationId));
+                    run.CorrelationId,
+                    run.ErrorReferenceId));
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -1575,7 +1576,8 @@ public static class WorkflowEndpoints
                 run.NodeRuns.Count,
                 run.ErrorMessage,
                 run.WorkflowDefinitionVersion,
-                run.CorrelationId));
+                run.CorrelationId,
+                run.ErrorReferenceId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.

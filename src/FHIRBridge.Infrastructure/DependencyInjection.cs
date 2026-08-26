@@ -41,6 +41,15 @@ using Microsoft.Extensions.Http.Resilience;
 
 namespace FHIRBridge.Infrastructure;
 
+/// <summary>EF Core provider backing <see cref="Persistence.FHIRBridgeDbContext"/>, selected via the
+/// "Database:Provider" config key. Defaults to <see cref="SqlServer"/> so every existing deployment
+/// (which has no such key set) keeps behaving exactly as before.</summary>
+public enum PersistenceProvider
+{
+    SqlServer,
+    PostgreSql
+}
+
 public static class DependencyInjection
 {
     public static IServiceCollection AddFHIRBridgeInfrastructure(
@@ -163,6 +172,7 @@ public static class DependencyInjection
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
 
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
+        var persistenceProvider = configuration.GetValue("Database:Provider", PersistenceProvider.SqlServer);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -176,6 +186,8 @@ public static class DependencyInjection
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
+            services.AddSingleton<IBrandConfigurationRepository, InMemoryBrandConfigurationRepository>();
+            services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
 
             // No database: per-process idempotency. Fine for single-process dev; not multi-instance safe.
             services.AddSingleton<IProcessedMessageStore, InMemoryProcessedMessageStore>();
@@ -215,7 +227,18 @@ public static class DependencyInjection
 
             services.AddDbContext<FHIRBridgeDbContext>((sp, options) =>
             {
-                options.UseSqlServer(connectionString);
+                switch (persistenceProvider)
+                {
+                    case PersistenceProvider.PostgreSql:
+                        options.UseNpgsql(
+                            connectionString,
+                            npgsql => npgsql.MigrationsAssembly("FHIRBridge.Infrastructure.Migrations.PostgreSql"));
+                        break;
+                    default:
+                        options.UseSqlServer(connectionString);
+                        break;
+                }
+
                 options.AddInterceptors(sp.GetRequiredService<AuditingSaveChangesInterceptor>());
             });
 
@@ -234,6 +257,8 @@ public static class DependencyInjection
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
+            services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();
+            services.AddScoped<ITenantRepository, EfTenantRepository>();
 
             services.AddScoped<IConfigurationRepository, EfConfigurationRepository>();
             services.AddScoped<ISchemaMappingRepository, EfSchemaMappingRepository>();
@@ -243,6 +268,7 @@ public static class DependencyInjection
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IBulkExportJobRepository, EfBulkExportJobRepository>();
+            services.Configure<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>(configuration.GetSection("BulkExport"));
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
@@ -322,6 +348,11 @@ public static class DependencyInjection
         services.Configure<LocalAuthOptions>(configuration.GetSection("LocalAuth"));
         services.AddScoped<IEmailSender, Email.SmtpEmailSender>();
         services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+        services.AddScoped<Application.Abstractions.Branding.IBrandConfigurationService, Application.Services.BrandConfigurationService>();
+        services.AddScoped<Application.Abstractions.Tenancy.ITenantsService, Application.Services.TenantsService>();
+        // Singleton, same reasoning as IUserPermissionsProvider/CachedUserPermissionsProvider — resolves
+        // IUserAccessRepository lazily through a scope, so it works with either repository registration.
+        services.AddSingleton<Application.Abstractions.Tenancy.ICurrentTenantResolver, Security.CachedCurrentTenantResolver>();
         services.AddHttpClient(nameof(SourceConnectionTestService));
         services.AddHttpClient(nameof(SourceCapabilityDiscoveryService));
         services.AddHttpClient(nameof(BackendAuthScopeProbeService));
@@ -416,6 +447,15 @@ public static class DependencyInjection
                 sp.GetRequiredService<IHttpClientFactory>(),
                 sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>(),
                 sp.GetRequiredService<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>()));
+
+        services.AddHttpClient(nameof(Destinations.MedplumDestinationConnectionTestService));
+        services.AddScoped<IMedplumDestinationConnectionTestService>(sp =>
+            new Destinations.MedplumDestinationConnectionTestService(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IMedplumTokenProvider>()));
+
+        services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
+        services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {
@@ -597,10 +637,21 @@ public static class DependencyInjection
         services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
-        services.AddHealthChecks()
-            .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
-            .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde")
+        var healthChecksBuilder = services.AddHealthChecks()
             .AddCheck<KeyVaultConfigurationHealthCheck>("keyvault");
+
+        // TDE (Transparent Data Encryption) is a SQL Server / Azure SQL-only concept — there is no PostgreSQL
+        // equivalent, so it's only registered on the SqlServer path.
+        if (persistenceProvider == PersistenceProvider.PostgreSql)
+        {
+            healthChecksBuilder.AddCheck<PostgresConnectionHealthCheck>("postgresql");
+        }
+        else
+        {
+            healthChecksBuilder
+                .AddCheck<SqlServerConnectionHealthCheck>("sqlserver")
+                .AddCheck<SqlServerTdeHealthCheck>("sqlserver-tde");
+        }
 
         return services;
     }

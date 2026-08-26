@@ -64,6 +64,49 @@ services:
       timeout: 10s
       retries: 15
 
+  # --- Terminology server POC (added alongside the existing hapi-fhir/hapi-postgres pair above,
+  # which continues to serve as the EHR-source stand-in for bulk-export/webhook testing).
+  # This pair is a separate HAPI FHIR instance + its own Postgres database, dedicated to serving
+  # code system lookups ($lookup/$validate-code/$expand/$translate). Nothing in the existing
+  # FHIRBridge codebase points at it yet — see tools/TerminologyServerPoc/README.md.
+  hapi-terminology-postgres:
+    image: postgres:16-alpine
+    container_name: fhirbridge-hapi-terminology-postgres
+    environment:
+      POSTGRES_DB: "${HAPI_TERMINOLOGY_POSTGRES_DB:-hapi_terminology}"
+      POSTGRES_USER: "${HAPI_TERMINOLOGY_POSTGRES_USER:-hapi_terminology}"
+      POSTGRES_PASSWORD: "${HAPI_TERMINOLOGY_POSTGRES_PASSWORD:-hapi_terminology_password}"
+    ports:
+      - "${HAPI_TERMINOLOGY_POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - hapi-terminology-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HAPI_TERMINOLOGY_POSTGRES_USER:-hapi_terminology} -d ${HAPI_TERMINOLOGY_POSTGRES_DB:-hapi_terminology}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hapi-terminology:
+    image: hapiproject/hapi:latest
+    container_name: fhirbridge-hapi-terminology
+    depends_on:
+      hapi-terminology-postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://hapi-terminology-postgres:5432/${HAPI_TERMINOLOGY_POSTGRES_DB:-hapi_terminology}"
+      SPRING_DATASOURCE_USERNAME: "${HAPI_TERMINOLOGY_POSTGRES_USER:-hapi_terminology}"
+      SPRING_DATASOURCE_PASSWORD: "${HAPI_TERMINOLOGY_POSTGRES_PASSWORD:-hapi_terminology_password}"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: "org.postgresql.Driver"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect"
+      HAPI_FHIR_VERSION: "R4"
+    ports:
+      - "${HAPI_TERMINOLOGY_PORT:-8090}:8080"
+    healthcheck:
+      test: ["CMD", "java", "-version"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: fhirbridge-rabbitmq
@@ -243,6 +286,7 @@ services:
 volumes:
   controlplane-sql-data:
   hapi-postgres-data:
+  hapi-terminology-postgres-data:
   rabbitmq-data:
   redis-data:
   minio-data:

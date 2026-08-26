@@ -42,6 +42,26 @@
   }
 }
 
+// ─── Filter/vendor selects ────────────────────────────────────────────────────
+// Matches destination-connections/mapping-profiles' identical rules — without these, the EHR/audience/
+// status filters and the vendor picker next to "New Source Connection" fall back to raw browser <select>
+// sizing instead of the app's consistent 40px control height, which is what made this row look congested
+// next to the properly-styled search box and buttons.
+.type-filter-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.type-filter-select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  font-size: 13.5px;
+  color: var(--color-ink);
+}
+
 // ─── Action Buttons ───────────────────────────────────────────────────────────
 .btn-add {
   display: inline-flex;

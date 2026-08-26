@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Tenancy;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -13,10 +14,25 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserManagementService _userManagementService;
+    private readonly ICurrentTenantResolver _tenantResolver;
 
-    public UsersController(IUserManagementService userManagementService)
+    public UsersController(IUserManagementService userManagementService, ICurrentTenantResolver tenantResolver)
     {
         _userManagementService = userManagementService;
+        _tenantResolver = tenantResolver;
+    }
+
+    /// <summary>Resolves the calling admin's own TenantId — a newly created/invited user is always
+    /// assigned to whichever tenant the admin creating them belongs to. Never accepts a tenant id from the
+    /// request body: CreateLocalUserRequest/InviteUserRequest's TenantId is overwritten here via `with`
+    /// regardless of what (if anything) was bound onto it from the incoming JSON.</summary>
+    private async Task<Guid> ResolveCallerTenantIdAsync(CancellationToken cancellationToken)
+    {
+        var userId = CurrentUserClaimReader.GetUserId(User)
+            ?? throw new InvalidOperationException("Your session is no longer valid. Please sign in again.");
+
+        return await _tenantResolver.ResolveTenantIdAsync(userId, cancellationToken)
+            ?? throw new InvalidOperationException("Your account is not associated with a tenant.");
     }
 
     [HttpGet]
@@ -47,7 +63,8 @@ public sealed class UsersController : ControllerBase
         [FromBody] CreateLocalUserRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await _userManagementService.CreateLocalUserAsync(request, cancellationToken);
+        var tenantId = await ResolveCallerTenantIdAsync(cancellationToken);
+        var user = await _userManagementService.CreateLocalUserAsync(request with { TenantId = tenantId }, cancellationToken);
 
         return Created($"/api/v1/users/{user.Id}", user);
     }
@@ -72,7 +89,8 @@ public sealed class UsersController : ControllerBase
         [FromBody] InviteUserRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await _userManagementService.InviteUserAsync(request, cancellationToken);
+        var tenantId = await ResolveCallerTenantIdAsync(cancellationToken);
+        var user = await _userManagementService.InviteUserAsync(request with { TenantId = tenantId }, cancellationToken);
 
         return Created($"/api/v1/users/{user.Id}", user);
     }

@@ -578,6 +578,10 @@ export class DestinationWizardComponent implements OnInit {
   // resource's node/profile context, which only this component has.
   readonly markAsMasterRequest = input<number>(0);
   private _lastMarkAsMasterTrigger: number | null = null;
+  /** Toolbar-level search (dialog header) — forwarded straight through to the canvas, which applies it
+   *  to both the payload tree and every destination table's columns. Not a "request" counter like the
+   *  actions above: this is live text, re-forwarded on every change rather than reacted to once here. */
+  readonly mappingSearchQuery = input<string>('');
   /** Mirrors the canvas's own suggestionCountChange/zoomPercentChange straight up to the dialog header,
    *  which renders the "Clear N suggestions" label and zoom-percent readout. */
   readonly suggestionCountChange = output<number>();
@@ -1031,6 +1035,61 @@ export class DestinationWizardComponent implements OnInit {
 
   clearGroupSearch(): void {
     this.groupSearchQuery.set('');
+  }
+
+  /** Every resource currently visible (respects an active search filter) that isn't selected yet.
+   *  Exposed for the template so the "Select all" action can show/disable itself accurately instead
+   *  of always claiming there's something left to add. */
+  readonly allFilteredSelected = computed(() => {
+    const filtered = this.filteredGroups();
+    return filtered.length > 0 && filtered.every((r) => this.isResourceSelected(r));
+  });
+
+  /** True when at least one currently-visible (filtered) resource is selected — drives the "Clear"
+   *  action's disabled state the same way allFilteredSelected() drives "Select all"'s. */
+  readonly anyFilteredSelected = computed(() => {
+    const selected = new Set(this.selectedResources());
+    return this.filteredGroups().some((r) => selected.has(r));
+  });
+
+  /** Selects every currently-visible (filtered) resource in one action — snapshots the target list
+   *  first, same reasoning as addAllRecommendedResources(): toggleResource() mutates
+   *  selectedResources(), which filteredGroups() doesn't depend on but this method's own loop
+   *  shouldn't re-read mid-iteration regardless. Goes through toggleResource() (never a direct
+   *  selectedResources.set(...)) so nothing already selected gets double-added and so this stays the
+   *  single place resource selection is mutated. Respects an active search — "Select all" while
+   *  filtered to "Medication" only selects the Medication* resources actually shown, not the full
+   *  SUPPORTED_RESOURCE_TYPES universe. */
+  selectAllFilteredResources(): void {
+    const toAdd = this.filteredGroups().filter((r) => !this.isResourceSelected(r));
+    for (const r of toAdd) {
+      this.toggleResource(r);
+    }
+  }
+
+  /** Deselects every currently-visible (filtered) resource — via toggleResource() so each one still
+   *  gets its mappingRows/targetByResource/extraTablesByGroup/payloadFieldsByResource cleanup (see
+   *  toggleResource's own comment on why that pruning matters). Scoped to the filtered set, not all
+   *  of selectedResources(), so clearing while searched to "Medication" doesn't silently drop an
+   *  unrelated resource the user picked earlier and can no longer even see. */
+  clearAllFilteredResources(): void {
+    const toRemove = this.filteredGroups().filter((r) => this.isResourceSelected(r));
+    for (const r of toRemove) {
+      this.toggleResource(r);
+    }
+  }
+
+  /** Backs the single "Select all" checkbox in the Step 2 header — a controlled checkbox (its
+   *  [checked]/[indeterminate] come from allFilteredSelected()/anyFilteredSelected(), never the
+   *  native DOM state), so this decides the action from that same current signal value rather than
+   *  reading $event.target.checked: fully selected -> clear the filtered set; anything else
+   *  (partial or empty) -> select the rest of it. */
+  toggleSelectAllFiltered(): void {
+    if (this.allFilteredSelected()) {
+      this.clearAllFilteredResources();
+    } else {
+      this.selectAllFilteredResources();
+    }
   }
 
   // ── mapping rows ──────────────────────────────────────────────────────────
@@ -2478,16 +2537,26 @@ export class DestinationWizardComponent implements OnInit {
       );
       return;
     }
-    // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
-    // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
-    // parent resource's mapping in another group, or resolve it later, so they're shown a
-    // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
-    const warnings = this.buildParentReferenceWarnings(group);
-    if (warnings.length > 0) {
-      this.pendingSaveWarnings.set(warnings);
-      return;
-    }
-    this.completeSaveGroupMapping(group);
+
+    this.validateRuleConflictsForSave(group).subscribe((ruleErrors) => {
+      if (ruleErrors.length > 0) {
+        this.toast.error(
+          `Fix ${ruleErrors.length} transform rule conflict${ruleErrors.length === 1 ? '' : 's'} before saving`,
+          ruleErrors.join(' '),
+        );
+        return;
+      }
+      // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
+      // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
+      // parent resource's mapping in another group, or resolve it later, so they're shown a
+      // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
+      const warnings = this.buildParentReferenceWarnings(group);
+      if (warnings.length > 0) {
+        this.pendingSaveWarnings.set(warnings);
+        return;
+      }
+      this.completeSaveGroupMapping(group);
+    });
   }
 
   /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
@@ -2732,6 +2801,59 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     return errors;
+  }
+
+  /** Mirrors CreateMappingProfileRequestValidator.ValidateApplicableRulesAsync (the backend's mapping-profile
+   *  save gate) client-side: a field can pass every check in validateMappingForSave above — the mapped value
+   *  itself matches the column's type — and still fail at pipeline-run time because a Global/ResourceType/
+   *  DestinationType-scoped TransformationRule applies to it and expects a different type than the column
+   *  actually is (e.g. a Global NumberCast rule hitting a text column). Async because it needs one
+   *  getEffectiveRules call per mapped field; returns [] immediately (no network calls) when there's no live
+   *  SQL schema to check column types against, same short-circuit validateMappingForSave uses. */
+  private validateRuleConflictsForSave(resource: string): Observable<string[]> {
+    if (!this.hasSqlTables()) return of([]);
+
+    const destinationType = this.resolveDestinationTypeForRules();
+    if (!destinationType) return of([]);
+
+    const rows = this
+      .mappingRows()
+      .filter((r) => r.resource === resource && r.mode === 'value');
+    if (rows.length === 0) return of([]);
+
+    const checks = rows.map((row) => {
+      const table = this.sqlTables().find((t) => t.fullName === row.tableName);
+      const column = table?.columns.find((c) => c.name === row.targetName);
+      if (!column?.mappingValueType) return of([] as string[]);
+
+      return this.transformationRulesSvc
+        .getEffectiveRules({
+          destinationType,
+          resourceType: resource,
+          destinationField: row.targetName,
+          sourceSystem: this.sourceVendor() || null,
+          sourceField: row.sources[0]?.fhirPath ?? null,
+        })
+        .pipe(
+          map((rules) =>
+            rules
+              .filter(
+                (rule) =>
+                  rule.expectedValueType &&
+                  rule.expectedValueType.toLowerCase() !== column.mappingValueType.toLowerCase(),
+              )
+              .map(
+                (rule) =>
+                  `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
+                  `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}). ` +
+                  `Add a workflow-level override for this field, or update the rule's expected type.`,
+              ),
+          ),
+          catchError(() => of([] as string[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
+        );
+    });
+
+    return forkJoin(checks).pipe(map((results) => results.flat()));
   }
 
   /** Soft, confirm-before-proceed checks shown via pendingSaveWarnings — distinct from

@@ -78,7 +78,7 @@ public sealed class WorkflowNodeEntityTypeConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.Rank).IsRequired();
         builder.Property(x => x.SubRank).IsRequired();
         builder.Property(x => x.DisplayName).HasMaxLength(400).IsRequired();
-        builder.Property(x => x.ConfigurationJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.ConfigurationJson).IsRequired();
         builder.Property(x => x.PositionX).IsRequired();
         builder.Property(x => x.PositionY).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
@@ -106,7 +106,7 @@ public sealed class WorkflowNodeConfigurationEntityTypeConfiguration
 
         builder.Property(x => x.WorkflowNodeId).IsRequired();
         builder.Property(x => x.Key).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.Value).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.Value).IsRequired();
         builder.Property(x => x.IsSecret).IsRequired();
 
         builder.HasIndex(x => x.WorkflowNodeId);
@@ -140,7 +140,8 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.StartedAt).IsRequired();
         builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
-        builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.ErrorMessage);
+        builder.Property(x => x.ErrorReferenceId).HasMaxLength(50);
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
@@ -172,7 +173,7 @@ public sealed class WorkflowNodeRunPayloadEntityTypeConfiguration : IEntityTypeC
         builder.Property(x => x.NodeType).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Contract).HasMaxLength(100).IsRequired();
         // Encrypted at rest (can carry PHI: raw fetched resources, mapped field values) — see EfWorkflowNodeResourceHistoryRecorder.
-        builder.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.PayloadJson).IsRequired();
         builder.Property(x => x.ItemCount);
         builder.Property(x => x.RecordedAtUtc).IsRequired();
 
@@ -196,9 +197,9 @@ public sealed class FieldLineageEntryEntityTypeConfiguration : IEntityTypeConfig
         builder.Property(x => x.SourceField).HasMaxLength(500);
         builder.Property(x => x.NodeOrder).IsRequired();
         builder.Property(x => x.NodeType).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.ConfigJson).HasColumnType("nvarchar(max)").IsRequired();
-        builder.Property(x => x.SourceValueJson).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.DestinationValueJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.ConfigJson).IsRequired();
+        builder.Property(x => x.SourceValueJson);
+        builder.Property(x => x.DestinationValueJson);
         builder.Property(x => x.Success).IsRequired();
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
         builder.Property(x => x.DurationMs);
@@ -230,8 +231,8 @@ public sealed class WorkflowNodeRunEntityTypeConfiguration : IEntityTypeConfigur
         builder.Property(x => x.StartedAt).IsRequired();
         builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
-        builder.Property(x => x.ErrorMessage).HasColumnType("nvarchar(max)");
-        builder.Property(x => x.LineageJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.ErrorMessage);
+        builder.Property(x => x.LineageJson);
 
         builder.HasIndex(x => x.WorkflowRunId);
     }

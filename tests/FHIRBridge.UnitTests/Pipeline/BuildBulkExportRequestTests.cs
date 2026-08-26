@@ -1,6 +1,7 @@
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Pipeline;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 using FluentAssertions;
 
 namespace FHIRBridge.UnitTests.Pipeline;
@@ -102,5 +103,41 @@ public sealed class BuildBulkExportRequestTests
             Bulk(exportScope: "system", outputFormat: "application/fhir+ndjson"), "Patient");
 
         request.OutputFormat.Should().Be("application/fhir+ndjson");
+    }
+
+    [Fact]
+    public void Non_athenahealth_group_id_passes_through_unchanged()
+    {
+        var request = ConfiguredPipelineService.BuildBulkExportRequest(
+            Bulk(exportScope: "group", groupId: "195900"), "Patient", RuntimeSourceType.Epic, practiceId: null);
+
+        request.GroupId.Should().Be("195900");
+    }
+
+    [Fact]
+    public void Athenahealth_bare_numeric_group_id_is_reformatted_to_practice_reference()
+    {
+        var request = ConfiguredPipelineService.BuildBulkExportRequest(
+            Bulk(exportScope: "group", groupId: "195900"), "Patient", RuntimeSourceType.Athenahealth, practiceId: null);
+
+        request.GroupId.Should().Be("a-1.C-195900");
+    }
+
+    [Fact]
+    public void Athenahealth_blank_group_id_falls_back_to_the_connections_practice_id()
+    {
+        var request = ConfiguredPipelineService.BuildBulkExportRequest(
+            Bulk(exportScope: "group", groupId: null), "Patient", RuntimeSourceType.Athenahealth, practiceId: "195900");
+
+        request.GroupId.Should().Be("a-1.C-195900");
+    }
+
+    [Fact]
+    public void Athenahealth_already_formatted_group_id_is_left_untouched()
+    {
+        var request = ConfiguredPipelineService.BuildBulkExportRequest(
+            Bulk(exportScope: "group", groupId: "a-1.C-195900"), "Patient", RuntimeSourceType.Athenahealth, practiceId: null);
+
+        request.GroupId.Should().Be("a-1.C-195900");
     }
 }

@@ -32,7 +32,7 @@ public sealed class GlobalExceptionManagerCaptureExpectedTests
     }
 
     [Fact]
-    public async Task CaptureExpectedAsync_SwallowsGovernanceLoggerFailures()
+    public async Task CaptureExpectedAsync_SwallowsGovernanceLoggerFailures_AndReturnsNullReferenceId()
     {
         var governanceLogger = new Mock<IGovernanceLogger>();
         governanceLogger
@@ -41,10 +41,13 @@ public sealed class GlobalExceptionManagerCaptureExpectedTests
 
         var manager = new GlobalExceptionManager(governanceLogger.Object, new DefaultExceptionClassifier());
 
+        // The call must not throw even though nothing could actually be persisted — but since nothing was
+        // persisted, there is no ErrorLogs row to point at, so the returned reference id must be null rather
+        // than an orphaned id a caller might otherwise surface as a dead link.
         var referenceId = await manager.CaptureExpectedAsync(
             new ExpectedFailure("InvalidOperationException", "Wrong password."),
             new ExceptionContext(Module: "Api"));
 
-        referenceId.Should().NotBeNullOrWhiteSpace();
+        referenceId.Should().BeNull();
     }
 }

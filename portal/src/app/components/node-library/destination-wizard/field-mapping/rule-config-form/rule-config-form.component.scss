@@ -15,7 +15,15 @@
 .rule-config-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  align-items: start;
+  // Was align-items: start. A field's label can wrap to 1-3 lines depending on its own text length
+  // (e.g. "Code system" vs "Display text (optional — leave blank to resolve from the local
+  // terminology DB)") — with start-aligned cells, each field's label+input block sits at the top of
+  // its own cell independently, so a short label lets its input float noticeably higher than a
+  // neighbor whose longer label pushed its input further down. Stretching every cell to the grid
+  // row's full height (the tallest field's natural height) and anchoring each label to the top via
+  // its own margin-bottom: auto below is what actually lines up every input/select on one shared
+  // baseline regardless of label length.
+  align-items: stretch;
   gap: 16px;
 }
 
@@ -32,6 +40,11 @@
     font-weight: 600;
     line-height: 1.3;
     color: var(--color-ink-2);
+    // Absorbs the cell's leftover height (see align-items: stretch above) so the label itself stays
+    // pinned to the top of its cell while pushing the select/input down to a shared bottom baseline
+    // with every other field in the row — a plain min-height alone can't do this, since it only ever
+    // grows a field's OWN cell, never accounts for a taller sibling's label in the same row.
+    margin-bottom: auto;
   }
 
   select, input {
@@ -151,6 +164,99 @@
 
 .checkbox-visual__input:focus-visible ~ .checkbox-visual__box {
   box-shadow: 0 0 0 2px var(--color-primary-mid);
+}
+
+// Full-width, same reasoning as .config-control--checkbox above — a multi-row table reads as visually
+// "trapped" if it's squeezed into one ~180px grid cell alongside single-line text/select fields.
+.config-control--keyvalue {
+  grid-column: 1 / -1;
+}
+
+.keyvalue-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keyvalue-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    padding: 0 12px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    font-size: 13.5px;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    box-sizing: border-box;
+    transition: border-color var(--transition-base, 150ms ease);
+
+    &:hover { border-color: var(--color-muted); }
+    &:focus-visible {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-mid);
+    }
+  }
+}
+
+.keyvalue-arrow {
+  flex-shrink: 0;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--color-muted);
+}
+
+.keyvalue-remove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+  &:hover {
+    background: var(--color-danger-mid, rgba(220, 38, 38, 0.1));
+    color: var(--color-danger, #DC2626);
+  }
+}
+
+.keyvalue-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1.5px dashed var(--color-border-input);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+  &:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-mid);
+  }
 }
 
 .no-config { grid-column: 1 / -1; font-size: 12.5px; color: var(--color-muted); margin: 0; }

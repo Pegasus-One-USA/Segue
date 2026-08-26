@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
+using PhoneNumbers;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
 
@@ -203,11 +204,34 @@ public sealed class HumanNameParsingNode : ITransformNode
     }
 }
 
-/// <summary>13. Address Parsing &amp; Normalization — a simplified comma-delimited parser
-/// ("line, city, state postalCode"); full address parsing libraries are out of scope here.</summary>
+/// <summary>13. Address Parsing &amp; Normalization — a comma/newline-delimited parser
+/// ("line[, line2, ...], city, state postalCode") with US state and country full-name normalization;
+/// full third-party address-parsing libraries are out of scope here.</summary>
 public sealed class AddressParsingNode : ITransformNode
 {
-    private static readonly Regex StateZip = new(@"^([A-Za-z]{2,})\s+(\d{5}(-\d{4})?)$", RegexOptions.Compiled);
+    private static readonly Regex StateZip = new(@"^([A-Za-z .]{2,})\s+(\d{5}(-\d{4})?)$", RegexOptions.Compiled);
+
+    private static readonly IReadOnlyDictionary<string, string> UsStateAbbreviations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["alabama"] = "AL", ["alaska"] = "AK", ["arizona"] = "AZ", ["arkansas"] = "AR", ["california"] = "CA",
+        ["colorado"] = "CO", ["connecticut"] = "CT", ["delaware"] = "DE", ["district of columbia"] = "DC",
+        ["florida"] = "FL", ["georgia"] = "GA", ["hawaii"] = "HI", ["idaho"] = "ID", ["illinois"] = "IL",
+        ["indiana"] = "IN", ["iowa"] = "IA", ["kansas"] = "KS", ["kentucky"] = "KY", ["louisiana"] = "LA",
+        ["maine"] = "ME", ["maryland"] = "MD", ["massachusetts"] = "MA", ["michigan"] = "MI",
+        ["minnesota"] = "MN", ["mississippi"] = "MS", ["missouri"] = "MO", ["montana"] = "MT",
+        ["nebraska"] = "NE", ["nevada"] = "NV", ["new hampshire"] = "NH", ["new jersey"] = "NJ",
+        ["new mexico"] = "NM", ["new york"] = "NY", ["north carolina"] = "NC", ["north dakota"] = "ND",
+        ["ohio"] = "OH", ["oklahoma"] = "OK", ["oregon"] = "OR", ["pennsylvania"] = "PA",
+        ["rhode island"] = "RI", ["south carolina"] = "SC", ["south dakota"] = "SD", ["tennessee"] = "TN",
+        ["texas"] = "TX", ["utah"] = "UT", ["vermont"] = "VT", ["virginia"] = "VA", ["washington"] = "WA",
+        ["west virginia"] = "WV", ["wisconsin"] = "WI", ["wyoming"] = "WY"
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> CountryIso3166 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["united states"] = "US", ["united states of america"] = "US", ["usa"] = "US",
+        ["canada"] = "CA", ["united kingdom"] = "GB", ["mexico"] = "MX"
+    };
 
     public TransformNodeType NodeType => TransformNodeType.AddressParsing;
 
@@ -219,26 +243,27 @@ public sealed class AddressParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var address = new JsonObject { ["line"] = new JsonArray(parts.Length > 0 ? (JsonNode)parts[0] : "") };
+        // A second Apt/Suite line arrives either newline-separated or as an extra comma segment — normalize
+        // both to the same comma-delimited form before splitting.
+        var parts = raw.Replace("\r\n", "\n").Replace('\n', ',')
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-        if (parts.Length > 1)
+        var address = new JsonObject();
+
+        if (parts.Length >= 3)
         {
-            address["city"] = parts[1];
+            // Everything before the trailing "city" and "state zip" segments is a street line — supports a
+            // second Apt/Suite line instead of assuming exactly one line always precedes city.
+            address["line"] = new JsonArray(parts[..^2].Select(l => (JsonNode)l).ToArray());
+            address["city"] = parts[^2];
+            ApplyStateZip(address, parts[^1]);
         }
-
-        if (parts.Length > 2)
+        else
         {
-            var match = StateZip.Match(parts[2]);
-            if (match.Success)
+            address["line"] = new JsonArray(parts.Length > 0 ? (JsonNode)parts[0] : "");
+            if (parts.Length > 1)
             {
-                var state = match.Groups[1].Value;
-                address["state"] = state.Length == 2 ? state.ToUpperInvariant() : state;
-                address["postalCode"] = match.Groups[2].Value;
-            }
-            else
-            {
-                address["state"] = parts[2];
+                address["city"] = parts[1];
             }
         }
 
@@ -249,17 +274,33 @@ public sealed class AddressParsingNode : ITransformNode
             address["type"] = type;
         }
 
-        address["country"] = config.Get("country", "US");
+        var country = config.Get("country", "US");
+        address["country"] = CountryIso3166.TryGetValue(country, out var isoCountry) ? isoCountry : country;
         return TransformResult.Ok(address);
     }
+
+    private static void ApplyStateZip(JsonObject address, string stateZip)
+    {
+        var match = StateZip.Match(stateZip);
+        var stateToken = match.Success ? match.Groups[1].Value.Trim() : stateZip;
+        address["state"] = NormalizeState(stateToken);
+        if (match.Success)
+        {
+            address["postalCode"] = match.Groups[2].Value;
+        }
+    }
+
+    private static string NormalizeState(string state) =>
+        state.Length == 2 ? state.ToUpperInvariant() :
+        UsStateAbbreviations.TryGetValue(state, out var abbr) ? abbr : state;
 }
 
-/// <summary>14. Telecom (ContactPoint) Normalization — E.164 for US-style 10-digit numbers; other regions
-/// pass through with formatting stripped (full libphonenumber-equivalent parsing is out of scope here).</summary>
+/// <summary>14. Telecom (ContactPoint) Normalization — phone numbers are parsed and formatted to E.164 via
+/// libphonenumber (Google's library, region-aware rather than guessing off digit count).</summary>
 public sealed class TelecomNormalizationNode : ITransformNode
 {
     private static readonly Regex EmailPattern = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
-    private static readonly Regex NonDigit = new(@"[^\d]", RegexOptions.Compiled);
+    private static readonly PhoneNumberUtil PhoneUtil = PhoneNumberUtil.GetInstance();
 
     public TransformNodeType NodeType => TransformNodeType.TelecomNormalization;
 
@@ -298,13 +339,22 @@ public sealed class TelecomNormalizationNode : ITransformNode
             return TransformResult.Ok(result);
         }
 
-        var digits = NonDigit.Replace(raw, string.Empty);
-        var normalized = digits.Length switch
+        var region = config.Get("region", "US");
+        string normalized;
+        try
         {
-            10 => $"+1{digits}",
-            11 when digits.StartsWith('1') => $"+{digits}",
-            _ => raw.StartsWith('+') ? raw : $"+{digits}"
-        };
+            var parsedNumber = PhoneUtil.Parse(raw, region);
+            if (!PhoneUtil.IsValidNumber(parsedNumber))
+            {
+                return TransformResult.Fail($"'{raw}' is not a valid phone number for region '{region}'.");
+            }
+
+            normalized = PhoneUtil.Format(parsedNumber, PhoneNumberFormat.E164);
+        }
+        catch (NumberParseException ex)
+        {
+            return TransformResult.Fail($"Unable to parse '{raw}' as a phone number: {ex.Message}");
+        }
 
         var phone = new JsonObject { ["system"] = "phone", ["value"] = normalized, ["use"] = config.Get("use", "mobile") };
         if (rank is not null)

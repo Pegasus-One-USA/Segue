@@ -14,6 +14,8 @@
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
+.error-reference-link { display: block; margin-top: 4px; font-size: 11px; }
+
 .pipe-avatar {
   width: 36px; height: 36px; border-radius: 8px;
   background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -32,6 +34,15 @@
   &.status-succeeded  { background: var(--color-success-soft); color: var(--color-success-strong); }
   &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); }
   &.status-cancelled  { background: var(--color-side); color: var(--color-muted); }
+}
+
+// Source tag
+.tag {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: var(--color-side); color: var(--color-ink-2);
+  border: 1px solid var(--color-border);
 }
 
 // Trigger badges

@@ -7,6 +7,12 @@ using FHIRBridge.Domain.Entities;
 
 namespace FHIRBridge.Application.Services;
 
+// SetupService runs before any tenant context exists (anonymous, empty database) — both first-run paths
+// below assign the well-known Default Tenant (SeededSecurityIds.DefaultTenantId), the same tenant every
+// pre-existing user was migrated into by the AddTenant migration. There is deliberately no "pick a tenant"
+// UI on first-run setup; a deployment that genuinely needs more than one tenant creates the rest via the
+// Tenant Management screen afterward.
+
 /// <summary>
 /// First-run setup. "Requires setup" is simply "no user exists yet". Creating the first SuperAdmin reuses the normal
 /// local-user creation + login paths, then signs the caller in. The empty-database guard is re-checked here so the
@@ -82,7 +88,8 @@ public sealed class SetupService : ISetupService
                 request.LastName,
                 // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin — hardcoded true, not
                 // caller-controlled like the general create-user/invite paths.
-                RequireMfa: true),
+                RequireMfa: true,
+                TenantId: SeededSecurityIds.DefaultTenantId),
             cancellationToken);
 
         return await _localAuth.LoginAsync(new LocalLoginRequest(request.Email, request.Password), cancellationToken);
@@ -101,7 +108,7 @@ public sealed class SetupService : ISetupService
         var identity = await _externalTokenValidator.ValidateAsync(request.Provider, request.Token, cancellationToken);
 
         // Create the SuperAdmin directly from the external identity: active, no password, SSO-linked.
-        var user = new User(identity.Subject, identity.Email, identity.Name);
+        var user = new User(identity.Subject, identity.Email, identity.Name, SeededSecurityIds.DefaultTenantId);
         user.LinkExternalIdentity(identity.Subject, request.Provider);
         // HIPAA hardening: MFA is compulsory for the first-run SuperAdmin, same as the local-password path.
         user.SetMustSetupMfa(true);

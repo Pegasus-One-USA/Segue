@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.DTOs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -10,15 +11,18 @@ public sealed class FhirTerminologyLookupService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly ISystemSettingsCache _settings;
     private readonly ILogger<FhirTerminologyLookupService> _logger;
 
     public FhirTerminologyLookupService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
+        ISystemSettingsCache settings,
         ILogger<FhirTerminologyLookupService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -27,7 +31,10 @@ public sealed class FhirTerminologyLookupService
         string code,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _configuration["Terminology:BaseUrl"];
+        // Admin-configurable via System Settings ("Terminology:BaseUrl"), falling back to appsettings/env
+        // when no override has been set.
+        var baseUrl = await _settings.GetStringAsync(
+            "Terminology:BaseUrl", _configuration["Terminology:BaseUrl"] ?? string.Empty, cancellationToken);
         if (string.IsNullOrWhiteSpace(baseUrl)
             || string.IsNullOrWhiteSpace(system)
             || string.IsNullOrWhiteSpace(code))

@@ -15,6 +15,7 @@ import { DestinationConfigurationDto, DestinationSortColumn, DestinationType, So
 import {
   DestinationConnectionDialogComponent,
   DestinationConnectionDialogData,
+  DESTINATION_CREATE_PERMISSION_CODES,
 } from '../../dialogs/destination-connection-dialog/destination-connection-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
@@ -22,6 +23,7 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
 import { PermissionService } from '../../../auth/services/permission.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { TRANSFORMS } from '../../../data/transforms.data';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -55,10 +57,10 @@ export class DestinationConnectionListComponent implements OnInit {
 
   // ─── Permission gating ──────────────────────────────────────────────────────
   // There is no `destinationconnections.create` — Create is authorized per destination type
-  // (ConfigurationsController.cs), and this dialog's create-flow only ever offers two type choices
-  // (see destination-connection-dialog.component.ts's chosenTypeToDestinationType), so "can this role
-  // create a destination connection at all" is "holds sqlserver.create OR csv.create".
-  readonly CREATE_CODES = ['sqlserver.create', 'csv.create'];
+  // (ConfigurationsController.cs). "Can this role create a destination connection at all" = holds the create
+  // code for ANY type the dialog's create-flow offers. That list (and each type's permission prefix) is the
+  // single source shared with the dialog, so adding a type there widens this gate automatically.
+  readonly CREATE_CODES = DESTINATION_CREATE_PERMISSION_CODES;
 
   /** `{destinationType}.edit`, e.g. `sqlserver.edit` — the code the backend actually authorizes
    *  PUT /destinations/{id} against, independent of the generic destinationconnections group (which
@@ -115,11 +117,35 @@ export class DestinationConnectionListComponent implements OnInit {
     this.actionOnSortDirection.set(null);
   }
 
-  readonly typeOptions: { value: DestinationType; label: string }[] = [
-    { value: 'SqlServer', label: 'SQL Server' },
-    { value: 'Csv', label: 'CSV' },
-    { value: 'Sftp', label: 'CSV (SFTP)' },
-  ];
+  /**
+   * Type-filter options, derived from the same TRANSFORMS catalog the workflow builder renders its
+   * Node Library destinations from — so the filter always offers exactly the destination types that
+   * appear at workflow-create time (and picks up any new one added to the catalog automatically),
+   * grouped by the catalog's own category and in catalog order. Each group becomes an <optgroup>.
+   *
+   * Gated by the identical rule the Node Library's Rank-7 tiles use (node-library-dialog.component.ts):
+   * a type with a dedicated permission group is only offered when the user holds `{prefix}.view`
+   * (admins hold everything). Built once — permissions are decoded before bootstrap and don't change
+   * while this screen is mounted.
+   */
+  readonly typeGroups: { category: string; options: { value: DestinationType; label: string }[] }[] =
+    this.buildTypeGroups();
+
+  private buildTypeGroups(): { category: string; options: { value: DestinationType; label: string }[] }[] {
+    const groups: { category: string; options: { value: DestinationType; label: string }[] }[] = [];
+    for (const t of TRANSFORMS) {
+      if (!t.destinationType) continue;
+      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) continue;
+      const category = t.category ?? 'Other';
+      let group = groups.find(g => g.category === category);
+      if (!group) {
+        group = { category, options: [] };
+        groups.push(group);
+      }
+      group.options.push({ value: t.destinationType, label: t.name });
+    }
+    return groups;
+  }
 
   ngOnInit(): void {
     this.load();

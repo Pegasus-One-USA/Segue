@@ -1,16 +1,15 @@
 using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Security;
-using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Infrastructure.Security;
 
 /// <summary>
 /// AES-256-GCM field encryptor for PHI-bearing execution-history columns (raw fetched JSON, normalized JSON,
-/// mapped values). The key is read once from <c>Security:PhiEncryptionKey</c> (a base64-encoded 256-bit key) —
-/// the same "plaintext-in-config" pattern already used for <c>Authentication:SigningKey</c>, so it can be backed
-/// by a Key Vault-fed configuration provider or environment variable in production. EF value converters must be
-/// synchronous, which is why this reads a pre-provisioned key rather than resolving one via <see cref="ISecretProvider"/>
-/// (which is async, Key-Vault-reference based, and meant for per-destination secrets, not row-level encryption keys).
+/// mapped values). The key is <see cref="AppSecretReferences.PhiEncryptionKey"/>, auto-generated on first boot
+/// and cached in <see cref="IAppSecretAccessor"/> by <c>AppSecretProvisioner</c> — the same pattern used for the
+/// JWT signing key and other app secrets. Reading the already-provisioned, synchronous accessor (rather than
+/// resolving one via <see cref="ISecretProvider"/> directly, which is async) keeps this usable from EF value
+/// converters, which must be synchronous.
 /// </summary>
 public sealed class AesGcmPhiFieldEncryptor : IPhiFieldEncryptor
 {
@@ -19,13 +18,9 @@ public sealed class AesGcmPhiFieldEncryptor : IPhiFieldEncryptor
 
     private readonly byte[] _key;
 
-    public AesGcmPhiFieldEncryptor(IConfiguration configuration)
+    public AesGcmPhiFieldEncryptor(IAppSecretAccessor appSecretAccessor)
     {
-        var configuredKey = configuration["Security:PhiEncryptionKey"];
-        _key = string.IsNullOrWhiteSpace(configuredKey)
-            // Dev-only fallback so local/no-config environments still work; production must set a real key.
-            ? SHA256.HashData("dev-only-insecure-phi-encryption-key"u8.ToArray())
-            : Convert.FromBase64String(configuredKey);
+        _key = Convert.FromBase64String(appSecretAccessor.PhiEncryptionKey);
     }
 
     public string Encrypt(string plaintext)

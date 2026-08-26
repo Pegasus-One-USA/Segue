@@ -153,4 +153,50 @@ public sealed class EfBulkExportJobRepositoryTests
 
         pending.Select(job => job.Id).Should().BeEquivalentTo([pendingSibling.Id]);
     }
+
+    [Fact]
+    public async Task CountActiveBySourceConnectionAsync_counts_only_non_terminal_jobs_for_that_connection()
+    {
+        var sourceConnectionId = Guid.NewGuid();
+        var otherSourceConnectionId = Guid.NewGuid();
+
+        var pendingJob = new BulkExportJob(
+            Guid.NewGuid(), BulkExportJobSourcePath.ConfiguredPipeline, sourceConnectionId,
+            sourceConfigurationId: null, exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow);
+        pendingJob.MarkCreated("test");
+
+        var pollingJob = new BulkExportJob(
+            Guid.NewGuid(), BulkExportJobSourcePath.WorkflowNode, sourceConnectionId,
+            sourceConfigurationId: null, exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow);
+        pollingJob.MarkKickedOff("https://fhir.example.com/status/1");
+        pollingJob.MarkCreated("test");
+
+        var completedJob = new BulkExportJob(
+            Guid.NewGuid(), BulkExportJobSourcePath.WorkflowNode, sourceConnectionId,
+            sourceConfigurationId: null, exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow);
+        completedJob.MarkKickedOff("https://fhir.example.com/status/2");
+        completedJob.MarkCompleted(DateTime.UtcNow);
+        completedJob.MarkCreated("test");
+
+        var otherConnectionJob = new BulkExportJob(
+            Guid.NewGuid(), BulkExportJobSourcePath.WorkflowNode, otherSourceConnectionId,
+            sourceConfigurationId: null, exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow);
+        otherConnectionJob.MarkKickedOff("https://fhir.example.com/status/3");
+        otherConnectionJob.MarkCreated("test");
+
+        await using (var context = CreateContext())
+        {
+            var repository = new EfBulkExportJobRepository(context);
+            await repository.AddAsync(pendingJob, CancellationToken.None);
+            await repository.AddAsync(pollingJob, CancellationToken.None);
+            await repository.AddAsync(completedJob, CancellationToken.None);
+            await repository.AddAsync(otherConnectionJob, CancellationToken.None);
+        }
+
+        await using var assertContext = CreateContext();
+        var activeCount = await new EfBulkExportJobRepository(assertContext)
+            .CountActiveBySourceConnectionAsync(sourceConnectionId, CancellationToken.None);
+
+        activeCount.Should().Be(2);
+    }
 }

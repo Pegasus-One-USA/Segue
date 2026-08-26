@@ -75,12 +75,54 @@ public sealed class FhirComplexTypeNodesTests
     }
 
     [Fact]
+    public void AddressParsingNode_normalizes_a_full_state_name_to_its_abbreviation()
+    {
+        var result = new AddressParsingNode().Execute("123 Main St, Detroit, Michigan 48201", new Dictionary<string, string>(), null);
+        var address = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        address["state"]!.GetValue<string>().Should().Be("MI");
+    }
+
+    [Fact]
+    public void AddressParsingNode_treats_an_extra_segment_before_city_as_a_second_address_line()
+    {
+        var result = new AddressParsingNode().Execute("123 Main St, Apt 4B, Detroit, MI 48201", new Dictionary<string, string>(), null);
+        var address = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        address["line"]!.AsArray().Select(l => l!.GetValue<string>()).Should().BeEquivalentTo(["123 Main St", "Apt 4B"]);
+        address["city"]!.GetValue<string>().Should().Be("Detroit");
+    }
+
+    [Fact]
+    public void AddressParsingNode_normalizes_a_full_country_name_to_its_ISO_3166_code()
+    {
+        var config = new Dictionary<string, string> { ["country"] = "Canada" };
+        var result = new AddressParsingNode().Execute("1 Queen St, Toronto, ON", config, null);
+        var address = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        address["country"]!.GetValue<string>().Should().Be("CA");
+    }
+
+    [Fact]
     public void TelecomNormalizationNode_normalizes_a_10_digit_US_number_to_E164()
     {
         var result = new TelecomNormalizationNode().Execute("(313) 555-0142", new Dictionary<string, string>(), null);
         var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
         contact["system"]!.GetValue<string>().Should().Be("phone");
         contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_normalizes_a_non_US_number_using_the_configured_region()
+    {
+        var config = new Dictionary<string, string> { ["region"] = "GB" };
+        var result = new TelecomNormalizationNode().Execute("020 7946 0958", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+442079460958");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_fails_for_an_invalid_phone_number()
+    {
+        var result = new TelecomNormalizationNode().Execute("123", new Dictionary<string, string>(), null);
+        result.Success.Should().BeFalse();
     }
 
     [Fact]

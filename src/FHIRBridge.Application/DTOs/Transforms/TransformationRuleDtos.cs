@@ -21,7 +21,8 @@ public sealed record TransformationRuleDto(
     TransformArrayMode ArrayMode = TransformArrayMode.Whole,
     string? FhirWriteBackJsonPath = null,
     TransformExecutionPhase ExecutionPhase = TransformExecutionPhase.PostMapping,
-    Guid? DeIdentificationProfileId = null);
+    Guid? DeIdentificationProfileId = null,
+    MappingValueType? ExpectedValueType = null);
 
 /// <summary><see cref="Id"/> null creates a new rule; supplying an existing id updates it in place.</summary>
 public sealed record SaveTransformationRuleRequest(
@@ -45,7 +46,11 @@ public sealed record SaveTransformationRuleRequest(
     // Pre-mapping rules (raw FHIR path, no destination field) are only valid at Global/ResourceType scope and
     // must carry a DeIdentificationProfileId — enforced in the TransformationRule constructor.
     TransformExecutionPhase ExecutionPhase = TransformExecutionPhase.PostMapping,
-    Guid? DeIdentificationProfileId = null);
+    Guid? DeIdentificationProfileId = null,
+    // The data type this rule's output is expected to be — validated against the destination column's type
+    // at mapping-profile save time (see CreateMappingProfileRequestValidator). Null means "not declared,"
+    // which is silently excluded from that check rather than treated as a conflict.
+    MappingValueType? ExpectedValueType = null);
 
 /// <summary>Resolve-and-apply a sample value through whatever rule chain is currently in effect for one field —
 /// backs both the wizard's "auto-applied on add" behavior and the Rules modal's live preview.
@@ -80,7 +85,7 @@ public sealed record TransformPreviewResult(
 public sealed record TransformConfigFieldSchema(
     string Key,
     string Label,
-    string InputKind, // "text" | "select" | "checkbox"
+    string InputKind, // "text" | "number" | "select" | "combo" | "checkbox" | "keyvalue"
     IReadOnlyList<string>? Options,
     string? DefaultValue,
     // Shown as grey example text inside an empty text box — never submitted as the actual value, unlike
@@ -94,3 +99,11 @@ public sealed record TransformNodeSchemaDto(
     IReadOnlyList<TransformConfigFieldSchema> Fields);
 
 public sealed record TransformationRulesHiddenDto(bool Hidden);
+
+/// <summary>How many workflows a Global/ResourceType-scoped rule save affects — informational only, shown as
+/// a non-blocking heads-up in the rule-save dialog (see TransformationRuleListComponent), not a validation
+/// gate. Meaningless (always zeroes) for Field/Workflow/DestinationType scope, since those already name a
+/// specific field/workflow rather than fanning out across many.</summary>
+public sealed record RuleImpactSummaryDto(
+    int TotalMatchingWorkflows,
+    int WorkflowsWithMoreSpecificOverride);

@@ -23,6 +23,7 @@ public sealed class MagicLinkAuthTests
     private readonly Mock<ITotpService> _totp = new();
     private readonly Mock<IGovernanceLogger> _governanceLogger = new();
     private readonly Mock<ISystemSettingsCache> _settingsCache = PassThroughSettingsCache();
+    private readonly Mock<ITenantRepository> _tenantRepository = new();
     private readonly LocalAuthOptions _options = new();
 
     private static Mock<ISystemSettingsCache> PassThroughSettingsCache()
@@ -37,6 +38,13 @@ public sealed class MagicLinkAuthTests
         return mock;
     }
 
+    public MagicLinkAuthTests()
+    {
+        // Safe default — no test here cares about tenant display name specifically.
+        _tenantRepository.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Tenant?)null);
+    }
+
     private LocalAuthService Service() => new(
         _repository.Object,
         _passwordHasher.Object,
@@ -46,7 +54,8 @@ public sealed class MagicLinkAuthTests
         _totp.Object,
         _governanceLogger.Object,
         _settingsCache.Object,
-        Options.Create(_options));
+        Options.Create(_options),
+        _tenantRepository.Object);
 
     private const string Email = "magic-user@x.io";
     private const string Token = "raw-magic-link-token";
@@ -54,7 +63,7 @@ public sealed class MagicLinkAuthTests
 
     private static User LocalLoginUser()
     {
-        var user = new User("local:magic-user", Email, "Magic Link User");
+        var user = new User("local:magic-user", Email, "Magic Link User", Guid.NewGuid());
         user.EnableLocalLogin("password-hash", mustChangePassword: false);
         return user;
     }
@@ -93,6 +102,9 @@ public sealed class MagicLinkAuthTests
         user.SetMagicLinkToken(TokenHash, DateTime.UtcNow.AddMinutes(15));
         _repository.Setup(x => x.GetUserByEmailAsync(Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _passwordHasher.Setup(x => x.Verify(Token, TokenHash)).Returns(true);
+        // Pre-existing staleness fix, unrelated to Remember Me: IAccessTokenIssuer.Issue(User, IReadOnlyCollection<string>)
+        // only ever takes 2 arguments — permission codes stopped being embedded as JWT claims a while back
+        // (see IUserPermissionsProvider) — this setup's 3rd argument no longer matches any real overload.
         _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>()))
             .Returns(new AccessTokenDto("access-token", "Bearer", DateTime.UtcNow.AddHours(1)));
         _accessTokenIssuer.Setup(x => x.IssueRefreshToken()).Returns(("refresh-hash", DateTime.UtcNow.AddDays(30)));
@@ -125,6 +137,7 @@ public sealed class MagicLinkAuthTests
         response.RequiresMfa.Should().BeTrue();
         response.MfaChallengeToken.Should().Be("challenge-hash");
         user.MagicLinkTokenHash.Should().BeNull();
+        // Same pre-existing 2-arg-signature fix as above.
         _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }
 

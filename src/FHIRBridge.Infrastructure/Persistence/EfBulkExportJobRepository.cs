@@ -48,6 +48,13 @@ public sealed class EfBulkExportJobRepository : IBulkExportJobRepository
             .ToListAsync(cancellationToken);
     }
 
+    public Task<int> CountActiveBySourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
+        => _dbContext.BulkExportJobs
+            .AsNoTracking()
+            .Where(x => x.SourceConnectionId == sourceConnectionId)
+            .Where(x => x.Status == BulkExportJobStatus.Pending || x.Status == BulkExportJobStatus.Polling)
+            .CountAsync(cancellationToken);
+
     public async Task UpdateAsync(BulkExportJob job, CancellationToken cancellationToken)
     {
         if (_dbContext.Entry(job).State == EntityState.Detached)

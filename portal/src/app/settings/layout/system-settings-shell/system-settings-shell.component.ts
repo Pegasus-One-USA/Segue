@@ -14,19 +14,23 @@ interface SystemSettingsSection {
   superAdminOnly?: boolean;
 }
 
-// Kept in sync with settings.routes.ts's per-section guards below this shell — Email and the four
-// Terminology Codes systems are independently permission-controlled, so a role holding only
-// loinc.view (say) must see Terminology Codes here without also seeing Email/General/Security.
+// Kept in sync with settings.routes.ts's per-section guards below this shell — Email is
+// independently permission-controlled, so a role holding only configuration.view must see it here
+// without also seeing General/Security.
 const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   { label: 'Email', route: 'email', icon: 'mail', permissions: ['configuration.view', 'configuration.write'] },
   { label: 'General', route: 'general', icon: 'tune', superAdminOnly: true },
   { label: 'Security', route: 'security', icon: 'security', superAdminOnly: true },
-  {
-    label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
-    permissions: [
-      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
-    ],
-  },
+  // 'Terminology Codes' tab hidden from navigation — its settings now live under the "Terminology
+  // Settings" group on the General tab instead. The route (settings.routes.ts) and its backend
+  // controllers are untouched, so this is reversible by restoring this entry; nothing behind it was
+  // changed or disabled.
+  // {
+  //   label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
+  //   permissions: [
+  //     'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+  //   ],
+  // },
   // SuperAdmin-role-only, matching settings.routes.ts's own sso-configurations child guard and the
   // backend's SsoConfigurationsController policy.
   { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings', superAdminOnly: true },

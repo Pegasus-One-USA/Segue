@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, map, of, shareReplay } from 'rxjs';
 import { TRANSFORMATION_RULES_ENDPOINTS } from '../../../../core/api-endpoints';
 import { DestinationType } from '../../../../destination-connections/models/destination-configuration.model';
+import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 
 export type TransformScope = 'Global' | 'DestinationType' | 'ResourceType' | 'Field' | 'Workflow';
 
@@ -59,6 +60,9 @@ export interface TransformationRule {
   fhirWriteBackJsonPath?: string | null;
   executionPhase?: TransformExecutionPhase;
   deIdentificationProfileId?: string | null;
+  /** The data type this rule's output is expected to be, validated at mapping-profile save time against the
+   *  destination column it writes to. Null means "not declared" — silently excluded from that check. */
+  expectedValueType?: MappingValueType | null;
 }
 
 export interface SaveTransformationRuleRequest {
@@ -81,7 +85,32 @@ export interface SaveTransformationRuleRequest {
   fhirWriteBackJsonPath?: string | null;
   executionPhase?: TransformExecutionPhase;
   deIdentificationProfileId?: string | null;
+  expectedValueType?: MappingValueType | null;
 }
+
+/** Default MappingValueType the rule-authoring UI pre-fills for a given node type — a starting point the
+ *  author can override, not an enforced constraint. Undefined/null for node types whose output shape
+ *  genuinely depends on the data/config rather than the node type alone — those require an explicit pick.
+ *  Mirrors the backend's TransformNodeTypeDefaults (src/FHIRBridge.Domain/Enums/TransformNodeTypeDefaults.cs). */
+export const TRANSFORM_NODE_DEFAULT_VALUE_TYPES: Partial<Record<TransformNodeType, MappingValueType>> = {
+  DateTimeFormat: 'DateTime',
+  NumberCast: 'Decimal',
+  BooleanConversion: 'Boolean',
+  UnitConversion: 'Decimal',
+  QuantityRangeAssembly: 'Json',
+  RoundingScaling: 'Decimal',
+  ValueCodeMapping: 'String',
+  CodeableConceptBuilder: 'Json',
+  StatusEnumCoercion: 'String',
+  ReferenceConstruction: 'String',
+  IdentifierFormatting: 'String',
+  TelecomNormalization: 'String',
+  StringNormalization: 'String',
+  DateMathAge: 'Integer',
+  HashingMasking: 'String',
+  // HumanNameParsing, AddressParsing, ConcatenationTemplating, ArrayListOperations, DefaultNullHandling:
+  // deliberately absent — their output type depends on data/config, not the node type alone.
+};
 
 export interface TransformPreviewRequest {
   destinationType: DestinationType;
@@ -95,7 +124,10 @@ export interface TransformPreviewRequest {
 
 // 'combo' = a dropdown of common presets that still allows a genuinely custom value (unlike 'select', which
 // forces the value back to a preset) — used for fields where "none of the above" is a legitimate answer.
-export type ConfigFieldInputKind = 'text' | 'select' | 'checkbox' | 'combo';
+// 'number' = a numeric input (rejects non-numeric keystrokes) for fields the node parses as int/decimal.
+// 'keyvalue' = a from/to lookup table (add row / key / value) for a config value that's a JSON object
+// string under the hood — lets the field hold structured data without a raw-JSON textarea.
+export type ConfigFieldInputKind = 'text' | 'number' | 'select' | 'checkbox' | 'combo' | 'keyvalue';
 
 export interface TransformConfigFieldSchema {
   key: string;
@@ -126,6 +158,13 @@ export interface TransformPreviewResult {
   finalValue: unknown;
   effectiveScope: TransformScope | null;
   steps: TransformStepTrace[];
+}
+
+/** Informational only — how many workflows a Global/ResourceType-scoped rule save would affect vs. already
+ *  have a more specific override and are therefore unaffected. Never blocks saving. */
+export interface RuleImpactSummary {
+  totalMatchingWorkflows: number;
+  workflowsWithMoreSpecificOverride: number;
 }
 
 /**
@@ -177,6 +216,15 @@ export class TransformationRulesService {
 
   preview(request: TransformPreviewRequest): Observable<TransformPreviewResult> {
     return this.http.post<TransformPreviewResult>(TRANSFORMATION_RULES_ENDPOINTS.preview, request);
+  }
+
+  /** Informational heads-up shown after saving a Global/ResourceType-scoped rule — never blocks the save
+   *  that already happened; purely advisory about how many workflows this rule now reaches. */
+  getRuleImpactSummary(scope: TransformScope, resourceType: string | null, destinationField: string | null): Observable<RuleImpactSummary> {
+    const params = new URLSearchParams({ scope });
+    if (resourceType) params.set('resourceType', resourceType);
+    if (destinationField) params.set('destinationField', destinationField);
+    return this.http.get<RuleImpactSummary>(`${TRANSFORMATION_RULES_ENDPOINTS.impact}?${params.toString()}`);
   }
 
   /** Cached for the app session — this is static reference data (which config keys each node type reads),

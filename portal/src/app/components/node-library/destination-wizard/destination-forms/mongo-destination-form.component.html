@@ -38,3 +38,20 @@
 
   </div><!-- /dw-grid-2 -->
 </form>
+
+<div class="sf-actions" style="margin-top: 20px;">
+  <button type="button" class="dw-btn"
+    [disabled]="probeState() === 'testing' || !canTest()"
+    (click)="testConnection()">
+    {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+  </button>
+</div>
+@if (probeState() === 'testing') {
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Testing connection…</div>
+}
+@if (probeState() === 'error') {
+  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">Connection failed: {{ probeError() }}</div>
+}
+@if (probeState() === 'ok') {
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Connected — MongoDB reachable.</div>
+}

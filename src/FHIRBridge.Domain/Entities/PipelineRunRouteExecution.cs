@@ -69,19 +69,26 @@ public sealed class PipelineRunRouteExecution : Entity<Guid>
     public int WrittenCount { get; private set; }
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>The Global Exception Manager's <c>ERR-yyyyMMdd-NNNNNN</c> id for this route's failure, when one
+    /// was actually persisted to ErrorLogs — null for a non-failed completion, or when no capture ran/persisted
+    /// (never a placeholder; see <c>ErrorReport.ErrorReferenceId</c>).</summary>
+    public string? ErrorReferenceId { get; private set; }
+
     public void Complete(
         string status,
         int extractedCount,
         int mappedCount,
         int writtenCount,
         string? errorMessage,
-        DateTime completedOnUtc)
+        DateTime completedOnUtc,
+        string? errorReferenceId = null)
     {
         Status = status;
         ExtractedCount = extractedCount;
         MappedCount = mappedCount;
         WrittenCount = writtenCount;
         ErrorMessage = errorMessage;
+        ErrorReferenceId = errorReferenceId;
         CompletedOnUtc = completedOnUtc;
     }
 }

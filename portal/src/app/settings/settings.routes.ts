@@ -103,12 +103,21 @@ export const SETTINGS_ROUTES: Routes = [
           {
             path: '',
             pathMatch: 'full',
+            // The guard always returns a UrlTree (dynamic redirect), so children never render;
+            // the empty `children` is only here to satisfy Angular's route-config validation
+            // (a route needs one of component/loadComponent/redirectTo/children/loadChildren — a
+            // canActivate alone throws NG04014).
             canActivate: [settingsLandingGuard('/settings/workflow-configurations', [
               { path: 'source-connections', permissions: ['sourceconnections.view'] },
               { path: 'destination-connections', permissions: ['destinationconnections.view'] },
               { path: 'mapping-profiles', permissions: ['mappingprofiles.view'] },
               { path: 'transformation-rules', permissions: ['transformationrules.view'] },
             ])],
+            // canActivate always returns a redirect UrlTree — nothing ever renders here — but the
+            // Angular Router still requires one of component/loadComponent/redirectTo/children/
+            // loadChildren declared on every route (NG04014). An empty array satisfies that check
+            // without changing behavior.
+            children: [],
           },
         ],
       },
@@ -216,12 +225,15 @@ export const SETTINGS_ROUTES: Routes = [
               {
                 path: '',
                 pathMatch: 'full',
+                // Empty children only to satisfy route-config validation; the guard always
+                // redirects (UrlTree) so nothing renders here. See NG04014 note above.
                 canActivate: [settingsLandingGuard('/settings/system-settings/terminology', [
                   { path: 'loinc', permissions: ['loinc.view', 'loinc.write'] },
                   { path: 'snomed-ct', permissions: ['snomedct.view', 'snomedct.write'] },
                   { path: 'rxnorm', permissions: ['rxnorm.view', 'rxnorm.write'] },
                   { path: 'icd-10', permissions: ['icd10.view', 'icd10.write'] },
                 ])],
+                children: [],
               },
             ],
           },
@@ -244,6 +256,8 @@ export const SETTINGS_ROUTES: Routes = [
           {
             path: '',
             pathMatch: 'full',
+            // Empty children only to satisfy route-config validation; the guard always
+            // redirects (UrlTree) so nothing renders here. See NG04014 note above.
             canActivate: [settingsLandingGuard('/settings/system-settings', [
               { path: 'email', permissions: ['configuration.view', 'configuration.write'] },
               { path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS },
@@ -251,6 +265,7 @@ export const SETTINGS_ROUTES: Routes = [
               { path: 'security', superAdminOnly: true },
               { path: 'sso-configurations', superAdminOnly: true },
             ])],
+            children: [],
           },
         ],
       },
@@ -261,6 +276,8 @@ export const SETTINGS_ROUTES: Routes = [
       {
         path: '',
         pathMatch: 'full',
+        // Empty children only to satisfy route-config validation; the guard always
+        // redirects (UrlTree) so nothing renders here. See NG04014 note above.
         canActivate: [settingsLandingGuard('/settings', [
           { path: 'branding', permissions: ['configuration.write'] },
           { path: 'workflow-configurations', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
@@ -268,6 +285,7 @@ export const SETTINGS_ROUTES: Routes = [
           { path: 'system-settings', permissions: SYSTEM_SETTINGS_PERMISSIONS },
           { path: 'allowed-origins', superAdminOnly: true },
         ])],
+        children: [],
       },
     ],
   },

@@ -12,6 +12,21 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
 
+/** Options for the Source filter dropdown — the SourceSystemType enum's raw values (what the backend's
+ *  `source` query param and each row's sourceSystemType actually carry) paired with a friendly label,
+ *  same vendor set as sources.data.ts (the Source Connections picker). */
+const SOURCE_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Epic',               label: 'Epic' },
+  { value: 'Cerner',              label: 'Cerner (Oracle Health)' },
+  { value: 'Athenahealth',        label: 'Athenahealth' },
+  { value: 'Allscripts',          label: 'Allscripts (Veradigm)' },
+  { value: 'Healow',              label: 'Healow (eClinicalWorks)' },
+  { value: 'MeditechGreenfield',  label: 'Meditech Greenfield' },
+  { value: 'GenericFhir',         label: 'Generic FHIR' },
+  { value: 'Hl7v2',               label: 'HL7 v2 / MLLP' },
+  { value: 'Sample',              label: 'Sample (sandbox)' },
+];
+
 @Component({
   selector: 'app-execution-history-list',
   standalone: true,
@@ -33,8 +48,11 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
 
+  readonly sourceOptions = SOURCE_FILTER_OPTIONS;
+
   readonly searchQuery   = signal('');
   readonly statusFilter  = signal('');
+  readonly sourceFilter  = signal('');
   readonly triggerFilter = signal('');
   readonly pageIndex     = signal(0);
   readonly pageSize      = signal(10);
@@ -70,6 +88,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.api.list({
       status: this.statusFilter() || undefined,
+      source: this.sourceFilter() || undefined,
       triggeredBy: this.triggerFilter() || undefined,
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
@@ -88,11 +107,13 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   onSearch(val: string): void { this.search$.next(val); }
 
   onStatus(val: string): void  { this.statusFilter.set(val);  this.pageIndex.set(0); this.load(); }
+  onSource(val: string): void  { this.sourceFilter.set(val);  this.pageIndex.set(0); this.load(); }
   onTrigger(val: string): void { this.triggerFilter.set(val); this.pageIndex.set(0); this.load(); }
 
   reset(): void {
     this.searchQuery.set('');
     this.statusFilter.set('');
+    this.sourceFilter.set('');
     this.triggerFilter.set('');
     this.pageIndex.set(0);
     this.load();
@@ -138,7 +159,9 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   }
 
   sourceLabel(execution: RouteExecution): string {
-    return execution.sourceName ?? execution.sourceSystemType ?? '—';
+    // Show the vendor type (Epic, Athenahealth, ...) to match the Workflows list's Source badge,
+    // not the per-connection name (e.g. "Epic_gogo") — fall back to it only when the type is unknown.
+    return execution.sourceSystemType ?? execution.sourceName ?? '—';
   }
 
   formatDuration(ms: number | null): string {

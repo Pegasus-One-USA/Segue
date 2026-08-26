@@ -18,6 +18,7 @@ public sealed class PipelineRunRouteExecutionConfiguration : IEntityTypeConfigur
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
+        builder.Property(x => x.ErrorReferenceId).HasMaxLength(50);
         builder.Property(x => x.StartedOnUtc).IsRequired();
 
         builder.HasIndex(x => x.PipelineRunId);

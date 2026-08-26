@@ -5,6 +5,7 @@ import { MappingRow, MappingDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { ChildTableRelation, detectRelationFromColumns } from './field-mapping-summary.model';
 import { autoCardWidth } from './field-mapping-card-size.util';
+import { searchTerms, matchesSearchTerms } from './field-mapping-tree.util';
 
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 640;
@@ -80,6 +81,12 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly schemaAuthoringEnabled = input(true);
   readonly x = input.required<number>();
   readonly y = input.required<number>();
+  /** Toolbar-level search (see NodeLibraryDialogComponent's toolbar search box, forwarded through
+   *  FieldMappingCanvasComponent) — ANDed together with this card's own searchQuery below to actually
+   *  drive filtering (see effectiveQuery), but deliberately never written INTO searchQuery: typing in
+   *  the toolbar must filter these columns without visibly changing what's shown in this card's own box
+   *  (and vice versa — this card's own typing never echoes back up to the toolbar either). */
+  readonly externalQuery = input<string>('');
 
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
@@ -143,10 +150,28 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
 
   // ── search ────────────────────────────────────────────────────────────────
   readonly searchQuery = signal('');
+  /** Drives ONLY this card's own inline clear (✕) button — local text alone, so that button never
+   *  appears "clearable" over a filter that's actually coming from the toolbar (nothing here to clear). */
   readonly isSearching = computed(() => this.searchQuery().trim().length > 0);
+
+  /** What actually drives filtering: the toolbar query AND this card's own box, combined as extra AND
+   *  terms — so the toolbar narrows every table's columns at once and this card's own box can further
+   *  refine within that, without either overwriting the other's displayed text (see externalQuery). */
+  readonly effectiveQuery = computed(() => `${this.externalQuery()} ${this.searchQuery()}`.trim());
+  /** True whenever a filter is actually in effect, from either source — unlike isSearching (local-only,
+   *  for the clear button), this gates the "no columns match" empty state. */
+  readonly hasActiveFilter = computed(() => this.effectiveQuery().length > 0);
+
+  /** Matches by column name AND by its real data type (columnDataType — e.g. "bigint", "int",
+   *  "nvarchar(50)" for a probed/created SQL column; undefined for a free-text/CSV column, which then
+   *  only matches by name) — same multi-term AND/OR semantics as the payload tree's own search (see
+   *  matchesSearchTerms), so "int" finds every integer column and "patient int" combines a name/path
+   *  term with a type term exactly like the source side does. */
   readonly filteredColumns = computed(() => {
-    const q = this.searchQuery().trim().toLowerCase();
-    return q ? this.columns().filter(c => c.toLowerCase().includes(q)) : this.columns();
+    const terms = searchTerms(this.effectiveQuery());
+    if (!terms.length) return this.columns();
+    const typeOf = this.columnDataType();
+    return this.columns().filter(c => matchesSearchTerms([c, typeOf(c) ?? ''], terms));
   });
 
   onSearchInput(value: string): void { this.searchQuery.set(value); }

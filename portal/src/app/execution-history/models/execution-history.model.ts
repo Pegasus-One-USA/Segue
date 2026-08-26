@@ -24,6 +24,10 @@ export interface RouteExecution {
   errorMessage: string | null;
   workflowDefinitionVersion: number;
   correlationId: string | null;
+  /** The Global Exception Manager's ERR-yyyyMMdd-NNNNNN id for this run's failure, when one was actually
+   *  persisted to ErrorLogs — null if capture never ran or failed to persist (never a placeholder). Link
+   *  straight to /operations/errors?errorReferenceId=... rather than asking the user to search by execution id. */
+  errorReferenceId: string | null;
 }
 
 export interface PagedResult<T> {

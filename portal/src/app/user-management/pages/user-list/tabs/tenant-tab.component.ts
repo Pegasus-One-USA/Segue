@@ -7,7 +7,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TenantRoleService, Tenant } from '../../../services/tenant-role.service';
+import { ToastService } from '../../../../services/toast.service';
 
 @Component({
   selector: 'app-tenant-tab',
@@ -20,19 +22,22 @@ import { TenantRoleService, Tenant } from '../../../services/tenant-role.service
     MatButtonModule,
     MatIconModule,
     MatTableModule,
+    MatProgressSpinnerModule,
   ],
   templateUrl: './tenant-tab.component.html',
   styleUrls: ['./tenant-tab.component.scss'],
 })
 export class TenantTabComponent {
-  private readonly svc = inject(TenantRoleService);
-  private readonly fb  = inject(FormBuilder);
+  private readonly svc   = inject(TenantRoleService);
+  private readonly fb    = inject(FormBuilder);
+  private readonly toast = inject(ToastService);
 
   readonly tenants       = this.svc.tenants;
   readonly displayedCols = ['name', 'code', 'createdAt', 'actions'];
 
   editId    = signal<string | null>(null);
   submitted = signal(false);
+  saving    = signal(false);
 
   form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
@@ -50,15 +55,26 @@ export class TenantTabComponent {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
 
     const { name, code } = this.form.value as { name: string; code: string };
+    this.saving.set(true);
 
-    if (this.editId()) {
-      this.svc.updateTenant(this.editId()!, { name, code });
-      this.editId.set(null);
-    } else {
-      this.svc.addTenant({ name, code });
-    }
-    this.form.reset({ name: '', code: '' });
-    this.submitted.set(false);
+    const editingId = this.editId();
+    const request$ = editingId
+      ? this.svc.updateTenant(editingId, { name, code })
+      : this.svc.addTenant({ name, code });
+
+    request$.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.editId.set(null);
+        this.form.reset({ name: '', code: '' });
+        this.submitted.set(false);
+        this.toast.success(editingId ? 'Tenant updated.' : 'Tenant created.');
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error('Save failed', err?.error?.message ?? 'Could not save tenant. Please try again.');
+      },
+    });
   }
 
   startEdit(tenant: Tenant): void {
@@ -75,9 +91,15 @@ export class TenantTabComponent {
   }
 
   deleteTenant(tenant: Tenant): void {
-    if (!confirm(`Delete "${tenant.name}"? All associated roles will also be removed.`)) return;
-    this.svc.deleteTenant(tenant.id);
-    if (this.editId() === tenant.id) this.cancelEdit();
+    if (!confirm(`Delete "${tenant.name}"?`)) return;
+    this.svc.deleteTenant(tenant.id).subscribe({
+      next: () => {
+        if (this.editId() === tenant.id) this.cancelEdit();
+        this.toast.success(`Tenant "${tenant.name}" deleted.`);
+      },
+      error: (err) => this.toast.error(
+        'Delete failed', err?.error?.message ?? `Could not delete tenant "${tenant.name}".`),
+    });
   }
 
   formatDate(iso: string): string {

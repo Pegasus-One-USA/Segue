@@ -14,39 +14,59 @@ import {
 import { newSecretName } from '../../utils/destination-connection-secret.util';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionService } from '../../../auth/services/permission.service';
+import { TRANSFORMS } from '../../../data/transforms.data';
+import { Transform } from '../../../models/transform.model';
 
 export interface DestinationConnectionDialogData {
   mode: 'create' | 'edit' | 'view';
   destination?: DestinationConfigurationDto;
 }
 
-/** Still only offers Sql/Csv/Fhir from this screen's create-flow type picker (three cards) — unchanged UX.
- *  'sql' now resolves to the real SqlServer DestinationType (the registry's default SQL-family entry point),
- *  since DESTINATION_FORM_REGISTRY components no longer have an in-form "Database engine" dropdown to pick
- *  MySQL/PostgreSQL/AzureSql from (see SqlFamilyDestinationFormComponent) — creating those specific engines
- *  isn't reachable from this admin dialog yet, only from a future full registry-driven type picker. */
-function chosenTypeToDestinationType(t: 'sql' | 'csv' | 'fhir'): DestinationType {
-  return t === 'sql' ? 'SqlServer' : t === 'fhir' ? 'FhirRepository' : 'Csv';
+/** The DestinationTypes this admin dialog's create-flow offers, in display order. A curated safe subset of the
+ *  full catalog — each has a working form here (registry-routed, or the hand-rolled FHIR form) and a real
+ *  backend writer. Analytics/File/Delivery types (Snowflake/Parquet/…) aren't offered yet: their standalone
+ *  forms aren't verified in this dialog. Labels/descriptions/permission all come from the TRANSFORMS catalog
+ *  (transforms.data.ts), so this stays in sync with the workflow builder's Node Library. */
+const CREATE_TYPES: DestinationType[] = [
+  'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum',
+];
+
+/** Types whose connection secret can be replaced from the Edit flow (their form loads here). Superset of
+ *  CREATE_TYPES plus AzureSql/Sftp, which have always been edit-supported by collapsing onto the
+ *  SqlServer/Csv registry forms. Anything else is name/target-only on edit (see unsupportedType()). */
+const EDITABLE_TYPES: ReadonlySet<DestinationType> = new Set<DestinationType>([
+  ...CREATE_TYPES, 'AzureSql', 'Sftp',
+]);
+
+/** DestinationType -> its TRANSFORMS catalog entry (name, sub, permissionPrefix). */
+const DEST_CATALOG = new Map<DestinationType, Transform>(
+  TRANSFORMS.filter(t => t.destinationType).map(t => [t.destinationType!, t]),
+);
+
+/** The permission-code prefix the backend authorizes this type against — its own dedicated group where it has
+ *  one (sqlserver/postgresql/mysql/mongo/blobstorage/csv), else the generic `sourceconnections` fallback the
+ *  catalog records (Medplum, Aidbox/FhirRepository). Same prefix the Node Library gates its tiles on. */
+function permissionPrefixFor(type: DestinationType): string {
+  return DEST_CATALOG.get(type)?.permissionPrefix ?? type.toLowerCase();
 }
 
-/** Maps the entity's full enum down to the three form shapes this screen's create-flow choice cards offer,
- *  for `unsupportedType()`'s edit-mode gating only — unrelated to which exact registry component
- *  DestinationConnectionFormComponent loads for editing (see toEditableDestinationType below), which now
- *  uses the destination's real, un-collapsed DestinationType instead. */
-function toFormType(t: DestinationType): 'sql' | 'csv' | 'fhir' | null {
-  if (t === 'SqlServer' || t === 'AzureSql' || t === 'PostgreSql' || t === 'MySql') return 'sql';
-  if (t === 'Csv' || t === 'Sftp') return 'csv';
-  if (t === 'FhirRepository') return 'fhir';
+/** DestinationConfiguration.target for a freshly-built connection, mirroring workflow-build-assembler's
+ *  per-type target: FHIR base URL / Medplum base URL / blob container / Mongo collection / CSV file pattern.
+ *  SQL-family destinations have no natural target (null), same as before. */
+const TARGET_FIELD_KEYS = ['dest_baseUrl', 'dest_medplumBaseUrl', 'dest_blobContainer', 'dest_collection', 'dest_filePattern'];
+function resolveTarget(fields: Record<string, string>): string | null {
+  for (const key of TARGET_FIELD_KEYS) {
+    if (fields[key]) return fields[key];
+  }
   return null;
 }
 
-/** The real DestinationType to load into DestinationConnectionFormComponent for "Replace connection secret"
- *  on an existing SQL-family/CSV-family destination — the un-collapsed type (so e.g. editing a MySql
- *  destination loads MySqlDestinationFormComponent, not SqlServerDestinationFormComponent), gated by the same
- *  family membership toFormType() already checks (unsupportedType() covers everything else). */
-function toEditableDestinationType(t: DestinationType): DestinationType | null {
-  return toFormType(t) ? t : null;
-}
+/** Create-permission codes across every type this dialog's create-flow offers — the "can create ANY
+ *  destination" gate for the list screen's New Connection button. Deduped (Medplum + Aidbox both map to
+ *  sourceconnections.create). */
+export const DESTINATION_CREATE_PERMISSION_CODES: string[] = [
+  ...new Set(CREATE_TYPES.map(type => `${permissionPrefixFor(type)}.create`)),
+];
 
 @Component({
   selector: 'app-destination-connection-dialog',
@@ -72,21 +92,32 @@ export class DestinationConnectionDialogComponent {
 
   // Create: the user picks a type before the rich connection form appears. Edit/view: the type is fixed,
   // derived from the saved destination — this screen only lets you *replace* an existing secret, not retype it.
-  readonly chosenType = signal<'sql' | 'csv' | 'fhir' | null>(
-    this.isCreate ? null : toFormType(this.data.destination!.destinationType),
+  // chosenType holds the real DestinationType directly (create: the picked card; edit: the destination's own
+  // type when it's editable here, else null → name/target-only).
+  readonly chosenType = signal<DestinationType | null>(
+    this.isCreate
+      ? null
+      : (EDITABLE_TYPES.has(this.data.destination!.destinationType) ? this.data.destination!.destinationType : null),
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
 
-  /** The real DestinationType handed to DestinationConnectionFormComponent's (now-widened) destType input —
-   *  distinct from chosenType() above, which stays the UI-facing 'sql'/'csv' shorthand the two create-flow
-   *  cards and unsupportedType()'s edit-mode gating use. Create always resolves 'sql' to SqlServer (see
-   *  chosenTypeToDestinationType); edit/view use the destination's own real, un-collapsed type so "Replace
-   *  connection secret" loads the matching engine's component (e.g. MySql, not SqlServer). */
-  readonly formDestinationType = computed<DestinationType | null>(() =>
-    this.isCreate
-      ? (this.chosenType() ? chosenTypeToDestinationType(this.chosenType()!) : null)
-      : toEditableDestinationType(this.data.destination!.destinationType),
-  );
+  /** The DestinationType handed to DestinationConnectionFormComponent's destType input — the real type in both
+   *  modes (create: the chosen card; edit: the destination's own type), so "Replace connection secret" loads
+   *  the matching engine's component (e.g. MySql, not SqlServer). */
+  readonly formDestinationType = computed<DestinationType | null>(() => this.chosenType());
+
+  /** Create-flow type cards, derived from the TRANSFORMS catalog (single source of truth shared with the
+   *  workflow builder) and filtered to the types the current user can actually create. */
+  readonly createTypeCards = CREATE_TYPES
+    .map(type => DEST_CATALOG.get(type))
+    .filter((t): t is Transform => !!t)
+    .map(t => ({
+      destinationType: t.destinationType!,
+      title: t.name,
+      description: t.sub,
+      permissionCode: `${permissionPrefixFor(t.destinationType!)}.create`,
+    }))
+    .filter(card => this.permissions.hasPermission(card.permissionCode));
 
   // Edit/view: Name + Target map straight to DestinationConfiguration's own persisted fields. The rich
   // sql/csv connection fields (server, credentials, folder, etc.) are never returned by the API — they were
@@ -107,7 +138,7 @@ export class DestinationConnectionDialogComponent {
     }
   }
 
-  chooseType(type: 'sql' | 'csv' | 'fhir'): void {
+  chooseType(type: DestinationType): void {
     this.chosenType.set(type);
   }
 
@@ -115,7 +146,7 @@ export class DestinationConnectionDialogComponent {
    *  Save is even possible — a wrong secret would otherwise save silently and only fail later at run time. Only
    *  relevant when a new secret is actually being entered: create, or edit with "Replace connection secret" on. */
   fhirTestPending(): boolean {
-    if (this.chosenType() !== 'fhir') return false;
+    if (this.chosenType() !== 'FhirRepository') return false;
     if (!this.isCreate && !this.replaceSecret()) return false;
     return this.connectionForm()?.probeState() !== 'ok';
   }
@@ -146,7 +177,7 @@ export class DestinationConnectionDialogComponent {
     // "holds any create code" before this dialog opened — this re-checks against the SPECIFIC type
     // the user just picked from the two type-choice cards, since holding sqlserver.create doesn't
     // imply csv.create or vice versa.
-    if (!this.actionGuard.ensure(`${type.toLowerCase()}.create`, `You do not have permission to create a ${type} destination.`)) return;
+    if (!this.actionGuard.ensure(`${permissionPrefixFor(type)}.create`, `You do not have permission to create a ${type} destination.`)) return;
 
     const metadata = form.getMetadata();
     if (!metadata) {
@@ -160,10 +191,11 @@ export class DestinationConnectionDialogComponent {
       destinationType: type,
       keyVaultName: 'workflow-secrets',
       secretName: newSecretName(name),
-      // Required by CreateDestinationConfigurationRequestValidator.ValidateFhirRepositoryMetadata whenever
-      // dest_fhirAuthType isn't 'none' (the FHIR form always sets an auth type, so effectively always
-      // required for FhirRepository in practice) — dest_baseUrl covers that case, dest_filePattern covers Csv.
-      target: metadata.fields['dest_baseUrl'] || metadata.fields['dest_filePattern'] || null,
+      // Per-type target, mirroring workflow-build-assembler (FHIR/Medplum base URL, blob container, Mongo
+      // collection, CSV file pattern); SQL-family has none. Also satisfies
+      // CreateDestinationConfigurationRequestValidator.ValidateFhirRepositoryMetadata, which needs a target
+      // (dest_baseUrl) whenever a FhirRepository's auth type isn't 'none'.
+      target: resolveTarget(metadata.fields),
       inlineSecret: metadata.secret ?? '',
       connectionMetadataJson: JSON.stringify(metadata.fields),
     };
@@ -175,7 +207,7 @@ export class DestinationConnectionDialogComponent {
     const destination = this.data.destination!;
     // Defense-in-depth: DestinationConnectionListComponent.openEdit() already checked this before
     // opening the dialog — re-checked here against a permission change landing mid-edit.
-    if (!this.actionGuard.ensure(`${destination.destinationType.toLowerCase()}.edit`, `You do not have permission to edit this ${destination.destinationType} destination.`)) return;
+    if (!this.actionGuard.ensure(`${permissionPrefixFor(destination.destinationType)}.edit`, `You do not have permission to edit this ${destination.destinationType} destination.`)) return;
     if (this.metaForm.invalid) {
       this.metaForm.markAllAsTouched();
       return;

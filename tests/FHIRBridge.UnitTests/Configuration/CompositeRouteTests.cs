@@ -31,7 +31,10 @@ public sealed class CompositeRouteTests
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
             Mock.Of<IParentReferenceResolver>(),
-            new CreateMappingProfileRequestValidator(new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService()),
+            new CreateMappingProfileRequestValidator(
+                new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService(),
+                _repository,
+                new FHIRBridge.UnitTests.Validation.NoOpEffectiveRuleResolver()),
             new CreateDestinationConfigurationRequestValidator(),
             new FHIRBridge.UnitTests.Security.PassthroughUserDisplayNameResolver(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ConfigurationService>.Instance);

@@ -141,6 +141,36 @@ export interface ConnectionTestResult {
   error: string | null;
 }
 
+// Medplum connection test — credentials come straight off the form (nothing saved yet). authMethod is
+// 'client_secret' (default) or 'private_key_jwt', in which case `secret` carries the PEM private key.
+export interface MedplumConnectionTestRequest {
+  baseUrl: string;
+  clientId: string;
+  secret: string;
+  authMethod?: string;
+  keyId?: string;
+  tokenUrl?: string;
+}
+
+// Mongo connection test — the whole connection string is the credential (must embed the database name).
+export interface MongoConnectionTestRequest {
+  connectionString: string;
+}
+
+// Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /
+// account key / SAS / service-principal client secret per authMode; omitted for managedIdentity.
+export interface BlobConnectionTestRequest {
+  authMode: string;
+  container: string;
+  secret?: string;
+  accountUrl?: string;
+  accountName?: string;
+  endpointSuffix?: string;
+  tenantId?: string;
+  clientId?: string;
+  managedIdentityClientId?: string;
+}
+
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the
  *  (now-hidden) tokenEndpoint form control exactly as if the user had typed it in. */
 export interface FhirConnectionTestResult extends ConnectionTestResult {
@@ -191,5 +221,23 @@ export class DestinationSchemaService {
   /** Tests an ad-hoc FHIR-repository connection (e.g. Aidbox) for a not-yet-saved FhirRepository destination. */
   testFhir(request: FhirConnectionTestRequest): Observable<FhirConnectionTestResult> {
     return this.http.post<FhirConnectionTestResult>(DESTINATION_ENDPOINTS.fhirTest, request);
+  }
+
+  /** Tests an ad-hoc Medplum connection for a not-yet-saved Medplum destination — mints an OAuth2 token from
+   *  the supplied credentials and pings {baseUrl}/metadata server-side. */
+  testMedplum(request: MedplumConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.medplumTest, request);
+  }
+
+  /** Tests an ad-hoc MongoDB connection for a not-yet-saved Mongo destination — opens a client on the
+   *  connection string and runs a ping server-side. */
+  testMongo(request: MongoConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
+  }
+
+  /** Tests an ad-hoc Azure Blob Storage connection for a not-yet-saved Blob destination — builds the container
+   *  client for the auth mode and does a reachability round-trip server-side. */
+  testBlob(request: BlobConnectionTestRequest): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.blobTest, request);
   }
 }
