@@ -60,10 +60,12 @@ public sealed class SafeHarborDeIdentificationServiceTests
 
         var result = await sut.DeIdentifyAsync(request, CancellationToken.None);
 
-        result.Should().NotContain("Jane Doe");
-        result.Should().NotContain("Dr. Jane Smith");
-        result.Should().Contain("Patient/patient-42");
-        result.Should().Contain("Practitioner/prac-1");
+        result.Json.Should().NotContain("Jane Doe");
+        result.Json.Should().NotContain("Dr. Jane Smith");
+        result.Json.Should().Contain("Patient/patient-42");
+        result.Json.Should().Contain("Practitioner/prac-1");
+        result.Hops.Should().HaveCount(2);
+        result.Hops.Should().OnlyContain(hop => hop.Success);
     }
 
     [Fact]
@@ -74,7 +76,8 @@ public sealed class SafeHarborDeIdentificationServiceTests
 
         var result = await sut.DeIdentifyAsync(request, CancellationToken.None);
 
-        result.Should().Be(ProvenanceJson);
+        result.Json.Should().Be(ProvenanceJson);
+        result.Hops.Should().BeEmpty();
     }
 
     [Fact]
@@ -85,7 +88,8 @@ public sealed class SafeHarborDeIdentificationServiceTests
 
         var result = await sut.DeIdentifyAsync(request, CancellationToken.None);
 
-        result.Should().Contain("Jane Doe");
-        result.Should().Contain("Dr. Jane Smith");
+        result.Json.Should().Contain("Jane Doe");
+        result.Json.Should().Contain("Dr. Jane Smith");
+        result.Hops.Should().BeEmpty();
     }
 }

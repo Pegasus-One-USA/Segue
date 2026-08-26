@@ -514,27 +514,37 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             ? actualGrantedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : source.Scopes;
 
-        // Authorization session check: the connection's granted SMART scopes (effectiveGrantedScopes — the real
-        // grant when known, else the configured/requested scopes, see above) are logged every time this node runs,
-        // not just when something is missing, so Correlation Search's Errors section always shows what this run was
-        // authorized for. Best-effort: a governance-logging hiccup must never abort the extraction itself
-        // (CaptureExpectedAsync already swallows internally).
-        if (_exceptionManager is not null)
+        // Scope-narrowing check: only worth a governance log entry (and the reference id that comes with it) when
+        // the IdP's actual grant (actualGrantedScope, read back above) is missing something FHIRBridge configured
+        // — i.e. the token endpoint silently narrowed the request. When actualGrantedScope is unavailable,
+        // effectiveGrantedScopes just falls back to source.Scopes itself, so there is nothing to compare and
+        // nothing anomalous to report. This deliberately does NOT log on every run: a fully-granted session is not
+        // an error and must never mint a reference id (docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md). Best-effort:
+        // a governance-logging hiccup must never abort the extraction itself (CaptureExpectedAsync swallows
+        // internally).
+        if (_exceptionManager is not null && !string.IsNullOrWhiteSpace(actualGrantedScope))
         {
-            var grantedScopesSummary = effectiveGrantedScopes is { Count: > 0 }
-                ? string.Join(", ", effectiveGrantedScopes)
-                : "(none granted)";
-            await _exceptionManager.CaptureExpectedAsync(
-                new ExpectedFailure(
-                    "ScopesGranted",
-                    $"Authorization session for node '{node.Id}' ({node.NodeType}): granted scopes = [{grantedScopesSummary}]; requested resource types = [{string.Join(", ", executionOrder)}]"),
-                new ExceptionContext(
-                    Module: "Workflow",
-                    Severity: "Informational",
-                    CorrelationId: context.CorrelationId,
-                    WorkflowId: node.WorkflowDefinitionId.ToString(),
-                    ExecutionId: context.WorkflowRunId.ToString()),
-                cancellationToken);
+            var missingScopes = (source.Scopes ?? [])
+                .Where(scope => !effectiveGrantedScopes.Contains(scope, StringComparer.Ordinal))
+                .ToList();
+
+            if (missingScopes.Count > 0)
+            {
+                var grantedScopesSummary = effectiveGrantedScopes is { Count: > 0 }
+                    ? string.Join(", ", effectiveGrantedScopes)
+                    : "(none granted)";
+                await _exceptionManager.CaptureExpectedAsync(
+                    new ExpectedFailure(
+                        "ScopesNarrowed",
+                        $"Authorization session for node '{node.Id}' ({node.NodeType}) granted fewer scopes than configured: missing = [{string.Join(", ", missingScopes)}]; granted = [{grantedScopesSummary}]; requested resource types = [{string.Join(", ", executionOrder)}]"),
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        Severity: "Informational",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: node.WorkflowDefinitionId.ToString(),
+                        ExecutionId: context.WorkflowRunId.ToString()),
+                    cancellationToken);
+            }
         }
 
         // Only enforced when the connection actually declares resource-scoped SMART grants — a source with no

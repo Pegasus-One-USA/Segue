@@ -187,10 +187,10 @@ public sealed class WorkflowGraphLaunchTests
     {
         public int CallCount { get; private set; }
 
-        public Task<string> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
+        public Task<DeIdentificationResult> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
         {
             CallCount++;
-            return Task.FromResult("SCRUBBED");
+            return Task.FromResult(new DeIdentificationResult("SCRUBBED", []));
         }
     }
 
