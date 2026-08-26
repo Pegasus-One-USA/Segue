@@ -220,14 +220,18 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
         if (deactivatedPermissionIds.Count > 0)
         {
-            var allocationsToRevoke = await _dbContext.PermissionAllocations
+            // ExecuteDeleteAsync, not RemoveRange + SaveChanges: PermissionAllocation is ISoftDeletable, and
+            // AuditingSaveChangesInterceptor converts any tracked Delete into a soft delete (IsDeleted = true,
+            // row stays). That's correct for the "operator unchecked a box" path (RemoveRolePermissionAsync
+            // already uses ExecuteDeleteAsync for the same reason), but RemoveRange here left the row physically
+            // present under the (RoleId, PermissionId) unique index — invisible to the un-filtered existingLinks
+            // query below, so the very next boot's re-seed tried to INSERT the same pair again and crashed with
+            // a duplicate-key violation the moment the permission was ever re-declared. A revoked grant has no
+            // audit/lineage value worth preserving as a dead row, so a real delete is correct here too.
+            await _dbContext.PermissionAllocations
+                .IgnoreQueryFilters()
                 .Where(a => deactivatedPermissionIds.Contains(a.PermissionId))
-                .ToListAsync(cancellationToken);
-
-            if (allocationsToRevoke.Count > 0)
-            {
-                _dbContext.PermissionAllocations.RemoveRange(allocationsToRevoke);
-            }
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         var existingRoleIds = await _dbContext.Roles
