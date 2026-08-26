@@ -656,11 +656,11 @@
           </div>
         }
       }
-    } @else if (isStepActive(3) && isMedplum()) {
-      <!-- ── Columnless FHIR server (Medplum): the whole normalized resource is written as-is (runtime
-           wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to map
-           field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
-           Aidbox above, Medplum has no per-field customize option. ── -->
+    } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
+      <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
+           as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to
+           map field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
+           Aidbox above, neither has a per-field customize option. ── -->
       <div class="dw-section-head">
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">Map fields</span>
@@ -934,6 +934,19 @@
               <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobPathPrefix'] }}</span>
             </div>
           }
+        } @else if (isAzureFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR service URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_baseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_authType'] === 'managedIdentity' ? 'Managed identity' : 'Client credentials' }}</span>
+          </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -952,7 +965,7 @@
           <span class="dw-review-key">Data groups</span>
           <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
         </div>
-        @if (!isFhir()) {
+        @if (!isFhir() && !isAzureFhir()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Mapped fields</span>
             <span class="dw-review-val">{{ mappingRows().length }} fields</span>

@@ -165,6 +165,23 @@ public sealed class FhirRepositoryDestinationNodeExecutor : DestinationNodeExecu
     }
 }
 
+public sealed class AzureFhirServiceDestinationNodeExecutor : DestinationNodeExecutor
+{
+    // Same writer (MappedFhirRepositoryDestinationWriter) and same opt-in dest_autoFetchMissingReferences
+    // mechanism as FhirRepositoryDestinationNodeExecutor — wiring the source-client dependencies through here
+    // too lets Azure FHIR Service auto-fetch a missing reference (e.g. Organization/Practitioner) straight from
+    // the source EHR instead of requiring every referenced resource type to be pulled into the same batch.
+    public AzureFhirServiceDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null,
+        FHIRBridge.Runtime.Application.Abstractions.Connectors.IFhirSourceClientFactory? sourceClientFactory = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.ISourceConnectionRuntimeResolver? sourceConnectionResolver = null)
+        : base(WorkflowNodeTypes.AzureFhirServiceDestination, DestinationType.AzureFhirService, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository, sourceClientFactory, sourceConnectionResolver)
+    {
+    }
+}
+
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
@@ -892,14 +909,18 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private DestinationConfiguration CreateDestinationConfiguration(WorkflowExecutionContext context, WorkflowNode node)
     {
         var target = ReadStringConfiguration(node, "target");
-        if (string.IsNullOrWhiteSpace(target) && node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination)
+        if (string.IsNullOrWhiteSpace(target)
+            && (node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination || node.NodeType == WorkflowNodeTypes.AzureFhirServiceDestination))
         {
             // The destination wizard only stamps a top-level "target" field onto the node when reusing an
             // EXISTING destination connection (destination-wizard.component.ts, selectExisting() branch) — a
-            // freshly-created FHIR destination never gets one, even though its persisted DestinationConfigurations
-            // row does (via WorkflowBuildAssemblerService.buildDestination()). Fall back to dest_baseUrl, the same
-            // raw field BuildConnectionMetadataJson below already reads, so a graph-driven run of a freshly-created
-            // FHIR destination doesn't throw "Target must be set" from MappedFhirRepositoryDestinationWriter.
+            // freshly-created FHIR/Azure FHIR Service destination never gets one, even though its persisted
+            // DestinationConfigurations row does (via WorkflowBuildAssemblerService.buildDestination()). Fall
+            // back to dest_baseUrl, the same raw field BuildConnectionMetadataJson below already reads, so a
+            // graph-driven run of a freshly-created FHIR/Azure FHIR Service destination doesn't throw "Target
+            // must be set" from MappedFhirRepositoryDestinationWriter — or, worse, silently build a relative
+            // request URI (empty baseUrl) that HttpClient then rejects with "invalid request URI... must be
+            // absolute" once it actually tries to write.
             target = ReadStringConfiguration(node, "dest_baseUrl");
         }
 
@@ -943,14 +964,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         }
 
         // The canvas node's own field is dest_authType, in the wizard's internal vocabulary ('oauth2'/'basic'/
-        // 'bearer') — it's never renamed to the backend's dest_fhirAuthType/'clientCredentials' vocabulary at this
-        // layer; that bridge only happens in WorkflowBuildAssemblerService.buildConnectionMetadata(), which builds
-        // the SEPARATE, persisted DestinationConfiguration row. A graph-driven run reconstructs its own
-        // DestinationConfiguration straight from these raw node fields (see CreateDestinationConfiguration above)
-        // and never reads that persisted row, so FhirRepositoryAuthResolver would never see dest_fhirAuthType at
-        // all — silently resolving to "none" and sending an unauthenticated request that Aidbox rejects with 401.
-        // Mirror the same key+value bridge here, scoped to this node type only.
-        if (node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination
+        // 'bearer', or — for Azure FHIR Service — 'clientCredentials'/'managedIdentity' directly) — it's never
+        // renamed to the backend's dest_fhirAuthType vocabulary at this layer; that bridge only happens in
+        // WorkflowBuildAssemblerService.buildConnectionMetadata(), which builds the SEPARATE, persisted
+        // DestinationConfiguration row. A graph-driven run reconstructs its own DestinationConfiguration
+        // straight from these raw node fields (see CreateDestinationConfiguration above) and never reads that
+        // persisted row, so FhirRepositoryAuthResolver would never see dest_fhirAuthType at all — silently
+        // resolving to "none", which then falls through to an empty/relative base URL once Target is also
+        // unset (see the target fallback above) and HttpClient rejects the resulting relative request URI, or
+        // (for Aidbox) sends an unauthenticated request that gets rejected with 401. Mirror the same key+value
+        // bridge here, scoped to these two FHIR-native node types only.
+        if ((node.NodeType == WorkflowNodeTypes.FhirRepositoryDestination || node.NodeType == WorkflowNodeTypes.AzureFhirServiceDestination)
             && metadata.TryGetValue("dest_authType", out var fhirAuthType)
             && fhirAuthType.ValueKind == JsonValueKind.String)
         {

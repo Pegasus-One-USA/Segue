@@ -93,7 +93,7 @@ public sealed class MagicLinkAuthTests
         user.SetMagicLinkToken(TokenHash, DateTime.UtcNow.AddMinutes(15));
         _repository.Setup(x => x.GetUserByEmailAsync(Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _passwordHasher.Setup(x => x.Verify(Token, TokenHash)).Returns(true);
-        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()))
+        _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>()))
             .Returns(new AccessTokenDto("access-token", "Bearer", DateTime.UtcNow.AddHours(1)));
         _accessTokenIssuer.Setup(x => x.IssueRefreshToken()).Returns(("refresh-hash", DateTime.UtcNow.AddDays(30)));
         _repository.Setup(x => x.GetUserRolesAsync(user.Id, It.IsAny<CancellationToken>()))
@@ -125,7 +125,7 @@ public sealed class MagicLinkAuthTests
         response.RequiresMfa.Should().BeTrue();
         response.MfaChallengeToken.Should().Be("challenge-hash");
         user.MagicLinkTokenHash.Should().BeNull();
-        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+        _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }
 
     [Fact]

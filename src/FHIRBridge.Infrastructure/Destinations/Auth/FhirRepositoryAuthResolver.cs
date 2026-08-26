@@ -29,12 +29,37 @@ internal static class FhirRepositoryAuthResolver
         SecretReference secretReference,
         ISecretProvider secretProvider,
         IFhirDestinationTokenProvider tokenProvider,
+        IAzureManagedIdentityFhirTokenProvider managedIdentityTokenProvider,
+        string? baseUrl,
         CancellationToken cancellationToken)
     {
         var authType = ConnectionMetadataReader.GetString(connectionMetadataJson, "dest_fhirAuthType") ?? "none";
         if (string.Equals(authType, "none", StringComparison.OrdinalIgnoreCase))
         {
             return null;
+        }
+
+        // Managed identity never resolves a Key Vault secret — the scope/authority/user-assigned-identity-id it
+        // needs are all non-secret connection metadata, same as MappedFhirRepositoryDestinationWriter's other flags.
+        if (string.Equals(authType, "managedIdentity", StringComparison.OrdinalIgnoreCase))
+        {
+            var scope = ConnectionMetadataReader.GetString(connectionMetadataJson, "dest_fhirAzureScope");
+            if (string.IsNullOrWhiteSpace(scope))
+            {
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    throw new InvalidOperationException(
+                        "dest_fhirAuthType 'managedIdentity' requires either dest_fhirAzureScope or a FHIR base URL to derive the default scope from.");
+                }
+
+                scope = $"{baseUrl.TrimEnd('/')}/.default";
+            }
+
+            var managedIdentityClientId = ConnectionMetadataReader.GetString(connectionMetadataJson, "dest_fhirManagedIdentityClientId");
+            var authorityHost = ConnectionMetadataReader.GetString(connectionMetadataJson, "dest_fhirAuthorityHost");
+            var token = await managedIdentityTokenProvider.GetAccessTokenAsync(
+                scope, managedIdentityClientId, authorityHost, cancellationToken);
+            return new AuthenticationHeaderValue("Bearer", token);
         }
 
         var secretJson = await secretProvider.GetSecretAsync(secretReference, cancellationToken);
@@ -52,7 +77,7 @@ internal static class FhirRepositoryAuthResolver
                     new FhirDestinationOAuth2Options(secret.TokenEndpoint!, secret.ClientId!, secret.ClientSecret!, secret.Scope),
                     cancellationToken)),
             _ => throw new InvalidOperationException(
-                $"Unsupported dest_fhirAuthType '{authType}' for a FHIR repository destination. Supported: none, bearer, basic, clientCredentials.")
+                $"Unsupported dest_fhirAuthType '{authType}' for a FHIR repository destination. Supported: none, bearer, basic, clientCredentials, managedIdentity.")
         };
     }
 

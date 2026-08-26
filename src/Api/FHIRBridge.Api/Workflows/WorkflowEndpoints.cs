@@ -20,6 +20,7 @@ using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -2146,7 +2147,12 @@ public static class WorkflowEndpoints
     /// name — never the original's — so the copy's credential is fully independent (see ISecretWriter's own doc
     /// comment: it always lands in the app's DB-provisioned secret store, functionally equivalent to the original
     /// regardless of whether the original itself came from real Azure Key Vault or that same store). Null when
-    /// there's no secret reference to clone in the first place (an optional auth field the connection never set).</summary>
+    /// there's no secret reference to clone in the first place (an optional auth field the connection never set),
+    /// OR when a reference exists but nothing was ever actually written there — e.g. a managed-identity-authenticated
+    /// destination/source (Azure FHIR Service, Blob Storage) always carries non-blank KeyVaultName/SecretName
+    /// (required by validation) but never calls ISecretWriter.WriteSecretAsync for that mode, since there's no
+    /// secret value to store. Without this second check, duplicating such a connection throws
+    /// SecretNotConfiguredException instead of just producing an equally-secret-less clone.</summary>
     private static async Task<SecretReference?> CloneSecretAsync(
         string? keyVaultName,
         string? secretName,
@@ -2159,7 +2165,16 @@ public static class WorkflowEndpoints
             return null;
         }
 
-        var value = await secretProvider.GetSecretAsync(new SecretReference(keyVaultName, secretName), cancellationToken);
+        string value;
+        try
+        {
+            value = await secretProvider.GetSecretAsync(new SecretReference(keyVaultName, secretName), cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
+        }
+
         var newReference = new SecretReference(keyVaultName, $"{secretName}-copy-{Guid.NewGuid():N}");
         await secretWriter.WriteSecretAsync(newReference, value, cancellationToken);
         return newReference;

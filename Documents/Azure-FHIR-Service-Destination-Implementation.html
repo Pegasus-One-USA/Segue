@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure FHIR Service Destination — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden: #64748B;
+    --hidden-bg: #F1F5F9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14.5px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-active   { color: var(--new);      background: var(--new-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+  .pill-required { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-optional { color: var(--muted);    background: var(--hidden-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.danger { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  .auth-mode {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 20px;
+  }
+  .auth-mode .auth-mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .auth-mode .auth-mode-head h3, .auth-mode .auth-mode-head h4 { margin: 0; }
+  .auth-mode .auth-mode-value { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  table.spec-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; }
+  table.spec-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: #F1F5F9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    width: 190px;
+  }
+  table.spec-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.spec-table tr:last-child td, table.spec-table tr:last-child th { border-bottom: none; }
+
+  table.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 12.8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.config-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.config-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.config-table tr:last-child td { border-bottom: none; }
+  table.config-table tr:hover td { background: #FAFBFC; }
+  table.config-table td.key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: #0F172A; }
+  table.config-table td.default { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  details.trace {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 0;
+  }
+  details.trace summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 700;
+    font-size: 13.5px;
+    list-style: none;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸ "; color: var(--primary); }
+  details.trace[open] summary::before { content: "▾ "; }
+  details.trace .trace-body { padding: 0 18px 16px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+    details.trace { break-inside: avoid; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table, table.spec-table, table.config-table { font-size: 12px; }
+    table.spec-table th { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Azure FHIR Service Destination</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — complete implementation reference: architecture, method-by-method request flow, Azure setup, Postman verification, and every issue hit while getting it working end to end</p>
+    <div class="meta">
+      <div><strong>Branch</strong> Azure_FHIR_Service</div>
+      <div><strong>Scope</strong> Backend (.NET 9, Azure.Identity SDK) + Frontend (Angular 20)</div>
+      <div><strong>Status</strong> Implemented, tested, confirmed working end to end against a real Azure Health Data Services FHIR service</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#features">What was built</a></li>
+      <li><a href="#azure-setup">Azure setup — where every field's value comes from</a></li>
+      <li><a href="#quick-start">Quick start — your first Azure FHIR Service destination</a></li>
+      <li><a href="#page-flow">Page-to-page request flow — screen by screen</a></li>
+      <li><a href="#test-connection">Test Connection button</a></li>
+      <li><a href="#auth-modes">Authentication modes</a></li>
+      <li><a href="#config-reference">Complete configuration key reference</a></li>
+      <li><a href="#auto-fetch">Auto-fetch missing references</a></li>
+      <li><a href="#architecture">Architecture &amp; request flow — method by method</a></li>
+      <li><a href="#backend-files">Backend — files</a></li>
+      <li><a href="#frontend-files">Frontend — files</a></li>
+      <li><a href="#test-files">Tests</a></li>
+      <li><a href="#verify-data">Verifying data actually landed</a></li>
+      <li><a href="#postman">Postman reference — token &amp; data calls</a></li>
+      <li><a href="#clear-data">Clearing / deleting test data</a></li>
+      <li><a href="#followups">Known issues &amp; recommended follow-ups</a></li>
+      <li><a href="#troubleshooting">Troubleshooting — every error hit and its fix</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    Azure FHIR Service (Azure Health Data Services' FHIR API) is now a first-class destination type in
+    FHIRBridge — <code>DestinationType.AzureFhirService</code>. Azure's FHIR service is a standard FHIR R4
+    RESTful server (the same engine family as a self-hosted Aidbox), so rather than writing a whole new
+    writer, this destination is <strong>registered to the existing <code>MappedFhirRepositoryDestinationWriter</code></strong>
+    — the same class the generic "FHIR Repository (Aidbox)" destination already uses — and gets its rich
+    feature set (individual/bundle/transaction write modes, reference resolution, topological write ordering)
+    for free. The only genuinely new piece is <strong>authentication</strong>: Azure always secures its FHIR
+    API with Microsoft Entra ID, so this work adds a <code>managedIdentity</code> auth mode alongside the
+    already-supported <code>clientCredentials</code> (OAuth2 client-credentials) mode, plus a dedicated
+    Angular form, workflow-canvas wiring, and an auto-fetch-missing-reference capability.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">2</div><div class="label">auth modes — client credentials &amp; managed identity</div></div>
+    <div class="card"><div class="num">1</div><div class="label">shared writer (no new writer class)</div></div>
+    <div class="card"><div class="num">32</div><div class="label">files touched (28 modified + 4 new)</div></div>
+    <div class="card"><div class="num">2</div><div class="label">execution planes — Configured Pipeline &amp; Runtime DAG canvas</div></div>
+    <div class="card"><div class="num">5</div><div class="label">separate hardcoded UI destination-type lists found &amp; wired</div></div>
+    <div class="card"><div class="num">1</div><div class="label">real backend bug fixed along the way (wholeResourceFhir)</div></div>
+  </div>
+
+  <h2 id="features"><span class="num">2.</span>What was built</h2>
+  <ul class="feature-list">
+    <li><strong>New <code>DestinationType.AzureFhirService</code></strong> enum value, registered to the existing <code>MappedFhirRepositoryDestinationWriter</code> in <code>ConfiguredDestinationWriterFactory</code> — same pattern already used for <code>AzureSql</code> → <code>MappedSqlServerDestinationWriter</code>.</li>
+    <li><strong>Managed-identity authentication</strong> — a new <code>AzureManagedIdentityFhirTokenProvider</code> using <code>Azure.Identity.DefaultAzureCredential</code>, wired into <code>FhirRepositoryAuthResolver</code> as a new <code>managedIdentity</code> branch of <code>dest_fhirAuthType</code>, alongside the existing <code>none</code>/<code>bearer</code>/<code>basic</code>/<code>clientCredentials</code> values.</li>
+    <li><strong>A dedicated Angular form</strong> (<code>AzureFhirServiceDestinationFormComponent</code>) with an auth-mode toggle (client credentials vs. managed identity), a scope override field, and an auto-fetch-missing-references checkbox — modeled on Azure Blob Storage's own auth-mode-conditional-validator pattern.</li>
+    <li><strong>Full workflow-canvas wiring</strong> — the node now appears in the Node Library palette, opens its own configuration form, saves/edits/runs correctly, and shows up in Step 4's review screen — across five separate, independent hardcoded destination-type lists that had to each be found and extended (see §8).</li>
+    <li><strong>Auto-fetch missing references</strong> — lets the writer pull a referenced resource (e.g. a Patient's managing Organization) straight from the source EHR on demand instead of requiring every referenced resource type to be pulled into the same batch.</li>
+    <li><strong>Test Connection button</strong> — validates client ID/secret/tenant/URL (or a managed identity) against the real FHIR service before anything is saved, reusing the same ad-hoc test endpoint the Aidbox form already had, extended to skip SMART-configuration discovery (Azure already knows its own tenant) and to support <code>managedIdentity</code>. See §6.</li>
+    <li><strong>Improved write-failure diagnostics</strong> — the writer's HTTP failures now surface the FHIR server's actual <code>OperationOutcome</code> body in the thrown error instead of a bare, uninformative status code, which is what let us actually diagnose the RBAC "Authorization failed" error during testing.</li>
+    <li><strong>One real bug fixed</strong> — the Mapping node's <code>wholeResourceFhir</code> passthrough flag (which lets a FHIR-native destination receive whole resources with no field mappings configured) didn't include the new destination type, so every record was silently dropped with zero mapped fields. Now fixed.</li>
+  </ul>
+
+  <h2 id="azure-setup"><span class="num">3.</span>Azure setup — where every field's value comes from</h2>
+  <p class="section-intro">Everything below is done in the Azure Portal, before you ever open FHIRBridge.</p>
+
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Create the Azure Health Data Services workspace</strong><span>Azure Portal &rarr; search "Health Data Services" &rarr; + Create &rarr; pick subscription/resource group/region &rarr; name it (e.g. <code>azurefhirpeg</code>).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Create the FHIR service inside that workspace</strong><span>Workspace &rarr; <strong>FHIR services</strong> blade &rarr; + Add FHIR service &rarr; name it (e.g. <code>segue</code>) &rarr; FHIR version R4 (the only version supported). Azure always secures it with Entra ID — there is no anonymous-access option.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Get the FHIR service URL</strong><span>FHIR service &rarr; <strong>Authentication</strong> blade &rarr; <strong>Audience</strong> field, e.g. <code>https://azurefhirpeg-segue.fhir.azurehealthcareapis.com</code>. This is the exact value for FHIRBridge's <strong>FHIR service URL</strong> field — no trailing slash, no <code>/metadata</code> suffix. (If you only have the "FHIR metadata endpoint" link from the Overview page, strip the trailing <code>/metadata</code>.)</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Get the Tenant ID</strong><span>Same <strong>Authentication</strong> blade &rarr; <strong>Authority</strong> field, e.g. <code>https://login.microsoftonline.com/d5ae9301-08f4-4e80-b0b0-1b8a97b7687f</code> &mdash; the GUID at the end is the Tenant ID. This is the <em>only</em> tenant this FHIR service will accept tokens from &mdash; use this value even if another screen (e.g. an app registration in a different tenant) shows something else.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Client credentials mode — create an app registration</strong><span>Microsoft Entra ID &rarr; App registrations &rarr; + New registration &rarr; name it (e.g. <code>fhirbridge-ahds-client</code>). On its Overview page: <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> (must match step 4's tenant). Then Certificates &amp; secrets &rarr; + New client secret &rarr; copy the <strong>Value</strong> column immediately &mdash; not the Secret ID column, which is a different GUID that will never authenticate (this exact mistake produces AADSTS7000215, see §16).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Managed identity mode instead — enable it on the compute resource</strong><span>If FHIRBridge's Worker/API runs on an Azure App Service/VM/AKS pod: that resource &rarr; <strong>Identity</strong> blade &rarr; System assigned &rarr; On. For a user-assigned identity instead, create one under Managed Identities and note its Client ID for the form's optional field. No secret to generate at all.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">7</div>
+      <div class="step-body"><strong>Grant access — required either way</strong><span>FHIR service &rarr; <strong>Access control (IAM)</strong> &rarr; + Add &rarr; Add role assignment &rarr; Role: <strong>FHIR Data Writer</strong> or <strong>FHIR Data Contributor</strong> &rarr; Members: search for the app registration (client-credentials mode) or the managed identity (managed-identity mode) &rarr; Review + assign. Propagation is usually fast but can occasionally take up to 15&ndash;30 minutes.</span></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Field-to-Azure-screen mapping, at a glance</strong>
+    <table class="spec-table" style="margin-top:8px;">
+      <tr><th>FHIRBridge field</th><td>Azure Portal location</td></tr>
+      <tr><th>FHIR service URL</th><td>FHIR service &rarr; Authentication &rarr; <strong>Audience</strong></td></tr>
+      <tr><th>Tenant ID</th><td>FHIR service &rarr; Authentication &rarr; <strong>Authority</strong> (the GUID after <code>login.microsoftonline.com/</code>) &mdash; or App registration &rarr; Overview &rarr; <strong>Directory (tenant) ID</strong>, which must match</td></tr>
+      <tr><th>Client ID</th><td>App registration &rarr; Overview &rarr; <strong>Application (client) ID</strong></td></tr>
+      <tr><th>Client secret</th><td>App registration &rarr; Certificates &amp; secrets &rarr; the secret's <strong>Value</strong> column (only visible once, at creation time)</td></tr>
+      <tr><th>User-assigned identity client ID (optional)</th><td>Managed Identity resource &rarr; Overview &rarr; <strong>Client ID</strong> (leave blank for system-assigned)</td></tr>
+      <tr><th>Scope override (optional)</th><td>Leave blank &mdash; defaults to <code>{FHIR service URL}/.default</code> automatically</td></tr>
+    </table>
+  </div>
+
+  <h2 id="quick-start"><span class="num">4.</span>Quick start — your first Azure FHIR Service destination</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Complete the Azure setup above</strong><span>FHIR service URL, tenant ID, and either an app registration + secret or a managed identity, plus the IAM role assignment.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Add the node</strong><span>On the workflow canvas, open the Node Library and pick <strong>Azure FHIR Service</strong> under Cloud / FHIR destinations.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Configure step</strong><span>Fill in Destination name, FHIR service URL, pick Authentication mode, and fill in its fields (see §5). Optionally check "Auto-fetch missing references" (see §7).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Wire it into the pipeline</strong><span>Insert a Mapping node between your source and this destination (Azure FHIR Service is <em>not</em> exempt from the mapping-node requirement the way the generic Aidbox destination is) — the mapping node needs no real field mappings configured; the writer sends whole FHIR resources as-is.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Save &amp; run</strong><span>Step 4 shows the FHIR service URL and chosen authentication mode. Save, then run the workflow.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Verify</strong><span>Check the destination node's output for a non-zero <code>RecordsWritten</code>, then confirm via the Azure side (see §12) &mdash; the Portal itself has no data browser.</span></div>
+    </div>
+  </div>
+
+  <h2 id="page-flow"><span class="num">5.</span>Page-to-page request flow — screen by screen</h2>
+  <p class="section-intro">
+    Distinct from the method-level code trace in §8, this is the actual sequence of <strong>pages/screens</strong>
+    a user moves through, and which network call fires at each hop, from opening the portal to confirming data
+    landed in Azure.
+  </p>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Workflow Builder canvas</strong> (<code>/workflows/:id/builder</code> or "New workflow")<span>The main canvas page. Clicking a node's <strong>+</strong> handle, or the top toolbar's node-library button, opens the <strong>Node Library dialog</strong> as an overlay — no page navigation, same route.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Node Library dialog</strong> (overlay, not a route change)<span>Clicking the <strong>Azure FHIR Service</strong> tile under "Cloud / FHIR" calls <code>GET /api/v1/workflow-catalog</code> (already cached from page load) to resolve the node's contract, then opens the <strong>Destination Wizard</strong> as a further nested overlay, still on the same canvas route.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Destination Wizard — Step 1 "Configure"</strong><span>Mounts <code>AzureFhirServiceDestinationFormComponent</code>. Optional: clicking <strong>Test Connection</strong> here calls <code>POST /api/v1/destination-schema/fhir-test</code> with the current (unsaved) field values — see §6. No navigation; the result renders inline in the same step.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Advancing past Step 1</strong><span>Calls <code>POST /api/v1/configurations/destinations</code> (create) or <code>PUT .../destinations/{id}</code> (update) — this is where the real <code>DestinationConfiguration</code> row and its Key Vault secret actually get written. Still the same wizard overlay; advances to Step 2.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Step 2 "Data groups" &rarr; Step 3 "Map fields"</strong><span>Pick FHIR resource types. For this FHIR-native destination, Step 3 shows the "Send FHIR resources as-is" card instead of a real field-mapping canvas (see §4's Quick Start step 4) — no extra network calls beyond what resource-type selection already triggers.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Step 4 "Review" &rarr; Save</strong><span>Calls <code>POST /api/v1/workflows</code> or <code>PUT /api/v1/workflows/{id}</code> with the full node/edge graph (<code>WorkflowGraphMapperService.toRequest()</code>) — this is what actually persists the node into the workflow definition. The dialog closes, returning to the bare canvas.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">7</div>
+      <div class="step-body"><strong>Canvas &rarr; Workflow List page</strong> (<code>/workflows</code>)<span>Navigating away from the builder (Back / breadcrumb) is a real route change to the workflow list.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">8</div>
+      <div class="step-body"><strong>Workflow List &mdash; Run</strong><span>Clicking Run calls <code>POST /api/v1/workflows/{id}/run</code> (sync) or with <code>{ async: true }</code> (background). No page navigation; the row's status updates in place as the run progresses.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">9</div>
+      <div class="step-body"><strong>Execution history / node output view</strong><span>Opening a run's details (same page, expandable row or a details overlay) reads back each node's persisted output — this is where the destination node's <code>RecordsWritten</code>/<code>WrittenAt</code> JSON (shown throughout §16's troubleshooting) is actually rendered.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">10</div>
+      <div class="step-body"><strong>Leaving FHIRBridge entirely &mdash; Azure Portal</strong><span>Confirming the write landed requires leaving the FHIRBridge portal altogether and using the Azure Portal's Resource visualizer/Metrics (§12) or a separate tool (Postman, §13) &mdash; FHIRBridge has no page that browses the destination's own data.</span></div>
+    </div>
+  </div>
+
+  <h2 id="test-connection"><span class="num">6.</span>Test Connection button</h2>
+  <p class="section-intro">
+    Every Azure FHIR Service destination form now has a <strong>Test Connection</strong> button, so client ID,
+    secret, tenant ID, and the FHIR service URL can all be validated on the spot — before anything is saved —
+    the same way the SQL-family and Aidbox forms already work.
+  </p>
+  <div class="card">
+    <h4>Where it lives</h4>
+    <p>Destination Wizard &rarr; Step 1 "Configure" &rarr; bottom of the Azure FHIR Service form, right below the auto-fetch settings.</p>
+  </div>
+  <div class="card">
+    <h4>What it does</h4>
+    <p>Sends the form's <em>current, unsaved</em> field values &mdash; never a value already stored in Key Vault &mdash; to <code>POST /api/v1/destination-schema/fhir-test</code>, which does <strong>two</strong> real checks in sequence:</p>
+    <ol style="margin:0 0 8px 20px; padding:0;">
+      <li>An authenticated <code>GET {baseUrl}/metadata</code> — confirms the token/tenant/audience are valid.</li>
+      <li><strong>A real write-authorization probe</strong> — PUTs a synthetic, harmless <code>Basic</code> resource (id <code>fhirbridge-connection-test-probe</code>) to the destination, then immediately deletes it. This step exists because Azure Health Data Services (and FHIR servers generally) typically do <em>not</em> enforce the <code>FHIR Data Writer</code>/<code>Contributor</code> RBAC role on <code>/metadata</code> — only on actual writes. Without this second step, a principal with a valid token but no write role would pass Test Connection and only discover the problem on the first real pipeline run.</li>
+    </ol>
+    <p>Reports back <code>Connected: true/false</code> plus an error message on failure — a failure at step 2 shows as <code>"Write check failed — PUT '...' returned 403 ...: {OperationOutcome}"</code>, the exact same wording a real pipeline write failure would show.</p>
+  </div>
+  <table class="spec-table">
+    <tr><th>Client credentials mode</th><td>Enabled once Tenant ID + Client ID + Client secret + FHIR service URL are all filled in. Skips Aidbox's SMART-configuration discovery entirely — the Entra ID token endpoint is computed directly from Tenant ID (<code>https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token</code>), since Azure FHIR Service already tells us its own tenant.</td></tr>
+    <tr><th>Managed identity mode</th><td>Enabled once just the FHIR service URL is filled in (no secret to check). <strong>Caveat:</strong> this still calls <code>DefaultAzureCredential</code> server-side &mdash; testing it only produces a meaningful result when FHIRBridge itself is actually running in Azure with the identity attached and the IAM role assignment already granted, <strong>or</strong> when a local fallback credential (see box below) is available. From a local dev box with neither, it will report a connection failure regardless of whether the eventual production role assignment is correct.</td></tr>
+    <tr><th>Result display</th><td>Green "Connected — the FHIR service URL and credentials are valid" callout, or a red "Connection failed: &lt;reason&gt;" callout with the real error text (e.g. an AADSTS code, or the FHIR server's own message) &mdash; the same wording you'd see from the errors catalogued in §18.</td></tr>
+  </table>
+  <div class="callout">
+    <strong>What changed to support this</strong>
+    <code>FhirConnectionTestRequest</code> gained four new optional fields (<code>TenantId</code>, <code>Scope</code>,
+    <code>ManagedIdentityClientId</code>, <code>AuthorityHost</code>); <code>FhirDestinationConnectionTestService</code>
+    gained a <code>managedIdentity</code> branch, a direct-tenant client-credentials path that bypasses
+    discovery when <code>TenantId</code> is supplied, and the write-authorization probe described above &mdash;
+    all purely additive, so the existing Aidbox "Test Connection" flow gets the stronger write check too
+    (for free), with its discovery-based token endpoint resolution unaffected.
+  </div>
+  <div class="callout warn">
+    <strong>Testing managed identity from a local dev box</strong>
+    <code>DefaultAzureCredential</code> tries a chain of credential sources, falling through each one that
+    isn't available: Environment variables &rarr; Managed Identity &rarr; Azure CLI &rarr; others. You can use
+    that chain to genuinely exercise the managed-identity code path locally, without deploying anywhere:
+    <ol style="margin:8px 0 0 20px; padding:0;">
+      <li><strong>Easiest:</strong> run <code>az login</code> (signs in as your own account), then grant
+      <em>that account</em> the FHIR Data Writer/Contributor role on the FHIR service (same IAM screen as the
+      app). With no real attached managed identity on your laptop, <code>DefaultAzureCredential</code> falls
+      through to your Azure CLI session instead — same code path as production, different backing identity.</li>
+      <li><strong>Alternative:</strong> set <code>AZURE_TENANT_ID</code>/<code>AZURE_CLIENT_ID</code>/<code>AZURE_CLIENT_SECRET</code>
+      environment variables (matching a service principal) in the terminal that launches the backend, then
+      restart it — the "Environment Credential" step picks these up before Managed Identity is even tried.</li>
+    </ol>
+    <strong>Common trap:</strong> if you try both approaches across different terminal sessions, leftover
+    <code>AZURE_*</code> environment variables in whichever terminal actually launched the backend take
+    priority over an <code>az login</code> session — check <code>echo $env:AZURE_CLIENT_ID</code> etc. in that
+    exact terminal (empty output = unset) before assuming <code>az login</code> is what's being used.
+  </div>
+
+  <h2 id="auth-modes"><span class="num">7.</span>Authentication modes</h2>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>1. Client credentials (service principal)</h3><span class="pill pill-active">Default</span></div>
+    <div class="auth-mode-value">wizard value: <code>clientCredentials</code> &middot; metadata key: <code>dest_fhirAuthType=clientCredentials</code></div>
+    <p>A standard OAuth2 client-credentials exchange against Entra ID's v2.0 token endpoint. Internally reuses the <em>existing</em> generic <code>FhirDestinationOAuth2TokenProvider</code> (the same one the plain "FHIR Repository" destination already used) &mdash; no new backend auth code was needed for this mode, only the right token endpoint/scope values.</p>
+    <table class="spec-table">
+      <tr><th>Tenant ID</th><td>See §3 step 4. <span class="pill pill-required">Required</span>.</td></tr>
+      <tr><th>Client ID</th><td>See §3 step 5. <span class="pill pill-required">Required</span>.</td></tr>
+      <tr><th>Client secret</th><td>See §3 step 5 &mdash; the <strong>Value</strong>, never the Secret ID. <span class="pill pill-required">Required</span> for a new connection; never repopulated on edit.</td></tr>
+      <tr><th>Token endpoint</th><td>Computed automatically as <code>https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token</code> &mdash; not a field you fill in.</td></tr>
+      <tr><th>Scope</th><td>Computed automatically as <code>{FHIR service URL}/.default</code> unless overridden.</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>2. Managed identity</h3><span class="pill pill-active">Enabled</span></div>
+    <div class="auth-mode-value">wizard value: <code>managedIdentity</code> &middot; no secret is ever stored or resolved</div>
+    <p>The host running FHIRBridge (App Service, VM, AKS) authenticates as itself via <code>Azure.Identity.DefaultAzureCredential</code> &mdash; the new <code>AzureManagedIdentityFhirTokenProvider</code> class. No Key Vault secret is ever resolved for this mode &mdash; <code>FhirRepositoryAuthResolver</code>'s <code>managedIdentity</code> branch skips secret retrieval entirely. Only works when FHIRBridge itself runs in Azure with that identity assigned the right role (see §3 step 7); it cannot work from a dev laptop unless you're separately signed in via Azure CLI with an identity that also holds that role.</p>
+    <table class="spec-table">
+      <tr><th>User-assigned identity client ID</th><td><span class="pill pill-optional">Optional</span> &mdash; leave blank to use the system-assigned identity.</td></tr>
+      <tr><th>Scope</th><td>Computed automatically as <code>{FHIR service URL}/.default</code> unless overridden.</td></tr>
+    </table>
+  </div>
+
+  <h2 id="config-reference"><span class="num">8.</span>Complete configuration key reference</h2>
+  <table class="config-table">
+    <tr><th>Key</th><th>Lives in</th><th>Applies to</th><th>Default</th><th>Notes</th></tr>
+    <tr><td class="key">Target</td><td>Entity column</td><td>All modes</td><td class="default">&mdash;</td><td>FHIR service URL. Also carried in metadata as <code>dest_baseUrl</code> as a fallback for graph-driven runs (see §8).</td></tr>
+    <tr><td class="key">dest_baseUrl</td><td>Metadata</td><td>All modes</td><td class="default">&mdash;</td><td>Same FHIR service URL, non-secret. <span class="pill pill-required">Required</span>.</td></tr>
+    <tr><td class="key">dest_fhirAuthType</td><td>Metadata</td><td>All modes</td><td class="default">none</td><td>Must be <code>clientCredentials</code> or <code>managedIdentity</code> for Azure FHIR Service (the generic <code>none</code>/<code>bearer</code>/<code>basic</code> values also exist but don't apply here, since Azure always requires Entra ID auth).</td></tr>
+    <tr><td class="key">dest_clientId</td><td>Metadata</td><td>Client credentials</td><td class="default">&mdash;</td><td><span class="pill pill-required">Required</span> for this mode.</td></tr>
+    <tr><td class="key">dest_tokenEndpoint</td><td>Metadata</td><td>Client credentials</td><td class="default">&mdash;</td><td>Computed by the form, not user-entered.</td></tr>
+    <tr><td class="key">(secret) clientSecret</td><td>Key Vault secret blob</td><td>Client credentials</td><td class="default">&mdash;</td><td>Stored as <code>{clientId, clientSecret, tokenEndpoint, scope}</code> JSON, never in ConnectionMetadataJson.</td></tr>
+    <tr><td class="key">dest_fhirAzureScope</td><td>Metadata</td><td>All modes</td><td class="default">{baseUrl}/.default</td><td>Optional override. For client credentials mode this value is also folded into the secret blob's <code>scope</code> field &mdash; without it, Entra ID rejects the token request with AADSTS90014 (see §16).</td></tr>
+    <tr><td class="key">dest_fhirManagedIdentityClientId</td><td>Metadata</td><td>Managed identity</td><td class="default">(system-assigned)</td><td>Set only for a user-assigned identity.</td></tr>
+    <tr><td class="key">dest_fhirAuthorityHost</td><td>Metadata</td><td>Managed identity</td><td class="default">(public cloud)</td><td>Only needed for sovereign clouds.</td></tr>
+    <tr><td class="key">dest_autoFetchMissingReferences</td><td>Metadata</td><td>All modes</td><td class="default">false</td><td>String <code>"true"</code>/<code>"false"</code>. See §7.</td></tr>
+    <tr><td class="key">dest_autoFetchMaxCount</td><td>Metadata</td><td>All modes</td><td class="default">25</td><td>Caps auto-fetch round trips per write call.</td></tr>
+    <tr><td class="key">dest_fhirWriteMode</td><td>Metadata</td><td>All modes</td><td class="default">individual</td><td>Inherited from the shared writer: <code>individual</code> (one PUT per record), <code>bundle</code> (non-atomic batch), or <code>transaction</code> (atomic). No UI control on the Azure form yet &mdash; set directly in ConnectionMetadataJson if needed.</td></tr>
+  </table>
+
+  <h2 id="auto-fetch"><span class="num">9.</span>Auto-fetch missing references</h2>
+  <p class="section-intro">
+    The shared writer's dangling-reference protection blocks (rather than writes) any record whose FHIR
+    reference (e.g. a Patient's <code>managingOrganization</code>) can't be resolved &mdash; neither present
+    in the same batch nor already at the destination. This is correct defense-in-depth, but it means pulling
+    <em>only</em> <code>Patient</code> resources into a run against a brand-new/empty FHIR service blocks
+    every record, since none of their referenced Organizations/Practitioners exist anywhere yet.
+  </p>
+  <p>Two ways around this:</p>
+  <ul class="feature-list">
+    <li><strong>Include the referenced types in the same run</strong> &mdash; e.g. also pull <code>Organization</code> and <code>Practitioner</code> from the source alongside <code>Patient</code>. The writer topologically orders writes so referenced types land first. No configuration needed.</li>
+    <li><strong>Enable auto-fetch</strong> (the checkbox on the Azure FHIR Service form) &mdash; the writer pulls a missing reference straight from the same source EHR connection already feeding the pipeline, recursively (a fetched Encounter that itself references a Practitioner gets that resolved too), up to the configured cap.</li>
+  </ul>
+  <div class="callout">
+    <strong>What had to be added for this</strong>
+    The generic Aidbox destination already had this wired; Azure FHIR Service's node executor did not.
+    <code>AzureFhirServiceDestinationNodeExecutor</code>'s constructor now also accepts
+    <code>IFhirSourceClientFactory</code>/<code>ISourceConnectionRuntimeResolver</code>, mirroring
+    <code>FhirRepositoryDestinationNodeExecutor</code> exactly, so <code>ResolveFetchMissingReferenceDelegateAsync</code>
+    (in the shared <code>DestinationNodeExecutor</code> base class) has something to wire up.
+  </div>
+
+  <h2 id="architecture"><span class="num">10.</span>Architecture &amp; request flow — method by method</h2>
+  <p class="section-intro">
+    FHIRBridge has two separate execution planes that both end up calling the same writer: the
+    <strong>Configured Pipeline</strong> (tenant-config-driven, scheduled/webhook-triggered) and the
+    <strong>Runtime DAG</strong> (the workflow canvas you build and run interactively). The traces below cover
+    both the canvas save/provisioning path and the actual run-time execution path &mdash; the exact sequence
+    exercised while building and testing this feature.
+  </p>
+
+  <h3>8.1 Saving the destination from the canvas (provisioning a real <code>DestinationConfiguration</code> row)</h3>
+  <details class="trace" open>
+    <summary>Destination Wizard "Configure" step &rarr; provisioned row &rarr; full trace</summary>
+    <div class="trace-body">
+      <pre><code>DestinationWizardComponent.next()  [destination-wizard.component.ts]
+  registryKey() switch on destType() === 'azurefhir'
+    &rarr; returns 'AzureFhirService'
+  activeFormType() = DESTINATION_FORM_REGISTRY['AzureFhirService']
+    &rarr; AzureFhirServiceDestinationFormComponent (mounted via NgComponentOutlet)
+  activeForm().getMetadata()  [azure-fhir-service-destination-form.component.ts]
+    isValid() ? checks fhirForm.valid (name + baseUrl always required;
+                 tenantId/clientId/clientSecret required only when authMode === 'clientCredentials')
+    : return null
+    getFullConfig() builds the raw dest_* field bag:
+      dest_baseUrl        = form.baseUrl
+      dest_authType        = form.authMode            // 'clientCredentials' | 'managedIdentity'
+      dest_clientId        = form.clientId
+      dest_clientSecret    = form.clientSecret         // secret, stripped before persistence
+      dest_tokenEndpoint   = computed from tenantId when clientCredentials, else ''
+      dest_fhirAzureScope  = form.scope
+      dest_fhirManagedIdentityClientId = form.managedIdentityClientId
+      dest_autoFetchMissingReferences  = 'true' | 'false'
+      dest_autoFetchMaxCount           = form.autoFetchMaxCount
+    fields = buildConnectionMetadata(config, 'fhir')   [destination-connection-secret.util.ts]
+      &rarr; filters to the 'fhir' kind's non-secret allow-list (dest_baseUrl, dest_clientId,
+          dest_fhirAzureScope, dest_fhirManagedIdentityClientId,
+          dest_autoFetchMissingReferences, dest_autoFetchMaxCount, ...)
+      &rarr; bridges dest_authType -&gt; dest_fhirAuthType (passthrough for
+          'clientCredentials'/'managedIdentity', since neither equals the legacy 'oauth2' sentinel)
+    secret = buildFhirSecretBlob(config)
+      if dest_authType === 'managedIdentity': return ''   // no secret at all
+      else: JSON.stringify({ clientId, clientSecret, tokenEndpoint,
+                              scope: dest_fhirAzureScope || `${dest_baseUrl}/.default` })
+
+&rarr; provisionDestinationConnection(metadata, onDone)  [destination-wizard.component.ts]
+    isAzureFhir branch of the request-building ternary:
+      POST/PUT CreateDestinationConfigurationRequest {
+        destinationType: 'AzureFhirService',
+        target: metadata.fields['dest_baseUrl'],
+        inlineSecret: metadata.secret,
+        connectionMetadataJson: JSON.stringify(metadata.fields),
+      }
+
+&rarr; API: ConfigurationsController.AddDestinationConfiguration (or Update)
+    [Authorize policy: HasPermission:sourceconnections.create/.edit]
+    &rarr; CreateDestinationConfigurationRequestValidator.ValidateConnectionMetadata
+        request.DestinationType is FhirRepository or AzureFhirService
+          &rarr; ValidateFhirRepositoryMetadata(request, context, metadata)
+              authType = dest_fhirAuthType, must be one of
+                [none, bearer, basic, clientCredentials, managedIdentity]
+              if authType != "none": Target must be non-blank
+    &rarr; ConfigurationService writes the row + calls ISecretProvider to store inlineSecret
+        in Key Vault under (keyVaultName, secretName) — the DB row only ever holds that pointer</code></pre>
+    </div>
+  </details>
+
+  <h3>8.2 Running the workflow — the Runtime DAG execution path</h3>
+  <p>This is the sequence actually exercised end to end: <code>EpicSource &rarr; Mapping &rarr; AzureFhirServiceDestinationNode</code>.</p>
+
+  <details class="trace" open>
+    <summary>Mapping node — why it can emit records with zero field mappings configured</summary>
+    <div class="trace-body">
+      <pre><code>MappingNodeExecutor.ExecuteAsync(context, node, inputs, ct)
+  [TransformNodeExecutors.cs]
+  destinationId = node's configured destinationId
+  (destinationType, destinationName) = ResolveDestinationTypeAsync(destinationId, ct)
+
+  wholeResourceFhir = destinationType is Medplum or FhirRepository or AzureFhirService
+      // <- the actual bug fixed in this branch: AzureFhirService was missing here,
+      //    so every resource had zero mapped Values and was silently dropped.
+
+  for each resource group (by ResourceType):
+    fields = resolve mapped fields for this (resourceType, destinationObject) — none exist
+             for a FHIR-native destination, since Step 3's UI never asks for them
+    if fields is null:
+      if wholeResourceFhir:
+        for each resource in group:
+          records.Add(new MappedDestinationRecord(
+            PipelineRunId, ResourceType, DestinationObject,
+            SourceResourceId, Values: {}, SourceJson: resource.RawJson))
+          // <- this is the "carrier record": Values stays empty, SourceJson carries
+          //    the whole resource verbatim, ReferenceLookups stays null
+      else:
+        continue   // a relational destination with no fields configured: skip, don't guess
+
+  &rarr; emits MappedRecordBatch containing one carrier record per source resource</code></pre>
+    </div>
+  </details>
+
+  <details class="trace" open>
+    <summary>Destination node — from raw canvas config to a resolved <code>DestinationConfiguration</code></summary>
+    <div class="trace-body">
+      <pre><code>AzureFhirServiceDestinationNodeExecutor
+  [DestinationNodeExecutors.cs] — thin subclass, base ctor passes:
+     WorkflowNodeTypes.AzureFhirServiceDestination, DestinationType.AzureFhirService,
+     writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository,
+     sourceClientFactory, sourceConnectionResolver   // <- added for auto-fetch support
+
+DestinationNodeExecutor.ExecuteAsync(context, node, inputs, ct)   [base class]
+  records = PassThroughNodeExecutor.ReadMappedRecords(inputs)   // the carrier records above
+  destination = ReadConfiguration&lt;DestinationConfiguration&gt;(node, "destination")
+                ?? CreateDestinationConfiguration(context, node)
+
+  CreateDestinationConfiguration(context, node):
+    target = node's own "target" field
+    if target is blank AND node.NodeType is FhirRepositoryDestination OR AzureFhirServiceDestination:
+      target = node's "dest_baseUrl" field
+      // <- a freshly-created node (not reusing an existing connection) never gets a
+      //    top-level "target" stamped by the wizard; without this fallback Target
+      //    stays null and the writer later builds a relative (invalid) request URI
+    secretRef = new SecretReference(node's secretKeyVaultName, secretName)
+    connectionMetadataJson = BuildConnectionMetadataJson(node)
+
+  BuildConnectionMetadataJson(node):
+    copy every "dest_*" field from the node's raw ConfigurationJson verbatim
+    if node.NodeType is FhirRepositoryDestination OR AzureFhirServiceDestination
+       AND metadata has "dest_authType":
+      metadata["dest_fhirAuthType"] = (dest_authType == "oauth2" ? "clientCredentials" : dest_authType)
+      // <- the canvas node stores the wizard's own field name (dest_authType);
+      //    the writer's auth resolver looks for dest_fhirAuthType. Without this
+      //    bridge, a graph-driven run never sees the real auth type and silently
+      //    resolves to "none" — which is what produced the "invalid request URI"
+      //    error before this was extended to cover AzureFhirServiceDestination too.
+
+  writer = _writerFactory.Create(DestinationType.AzureFhirService)
+    [ConfiguredDestinationWriterFactory.cs]
+    &rarr; registry lookup: DestinationType.AzureFhirService -> typeof(MappedFhirRepositoryDestinationWriter)
+    &rarr; resolved from DI (scoped)
+
+  fetchMissingReferenceAsync = ResolveFetchMissingReferenceDelegateAsync(node, ct)
+    // null unless: sourceClientFactory/sourceConnectionResolver were injected (see above)
+    //   AND exactly one upstream source node is reachable in the graph
+    //   AND its sourceConnectionId parses as a GUID
+    // if all true: builds a closure that reads one resource by (type, id) from that
+    // exact source connection — this is what "auto-fetch missing references" calls
+
+  writeContext = new PipelineWriteContext(AllowInlineDelivery: false, workflowName,
+                     RunStartedAtUtc, CorrelationId, fetchMissingReferenceAsync)
+
+  writer.WriteAsync(destination, mappingProfile, records, writeContext, ct)   // -&gt; see 8.3</code></pre>
+    </div>
+  </details>
+
+  <h3>8.3 Inside the writer — auth resolution, reference resolution, the actual HTTP write</h3>
+  <details class="trace" open>
+    <summary>MappedFhirRepositoryDestinationWriter.WriteAsync — full trace</summary>
+    <div class="trace-body">
+      <pre><code>MappedFhirRepositoryDestinationWriter.WriteAsync(destination, mappingProfile, records, context, ct)
+  authType = ConnectionMetadataReader.GetString(destination.ConnectionMetadataJson, "dest_fhirAuthType") ?? "none"
+
+  if authType == "none":
+    baseUrl = destination.Target ?? (await _secretProvider.GetSecretAsync(destination.SecretReference, ct))
+    authHeader = null
+  else:
+    if destination.Target is blank: throw InvalidOperationException("...must set Target...")
+    baseUrl = destination.Target.TrimEnd('/')
+    authHeader = await FhirRepositoryAuthResolver.ResolveAsync(
+        destination.ConnectionMetadataJson, destination.SecretReference,
+        _secretProvider, _tokenProvider, _managedIdentityTokenProvider, baseUrl, ct)
+    // -&gt; see auth-resolution trace below
+
+  autoFetchEnabled  = dest_autoFetchMissingReferences == "true"
+  autoFetchMaxCount = dest_autoFetchMaxCount ?? 25
+
+  (writableRecords, referenceErrors) = await ResolveMissingReferencesAsync(
+      httpClient, baseUrl, authHeader, records, resolvedResourceCache,
+      autoFetchEnabled, autoFetchMaxCount, context.FetchMissingReferenceAsync, ct)
+    // for each record's parsed FHIR references (managingOrganization, generalPractitioner, etc.):
+    //   1. present in this same batch?           -&gt; OK, no destination lookup needed
+    //   2. else: batched existence check          -&gt; GET {baseUrl}/{Type}?_id=a,b,c&amp;_elements=id
+    //      (see CheckExistingInAidboxAsync, also goes through EnsureSuccessOrThrowAsync)
+    //   3. else, if autoFetchEnabled: fetch via context.FetchMissingReferenceAsync(type, id, ct)
+    //      -&gt; recursively re-checks the fetched resource's OWN references too
+    //   4. else: record (and anything that depends on it) is excluded, with a precise
+    //      "Type/id references Type/id — not found" error — this produced the
+    //      RecordsWritten: 0 "partial success" result during testing before auto-fetch
+    //      was wired up / before Organization+Practitioner were pulled into the same run
+
+  writeMode = dest_fhirWriteMode ?? "individual"
+  if writeMode == "individual":
+    for each writable record:
+      (resourceType, id, body) = BuildFhirResource(record, cache)
+      endpoint = "{baseUrl}/{resourceType}/{id}"
+      response = await httpClient.PutAsync(endpoint, body-as-fhir+json, ct)
+      await EnsureSuccessOrThrowAsync(response, PUT, endpoint, ct)
+        // if !response.IsSuccessStatusCode: read response body, throw
+        //   "FHIR destination PUT '{endpoint}' returned {status} ({reason}): {body, truncated to 600 chars}"
+        // <- this is what surfaced the real Azure OperationOutcome
+        //    ("Authorization failed") instead of a bare .NET status-code message
+  else: // "bundle" or "transaction"
+    build one Bundle (type: batch | transaction) of PUT entries, POST it to {baseUrl},
+    tally per-entry (bundle) or all-or-nothing (transaction) results
+
+  return DestinationWriteResult(Count: written, RecordErrors, WrittenResourceIds)</code></pre>
+    </div>
+  </details>
+
+  <details class="trace">
+    <summary>FhirRepositoryAuthResolver.ResolveAsync — all five branches</summary>
+    <div class="trace-body">
+      <pre><code>FhirRepositoryAuthResolver.ResolveAsync(connectionMetadataJson, secretRef, secretProvider,
+                                        tokenProvider, managedIdentityTokenProvider, baseUrl, ct)
+  authType = dest_fhirAuthType ?? "none"
+
+  switch authType.ToLowerInvariant():
+
+    "none":
+      return null   // no header at all — unchanged legacy behavior
+
+    "managedidentity":                                    // <- new in this branch
+      scope = dest_fhirAzureScope, or "{baseUrl}/.default" if blank
+      managedIdentityClientId = dest_fhirManagedIdentityClientId
+      authorityHost           = dest_fhirAuthorityHost
+      token = await managedIdentityTokenProvider.GetAccessTokenAsync(
+                  scope, managedIdentityClientId, authorityHost, ct)
+        [AzureManagedIdentityFhirTokenProvider.cs]
+        cacheKey = SHA256("{scope}|{clientId}|{authorityHost}")   // no secret material hashed
+        if cached token exists: return it
+        credential = new DefaultAzureCredential({ ManagedIdentityClientId, AuthorityHost })
+        token = await credential.GetTokenAsync(new TokenRequestContext([scope]), ct)
+        cache it (via the shared IFhirAccessTokenCache, IDataProtector-wrapped at rest)
+      return new AuthenticationHeaderValue("Bearer", token)
+      // no secret was ever read from Key Vault for this branch
+
+    "clientcredentials":
+      secretJson = await secretProvider.GetSecretAsync(secretRef, ct)
+      secret = FhirRepositoryAuthSecret.Parse(secretJson, "clientCredentials")
+               // requires clientId + clientSecret + tokenEndpoint present in the blob
+      token = await tokenProvider.GetAccessTokenAsync(
+                  new FhirDestinationOAuth2Options(secret.TokenEndpoint, secret.ClientId,
+                                                    secret.ClientSecret, secret.Scope), ct)
+        [FhirDestinationOAuth2TokenProvider.cs] — generic OAuth2 client-credentials POST:
+        cacheKey includes a SHA256 fingerprint of the secret (never the secret itself),
+          so a rotated/wrong secret can never reuse a stale cached token
+        POST {tokenEndpoint}  grant_type=client_credentials&amp;client_id=...&amp;
+                               client_secret=...&amp;scope=...   (scope omitted if blank
+                               -&gt; this is exactly what caused AADSTS90014 before
+                               dest_fhirAzureScope was folded into the secret blob)
+      return new AuthenticationHeaderValue("Bearer", token)
+
+    "bearer" / "basic":
+      (unchanged, pre-existing branches — static token / basic auth from the secret blob)</code></pre>
+    </div>
+  </details>
+
+  <h2 id="backend-files"><span class="num">11.</span>Backend — files</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What it does</th></tr>
+    <tr><td class="file-path">Domain/Enums/DestinationType.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds <code>AzureFhirService = 23</code>.</td></tr>
+    <tr><td class="file-path">Destinations/Auth/IAzureManagedIdentityFhirTokenProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Interface for the managed-identity token acquisition contract.</td></tr>
+    <tr><td class="file-path">Destinations/Auth/AzureManagedIdentityFhirTokenProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>DefaultAzureCredential</code>-based implementation, cached via the shared <code>IFhirAccessTokenCache</code>.</td></tr>
+    <tr><td class="file-path">Destinations/Auth/FhirRepositoryAuthResolver.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">New <code>managedIdentity</code> branch; new <code>managedIdentityTokenProvider</code>/<code>baseUrl</code> parameters on <code>ResolveAsync</code>.</td></tr>
+    <tr><td class="file-path">Destinations/MappedFhirRepositoryDestinationWriter.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">New <code>IAzureManagedIdentityFhirTokenProvider</code> dependency; new <code>EnsureSuccessOrThrowAsync</code> helper replacing three bare <code>EnsureSuccessStatusCode()</code> calls, so write failures surface the FHIR server's real <code>OperationOutcome</code> body. <strong>Also:</strong> in <code>ParseFhirResource</code>, any resource <code>id</code> that doesn't satisfy FHIR's <code>^[A-Za-z0-9\-\.]{1,64}$</code> pattern (Epic occasionally issues longer ones) is replaced with a deterministic RFC&nbsp;4122 v5 name-based UUID derived from <code>{resourceType}|{originalId}</code>, so the same source id always maps to the same replacement id across runs; the original id is preserved as a secondary <code>identifier</code> (<code>system="urn:fhirbridge:source-id"</code>).</td></tr>
+    <tr><td class="file-path">Destinations/ConfiguredDestinationWriterFactory.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>AzureFhirService</code> &rarr; <code>MappedFhirRepositoryDestinationWriter</code>.</td></tr>
+    <tr><td class="file-path">Destinations/FhirRepositoryHealthCheckProvider.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Parametrized by <code>DestinationType</code> (was hardcoded to <code>FhirRepository</code>) so one class instance covers both destination types; new managed-identity-token-provider dependency.</td></tr>
+    <tr><td class="file-path">DependencyInjection.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>IAzureManagedIdentityFhirTokenProvider</code>; registers the health-check provider a second time for <code>AzureFhirService</code>.</td></tr>
+    <tr><td class="file-path">Application/Validation/CreateDestinationConfigurationRequestValidator.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>AzureFhirService</code> dispatches to the same <code>ValidateFhirRepositoryMetadata</code> as <code>FhirRepository</code>; <code>managedIdentity</code> added to the supported <code>dest_fhirAuthType</code> list.</td></tr>
+    <tr><td class="file-path">Application/DTOs/FhirConnectionTestRequest.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Four new optional fields (<code>TenantId</code>, <code>Scope</code>, <code>ManagedIdentityClientId</code>, <code>AuthorityHost</code>) for the Test Connection button (§6).</td></tr>
+    <tr><td class="file-path">Destinations/FhirDestinationConnectionTestService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">New <code>managedIdentity</code> branch; new direct-tenant client-credentials path that skips SMART-configuration discovery when <code>TenantId</code> is supplied. <strong>Also:</strong> new <code>ProbeWriteAuthorizationAsync</code> &mdash; after the <code>/metadata</code> read succeeds, PUTs a synthetic <code>Basic</code> resource (id <code>fhirbridge-connection-test-probe</code>) and deletes it, so Test Connection genuinely proves write authorization rather than just token validity (see §6).</td></tr>
+    <tr><td class="file-path">Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds the <code>AzureFhirServiceDestination</code> node-type constant.</td></tr>
+    <tr><td class="file-path">Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds the node to the exposed palette list, plus its icon slug/label/description.</td></tr>
+    <tr><td class="file-path">Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">New <code>AzureFhirServiceDestinationNodeExecutor</code> class; extends the Target-fallback and <code>dest_authType</code>&rarr;<code>dest_fhirAuthType</code> bridge (previously Aidbox-only) to also cover this type.</td></tr>
+    <tr><td class="file-path">Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">The <code>wholeResourceFhir</code> bug fix — adds <code>AzureFhirService</code> to the destination-type check.</td></tr>
+    <tr><td class="file-path">Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>AzureFhirServiceDestinationNodeExecutor</code>.</td></tr>
+  </table>
+
+  <h2 id="frontend-files"><span class="num">12.</span>Frontend — files</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed</th></tr>
+    <tr><td class="file-path">destination-forms/azure-fhir-service-destination-form.component.ts</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The full form — name, FHIR service URL, auth-mode toggle, tenant/client/secret fields, scope override, auto-fetch checkbox &amp; max-count, and a <strong>Test Connection</strong> button (own <code>probeState</code>/<code>probeError</code> signals, §6). <strong>Also fixed:</strong> <code>patchFrom()</code> now reads <code>dest_authType</code> as a fallback when <code>dest_fhirAuthType</code> is absent — re-opening a saved <code>managedIdentity</code> canvas node was silently showing "Client credentials" because <code>_populateFromNode()</code> passes the node's raw, unbridged field key (see §18).</td></tr>
+    <tr><td class="file-path">services/destination-schema.service.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>FhirConnectionTestRequest</code> interface gains <code>tenantId</code>/<code>scope</code>/<code>managedIdentityClientId</code>/<code>authorityHost</code>, mirroring the backend DTO.</td></tr>
+    <tr><td class="file-path">destination-forms/destination-form.registry.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>AzureFhirService</code> &rarr; the new form component.</td></tr>
+    <tr><td class="file-path">destination-connections/models/destination-configuration.model.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>DestinationType</code> union widened with <code>'AzureFhirService'</code>.</td></tr>
+    <tr><td class="file-path">destination-connections/utils/destination-connection-secret.util.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>buildFhirSecretBlob</code>: <code>managedIdentity</code> returns <code>''</code>; scope folded into the client-credentials blob. <code>buildConnectionMetadata</code>'s 'fhir' key list gains the four new metadata keys.</td></tr>
+    <tr><td class="file-path">services/workflow-build-assembler.service.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Own duplicate copy of the same two util functions above, kept in sync; new <code>isAzureFhir</code> branch in <code>buildDestination()</code> (also fixes a real <code>.includes('Fhir')</code> substring-collision bug that would have misclassified <code>AzureFhirServiceDestinationNode</code> as plain Aidbox).</td></tr>
+    <tr><td class="file-path">services/workflow-graph-mapper.service.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>FALLBACK_NODE_TYPES['dest-azurefhir'] = 'AzureFhirServiceDestinationNode'</code>.</td></tr>
+    <tr><td class="file-path">services/phase-config.service.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>dest-azurefhir</code> added to the Phase-1 <code>enabledTransformIds</code> allowlist &mdash; without this the tile is completely invisible in the Node Library, not just disabled.</td></tr>
+    <tr><td class="file-path">components/node-library/node-library-dialog.component.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Every destination-type dispatch list (tile&rarr;type mapping, permission prefix, type-lock guard, edit-node deep-link, label, icon/color) extended with <code>dest-azurefhir</code>/<code>azurefhir</code>.</td></tr>
+    <tr><td class="file-path">components/nodes/transform-node/transform-node.component.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Canvas node abbreviation/color metadata (<code>AZF</code>, Azure blue).</td></tr>
+    <tr><td class="file-path">data/transforms.data.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">New <code>dest-azurefhir</code> tile entry under the "Cloud / FHIR" category.</td></tr>
+    <tr><td class="file-path">pages/workflow-builder/workflow-builder.component.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>onOpenWizard()</code>'s type-membership check extended &mdash; this is the exact fix for the "Nothing to configure" error (see §16).</td></tr>
+    <tr><td class="file-path">destination-wizard/destination-wizard.component.ts</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>WizardDestType</code> widened; <code>registryKey()</code>, <code>isAzureFhir</code>, <code>destLabel</code>, the mapping-row-rebuild guard, <code>resolveDestinationTypeForRules</code>, "select existing" type filter, and the destination-request builder all extended.</td></tr>
+    <tr><td class="file-path">destination-wizard/destination-wizard.component.html</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Step 3's "columnless FHIR server" card now also renders for <code>isAzureFhir()</code>; Step 4 gets a dedicated review-card branch; the "Mapped fields" card is suppressed for this type too.</td></tr>
+  </table>
+
+  <h2 id="test-files"><span class="num">13.</span>Tests</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>What's covered</th></tr>
+    <tr><td class="file-path">Destinations/MappedFhirRepositoryDestinationWriterTests.cs</td><td class="why">52 tests. Managed-identity auth attaches a token and skips the secret entirely; the shared writer behaves identically when the destination is <code>AzureFhirService</code>-typed vs. <code>FhirRepository</code>-typed. Plus 3 id-sanitization tests: an id over 64 characters is replaced with a deterministic valid id; the same invalid id maps to the same replacement id every run; an id already within the limit and using only valid characters is left unchanged.</td></tr>
+    <tr><td class="file-path">Destinations/FhirRepositoryHealthCheckProviderTests.cs</td><td class="why">The health-check provider can be constructed for either <code>DestinationType</code>; managed-identity check attaches a token.</td></tr>
+    <tr><td class="file-path">Destinations/Auth/FhirRepositoryAuthResolverTests.cs</td><td class="why">Managed identity never touches the secret; default-scope derivation from <code>baseUrl</code>; explicit scope/authority/user-assigned-identity overrides; missing scope+baseUrl throws.</td></tr>
+    <tr><td class="file-path">Destinations/FhirDestinationConnectionTestServiceTests.cs</td><td class="why">13 tests. Client credentials with <code>TenantId</code> computes the Entra ID token endpoint directly and skips discovery; managed identity attaches a token via the managed-identity provider and needs no secret. Plus 3 write-probe tests: metadata read succeeding but the write probe being forbidden is reported as a connection failure; a successful check PUTs then DELETEs the probe resource; a cleanup DELETE failure after a successful PUT does not invalidate an otherwise-successful check.</td></tr>
+    <tr><td class="file-path">Auth/MagicLinkAuthTests.cs</td><td class="why">Unrelated pre-existing compile break (stale 3-arg <code>Issue(...)</code> call from an unrelated SSO/magic-link commit) fixed so the whole test project could build again.</td></tr>
+  </table>
+
+  <h2 id="verify-data"><span class="num">14.</span>Verifying data actually landed</h2>
+  <p class="section-intro">The Azure Portal has <strong>no built-in FHIR data browser</strong> (no table/grid view like Cosmos DB's Data Explorer). Three ways to actually confirm a write:</p>
+  <ul class="feature-list">
+    <li><strong>Resource visualizer</strong> (FHIR service's own sidebar) &mdash; shows resource-type counts (e.g. <code>Patient: 9</code>). Confirms totals, not content.</li>
+    <li><strong>Monitoring &rarr; Metrics</strong> &mdash; request/latency counters. Confirms activity happened, not content.</li>
+    <li><strong>The REST API directly</strong> (Postman/curl/PowerShell, see §13) &mdash; the only way to see actual resource content: <code>GET {fhirServiceUrl}/Patient?_count=50</code>, or a specific one by id: <code>GET {fhirServiceUrl}/Patient/{id}</code>.</li>
+  </ul>
+
+  <h2 id="postman"><span class="num">15.</span>Postman reference — token &amp; data calls</h2>
+
+  <h3>13.1 Token via Postman's built-in OAuth2 flow</h3>
+  <table class="spec-table">
+    <tr><th>Type</th><td>OAuth 2.0</td></tr>
+    <tr><th>Grant Type</th><td>Client Credentials</td></tr>
+    <tr><th>Access Token URL</th><td><code>https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token</code></td></tr>
+    <tr><th>Client ID</th><td>the app registration's Application (client) ID</td></tr>
+    <tr><th>Client Secret</th><td>the secret's <em>Value</em></td></tr>
+    <tr><th>Scope</th><td><code>{fhirServiceUrl}/.default</code></td></tr>
+    <tr><th>Client Authentication</th><td>Send client credentials in body</td></tr>
+  </table>
+  <p>Click <strong>Get New Access Token</strong> &rarr; <strong>Use Token</strong> &mdash; Postman attaches it automatically to whatever request you send next.</p>
+
+  <h3>13.2 Token as a plain request (returns the token in the response body)</h3>
+  <table class="spec-table">
+    <tr><th>Method</th><td>POST</td></tr>
+    <tr><th>URL</th><td><code>https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token</code></td></tr>
+    <tr><th>Body</th><td>x-www-form-urlencoded: <code>grant_type=client_credentials</code>, <code>client_id=...</code>, <code>client_secret=...</code>, <code>scope={fhirServiceUrl}/.default</code></td></tr>
+  </table>
+  <pre><code>// Response
+{
+  "token_type": "Bearer",
+  "expires_in": 3599,
+  "access_token": "eyJ0eXAiOiJKV1Qi..."
+}</code></pre>
+  <div class="callout">
+    <strong>Auto-updating a variable for reuse</strong>
+    In that request's <strong>Scripts &rarr; Post-response</strong> tab:
+    <pre><code>const body = pm.response.json();
+pm.collectionVariables.set("access_token", body.access_token);</code></pre>
+    Then any other request's Authorization tab &rarr; Bearer Token &rarr; <code>{{access_token}}</code> stays current every time the token request re-runs. Tokens expire in roughly 60&ndash;65 minutes &mdash; mint a fresh one right before use rather than reusing an old one (an expired token produces a 401, not the RBAC-related 403).
+  </div>
+
+  <h3>13.3 Data calls</h3>
+  <table class="spec-table">
+    <tr><th>List a resource type</th><td><code>GET {fhirServiceUrl}/Patient?_count=50</code></td></tr>
+    <tr><th>Read one by id</th><td><code>GET {fhirServiceUrl}/Patient/{id}</code></td></tr>
+    <tr><th>Create/update (upsert by id)</th><td><code>PUT {fhirServiceUrl}/Patient/{id}</code>, body: FHIR JSON, header <code>Content-Type: application/fhir+json</code></td></tr>
+    <tr><th>Delete one</th><td><code>DELETE {fhirServiceUrl}/Patient/{id}</code> (soft delete by default &mdash; see §14)</td></tr>
+    <tr><th>Capability statement</th><td><code>GET {fhirServiceUrl}/metadata</code> &mdash; what the writer's health-check provider itself calls</td></tr>
+  </table>
+  <p>Every data call needs <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+
+  <h2 id="clear-data"><span class="num">16.</span>Clearing / deleting test data</h2>
+  <p class="section-intro">The FHIR service has no single "delete everything" API call built in. Three options, simplest first for a small test dataset:</p>
+
+  <h3>Option A — delete &amp; recreate the FHIR service</h3>
+  <p>Simplest full wipe, but also wipes the Authentication blade config and IAM role assignment &mdash; both need redoing afterward.</p>
+
+  <h3>Option B — <code>$bulk-delete</code> (if available on your service version)</h3>
+  <pre><code>POST {fhirServiceUrl}/$bulk-delete
+Authorization: Bearer &lt;token&gt;</code></pre>
+
+  <h3>Option C — scripted per-type delete (works everywhere, keeps config intact)</h3>
+  <pre><code>param(
+    [Parameter(Mandatory)]
+    [string]$ClientSecret,
+
+    [ValidateSet('All','Single')]
+    [string]$Mode = 'All',
+
+    [string[]]$ResourceTypes = @('Patient','Organization','Practitioner'),
+
+    [string]$ResourceType,
+    [string]$ResourceId
+)
+
+$tenantId = "&lt;tenant-id&gt;"
+$clientId = "&lt;client-id&gt;"
+$fhirUrl  = "&lt;fhir-service-url&gt;"
+
+# Always mint a fresh token right before use.
+$tokenBody = @{
+    grant_type    = "client_credentials"
+    client_id     = $clientId
+    client_secret = $ClientSecret
+    scope         = "$fhirUrl/.default"
+}
+$token = (Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Method Post -Body $tokenBody).access_token
+$headers = @{ Authorization = "Bearer $token" }
+
+function Remove-FhirResource {
+    param($Type, $Id)
+    try {
+        Invoke-RestMethod -Uri "$fhirUrl/$Type/$Id" -Method Delete -Headers $headers | Out-Null
+        Write-Host "Deleted $Type/$Id"
+    } catch {
+        Write-Warning "Failed to delete $Type/$Id : $($_.Exception.Message)"
+    }
+}
+
+if ($Mode -eq 'Single') {
+    if (-not $ResourceType -or -not $ResourceId) {
+        Write-Error "Single mode requires -ResourceType and -ResourceId."
+        return
+    }
+    Remove-FhirResource -Type $ResourceType -Id $ResourceId
+    return
+}
+
+# Mode = All: page through every resource of each type (follows the Bundle's own
+# "next" link, so it isn't limited to the first 100 per type) and delete each one.
+foreach ($type in $ResourceTypes) {
+    $nextUrl = "$fhirUrl/$type`?_count=100"
+    while ($nextUrl) {
+        $result = Invoke-RestMethod -Uri $nextUrl -Headers $headers
+        foreach ($entry in $result.entry) {
+            Remove-FhirResource -Type $type -Id $entry.resource.id
+        }
+        $nextLink = $result.link | Where-Object { $_.relation -eq 'next' } | Select-Object -First 1
+        $nextUrl = $nextLink.url
+    }
+}</code></pre>
+  <p><strong>Usage:</strong></p>
+  <pre><code># Delete everything (Patient + Organization + Practitioner, the default)
+.\Clear-FhirData.ps1 -ClientSecret "&lt;secret&gt;"
+
+# Delete everything, only specific types
+.\Clear-FhirData.ps1 -ClientSecret "&lt;secret&gt;" -ResourceTypes @('Patient','Encounter')
+
+# Delete just one resource
+.\Clear-FhirData.ps1 -ClientSecret "&lt;secret&gt;" -Mode Single -ResourceType Patient -ResourceId egqBHVfQlt4Bw3XGXoxVxHg3</code></pre>
+  <div class="callout warn">
+    <strong>Soft delete by default</strong>
+    A plain <code>DELETE {Type}/{id}</code> on Azure Health Data Services marks the resource deleted but
+    keeps its history rather than purging it &mdash; a true permanent wipe needs the service's hard-delete/<code>$purge</code>
+    capability if enabled.
+  </div>
+
+  <h2 id="followups"><span class="num">17.</span>Known issues &amp; recommended follow-ups</h2>
+  <div class="card">
+    <h4>High — managed-identity scope &amp; destination host are both unvalidated (credential-theft / SSRF-style risk)</h4>
+    <p>Neither <code>dest_fhirAzureScope</code> nor <code>Target</code>/<code>dest_baseUrl</code> is validated server-side (<code>CreateDestinationConfigurationRequestValidator.ValidateFhirRepositoryMetadata</code> only checks <code>Target</code> is non-blank). A user holding only the routine, non-admin permission required to create/edit a destination (the generic <code>sourceconnections.create</code>/<code>.edit</code> fallback, since neither <code>FhirRepository</code> nor <code>AzureFhirService</code> has a dedicated <code>PermissionGroupCode</code>) could set <code>managedIdentity</code> auth mode with an arbitrary <code>Target</code> host and an arbitrary <code>dest_fhirAzureScope</code>, causing FHIRBridge's own compute identity to mint a live Azure AD token for whatever scope was requested and send it to an attacker-controlled host. <strong>Recommendation:</strong> restrict <code>dest_fhirAzureScope</code> to the derived <code>{Target}/.default</code> value (disallow arbitrary override, or require it match <code>Target</code>'s host), and/or allow-list <code>Target</code>'s host to the expected <code>*.azurehealthcareapis.com</code> pattern for FHIR-native destinations using <code>managedIdentity</code>/<code>clientCredentials</code>.</p>
+  </div>
+  <div class="card">
+    <h4>Medium — write-failure error messages can carry PHI fragments past the existing log redaction</h4>
+    <p><code>EnsureSuccessOrThrowAsync</code> now embeds up to 600 characters of the raw FHIR server response body in thrown exception messages (previously a bare status code, no body). The project's existing <code>PhiMaskingEnricher</code>/<code>IPhiRedactor</code> is a defensive, regex-based backstop keyed on a fixed field-name list (<code>familyName</code>, <code>givenName</code>, etc.) that doesn't match real FHIR JSON key names (<code>family</code>, <code>given</code>, <code>identifier</code>) and doesn't fully redact array/object-shaped values. If a FHIR server's validation-error diagnostic ever echoes a fragment of the submitted resource, it could reach logs or the persisted <code>ErrorLogs</code> table unredacted. <strong>Recommendation:</strong> parse the <code>OperationOutcome</code> and surface only its <code>issue[].severity</code>/<code>code</code> fields rather than the raw body, and/or extend the redactor's field list and value-matching to cover real FHIR key names and nested structures.</p>
+  </div>
+  <div class="card">
+    <h4>Low — no write-mode UI control on the Azure FHIR Service form</h4>
+    <p><code>dest_fhirWriteMode</code> (individual/bundle/transaction) has no field on the new form yet &mdash; set it directly in <code>ConnectionMetadataJson</code> if bundle/transaction behavior is needed.</p>
+  </div>
+  <div class="card">
+    <h4>Low — sanitized-id substitution doesn't rewrite cross-batch references</h4>
+    <p>When an oversized/invalid FHIR <code>id</code> is replaced with a deterministic UUID (see §11, §18), any <em>other</em> resource in the same batch that references it by its original id is not updated to point at the new id. Not yet observed in real Epic data (the field this hit, Observation, isn't itself commonly referenced by id within a batch), but a resource type that is commonly referenced (e.g. Patient, Encounter) hitting this path would produce a dangling reference. <strong>Recommendation:</strong> if this surfaces, extend the id-sanitization step to also rewrite in-batch references, mirroring the existing (currently unused) <code>RewriteNumericReferences</code>/<code>SafenReference</code> pattern already present in the same file.</p>
+  </div>
+
+  <h2 id="troubleshooting"><span class="num">18.</span>Troubleshooting — every error hit and its fix</h2>
+
+  <h4>"Nothing to configure — This module type doesn't have a configuration screen yet"</h4>
+  <p><strong>Cause:</strong> <code>workflow-builder.component.ts</code>'s <code>onOpenWizard()</code> had its own separate destination-type allowlist that didn't yet include <code>dest-azurefhir</code>.</p>
+  <p><strong>Fix:</strong> extended (see §10). A node created before this fix was in place may still need to be deleted and re-added fresh.</p>
+
+  <h4>Tile doesn't appear in the Node Library at all</h4>
+  <p><strong>Cause:</strong> <code>phase-config.service.ts</code>'s Phase-1 <code>enabledTransformIds</code> allowlist hides tiles entirely (not just disables them) &mdash; a completely separate gate from the type-union/registry wiring.</p>
+  <p><strong>Fix:</strong> added <code>dest-azurefhir</code> to that list.</p>
+
+  <h4>Mapping node shows <code>"Records": []</code> even though source resources exist</h4>
+  <p><strong>Cause:</strong> the <code>wholeResourceFhir</code> bug &mdash; <code>AzureFhirService</code> wasn't in the destination-type check that lets a FHIR-native destination receive whole-resource carrier records with zero real field mappings.</p>
+  <p><strong>Fix:</strong> extended in <code>TransformNodeExecutors.cs</code> (see §2, §8.2).</p>
+
+  <h4>"An invalid request URI was provided. Either the request URI must be an absolute URI or BaseAddress must be set."</h4>
+  <p><strong>Cause:</strong> a graph-driven run's <code>Target</code> stayed null (the wizard never stamps a top-level "target" field on a freshly-created node) and <code>dest_fhirAuthType</code> was never bridged from <code>dest_authType</code> &mdash; both fallbacks existed only for the generic Aidbox node type.</p>
+  <p><strong>Fix:</strong> both extended to also cover <code>AzureFhirServiceDestination</code> (see §8.2).</p>
+
+  <h4>AADSTS90014 — "The required field 'scope' is missing from the credential"</h4>
+  <p><strong>Cause:</strong> the client-credentials secret blob never included a <code>scope</code> field &mdash; Entra ID's v2.0 token endpoint requires one, unlike some generic OAuth2 servers.</p>
+  <p><strong>Fix:</strong> <code>buildFhirSecretBlob</code> (both copies) now folds <code>dest_fhirAzureScope</code> (or the computed <code>{baseUrl}/.default</code> default) into the secret blob. Re-typing the client secret is required afterward to actually rebuild the stored blob.</p>
+
+  <h4>AADSTS7000215 — "Invalid client secret provided... not the client secret ID"</h4>
+  <p><strong>Cause:</strong> the Secret ID column (a GUID, always visible) was copied instead of the Value column (shown once, at creation).</p>
+  <p><strong>Fix:</strong> create a new client secret, copy the Value immediately, re-enter it in the form.</p>
+
+  <h4>AADSTS700016 — "Application with identifier '...' was not found in the directory"</h4>
+  <p><strong>Cause:</strong> a one-character-truncated Client ID (copy/paste dropped the last character).</p>
+  <p><strong>Fix:</strong> carefully re-verify the full GUID matches the app registration's Application (client) ID exactly.</p>
+
+  <h4>403 Forbidden &mdash; bare "Response status code does not indicate success"</h4>
+  <p><strong>Cause:</strong> the writer called a bare <code>.EnsureSuccessStatusCode()</code> with no response body, so the real reason was invisible.</p>
+  <p><strong>Fix:</strong> replaced with <code>EnsureSuccessOrThrowAsync</code>, which surfaces the FHIR server's actual <code>OperationOutcome</code> (see §15's Medium finding for the corresponding PHI caveat).</p>
+
+  <h4>403 Forbidden &mdash; <code>OperationOutcome</code>: "Authorization failed."</h4>
+  <p><strong>Cause (transient case):</strong> a stale, already-minted-but-insufficiently-authorized token was cached from before the RBAC role assignment had finished propagating; token minting itself succeeded (so it wasn't re-fetched), and the cache has no way to know the token got rejected downstream. <strong>Fix:</strong> restart the backend process to clear the in-memory token cache (Redis in prod, memory in local dev) and force a fresh mint.</p>
+  <p><strong>Cause (persistent case &mdash; the actual root cause hit in this branch's testing):</strong> the signed-in principal (or app registration) had been granted the generic <strong>"Contributor"</strong> Azure role on the FHIR service resource, not <strong>"FHIR Data Contributor"</strong> (or "FHIR Data Writer"). Azure Health Data Services keeps a hard split between <em>control-plane</em> roles (Contributor/Owner &mdash; manage the resource itself: settings, networking, scaling) and <em>data-plane</em> roles (FHIR Data Reader/Writer/Contributor &mdash; read/write the actual FHIR resources inside it). Holding Contributor lets you configure the service in the Azure Portal but every FHIR REST write still comes back 403.</p>
+  <p><strong>Fix:</strong> on the FHIR service resource &rarr; <strong>Access control (IAM)</strong> &rarr; <strong>Add role assignment</strong>, grant <strong>FHIR Data Contributor</strong> (write) or <strong>FHIR Data Writer</strong> to the exact principal being used (the app registration's service principal for client-credentials mode, or the signed-in user/managed identity for managed-identity mode) &mdash; not just its owning app registration or resource group. Role assignments can take a few minutes to propagate; a backend restart afterward clears any token cached from before propagation finished. The Test Connection button's write-authorization probe (see §6) now catches exactly this class of misconfiguration before a real pipeline run does.</p>
+
+  <h4><code>RecordsWritten: 0</code> with "partial success" and no thrown error</h4>
+  <p><strong>Cause:</strong> the writer's dangling-reference protection correctly blocked every record because the pulled resource type (Patient only) referenced Organization/Practitioner resources that existed neither in the same batch nor at the (brand-new, empty) destination.</p>
+  <p><strong>Fix:</strong> pull the referenced types into the same run, or enable auto-fetch (see §7).</p>
+
+  <h4>401 Unauthorized when running a manual delete/verification script</h4>
+  <p><strong>Cause:</strong> reusing an access token past its ~60&ndash;65 minute lifetime.</p>
+  <p><strong>Fix:</strong> mint a fresh token immediately before each script run rather than reusing one from earlier in the session.</p>
+
+  <h4>Epic source token endpoint returns 503 Service Unavailable</h4>
+  <p><strong>Cause:</strong> an outage on Epic's own token endpoint, external to FHIRBridge &mdash; the response body is a generic IIS error page, not an Epic-specific error, and it clears on its own.</p>
+  <p><strong>Fix:</strong> no code change; retry the pipeline run once Epic's endpoint recovers. If it persists more than a few minutes, check Epic's own status/support channel rather than FHIRBridge logs.</p>
+
+  <h4>400 Bad Request &mdash; "Id must be any combination of upper/lower case ASCII letters ('A'-'Z', 'a'-'z'), numerals ('0'-'9'), '-' and '.', with a length limit of 64 characters"</h4>
+  <p><strong>Cause:</strong> Epic occasionally issues resource ids longer than FHIR's 64-character <code>id</code> limit (observed: 66 characters on an Observation) &mdash; Azure Health Data Services enforces the limit strictly and rejects the write outright.</p>
+  <p><strong>Fix:</strong> <code>MappedFhirRepositoryDestinationWriter.ParseFhirResource</code> now detects any id that doesn't match FHIR's <code>id</code> pattern and substitutes a deterministic, name-based UUID in its place (same source id always produces the same replacement id), preserving the original as a secondary <code>identifier</code> (see §11). <strong>Known limitation:</strong> if another resource in the same batch references the oversized id by its original value, that cross-reference is not rewritten &mdash; not yet observed in practice, listed as a follow-up in §17.</p>
+
+  <h4>Editing a saved destination shows "Client credentials" even though it was saved as "Managed identity"</h4>
+  <p><strong>Cause:</strong> the form's <code>patchFrom()</code> only checked the bridged metadata key <code>dest_fhirAuthType</code>. Re-opening a saved canvas node instead goes through <code>destination-wizard.component.ts</code>'s <code>_populateFromNode()</code>, which passes the node's own raw <code>dest_*</code> fields verbatim &mdash; still carrying the form's internal key <code>dest_authType</code>, which is never bridged at that layer. The auth mode silently fell back to its default (<code>clientCredentials</code>) every time.</p>
+  <p><strong>Fix:</strong> <code>patchFrom()</code> now checks <code>dest_fhirAuthType</code> first, falling back to <code>dest_authType</code> (see §12).</p>
+
+  <h2 id="verification"><span class="num">19.</span>Verification</h2>
+  <ul class="feature-list">
+    <li><strong>Backend:</strong> full solution build succeeds; targeted unit test suites (FHIR repository writer 52 tests, auth resolver, health-check provider, connection-test service 13 tests) pass; architecture tests confirm no new layering/switch violations (one pre-existing, unrelated <code>ApplicationType</code> switch violation in <code>WorkflowEndpoints.cs</code> was found and left as out-of-scope). 762/764 tests passing across the full suite consistently, with the 2 remaining failures (<code>DestinationExecutionHistoryGateTests</code>, <code>DateTimeFormatBirthDateReproTests</code>) confirmed pre-existing and unrelated to this branch.</li>
+    <li><strong>Frontend:</strong> clean Angular production build (<code>npm run build</code>) after every change, including the new form, catalog wiring, and every workflow-builder/node-library fix.</li>
+    <li><strong>Manual end-to-end (confirmed working):</strong> created a real Azure FHIR Service destination against a live Azure Health Data Services FHIR service, worked through every auth/config error in §18 to a working <code>clientCredentials</code> connection, resolved the "Contributor" vs "FHIR Data Contributor" RBAC gap, ran <code>EpicSource &rarr; Mapping &rarr; AzureFhirServiceDestinationNode</code> with Patient + Organization + Practitioner (auto-fetch also verified for Patient-only pulls), hit and fixed an oversized Epic id, and confirmed non-zero <code>RecordsWritten</code> plus the actual resources present at the destination via Postman/PowerShell. Test Connection's write-probe (§6) and managed-identity auth-mode persistence (§18) were both re-verified after their fixes landed.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge &middot; Azure FHIR Service destination implementation documentation &middot; branch <code>Azure_FHIR_Service</code>
+  </footer>
+
+</div>
+</body>
+</html>

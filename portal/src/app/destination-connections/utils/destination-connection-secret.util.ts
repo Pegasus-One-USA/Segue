@@ -64,10 +64,23 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
   if (authType === 'bearer') {
     return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
   }
+  // Managed identity (Azure FHIR Service) never resolves a Key Vault secret at all — see
+  // FhirRepositoryAuthResolver's "managedidentity" branch, which skips secret retrieval entirely for it.
+  if (authType === 'managedIdentity') {
+    return '';
+  }
   return JSON.stringify({
     clientId: f['dest_clientId'] ?? '',
     clientSecret: f['dest_clientSecret'] ?? '',
     tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+    // Only AzureFhirServiceDestinationFormComponent's config carries dest_fhirAzureScope (even blank) — the
+    // generic Aidbox/FhirRepository form never collects a scope at all, and its OAuth2 servers have tolerated
+    // an omitted scope, so this is deliberately scoped to Azure FHIR Service's config shape only. Entra ID's
+    // v2.0 token endpoint requires a non-empty scope for client_credentials (AADSTS90014 otherwise) — default
+    // to Azure's own {resource}/.default convention when the user left the override blank.
+    ...(f['dest_fhirAzureScope'] !== undefined
+      ? { scope: f['dest_fhirAzureScope'] || `${(f['dest_baseUrl'] ?? '').replace(/\/+$/, '')}/.default` }
+      : {}),
   });
 }
 
@@ -84,7 +97,11 @@ export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' |
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'
         ? ['dest_name', 'dest_baseUrl', 'dest_project', 'dest_writeMode', 'dest_fhirWriteMode',
-           'dest_tokenEndpoint', 'dest_clientId', 'dest_username']
+           'dest_tokenEndpoint', 'dest_clientId', 'dest_username',
+           // Azure FHIR Service (Azure Health Data Services) — non-secret managed-identity/scope overrides.
+           // dest_fhirAuthType itself is set separately, via the dest_authType bridge below.
+           'dest_fhirAzureScope', 'dest_fhirManagedIdentityClientId',
+           'dest_autoFetchMissingReferences', 'dest_autoFetchMaxCount']
         : kind === 'blob'
           ? ['dest_name', 'dest_blobAuthMode', 'dest_blobContainer', 'dest_blobAccountUrl', 'dest_blobAccountName',
              'dest_blobEndpointSuffix', 'dest_blobTenantId', 'dest_blobClientId', 'dest_blobManagedIdentityClientId',

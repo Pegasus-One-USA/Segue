@@ -114,15 +114,25 @@ public static class DependencyInjection
                     destinationType, sp.GetRequiredService<ISecretProvider>(), sp.GetRequiredService<IHttpClientFactory>()));
         }
 
-        // FhirRepository (e.g. Aidbox) needs an authenticated conformance check (GET {base}/metadata), not the
-        // anonymous HEAD/directory check TargetReachabilityDestinationHealthCheckProvider does above — it gets its
-        // own provider instead of joining that loop. Previously FhirRepository had no registered health check at all.
+        // FhirRepository (e.g. Aidbox) and AzureFhirService (Azure Health Data Services — same FHIR R4 wire
+        // behavior) both need an authenticated conformance check (GET {base}/metadata), not the anonymous
+        // HEAD/directory check TargetReachabilityDestinationHealthCheckProvider does above — one provider
+        // instance per DestinationType instead of joining that loop. Previously FhirRepository had no registered
+        // health check at all.
         services.AddHttpClient(nameof(Destinations.FhirRepositoryHealthCheckProvider));
-        services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
-            new Destinations.FhirRepositoryHealthCheckProvider(
-                sp.GetRequiredService<ISecretProvider>(),
-                sp.GetRequiredService<IHttpClientFactory>(),
-                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
+        foreach (var fhirLikeDestinationType in new[]
+        {
+            Domain.Enums.DestinationType.FhirRepository, Domain.Enums.DestinationType.AzureFhirService,
+        })
+        {
+            services.AddScoped<Application.Abstractions.Destinations.IDestinationHealthCheckProvider>(sp =>
+                new Destinations.FhirRepositoryHealthCheckProvider(
+                    fhirLikeDestinationType,
+                    sp.GetRequiredService<ISecretProvider>(),
+                    sp.GetRequiredService<IHttpClientFactory>(),
+                    sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>(),
+                    sp.GetRequiredService<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>()));
+        }
 
         services.AddSingleton<BlobContainerClientCache>();
         services.AddScoped<IBlobContainerClientFactory, BlobContainerClientFactory>();
@@ -323,6 +333,11 @@ public static class DependencyInjection
             new Destinations.Auth.FhirDestinationOAuth2TokenProvider(
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Destinations.Auth.FhirDestinationOAuth2TokenProvider)),
                 sp.GetRequiredService<IFhirAccessTokenCache>()));
+        // Managed-identity alternative to the client-credentials flow above (e.g. Azure Health Data Services'
+        // FHIR API from an Azure-hosted Worker/App Service) — no HttpClient of its own, DefaultAzureCredential
+        // manages its own token-endpoint calls (IMDS / Entra) internally.
+        services.AddScoped<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>(sp =>
+            new Destinations.Auth.AzureManagedIdentityFhirTokenProvider(sp.GetRequiredService<IFhirAccessTokenCache>()));
         services.AddHttpClient(nameof(MappedExcelDestinationWriter));
         services.AddHttpClient(nameof(MappedCsvDestinationWriter));
         services.AddHttpClient(nameof(MappedSnowflakeDestinationWriter));
@@ -399,7 +414,8 @@ public static class DependencyInjection
         services.AddScoped<IFhirDestinationConnectionTestService>(sp =>
             new Destinations.FhirDestinationConnectionTestService(
                 sp.GetRequiredService<IHttpClientFactory>(),
-                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>()));
+                sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>(),
+                sp.GetRequiredService<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>()));
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {

@@ -117,10 +117,11 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
 // ── FHIR-repository (Aidbox) destination ──────────────────────────────────────
 // This wizard's own destination-type union. MappingDestType (field-mapping-model.ts) covers only the
-// destinations that have a field-by-field mapping canvas; 'fhir' deliberately does NOT — it's a
-// passthrough/customize-rules destination — so it's widened here rather than in MappingDestType, and
-// nonFhirDestType() narrows back down at every call site that genuinely needs a mappable destination.
-export type WizardDestType = MappingDestType | 'fhir';
+// destinations that have a field-by-field mapping canvas; 'fhir' and 'azurefhir' deliberately do NOT —
+// both are FHIR-native, whole-resource passthrough destinations with no mapping canvas — so they're
+// widened here rather than in MappingDestType, and nonFhirDestType() narrows back down at every call
+// site that genuinely needs a mappable destination (guarded by isFhir()/isAzureFhir()).
+export type WizardDestType = MappingDestType | 'fhir' | 'azurefhir';
 
 /** All 20 transforms from Aidbox-Necessary-Transformations.md (Aidbox-Customize-Transform-UX-Plan.md's "All 20"
  *  section) — minus Redact/Rename, which stay the De-identification node's job (see that plan doc's Part 1c).
@@ -642,6 +643,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'BlobStorage';
       case 'medplum':
         return 'Medplum';
+      case 'azurefhir':
+        return 'AzureFhirService';
       // 'fhir' (Aidbox) deliberately has no case here — it's never registry-routed (see isFhir()'s doc
       // comment on the already-shipped, live-verified hand-rolled Aidbox form/wizard steps). Falling through
       // to the default is harmless because activeFormType()/activeForm() are never consulted for 'fhir' —
@@ -666,7 +669,8 @@ export class DestinationWizardComponent implements OnInit {
   activeFormInputs(): Record<string, unknown> {
     // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
     // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here.
+    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
+    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
     if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
     return {
       reusingExisting:
@@ -1604,6 +1608,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
+  private static readonly AZUREFHIR_TYPES: DestinationType[] = ['AzureFhirService'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -1624,15 +1629,21 @@ export class DestinationWizardComponent implements OnInit {
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
+  /** Azure FHIR Service (Azure Health Data Services) — likewise FHIR-native/columnless, no field-mapping
+   *  canvas of its own; behaves like isFhir()/isMedplum() everywhere Step 3 gates the mapping canvas, but
+   *  (unlike them) is registry-routed — see registryKey() — since its own form declares `reusingExisting`. */
+  readonly isAzureFhir = computed(() => this.destType() === 'azurefhir');
   readonly isBlob = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
   /** Narrowing helper for everything that genuinely needs a mappable destination (the field-mapping canvas,
-   *  buildMappingSummaryDocument, MappingSnapshot, _rebuildRows). Those are all reached only when isFhir() is
-   *  false — the FHIR branch never renders the canvas and never builds a mapping document — but signal call
-   *  sites can't be narrowed by control flow (destType() and isFhir() are two independent function calls to
-   *  the type checker), so the cast is made explicit and centralized here. */
+   *  buildMappingSummaryDocument, MappingSnapshot, _rebuildRows). Those are all reached only when isFhir() and
+   *  isAzureFhir() are both false — neither FHIR-native branch renders the canvas or builds a mapping document —
+   *  but signal call sites can't be narrowed by control flow (destType() and isFhir()/isAzureFhir() are
+   *  independent function calls to the type checker), so the cast is made explicit and centralized here.
+   *  Every caller must guard on `isFhir() || isAzureFhir()` first, exactly as the constructor's row-rebuild
+   *  effect does. */
   nonFhirDestType(): MappingDestType {
     return this.destType() as MappingDestType;
   }
@@ -1650,9 +1661,11 @@ export class DestinationWizardComponent implements OnInit {
               ? 'Medplum'
               : this.destType() === 'fhir'
                 ? 'Aidbox'
-                : this.destType() === 'blob'
-                  ? 'Azure Blob Storage'
-                  : 'CSV',
+                : this.destType() === 'azurefhir'
+                  ? 'Azure FHIR Service'
+                  : this.destType() === 'blob'
+                    ? 'Azure Blob Storage'
+                    : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -1666,9 +1679,10 @@ export class DestinationWizardComponent implements OnInit {
     effect(() => {
       const resources = this.selectedResources();
       const type = this.nonFhirDestType();
-      // A FHIR repository has no per-resource table/file target and no mapping rows at all — seeding either
-      // would only leave dead state behind on a destination that never renders the mapping canvas.
-      if (this.isFhir()) return;
+      // A FHIR repository (or Azure FHIR Service) has no per-resource table/file target and no mapping rows
+      // at all — seeding either would only leave dead state behind on a destination that never renders the
+      // mapping canvas.
+      if (this.isFhir() || this.isAzureFhir()) return;
       untracked(() => this._rebuildRows(resources, type));
     });
 
@@ -2179,6 +2193,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isMongo()) return 'Mongo';
     if (this.isMedplum()) return 'Medplum';
     if (this.isFhir()) return 'FhirRepository';
+    if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
@@ -2959,9 +2974,11 @@ export class DestinationWizardComponent implements OnInit {
                 ? DestinationWizardComponent.MEDPLUM_TYPES
                 : this.isFhir()
                   ? DestinationWizardComponent.FHIR_TYPES
-                  : this.isBlob()
-                    ? DestinationWizardComponent.BLOB_TYPES
-                    : DestinationWizardComponent.CSV_TYPES;
+                  : this.isAzureFhir()
+                    ? DestinationWizardComponent.AZUREFHIR_TYPES
+                    : this.isBlob()
+                      ? DestinationWizardComponent.BLOB_TYPES
+                      : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -3801,6 +3818,7 @@ export class DestinationWizardComponent implements OnInit {
     const isMongo = this.isMongo();
     const isMedplum = this.isMedplum();
     const isFhir = this.isFhir();
+    const isAzureFhir = this.isAzureFhir();
     const isBlob = this.isBlob();
     const name =
       metadata.fields['dest_name'] ||
@@ -3812,9 +3830,11 @@ export class DestinationWizardComponent implements OnInit {
             ? 'Medplum Destination'
             : isFhir
               ? 'Aidbox Destination'
-              : isBlob
-                ? 'Azure Blob Destination'
-                : 'File Destination');
+              : isAzureFhir
+                ? 'Azure FHIR Service Destination'
+                : isBlob
+                  ? 'Azure Blob Destination'
+                  : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -3869,7 +3889,23 @@ export class DestinationWizardComponent implements OnInit {
                 connectionMetadataJson: JSON.stringify(metadata.fields),
                 deIdentificationProfileId,
               }
-            : isBlob
+            : isAzureFhir
+              ? {
+                  name,
+                  destinationType: 'AzureFhirService',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // Same target convention as the FHIR (Aidbox) branch above — AzureFhirServiceDestinationFormComponent's
+                  // getFullConfig() also emits the FHIR service URL as dest_baseUrl.
+                  target: metadata.fields['dest_baseUrl'] || null,
+                  // AzureFhirServiceDestinationFormComponent.getMetadata() already folds managed identity's "no Key
+                  // Vault secret" rule into metadata.secret (buildFhirSecretBlob returns '' for it) — no extra
+                  // auth-mode check needed here, mirroring the Blob branch below.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isBlob
               ? {
                   name,
                   destinationType: 'BlobStorage',
@@ -4050,9 +4086,11 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'dest-medplum'
                     : type === 'fhir'
                       ? 'dest-fhir'
-                      : type === 'blob'
-                        ? 'dest-blob'
-                        : 'dest-csv',
+                      : type === 'azurefhir'
+                        ? 'dest-azurefhir'
+                        : type === 'blob'
+                          ? 'dest-blob'
+                          : 'dest-csv',
         status: 'enabled',
         config,
       });

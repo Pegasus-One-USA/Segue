@@ -29,6 +29,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-s3',          rank: 7, category: 'Cloud / FHIR', name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-medplum',     rank: 7, category: 'Cloud / FHIR', name: 'Medplum (FHIR)',     sub: 'Write FHIR resources to a Medplum store', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-azurefhir',   rank: 7, category: 'Cloud / FHIR', name: 'Azure FHIR Service', sub: 'Write FHIR resources to Azure Health Data Services.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-csv',         rank: 7, category: 'File',         name: 'CSV',                sub: 'Emit CSV files.',                   permissionPrefix: 'csv' },
   { id: 'dest-xlsx',        rank: 7, category: 'File',         name: 'Excel',              sub: 'Emit .xlsx workbooks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-ndjson',      rank: 7, category: 'File',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.',      permissionPrefix: 'sourceconnections' },

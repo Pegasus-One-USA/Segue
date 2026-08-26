@@ -49,6 +49,7 @@ public static class WorkflowNodeTypes
     public const string DatabricksDestination = "DatabricksDestinationNode";
     public const string MongoDestination = "MongoDestinationNode";
     public const string MedplumDestination = "MedplumDestinationNode";
+    public const string AzureFhirServiceDestination = "AzureFhirServiceDestinationNode";
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See

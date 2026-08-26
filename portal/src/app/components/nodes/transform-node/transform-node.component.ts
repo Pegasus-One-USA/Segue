@@ -24,6 +24,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
+  'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },
