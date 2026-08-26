@@ -40,6 +40,8 @@ public sealed class InMemoryPipelineRunRouteExecutionRepository : IPipelineRunRo
                 0,
                 0,
                 null,
+                null,
+                0,
                 null));
         }
 
@@ -54,7 +56,8 @@ public sealed class InMemoryPipelineRunRouteExecutionRepository : IPipelineRunRo
         int writtenCount,
         string? errorMessage,
         DateTime completedOnUtc,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? errorReferenceId = null)
     {
         lock (_gate)
         {
@@ -69,6 +72,7 @@ public sealed class InMemoryPipelineRunRouteExecutionRepository : IPipelineRunRo
                     WrittenCount = writtenCount,
                     ErrorMessage = errorMessage,
                     CompletedOnUtc = completedOnUtc,
+                    ErrorReferenceId = errorReferenceId,
                 };
             }
         }

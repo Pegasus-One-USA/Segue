@@ -14,6 +14,8 @@
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
+.error-reference-link { display: block; margin-top: 4px; font-size: 11px; }
+
 .pipe-avatar {
   width: 36px; height: 36px; border-radius: 8px;
   background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;

@@ -260,6 +260,15 @@
                   <div class="lastrun">
                     <span class="status-badge" [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
                     <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
+                    @if (w.lastRunErrorReferenceId) {
+                      <a
+                        class="mono link error-reference-link"
+                        [routerLink]="['/operations/errors']"
+                        [queryParams]="{ errorReferenceId: w.lastRunErrorReferenceId }"
+                        (click)="$event.stopPropagation()"
+                        title="View this error in Operations → Errors"
+                      >{{ w.lastRunErrorReferenceId }}</a>
+                    }
                   </div>
                 } @else {
                   <span class="cell-muted">Never run</span>

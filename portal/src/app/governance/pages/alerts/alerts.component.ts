@@ -3,6 +3,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AlertHistoryEntry } from '../../models/governance.model';
+import { ToastService } from '../../../services/toast.service';
 
 @Component({
   selector: 'app-alerts',
@@ -13,6 +14,7 @@ import { AlertHistoryEntry } from '../../models/governance.model';
 })
 export class AlertsComponent implements OnInit {
   private readonly api = inject(GovernanceApiService);
+  private readonly toast = inject(ToastService);
 
   readonly loading = signal(false);
   readonly entries = signal<AlertHistoryEntry[]>([]);
@@ -32,6 +34,9 @@ export class AlertsComponent implements OnInit {
   }
 
   acknowledge(entry: AlertHistoryEntry): void {
-    this.api.acknowledgeAlert(entry.id).subscribe({ next: () => this.load() });
+    this.api.acknowledgeAlert(entry.id).subscribe({
+      next: () => this.load(),
+      error: () => this.toast.error('Could not acknowledge this alert.'),
+    });
   }
 }

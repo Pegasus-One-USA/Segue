@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { PipelineExecutionApiService } from '../../services/pipeline-execution-api.service';
@@ -9,7 +9,7 @@ import { PipelineExecutionEntry } from '../../models/pipeline-execution.model';
 @Component({
   selector: 'app-pipeline-execution-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule],
+  imports: [CommonModule, DatePipe, MatTableModule, MatPaginatorModule, RouterLink],
   templateUrl: './pipeline-execution-list.component.html',
   styleUrl: './pipeline-execution-list.component.scss',
 })

@@ -599,10 +599,10 @@ public sealed class RankedWorkflowOrchestratorTests
             return Task.FromResult(new ErrorReport("ERR-TEST-000001", ErrorCategory.Unknown, "Something went wrong.", context.CorrelationId));
         }
 
-        public Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+        public Task<string?> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
         {
             CapturedContexts.Add(context);
-            return Task.FromResult("ERR-TEST-000002");
+            return Task.FromResult<string?>("ERR-TEST-000002");
         }
     }
 

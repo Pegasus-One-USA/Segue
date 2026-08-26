@@ -19,6 +19,10 @@ export interface PipelineExecutionEntry {
   correlationId: string | null;
   errorCount: number;
   durationMs: number | null;
+  /** The Global Exception Manager's ERR-yyyyMMdd-NNNNNN id for this route's failure, when one was actually
+   *  persisted to ErrorLogs — null for a non-failed completion, or when no capture ran/persisted (never a
+   *  placeholder). Link straight to /operations/errors?errorReferenceId=... */
+  errorReferenceId: string | null;
 }
 
 export interface PipelineExecutionPagedResult {
