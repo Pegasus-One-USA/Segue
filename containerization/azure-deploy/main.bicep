@@ -392,6 +392,8 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
+            // Gateway proxies /api to the Api process in this same container (entrypoint binds Api on loopback :5000).
+            { name: 'ApiBaseUrl', value: 'http://127.0.0.1:5000/' }
             // Always allow the platform demo FQDN; add custom demo origin when configured.
             { name: 'Portal__AllowedOrigins__0', value: 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
             { name: 'AllowedHosts', value: '*' }
