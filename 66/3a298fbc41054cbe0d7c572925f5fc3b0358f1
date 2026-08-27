@@ -1,0 +1,22 @@
+portal/src/app/services/phase-config.service.ts
+  s_15a6369242a897::t_a7f36e93b9f52c 28-29
+  s_15a6369242a897::t_6b2129d2f96caf 39,41
+portal/src/app/data/transforms.data.ts
+  s_15a6369242a897::t_250859abdc82fc 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "663a298fbc41054cbe0d7c572925f5fc3b0358f1",
+  "prompts": {},
+  "sessions": {
+    "s_15a6369242a897": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbb45777-0f79-4d30-bcbe-1549b2ccf4ea",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
