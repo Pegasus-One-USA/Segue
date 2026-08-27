@@ -123,6 +123,20 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("Terminology:Icd11Hapi:Frequency", _configuration.GetValue("Terminology:Icd11Hapi:Frequency", "Monthly"), "ICD-11 MMS terminology-server sync frequency: Weekly or Monthly."),
             ("Terminology:Icd11Hapi:ExecutionTime", _configuration.GetValue("Terminology:Icd11Hapi:ExecutionTime", "06:00"), "Local execution time for the scheduled ICD-11 MMS terminology-server sync (HH:mm)."),
 
+            ("Terminology:Ndc:SchedulerEnabled", Bool("Terminology:Ndc:SchedulerEnabled", false), "Master switch for scheduled NDC synchronization."),
+            ("Terminology:Ndc:Frequency", _configuration.GetValue("Terminology:Ndc:Frequency", "Daily"), "NDC synchronization frequency: Daily or Weekly. openFDA's NDC Directory updates daily."),
+            ("Terminology:Ndc:ExecutionTime", _configuration.GetValue("Terminology:Ndc:ExecutionTime", "04:00"), "Local execution time for scheduled NDC synchronization (HH:mm)."),
+
+            ("Terminology:Ucum:SchedulerEnabled", Bool("Terminology:Ucum:SchedulerEnabled", false), "Master switch for scheduled UCUM synchronization."),
+            ("Terminology:Ucum:Frequency", _configuration.GetValue("Terminology:Ucum:Frequency", "Weekly"), "UCUM synchronization frequency: Weekly or Monthly."),
+            ("Terminology:Ucum:ExecutionTime", _configuration.GetValue("Terminology:Ucum:ExecutionTime", "05:00"), "Local execution time for scheduled UCUM synchronization (HH:mm)."),
+
+            ("Terminology:RxNorm:SchedulerEnabled", Bool("Terminology:RxNorm:SchedulerEnabled", false), "Master switch for scheduled RxNorm synchronization."),
+            ("Terminology:RxNorm:ExecutionTime", _configuration.GetValue("Terminology:RxNorm:ExecutionTime", "02:00"), "Local execution time for scheduled RxNorm synchronization (HH:mm). RxNorm has a fixed monthly cadence (1st of each month) — no Frequency setting."),
+
+            ("Terminology:Snomed:SchedulerEnabled", Bool("Terminology:Snomed:SchedulerEnabled", false), "Master switch for scheduled SNOMED CT synchronization."),
+            ("Terminology:Snomed:ExecutionTime", _configuration.GetValue("Terminology:Snomed:ExecutionTime", "03:00"), "Local execution time for scheduled SNOMED CT synchronization (HH:mm). SNOMED CT US Edition releases twice yearly (March and September) — no Frequency setting."),
+
             ("RateLimiting:Enabled", Bool("RateLimiting:Enabled", true), "Master on/off for API rate limiting. Requires a restart to take effect."),
             ("RateLimiting:Auth:PermitPerWindow", Int("RateLimiting:Auth:PermitPerWindow", 10), "Auth endpoint rate-limit permit count. Requires a restart to take effect."),
             ("RateLimiting:Auth:WindowMinutes", Int("RateLimiting:Auth:WindowMinutes", 5), "Auth endpoint rate-limit window, in minutes. Requires a restart to take effect."),

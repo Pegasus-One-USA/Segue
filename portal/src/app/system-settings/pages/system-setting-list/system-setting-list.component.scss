@@ -38,6 +38,9 @@
   height: auto;
 
   ::ng-deep .group-header-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: var(--space-4) var(--space-8) var(--space-1);
     font-family: var(--font-family, var(--brand-font));
     font-size: 12px;
@@ -50,6 +53,53 @@
   }
 
   &:hover { background: transparent; } // group headings never get the row-hover highlight
+}
+
+// ─── Code sub-group heading (e.g. "CVX (HAPI terminology server)") ───────────
+// Nested one level under "Terminology Settings" — collapsed by default so ~17 codes' worth of
+// SchedulerEnabled/Frequency/ExecutionTime rows don't have to be scanned flatly. Same
+// chevron/aria-expanded/click+keydown convention as the execution history detail page.
+.code-group-header-row {
+  height: auto;
+  cursor: pointer;
+
+  td { padding: 0; border-bottom: 1px solid var(--color-border); }
+
+  &:hover { background: var(--color-bg); }
+}
+
+.code-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-6) var(--space-8);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+
+  .chevron { color: var(--color-muted); flex-shrink: 0; }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px rgba(0, 168, 157, 0.20);
+  }
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-primary);
+  cursor: pointer;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
 }
 
 // ─── Column widths ────────────────────────────────────────────────────────────
@@ -74,9 +124,12 @@
   gap: 12px;
 }
 
-.cell-mono {
-  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+.cell-data {
+  font-family: var(--font-family, var(--brand-font));
   font-size: 13px;
+  // Overrides .cell-primary's font-weight: 600 (from _list-page.scss) so the key and value
+  // columns read at the same weight as each other, and match the app's font everywhere else.
+  font-weight: 400;
 }
 
 .endpoint-avatar {

@@ -1,4 +1,5 @@
-using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 
 namespace FHIRBridge.Worker;
@@ -10,14 +11,17 @@ namespace FHIRBridge.Worker;
 /// </summary>
 public sealed class UcumHapiTerminologySyncWorker : BackgroundService
 {
+    private static readonly TerminologySyncScheduleConfig ScheduleConfig = new("Terminology:UcumHapi", "04:00");
+
     private readonly IServiceScopeFactory _scopes;
-    private readonly ISystemSettingsCache _settings;
+    private readonly ITerminologySyncScheduleEvaluator _scheduleEvaluator;
     private readonly ILogger<UcumHapiTerminologySyncWorker> _logger;
-    private DateOnly? _lastRunDate;
 
     public UcumHapiTerminologySyncWorker(
-        IServiceScopeFactory scopes, ISystemSettingsCache settings, ILogger<UcumHapiTerminologySyncWorker> logger) =>
-        (_scopes, _settings, _logger) = (scopes, settings, logger);
+        IServiceScopeFactory scopes,
+        ITerminologySyncScheduleEvaluator scheduleEvaluator,
+        ILogger<UcumHapiTerminologySyncWorker> logger) =>
+        (_scopes, _scheduleEvaluator, _logger) = (scopes, scheduleEvaluator, logger);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,27 +29,18 @@ public sealed class UcumHapiTerminologySyncWorker : BackgroundService
         {
             try
             {
-                if (await _settings.GetBoolAsync("Terminology:UcumHapi:SchedulerEnabled", false, stoppingToken))
+                if (await _scheduleEvaluator.IsDueAsync(ScheduleConfig, DateTimeOffset.Now, stoppingToken))
                 {
-                    var now = DateTimeOffset.Now;
-                    var frequency = await _settings.GetStringAsync("Terminology:UcumHapi:Frequency", "Monthly", stoppingToken);
-                    var configured = await _settings.GetStringAsync("Terminology:UcumHapi:ExecutionTime", "04:00", stoppingToken);
-                    var dueTime = TimeOnly.TryParse(configured, out var time) ? time : new TimeOnly(4, 0);
-                    var due = now.TimeOfDay >= dueTime.ToTimeSpan() && _lastRunDate != DateOnly.FromDateTime(now.DateTime)
-                        && (string.Equals(frequency, "Weekly", StringComparison.OrdinalIgnoreCase) || now.Day == 1);
-
-                    if (due)
-                    {
-                        using var scope = _scopes.CreateScope();
-                        var result = await scope.ServiceProvider
-                            .GetRequiredService<IHapiUcumTerminologySyncService>()
-                            .SyncAsync(stoppingToken);
-                        _lastRunDate = DateOnly.FromDateTime(now.DateTime);
-                        _logger.LogInformation(
-                            "UCUM HAPI terminology sync completed: {Total} codes, {Elapsed}.",
-                            result.TotalConceptCount,
-                            result.Duration);
-                    }
+                    using var scope = _scopes.CreateScope();
+                    var result = await scope.ServiceProvider
+                        .GetRequiredService<IHapiUcumTerminologySyncService>()
+                        .SyncAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<ISystemSettingsService>()
+                        .SetAsync("Terminology:UcumHapi:LastRunUtc", DateTime.UtcNow.ToString("O"), null, stoppingToken);
+                    _logger.LogInformation(
+                        "UCUM HAPI terminology sync completed: {Total} codes, {Elapsed}.",
+                        result.TotalConceptCount,
+                        result.Duration);
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

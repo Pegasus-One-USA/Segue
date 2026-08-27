@@ -47,20 +47,53 @@
         }
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Value</mat-label>
-        <input
-          matInput
-          formControlName="value"
-          placeholder="e.g. true, 60, http://portal.example.com"
-          autocomplete="off"
-        />
-        @if (hasError('value', 'required')) {
-          <mat-error>Value is required.</mat-error>
-        } @else if (hasError('value', 'maxlength')) {
-          <mat-error>Maximum 2000 characters allowed.</mat-error>
+      @switch (fieldDescriptor.kind) {
+        @case ('toggle') {
+          <div class="form-field form-field--toggle">
+            <mat-slide-toggle formControlName="value">
+              {{ form.get('value')?.value ? 'Enabled' : 'Disabled' }}
+            </mat-slide-toggle>
+          </div>
         }
-      </mat-form-field>
+        @case ('frequency') {
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Frequency</mat-label>
+            <mat-select formControlName="value">
+              @for (option of frequencyOptions; track option) {
+                <mat-option [value]="option">{{ option }}</mat-option>
+              }
+            </mat-select>
+            @if (hasError('value', 'required')) {
+              <mat-error>Frequency is required.</mat-error>
+            }
+          </mat-form-field>
+        }
+        @case ('time') {
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Execution time</mat-label>
+            <input matInput type="time" formControlName="value" />
+            @if (hasError('value', 'required')) {
+              <mat-error>Execution time is required.</mat-error>
+            }
+          </mat-form-field>
+        }
+        @default {
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Value</mat-label>
+            <input
+              matInput
+              formControlName="value"
+              placeholder="e.g. true, 60, http://portal.example.com"
+              autocomplete="off"
+            />
+            @if (hasError('value', 'required')) {
+              <mat-error>Value is required.</mat-error>
+            } @else if (hasError('value', 'maxlength')) {
+              <mat-error>Maximum 2000 characters allowed.</mat-error>
+            }
+          </mat-form-field>
+        }
+      }
 
       <mat-form-field appearance="outline" class="form-field">
         <mat-label>Description (optional)</mat-label>
