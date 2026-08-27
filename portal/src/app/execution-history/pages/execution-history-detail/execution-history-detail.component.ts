@@ -7,7 +7,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../../services/toast.service';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
-import { NodeRunHistoryEntry, NodeRunPayloadDetail, PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { DestinationWriteResultPayload, NodeRunHistoryEntry, NodeRunPayloadDetail, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { FieldLineagePanelComponent } from '../../components/field-lineage-panel/field-lineage-panel.component';
 
 @Component({
@@ -130,6 +130,22 @@ export class ExecutionHistoryDetailComponent implements OnInit {
    *  when the node run genuinely has none recorded. */
   payloadJsonFor(entryId: string): string | null {
     return this.payloadCache().get(entryId)?.payloadJson ?? null;
+  }
+
+  /** Parses a DestinationWriteResult-contract node's payload so the template can render a download link / email
+   *  delivery card instead of raw JSON. Returns null for every other contract, or if the payload has neither a
+   *  download link nor email delivery detail to show (e.g. a plain SQL/Blob write — just a record count). */
+  destinationWriteResultFor(entry: NodeRunHistoryEntry): DestinationWriteResultPayload | null {
+    if (entry.contract !== 'DestinationWriteResult') return null;
+    const payloadJson = this.payloadJsonFor(entry.workflowNodeRunId);
+    if (!payloadJson) return null;
+
+    try {
+      const parsed = JSON.parse(payloadJson) as DestinationWriteResultPayload;
+      return parsed.DownloadUrl || parsed.EmailDelivery ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   back(): void {

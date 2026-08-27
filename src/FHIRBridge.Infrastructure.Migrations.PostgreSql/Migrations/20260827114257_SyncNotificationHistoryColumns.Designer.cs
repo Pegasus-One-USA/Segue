@@ -3,6 +3,7 @@ using System;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    partial class FHIRBridgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827114257_SyncNotificationHistoryColumns")]
+    partial class SyncNotificationHistoryColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2101,6 +2104,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<int>("ExtractedCount")
                         .HasColumnType("integer");
@@ -4824,6 +4831,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");

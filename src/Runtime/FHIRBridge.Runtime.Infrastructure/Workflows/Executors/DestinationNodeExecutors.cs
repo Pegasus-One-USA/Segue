@@ -828,7 +828,21 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var result = new RuntimeDestinationWriteResult(
-            destination.Id.ToString("N"), written, DateTimeOffset.UtcNow);
+            destination.Id.ToString("N"),
+            written,
+            DateTimeOffset.UtcNow,
+            downloadUrl,
+            writeResult?.EmailDelivery is { } emailDelivery
+                ? new FHIRBridge.Runtime.Application.Workflows.Payloads.EmailDeliveryDetail(
+                    emailDelivery.From,
+                    emailDelivery.To,
+                    emailDelivery.Cc,
+                    emailDelivery.Subject,
+                    emailDelivery.Body,
+                    emailDelivery.AttachmentNames,
+                    emailDelivery.Status,
+                    emailDelivery.Error)
+                : null);
 
         // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md discussion: Operations → Exports previously only ever
         // reflected the Configured Pipeline plane (ConfiguredPipelineService's own LogExportAsync call) — a

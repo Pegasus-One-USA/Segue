@@ -29,13 +29,13 @@ public sealed class SmtpEmailSender : IEmailSender
         _logger = logger;
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
+    public async Task<bool> SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
     {
         var settings = await _settingsRepository.GetAsync(cancellationToken);
         if (settings is not { IsEnabled: true })
         {
             _logger.LogInformation("Email sending is disabled; skipped '{Subject}' to {ToEmail}.", subject, toEmail);
-            return;
+            return false;
         }
 
         using var message = new MailMessage
@@ -48,9 +48,10 @@ public sealed class SmtpEmailSender : IEmailSender
         message.To.Add(toEmail);
 
         await SendAsync(settings, message, subject, toEmail, cancellationToken);
+        return true;
     }
 
-    public async Task SendAsync(
+    public async Task<bool> SendAsync(
         IReadOnlyCollection<string> toEmails,
         IReadOnlyCollection<string>? ccEmails,
         string subject,
@@ -63,7 +64,7 @@ public sealed class SmtpEmailSender : IEmailSender
         if (settings is not { IsEnabled: true })
         {
             _logger.LogInformation("Email sending is disabled; skipped '{Subject}' to {ToEmails}.", subject, recipients);
-            return;
+            return false;
         }
 
         using var message = new MailMessage
@@ -92,6 +93,7 @@ public sealed class SmtpEmailSender : IEmailSender
         }
 
         await SendAsync(settings, message, subject, recipients, cancellationToken);
+        return true;
     }
 
     private async Task SendAsync(

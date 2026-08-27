@@ -1271,6 +1271,14 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AttachmentNames")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Body")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");

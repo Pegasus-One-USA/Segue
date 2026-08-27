@@ -13,16 +13,21 @@
       <label class="dw-label" for="cf-deliveryMode">Delivery mode <span class="dw-req">*</span></label>
       <div class="dw-select-wrap">
         <select id="cf-deliveryMode" class="dw-select" formControlName="deliveryMode">
-          <option value="download">Download (returned directly from the run)</option>
+          @if (csvForm.get('deliveryMode')!.value === 'download') {
+            <option value="download">Download (unsupported — see warning below)</option>
+          }
           <option value="email">Email</option>
           <option value="sftp">SFTP</option>
           <option value="downloadUrl">Download link</option>
         </select>
       </div>
       @if (csvForm.get('deliveryMode')!.value === 'download') {
-        <span class="dw-hint">
-          Only works when this destination's route is triggered manually — not on a schedule or webhook.
-        </span>
+        <div class="dw-callout dw-callout--warn">
+          This destination was saved with "Download" delivery, which returns the file bytes directly in the HTTP
+          response — that never works from a workflow-canvas destination node, on any trigger (manual, scheduled,
+          or webhook), because this engine has no HTTP response to carry them back through. Switch to
+          "Download link" (or Email/SFTP) and save to fix it.
+        </div>
       }
     </div>
 
