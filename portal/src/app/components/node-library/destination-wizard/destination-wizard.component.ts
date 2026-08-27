@@ -3781,6 +3781,41 @@ export class DestinationWizardComponent implements OnInit {
             Array.from(new Set([...list, ...fromDestResources])),
           );
         }
+        // loadMappingSummary just overwrote targetByResource with the Mapping JSON's OWN inferred primary
+        // (isPrimary if the doc has it, else the older "primary = whichever table has no genuine relation"
+        // guess — see resolvePrimaryTable). dest_targets (parsed into targetByResource above, before that
+        // overwrite) is a second, independently-persisted record of the same fact — already treated as
+        // authoritative by workflow-build-assembler.service.ts on the save/build path (see its own comment
+        // there) — and reconciling against it here fixes an ALREADY-SAVED document that predates isPrimary
+        // (an independent Mongo extra collection saved with no relation and no isPrimary flag, where the
+        // guess can pick the wrong table), not just documents saved after this landed. A correctly-saved
+        // document already agrees with dest_targets, so this is a no-op for anything not actually broken.
+        if (f['dest_targets']) {
+          try {
+            const savedTargets = JSON.parse(f['dest_targets']) as Record<string, string>;
+            const targets = { ...this.targetByResource() };
+            const extras = { ...this.extraTablesByGroup() };
+            for (const [resource, savedPrimary] of Object.entries(savedTargets)) {
+              const currentPrimary = targets[resource];
+              if (!savedPrimary || currentPrimary === savedPrimary) continue;
+              const resourceExtras = extras[resource] ?? [];
+              // Only reconcile when dest_targets names a table this resource's Mapping JSON actually
+              // mapped something onto (as either the guessed primary or one of its extras) — never invent
+              // a table the summary never mapped anything onto.
+              const knownTables = new Set([currentPrimary, ...resourceExtras].filter(Boolean));
+              if (!knownTables.has(savedPrimary)) continue;
+              targets[resource] = savedPrimary;
+              extras[resource] = [
+                ...resourceExtras.filter((t) => t !== savedPrimary),
+                ...(currentPrimary && currentPrimary !== savedPrimary ? [currentPrimary] : []),
+              ];
+            }
+            this.targetByResource.set(targets);
+            this.extraTablesByGroup.set(extras);
+          } catch {
+            /* ignore malformed */
+          }
+        }
         return;
       } catch {
         /* fall through to the older loaders below */

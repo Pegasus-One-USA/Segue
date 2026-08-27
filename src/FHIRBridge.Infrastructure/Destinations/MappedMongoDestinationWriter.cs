@@ -93,14 +93,17 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
     }
 
     /// <summary>
-    /// Writes one parent record's rows for a single child table/collection (e.g. one patient's contacts).
-    /// With a mapped upsert key for that collection (a field whose DestinationObject is this child table and
-    /// IsUpsertKey is set — the canvas's per-table key toggle), each row is upserted individually, keyed on
-    /// that field, so re-running the pipeline updates existing children in place without touching siblings the
-    /// current source payload doesn't include. With no key mapped, falls back to
-    /// MappedSqlServerDestinationWriter.WriteChildTablesAsync's own "delete every existing child row for this
-    /// parent, then insert the fresh set" — the only way to stay idempotent across re-runs without a key to
-    /// match on.
+    /// Writes one parent record's rows for a single "child" table/collection — really just a second Mongo
+    /// collection some of this resource's fields were routed to (e.g. a patient's contacts), written fully
+    /// independently: unlike SQL's relational child tables, a Mongo collection needs no FK linking it back to
+    /// a parent to be meaningful on its own, so <see cref="MappedChildTableRecord.ForeignKeyColumn"/> being
+    /// blank (the normal case — nothing in the Mongo mapping UI ever sets it; see
+    /// ConfiguredPipelineService.BuildChildTableRecords) is not an error. With a mapped upsert key for this
+    /// collection (a field whose DestinationObject is it and IsUpsertKey is set — the canvas's per-table key
+    /// toggle), each row is upserted individually, keyed on that field, so re-running the pipeline updates
+    /// matching documents in place instead of duplicating them. With no key mapped, each row is just inserted —
+    /// there's nothing to safely delete-and-replace by without either a key or a parent link, so repeated runs
+    /// will accumulate duplicates unless the collection is given its own key.
     /// </summary>
     private static async Task WriteChildTableAsync(
         IMongoDatabase database,
@@ -116,11 +119,14 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
             return;
         }
 
-        if (!record.Values.TryGetValue(childTable.ParentKeyColumn, out var parentKeyValue) || parentKeyValue is null)
+        var hasForeignKey = !string.IsNullOrWhiteSpace(childTable.ForeignKeyColumn);
+        object? parentKeyValue = null;
+        if (hasForeignKey)
         {
-            throw new InvalidOperationException(
-                $"Cannot write child collection '{childTable.TableName}': parent key column " +
-                $"'{childTable.ParentKeyColumn}' had no mapped value.");
+            // A parent value missing for this one record just means this record's children go in without
+            // the link field rather than aborting the whole write — the collection is still independently
+            // valid without it (see the type doc comment).
+            record.Values.TryGetValue(childTable.ParentKeyColumn, out parentKeyValue);
         }
 
         if (!childCollections.TryGetValue(childTable.TableName, out var childInfo))
@@ -133,7 +139,7 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         }
 
         var childDocuments = childTable.Rows
-            .Select(row => ToChildBsonDocument(row, childTable.ForeignKeyColumn, parentKeyValue))
+            .Select(row => ToChildBsonDocument(row, hasForeignKey ? childTable.ForeignKeyColumn : null, parentKeyValue))
             .ToList();
 
         if (childInfo.KeyField is not null)
@@ -153,11 +159,17 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
                 }
             }
         }
-        else
+        else if (hasForeignKey && parentKeyValue is not null)
         {
+            // Only safe to delete-and-replace when there's a real parent link to scope the delete to —
+            // otherwise this would wipe the entire collection on every run.
             await childInfo.Collection.DeleteManyAsync(
                 Builders<BsonDocument>.Filter.Eq(childTable.ForeignKeyColumn, BsonValue.Create(Stringify(parentKeyValue))),
                 cancellationToken);
+            await childInfo.Collection.InsertManyAsync(childDocuments, cancellationToken: cancellationToken);
+        }
+        else
+        {
             await childInfo.Collection.InsertManyAsync(childDocuments, cancellationToken: cancellationToken);
         }
     }
@@ -211,17 +223,24 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
     }
 
     /// <summary>
-    /// Builds one child-table row's document — same value conversion as ToBsonDocument, plus the parent's key
-    /// value stamped under <paramref name="foreignKeyColumn"/> so the child can be matched back to its parent
-    /// (Mongo has no real FK constraint; this is a plain field, same role MappedSqlServerDestinationWriter's FK
-    /// column plays). "RowIndex" is a synthetic key JsonMappingEngine adds internally to align SeparateDestination
-    /// rows — not a real mapped field, so it must never reach the document (mirrors
+    /// Builds one child-table row's document — same value conversion as ToBsonDocument, plus (only when both
+    /// <paramref name="foreignKeyColumn"/> and <paramref name="parentKeyValue"/> are supplied) the parent's key
+    /// value stamped under that field name, so the child can optionally be matched back to its parent (Mongo has
+    /// no real FK constraint; this is just a plain field, same role MappedSqlServerDestinationWriter's FK column
+    /// plays). Neither is required — an independent child collection with no parent link is written just the
+    /// same, minus that one field. "RowIndex" is a synthetic key JsonMappingEngine adds internally to align
+    /// SeparateDestination rows — not a real mapped field, so it must never reach the document (mirrors
     /// MappedSqlServerDestinationWriter.InsertChildRowsAsync's own exclusion).
     /// </summary>
     private static BsonDocument ToChildBsonDocument(
-        IReadOnlyDictionary<string, object?> row, string foreignKeyColumn, object parentKeyValue)
+        IReadOnlyDictionary<string, object?> row, string? foreignKeyColumn, object? parentKeyValue)
     {
-        var document = new BsonDocument { [foreignKeyColumn] = ToBsonValue(parentKeyValue) };
+        var document = new BsonDocument();
+        if (!string.IsNullOrWhiteSpace(foreignKeyColumn) && parentKeyValue is not null)
+        {
+            document[foreignKeyColumn] = ToBsonValue(parentKeyValue);
+        }
+
         foreach (var (column, value) in row)
         {
             if (string.Equals(column, "RowIndex", StringComparison.OrdinalIgnoreCase))

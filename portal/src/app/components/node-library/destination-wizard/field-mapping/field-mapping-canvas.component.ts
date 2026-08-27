@@ -253,7 +253,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // placeholder. Until then, the canvas-level "+ Add a table…" control is the one way in (see
   // onAddExtraTable/openCreateTableModal, which route there instead of "extra" while this is false).
   private isPrimaryTargetValid(resource: string): boolean {
-    return !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetFor(resource));
+    const target = this.targetFor(resource);
+    // Empty is never valid, for any destType — this is also what makes removing the primary card actually
+    // remove it (confirmRemoveTable clears targetByResource[resource] to '') instead of it reappearing
+    // immediately with the resource name as a fallback label, which is what happened before this check
+    // when hasSqlTables() is false (every non-SQL destination, including Mongo): the OR short-circuited to
+    // true regardless of whether target was actually set to anything.
+    if (!target) return false;
+    return !this.hasSqlTables() || this.sqlTableOptions().includes(target);
   }
 
   readonly targetCards = computed<FmTargetCardSpec[]>(() => {
@@ -786,33 +793,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     }
     this.extraTablesChange.emit([...this.extraTables(), name]);
 
-    // Mongo has no create-table modal to collect this (schemaAuthoringEnabled is SQL-only — see
-    // showAddTablePicker()), and there's no live-probed schema to auto-detect a real FK column from
-    // either (detectRelationFromColumns needs real, already-known columns). Without SOME relation,
-    // serializeRowsFlat's "genuine relation" guard (relation.parentTable === rootTable) never passes, so
-    // this child collection's ForeignKeyColumn/ParentKeyColumn never reach the backend — and
-    // ConfiguredPipelineService.BuildChildTableRecords silently drops any child table with no field
-    // carrying ForeignKeyColumn metadata, so it's never even written. Auto-generate one instead of
-    // requiring a second prompt: the reference field defaults to "{Resource}Id" (e.g. "PatientId"), the
-    // parent-side value it copies from defaults to whatever the primary card's own upsert key is (or
-    // "Id" if none is set yet) — same default-generation convention field-mapping-create-table-modal
-    // uses for SQL ("{ParentTable}Id" / "Id"). Shown read-only on the card via its relation banner
-    // (field-mapping-target-card.component.html's relationToShow()) so it's not invisible.
-    if (this.destType() === 'mongo') {
-      const rootTable = this.targetFor(resource);
-      const parentKeyField = this.mappingRows().find(
-        (r) => r.resource === resource && r.tableName === rootTable && r.isUpsertKey === true,
-      )?.targetName;
-      this.childTableRelationAdded.emit({
-        tableName: name,
-        relation: {
-          parentTable: rootTable,
-          parentColumn: parentKeyField ?? 'Id',
-          foreignKeyColumnName: `${resource}Id`,
-        },
-      });
-    }
-
+    // Unlike SQL's child tables, a Mongo collection added here needs no parent-link relation to be written —
+    // it's independent, keyed on its own mapped upsert key if any (see ConfiguredPipelineService.
+    // BuildChildTableRecords / MappedMongoDestinationWriter.WriteChildTableAsync, which no longer require
+    // ForeignKeyColumn metadata to exist at all). No childTableRelationAdded emission needed here.
     this.toast.success('Table added', `${name} is ready to map.`);
   }
 
@@ -1431,17 +1415,20 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     );
   }
 
-  /** Only one row per resource can be the upsert key (the backend resolves a single key column — see
-   *  MappedSqlServerDestinationWriter.ResolveUpsertKeyColumn) — so marking one on clears any other
-   *  explicit key already set for the same resource. Marking the already-active row off drops the
-   *  explicit override entirely, reverting that resource to the real-PK fallback in serializeRowsFlat. */
+  /** Only one row per (resource, table/collection) can be the upsert key — the backend resolves one key
+   *  column per DestinationObject, independently for each one (see MappedSqlServerDestinationWriter's and
+   *  MappedMongoDestinationWriter's own ResolveUpsertKeyField, both scoped by DestinationObject, not just
+   *  resource) — so marking one on only clears any other explicit key already set for the SAME table, never
+   *  a key set on a different collection for this resource (e.g. the primary and an independently-added
+   *  extra Mongo collection each keep their own key). Marking the already-active row off drops the explicit
+   *  override entirely, reverting that table back to the real-PK fallback in serializeRowsFlat. */
   onToggleUpsertKey(resource: string, tableName: string, column: string): void {
     const target = this.rowForColumnFn(resource, tableName, column);
     if (!target) return;
     const turningOn = !target.isUpsertKey;
     this.mappingRowsChange.emit(
       this.mappingRows().map(r => {
-        if (r.resource !== resource) return r;
+        if (r.resource !== resource || r.tableName !== tableName) return r;
         if (r === target) return { ...r, isUpsertKey: turningOn };
         return r.isUpsertKey ? { ...r, isUpsertKey: false } : r;
       }),

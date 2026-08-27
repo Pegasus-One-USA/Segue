@@ -96,6 +96,14 @@ export interface MappingSummaryColumn {
 export interface MappingSummaryTable {
   name: string;
   isNew: boolean;
+  /** Explicit "this is the resource's primary table/collection" flag, set from the wizard's own
+   *  authoritative targetByResource signal at save time — added because relation-based inference
+   *  (previously the only signal: "primary = whichever table has no genuine child relation") broke once a
+   *  Mongo destination could have a genuinely independent extra collection with no relation at all, making
+   *  both it and the real primary look identical on reload. Optional because an already-saved document from
+   *  before this field existed won't have it — applyMappingSummaryDocument falls back to the old
+   *  relation-based inference when no table in the entry carries it. */
+  isPrimary?: boolean;
   relation: { childColumn: string; parentTable: string; parentColumn: string } | null;
   columns: MappingSummaryColumn[];
 }
@@ -436,14 +444,22 @@ export function buildMappingSummaryDocument(params: BuildMappingSummaryParams): 
     const resolved = tableNames.map(name => resolveTable(name, sqlTables, childTableRelationsByTable, destType, resource, rootTableToResource));
     const forest = buildForest([resource], availableFields);
 
+    const primaryTarget = targetByResource[resource];
     const tables: MappingSummaryTable[] = resolved.map(t => ({
       name: t.bare,
       isNew: t.isNew,
+      isPrimary: t.fullName === primaryTarget,
       relation: t.relation
         ? { childColumn: t.relation.foreignKeyColumnName, parentTable: bareName(t.relation.parentTable), parentColumn: t.relation.parentColumn }
         : null,
       columns: resourceRows.filter(r => r.tableName === t.fullName).map(r => toSummaryColumn(r, forest, resourceKeyInfo)),
     }));
+    // targetByResource[resource] not matching any of this resource's own tables (a caller with nothing set
+    // yet, or a stale value) must never leave every table looking like an extra on reload — fall back to
+    // the first one, same fallback applyMappingSummaryDocument itself uses.
+    if (tables.length > 0 && !tables.some(t => t.isPrimary)) {
+      tables[0].isPrimary = true;
+    }
 
     return {
       resourceType: resource,
@@ -486,6 +502,23 @@ function isGenuineChildRelation(
   return !!relation && siblingTableNames.includes(relation.parentTable);
 }
 
+/**
+ * Finds this resource entry's primary table on reload. Prefers the explicit `isPrimary` flag
+ * (buildMappingSummaryDocument's own authoritative targetByResource, round-tripped) when ANY table in the
+ * entry carries it; falls back to the older "primary = whichever table has no genuine child relation"
+ * inference for a document saved before that flag existed. The old inference alone degenerates once a
+ * destination (Mongo) can have a genuinely independent extra table with no relation either — both it and
+ * the real primary would look identical, and this would silently pick whichever happens to come first in
+ * the array (see the ChildTableRelation-removal investigation this fixed).
+ */
+function resolvePrimaryTable(tables: readonly MappingSummaryTable[]): MappingSummaryTable | undefined {
+  if (tables.some(t => t.isPrimary === true)) {
+    return tables.find(t => t.isPrimary === true);
+  }
+  const siblingNames = tables.map(t => t.name);
+  return tables.find(t => !isGenuineChildRelation(t.relation, siblingNames));
+}
+
 export interface AppliedMappingSummary {
   mappingRows: MappingRow[];
   targetByResource: Record<string, string>;
@@ -518,8 +551,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
   // root table known up front, hence this separate pass before the main one below.
   const tableToResource: Record<string, string> = {};
   for (const entry of doc.mappings) {
-    const siblingNames = entry.tables.map(t => t.name);
-    const rootTable = entry.tables.find(t => !isGenuineChildRelation(t.relation, siblingNames));
+    const rootTable = resolvePrimaryTable(entry.tables);
     if (rootTable) {
       tableToResource[rootTable.name] = entry.resourceType;
     }
@@ -529,7 +561,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
     const resource = entry.resourceType;
     const siblingNames = entry.tables.map(t => t.name);
     const fullNames = entry.tables.map(t => qualify(t.name, destType));
-    const primaryIndex = Math.max(0, entry.tables.findIndex(t => !isGenuineChildRelation(t.relation, siblingNames)));
+    const primaryIndex = Math.max(0, entry.tables.indexOf(resolvePrimaryTable(entry.tables) ?? entry.tables[0]));
     targetByResource[resource] = fullNames[primaryIndex] ?? fullNames[0] ?? '';
     extraTablesByGroup[resource] = fullNames.filter((_, i) => i !== primaryIndex);
 
