@@ -114,7 +114,9 @@ public sealed record NotificationEntry(
     string Status,
     string? Subject = null,
     string? Error = null,
-    string? CorrelationId = null);
+    string? CorrelationId = null,
+    string? Body = null,
+    IReadOnlyList<string>? AttachmentNames = null);
 
 /// <summary>A resource that produced US-Core/data-quality validation warnings during normalization.</summary>
 public sealed record ValidationFailureEntry(

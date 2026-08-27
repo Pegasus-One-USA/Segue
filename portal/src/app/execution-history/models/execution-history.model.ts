@@ -69,6 +69,29 @@ export interface ResourceHistoryEntry {
   recordedAtUtc: string;
 }
 
+/** Shape of a DestinationWriteResult-contract node's decrypted payload JSON (PascalCase — serialized straight off
+ *  the backend's Runtime.Application.Workflows.Payloads.DestinationWriteResult record, no naming policy applied).
+ *  Parsed client-side from NodeRunPayloadDetail.payloadJson so the CSV destination node's Execution History row
+ *  can render a download link / email delivery card instead of the raw JSON dump. */
+export interface DestinationWriteResultPayload {
+  DestinationId: string;
+  RecordsWritten: number;
+  WrittenAt: string;
+  DownloadUrl: string | null;
+  EmailDelivery: EmailDeliveryDetail | null;
+}
+
+export interface EmailDeliveryDetail {
+  From: string;
+  To: string[];
+  Cc: string[];
+  Subject: string;
+  Body: string;
+  AttachmentNames: string[];
+  Status: 'Sent' | 'Failed' | 'Skipped' | string;
+  Error: string | null;
+}
+
 export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
 
 /** Matches the backend's WorkflowNodeRunHistoryDto — one row per node that actually started this run, with
