@@ -18,7 +18,7 @@ This project orchestrates pipeline execution without binding to any concrete EHR
 
 ## Key components
 ### `Abstractions/`
-- `Auth/` — `IFhirAccessTokenProvider`, `IFhirAccessTokenCache` (distributed token cache), `IBackendServicesJwtFactory` (+ `BackendServicesJwtRequest`), `IFhirAuthorizationCodeTokenStore` (interactive auth-code tokens), `IFhirAccessTokenAuditSink`.
+- `Auth/` — `IFhirAccessTokenProvider`, `IFhirAccessTokenCache` (distributed token cache), `IBackendServicesJwtFactory` (+ `BackendServicesJwtRequest`), `IFhirAuthorizationCodeTokenStore` (interactive auth-code tokens). Token success/failure is audited via `IGovernanceLogger.LogAuthenticationAsync` (in `CompositeFhirAccessTokenProvider`), not a separate sink.
 - `Connectors/` — `IFhirSourceClient` (paginated search), `IFhirBulkExportClient` (`$export` ping-pong), `IFhirSubscriptionClient` (rest-hook Subscription lifecycle), `IFhirSourceClientFactory` (by `RuntimeSourceType`).
 - `Destinations/` — `IDestinationWriter`, `IDestinationWriterFactory` (by `RuntimeDestinationType`).
 - `Persistence/` — `IPipelineRunStore` (add/update/get/recent runs + add/get events).

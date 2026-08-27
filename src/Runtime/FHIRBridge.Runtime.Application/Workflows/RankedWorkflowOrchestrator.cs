@@ -4,6 +4,8 @@ using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Runtime.Application.Workflows;
 
@@ -19,6 +21,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IServiceScopeFactory? _scopeFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
+    private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
@@ -30,7 +33,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IRunStatusNotifier? runStatusNotifier = null,
         IServiceScopeFactory? scopeFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        IBulkExportPauseRecorder? bulkExportPauseRecorder = null)
+        IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
+        ILogger<RankedWorkflowOrchestrator>? logger = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -42,6 +46,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _scopeFactory = scopeFactory;
         _workflowDefinitionStore = workflowDefinitionStore;
         _bulkExportPauseRecorder = bulkExportPauseRecorder;
+        _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -433,9 +438,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             {
                 await PersistRunAsync(workflowRun, CancellationToken.None);
             }
-            catch
+            catch (Exception persistException)
             {
-                // Swallowed by design — see the matching remark in the generic failure branch below.
+                // Not rethrown by design — see the matching remark in the generic failure branch below — but must
+                // still be logged: this is the terminal write for the run's history, so a silent failure here means
+                // the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
+                _logger.LogError(persistException,
+                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                    workflowRun.Id, workflowDefinition.Id);
             }
 
             await NotifyRunStatusAsync(
@@ -486,9 +496,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             {
                 await PersistRunAsync(workflowRun, CancellationToken.None);
             }
-            catch
+            catch (Exception persistException)
             {
-                // Swallowed by design — see the remark above; NotifyRunStatusAsync still runs regardless.
+                // Not rethrown by design — see the remark above; NotifyRunStatusAsync still runs regardless — but
+                // must still be logged: this is the terminal write for the run's history, so a silent failure here
+                // means the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
+                _logger.LogError(persistException,
+                    "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                    workflowRun.Id, workflowDefinition.Id);
             }
 
             await NotifyRunStatusAsync(
@@ -539,9 +554,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             await _runStore.SaveAsync(workflowRun, cancellationToken);
         }
-        catch
+        catch (Exception persistException)
         {
-            // Swallowed by design — see the XML doc above.
+            // Not rethrown by design — see the XML doc above — but must still be logged, since the terminal
+            // PersistRunAsync call at the end of the run is the only other place this history is captured.
+            _logger.LogError(persistException,
+                "Failed to persist the initial 'Running' placeholder for workflow run {WorkflowRunId}.", workflowRun.Id);
         }
     }
 

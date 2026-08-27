@@ -159,6 +159,9 @@ export class NodeLibraryDialogComponent {
   readonly mode         = input<LibraryMode>('source');
   readonly originNodeId = input<string | null>(null);
   readonly editNodeId   = input<string | null>(null);
+  /** The persisted workflow/ResourcePipelineRoute GUID when editing an already-saved workflow — forwarded
+   *  straight through to the destination wizard so a transform-rule-conflict fix can be scoped to it. */
+  readonly currentWorkflowId = input<string | null>(null);
 
   readonly closed            = output<void>();
   readonly sourceSelected    = output<string>();

@@ -18,16 +18,13 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
     private const int DefaultExpiresInSeconds = 900;
 
     private readonly HttpClient _httpClient;
-    private readonly IFhirAccessTokenAuditSink _auditSink;
     private readonly IFhirAccessTokenCache _tokenCache;
 
     public MeditechGreenfieldTokenProvider(
         HttpClient httpClient,
-        IFhirAccessTokenAuditSink? auditSink = null,
         IFhirAccessTokenCache? tokenCache = null)
     {
         _httpClient = httpClient;
-        _auditSink = auditSink ?? new NoOpFhirAccessTokenAuditSink();
         _tokenCache = tokenCache ?? new InMemoryFhirAccessTokenCache();
     }
 
@@ -59,16 +56,7 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
             source.ClientSecret!,
             scopes));
 
-        HttpResponseMessage response;
-        try
-        {
-            response = await _httpClient.SendAsync(request, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            await _auditSink.RecordAsync(source, "MeditechTokenRequestFailed", "Failed", exception.Message, cancellationToken);
-            throw;
-        }
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         using (response)
         {
@@ -76,7 +64,6 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 var message = $"MEDITECH Greenfield token endpoint returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}".Trim();
-                await _auditSink.RecordAsync(source, "MeditechTokenRequestFailed", "Failed", message, cancellationToken);
                 throw new InvalidOperationException(message);
             }
 
@@ -84,13 +71,11 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
                 ?? throw new InvalidOperationException("MEDITECH Greenfield token endpoint returned an empty response.");
             if (string.IsNullOrWhiteSpace(token.AccessToken))
             {
-                await _auditSink.RecordAsync(source, "MeditechTokenRequestFailed", "Failed", "MEDITECH Greenfield token endpoint did not return an access_token.", cancellationToken);
                 throw new InvalidOperationException("MEDITECH Greenfield token endpoint did not return an access_token.");
             }
 
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;
             await _tokenCache.SetAsync(cacheKey, token.AccessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn), cancellationToken);
-            await _auditSink.RecordAsync(source, "MeditechTokenRequestSucceeded", "Completed", "MEDITECH Greenfield access token acquired.", cancellationToken);
             return token.AccessToken;
         }
     }
