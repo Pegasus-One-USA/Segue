@@ -1,0 +1,77 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827114257_SyncNotificationHistoryColumns.Designer.cs
+  s_636b86177c1f0f::t_36c770b98e44eb 1-5687
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827114200_AddNotificationHistoryBodyAndAttachments.Designer.cs
+  s_636b86177c1f0f::t_70d0f8c84b2d93 1-5717
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_636b86177c1f0f::t_191b5abb2f4233 831-845
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_636b86177c1f0f::t_00aca3d6c0cd7f 117-119
+src/FHIRBridge.Infrastructure/Destinations/Delivery/EmailDeliveryStrategy.cs
+  s_636b86177c1f0f::t_ba528a9d29549f 59,61-63,65,68,72,79,84-97,99,102-104
+  s_636b86177c1f0f::t_fccbfcb2273097 3,22,24-25,29
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_636b86177c1f0f::t_84729bd5ca1189 135-150
+  s_636b86177c1f0f::t_aa4586e0f718ea 10
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.html
+  s_636b86177c1f0f::t_3a3cc0e996e4a7 16-18,25-30
+src/FHIRBridge.Infrastructure/Email/SmtpEmailSender.cs
+  s_636b86177c1f0f::t_428954bc079b95 32,38,51,54,67,96
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Payloads/DestinationWriteResult.cs
+  s_636b86177c1f0f::t_22baa44fa178ac 3-27
+tests/FHIRBridge.UnitTests/Destinations/EmailDeliveryStrategyTests.cs
+  s_636b86177c1f0f::t_729eaafe1b20a1 3,21-29,42,44,52-59,74,82-105
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_636b86177c1f0f::t_b99b6d454a6623 242-244
+src/FHIRBridge.Application/Abstractions/Destinations/DestinationWriteResult.cs
+  s_636b86177c1f0f::t_e85db53011c8e9 8-9,23-26,32-44
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_636b86177c1f0f::t_ce62f5bc0d7c7e 109
+  s_636b86177c1f0f::t_1ed0502ebd0d0d 66-69,71
+  s_636b86177c1f0f::t_ab8bd182d74061 144
+  s_636b86177c1f0f::t_88c3d92727853b 165
+  s_636b86177c1f0f::t_d5ad9c274bbc59 34
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_636b86177c1f0f::t_36c770b98e44eb 1265-1272
+tests/FHIRBridge.UnitTests/Auth/ForgotPasswordResetPasswordTests.cs
+  s_636b86177c1f0f::t_29bd68800f0f23 89,117
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827114200_AddNotificationHistoryBodyAndAttachments.cs
+  s_636b86177c1f0f::t_70d0f8c84b2d93 1-40
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_636b86177c1f0f::t_b8051cd28f3f70 72-94
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_636b86177c1f0f::t_70d0f8c84b2d93 1274-1281
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_636b86177c1f0f::t_9403087794177a 391-441
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827114257_SyncNotificationHistoryColumns.cs
+  s_636b86177c1f0f::t_36c770b98e44eb 1-40
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_636b86177c1f0f::t_9f2aba9d5e8ddb 173-197
+  s_636b86177c1f0f::t_663ee154d2c2e6 198-203
+src/FHIRBridge.Application/Abstractions/Notifications/IEmailSender.cs
+  s_636b86177c1f0f::t_5e71232e39e210 7-9,11-13
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/NotificationHistoryConfiguration.cs
+  s_636b86177c1f0f::t_003333a4bab642 20-21
+src/FHIRBridge.Domain/Entities/Governance/NotificationHistory.cs
+  s_636b86177c1f0f::t_43751ce10d198c 20-22,32-33,43-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d2897e060a5feb473d651b6cc2604c7bac1f22b7",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_636b86177c1f0f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df9d7b7f-b17f-4e98-9159-6a26b18b2feb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
