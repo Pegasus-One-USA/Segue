@@ -772,6 +772,7 @@
           [schemaAuthoringEnabled]="isSql()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
+          [pendingTableNames]="pendingTableNames()"
           [columnsForTable]="columnsForTableFn"
           [dataTypeForTable]="dataTypeForTableColumnFn"
           [keyInfoForTable]="keyInfoForTableColumnFn"

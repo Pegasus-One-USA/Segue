@@ -256,7 +256,20 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
             if (await TableExistsAsync(connection, schemaName, tableName, cancellationToken))
             {
-                return new SchemaMutationResultDto(false, $"Table '{schemaName}.{tableName}' already exists.");
+                // Idempotent, not a failure: this deferred "create table" op can legitimately reach here
+                // against a table that already exists for real — e.g. the mapping canvas staged this
+                // create from a local preview that never got the chance to notice a since-successful
+                // earlier flush of the exact same op, or another session created it in the meantime. Never
+                // re-run the DDL (would either throw a duplicate-object error or, worse, silently clobber
+                // real data if it didn't), but still SUCCEED — with the table's real current shape, not
+                // whatever columns were originally requested — so any queued ADD COLUMN behind this one in
+                // the same flush still gets to run instead of being stranded (see AddColumnAsync's own
+                // "never auto-create" comment for why a hard failure here would otherwise dead-end it).
+                var liveTables = await ReadSchemaAsync(request.Connection.DestinationType, connectionString, cancellationToken);
+                var existingTable = liveTables.FirstOrDefault(t =>
+                    string.Equals(t.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
+                return new SchemaMutationResultDto(true, null, Table: existingTable, AlreadyExisted: true);
             }
 
             if (parent is { } p && !await TableExistsAsync(connection, p.SchemaName, p.TableName, cancellationToken))

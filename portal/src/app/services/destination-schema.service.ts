@@ -62,6 +62,12 @@ export interface SchemaMutationResult {
    *  any). Also populated by addColumn() when its target table didn't already exist and had to be
    *  auto-created (Id + the one added column) — the caller otherwise has no prior record of that table. */
   table: DestinationTable | null;
+  /** Set only by createTable(), only when the requested table turned out to already exist for real by the
+   *  time this (deferred, queued) create actually ran — success, not failure, with `table` carrying its
+   *  real current shape rather than whatever columns were originally requested. See
+   *  SqlDestinationSchemaService.CreateTableAsync's own doc comment for why this must never be a hard
+   *  failure — a dependent queued addColumn() behind it would otherwise be stranded. */
+  alreadyExisted?: boolean;
 }
 
 /** One user-specified column for CreateTableRequest — name + a data type in the same shapes the
