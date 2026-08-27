@@ -512,7 +512,11 @@ export class WorkflowBuildAssemblerService {
         destinationType: 'Mongo',
         keyVaultName,
         secretName,
-        target: fields['dest_collection'] || null,
+        // null, not the primary collection — matches SQL's own `target: null` above. A non-null Target here
+        // wins over EVERY resource's own MappingProfile.DestinationObject in MappedMongoDestinationWriter's
+        // `destination.Target ?? mappingProfile.DestinationObject` resolution, collapsing every additional
+        // collection (added via the mapping canvas's "+ Add a collection" picker) back onto the primary one.
+        target: null,
         // The whole connection string is treated as secret (see destination-wizard.component.ts's mongoForm
         // comment) — there's no split server/database/credentials form to assemble from, so this is a direct
         // pass-through of whatever the wizard collected, same "don't touch an already-provisioned secret unless
@@ -648,7 +652,7 @@ export class WorkflowBuildAssemblerService {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
           : kind === 'medplum'
             ? [
                 'dest_name',

@@ -4010,7 +4010,15 @@ export class DestinationWizardComponent implements OnInit {
             destinationType: 'Mongo',
             keyVaultName: 'workflow-secrets',
             secretName,
-            target: metadata.fields['dest_collection'] || null,
+            // null, not the primary collection — matches SQL's own `target: null` above. Mongo can now map
+            // more than one resource to more than one collection (the mapping canvas's "+ Add a collection"
+            // picker), each resolved per-resource via its own MappingProfile.DestinationObject
+            // (workflow-build-assembler.service.ts's buildMappingForResource, already generic/not SQL-only).
+            // MappedMongoDestinationWriter resolves `destination.Target ?? mappingProfile.DestinationObject`
+            // — a non-null Target here would win for EVERY resource's write, collapsing every extra
+            // collection back onto the primary one (confirmed: this was exactly why a second collection
+            // added via the canvas was never actually created).
+            target: null,
             inlineSecret: metadata.secret ?? '',
             connectionMetadataJson: JSON.stringify(metadata.fields),
             deIdentificationProfileId,
