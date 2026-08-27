@@ -93,6 +93,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly columnActivate = output<string>();
   readonly positionChange = output<{ x: number; y: number }>();
   readonly removeTable = output<void>();
+  /** Mongo-only inline rename of this card's collection name (see startRenameTable) — preserves this
+   *  resource's already-mapped rows under the new name, unlike remove-then-re-add which would discard
+   *  them (see FieldMappingCanvasComponent.onRenameTable). */
+  readonly renameTable = output<string>();
   readonly deleteColumn = output<string>();
   readonly editColumn = output<string>();
   /** A free-text column's name was changed via the inline rename (✎ on a column with no real schema —
@@ -109,6 +113,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly renamingColumn = signal<string | null>(null);
   private readonly renameInput = viewChild<ElementRef<HTMLInputElement>>('renameInput');
 
+  /** True while this card's own collection name (Mongo only) is being edited inline — see startRenameTable. */
+  readonly renamingTable = signal(false);
+  private readonly renameTableInput = viewChild<ElementRef<HTMLInputElement>>('renameTableInput');
+
   private dragOffset: { dx: number; dy: number } | null = null;
 
   constructor() {
@@ -116,6 +124,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     // hit Enter to keep the current name) without an extra click.
     effect(() => {
       const el = this.renameInput()?.nativeElement;
+      if (el) { el.focus(); el.select(); }
+    });
+    effect(() => {
+      const el = this.renameTableInput()?.nativeElement;
       if (el) { el.focus(); el.select(); }
     });
   }
@@ -329,6 +341,26 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     const newName = input.value.trim();
     this.renamingColumn.set(null);
     if (newName && newName !== oldName) this.renameColumn.emit({ oldName, newName });
+  }
+
+  startRenameTable(): void {
+    this.renamingTable.set(true);
+  }
+
+  onRenameTableKeydown(ev: KeyboardEvent): void {
+    if (ev.key === 'Escape') { this.renamingTable.set(false); return; }
+    if (ev.key !== 'Enter') return;
+    this.commitRenameTable(ev.target as HTMLInputElement);
+  }
+
+  onRenameTableBlur(ev: FocusEvent): void {
+    this.commitRenameTable(ev.target as HTMLInputElement);
+  }
+
+  private commitRenameTable(input: HTMLInputElement): void {
+    const newName = input.value.trim();
+    this.renamingTable.set(false);
+    if (newName && newName !== this.tableName()) this.renameTable.emit(newName);
   }
 
   onColumnKeydown(column: string, ev: KeyboardEvent): void {
