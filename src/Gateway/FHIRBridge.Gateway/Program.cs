@@ -67,8 +67,8 @@ builder.Services.AddReverseProxy().LoadFromMemory(
 
 var app = builder.Build();
 
-// Serve the portal's production build for everything that isn't under /api — YARP (mapped
-// below) owns /api/**, so this static-file branch owns the rest of the path space.
+// Serve the portal's production build for everything that isn't proxied to the Api (/api/** and
+// /swagger/**, both mapped below) — this static-file branch owns the rest of the path space.
 // PhysicalFileProvider requires an absolute path; resolve relative config values (used for
 // local dev) against the working directory the same way Path.GetFullPath always would.
 var configuredRoot = builder.Configuration["StaticFiles:RootPath"];
@@ -78,7 +78,7 @@ if (staticRoot is not null && Directory.Exists(staticRoot))
     var fileProvider = new PhysicalFileProvider(staticRoot);
 
     app.UseWhen(
-        context => !context.Request.Path.StartsWithSegments("/api"),
+        context => !context.Request.Path.StartsWithSegments("/api") && !context.Request.Path.StartsWithSegments("/swagger"),
         branch =>
         {
             branch.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });

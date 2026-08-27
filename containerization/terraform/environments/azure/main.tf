@@ -454,6 +454,11 @@ resource "azurerm_container_app" "fhirbridge_app" {
         name  = "DataProtection__KeyRingPath"
         value = "/app/keys"
       }
+      # Gateway proxies /api to the Api process in this same container (entrypoint binds Api on loopback :5000).
+      env {
+        name  = "ApiBaseUrl"
+        value = "http://127.0.0.1:5000/"
+      }
       # Demo app is a separate origin whose frontend calls this API cross-origin. Computed from
       # the demo app's own (plain-string) name + the environment's default domain — a Container
       # App's FQDN is always predictable this way, so this needs no second `apply`.
@@ -475,13 +480,6 @@ resource "azurerm_container_app" "fhirbridge_app" {
       env {
         name  = "AllowedHosts"
         value = "*"
-      }
-      # Api and Gateway run as sibling processes inside this one container (see entrypoint.sh),
-      # with Api bound to loopback-only port 5000 - Program.cs throws on boot if this isn't set
-      # explicitly (no shared fallback across environments), matching local dev's own fallback.
-      env {
-        name  = "ApiBaseUrl"
-        value = "http://127.0.0.1:5000/"
       }
 
       volume_mounts {
