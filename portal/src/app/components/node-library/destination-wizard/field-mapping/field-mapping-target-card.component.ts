@@ -8,6 +8,11 @@ import { autoCardWidth } from './field-mapping-card-size.util';
 import { searchTerms, matchesSearchTerms } from './field-mapping-tree.util';
 
 const MIN_WIDTH = 220;
+// Mongo-only floor: its header carries an extra rename button, and its columns tend to have short names
+// (e.g. "PatientId") with no long schema-qualified name to widen the card past MIN_WIDTH naturally, so it
+// felt cramped at the shared default. Kept SQL/CSV/Blob at the original floor rather than raising it for
+// everyone.
+const MIN_WIDTH_MONGO = 300;
 const MAX_WIDTH = 640;
 // Higher base than the source card's — every row here also carries a port dot, an optional type badge,
 // an optional PK/FK badge + key-toggle, and edit/delete buttons, none of which the source tree has.
@@ -244,7 +249,8 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     // flat 300px default — never re-applied afterward (see field-mapping-card-size.util.ts), so it can't
     // fight the user's own drag-resize later.
     const longest = Math.max(this.targetValue().length, ...this.columns().map(c => c.length), 0);
-    this.card().nativeElement.style.width = `${autoCardWidth([longest], BASE_PADDING_PX, MIN_WIDTH, MAX_WIDTH)}px`;
+    const minWidth = this.destType() === 'mongo' ? MIN_WIDTH_MONGO : MIN_WIDTH;
+    this.card().nativeElement.style.width = `${autoCardWidth([longest], BASE_PADDING_PX, minWidth, MAX_WIDTH)}px`;
 
     // The card is now user-resizable (CSS `resize: both`), which doesn't fire any DOM event or trigger
     // Angular change detection on its own — without this, wires attached to rows inside it would
