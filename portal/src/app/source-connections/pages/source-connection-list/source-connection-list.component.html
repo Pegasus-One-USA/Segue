@@ -21,7 +21,7 @@
       <div class="type-filter-wrap">
         <select class="type-filter-select" [value]="ehrFilter()" (change)="onEhrFilterChange($any($event.target).value)">
           <option value="">All EHRs</option>
-          @for (o of ehrOptions; track o.value) {
+          @for (o of ehrOptions(); track o.value) {
             <option [value]="o.value">{{ o.label }}</option>
           }
         </select>
