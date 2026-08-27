@@ -24,6 +24,7 @@ import { PermissionService } from '../../../auth/services/permission.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { TRANSFORMS } from '../../../data/transforms.data';
+import { PhaseConfigService } from '../../../services/phase-config.service';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -54,6 +55,7 @@ export class DestinationConnectionListComponent implements OnInit {
   private readonly toast       = inject(ToastService);
   private readonly permissions = inject(PermissionService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg    = inject(PhaseConfigService);
 
   // ─── Permission gating ──────────────────────────────────────────────────────
   // There is no `destinationconnections.create` — Create is authorized per destination type
@@ -123,10 +125,12 @@ export class DestinationConnectionListComponent implements OnInit {
    * appear at workflow-create time (and picks up any new one added to the catalog automatically),
    * grouped by the catalog's own category and in catalog order. Each group becomes an <optgroup>.
    *
-   * Gated by the identical rule the Node Library's Rank-7 tiles use (node-library-dialog.component.ts):
-   * a type with a dedicated permission group is only offered when the user holds `{prefix}.view`
-   * (admins hold everything). Built once — permissions are decoded before bootstrap and don't change
-   * while this screen is mounted.
+   * Gated by the identical rules the Node Library's Rank-7 tiles use (node-library-dialog.component.ts):
+   * hidden unless enabled in the active phase config (phaseCfg.isTransformEnabled — Phase 1 currently
+   * offers SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, and Aidbox only),
+   * and a type with a dedicated permission group is only offered when the user holds `{prefix}.view`
+   * (admins hold everything). Built once — the phase config and permissions are both static for the
+   * lifetime of this screen.
    */
   readonly typeGroups: { category: string; options: { value: DestinationType; label: string }[] }[] =
     this.buildTypeGroups();
@@ -135,6 +139,7 @@ export class DestinationConnectionListComponent implements OnInit {
     const groups: { category: string; options: { value: DestinationType; label: string }[] }[] = [];
     for (const t of TRANSFORMS) {
       if (!t.destinationType) continue;
+      if (!this.phaseCfg.isTransformEnabled(t.id)) continue;
       if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) continue;
       const category = t.category ?? 'Other';
       let group = groups.find(g => g.category === category);
