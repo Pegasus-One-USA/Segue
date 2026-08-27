@@ -16,13 +16,11 @@ import {
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { forkJoin, of, from, Observable } from 'rxjs';
+import { forkJoin, of, Observable } from 'rxjs';
 import {
   catchError,
   map,
   switchMap,
-  concatMap,
-  toArray,
   finalize,
 } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
@@ -65,6 +63,7 @@ import {
   PendingSchemaOp,
   MappingDestType,
 } from './field-mapping/field-mapping-model';
+import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
 import {
   MappingSnapshot,
@@ -1481,6 +1480,11 @@ export class DestinationWizardComponent implements OnInit {
   // normally throughout; this queue exists purely to run the real DDL, in order, once confirmed.
   readonly pendingSchemaOps = signal<PendingSchemaOp[]>([]);
   readonly applyingSchemaOps = signal(false);
+  /** Every table name any currently-queued op still references — passed down to the canvas so its own
+   *  "Create a new table…"/"Add column" guards can tell "already exists for real" apart from "already
+   *  staged this session, not yet flushed" (see field-mapping-schema-ops.util.ts — this is the fix for
+   *  the canvas contradicting a live-database check with a local-only "already on this canvas" one). */
+  readonly pendingTableNames = computed(() => computePendingTableNames(this.pendingSchemaOps()));
 
   onSchemaOpQueued(op: PendingSchemaOp): void {
     this.pendingSchemaOps.update((ops) => [...ops, op]);
@@ -1506,23 +1510,18 @@ export class DestinationWizardComponent implements OnInit {
    *  the failing op and anything still after it stay queued, and the caller is told not to proceed with
    *  the rest of the save so a mapping profile is never persisted against schema that doesn't exist. */
   flushPendingSchemaOps(): Observable<boolean> {
-    const ops = this.pendingSchemaOps();
-    if (ops.length === 0) return of(true);
+    if (this.pendingSchemaOps().length === 0) return of(true);
 
     this.applyingSchemaOps.set(true);
-    return from(ops).pipe(
-      concatMap((op) =>
-        this._applyOneSchemaOp(op).pipe(
-          map(() => {
-            this.pendingSchemaOps.update((list) =>
-              list.filter((o) => o !== op),
-            );
-            return true;
-          }),
-        ),
-      ),
-      toArray(),
-      map((results) => results.every(Boolean)),
+    // The actual "run in order, stop at the first failure" sequencing is a pure, DI-free algorithm — see
+    // field-mapping-schema-ops.util.ts's runQueuedOpsSequentially — so it's unit-testable without a live
+    // database or Angular's TestBed. Reads pendingSchemaOps() fresh on each call rather than closing over
+    // a snapshot, matching the previous behavior exactly.
+    return runQueuedOpsSequentially(
+      this.pendingSchemaOps(),
+      (op) => this._applyOneSchemaOp(op),
+      (op) => this.pendingSchemaOps.update((list) => list.filter((o) => o !== op)),
+    ).pipe(
       catchError((err) => {
         const msg =
           err instanceof Error
