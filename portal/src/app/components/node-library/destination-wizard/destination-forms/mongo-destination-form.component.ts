@@ -22,6 +22,9 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
 
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
+  /** Real collection names from the last successful Test Connection — feeds the Collection field's
+   *  datalist so an existing collection can be picked instead of typed blind. */
+  readonly collections = signal<string[]>([]);
 
   /** Discriminates this form from CSV/SFTP's own unrelated testConnection()/probeState pair — see
    *  isMongoForm() in destination-form-api.ts for why duck-typing on those alone is unsafe. */
@@ -69,6 +72,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       })
       .subscribe({
         next: res => {
+          this.collections.set(res.collections ?? []);
           if (res.connected) {
             this.probeState.set('ok');
           } else {
@@ -129,5 +133,8 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       writeMode: 'upsert',
       createIfNotExists: false,
     });
+    this.collections.set([]);
+    this.probeState.set('idle');
+    this.probeError.set(null);
   }
 }

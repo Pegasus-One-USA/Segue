@@ -20,7 +20,16 @@
 
     <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
       <label class="dw-label" for="mf-collection">Collection <span class="dw-req">*</span></label>
-      <input id="mf-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+      <input id="mf-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients"
+        list="mf-collections-list" autocomplete="off" />
+      @if (collections().length) {
+        <datalist id="mf-collections-list">
+          @for (c of collections(); track c) {
+            <option [value]="c"></option>
+          }
+        </datalist>
+        <span class="dw-hint">Pick an existing collection above, or type a new name.</span>
+      }
       @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
         <span class="dw-error">Collection name is required.</span>
       }

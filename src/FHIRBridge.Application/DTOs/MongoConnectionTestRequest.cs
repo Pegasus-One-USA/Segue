@@ -16,3 +16,14 @@ public sealed record MongoConnectionTestRequest(
     string ConnectionString,
     string? Collection = null,
     bool CreateIfNotExists = false);
+
+/// <summary>
+/// Result of a Mongo connection test — extends the shared <see cref="ConnectionTestResultDto"/> shape with the
+/// database's real collection names on success, so the destination form can offer them as an autocomplete
+/// instead of requiring the collection name to be typed blind (a typo there only surfaced previously at
+/// pipeline-run time, or now as a Test Connection failure if it doesn't already exist).
+/// </summary>
+public sealed record MongoConnectionTestResultDto(
+    bool Connected,
+    string? Error,
+    IReadOnlyList<string>? Collections = null);
