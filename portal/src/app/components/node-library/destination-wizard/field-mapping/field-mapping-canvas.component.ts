@@ -785,6 +785,34 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
     this.extraTablesChange.emit([...this.extraTables(), name]);
+
+    // Mongo has no create-table modal to collect this (schemaAuthoringEnabled is SQL-only — see
+    // showAddTablePicker()), and there's no live-probed schema to auto-detect a real FK column from
+    // either (detectRelationFromColumns needs real, already-known columns). Without SOME relation,
+    // serializeRowsFlat's "genuine relation" guard (relation.parentTable === rootTable) never passes, so
+    // this child collection's ForeignKeyColumn/ParentKeyColumn never reach the backend — and
+    // ConfiguredPipelineService.BuildChildTableRecords silently drops any child table with no field
+    // carrying ForeignKeyColumn metadata, so it's never even written. Auto-generate one instead of
+    // requiring a second prompt: the reference field defaults to "{Resource}Id" (e.g. "PatientId"), the
+    // parent-side value it copies from defaults to whatever the primary card's own upsert key is (or
+    // "Id" if none is set yet) — same default-generation convention field-mapping-create-table-modal
+    // uses for SQL ("{ParentTable}Id" / "Id"). Shown read-only on the card via its relation banner
+    // (field-mapping-target-card.component.html's relationToShow()) so it's not invisible.
+    if (this.destType() === 'mongo') {
+      const rootTable = this.targetFor(resource);
+      const parentKeyField = this.mappingRows().find(
+        (r) => r.resource === resource && r.tableName === rootTable && r.isUpsertKey === true,
+      )?.targetName;
+      this.childTableRelationAdded.emit({
+        tableName: name,
+        relation: {
+          parentTable: rootTable,
+          parentColumn: parentKeyField ?? 'Id',
+          foreignKeyColumnName: `${resource}Id`,
+        },
+      });
+    }
+
     this.toast.success('Table added', `${name} is ready to map.`);
   }
 
