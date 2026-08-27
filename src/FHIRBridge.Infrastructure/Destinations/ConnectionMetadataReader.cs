@@ -34,4 +34,10 @@ internal static class ConnectionMetadataReader
         var raw = GetString(connectionMetadataJson, key);
         return int.TryParse(raw, out var value) ? value : fallback;
     }
+
+    public static bool GetBool(string? connectionMetadataJson, string key, bool fallback)
+    {
+        var raw = GetString(connectionMetadataJson, key);
+        return bool.TryParse(raw, out var value) ? value : fallback;
+    }
 }

@@ -44,15 +44,32 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         var database = client.GetDatabase(new MongoUrl(connectionString).DatabaseName
             ?? throw new InvalidOperationException("The Mongo connection string must include a database name."));
 
-        // The customer owns the destination — same "does not exist, create it first" contract every other
-        // writer enforces, even though MongoDB itself would otherwise auto-create the collection on first write.
+        // The customer owns the destination by default — same "does not exist, create it first" contract every
+        // other writer enforces, even though MongoDB itself would otherwise auto-create the collection on first
+        // write. "Create collection if not exists" (the form's checkbox) is an explicit opt-in past that default,
+        // mirroring MappedBlobStorageDestinationWriter's CreateContainerIfNotExists.
         var existingNames = await (await database.ListCollectionNamesAsync(
             new ListCollectionNamesOptions { Filter = Builders<BsonDocument>.Filter.Eq("name", collectionName) },
             cancellationToken)).ToListAsync(cancellationToken);
         if (existingNames.Count == 0)
         {
-            throw new InvalidOperationException(
-                $"Destination collection '{collectionName}' does not exist. Create it in your database before running this pipeline.");
+            var createIfNotExists = ConnectionMetadataReader.GetBool(
+                destination.ConnectionMetadataJson, "dest_createCollectionIfNotExists", fallback: false);
+            if (!createIfNotExists)
+            {
+                throw new InvalidOperationException(
+                    $"Destination collection '{collectionName}' does not exist. Create it in your database before running this pipeline, or enable \"Create collection if not exists\" on this destination.");
+            }
+
+            try
+            {
+                await database.CreateCollectionAsync(collectionName, cancellationToken: cancellationToken);
+            }
+            catch (MongoCommandException exception) when (exception.CodeName == "NamespaceExists")
+            {
+                // Created concurrently by another writer between the existence check above and this call —
+                // the collection is there either way, nothing left to do.
+            }
         }
 
         var collection = database.GetCollection<BsonDocument>(collectionName);
@@ -132,20 +149,7 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
 
     private static string ValidateCollectionName(string destinationObject)
     {
-        var name = destinationObject.Trim();
-        var queryIndex = name.IndexOf('?', StringComparison.Ordinal);
-        if (queryIndex >= 0)
-        {
-            name = name[..queryIndex];
-        }
-
-        // Mongo has no schema layer distinct from the database (same convention as MySQL) — a "Schema.Collection"
-        // style destination object only ever needs the last segment.
-        var dotIndex = name.LastIndexOf('.');
-        if (dotIndex >= 0)
-        {
-            name = name[(dotIndex + 1)..];
-        }
+        var name = MongoCollectionNameResolver.Resolve(destinationObject);
 
         if (string.IsNullOrWhiteSpace(name))
         {

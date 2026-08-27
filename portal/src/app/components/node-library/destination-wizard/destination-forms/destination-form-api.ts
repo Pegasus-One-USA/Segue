@@ -60,3 +60,19 @@ export interface SqlFamilyFormApi extends WizardDestinationFormApi {
 export function isSqlFamilyForm(x: WizardDestinationFormApi | null | undefined): x is SqlFamilyFormApi {
   return !!x && typeof (x as Partial<SqlFamilyFormApi>).getProbeRequest === 'function';
 }
+
+/** Extra members exposed only by MongoDestinationFormComponent — the live connectivity + collection-existence
+ *  probe Step 1 gates "Next" on (mirroring the SQL family's own probe-then-advance gate), now that a stored
+ *  collection name that doesn't exist is a pipeline-run-time failure worth catching here instead. */
+export interface MongoFormApi extends WizardDestinationFormApi {
+  readonly probeState: Signal<'idle' | 'testing' | 'ok' | 'error'>;
+  readonly probeError: Signal<string | null>;
+  testConnection(onSettled?: (result: { connected: boolean }) => void): void;
+}
+
+/** Keyed on `kind === 'mongo'` — CSV/SFTP forms also define their own unrelated testConnection()/probeState
+ *  pair (see the isSqlFamilyForm doc comment above for the exact footgun that caused), so duck-typing on those
+ *  members alone would misroute them into Mongo's "test then advance" branch too. */
+export function isMongoForm(x: WizardDestinationFormApi | null | undefined): x is MongoFormApi {
+  return !!x && (x as Partial<{ kind: string }>).kind === 'mongo';
+}
