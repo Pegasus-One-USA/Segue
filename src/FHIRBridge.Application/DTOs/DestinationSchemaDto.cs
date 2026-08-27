@@ -121,9 +121,14 @@ public sealed record AlterColumnRequest(
 /// column added); <see cref="Table"/> by CreateTableAsync (the full created table, all columns including the
 /// FK if any) — so the caller never needs a second round trip to know the table's real shape. AddColumnAsync
 /// also populates <see cref="Table"/>, but only when its target table didn't already exist and had to be
-/// auto-created (Id + this one column) — the caller has no prior record of that table at all otherwise.</summary>
+/// auto-created (Id + this one column) — the caller has no prior record of that table at all otherwise.
+/// <see cref="AlreadyExisted"/> is set only by CreateTableAsync, when the requested table turned out to
+/// already exist for real by the time the (deferred, queued) create actually ran — see its own doc comment
+/// for why this is a success, not a failure, with <see cref="Table"/> carrying the table's real current
+/// shape rather than whatever was originally requested.</summary>
 public sealed record SchemaMutationResultDto(
     bool Success,
     string? Error,
     DestinationColumnSchemaDto? Column = null,
-    DestinationTableSchemaDto? Table = null);
+    DestinationTableSchemaDto? Table = null,
+    bool AlreadyExisted = false);
