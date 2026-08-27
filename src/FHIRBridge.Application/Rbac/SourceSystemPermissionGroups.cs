@@ -71,7 +71,7 @@ public static class SourceSystemPermissionGroups
             .Cast<Enum>()
             .Select(GroupFor)
             .Where(group => group != PermissionGroupCode.SourceConnections)
-            .Where(AllowedGroups.Contains)
+            // .Where(AllowedGroups.Contains)
             .Distinct()
             .ToArray();
     }
