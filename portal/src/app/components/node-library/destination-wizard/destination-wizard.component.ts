@@ -1101,6 +1101,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  // ── Mongo connection probe (test connection → load real collection names) ──
+  // Copied from MongoFormApi.collections() on a successful "Next" (see next()'s Mongo branch) — Step 1's
+  // dynamically-mounted form is gone once Step 2/3 mounts, so the mapping canvas's "+ Add a table" picker
+  // (fed this via availableTablesToAddFn below) needs its own copy to keep offering real names for
+  // additional resources.
+  readonly mongoCollections = signal<string[]>([]);
+
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -1328,15 +1335,21 @@ export class DestinationWizardComponent implements OnInit {
     return table ? table.columns.map((c) => c.name) : [];
   };
 
-  /** Already-probed tables not yet used as this group's primary or extra targets — offered in "+ Add a table". */
+  /** Already-known tables/collections not yet used as this group's primary or extra targets — offered in
+   *  "+ Add a table"/"+ Add a collection". Sourced from sqlTables() for SQL, mongoCollections() for Mongo —
+   *  deliberately NOT gated through hasSqlTables()/sqlTableOptions() (the canvas's own hasSqlTables input,
+   *  which also drives isPrimaryTargetValid's "must be a known table" check): a not-yet-created Mongo
+   *  collection is a valid primary target (paired with "Create collection if not exists"), so Mongo must
+   *  never flip that check on. */
   readonly availableTablesToAddFn = (group: string): string[] => {
     const used = new Set([
       this.targetFor(group),
       ...this.extraTablesFor(group),
     ]);
-    return this.sqlTables()
-      .map((t) => t.fullName)
-      .filter((t) => !used.has(t));
+    const known = this.isMongo()
+      ? this.mongoCollections()
+      : this.sqlTables().map((t) => t.fullName);
+    return known.filter((t) => !used.has(t));
   };
 
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
@@ -2154,6 +2167,7 @@ export class DestinationWizardComponent implements OnInit {
       if (isMongoForm(form) && form.probeState() !== 'ok') {
         form.testConnection((result) => {
           if (!result.connected) return;
+          this.mongoCollections.set(form.collections());
           const metadata = form.getMetadata();
           if (metadata)
             this.provisionDestinationConnection(metadata, () =>
@@ -2164,6 +2178,9 @@ export class DestinationWizardComponent implements OnInit {
       }
       // CSV/Blob (and SQL/Mongo once already probed 'ok'): provision (create/update) the real
       // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
+      // Mongo reaches here when the user already clicked Test Connection manually before Next — the branch
+      // above only fires on a stale/idle probe, so this is the other place collections needs copying.
+      if (isMongoForm(form)) this.mongoCollections.set(form.collections());
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>

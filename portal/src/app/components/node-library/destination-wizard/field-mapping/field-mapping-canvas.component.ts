@@ -708,6 +708,17 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.addTableSearchInput()?.nativeElement.focus();
   }
 
+  /** Whether the "+ Add a table" slot should render the searchable-list UI (vs. SQL's plain "+ Create a
+   *  new table…" @else branch, or nothing at all). Deliberately separate from the hasSqlTables INPUT —
+   *  that one also drives isPrimaryTargetValid's "primary target must be a known table" gate below, which
+   *  must stay false for Mongo (a not-yet-created collection is a valid primary target, paired with
+   *  "Create collection if not exists" on the destination). Mongo always gets the searchable UI regardless
+   *  of hasSqlTables()/whether any collections were loaded yet, since its own "type a new collection name"
+   *  option (see the template) needs the search box open even against a brand-new, empty database. */
+  showAddTablePicker(): boolean {
+    return this.hasSqlTables() || this.destType() === 'mongo';
+  }
+
   /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a
    *  computed() — it just re-filters on every call, same as tablesForResourceFn/columnsForResourceTableFn
    *  above; the table lists involved are small enough that this is cheap per change-detection pass. */
@@ -873,6 +884,33 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // both an extra table and the primary one (its own "✕" clears the resource's target instead of
   // filtering extraTables, since the primary slot isn't a member of that list).
   readonly pendingRemoveTable = signal<{ resource: string; tableName: string; isExtra: boolean } | null>(null);
+
+  /** Mongo-only inline rename (see FieldMappingTargetCardComponent.startRenameTable) — unlike remove +
+   *  re-add, this keeps every mapping already made onto this table/collection: they're carried over to the
+   *  new name (mapped by tableName), never filtered out the way confirmRemoveTable() discards them. */
+  onRenameTable(resource: string, oldName: string, newName: string, isExtra: boolean): void {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (this.targetFor(resource) === trimmed || this.extraTables().includes(trimmed)) {
+      this.toast.warning('Name already used', `${trimmed} is already on this canvas.`);
+      return;
+    }
+
+    if (isExtra) {
+      this.extraTablesChange.emit(this.extraTables().map(t => (t === oldName ? trimmed : t)));
+    } else {
+      this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: trimmed });
+    }
+
+    this.mappingRowsChange.emit(
+      this.mappingRows().map(r =>
+        r.resource === resource && r.tableName === oldName ? { ...r, tableName: trimmed } : r,
+      ),
+    );
+    // Any schema op queued against the old name (SQL-only in practice — Mongo never queues one) is stale now.
+    this.schemaOpsCancelledForTable.emit(oldName);
+    this.toast.success('Collection renamed', `${oldName} is now ${trimmed}.`);
+  }
 
   onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {
     this.pendingRemoveTable.set({ resource, tableName, isExtra });

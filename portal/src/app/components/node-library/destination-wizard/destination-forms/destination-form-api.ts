@@ -67,6 +67,11 @@ export function isSqlFamilyForm(x: WizardDestinationFormApi | null | undefined):
 export interface MongoFormApi extends WizardDestinationFormApi {
   readonly probeState: Signal<'idle' | 'testing' | 'ok' | 'error'>;
   readonly probeError: Signal<string | null>;
+  /** Real collection names from the last successful Test Connection — the wizard copies this into its own
+   *  mongoCollections signal on a successful "Next" (see next()'s Mongo branch), the same way SQL copies
+   *  result.tables into sqlTables, so the mapping canvas's "+ Add a table" picker has real names to offer
+   *  for additional resources even after Step 1's dynamically-mounted form is gone. */
+  readonly collections: Signal<string[]>;
   testConnection(onSettled?: (result: { connected: boolean }) => void): void;
 }
 
