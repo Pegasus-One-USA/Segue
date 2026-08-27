@@ -10,7 +10,7 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// </summary>
 public interface IMongoDestinationConnectionTestService
 {
-    Task<ConnectionTestResultDto> TestConnectionAsync(
+    Task<MongoConnectionTestResultDto> TestConnectionAsync(
         MongoConnectionTestRequest request,
         CancellationToken cancellationToken);
 }

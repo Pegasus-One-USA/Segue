@@ -155,6 +155,12 @@ export interface MongoConnectionTestRequest {
   createIfNotExists?: boolean;
 }
 
+export interface MongoConnectionTestResult extends ConnectionTestResult {
+  /** The database's real collection names, returned on every successful connect — lets the form offer them
+   *  as an autocomplete instead of requiring the collection name to be typed blind. */
+  collections?: string[];
+}
+
 // Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /
 // account key / SAS / service-principal client secret per authMode; omitted for managedIdentity.
 export interface BlobConnectionTestRequest {
@@ -228,9 +234,9 @@ export class DestinationSchemaService {
   }
 
   /** Tests an ad-hoc MongoDB connection for a not-yet-saved Mongo destination — opens a client on the
-   *  connection string and runs a ping server-side. */
-  testMongo(request: MongoConnectionTestRequest): Observable<ConnectionTestResult> {
-    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
+   *  connection string, runs a ping server-side, and (on success) returns the database's real collection names. */
+  testMongo(request: MongoConnectionTestRequest): Observable<MongoConnectionTestResult> {
+    return this.http.post<MongoConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
   }
 
   /** Tests an ad-hoc Azure Blob Storage connection for a not-yet-saved Blob destination — builds the container

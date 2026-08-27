@@ -769,6 +769,7 @@
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
+          [schemaAuthoringEnabled]="isSql()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
           [columnsForTable]="columnsForTableFn"
