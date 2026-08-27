@@ -1,0 +1,119 @@
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_194b8850015155::t_3ecce92f855eff 328
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_6ad326757510b2::t_dfb17a06b547a0 295
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartConfidentialClientExchangeTests.cs
+  s_6ad326757510b2::t_65ee64b5fea283 33
+tests/FHIRBridge.Runtime.UnitTests/Workflows/WorkflowGraphValidatorTests.cs
+  s_b790289f274d05::t_72aa12c1e3747e 81-103
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqMessageConsumer.cs
+  s_6ad326757510b2::t_cd27ee6069783f 70
+  s_6ad326757510b2::t_8c27515798787a 3-4,21,26-27,32-47
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_194b8850015155::t_8d9eca4d56cc20 704-710
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicInteractiveTokenProvider.cs
+  s_6ad326757510b2::t_e9883def53c363 19
+src/Runtime/FHIRBridge.Runtime.Application/README.md
+  s_6ad326757510b2::t_bfaa6e581c79c7 21
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_6ad326757510b2::t_b6fbf5191be36e 60-67
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowPersistenceServiceCollectionExtensions.cs
+  s_6ad326757510b2::t_ffea0b13d1e08b 1,3
+  s_6ad326757510b2::t_0c0815f581756d 34-39
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_194b8850015155::t_67a935e4acae08 1087-1129
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_194b8850015155::t_fa7ac5ae462403 106
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827151607_AddPipelineRunSqlPersistence.Designer.cs
+  s_6ad326757510b2::t_c6e838dd96ff03 1-5882
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/HealowAuthorizationCodeTokenProvider.cs
+  s_6ad326757510b2::t_7bab2650d7025f 18
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_6ad326757510b2::t_b956df1971d848 375-390
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827151651_AddPipelineRunSqlPersistence.cs
+  s_6ad326757510b2::t_90b95790748bca 1-125
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6ad326757510b2::t_90b95790748bca 4478-4628,5727-5735,5817-5821
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunPersistenceConfigurations.cs
+  s_6ad326757510b2::t_0ab280c46347ee 1-28,30-95
+  s_6ad326757510b2::t_38d72726ccad89 29
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  h_44b3eb0c92b6da 3
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_194b8850015155::t_aa36e6b1c39fdc 162-164
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_6ad326757510b2::t_8335fc8fa7fc80 58-59,61,63-65,68,71-75,77-80,82-83
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/MeditechGreenfieldTokenProvider.cs
+  s_6ad326757510b2::t_57033b1a0b5a5c 59
+src/FHIRBridge.Infrastructure/Persistence/Pipeline/SqlPipelineRunStore.cs
+  s_6ad326757510b2::t_0964fa7aa32bbd 1-109
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827151651_AddPipelineRunSqlPersistence.Designer.cs
+  s_6ad326757510b2::t_90b95790748bca 1-5852
+src/FHIRBridge.Infrastructure/Governance/EfAlertEvaluationService.cs
+  s_6ad326757510b2::t_dfb3c67e5b0f1a 79-92
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_6ad326757510b2::t_c6e838dd96ff03 4512-4662,5765-5773,5855-5859
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_194b8850015155::t_d3b9878cc15e99 2304-2310
+  s_194b8850015155::t_2f12eae47290c5 88-91,3042-3043
+  s_194b8850015155::t_1b43b92c9181fd 2874,2885-2890,2894-2897,2904-2906,2917-2930,2933,2940-3041
+  s_194b8850015155::t_979d3b1e26df89 104
+  s_194b8850015155::t_f3fa218cd31f24 235-252
+  s_194b8850015155::t_2bae2b99902232 2605-2607
+  s_194b8850015155::t_3a2f0f01126542 569-573
+src/FHIRBridge.Infrastructure/Messaging/AzureServiceBus/AzureServiceBusMessageConsumer.cs
+  s_6ad326757510b2::t_f3c263de9ecceb 65
+  s_6ad326757510b2::t_07208377813235 4-5,20,25-26,31-43
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827151607_AddPipelineRunSqlPersistence.cs
+  s_6ad326757510b2::t_c6e838dd96ff03 1-125
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_6ad326757510b2::t_cb9f75b036c203 613-648
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_6ad326757510b2::t_9c49f69194f6a9 92-96
+src/Runtime/FHIRBridge.Runtime.Domain/Entities/PipelineRun.cs
+  s_6ad326757510b2::t_5ee10c5015a868 12,19
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_6ad326757510b2::t_9d1f31937712c3 557,559-562
+  s_6ad326757510b2::t_a8018a6ab40f02 441,443-448
+  s_6ad326757510b2::t_b495439861ba1a 499,501-506
+  s_6ad326757510b2::t_8772f77ccb003c 7-8,24,36-37,49
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_b790289f274d05::t_18e3ab4770b202 475-507
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5ee33e40d4ed750644fde702389d335f158a7654",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_194b8850015155": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a393e41-8e96-409d-81af-a116a100220f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_6ad326757510b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "41a5b9fe-7f62-47eb-8621-d48c97f8fbd9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_b790289f274d05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ffad7f1-197d-4413-9ee8-d285c42be3f0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
