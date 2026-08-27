@@ -50,6 +50,23 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
             await database.RunCommandAsync<BsonDocument>(
                 new BsonDocument("ping", 1), cancellationToken: cancellationToken);
 
+            // Collection existence is checked here too (not just at pipeline-run time in
+            // MappedMongoDestinationWriter) so a typo'd/never-created collection surfaces on the form
+            // immediately, unless the caller has opted into auto-create via the checkbox.
+            if (!string.IsNullOrWhiteSpace(request.Collection) && !request.CreateIfNotExists)
+            {
+                var collectionName = MongoCollectionNameResolver.Resolve(request.Collection);
+                var existingNames = await (await database.ListCollectionNamesAsync(
+                    new ListCollectionNamesOptions { Filter = Builders<BsonDocument>.Filter.Eq("name", collectionName) },
+                    cancellationToken)).ToListAsync(cancellationToken);
+                if (existingNames.Count == 0)
+                {
+                    return new ConnectionTestResultDto(
+                        false,
+                        $"Connected, but collection '{collectionName}' does not exist. Create it in your database, or enable \"Create collection if not exists\".");
+                }
+            }
+
             return new ConnectionTestResultDto(true, null);
         }
         catch (Exception exception)

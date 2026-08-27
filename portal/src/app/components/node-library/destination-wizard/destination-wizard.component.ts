@@ -53,6 +53,7 @@ import {
   WizardDestinationFormApi,
   SqlFamilyFormApi,
   isSqlFamilyForm,
+  isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
 import {
@@ -2161,7 +2162,20 @@ export class DestinationWizardComponent implements OnInit {
         });
         return;
       }
-      // CSV/Mongo/Blob (and SQL once already probed 'ok'): provision (create/update) the real
+      // Mongo: same "test then advance" gate as SQL, so a collection that doesn't exist (and isn't opted into
+      // auto-create via the form's checkbox) blocks Next here instead of only failing at pipeline-run time.
+      if (isMongoForm(form) && form.probeState() !== 'ok') {
+        form.testConnection((result) => {
+          if (!result.connected) return;
+          const metadata = form.getMetadata();
+          if (metadata)
+            this.provisionDestinationConnection(metadata, () =>
+              this._advancePastStep1(),
+            );
+        });
+        return;
+      }
+      // CSV/Blob (and SQL/Mongo once already probed 'ok'): provision (create/update) the real
       // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
       const metadata = form.getMetadata();
       if (!metadata) return;

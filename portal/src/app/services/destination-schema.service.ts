@@ -161,6 +161,10 @@ export interface MedplumConnectionTestRequest {
 // Mongo connection test — the whole connection string is the credential (must embed the database name).
 export interface MongoConnectionTestRequest {
   connectionString: string;
+  /** When supplied, the test also checks whether this collection exists (not just connectivity). */
+  collection?: string;
+  /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
+  createIfNotExists?: boolean;
 }
 
 // Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /

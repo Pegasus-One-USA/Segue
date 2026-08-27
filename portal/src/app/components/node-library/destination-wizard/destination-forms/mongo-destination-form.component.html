@@ -36,6 +36,17 @@
       </div>
     </div>
 
+    <div class="dw-field dw-field--checkbox dw-field--full">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="createIfNotExists" />
+        Create collection if not exists
+      </label>
+      <span class="dw-hint">
+        Off by default — the collection above must already exist in your database. Enable this to have the
+        pipeline create it automatically instead of failing when it's missing.
+      </span>
+    </div>
+
   </div><!-- /dw-grid-2 -->
 </form>
 
@@ -50,8 +61,10 @@
   <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Testing connection…</div>
 }
 @if (probeState() === 'error') {
-  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">Connection failed: {{ probeError() }}</div>
+  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">{{ probeError() }}</div>
 }
 @if (probeState() === 'ok') {
-  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Connected — MongoDB reachable.</div>
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">
+    Connected — MongoDB reachable{{ mongoForm.value.collection ? ' and collection verified.' : '.' }}
+  </div>
 }
