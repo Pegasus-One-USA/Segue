@@ -1,0 +1,32 @@
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_b790289f274d05::t_b0ab5f27ef76a6 24
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_b790289f274d05::t_e68366ad812cfe 58
+  s_b790289f274d05::t_8936bc9aa43cc1 27
+  s_b790289f274d05::t_fa67b1073bee5f 128-133,142
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_b790289f274d05::t_dac87af1f0844f 97-100,102-111,121-123,131
+  s_b790289f274d05::t_267fb807b772f1 63
+  s_b790289f274d05::t_fd9988625db114 16-17,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "4b7d73ead35eee935798f0bf663fd52e1c8ec7d2",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_b790289f274d05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ffad7f1-197d-4413-9ee8-d285c42be3f0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
