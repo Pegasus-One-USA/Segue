@@ -89,6 +89,11 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<WorkflowNodeRunPayload> WorkflowNodeRunPayloads => Set<WorkflowNodeRunPayload>();
     public DbSet<FieldLineageEntry> FieldLineageEntries => Set<FieldLineageEntry>();
 
+    // Runtime DAG plane (Scenario B / bulk-export): pipeline run history — see SqlPipelineRunStore.
+    public DbSet<FHIRBridge.Runtime.Domain.Entities.PipelineRun> PipelineRuns => Set<FHIRBridge.Runtime.Domain.Entities.PipelineRun>();
+    public DbSet<FHIRBridge.Runtime.Domain.Entities.PipelineRunStep> PipelineRunSteps => Set<FHIRBridge.Runtime.Domain.Entities.PipelineRunStep>();
+    public DbSet<FHIRBridge.Runtime.Domain.Entities.PipelineRunEvent> PipelineRunEvents => Set<FHIRBridge.Runtime.Domain.Entities.PipelineRunEvent>();
+
     // Governance: immutable audit/access/authentication trail + mutable security-event triage.
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<WorkflowAuditLog> WorkflowAuditLogs => Set<WorkflowAuditLog>();

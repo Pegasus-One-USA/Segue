@@ -30,7 +30,7 @@ public sealed class SmartConfidentialClientExchangeTests
     {
         var handler = new CapturingHandler();
         var provider = new SmartAuthorizationCodeTokenProvider(
-            new HttpClient(handler), new InMemoryFhirAuthorizationCodeTokenStore(), null, new FakeJwtFactory());
+            new HttpClient(handler), new InMemoryFhirAuthorizationCodeTokenStore(), new FakeJwtFactory());
         var source = new FhirSourceConfiguration(
             RuntimeSourceType.Epic, "Epic", null, "https://auth.example.com/token", "client-1", "key-1",
             "-----BEGIN PRIVATE KEY-----abc-----END PRIVATE KEY-----", []);

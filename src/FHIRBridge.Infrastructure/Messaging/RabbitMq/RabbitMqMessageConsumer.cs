@@ -1,5 +1,7 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Messaging;
+using FHIRBridge.Governance;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -16,15 +18,33 @@ public sealed class RabbitMqMessageConsumer<TMessage> : IMessageConsumer<TMessag
     private readonly RabbitMqConnection _connection;
     private readonly RabbitMqOptions _options;
     private readonly ILogger<RabbitMqMessageConsumer<TMessage>> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public RabbitMqMessageConsumer(
         RabbitMqConnection connection,
         IOptions<RabbitMqOptions> options,
-        ILogger<RabbitMqMessageConsumer<TMessage>> logger)
+        ILogger<RabbitMqMessageConsumer<TMessage>> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _connection = connection;
         _options = options.Value;
         _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
+
+    // Deserialization failures happen before PipelineRunCommandHandler's own IGlobalExceptionManager capture ever
+    // runs (see PipelineRunCommandProcessor.HandleAsync), so without this, a poison message vanishes into a
+    // dead-letter queue with only an ILogger/Seq trace — invisible in production, where there is no Seq. A fresh
+    // scope is required since this consumer is a long-lived singleton but IGlobalExceptionManager (→
+    // IGovernanceLogger → FHIRBridgeDbContext) is scoped.
+    private async Task CaptureDeserializationFailureAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+        await exceptionManager.CaptureAsync(
+            exception,
+            new ExceptionContext(Module: "Message Deserialization"),
+            cancellationToken);
     }
 
     public async Task StartAsync(Func<TMessage, CancellationToken, Task> handler, CancellationToken cancellationToken)
@@ -47,6 +67,7 @@ public sealed class RabbitMqMessageConsumer<TMessage> : IMessageConsumer<TMessag
             catch (Exception exception)
             {
                 _logger.LogError(exception, "Failed to deserialize {MessageType}; dead-lettering.", typeof(TMessage).Name);
+                await CaptureDeserializationFailureAsync(exception, CancellationToken.None);
                 await channel.BasicNackAsync(deliver.DeliveryTag, multiple: false, requeue: false, cancellationToken);
                 return;
             }

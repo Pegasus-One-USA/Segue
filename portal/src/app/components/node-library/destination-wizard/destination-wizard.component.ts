@@ -86,7 +86,10 @@ import {
   TransformRulesDialogComponent,
   TransformRulesDialogData,
 } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
-import { TransformationRulesService } from './field-mapping/transformation-rules.service';
+import {
+  TransformationRulesService,
+  TransformationRule,
+} from './field-mapping/transformation-rules.service';
 import {
   ExistingMappingProfileDialogComponent,
   ExistingMappingProfileDialogData,
@@ -99,6 +102,7 @@ import { MappingProfileService } from '../../../mapping-profiles/services/mappin
 import {
   MappingProfileDto,
   MappingFieldDto,
+  MappingValueType,
 } from '../../../mapping-profiles/models/mapping-profile.model';
 import {
   sortByDependencyRank,
@@ -227,6 +231,24 @@ export interface PendingParentReferenceWarning {
   existingRow: MappingRow | null;
   destinationColumns: string[];
   selectedDestinationColumn: string | null;
+}
+
+/** One transform-rule/destination-column type mismatch blocking Save — see validateRuleConflictsForSave.
+ *  `rule` is the full effective rule as currently resolved (Global/DestinationType/ResourceType/Field tier;
+ *  never itself a Workflow-scoped row, since that would already have been the effective rule and wouldn't
+ *  conflict). The dialog's fixes never touch `rule` — they create a NEW Workflow-scoped row that outranks
+ *  it for this workflow only (see resolveRuleConflictOverride/resolveRuleConflictBypass). */
+export interface PendingTransformRuleConflict {
+  resource: string;
+  tableName: string;
+  targetName: string;
+  destinationType: DestinationType;
+  columnValueType: string;
+  columnDataType: string;
+  sourceSystem: string | null;
+  sourceField: string | null;
+  rule: TransformationRule;
+  message: string;
 }
 
 export interface ResourceDef {
@@ -545,6 +567,11 @@ export class DestinationWizardComponent implements OnInit {
    *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
    *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
   readonly sourceDiscoveredResourceTypes = input<string[]>([]);
+  /** The persisted ResourcePipelineRoute/workflow GUID when editing an already-saved workflow — null while
+   *  still building a brand-new one (see WorkflowBuilderComponent.currentWorkflowId). Threaded through so a
+   *  transform-rule-conflict override can be scoped to just this workflow (see validateRuleConflictsForSave /
+   *  resolveRuleConflictOverride) — undefined/null means no workflow exists yet to scope an override to. */
+  readonly currentWorkflowId = input<string | null>(null);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
@@ -2275,6 +2302,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly pendingExitConfirm = signal(false);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
+  /** Non-null while the transform-rule-conflict dialog is up — see saveGroupMapping/validateRuleConflictsForSave.
+   *  Unlike pendingSaveWarnings this genuinely blocks Save: it's only dismissed by fixing every conflict
+   *  (override/bypass) or cancelling back to the canvas, never by a "save anyway". */
+  readonly pendingRuleConflicts = signal<PendingTransformRuleConflict[] | null>(null);
+  /** Id of whichever conflict row currently has an override/bypass request in flight — disables that row's
+   *  buttons so a slow save can't be double-clicked; other rows stay usable. */
+  readonly resolvingRuleConflict = signal<string | null>(null);
 
   /** The real backend DestinationType for whichever destination family this wizard instance is
    *  configuring — same ternary already used inline at every mapping-profiles/import call site
@@ -2569,12 +2603,9 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.validateRuleConflictsForSave(group).subscribe((ruleErrors) => {
-      if (ruleErrors.length > 0) {
-        this.toast.error(
-          `Fix ${ruleErrors.length} transform rule conflict${ruleErrors.length === 1 ? '' : 's'} before saving`,
-          ruleErrors.join(' '),
-        );
+    this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
+      if (conflicts.length > 0) {
+        this.pendingRuleConflicts.set(conflicts);
         return;
       }
       // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
@@ -2841,7 +2872,7 @@ export class DestinationWizardComponent implements OnInit {
    *  actually is (e.g. a Global NumberCast rule hitting a text column). Async because it needs one
    *  getEffectiveRules call per mapped field; returns [] immediately (no network calls) when there's no live
    *  SQL schema to check column types against, same short-circuit validateMappingForSave uses. */
-  private validateRuleConflictsForSave(resource: string): Observable<string[]> {
+  private validateRuleConflictsForSave(resource: string): Observable<PendingTransformRuleConflict[]> {
     if (!this.hasSqlTables()) return of([]);
 
     const destinationType = this.resolveDestinationTypeForRules();
@@ -2852,18 +2883,28 @@ export class DestinationWizardComponent implements OnInit {
       .filter((r) => r.resource === resource && r.mode === 'value');
     if (rows.length === 0) return of([]);
 
+    // Resolved with the real workflow id when editing an already-saved workflow, so an override already
+    // added for this workflow (see resolveRuleConflictOverride/resolveRuleConflictBypass) suppresses the
+    // broader-tier rule here exactly the way it will at pipeline-run time — see EffectiveRuleResolver.
+    // Null while still building a brand-new workflow (no ResourcePipelineRouteId exists yet).
+    const resourcePipelineRouteId = this.currentWorkflowId() ?? undefined;
+
     const checks = rows.map((row) => {
       const table = this.sqlTables().find((t) => t.fullName === row.tableName);
       const column = table?.columns.find((c) => c.name === row.targetName);
-      if (!column?.mappingValueType) return of([] as string[]);
+      if (!column?.mappingValueType) return of([] as PendingTransformRuleConflict[]);
+
+      const sourceSystem = this.sourceVendor() || null;
+      const sourceField = row.sources[0]?.fhirPath ?? null;
 
       return this.transformationRulesSvc
         .getEffectiveRules({
           destinationType,
           resourceType: resource,
           destinationField: row.targetName,
-          sourceSystem: this.sourceVendor() || null,
-          sourceField: row.sources[0]?.fhirPath ?? null,
+          resourcePipelineRouteId,
+          sourceSystem,
+          sourceField,
         })
         .pipe(
           map((rules) =>
@@ -2874,17 +2915,131 @@ export class DestinationWizardComponent implements OnInit {
                   rule.expectedValueType.toLowerCase() !== column.mappingValueType.toLowerCase(),
               )
               .map(
-                (rule) =>
-                  `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
-                  `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}). ` +
-                  `Add a workflow-level override for this field, or update the rule's expected type.`,
+                (rule): PendingTransformRuleConflict => ({
+                  resource,
+                  tableName: row.tableName,
+                  targetName: row.targetName,
+                  destinationType,
+                  columnValueType: column.mappingValueType,
+                  columnDataType: column.dataType,
+                  sourceSystem,
+                  sourceField,
+                  rule,
+                  message:
+                    `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
+                    `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}).`,
+                }),
               ),
           ),
-          catchError(() => of([] as string[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
+          catchError(() => of([] as PendingTransformRuleConflict[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
         );
     });
 
     return forkJoin(checks).pipe(map((results) => results.flat()));
+  }
+
+  /** Stable per-row key for the conflicts dialog's @for track and resolvingRuleConflict guard — a rule can
+   *  appear more than once across fields, so id alone isn't unique to a row. */
+  ruleConflictKey(c: PendingTransformRuleConflict): string {
+    return `${c.tableName}::${c.targetName}::${c.rule.id}`;
+  }
+
+  /** User cancelled the transform-rule-conflict dialog — back to the canvas, nothing saved. */
+  cancelRuleConflicts(): void {
+    this.pendingRuleConflicts.set(null);
+  }
+
+  onRuleConflictsBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelRuleConflicts();
+  }
+
+  /** "Override" — adds a Workflow-scoped TransformationRule that clones the conflicting rule's transform
+   *  behavior (same node type/config/null-handling) but declares the destination column's own type as its
+   *  expectedValueType, so the field keeps being transformed the same way while no longer conflicting for
+   *  THIS workflow. The original rule (whatever broader tier it lives at) is never modified — this is a new
+   *  row that simply outranks it per EffectiveRuleResolver's Workflow-first resolution. */
+  resolveRuleConflictOverride(c: PendingTransformRuleConflict): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+    const key = this.ruleConflictKey(c);
+    this.resolvingRuleConflict.set(key);
+    const r = c.rule;
+    this.transformationRulesSvc
+      .save({
+        scope: 'Workflow',
+        nodeType: r.nodeType,
+        config: r.config,
+        destinationType: c.destinationType,
+        resourceType: c.resource,
+        destinationField: c.targetName,
+        resourcePipelineRouteId: workflowId,
+        sourceSystem: c.sourceSystem,
+        sourceField: c.sourceField,
+        order: r.order,
+        onNull: r.onNull,
+        errorPolicy: r.errorPolicy,
+        isEnabled: true,
+        onNullDefaultValue: r.onNullDefaultValue,
+        arrayMode: r.arrayMode,
+        fhirWriteBackJsonPath: r.fhirWriteBackJsonPath,
+        expectedValueType: c.columnValueType as MappingValueType,
+      })
+      .subscribe({
+        next: () => this.onRuleConflictResolved(c, key, 'Rule overridden for this workflow'),
+        error: () =>
+          this.onRuleConflictResolveFailed(key, 'Could not add the workflow override — try again.'),
+      });
+  }
+
+  /** "Bypass" — adds a disabled Workflow-scoped TransformationRule for this exact field. A Workflow-tier row
+   *  wins the tier the moment one exists (see EffectiveRuleResolver), even disabled, so this suppresses the
+   *  broader-tier rule for this field on this workflow entirely (no transform applied) without touching or
+   *  deleting the original rule anywhere else it still applies. */
+  resolveRuleConflictBypass(c: PendingTransformRuleConflict): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+    const key = this.ruleConflictKey(c);
+    this.resolvingRuleConflict.set(key);
+    const r = c.rule;
+    this.transformationRulesSvc
+      .save({
+        scope: 'Workflow',
+        nodeType: r.nodeType,
+        config: r.config,
+        destinationType: c.destinationType,
+        resourceType: c.resource,
+        destinationField: c.targetName,
+        resourcePipelineRouteId: workflowId,
+        sourceSystem: c.sourceSystem,
+        sourceField: c.sourceField,
+        order: r.order,
+        onNull: r.onNull,
+        errorPolicy: r.errorPolicy,
+        isEnabled: false,
+        expectedValueType: r.expectedValueType,
+      })
+      .subscribe({
+        next: () => this.onRuleConflictResolved(c, key, 'Rule bypassed for this workflow'),
+        error: () =>
+          this.onRuleConflictResolveFailed(key, 'Could not bypass the rule — try again.'),
+      });
+  }
+
+  private onRuleConflictResolved(c: PendingTransformRuleConflict, key: string, successTitle: string): void {
+    this.resolvingRuleConflict.set(null);
+    const remaining = (this.pendingRuleConflicts() ?? []).filter((x) => this.ruleConflictKey(x) !== key);
+    this.pendingRuleConflicts.set(remaining.length === 0 ? null : remaining);
+    this.toast.success(successTitle, `"${c.targetName}" on ${c.tableName} no longer conflicts.`);
+    if (remaining.length === 0) {
+      // Every conflict is resolved — re-run Save so the fixed mapping actually persists instead of leaving
+      // the user to click Save again themselves.
+      this.saveGroupMapping();
+    }
+  }
+
+  private onRuleConflictResolveFailed(key: string, message: string): void {
+    this.resolvingRuleConflict.set(null);
+    this.toast.error('Save failed', message);
   }
 
   /** Soft, confirm-before-proceed checks shown via pendingSaveWarnings — distinct from
