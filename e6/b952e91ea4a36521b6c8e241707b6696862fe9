@@ -1,0 +1,38 @@
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/resource-types.md
+  s_a651d5b2ef2da0::t_dfe39740f58f43 1-38
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/rule-catalog-rebuild.md
+  s_a651d5b2ef2da0::t_4e42e42984dd21 1-37
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_a651d5b2ef2da0::t_7ed1093356b016 216-217,219-228,231,234-259,261-287
+  s_a651d5b2ef2da0::t_2a0d55977528b4 260
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_a651d5b2ef2da0::t_fd0bc5960716fe 408-465,473-534
+  s_a651d5b2ef2da0::t_69cb9dca4c06f5 466-472
+  s_a651d5b2ef2da0::t_1644c84c2ce029 281-291,407
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_a651d5b2ef2da0::t_eeef0ae7e1790b 107,110-111,113-124,126-128,130-132,134-137,139-141,145-149,151,162-376
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/sample-values.md
+  s_a651d5b2ef2da0::t_fa76947c14b242 1-28
+.claude/skills/fhirbridge-provision-coverage-workflow/SKILL.md
+  s_a651d5b2ef2da0::t_84ff59c29636fe 1-212
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/report_template.html
+  s_a651d5b2ef2da0::t_b16b103880fb9a 1-266
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/rebuild-template.md
+  s_a651d5b2ef2da0::t_0376438d59fca8 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e6b952e91ea4a36521b6c8e241707b6696862fe9",
+  "prompts": {},
+  "sessions": {
+    "s_a651d5b2ef2da0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ba1e1217-99c1-4bda-97f3-85f9a9880e22",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
