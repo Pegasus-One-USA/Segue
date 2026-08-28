@@ -1,0 +1,423 @@
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_cddc8f2857e289::t_46fede28873eaf 383-398
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_cddc8f2857e289::t_46fede28873eaf 124-128,133-134
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/NotificationHistoryConfiguration.cs
+  s_cddc8f2857e289::t_46fede28873eaf 20-21
+portal/src/app/services/phase-config.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 28-29,48
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826105004_AddWorkflowRunErrorReferenceId.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5705
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/PipelineRunDto.cs
+  s_cddc8f2857e289::t_46fede28873eaf 16-17
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_cddc8f2857e289::t_46fede28873eaf 242-244
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 113-121
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicInteractiveTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 19
+src/Worker/FHIRBridge.Worker/DcmHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-44
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_cddc8f2857e289::t_46fede28873eaf 162-163,167
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunRouteExecutionConfiguration.cs
+  s_cddc8f2857e289::t_46fede28873eaf 21
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827114257_SyncNotificationHistoryColumns.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-40
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 475-507,635,638
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 111-118
+src/FHIRBridge.Infrastructure/Destinations/MappedPostgreSqlDestinationWriter.cs
+  s_cddc8f2857e289::t_46fede28873eaf 28-52
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 16-17,63,97-111,121-123,131
+src/FHIRBridge.Application/Abstractions/Notifications/IEmailSender.cs
+  s_cddc8f2857e289::t_46fede28873eaf 7-9,11-13
+src/FHIRBridge.Application/DTOs/PipelineRunRouteExecutionDto.cs
+  s_cddc8f2857e289::t_46fede28873eaf 19-20
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_cddc8f2857e289::t_46fede28873eaf 17,127-131,133-145,159,369-373,450-451
+src/FHIRBridge.Infrastructure/Destinations/Auth/FhirRepositoryAuthResolver.cs
+  s_cddc8f2857e289::t_46fede28873eaf 32-33,42-64,80
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 80-87,173-203
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 259-272
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827151651_AddPipelineRunSqlPersistence.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5852
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 6,24,65-70,101-107,256-263,732-742,795-799,811-816,829-877,957-983,1097-1108,1118-1124,1418-1424,1431
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-schema-ops.util.spec.ts
+  s_cddc8f2857e289::t_46fede28873eaf 1-195
+src/FHIRBridge.Infrastructure/Destinations/FhirDestinationConnectionTestService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 14-15,27,31-32,36,69-72,78-153,156-158,183-184,190,199-213,222-233
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 3,12
+src/Api/FHIRBridge.Api/Program.cs
+  s_cddc8f2857e289::t_46fede28873eaf 443-451
+src/FHIRBridge.Infrastructure/Persistence/EfPipelineRunRouteExecutionRepository.cs
+  s_cddc8f2857e289::t_46fede28873eaf 57-58,67,191-192
+portal/src/app/governance/pages/alerts/alerts.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 6,17,37-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827151607_AddPipelineRunSqlPersistence.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-125
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827151607_AddPipelineRunSqlPersistence.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5882
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_cddc8f2857e289::t_46fede28873eaf 52
+src/Runtime/FHIRBridge.Runtime.Domain/Entities/PipelineRun.cs
+  s_cddc8f2857e289::t_46fede28873eaf 12,19,36-40,74-84
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_cddc8f2857e289::t_46fede28873eaf 49-55,112-122
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 58-59,61,63-65,68,71-75,77-80,82-83
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/MeditechGreenfieldTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 59
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/sample-values.md
+  s_cddc8f2857e289::t_46fede28873eaf 1-28
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 628-663
+src/FHIRBridge.Infrastructure/Messaging/RabbitMq/RabbitMqMessageConsumer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 3-4,21,26-27,32-47,70
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 412
+src/Worker/FHIRBridge.Worker/RxNormHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-45
+tests/FHIRBridge.UnitTests/Destinations/FhirRepositoryHealthCheckProviderTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 19-22,32-36,48-74,107-109
+tests/FHIRBridge.UnitTests/Destinations/MappedFhirRepositoryDestinationWriterTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 35-38,50-53,136-171,196-247
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_cddc8f2857e289::t_46fede28873eaf 92-96
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/resource-types.md
+  s_cddc8f2857e289::t_46fede28873eaf 1-38
+portal/src/app/components/node-library/destination-wizard/destination-forms/azure-fhir-service-destination-form.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 1-324
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 8-9,15,31-32,51-55,61,65-68,74-78,86-88,90
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_cddc8f2857e289::t_46fede28873eaf 23,1552-1553,1658-1659,2231-2236,2249-2258
+src/FHIRBridge.Domain/Entities/PipelineRunRouteExecution.cs
+  s_cddc8f2857e289::t_46fede28873eaf 72-76,83-84,91
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_cddc8f2857e289::t_46fede28873eaf 64-65
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1265-1272,4478-4628,5727-5735,5817-5821
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRunStatusNotifier.cs
+  s_cddc8f2857e289::t_46fede28873eaf 18-20,26-27
+portal/src/app/pipeline-executions/models/pipeline-execution.model.ts
+  s_cddc8f2857e289::t_46fede28873eaf 22-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826124249_AddPipelineRunRouteExecutionErrorReferenceId.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-45
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowNodeOutput.cs
+  s_cddc8f2857e289::t_46fede28873eaf 38-45
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/HealowAuthorizationCodeTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 24
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/rebuild-template.md
+  s_cddc8f2857e289::t_46fede28873eaf 1-32
+src/Worker/FHIRBridge.Worker/UcumSynchronizationWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 2-3,10-12,14,17-18,24,26-33,35
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 391-441
+src/Worker/FHIRBridge.Worker/NdcSynchronizationWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 2-3,11-13,15,18-19,25,27-34,36
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_cddc8f2857e289::t_46fede28873eaf 18,51
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 19,56,67,88-91,104,124-128,235-252,569-573,677-678,703-704,1134-1140,1368-1373,1379-1382,1524-1528,1554,1557-1565,1710,1731-1734,1740-1745,1763-1767,1781-1784,2205-2219,2221-2223,2304-2310,2319,2605-2607,2874,2885-2890,2894-2897,2904-2906,2917-2930,2933,2940-3043,3284-3288,3939-3973,4163,4175-4179,4203-4211,4242-4258,4439-4443
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 100,162-164,214,326,351,454,549-551,571-572,689,699-701,705,713,733-734
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 138-146
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 106
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827151651_AddPipelineRunSqlPersistence.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-125
+src/Runtime/FHIRBridge.Runtime.Application/README.md
+  s_cddc8f2857e289::t_46fede28873eaf 21
+portal/src/app/services/run-status-hub.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 14-16
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_cddc8f2857e289::t_46fede28873eaf 107,110-111,113-118,120-128,130-132,134-137,139-141,145-149,151,162-376,736-746
+src/Runtime/FHIRBridge.Runtime.Application/Services/PipelineOrchestrator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 237-238,255-258,262,265,272-273
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 16-18,25-30
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_cddc8f2857e289::t_46fede28873eaf 48,50-51,213,234,255
+src/Worker/FHIRBridge.Worker/LoincHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,16-17,19,23-26,34,36-46
+tests/FHIRBridge.Runtime.UnitTests/Workflows/WorkflowGraphValidatorTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 81-103
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 24
+src/BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs
+  s_cddc8f2857e289::t_46fede28873eaf 46,49,51-53,79,94,97,102-105,132
+src/Worker/FHIRBridge.Worker/UcumHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,14-15,17,21-24,32,34-43
+src/Worker/FHIRBridge.Worker/Icd10HapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,17-18,20,24-27,35,37-48
+src/Worker/FHIRBridge.Worker/Icd11HapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-44
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 328
+portal/src/app/services/workflow-api.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 291-294
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 41-43,58-104,127-128,130-132
+src/FHIRBridge.Application/Services/Terminology/TerminologySyncScheduleConfig.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-22
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 27,58,128-133,142
+src/FHIRBridge.Application/Services/Terminology/ITerminologySyncScheduleEvaluator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-12
+src/FHIRBridge.Infrastructure/Persistence/Configurations/PipelineRunPersistenceConfigurations.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-95
+src/Worker/FHIRBridge.Worker/SnomedSynchronizationWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 2-3,12-15,17,20-21,27,29-36,38
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260825174225_SyncModelChanges.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-175
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 263-271
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_cddc8f2857e289::t_46fede28873eaf 180-184,187-194,202-207,220-221,249,258
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1,5,85,90-91,96,127-128,186,239,599,871-891,1071-1096,1105-1153
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 114-147
+tests/FHIRBridge.UnitTests/Auth/ForgotPasswordResetPasswordTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 89,117
+src/FHIRBridge.Application/Abstractions/Destinations/IMongoDestinationConnectionTestService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 13
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 32,36,47,52,55,64-66,68-73,75-84,87-121
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 50-56,58-96
+src/FHIRBridge.Infrastructure/Persistence/InMemoryPipelineRunRouteExecutionRepository.cs
+  s_cddc8f2857e289::t_46fede28873eaf 43-44,59-60,75
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 414-416
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 68
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 216-217,219-228,231,234-287
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_cddc8f2857e289::t_46fede28873eaf 99-106,447,451,457-462,505-521,554,564
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260827114257_SyncNotificationHistoryColumns.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5687
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_cddc8f2857e289::t_46fede28873eaf 117-119
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 7-8,24,36-37,49,372,381,403,421,424,435-453,472-490,499,501-506,509-510,557,559-562,574-575,585
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 140-159
+src/FHIRBridge.Application/DTOs/FhirConnectionTestRequest.cs
+  s_cddc8f2857e289::t_46fede28873eaf 4-13,22-26
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_cddc8f2857e289::t_46fede28873eaf 17-22,52-57,60-66,81-89,95-207,219-246,248-251,257-269,278-284,286,288-290,296-297,304
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_cddc8f2857e289::t_46fede28873eaf 67-71,76-83,100-104
+src/FHIRBridge.Infrastructure/Destinations/MongoCollectionNameResolver.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-30
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 60-67
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_cddc8f2857e289::t_46fede28873eaf 126-139
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 466-467
+Documents/Azure-FHIR-Service-Destination-Implementation.html
+  s_cddc8f2857e289::t_46fede28873eaf 1-1172
+src/FHIRBridge.Application/Services/Terminology/TerminologySyncFrequency.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-10
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_cddc8f2857e289::t_46fede28873eaf 144
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Payloads/DestinationWriteResult.cs
+  s_cddc8f2857e289::t_46fede28873eaf 3-27
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_cddc8f2857e289::t_46fede28873eaf 27-30,72-94
+src/FHIRBridge.Application/Abstractions/Destinations/DestinationWriteResult.cs
+  s_cddc8f2857e289::t_46fede28873eaf 8-9,23-26,32-44
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826124249_AddPipelineRunRouteExecutionErrorReferenceId.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5709
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 5,19-35
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_cddc8f2857e289::t_46fede28873eaf 46
+src/FHIRBridge.Infrastructure/Persistence/Pipeline/SqlPipelineRunStore.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-109
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form-api.ts
+  s_cddc8f2857e289::t_46fede28873eaf 63-83
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 15,22-29,137-182,185,191-192,195-196,201-246,251-258,263-266,273-282
+src/FHIRBridge.Application/Abstractions/Persistence/IPipelineRunRouteExecutionRepository.cs
+  s_cddc8f2857e289::t_46fede28873eaf 33-34
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  s_cddc8f2857e289::t_46fede28873eaf 10-29
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 23-32,48-58,73,76-78
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 115-117,125,128,135-136,748,758-759,859,866,1484-1491,1510-1511
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 56,91-93,95,101,117-118,132-141
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_cddc8f2857e289::t_46fede28873eaf 527-535,537-557
+src/Worker/FHIRBridge.Worker/CvxHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,14-15,17,21-24,32,34-44
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 668-672,772,775,949-961,980,1087-1129
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 704-710
+src/Worker/FHIRBridge.Worker/Icd10PcsHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-45
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/rule-catalog-rebuild.md
+  s_cddc8f2857e289::t_46fede28873eaf 1-37
+src/FHIRBridge.Infrastructure/Messaging/AzureServiceBus/AzureServiceBusMessageConsumer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 4-5,20,25-26,31-43,65
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_cddc8f2857e289::t_46fede28873eaf 27-28
+src/FHIRBridge.Infrastructure/Email/SmtpEmailSender.cs
+  s_cddc8f2857e289::t_46fede28873eaf 32,38,51,54,67,96
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 140-142
+src/FHIRBridge.Application/Services/PassThroughDeIdentificationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 7,11
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 17,23,33,38,53-73,77
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826105004_AddWorkflowRunErrorReferenceId.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-29
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowPersistenceServiceCollectionExtensions.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1,3,34-39
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_cddc8f2857e289::t_46fede28873eaf 168-184,831-845,926-927,931-937,981-991
+src/Worker/FHIRBridge.Worker/MeshHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-44
+tests/FHIRBridge.Runtime.UnitTests/Auth/SmartConfidentialClientExchangeTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 33
+src/FHIRBridge.Infrastructure/Destinations/Auth/AzureManagedIdentityFhirTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-63
+portal/src/app/components/node-library/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 34,66-69,71,109,144,165
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 5,43,156
+src/FHIRBridge.Infrastructure/Destinations/MappedMySqlDestinationWriter.cs
+  s_cddc8f2857e289::t_46fede28873eaf 32-53
+tests/FHIRBridge.UnitTests/Destinations/EmailDeliveryStrategyTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 3,21-29,42,44,52-59,74,82-105
+src/Worker/FHIRBridge.Worker/Icpc3HapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,14-15,17,21-24,32,34-43
+src/BuildingBlocks/FHIRBridge.Governance/IGlobalExceptionManager.cs
+  s_cddc8f2857e289::t_46fede28873eaf 18-21,45-47,49
+tests/FHIRBridge.UnitTests/Governance/GlobalExceptionManagerCaptureExpectedTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 35,44-46,51
+.claude/skills/fhirbridge-provision-coverage-workflow/SKILL.md
+  s_cddc8f2857e289::t_46fede28873eaf 1-212
+src/Worker/FHIRBridge.Worker/HcpcsHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-44
+tests/FHIRBridge.UnitTests/Terminology/TerminologySyncScheduleEvaluatorTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-178
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_cddc8f2857e289::t_46fede28873eaf 2,27-28
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 89-119,131,139,182-183
+src/FHIRBridge.Application/Services/Terminology/TerminologySyncScheduleEvaluator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-78
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 63-68,79-80,91-93
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_cddc8f2857e289::t_46fede28873eaf 4,191-197,204-213,281-291,295-298,341,407-534,619,651-678,688-702
+tests/FHIRBridge.UnitTests/Destinations/FhirDestinationConnectionTestServiceTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 18,31,38,58,65,83,102,120,124,151,160-289,292,294-299,301,307-308
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827114200_AddNotificationHistoryBodyAndAttachments.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1274-1281,2122-2125,4512-4662,5013-5016,5083,5246,5471,5482-5575,5628,5652,5677,5727,5765-5773,5810,5855-5859
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_cddc8f2857e289::t_46fede28873eaf 42-54,79-82,86-93,95-96,98-100,102-104,106,109,111-114,117-118,120-122,124-150,152-161,172-256
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 27
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260827114200_AddNotificationHistoryBodyAndAttachments.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5717
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_cddc8f2857e289::t_46fede28873eaf 22-23
+src/Worker/FHIRBridge.Worker/RxNormSynchronizationWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 2-3,12-14,16,19-20,26,28-35,37
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_cddc8f2857e289::t_46fede28873eaf 64,66-69,78,91
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 66-74
+tests/FHIRBridge.UnitTests/Destinations/Auth/FhirRepositoryAuthResolverTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 20-29,37,48,59,71,81,96,116,126-177
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_cddc8f2857e289::t_46fede28873eaf 190,193
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260825174225_SyncModelChanges.Designer.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-5671
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_cddc8f2857e289::t_46fede28873eaf 17-18
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-schema-ops.util.ts
+  s_cddc8f2857e289::t_46fede28873eaf 1-150
+src/Runtime/FHIRBridge.Runtime.Application/Mappings/PipelineDtoMapper.cs
+  s_cddc8f2857e289::t_46fede28873eaf 31-32
+src/FHIRBridge.Domain/Entities/Governance/NotificationHistory.cs
+  s_cddc8f2857e289::t_46fede28873eaf 20-22,32-33,43-49
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 10,135-150,165-169
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 709
+portal/src/app/pipeline-executions/pages/pipeline-execution-detail/pipeline-execution-detail.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 25-30
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 509-514,516-518,523,564-568,619-642,704,730-735,798-802,807-814
+src/Worker/FHIRBridge.Worker/SnomedHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,15-16,18,22-25,33,35-45
+portal/src/app/services/destination-schema.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 65-70,137-142,164-173,249-251
+src/Worker/FHIRBridge.Worker/NdcHapiTerminologySyncWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-2,14-15,17,21-24,32,34-43
+src/FHIRBridge.Infrastructure/Destinations/ConnectionMetadataReader.cs
+  s_cddc8f2857e289::t_46fede28873eaf 37-42
+portal/src/app/data/transforms.data.ts
+  s_cddc8f2857e289::t_46fede28873eaf 32
+src/FHIRBridge.Infrastructure/Governance/EfAlertEvaluationService.cs
+  s_cddc8f2857e289::t_46fede28873eaf 79-92
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.html
+  s_cddc8f2857e289::t_46fede28873eaf 8-30
+portal/src/app/system-settings/utils/terminology-setting-field.ts
+  s_cddc8f2857e289::t_46fede28873eaf 1-111
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 11-15,101-104,121-124,134-137,252-253,352-371
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_cddc8f2857e289::t_46fede28873eaf 39
+.claude/skills/fhirbridge-provision-coverage-workflow/reference/report_template.html
+  s_cddc8f2857e289::t_46fede28873eaf 1-266
+portal/src/app/governance/pages/alert-rules/alert-rules.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 11,37,87-90
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_cddc8f2857e289::t_46fede28873eaf 3-7
+src/FHIRBridge.Infrastructure/Destinations/Auth/IAzureManagedIdentityFhirTokenProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 1-17
+src/FHIRBridge.Infrastructure/Destinations/FhirRepositoryHealthCheckProvider.cs
+  s_cddc8f2857e289::t_46fede28873eaf 24,26-28,30,33-34,36,40,43,66-67
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_cddc8f2857e289::t_46fede28873eaf 25-31,42-44,57-62,66-84,86-89,103,124,129-138
+src/Worker/FHIRBridge.Worker/LoincSynchronizationWorker.cs
+  s_cddc8f2857e289::t_46fede28873eaf 2-3,10-11,13,15,20,22,24-27,29
+src/FHIRBridge.Infrastructure/Destinations/Delivery/EmailDeliveryStrategy.cs
+  s_cddc8f2857e289::t_46fede28873eaf 3,22,24-25,29,59,61-63,65,68,72,79,84-97,99,102-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6dda4c172c3ca1fba6be6d5725d166a9db4fef8b",
+  "prompts": {},
+  "sessions": {
+    "s_cddc8f2857e289": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05f8277d-d6c5-400e-805b-bd1d37d319d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
