@@ -1,11 +1,12 @@
 import {
   Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, viewChildren, AfterViewInit, OnDestroy,
 } from '@angular/core';
-import { MappingRow, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingDestType, isSqlFamilyDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { ChildTableRelation, detectRelationFromColumns } from './field-mapping-summary.model';
 import { autoCardWidth } from './field-mapping-card-size.util';
 import { searchTerms, matchesSearchTerms } from './field-mapping-tree.util';
+import { tableTargetStatus, TableTargetStatus } from './field-mapping-schema-ops.util';
 
 const MIN_WIDTH = 220;
 // Mongo-only floor: its header carries an extra rename button, and its columns tend to have short names
@@ -29,7 +30,7 @@ export interface FmColumnKeyInfo {
    *  change against a table other things may already depend on. 'userCreated' means it was added THIS
    *  session, on this canvas (a brand-new table's own columns, or "+ Add column" on an existing table) —
    *  nothing has been built against it outside this canvas yet, so it's still safe to edit/delete. */
-  origin?: 'probed' | 'userCreated';
+  origin?: 'probed' | 'userCreated' | 'restoredUnverified';
 }
 
 /**
@@ -63,6 +64,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
+  /** Table full-names with a "Create a new table…"/"Add column" op queued this session but not yet
+   *  flushed — see PendingSchemaOp and DestinationWizardComponent.pendingTableNames. Drives tableStatus's
+   *  'pending' badge; defaults to empty for any host that doesn't (yet) thread it through. */
+  readonly pendingTableNames = input<ReadonlySet<string>>(new Set());
   readonly columns = input.required<string[]>();
   readonly rowForColumn = input.required<(column: string) => MappingRow | undefined>();
   /** Real data type (e.g. "nvarchar(50)") for a probed/created SQL column — undefined for CSV or
@@ -148,6 +153,28 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    */
   readonly hasValidTarget = computed(() =>
     this.isExtra() || !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetValue())
+  );
+
+  /** SQL Server/MySQL/PostgreSQL all share this card's "real table" chrome (table kind label, the
+   *  Suggested/Pending/Confirmed status badge, and the real "+ Add column" ALTER TABLE flow) — CSV/Mongo/
+   *  Blob don't. See isSqlFamilyDestType's doc comment for why this can't just be `destType() === 'sql'`. */
+  readonly isSqlFamily = computed(() => isSqlFamilyDestType(this.destType()));
+
+  /** Pending / Confirmed — see TableTargetStatus's own doc comment for what each means. Driven by the
+   *  exact same pendingTableNames the canvas itself uses to gate Create-Table/Add-Column, so this badge
+   *  can never disagree with what those gates actually allow — for the primary table AND an extra table
+   *  alike. isExtra() used to force 'confirmed' unconditionally here on the theory that an extra table
+   *  only ever gets added via "+ Add a table from your database…" (onAddExtraTable), which does only
+   *  ever offer already-probed, real names — but extraTablesByGroup can also be populated straight from a
+   *  restored dest_mapping_summary_v1 with no live check at all (applyMappingSummaryDocument), so a
+   *  restored extra table whose table has since been dropped could reach this card too. Neither this card
+   *  nor tableStatus needs to know the difference any more: FieldMappingCanvasComponent.targetCards()
+   *  now applies the same "confirmed or pending" gate to extras that isPrimaryTargetValid already applied
+   *  to the primary target (see isExtraTableValid there), so this card is never rendered at all for a
+   *  target — primary or extra — that's neither. There's nothing left for this computed to decide beyond
+   *  "which of the two", for both cases identically. */
+  readonly tableStatus = computed<TableTargetStatus>(() =>
+    tableTargetStatus(this.tableName(), this.pendingTableNames())
   );
 
   /**

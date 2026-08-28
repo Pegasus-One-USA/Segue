@@ -148,10 +148,11 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         AddColumnRequest request,
         CancellationToken cancellationToken)
     {
-        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        var type = request.Connection.DestinationType;
+        if (!IsRelational(type))
         {
             return new SchemaMutationResultDto(
-                false, $"Destination type '{request.Connection.DestinationType}' does not support column creation.");
+                false, $"Destination type '{type}' does not support column creation.");
         }
 
         string schemaName, tableName, columnName, normalizedDataType;
@@ -159,9 +160,9 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string connectionString;
         try
         {
-            (schemaName, tableName) = SplitTableName(request.TableName);
+            (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
-            (normalizedDataType, maxLength) = ValidateDataType(request.DataType);
+            (normalizedDataType, maxLength) = ValidateDataType(type, request.DataType);
             connectionString = BuildConnectionString(request.Connection);
         }
         catch (Exception exception)
@@ -171,37 +172,44 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(
-                request.Connection.DestinationType, connectionString, cancellationToken);
+            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
 
             // Never auto-create the table here — a column can only be added to a table the user
             // explicitly created (via "Create a new table…") or that already exists for real. Silently
             // creating a bare table just because its name was guessed and doesn't exist yet surprises the
             // user with schema changes they never asked for.
-            if (!await TableExistsAsync(connection, schemaName, tableName, cancellationToken))
+            if (!await TableExistsAsync(type, connection, schemaName, tableName, cancellationToken))
             {
                 return new SchemaMutationResultDto(
-                    false, $"Table '{schemaName}.{tableName}' does not exist. Create it first via \"Create a new table…\".");
+                    false, $"Table '{DisplayTableName(type, schemaName, tableName)}' does not exist. Create it first via \"Create a new table…\".");
             }
 
             await using var command = connection.CreateCommand();
             // ddl-allowed: explicit user action from the mapping canvas's "Add column" affordance, not automatic
-            // writer-side schema mutation.
-            command.CommandText = $"""
-                ALTER TABLE [{schemaName}].[{tableName}]
-                ADD [{columnName}] {normalizedDataType} {(request.IsNullable ? "NULL" : "NOT NULL")};
-                """;
+            // writer-side schema mutation. MySQL/PostgreSQL both accept (and require, for PostgreSQL) the
+            // "COLUMN" keyword; SQL Server's own ADD syntax never takes one — left exactly as before for it.
+            command.CommandText = type is DestinationType.MySql or DestinationType.PostgreSql
+                ? $"""
+                    ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                    ADD COLUMN {Quote(type, columnName)} {normalizedDataType} {(request.IsNullable ? "NULL" : "NOT NULL")};
+                    """
+                : $"""
+                    ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                    ADD {Quote(type, columnName)} {normalizedDataType} {(request.IsNullable ? "NULL" : "NOT NULL")};
+                    """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception exception)
         {
-            // Column already exists, permission denied, etc. are expected UI outcomes.
+            // Column already exists, permission denied, etc. are expected UI outcomes — same across every
+            // provider: none of them pre-check "does this column already exist" here, so a duplicate ADD
+            // COLUMN fails naturally with each engine's own native error text, exactly like SQL Server always has.
             return new SchemaMutationResultDto(false, exception.Message);
         }
 
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
-            columnName, normalizedDataType, MapSqlServerType(typeFamily), request.IsNullable, maxLength);
+            columnName, normalizedDataType, MapType(type)(typeFamily), request.IsNullable, maxLength);
 
         return new SchemaMutationResultDto(true, null, column);
     }
@@ -210,10 +218,11 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         CreateTableRequest request,
         CancellationToken cancellationToken)
     {
-        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        var type = request.Connection.DestinationType;
+        if (!IsRelational(type))
         {
             return new SchemaMutationResultDto(
-                false, $"Destination type '{request.Connection.DestinationType}' does not support table creation.");
+                false, $"Destination type '{type}' does not support table creation.");
         }
 
         string schemaName, tableName, connectionString;
@@ -222,19 +231,19 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string? fkColumnName = null;
         try
         {
-            (schemaName, tableName) = SplitTableName(request.TableName);
+            (schemaName, tableName) = SplitTableName(type, request.TableName);
             connectionString = BuildConnectionString(request.Connection);
 
             foreach (var column in request.Columns ?? [])
             {
                 var name = SqlIdentifier.Validate(column.Name);
-                var (normalizedType, maxLength) = ValidateDataType(column.DataType);
+                var (normalizedType, maxLength) = ValidateDataType(type, column.DataType);
                 columns.Add((name, normalizedType, maxLength));
             }
 
             if (!string.IsNullOrWhiteSpace(request.ParentTable))
             {
-                var (parentSchema, parentTableName) = SplitTableName(request.ParentTable);
+                var (parentSchema, parentTableName) = SplitTableName(type, request.ParentTable);
                 var parentColumn = SqlIdentifier.Validate(
                     string.IsNullOrWhiteSpace(request.ParentColumn) ? "Id" : request.ParentColumn);
                 parent = (parentSchema, parentTableName, parentColumn);
@@ -251,10 +260,9 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(
-                request.Connection.DestinationType, connectionString, cancellationToken);
+            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
 
-            if (await TableExistsAsync(connection, schemaName, tableName, cancellationToken))
+            if (await TableExistsAsync(type, connection, schemaName, tableName, cancellationToken))
             {
                 // Idempotent, not a failure: this deferred "create table" op can legitimately reach here
                 // against a table that already exists for real — e.g. the mapping canvas staged this
@@ -265,47 +273,55 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 // whatever columns were originally requested — so any queued ADD COLUMN behind this one in
                 // the same flush still gets to run instead of being stranded (see AddColumnAsync's own
                 // "never auto-create" comment for why a hard failure here would otherwise dead-end it).
-                var liveTables = await ReadSchemaAsync(request.Connection.DestinationType, connectionString, cancellationToken);
+                var liveTables = await ReadSchemaAsync(type, connectionString, cancellationToken);
                 var existingTable = liveTables.FirstOrDefault(t =>
                     string.Equals(t.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
                 return new SchemaMutationResultDto(true, null, Table: existingTable, AlreadyExisted: true);
             }
 
-            if (parent is { } p && !await TableExistsAsync(connection, p.SchemaName, p.TableName, cancellationToken))
+            if (parent is { } p && !await TableExistsAsync(type, connection, p.SchemaName, p.TableName, cancellationToken))
             {
-                return new SchemaMutationResultDto(false, $"Parent table '{p.SchemaName}.{p.TableName}' was not found.");
+                return new SchemaMutationResultDto(false, $"Parent table '{DisplayTableName(type, p.SchemaName, p.TableName)}' was not found.");
             }
 
-            // ddl-allowed: explicit user action from the mapping canvas's "Create a new table…" affordance, not
-            // automatic writer-side schema mutation.
-            await using var createSchemaCommand = connection.CreateCommand();
-            createSchemaCommand.CommandText = $"""
-                IF SCHEMA_ID(N'{schemaName}') IS NULL
-                BEGIN
-                    EXEC(N'CREATE SCHEMA [{schemaName}]')
-                END
-                """;
-            await createSchemaCommand.ExecuteNonQueryAsync(cancellationToken);
-
-            var columnDefinitions = new List<string>
+            // MySQL has no schema layer distinct from the database (same convention MySqlMappingSchemaTransaction/
+            // MappedMySqlDestinationWriter already use), and PostgreSQL's default "public" schema always
+            // already exists — so only SQL Server needs (or gets) an explicit CREATE SCHEMA step; a
+            // non-default PostgreSQL schema that genuinely doesn't exist just fails the CREATE TABLE below
+            // with Postgres's own "schema does not exist" error, same never-throws/Success=false contract.
+            if (type is DestinationType.SqlServer or DestinationType.AzureSql)
             {
-                $"Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY",
-            };
-            columnDefinitions.AddRange(columns.Select(c => $"[{c.Name}] {c.NormalizedType} NULL"));
+                // ddl-allowed: explicit user action from the mapping canvas's "Create a new table…" affordance,
+                // not automatic writer-side schema mutation.
+                await using var createSchemaCommand = connection.CreateCommand();
+                createSchemaCommand.CommandText = $"""
+                    IF SCHEMA_ID(N'{schemaName}') IS NULL
+                    BEGIN
+                        EXEC(N'CREATE SCHEMA [{schemaName}]')
+                    END
+                    """;
+                await createSchemaCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var columnDefinitions = new List<string> { BuildPrimaryKeyColumnDefinition(type, schemaName, tableName) };
+            columnDefinitions.AddRange(columns.Select(c => $"{Quote(type, c.Name)} {c.NormalizedType} NULL"));
             if (parent is { } fk)
             {
-                columnDefinitions.Add(
-                    $"[{fkColumnName}] BIGINT NOT NULL " +
-                    $"CONSTRAINT FK_{schemaName}_{tableName}_{fkColumnName} " +
-                    $"REFERENCES [{fk.SchemaName}].[{fk.TableName}]([{fk.ColumnName}])");
+                columnDefinitions.Add(BuildForeignKeyColumnDefinition(type, schemaName, tableName, fkColumnName!, fk));
+            }
+            if (type is DestinationType.MySql or DestinationType.PostgreSql)
+            {
+                // Both engines require PRIMARY KEY as a separate table-constraint clause rather than an
+                // inline column attribute (unlike SQL Server's CONSTRAINT ... PRIMARY KEY above).
+                columnDefinitions.Add($"PRIMARY KEY ({Quote(type, "Id")})");
             }
 
             // ddl-allowed: explicit user action from the mapping canvas's "Create a new table…" affordance, not
             // automatic writer-side schema mutation.
             await using var createTableCommand = connection.CreateCommand();
             createTableCommand.CommandText = $"""
-                CREATE TABLE [{schemaName}].[{tableName}]
+                CREATE TABLE {QuoteTable(type, schemaName, tableName)}
                 (
                     {string.Join(",\n    ", columnDefinitions)}
                 );
@@ -322,7 +338,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             new("Id", "bigint", "Integer", false, null, IsPrimaryKey: true),
         };
         resultColumns.AddRange(columns.Select(c =>
-            new DestinationColumnSchemaDto(c.Name, c.NormalizedType, MapSqlServerType(c.NormalizedType.Split('(')[0]), true, c.MaxLength)));
+            new DestinationColumnSchemaDto(c.Name, c.NormalizedType, MapType(type)(c.NormalizedType.Split('(')[0]), true, c.MaxLength)));
         if (parent is { } fkParent)
         {
             resultColumns.Add(new DestinationColumnSchemaDto(
@@ -330,24 +346,55 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 IsForeignKey: true, References: $"{fkParent.SchemaName}.{fkParent.TableName}.{fkParent.ColumnName}"));
         }
 
-        var table = new DestinationTableSchemaDto(schemaName, tableName, $"{schemaName}.{tableName}", resultColumns);
+        var fullName = type == DestinationType.MySql ? tableName : $"{schemaName}.{tableName}";
+        var table = new DestinationTableSchemaDto(schemaName, tableName, fullName, resultColumns);
         return new SchemaMutationResultDto(true, null, Table: table);
     }
+
+    /// <summary>The always-first "Id" primary key column every CreateTableAsync table gets — auto-increment
+    /// per each engine's own native mechanism: SQL Server's IDENTITY(1,1), MySQL's AUTO_INCREMENT, PostgreSQL's
+    /// GENERATED ALWAYS AS IDENTITY (the SQL-standard-compliant, PostgreSQL 10+ equivalent — this app's Docker
+    /// Compose stack runs postgres:16-alpine, well past that floor).</summary>
+    private static string BuildPrimaryKeyColumnDefinition(DestinationType type, string schemaName, string tableName) => type switch
+    {
+        DestinationType.MySql => $"{Quote(type, "Id")} BIGINT AUTO_INCREMENT NOT NULL",
+        DestinationType.PostgreSql => $"{Quote(type, "Id")} BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL",
+        _ => $"Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY",
+    };
+
+    /// <summary>The child-table foreign key column CreateTableAsync adds when ParentTable is supplied — a
+    /// BIGINT column plus a REFERENCES constraint against the parent's own key column.</summary>
+    private static string BuildForeignKeyColumnDefinition(
+        DestinationType type, string schemaName, string tableName, string fkColumnName,
+        (string SchemaName, string TableName, string ColumnName) parent) => type switch
+    {
+        // MySQL: no parent schema prefix — same bare-table convention as everywhere else in this file for it.
+        DestinationType.MySql => $"{Quote(type, fkColumnName)} BIGINT NOT NULL, " +
+            $"CONSTRAINT `FK_{tableName}_{fkColumnName}` FOREIGN KEY ({Quote(type, fkColumnName)}) " +
+            $"REFERENCES {Quote(type, parent.TableName)} ({Quote(type, parent.ColumnName)})",
+        DestinationType.PostgreSql => $"{Quote(type, fkColumnName)} BIGINT NOT NULL, " +
+            $"CONSTRAINT \"FK_{schemaName}_{tableName}_{fkColumnName}\" FOREIGN KEY ({Quote(type, fkColumnName)}) " +
+            $"REFERENCES {QuoteTable(type, parent.SchemaName, parent.TableName)} ({Quote(type, parent.ColumnName)})",
+        _ => $"[{fkColumnName}] BIGINT NOT NULL " +
+            $"CONSTRAINT FK_{schemaName}_{tableName}_{fkColumnName} " +
+            $"REFERENCES [{parent.SchemaName}].[{parent.TableName}]([{parent.ColumnName}])",
+    };
 
     public async Task<SchemaMutationResultDto> DropColumnAsync(
         DropColumnRequest request,
         CancellationToken cancellationToken)
     {
-        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        var type = request.Connection.DestinationType;
+        if (!IsRelational(type))
         {
             return new SchemaMutationResultDto(
-                false, $"Destination type '{request.Connection.DestinationType}' does not support dropping columns.");
+                false, $"Destination type '{type}' does not support dropping columns.");
         }
 
         string schemaName, tableName, columnName, connectionString;
         try
         {
-            (schemaName, tableName) = SplitTableName(request.TableName);
+            (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
             connectionString = BuildConnectionString(request.Connection);
         }
@@ -358,14 +405,14 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(
-                request.Connection.DestinationType, connectionString, cancellationToken);
+            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
             await using var command = connection.CreateCommand();
             // ddl-allowed: explicit user action from the mapping canvas's column-delete affordance, not
-            // automatic writer-side schema mutation.
+            // automatic writer-side schema mutation. MySQL/PostgreSQL both accept "DROP COLUMN" the same as
+            // SQL Server — no dialect difference here beyond identifier quoting/qualification.
             command.CommandText = $"""
-                ALTER TABLE [{schemaName}].[{tableName}]
-                DROP COLUMN [{columnName}];
+                ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                DROP COLUMN {Quote(type, columnName)};
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -383,10 +430,11 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         AlterColumnRequest request,
         CancellationToken cancellationToken)
     {
-        if (!IsSqlServerFamily(request.Connection.DestinationType))
+        var type = request.Connection.DestinationType;
+        if (!IsRelational(type))
         {
             return new SchemaMutationResultDto(
-                false, $"Destination type '{request.Connection.DestinationType}' does not support altering columns.");
+                false, $"Destination type '{type}' does not support altering columns.");
         }
 
         string schemaName, tableName, columnName, normalizedDataType, connectionString;
@@ -394,9 +442,9 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string? newColumnName = null;
         try
         {
-            (schemaName, tableName) = SplitTableName(request.TableName);
+            (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
-            (normalizedDataType, maxLength) = ValidateDataType(request.NewDataType);
+            (normalizedDataType, maxLength) = ValidateDataType(type, request.NewDataType);
             if (!string.IsNullOrWhiteSpace(request.NewColumnName))
             {
                 newColumnName = SqlIdentifier.Validate(request.NewColumnName);
@@ -414,31 +462,75 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string? references;
         try
         {
-            await using var connection = await OpenConnectionAsync(
-                request.Connection.DestinationType, connectionString, cancellationToken);
+            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+            var renaming = newColumnName is not null
+                && !string.Equals(newColumnName, columnName, StringComparison.OrdinalIgnoreCase);
 
-            await using var alterCommand = connection.CreateCommand();
-            // ddl-allowed: explicit user action from the mapping canvas's column-edit affordance, not
-            // automatic writer-side schema mutation.
-            alterCommand.CommandText = $"""
-                ALTER TABLE [{schemaName}].[{tableName}]
-                ALTER COLUMN [{columnName}] {normalizedDataType};
-                """;
-            await alterCommand.ExecuteNonQueryAsync(cancellationToken);
-
-            if (newColumnName is not null
-                && !string.Equals(newColumnName, columnName, StringComparison.OrdinalIgnoreCase))
+            if (type == DestinationType.MySql)
             {
-                await using var renameCommand = connection.CreateCommand();
-                renameCommand.CommandText = "EXEC sp_rename @objname, @newname, N'COLUMN';";
-                AddParameter(renameCommand, "@objname", $"{schemaName}.{tableName}.{columnName}");
-                AddParameter(renameCommand, "@newname", newColumnName);
-                await renameCommand.ExecuteNonQueryAsync(cancellationToken);
-                finalColumnName = newColumnName;
+                // MySQL's CHANGE COLUMN (unlike SQL Server's ALTER COLUMN / PostgreSQL's ALTER COLUMN TYPE)
+                // requires restating the COMPLETE column definition — omitting NULL/NOT NULL doesn't
+                // preserve whatever it already was the way the other two engines do, it defaults to NULL —
+                // so the current nullability is read first and restated explicitly, combined with the
+                // optional rename in the same single statement (CHANGE COLUMN handles both at once; MySQL
+                // has no separate "RENAME COLUMN ... TYPE ..." split the way PostgreSQL does below).
+                var currentlyNullable = await GetColumnNullableAsync(type, connection, schemaName, tableName, columnName, cancellationToken);
+                var targetName = renaming ? newColumnName! : columnName;
+
+                await using var changeCommand = connection.CreateCommand();
+                // ddl-allowed: explicit user action from the mapping canvas's column-edit affordance, not
+                // automatic writer-side schema mutation.
+                changeCommand.CommandText = $"""
+                    ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                    CHANGE COLUMN {Quote(type, columnName)} {Quote(type, targetName)} {normalizedDataType} {(currentlyNullable ? "NULL" : "NOT NULL")};
+                    """;
+                await changeCommand.ExecuteNonQueryAsync(cancellationToken);
+                if (renaming)
+                {
+                    finalColumnName = newColumnName!;
+                }
+            }
+            else
+            {
+                await using var alterCommand = connection.CreateCommand();
+                // ddl-allowed: explicit user action from the mapping canvas's column-edit affordance, not
+                // automatic writer-side schema mutation. Unlike MySQL above, PostgreSQL's ALTER COLUMN ...
+                // TYPE (like SQL Server's own ALTER COLUMN) preserves whatever NULL/NOT NULL the column
+                // already had without needing to restate it.
+                alterCommand.CommandText = type == DestinationType.PostgreSql
+                    ? $"""
+                        ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                        ALTER COLUMN {Quote(type, columnName)} TYPE {normalizedDataType};
+                        """
+                    : $"""
+                        ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                        ALTER COLUMN {Quote(type, columnName)} {normalizedDataType};
+                        """;
+                await alterCommand.ExecuteNonQueryAsync(cancellationToken);
+
+                if (renaming)
+                {
+                    await using var renameCommand = connection.CreateCommand();
+                    if (type == DestinationType.PostgreSql)
+                    {
+                        renameCommand.CommandText = $"""
+                            ALTER TABLE {QuoteTable(type, schemaName, tableName)}
+                            RENAME COLUMN {Quote(type, columnName)} TO {Quote(type, newColumnName!)};
+                            """;
+                    }
+                    else
+                    {
+                        renameCommand.CommandText = "EXEC sp_rename @objname, @newname, N'COLUMN';";
+                        AddParameter(renameCommand, "@objname", $"{schemaName}.{tableName}.{columnName}");
+                        AddParameter(renameCommand, "@newname", newColumnName!);
+                    }
+                    await renameCommand.ExecuteNonQueryAsync(cancellationToken);
+                    finalColumnName = newColumnName!;
+                }
             }
 
-            isNullable = await GetColumnNullableAsync(connection, schemaName, tableName, finalColumnName, cancellationToken);
-            (isPrimaryKey, references) = await GetColumnKeyInfoAsync(connection, schemaName, tableName, finalColumnName, cancellationToken);
+            isNullable = await GetColumnNullableAsync(type, connection, schemaName, tableName, finalColumnName, cancellationToken);
+            (isPrimaryKey, references) = await GetColumnKeyInfoAsync(type, connection, schemaName, tableName, finalColumnName, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -449,7 +541,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         var typeFamily = normalizedDataType.Split('(')[0];
         var column = new DestinationColumnSchemaDto(
-            finalColumnName, normalizedDataType, MapSqlServerType(typeFamily), isNullable, maxLength,
+            finalColumnName, normalizedDataType, MapType(type)(typeFamily), isNullable, maxLength,
             IsPrimaryKey: isPrimaryKey, IsForeignKey: references is not null, References: references);
         return new SchemaMutationResultDto(true, null, column);
     }
@@ -462,49 +554,118 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         command.Parameters.Add(parameter);
     }
 
-    /// <summary>Definitive post-ALTER nullability, read back from the catalog rather than assumed — the
-    /// ALTER COLUMN statement above deliberately omits NULL/NOT NULL to preserve whatever it already
-    /// was, so this is the only way to know what that ended up being.</summary>
+    /// <summary>Definitive post-ALTER nullability, read back from the catalog rather than assumed — SQL
+    /// Server's ALTER COLUMN / PostgreSQL's ALTER COLUMN ... TYPE both deliberately omit NULL/NOT NULL to
+    /// preserve whatever it already was, so this is the only way to know what that ended up being. For
+    /// MySQL it's also read BEFORE the alter (see AlterColumnAsync) — its CHANGE COLUMN has no such
+    /// preserving behavior and must restate nullability explicitly.
+    ///
+    /// ANSI-standard INFORMATION_SCHEMA.COLUMNS, portable across all three providers — SQL Server and
+    /// PostgreSQL both have a real, non-empty schemaName to filter on (SplitTableName's "dbo"/"public"
+    /// default), but MySQL's own TABLE_SCHEMA column is the CONNECTED DATABASE's name, not a real,
+    /// separately-addressable schema — SplitTableName deliberately never resolves one for MySQL (see its own
+    /// doc comment), so DATABASE() is used directly in the query instead of a parameterized, necessarily-empty
+    /// schemaName.</summary>
     private static async Task<bool> GetColumnNullableAsync(
-        DbConnection connection, string schemaName, string tableName, string columnName, CancellationToken cancellationToken)
+        DestinationType type, DbConnection connection, string schemaName, string tableName, string columnName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table AND COLUMN_NAME = @column;
-            """;
-        AddParameter(command, "@schema", schemaName);
+        command.CommandText = type == DestinationType.MySql
+            ? "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table AND COLUMN_NAME = @column;"
+            : "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table AND COLUMN_NAME = @column;";
+        if (type != DestinationType.MySql)
+        {
+            AddParameter(command, "@schema", schemaName);
+        }
         AddParameter(command, "@table", tableName);
         AddParameter(command, "@column", columnName);
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is string s && string.Equals(s, "YES", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Provider-aware "does this table exist right now" — SQL Server keeps its existing OBJECT_ID
+    /// lookup unchanged; MySQL/PostgreSQL use the ANSI-standard INFORMATION_SCHEMA.TABLES (MySQL scoped via
+    /// DATABASE() rather than a parameterized schema — see GetColumnNullableAsync's doc comment for why).</summary>
     private static async Task<bool> TableExistsAsync(
-        DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
+        DestinationType type, DbConnection connection, string schemaName, string tableName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        if (type is DestinationType.MySql or DestinationType.PostgreSql)
+        {
+            command.CommandText = type == DestinationType.MySql
+                ? "SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table;"
+                : "SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table;";
+            if (type == DestinationType.PostgreSql)
+            {
+                AddParameter(command, "@schema", schemaName);
+            }
+            AddParameter(command, "@table", tableName);
+            var count = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+            return count > 0;
+        }
+
         command.CommandText = $"SELECT OBJECT_ID(N'[{schemaName}].[{tableName}]', N'U');";
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is not null and not DBNull;
     }
 
-    private static bool IsSqlServerFamily(DestinationType type)
-        => type is DestinationType.SqlServer or DestinationType.AzureSql;
-
-    private static (string SchemaName, string TableName) SplitTableName(string tableName)
+    /// <summary>Splits a (possibly schema-qualified) table name per the target engine's own convention.
+    /// SQL Server/PostgreSQL: schema.table, defaulting to each engine's real default schema ("dbo"/"public")
+    /// when unqualified — unchanged for SQL Server, same shape for PostgreSQL. MySQL: ALWAYS bare — MySQL has
+    /// no schema layer distinct from the database (same convention MySqlMappingSchemaTransaction/
+    /// MappedMySqlDestinationWriter already use elsewhere), and a "prefix." on a MySQL table name here is
+    /// really the CONNECTED DATABASE's own name (from the live schema probe's fullName, e.g.
+    /// "my_database.Patient" — see ReadColumnsAsync), never a real, separately-selectable MySQL schema — so
+    /// it's discarded (just the last dot-segment is kept) rather than treated as a schema qualifier.</summary>
+    private static (string SchemaName, string TableName) SplitTableName(DestinationType type, string tableName)
     {
+        if (type == DestinationType.MySql)
+        {
+            var lastDot = tableName.LastIndexOf('.');
+            var bare = lastDot >= 0 ? tableName[(lastDot + 1)..] : tableName;
+            return ("", SqlIdentifier.Validate(bare));
+        }
+
+        var defaultSchema = type == DestinationType.PostgreSql ? "public" : "dbo";
         var parts = tableName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return parts switch
         {
-            [var table] => ("dbo", SqlIdentifier.Validate(table)),
+            [var table] => (defaultSchema, SqlIdentifier.Validate(table)),
             [var schema, var table] => (SqlIdentifier.Validate(schema), SqlIdentifier.Validate(table)),
             _ => throw new InvalidOperationException($"'{tableName}' must be either TableName or SchemaName.TableName.")
         };
     }
 
-    private static (string NormalizedType, int? MaxLength) ValidateDataType(string dataType) =>
-        SqlServerDdlTypeValidator.Validate(dataType);
+    private static (string NormalizedType, int? MaxLength) ValidateDataType(DestinationType type, string dataType) => type switch
+    {
+        DestinationType.MySql => MySqlDdlTypeValidator.Validate(dataType),
+        DestinationType.PostgreSql => PostgreSqlDdlTypeValidator.Validate(dataType),
+        _ => SqlServerDdlTypeValidator.Validate(dataType),
+    };
+
+    /// <summary>Wraps a single identifier in the target engine's own quoting syntax — SQL Server "[x]",
+    /// MySQL "`x`", PostgreSQL "\"x\"". The one place every mutation method's generated DDL gets its
+    /// identifier quoting from, so the three conventions can never drift apart or get mixed up.</summary>
+    private static string Quote(DestinationType type, string identifier) => type switch
+    {
+        DestinationType.MySql => $"`{identifier}`",
+        DestinationType.PostgreSql => $"\"{identifier}\"",
+        _ => $"[{identifier}]",
+    };
+
+    /// <summary>A table reference ready to embed in DDL/DML — schema-qualified for SQL Server/PostgreSQL
+    /// ("[dbo].[Patient]" / "\"public\".\"Patient\""), bare for MySQL ("`Patient`" — see SplitTableName's own
+    /// doc comment for why MySQL never carries a real schema to qualify with).</summary>
+    private static string QuoteTable(DestinationType type, string schemaName, string tableName) => type switch
+    {
+        DestinationType.MySql => Quote(type, tableName),
+        _ => $"{Quote(type, schemaName)}.{Quote(type, tableName)}",
+    };
+
+    /// <summary>Human-readable "schema.table" (or just "table" for MySQL) for an error message — never used
+    /// in actual DDL (see QuoteTable for that), just what the user sees when a table can't be found.</summary>
+    private static string DisplayTableName(DestinationType type, string schemaName, string tableName) =>
+        type == DestinationType.MySql ? tableName : $"{schemaName}.{tableName}";
 
     private async Task<List<DestinationTableSchemaDto>> ReadSchemaAsync(
         DestinationType type,
@@ -564,12 +725,55 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     /// column — used right after AlterColumnAsync's rename/retype, where re-running the bulk, whole-database
     /// query would be wasteful for a single column whose key status could only be reported stale otherwise.</summary>
     private static async Task<(bool IsPrimaryKey, string? References)> GetColumnKeyInfoAsync(
+        DestinationType type,
         DbConnection connection,
         string schemaName,
         string tableName,
         string columnName,
         CancellationToken cancellationToken)
     {
+        // FK reference targets are only readable from SQL Server's own sys.* catalog views — PostgreSQL/
+        // MySQL columns keep References=null here, same established limitation ReadSchemaAsync already has
+        // for a live-probed column (see DestinationColumnSchemaDto's own doc comment) — only PK status is
+        // determined for them, via the same ANSI-standard information_schema join InformationSchemaConstraintsSql
+        // already uses for the read path, scoped to one column instead of the whole database.
+        if (type is DestinationType.MySql or DestinationType.PostgreSql)
+        {
+            await using var ansiCommand = connection.CreateCommand();
+            ansiCommand.CommandText = type == DestinationType.MySql
+                ? """
+                    SELECT tc.constraint_type
+                    FROM information_schema.key_column_usage kcu
+                    JOIN information_schema.table_constraints tc
+                        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                    WHERE kcu.table_schema = DATABASE() AND kcu.table_name = @table AND kcu.column_name = @column;
+                    """
+                : """
+                    SELECT tc.constraint_type
+                    FROM information_schema.key_column_usage kcu
+                    JOIN information_schema.table_constraints tc
+                        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                    WHERE kcu.table_schema = @schema AND kcu.table_name = @table AND kcu.column_name = @column;
+                    """;
+            if (type == DestinationType.PostgreSql)
+            {
+                AddParameter(ansiCommand, "@schema", schemaName);
+            }
+            AddParameter(ansiCommand, "@table", tableName);
+            AddParameter(ansiCommand, "@column", columnName);
+
+            var isPk = false;
+            await using var ansiReader = await ansiCommand.ExecuteReaderAsync(cancellationToken);
+            while (await ansiReader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(ansiReader.GetString(0), "PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
+                {
+                    isPk = true;
+                }
+            }
+            return (isPk, null);
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = SqlServerSingleColumnKeyMetadataSql;
         AddParameter(command, "@schema", schemaName);
@@ -917,13 +1121,19 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         "smallint" or "integer" or "bigint" => "Integer",
         "numeric" or "decimal" or "real" or "double precision" or "money" => "Decimal",
         "date" => "Date",
-        "timestamp without time zone" or "timestamp with time zone" => "DateTime",
+        // "timestamp without time zone"/"timestamp with time zone" are what a LIVE probe reports for an
+        // already-existing column; plain "timestamp" is what PostgreSqlDdlTypeValidator normalizes a
+        // newly-created column's type to (see CreateTableAsync/AddColumnAsync) — both mean the same thing.
+        "timestamp without time zone" or "timestamp with time zone" or "timestamp" => "DateTime",
         _ => "String"
     };
 
     private static string MapMySqlType(string dataType) => dataType.Trim().ToLowerInvariant() switch
     {
-        "tinyint" => "Boolean",
+        // MySQL has no native boolean storage type — BOOLEAN/BOOL are aliases for TINYINT(1), and the
+        // frontend's own SQL-Server-flavored "bit" default (see MySqlDdlTypeValidator) is kept as MySQL's
+        // real BIT type rather than translated, so all three read back as the same logical Boolean.
+        "tinyint" or "boolean" or "bool" or "bit" => "Boolean",
         "smallint" or "mediumint" or "int" or "integer" or "bigint" => "Integer",
         "decimal" or "numeric" or "float" or "double" => "Decimal",
         "date" => "Date",

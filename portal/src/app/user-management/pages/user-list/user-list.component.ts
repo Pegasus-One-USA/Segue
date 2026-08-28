@@ -1,21 +1,16 @@
 // user-management/pages/user-list/user-list.component.ts
 import {
-  Component, OnInit, OnDestroy, signal, computed, inject,
+  Component, OnInit, OnDestroy, HostListener, signal, computed, inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 
-import { MatTableModule } from '@angular/material/table';
-import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
 
 import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
@@ -47,16 +42,11 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: s
   imports: [
     CommonModule,
     FormsModule,
-    MatTableModule,
     PaginationBarComponent,
-    MatSortModule,
     MatButtonModule,
     MatIconModule,
-    MatMenuModule,
     MatDialogModule,
-    MatTooltipModule,
     MatProgressSpinnerModule,
-    MatDividerModule,
     HideWithoutPermissionDirective,
   ],
   templateUrl: './user-list.component.html',
@@ -93,7 +83,19 @@ export class UserListComponent implements OnInit, OnDestroy {
   inactiveUsers      = computed(() => this.users().filter(u => u.status !== 'active').length);
   mustChangePwdUsers = computed(() => this.users().filter(u => u.mustChangePassword).length);
 
-  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actionBy', 'actionOn', 'actions'];
+  /** Which row's "more actions" menu is open, if any — keyed by user id. See toggleActionMenu,
+   *  mirrored 1:1 from workflow-list.component.ts's identical row-menu pattern. */
+  readonly openActionMenuId = signal<string | null>(null);
+
+  /** Viewport-relative coordinates for the open action menu — see workflow-list.component.ts's
+   *  actionMenuPosition for the full rationale (position: fixed escapes .table-wrapper's overflow-x: auto
+   *  clipping). */
+  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; left: number } | null>(null);
+
+  /** Rough panel height (up to Edit + Assign Roles + Resend Invitation + divider + Activate/Deactivate +
+   *  divider + Delete) — just needs to be in the right ballpark to decide whether the panel fits below
+   *  the trigger, not pixel-exact. */
+  private static readonly ACTION_MENU_ESTIMATED_HEIGHT = 280;
 
   // Seeded with the 4 built-ins so the dropdown isn't empty while getRoles() is in flight —
   // replaced with the real role list (including any custom roles) once it loads, see ngOnInit.
@@ -203,15 +205,50 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.loadUsers();
   }
 
-  onSortChange(s: Sort): void {
-    if (s.direction) {
-      this.sortBy.set(s.active);
-      this.sortOrder.set(s.direction);
+  // Same click-to-toggle-asc/desc pattern as every other converted list page's onSort (e.g.
+  // role-list, mapping-profile-list) — replaces mat-sort-header's own 3-state (asc/desc/none) toggle
+  // now that this table no longer uses mat-table/matSort, for consistency with the rest of the app.
+  onSort(column: string): void {
+    if (this.sortBy() === column) {
+      this.sortOrder.update(d => (d === 'asc' ? 'desc' : 'asc'));
     } else {
-      this.sortBy.set('createdAt');
-      this.sortOrder.set('desc');
+      this.sortBy.set(column);
+      this.sortOrder.set('asc');
     }
     this.loadUsers();
+  }
+
+  toggleActionMenu(event: MouseEvent, id: string): void {
+    if (this.openActionMenuId() === id) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
+      return;
+    }
+
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const left = rect.left;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    this.actionMenuPosition.set(
+      spaceBelow < UserListComponent.ACTION_MENU_ESTIMATED_HEIGHT
+        ? { bottom: window.innerHeight - rect.top + 6, left }
+        : { top: rect.bottom + 6, left }
+    );
+    this.openActionMenuId.set(id);
+  }
+
+  // Single document:click listener for the whole component — closes the open row menu on any click
+  // outside it. Mirrors workflow-list.component.ts's closeFilterMenuIfOutside/onDocumentClick pair.
+  private closeActionMenuIfOutside(event: MouseEvent): void {
+    if (!(event.target as HTMLElement).closest('.row-menu')) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    this.closeActionMenuIfOutside(event);
   }
 
   // ─── Dialogs ─────────────────────────────────────────────────────────────
