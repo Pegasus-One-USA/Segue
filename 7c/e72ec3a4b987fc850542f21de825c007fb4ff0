@@ -1,0 +1,62 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_1de29626543182::t_15fd2a0d9fa924 517-525,527-547
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_1de29626543182::t_5c36ec23806f09 859,866
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_1de29626543182::t_c16bfd383731aa 5,19-35
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826124249_AddPipelineRunRouteExecutionErrorReferenceId.cs
+  s_48abdd5711f5c3::t_f3e2cdf7789594 1-29
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_1de29626543182::t_9188f8569a6fff 203-212
+  s_1de29626543182::t_7b66455667fde3 479
+  s_1de29626543182::t_258639e4e62863 329
+  s_1de29626543182::t_5ae9bf204f56cd 511-538,548-550,554
+  s_1de29626543182::t_826149b5d9d40a 551-553,555-562
+  s_1de29626543182::t_89c087b2a072bd 4
+  s_1de29626543182::t_1bd4c99b704720 283-286
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_1de29626543182::t_4655e64144e00a 68
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_1de29626543182::t_92e26bbbe588ef 91-93
+  s_1de29626543182::t_72f5b4f1742c45 79-80
+  s_1de29626543182::t_5915bb4943c328 63-68
+src/FHIRBridge.Application/Services/PassThroughDeIdentificationService.cs
+  s_1de29626543182::t_5509cc6e37564b 7,11
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowNodeOutput.cs
+  s_1de29626543182::t_32d0ade7aa2f42 38-45
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_1de29626543182::t_d62a57f5257994 32,36,47,52,55,64-66,68-73,75-84,87-121
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_1de29626543182::t_eda8c435a6808d 190,193
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260826124249_AddPipelineRunRouteExecutionErrorReferenceId.Designer.cs
+  s_48abdd5711f5c3::t_f3e2cdf7789594 1-5709
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_48abdd5711f5c3::t_f3e2cdf7789594 2114-2117
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_1de29626543182::t_6b17af7fc5bed3 249,258
+  s_1de29626543182::t_ba42f852629d2e 180-184,187-194,202-207,220-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7ce72ec3a4b987fc850542f21de825c007fb4ff0",
+  "prompts": {},
+  "sessions": {
+    "s_1de29626543182": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10c7672b-8b90-42c3-9b95-2c4bca23611b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_48abdd5711f5c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25858034-c78a-4a88-a1c4-50d4d67ea932",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

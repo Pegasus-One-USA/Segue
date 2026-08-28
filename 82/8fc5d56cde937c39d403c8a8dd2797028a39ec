@@ -1,0 +1,23 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260826122057_SyncErrorReferenceIdColumns.Designer.cs
+  s_1de29626543182::t_269138e002f26a 1-5679
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260826122057_SyncErrorReferenceIdColumns.cs
+  s_1de29626543182::t_f57601e8fbbd6b 1-40
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_1de29626543182::t_5764d5a5b567ca 2097-2100,4824-4827
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "828fc5d56cde937c39d403c8a8dd2797028a39ec",
+  "prompts": {},
+  "sessions": {
+    "s_1de29626543182": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10c7672b-8b90-42c3-9b95-2c4bca23611b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

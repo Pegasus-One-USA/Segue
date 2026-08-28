@@ -1,0 +1,51 @@
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_5849c970b9c366::t_6625d2abb542ed 259-272
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-schema-ops.util.ts
+  s_5849c970b9c366::t_cb3b8cd81b655c 1-58,66-67,72-77,79-91,93-94,120-150
+  s_5849c970b9c366::t_6a4c6e3aabd05e 59-65,68-71,78,92,95-113
+  s_5849c970b9c366::t_ce4e8d5dfa5ad5 114-119
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_5849c970b9c366::t_c9f0fc059609b6 101-107,818-819,844
+  s_5849c970b9c366::t_955c5feb680db9 1047-1058,1068-1074
+  s_5849c970b9c366::t_9348090962b103 65-70
+  s_5849c970b9c366::t_b2d38f5f48ed60 806-811,816-817,820-843,845-854
+  s_5849c970b9c366::t_f3d5736d304eaf 812-815
+  s_5849c970b9c366::t_cc8d2c4595339c 24
+  s_5849c970b9c366::t_d741143462f829 788-793
+  s_5849c970b9c366::t_ded21759ab1be1 6
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceTests.cs
+  s_5849c970b9c366::t_5bfa959f11cb96 140-159
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_5849c970b9c366::t_206f20a7b6df10 66
+  s_5849c970b9c366::t_2675ff74d721e2 1483-1487
+  s_5849c970b9c366::t_db4267c3370492 19
+  s_5849c970b9c366::t_2b41d0723ae969 1513,1516-1524
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_5849c970b9c366::t_de9de075f4a175 124-128,133-134
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-schema-ops.util.spec.ts
+  s_5849c970b9c366::t_70043195d15ed2 5-6
+  s_5849c970b9c366::t_a9bd9d845916ff 77,81,88
+  s_5849c970b9c366::t_6687de7a3b43ac 103-117,122-123,126-138
+  s_5849c970b9c366::t_7a30ba118e4ba3 118-121,124-125
+  s_5849c970b9c366::t_892f229264472e 1-4,7-76,78-80,82-87,89-102,139-195
+portal/src/app/services/destination-schema.service.ts
+  s_5849c970b9c366::t_b36defdb7788ef 65-70
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_5849c970b9c366::t_54f5c8c733dd9b 774
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1ca960db4b0fe65c666a038beb5390f4dc19ede1",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

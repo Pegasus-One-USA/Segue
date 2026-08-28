@@ -1,0 +1,51 @@
+portal/src/app/services/phase-config.service.ts
+  s_5849c970b9c366::t_63b78d633ddc41 28-31,35,39-44
+src/Api/FHIRBridge.Api/Program.cs
+  s_e4f33bc5f787da::t_609b801b3c3abc 708-715,732-736
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_563b36e6d1f96c::t_07c2475cec013b 178-182
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  s_e4f33bc5f787da::t_8756bec709b020 19-34,74
+src/FHIRBridge.Infrastructure/Rbac/RbacBootstrapper.cs
+  s_50c987f1d763d9::t_f30d069381804c 203-211,217,221-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "de41c7b266d160c952a4efd933d73594c26a37bd",
+  "prompts": {},
+  "sessions": {
+    "s_50c987f1d763d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb3953ea-c338-4d92-a6a8-1c0803cf1040",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_563b36e6d1f96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d1be468-7973-4038-9618-43ded366ad88",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
