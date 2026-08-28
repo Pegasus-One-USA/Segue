@@ -57,7 +57,7 @@ export class MfaEnrollmentPanelComponent implements OnInit {
         this.mfaEnrollment.set(res);
         this.mfaBusy.set(false);
         this.mfaQrDataUrl.set(null);
-        qrToDataUrl(res.otpAuthUri, { width: 200, margin: 1 })
+        qrToDataUrl(res.otpAuthUri, { width: 150, margin: 1 })
           .then(url => this.mfaQrDataUrl.set(url))
           .catch(() => this.mfaQrDataUrl.set(null));
       },

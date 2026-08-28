@@ -134,11 +134,113 @@ app-pagination-bar {
     .mat-mdc-row:last-child .mat-mdc-cell { border-bottom: none; }
     .mat-mdc-row { height: 58px; }
   }
+
+  // Plain <table class="data-table"> markup (the Workflows/Source-Connections/Destination-Connections
+  // pattern) instead of Angular Material's mat-table — the [mat-table] attribute selector guard means
+  // these rules can never collide with the ::ng-deep .mat-mdc-* block above, which only ever matches a
+  // <table mat-table> host. Copied verbatim from workflow-list.component.scss (the design reference) so
+  // header height, row height, typography, padding and borders match it exactly wherever this is used.
+  &:not([mat-table]) {
+    border-collapse: collapse;
+
+    thead th {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-ink-2);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      text-align: left;
+      padding: 10px 12px;
+      white-space: nowrap;
+      background: var(--color-side);
+      border-bottom: 2px solid var(--color-border);
+    }
+
+    tbody td {
+      padding: 12px;
+      border-bottom: 1px solid var(--color-border);
+      vertical-align: middle;
+      font-size: 14px;
+      color: var(--color-ink);
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+  }
 }
 
 .data-row { transition: background var(--transition-base); &:hover { background: var(--color-side); } }
 
 .col-index { width: 52px; text-align: center !important; color: var(--color-muted) !important; font-size: 13px !important; }
+
+// ─── Row "more actions" (⋮) menu ──────────────────────────────────────────────
+// Standard row-action pattern (see workflow-list.component.scss, the design reference): a single kebab
+// trigger in the FIRST column (.col-menu, empty header) opens a position: fixed panel — fixed rather
+// than absolute so it escapes .table-wrapper's overflow-x: auto clipping (an ancestor can't have
+// overflow-x auto/scroll and overflow-y visible at once, so an absolutely-positioned panel here would
+// get clipped the moment it needs to extend below the table's own visible bounds). Position is computed
+// at open time from the trigger's own getBoundingClientRect() — see toggleActionMenu in any consuming
+// component's .ts for the flip-upward-near-viewport-bottom logic.
+.col-menu { width: 44px; text-align: center; }
+
+.row-menu { position: relative; }
+
+.row-menu-panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  mat-icon { flex-shrink: 0; font-size: 18px; width: 18px; height: 18px; color: var(--color-muted); }
+
+  &:hover:not(:disabled) { background: var(--color-side); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  &--danger {
+    color: var(--color-error);
+    mat-icon { color: var(--color-error); }
+    &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+  }
+}
+
+.row-menu-divider { height: 1px; background: var(--color-border); margin: 4px 2px; }
+
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  width: 32px; height: 32px; padding: 0;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-ink-2);
+  line-height: 1; cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base);
+
+  mat-icon { width: 18px; height: 18px; font-size: 18px; }
+
+  &:hover:not(:disabled) { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+}
 
 // Sortable column headers (see Execution History, Workflows) — click a header to sort by it.
 .col-sortable {

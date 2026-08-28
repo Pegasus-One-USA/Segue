@@ -2,8 +2,8 @@ import {
   Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy, OnInit,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
-import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict } from './field-mapping-schema-ops.util';
+import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType, isSqlFamilyDestType } from './field-mapping-model';
+import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict, isExtraTableCardValid, TableIdentityInfo } from './field-mapping-schema-ops.util';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -19,7 +19,7 @@ import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './fiel
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
 import { parseSourcePayloadJson } from './field-mapping-payload.util';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, qualify } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
 
@@ -86,9 +86,22 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();
+  /** Bare suggested table name (e.g. "Patient") for the "Create a new table…" dialog's pre-fill — see
+   *  DestinationWizardComponent.suggestedTableNameForResourceFn's own doc comment. A dialog hint only:
+   *  never written into targetByResource on its own. */
+  readonly suggestedTableNameForResource = input<(r: string) => string>(() => '');
   readonly columnsForResourceTarget = input.required<(r: string) => string[]>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
+  /** The raw known-table list (fullName + tableName + origin), passed alongside sqlTableOptions (which
+   *  only ever carries bare fullName strings) specifically so submitCreateTable's local/pre-probe duplicate
+   *  check can match MySQL/PostgreSQL's own live-probed fullName ("{database}.Patient"/"public.Patient")
+   *  against a bare typed candidate via findConfirmedTableMatch — see describeCreateTableConflict's own
+   *  doc comment. Every OTHER consumer of sqlTableOptions (the "+ Add a table…" dropdown, canQueueAddColumn,
+   *  isPrimaryTargetValid, …) already compares against an already-resolved real fullName and stays on the
+   *  plain string[] unchanged; this input exists only for the one check that still needs the bare
+   *  tableName too. */
+  readonly sqlTables = input<readonly TableIdentityInfo[]>([]);
   readonly csvDelimiterKey = input<string>('comma');
   /** Toolbar-level search (dialog header, see NodeLibraryDialogComponent) — live text, forwarded
    *  straight through to both the payload source tree and every destination target card below, each of
@@ -248,12 +261,41 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   // ── target cards: primary table + any extra tables, for the single active resource ──────
-  // The primary card is only shown once it points at a real table — a guessed default ("dbo.Encounter")
-  // that was never actually created has nothing to map onto, so a card for it would just be a dead-end
-  // placeholder. Until then, the canvas-level "+ Add a table…" control is the one way in (see
+  // The primary card is only shown once it points at a real-or-pending table — an empty target (nothing
+  // has ever been confirmed or staged for this resource — see DestinationWizardComponent._rebuildRows,
+  // which deliberately never guesses one) has nothing to map onto, so a card for it would just be a
+  // dead-end placeholder ("Remove Suggested Tables from Map Fields"). Until then, the canvas-level
+  // "+ Add a table…"/"+ Create a new table…" control is the one way in (see
   // onAddExtraTable/openCreateTableModal, which route there instead of "extra" while this is false).
-  private isPrimaryTargetValid(resource: string): boolean {
-    return !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetFor(resource));
+  // Public (not private) so the template can show a "no destination table selected" hint alongside that
+  // control.
+  isPrimaryTargetValid(resource: string): boolean {
+    const target = this.targetFor(resource);
+    if (!target) return false;
+    // CSV/Mongo/Blob/etc. have no live "does this exist" concept today — any non-empty target (always
+    // seeded, see _rebuildRows) is valid, same as before this method's SQL-family branch was split out.
+    if (!isSqlFamilyDestType(this.destType())) return true;
+    // SQL Server/MySQL/PostgreSQL: only a genuinely real (sqlTableOptions) or session-staged
+    // (pendingTableNames) table counts — reusing canQueueAddColumn's exact "confirmed or pending" check
+    // rather than a second, possibly-diverging definition of the same question.
+    return canQueueAddColumn(target, this.sqlTableOptions(), this.pendingTableNames());
+  }
+
+  // An extra table (extraTablesByGroup) reaches this canvas two ways: a live "+ Add a table…"/
+  // "Create a new table…" pick, which only ever offers an already-probed-or-just-created name, or
+  // applyMappingSummaryDocument restoring dest_mapping_summary_v1 straight into extraTablesByGroup
+  // with no live check at all (see field-mapping-summary.model.ts). The second path is why an extra
+  // table needs its own "does this still exist" gate, mirroring isPrimaryTargetValid's own
+  // confirmed-or-pending check above rather than trusting isExtra alone — see
+  // isExtraTableCardValid's own doc comment for why this is checked against the raw sqlTables()
+  // (not the already-flattened sqlTableOptions()). A stale extra table is never removed from
+  // extraTablesByGroup here, only left out of what renders — same as a stale primary target already
+  // not rendering a card — so its mapping rows (if any) are untouched and still get caught by
+  // validateMappingForSave's existing table-existence check at save time.
+  private isExtraTableValid(tableName: string): boolean {
+    // CSV/Mongo/Blob/etc. have no live "does this exist" concept — unaffected by this gate.
+    if (!isSqlFamilyDestType(this.destType())) return true;
+    return isExtraTableCardValid(tableName, this.sqlTables(), this.pendingTableNames());
   }
 
   readonly targetCards = computed<FmTargetCardSpec[]>(() => {
@@ -262,7 +304,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const primary: FmTargetCardSpec[] = this.isPrimaryTargetValid(resource)
       ? [{ resource, tableName: this.targetFor(resource), isExtra: false }]
       : [];
-    const extras: FmTargetCardSpec[] = this.extraTables().map(t => ({ resource, tableName: t, isExtra: true }));
+    const extras: FmTargetCardSpec[] = this.extraTables()
+      .filter(t => this.isExtraTableValid(t))
+      .map(t => ({ resource, tableName: t, isExtra: true }));
     return [...primary, ...extras];
   });
 
@@ -668,6 +712,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   private creatingTableResource: string | null = null;
   private creatingTableAsPrimary = false;
 
+  /** The bare suggested name (e.g. "Patient") to pre-fill the create-table modal with — see
+   *  suggestedTableNameForResource's own doc comment. Empty when no create is in progress (defensive; the
+   *  modal only ever renders while creatingTableResource is set). */
+  creatingTableSuggestedName(): string {
+    return this.creatingTableResource ? this.suggestedTableNameForResource()(this.creatingTableResource) : '';
+  }
+
   /** A native <select>'s open option list is rendered by the OS/browser itself — no page CSS/DOM can
    *  size, position, or inject a search box into it, so it can't be kept inside the canvas's own
    *  visible bounds as that shrinks, nor filtered as the user types. This custom panel renders
@@ -799,7 +850,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     // Mirrors SqlDestinationSchemaService.SplitTableName's "dbo" default so extraTables()/sqlTables()
     // agree on the same key everywhere, or the new table's card resolves zero columns via
     // columnsForTable() even though the create appears to have "succeeded" (columns silently invisible).
-    const name = typed.includes('.') ? typed : `dbo.${typed}`;
+    // qualify() only actually adds "dbo." for SQL Server — MySQL/PostgreSQL (and everything else this
+    // canvas ever creates a table for) keep the bare name the user typed, never a hardcoded "dbo." prefix
+    // that has no meaning for those engines.
+    const name = qualify(typed, this.destType());
     const connection = this.connectionInfo();
     if (!connection) return;
 
@@ -810,7 +864,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     // (targetFor(resource) may just be a guess with no card shown for it yet — see isPrimaryTargetValid).
     const localConflict = describeCreateTableConflict(name, {
       extraTables: this.extraTables(),
-      sqlTableOptions: this.sqlTableOptions(),
+      sqlTables: this.sqlTables(),
       pendingTableNames: this.pendingTableNames(),
     });
     if (localConflict) {
@@ -887,8 +941,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     }
 
     const dot = name.indexOf('.');
+    // "dbo" is only ever the right fallback for a dot-less name on SQL Server (qualify() guarantees a dot
+    // is already present whenever destType is 'sql', so this branch is unreachable there in practice) —
+    // MySQL/PostgreSQL have no schema concept to default to, so a bare name gets a bare (empty) schemaName.
     const table: DestinationTable = {
-      schemaName: dot >= 0 ? name.slice(0, dot) : 'dbo',
+      schemaName: dot >= 0 ? name.slice(0, dot) : this.destType() === 'sql' ? 'dbo' : '',
       tableName: dot >= 0 ? name.slice(dot + 1) : name,
       fullName: name,
       origin: 'userCreated',
@@ -974,7 +1031,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly dropColumnSubmitting = signal(false);
 
   onDeleteColumn(resource: string, tableName: string, column: string): void {
-    if (this.destType() === 'sql' && this.hasSqlTables()) {
+    // MySQL/PostgreSQL columns are just as real (and just as destructive to drop) as SQL Server's — see
+    // isSqlFamilyDestType's doc comment for why this can't be a bare `=== 'sql'` check.
+    if (isSqlFamilyDestType(this.destType()) && this.hasSqlTables()) {
       this.pendingDropColumn.set({ resource, tableName, column });
       return;
     }

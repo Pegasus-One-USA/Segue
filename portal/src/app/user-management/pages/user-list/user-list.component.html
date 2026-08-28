@@ -1,5 +1,5 @@
 <!-- user-management/pages/user-list/user-list.component.html -->
-<div class="user-list-page">
+<div class="list-page">
 
   <!-- ─── Page Header ──────────────────────────────────────────────────── -->
   <div class="page-header">
@@ -123,157 +123,169 @@
     <!-- The global loader already shows this page is busy — no local overlay/spinner here. -->
 
     <div class="table-wrapper">
-      <table
-        mat-table
-        [dataSource]="users()"
-        matSort
-        (matSortChange)="onSortChange($event)"
-        class="users-table"
-      >
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-menu"></th>
+            <th class="col-sortable" (click)="onSort('firstName')">
+              Name
+              <span class="sort-ico" [class.sort-ico--active]="sortBy() === 'firstName'">
+                {{ sortBy() === 'firstName' && sortOrder() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th>Role</th>
+            <th class="col-sortable" (click)="onSort('status')">
+              Status
+              <span class="sort-ico" [class.sort-ico--active]="sortBy() === 'status'">
+                {{ sortBy() === 'status' && sortOrder() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th>Login Type</th>
+            <th class="col-sortable" (click)="onSort('lastLoginAt')">
+              Last Login
+              <span class="sort-ico" [class.sort-ico--active]="sortBy() === 'lastLoginAt'">
+                {{ sortBy() === 'lastLoginAt' && sortOrder() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th>Action by</th>
+            <th class="col-sortable" (click)="onSort('updatedAt')">
+              Action on
+              <span class="sort-ico" [class.sort-ico--active]="sortBy() === 'updatedAt'">
+                {{ sortBy() === 'updatedAt' && sortOrder() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+            <tr class="data-row">
+              <td class="col-menu">
+                @if (hasRowMenu()) {
+                  <div class="row-menu" (click)="$event.stopPropagation()">
+                    <button
+                      class="btn-icon"
+                      type="button"
+                      title="More actions"
+                      (click)="$event.stopPropagation(); toggleActionMenu($event, user.id)"
+                    ><mat-icon>more_vert</mat-icon></button>
 
-        <!-- Avatar Column -->
-        <ng-container matColumnDef="avatar">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let user">
-            <div
-              class="user-avatar"
-              [style.background-color]="getAvatarColor(user)"
-              (click)="navigateToDetail(user)"
-            >
-              {{ getInitials(user) }}
-            </div>
-          </td>
-        </ng-container>
+                    @if (openActionMenuId() === user.id && actionMenuPosition(); as pos) {
+                      <div
+                        class="row-menu-panel"
+                        [style.top.px]="pos.top"
+                        [style.bottom.px]="pos.bottom"
+                        [style.left.px]="pos.left"
+                      >
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)"
+                          (click)="openEditDialog(user); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>edit</mat-icon> Edit User
+                        </button>
 
-        <!-- Name Column -->
-        <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header="firstName">Name</th>
-          <td mat-cell *matCellDef="let user">
-            <div class="user-name-cell">
-              <span class="user-fullname" (click)="navigateToDetail(user)">{{ user.fullName }}</span>
-              <span class="user-email">{{ user.email }}</span>
-            </div>
-          </td>
-        </ng-container>
+                        <button
+                          type="button"
+                          class="row-menu-item"
+                          *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Assign)"
+                          (click)="openAssignRolesDialog(user); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>manage_accounts</mat-icon> Assign Roles
+                        </button>
 
-        <!-- Roles Column -->
-        <ng-container matColumnDef="roles">
-          <th mat-header-cell *matHeaderCellDef>Role</th>
-          <td mat-cell *matCellDef="let user">
-            <div class="role-chips">
-              @for (r of getRoleNames(user); track r) {
-                <span class="role-chip">{{ r }}</span>
-              }
-            </div>
-          </td>
-        </ng-container>
+                        @if (user.status === 'pending') {
+                          <button
+                            type="button"
+                            class="row-menu-item"
+                            *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Invite)"
+                            (click)="resendInvitation(user); openActionMenuId.set(null)"
+                          >
+                            <mat-icon>send</mat-icon> Resend Invitation
+                          </button>
+                        }
 
-        <!-- Status Column -->
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header="status">Status</th>
-          <td mat-cell *matCellDef="let user">
-            <span class="status-badge" [ngClass]="getStatusClass(user.status)">
-              {{ getStatusLabel(user.status) }}
-            </span>
-          </td>
-        </ng-container>
+                        <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Deactivate)">
+                          @if (user.status !== 'active') {
+                            <div class="row-menu-divider"></div>
+                            <button
+                              type="button"
+                              class="row-menu-item"
+                              (click)="toggleStatus(user, 'enable'); openActionMenuId.set(null)"
+                            >
+                              <mat-icon class="icon-enable">check_circle</mat-icon> Activate User
+                            </button>
+                          } @else if (!isSelf(user)) {
+                            <div class="row-menu-divider"></div>
+                            <button
+                              type="button"
+                              class="row-menu-item"
+                              (click)="toggleStatus(user, 'disable'); openActionMenuId.set(null)"
+                            >
+                              <mat-icon class="icon-disable">remove_circle</mat-icon> Deactivate User
+                            </button>
+                          }
+                        </ng-container>
 
-        <!-- Login Type Column -->
-        <ng-container matColumnDef="loginType">
-          <th mat-header-cell *matHeaderCellDef>Login Type</th>
-          <td mat-cell *matCellDef="let user">
-            <span class="login-chip" [ngClass]="'login-chip--' + user.loginType">
-              {{ getLoginTypeLabel(user.loginType) }}
-            </span>
-          </td>
-        </ng-container>
-
-        <!-- Last Login Column -->
-        <ng-container matColumnDef="lastLogin">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header="lastLoginAt">Last Login</th>
-          <td mat-cell *matCellDef="let user">
-            <span class="cell-muted">{{ formatDate(user.lastLoginAt) }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Action by Column -->
-        <ng-container matColumnDef="actionBy">
-          <th mat-header-cell *matHeaderCellDef>Action by</th>
-          <td mat-cell *matCellDef="let user">
-            <span class="cell-muted">{{ (user.modifiedBy || user.createdBy) ?? '—' }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Action on Column -->
-        <ng-container matColumnDef="actionOn">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header="updatedAt">Action on</th>
-          <td mat-cell *matCellDef="let user">
-            <span class="cell-muted">{{ formatDate(user.updatedAt || user.createdAt) }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Actions Column -->
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef></th>
-          <td mat-cell *matCellDef="let user">
-            <div class="actions-cell">
-              <button mat-button class="btn-view" (click)="navigateToDetail(user)">
-                View
-              </button>
-              @if (hasRowMenu()) {
-                <button mat-icon-button [matMenuTriggerFor]="userMenu" class="btn-more">
-                  <mat-icon>more_vert</mat-icon>
-                </button>
-                <mat-menu #userMenu="matMenu" class="user-action-menu">
-                  <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="openEditDialog(user)">
-                    <mat-icon>edit</mat-icon>
-                    Edit User
-                  </button>
-                  <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Assign)" (click)="openAssignRolesDialog(user)">
-                    <mat-icon>manage_accounts</mat-icon>
-                    Assign Roles
-                  </button>
-                  @if (user.status === 'pending') {
-                    <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Invite)" (click)="resendInvitation(user)">
-                      <mat-icon>send</mat-icon>
-                      Resend Invitation
-                    </button>
-                  }
-                  <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Deactivate)">
-                    <mat-divider></mat-divider>
-                    @if (user.status !== 'active') {
-                      <button mat-menu-item (click)="toggleStatus(user, 'enable')">
-                        <mat-icon class="icon-enable">check_circle</mat-icon>
-                        Activate User
-                      </button>
-                    } @else if (!isSelf(user)) {
-                      <button mat-menu-item (click)="toggleStatus(user, 'disable')">
-                        <mat-icon class="icon-disable">remove_circle</mat-icon>
-                        Deactivate User
-                      </button>
+                        @if (!isSelf(user)) {
+                          <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
+                            <div class="row-menu-divider"></div>
+                            <button
+                              type="button"
+                              class="row-menu-item row-menu-item--danger"
+                              (click)="deleteUser(user); openActionMenuId.set(null)"
+                            >
+                              <mat-icon>delete_outline</mat-icon> Delete User
+                            </button>
+                          </ng-container>
+                        }
+                      </div>
                     }
-                  </ng-container>
-                  @if (!isSelf(user)) {
-                    <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Delete)">
-                      <mat-divider></mat-divider>
-                      <button mat-menu-item class="menu-item-danger" (click)="deleteUser(user)">
-                        <mat-icon>delete_outline</mat-icon>
-                        Delete User
-                      </button>
-                    </ng-container>
+                  </div>
+                }
+              </td>
+              <td>
+                <div class="user-name-cell-wrap">
+                  <div
+                    class="user-avatar"
+                    [style.background-color]="getAvatarColor(user)"
+                    (click)="navigateToDetail(user)"
+                  >
+                    {{ getInitials(user) }}
+                  </div>
+                  <div class="user-name-cell">
+                    <span class="user-fullname" (click)="navigateToDetail(user)">{{ user.fullName }}</span>
+                    <span class="user-email">{{ user.email }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="role-chips">
+                  @for (r of getRoleNames(user); track r) {
+                    <span class="role-chip">{{ r }}</span>
                   }
-                </mat-menu>
-              }
-            </div>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-        <tr
-          mat-row
-          *matRowDef="let row; columns: displayedColumns;"
-          class="user-row"
-        ></tr>
+                </div>
+              </td>
+              <td>
+                <span class="status-badge" [ngClass]="getStatusClass(user.status)">
+                  {{ getStatusLabel(user.status) }}
+                </span>
+              </td>
+              <td>
+                <span class="login-chip" [ngClass]="'login-chip--' + user.loginType">
+                  {{ getLoginTypeLabel(user.loginType) }}
+                </span>
+              </td>
+              <td><span class="cell-muted">{{ formatDate(user.lastLoginAt) }}</span></td>
+              <td><span class="cell-muted">{{ (user.modifiedBy || user.createdBy) ?? '—' }}</span></td>
+              <td><span class="cell-muted">{{ formatDate(user.updatedAt || user.createdAt) }}</span></td>
+              <td class="col-actions">
+                <button class="btn-view" type="button" (click)="navigateToDetail(user)">View</button>
+              </td>
+            </tr>
+          }
+        </tbody>
       </table>
     </div>
 

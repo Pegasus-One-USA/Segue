@@ -20,8 +20,12 @@ export interface DestinationColumn {
   /** Set only when isForeignKey — "{schema}.{table}.{column}" of the referenced primary key. */
   references?: string | null;
   /** Absent (e.g. every real probe() response) is treated as 'probed'. Only the mapping-canvas's own
-   *  "+ Add column" flow ever stamps 'userCreated', client-side — the backend never sets this. */
-  origin?: 'probed' | 'userCreated';
+   *  "+ Add column" flow ever stamps 'userCreated', client-side — the backend never sets this.
+   *  'restoredUnverified' is column-level for symmetry with DestinationTable.origin, but nothing sets it
+   *  today — a restored table's columns come along for the ride under the table's own 'restoredUnverified'
+   *  tag (see DestinationTable.origin below); no code currently needs to ask "is THIS COLUMN verified"
+   *  independently of its table. */
+  origin?: 'probed' | 'userCreated' | 'restoredUnverified';
 }
 
 export interface DestinationTable {
@@ -29,8 +33,21 @@ export interface DestinationTable {
   tableName: string;
   fullName: string;
   columns: DestinationColumn[];
-  /** Same convention as DestinationColumn.origin — stamped only by the "+ Add a table" flow. */
-  origin?: 'probed' | 'userCreated';
+  /** Same convention as DestinationColumn.origin, plus a third state:
+   *  - undefined / 'probed': confirmed to exist right now by a real, live schema probe.
+   *  - 'userCreated': created (or optimistically staged pending creation) via this canvas's own
+   *    "Create a new table…" / "+ Add column" this session — see PendingSchemaOp/isConfirmedRealTable for
+   *    how "staged, not yet flushed" is told apart from "flushed and confirmed" (both carry this same tag;
+   *    pendingTableNames is what distinguishes them).
+   *  - 'restoredUnverified': reconstructed from a previously-SAVED mapping (dest_mapping_summary_v1 /
+   *    a mapping snapshot) on reopen, before this session's own live re-probe has confirmed it one way or
+   *    the other. MUST NEVER be treated as confirmed-real — see confirmedTableNames/tableTargetStatus in
+   *    field-mapping-schema-ops.util.ts, the single choke point that excludes it from "known to exist".
+   *    A successful live re-probe replaces the whole sqlTables() list wholesale (see
+   *    DestinationWizardComponent._refreshSqlTablesFromLiveSchema), so this tag is only ever transient —
+   *    it either upgrades to undefined/'probed' (table found for real) or the table disappears from
+   *    sqlTables() entirely (table confirmed NOT to exist) once that probe lands. */
+  origin?: 'probed' | 'userCreated' | 'restoredUnverified';
 }
 
 export interface DestinationSchemaProbe {
