@@ -1,0 +1,237 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "18077643527110757003"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The same deployment name prefix used for the original FHIRBridge deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and all 3 app names."
+      }
+    },
+    "fhirbridgeAppDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the FHIRBridge app (e.g. app.example.com). Leave blank to skip this app entirely this run."
+      }
+    },
+    "demoAppDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the Demo app. Leave blank to skip this app entirely this run."
+      }
+    },
+    "hapiTerminologyDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the HAPI terminology server. Leave blank to skip this app entirely this run."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for the (re)deployed container apps + managed certificates. An existing container app's own location can't be read back at compile time (Bicep BCP120), so this must match wherever the environment/apps actually live — defaults to the resource group's region, which is what main.bicep itself uses."
+      }
+    }
+  },
+  "variables": {
+    "environmentName": "[format('{0}-env', parameters('namePrefix'))]",
+    "allAppConfigs": [
+      {
+        "key": "fhirbridgeApp",
+        "name": "[format('{0}-app', parameters('namePrefix'))]",
+        "domain": "[parameters('fhirbridgeAppDomain')]"
+      },
+      {
+        "key": "demoApp",
+        "name": "[format('{0}-demo-app', parameters('namePrefix'))]",
+        "domain": "[parameters('demoAppDomain')]"
+      },
+      {
+        "key": "hapiTerminology",
+        "name": "[format('{0}-term', parameters('namePrefix'))]",
+        "domain": "[parameters('hapiTerminologyDomain')]"
+      }
+    ],
+    "activeAppConfigs": "[filter(variables('allAppConfigs'), lambda('c', not(empty(lambdaVariables('c').domain))))]"
+  },
+  "resources": [
+    {
+      "copy": {
+        "name": "appUpdates",
+        "count": "[length(variables('activeAppConfigs'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('update-{0}-customdomain', variables('activeAppConfigs')[copyIndex()].name)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].name]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[variables('environmentName')]"
+          },
+          "managedEnvironmentId": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').managedEnvironmentId]"
+          },
+          "domain": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].domain]"
+          },
+          "bindCertificate": {
+            "value": "[contains(map(coalesce(tryGet(reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress, 'customDomains'), createArray()), lambda('cd', lambdaVariables('cd').name)), variables('activeAppConfigs')[copyIndex()].domain)]"
+          },
+          "baseConfiguration": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration]"
+          },
+          "existingSecrets": {
+            "value": "[listSecrets(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').value]"
+          },
+          "otherCustomDomains": {
+            "value": "[filter(coalesce(tryGet(reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress, 'customDomains'), createArray()), lambda('cd', not(equals(lambdaVariables('cd').name, variables('activeAppConfigs')[copyIndex()].domain))))]"
+          },
+          "containerTemplate": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').template]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "16570397132375237209"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the container app being updated."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region - must match the app's existing region."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Container Apps managed environment (parents the managed certificate)."
+              }
+            },
+            "managedEnvironmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Container Apps managed environment this app belongs to."
+              }
+            },
+            "domain": {
+              "type": "string",
+              "metadata": {
+                "description": "The domain being registered/bound on this app."
+              }
+            },
+            "bindCertificate": {
+              "type": "bool",
+              "metadata": {
+                "description": "Whether `domain` was already present in the app's customDomains BEFORE this deployment (computed by the caller from live state) — true creates the managed certificate and binds SniEnabled SSL now; false just registers the hostname (bindingType Disabled) for a subsequent run to bind once DNS has propagated."
+              }
+            },
+            "baseConfiguration": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's current full configuration object (secrets redacted, ingress as-is) — read by the caller via an `existing` reference. `secrets` and `ingress.customDomains` are overridden below; everything else (registries, targetPort, transport, existing traffic weights, etc.) passes through unchanged."
+              }
+            },
+            "existingSecrets": {
+              "type": "array",
+              "metadata": {
+                "description": "The app's current secrets WITH real values (from the caller's listSecrets() call — a plain GET/`existing` reference redacts secret values to name-only, which would blank them out if reused as-is)."
+              }
+            },
+            "otherCustomDomains": {
+              "type": "array",
+              "metadata": {
+                "description": "Every custom domain already on the app OTHER than `domain` (already filtered by the caller) — preserved untouched so this app's other bound domains survive this update."
+              }
+            },
+            "containerTemplate": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's existing containers/scale template, passed through unchanged."
+              }
+            }
+          },
+          "variables": {
+            "thisCustomDomain": "[if(parameters('bindCertificate'), createObject('name', parameters('domain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('domain'), 'bindingType', 'Disabled'))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('bindCertificate')]",
+              "type": "Microsoft.App/managedEnvironments/managedCertificates",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}/{1}', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subjectName": "[parameters('domain')]",
+                "domainControlValidation": "CNAME"
+              }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('appName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "managedEnvironmentId": "[parameters('managedEnvironmentId')]",
+                "configuration": "[union(parameters('baseConfiguration'), createObject('secrets', parameters('existingSecrets'), 'ingress', union(parameters('baseConfiguration').ingress, createObject('external', true(), 'customDomains', concat(parameters('otherCustomDomains'), createArray(variables('thisCustomDomain')))))))]",
+                "template": "[parameters('containerTemplate')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "results": {
+      "type": "array",
+      "copy": {
+        "count": "[length(variables('activeAppConfigs'))]",
+        "input": {
+          "app": "[variables('activeAppConfigs')[copyIndex()].key]",
+          "appName": "[variables('activeAppConfigs')[copyIndex()].name]",
+          "domain": "[variables('activeAppConfigs')[copyIndex()].domain]",
+          "appFqdn": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress.fqdn]",
+          "domainVerificationId": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').customDomainVerificationId]",
+          "customDomainUrl": "[format('https://{0}', variables('activeAppConfigs')[copyIndex()].domain)]",
+          "phase": "[if(contains(map(coalesce(tryGet(reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress, 'customDomains'), createArray()), lambda('cd', lambdaVariables('cd').name)), variables('activeAppConfigs')[copyIndex()].domain), 'certificate-bound', 'hostname-registered-create-dns-then-redeploy-to-bind-certificate')]"
+        }
+      }
+    }
+  }
+}

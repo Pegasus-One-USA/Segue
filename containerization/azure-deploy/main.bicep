@@ -13,11 +13,13 @@
 // IMPORTANT — image publishing is a prerequisite, not something this template does: a genuinely
 // one-click deploy requires the 4 custom images (fhirbridge-app, demo-app, fhirbridge-worker,
 // fhirbridge-redis) to already exist in a registry the customer's Container Apps can reach BEFORE
-// they click deploy. fhirbridge-redis is stock redis:7-alpine plus a fixed, committed self-signed
-// TLS certificate — see containerization/docker/redis-tls/Dockerfile for why Redis needs a custom
-// image at all. Build and push them once (see containerization/scripts/build-images.sh|ps1) to
-// whatever registry you control, then point imageRegistryServer/imageTag at that release. See
-// README.md in this folder for the full publishing + one-click deploy story.
+// they click deploy. fhirbridge-redis is stock redis:7-alpine plus a self-signed TLS certificate
+// generated locally (containerization/docker/redis-tls/generate-cert.ps1|sh — run once before
+// building images) — see that Dockerfile for why Redis needs a custom image at all, and this
+// template's redisTrustedCertificateThumbprint parameter for wiring the printed thumbprint in.
+// Build and push images once (see containerization/scripts/build-images.sh|ps1) to whatever
+// registry you control, then point imageRegistryServer/imageTag at that release. See README.md in
+// this folder for the full publishing + one-click deploy story.
 
 @description('Short name used to build every resource name in this deployment.')
 param namePrefix string = 'fhirbridge'
@@ -58,6 +60,9 @@ param redisPort int = 6379
 @secure()
 param redisPassword string
 
+@description('SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn\'t match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs.')
+param redisTrustedCertificateThumbprint string
+
 @description('Password for the hapi_terminology Postgres role backing the HAPI terminology server\'s own schema (internal-only — not the app\'s own FHIRBridgeDb).')
 @secure()
 param hapiTerminologyPostgresPassword string
@@ -76,6 +81,23 @@ param demoAppCustomDomain string = ''
 
 @description('Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment.')
 param bindCustomDomainCertificates bool = false
+
+// The 3 params below are DELIBERATELY inert - captured here purely so a customer can note their
+// intended domain while filling out this wizard, without touching Azure at all (no
+// customDomains/ingress/certificate wiring, no TXT-record requirement, no risk of
+// InvalidCustomHostNameValidation on a first-ever deploy). They're only echoed back in this
+// template's outputs, as a plain reminder - actually activating a domain is a separate step (see
+// custom-domain.bicep / containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md), which
+// re-asks for the domain and does the real work once this app already exists.
+
+@description('Domain you intend to use for the FHIRBridge app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment\'s outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2).')
+param fhirbridgeAppIntendedDomain string = ''
+
+@description('Domain you intend to use for the Demo app later - purely a reminder, echoed in this deployment\'s outputs. Activate it afterward with custom-domain.bicep (Step 2).')
+param demoAppIntendedDomain string = ''
+
+@description('Domain you intend to use for the HAPI terminology server later - purely a reminder, echoed in this deployment\'s outputs. Activate it afterward with custom-domain.bicep (Step 2).')
+param hapiTerminologyIntendedDomain string = ''
 
 // fhirbridge-app / demo-app have no equivalent parameter: Azure Container Apps external HTTP
 // ingress has no client-configurable port — it's always https://<app>.<domain> with no port
@@ -133,8 +155,15 @@ var commonTags = {
   ManagedBy: 'Bicep'
 }
 
-var uniqueSuffix = uniqueString(resourceGroup().id, namePrefix)
-var storageAccountName = toLower('${namePrefix}st${uniqueSuffix}') // Storage account: alnum only, <=24 chars, globally unique
+var uniqueSuffix = uniqueString(resourceGroup().id, namePrefix) // always exactly 13 characters
+// Storage account names cap at 24 characters (alnum only, globally unique) - "st" (2) + the
+// 13-character uniqueSuffix leaves only 9 characters of headroom for namePrefix, which can be up
+// to 21 characters long (createUiDefinition.json's own regex allows it). Truncating namePrefix to
+// its first 9 characters here (only for this name - every other resource name below still uses
+// the full namePrefix, since ACR/Container Apps/etc. have far more headroom) keeps this valid
+// regardless of how long a namePrefix is chosen - a bug that surfaced with the default namePrefix
+// ("fhirbridge", 10 characters) alone already being one character too many before this fix.
+var storageAccountName = toLower('${take(namePrefix, 9)}st${uniqueSuffix}')
 
 // Plain-string app names (not resource attribute lookups) so a Container App can compute its OWN
 // public URL from its own name + the environment's default domain — a Container App's FQDN is
@@ -215,11 +244,6 @@ resource keysDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@20
   properties: { shareQuota: 1 }
 }
 
-resource hapiTerminologyDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  name: '${storageAccount.name}/default/hapi-terminology-data'
-  properties: { shareQuota: 10 }
-}
-
 resource sqlDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   parent: containerAppEnv
   name: 'sql-data'
@@ -262,19 +286,6 @@ resource keysDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01'
   dependsOn: [keysDataShare]
 }
 
-resource hapiTerminologyDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
-  parent: containerAppEnv
-  name: 'hapi-terminology-data'
-  properties: {
-    azureFile: {
-      accountName: storageAccount.name
-      accountKey: storageAccount.listKeys().keys[0].value
-      shareName: 'hapi-terminology-data'
-      accessMode: 'ReadWrite'
-    }
-  }
-  dependsOn: [hapiTerminologyDataShare]
-}
 
 // --- SQL Server Express (internal only, single replica — Azure Files isn't safe for concurrent
 //     multi-instance SQL Server) ---
@@ -406,20 +417,21 @@ resource hapiTerminologyPostgresApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'POSTGRES_DB', value: 'hapi_terminology' }
             { name: 'POSTGRES_USER', value: 'hapi_terminology' }
             { name: 'POSTGRES_PASSWORD', secretRef: 'hapi-terminology-postgres-password' }
-            // Azure Files (SMB) doesn't support the chown/chmod postgres's entrypoint does on
-            // PGDATA at first boot ("Operation not permitted") the way a native/NFS filesystem
-            // does - pointing PGDATA at a subdirectory postgres creates and owns itself (rather
-            // than the mount root, which is externally provisioned) works around it. SQL Server
-            // doesn't hit this because it never tries to chmod its own mount point.
-            { name: 'PGDATA', value: '/var/lib/postgresql/data/pgdata' }
           ]
+          // initdb hard-requires chmod 700 on PGDATA (not skippable via config) and Azure Files
+          // (SMB) doesn't support Unix permission changes at all, on any path within the share —
+          // so PGDATA can't live on an AzureFile-backed volume here (unlike SQL Server/Redis,
+          // which never chmod their own mount points). EmptyDir gives real POSIX semantics, at the
+          // cost of not surviving restarts/redeploys — acceptable since this is a rebuildable
+          // terminology cache, kept in sync by FHIRBridge.Infrastructure/Terminology/Hapi, not a
+          // source of truth.
           volumeMounts: [
             { volumeName: 'hapi-terminology-data', mountPath: '/var/lib/postgresql/data' }
           ]
         }
       ]
       volumes: [
-        { name: 'hapi-terminology-data', storageType: 'AzureFile', storageName: hapiTerminologyDataStorage.name }
+        { name: 'hapi-terminology-data', storageType: 'EmptyDir' }
       ]
       scale: { minReplicas: 1, maxReplicas: 1 }
     }
@@ -441,9 +453,10 @@ resource hapiTerminologyApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
-      secrets: [
+      secrets: concat(registrySecret, [
         { name: 'hapi-terminology-postgres-password', value: hapiTerminologyPostgresPassword }
-      ]
+      ])
+      registries: registryConfig
       // external defaults to false (internal-only, like sqlserver/redis) — flipped on by
       // hapiTerminologyExternalAccess, or implicitly by hapiTerminologyCustomDomain (custom
       // domains require external ingress). transport is 'auto' rather than sqlserver/redis' 'tcp'
@@ -468,7 +481,12 @@ resource hapiTerminologyApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'hapi-terminology'
-          image: 'hapiproject/hapi:latest'
+          // Imported into this registry (az acr import, not docker build/push -- stock third-party
+          // image, no Dockerfile of our own) under the same imageTag as the other custom images --
+          // previously pulled hapiproject/hapi:latest straight from Docker Hub on every deploy/cold
+          // start, which is slower (Docker Hub rate limits + cross-registry latency) than pulling
+          // from this registry.
+          image: '${imageRegistryServer}/hapi-terminology:${imageTag}'
           resources: containerSizes[hapiTerminologySize]
           env: [
             { name: 'SPRING_DATASOURCE_URL', value: 'jdbc:postgresql://${hapiTerminologyPostgresName}:5432/hapi_terminology' }
@@ -573,6 +591,7 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
+            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
             // Gateway proxies /api to the Api process in this same container (entrypoint binds Api on loopback :5000).
@@ -668,6 +687,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
+            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
             { name: 'RuntimeWorker__Enabled', value: 'true' }
             { name: 'Messaging__Provider', value: 'InMemory' }
             { name: 'Terminology__BaseUrl', value: 'http://${hapiTerminologyName}:8080/fhir' }
@@ -702,6 +722,16 @@ output hapiTerminologyCustomDomainUrl string = !empty(hapiTerminologyCustomDomai
 output bindCustomDomainCertificates bool = bindCustomDomainCertificates
 output customDomainPhase string = empty(fhirbridgeAppCustomDomain) && empty(demoAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
 
+// Purely a reminder of whatever was typed into the (inert) intended-domain fields above - nothing
+// in this deployment acts on these values. Use custom-domain.bicep (Step 2) to actually activate
+// a domain once this deployment has finished.
+output intendedCustomDomains object = {
+  fhirbridgeApp: fhirbridgeAppIntendedDomain
+  demoApp: demoAppIntendedDomain
+  hapiTerminology: hapiTerminologyIntendedDomain
+}
+output customDomainActivationNote string = (empty(fhirbridgeAppIntendedDomain) && empty(demoAppIntendedDomain) && empty(hapiTerminologyIntendedDomain)) ? '' : 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.'
+
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
 // their parents — e.g. the 5 Container Apps before the environment they run in). Azure keeps this
 // output in the deployment's own history (`az deployment group show --name main --query
@@ -718,11 +748,9 @@ output resourceManifest array = [
   workerApp.id
   sqlDataStorage.id
   redisDataStorage.id
-  hapiTerminologyDataStorage.id
   keysDataStorage.id
   sqlDataShare.id
   redisDataShare.id
-  hapiTerminologyDataShare.id
   keysDataShare.id
   containerAppEnv.id
   storageAccount.id

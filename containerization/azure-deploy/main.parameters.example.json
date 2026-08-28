@@ -12,6 +12,7 @@
     "sqlPort": { "value": 1433 },
     "redisPort": { "value": 6379 },
     "redisPassword": { "value": "replace-with-a-strong-redis-password" },
+    "redisTrustedCertificateThumbprint": { "value": "replace-with-the-thumbprint-generate-cert-ps1-sh-printed" },
     "hapiTerminologyPostgresPassword": { "value": "replace-with-a-strong-postgres-password" },
     "hapiTerminologyExternalAccess": { "value": false },
     "fhirbridgeAppCustomDomain": { "value": "" },

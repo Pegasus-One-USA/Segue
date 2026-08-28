@@ -22,6 +22,11 @@ variable "redis_password" {
   sensitive   = true
 }
 
+variable "redis_trusted_certificate_thumbprint" {
+  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+  type        = string
+}
+
 variable "hapi_terminology_postgres_password" {
   description = "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (not the app's own FHIRBridgeDb)."
   type        = string

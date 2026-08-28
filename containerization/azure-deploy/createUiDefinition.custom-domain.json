@@ -1,0 +1,193 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": true,
+      "basics": {
+        "description": "Step 2 of the FHIRBridge custom-domain flow. Binds a domain (and, once DNS is ready, a free Azure-managed SSL certificate) to any of the 3 public-facing apps from an already-deployed FHIRBridge stack. All 3 tabs below are independently optional - leave any/all blank to skip that app entirely this run. There is no certificate checkbox: run this SAME deploy (same name prefix, same domain(s)) TWICE. The first run registers the hostname only and shows the CNAME/TXT records to create; once you've created those and DNS has propagated, run this exact same deploy again - it detects the domain is already registered and automatically creates + binds the managed certificate instead.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App"
+          ]
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Deployment name prefix",
+        "defaultValue": "",
+        "toolTip": "The same prefix used for the original FHIRBridge deployment (e.g. 'segue12') - builds <prefix>-app, <prefix>-demo-app, <prefix>-term, <prefix>-env.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter - the same prefix your FHIRBridge deployment used."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "fhirbridgeAppStep",
+        "label": "FHIRBridge app",
+        "elements": [
+          {
+            "name": "appNameInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('App name: ', basics('namePrefix'), '-app')]"
+            }
+          },
+          {
+            "name": "appDetailsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-app?api-version=2024-03-01')]"
+            }
+          },
+          {
+            "name": "liveInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Default URL: https://', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
+            }
+          },
+          {
+            "name": "domain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Custom domain (optional)",
+            "defaultValue": "",
+            "toolTip": "e.g. app.example.com. Leave blank to skip this app entirely this run.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$",
+              "validationMessage": "Leave blank to skip, or enter a valid domain name (e.g. app.example.com)."
+            }
+          },
+          {
+            "name": "dnsRecords",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[not(empty(steps('fhirbridgeAppStep').domain))]",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+            }
+          }
+        ]
+      },
+      {
+        "name": "demoAppStep",
+        "label": "Demo app",
+        "elements": [
+          {
+            "name": "appNameInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('App name: ', basics('namePrefix'), '-demo-app')]"
+            }
+          },
+          {
+            "name": "appDetailsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-demo-app?api-version=2024-03-01')]"
+            }
+          },
+          {
+            "name": "liveInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Default URL: https://', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
+            }
+          },
+          {
+            "name": "domain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Custom domain (optional)",
+            "defaultValue": "",
+            "toolTip": "e.g. demo.example.com. Leave blank to skip this app entirely this run.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$",
+              "validationMessage": "Leave blank to skip, or enter a valid domain name (e.g. demo.example.com)."
+            }
+          },
+          {
+            "name": "dnsRecords",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[not(empty(steps('demoAppStep').domain))]",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+            }
+          }
+        ]
+      },
+      {
+        "name": "hapiTerminologyStep",
+        "label": "Terminology server",
+        "elements": [
+          {
+            "name": "appNameInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('App name: ', basics('namePrefix'), '-term')]"
+            }
+          },
+          {
+            "name": "appDetailsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-term?api-version=2024-03-01')]"
+            }
+          },
+          {
+            "name": "liveInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Default URL: https://', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
+            }
+          },
+          {
+            "name": "domain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Custom domain (optional)",
+            "defaultValue": "",
+            "toolTip": "e.g. term.example.com. Leave blank to skip this app entirely this run.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$",
+              "validationMessage": "Leave blank to skip, or enter a valid domain name (e.g. term.example.com)."
+            }
+          },
+          {
+            "name": "dnsRecords",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[not(empty(steps('hapiTerminologyStep').domain))]",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "fhirbridgeAppDomain": "[steps('fhirbridgeAppStep').domain]",
+      "demoAppDomain": "[steps('demoAppStep').domain]",
+      "hapiTerminologyDomain": "[steps('hapiTerminologyStep').domain]"
+    }
+  }
+}

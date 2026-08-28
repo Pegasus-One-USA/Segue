@@ -1,9 +1,11 @@
 output "ecr_repository_urls" {
-  description = "Push the 3 custom images here before the first full apply: containerization/scripts/build-images.sh -r <account>.dkr.ecr.<region>.amazonaws.com/<name_prefix> -t <image_tag> -p"
+  description = "Push the 5 custom/mirrored images here before the first full apply: containerization/scripts/build-images.sh -r <account>.dkr.ecr.<region>.amazonaws.com/<name_prefix> -t <image_tag> -p"
   value = {
-    fhirbridge_app = aws_ecr_repository.fhirbridge_app.repository_url
-    demo_app       = aws_ecr_repository.demo_app.repository_url
-    worker         = aws_ecr_repository.worker.repository_url
+    fhirbridge_app   = aws_ecr_repository.fhirbridge_app.repository_url
+    demo_app         = aws_ecr_repository.demo_app.repository_url
+    worker           = aws_ecr_repository.worker.repository_url
+    redis            = aws_ecr_repository.redis.repository_url
+    hapi_terminology = aws_ecr_repository.hapi_terminology.repository_url
   }
 }
 

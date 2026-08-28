@@ -79,8 +79,8 @@ resource "random_id" "kv_suffix" {
 
 locals {
   suffix               = random_id.suffix.hex
-  acr_name             = "${var.name_prefix}acr${local.suffix}" # ACR: alnum only, globally unique
-  storage_account_name = "${var.name_prefix}st${local.suffix}"  # Storage account: alnum only, <=24 chars, globally unique
+  acr_name             = "${var.name_prefix}acr${local.suffix}"             # ACR: alnum only, globally unique
+  storage_account_name = "${var.name_prefix}st${local.suffix}"              # Storage account: alnum only, <=24 chars, globally unique
   key_vault_name       = "${var.name_prefix}-kv-${random_id.kv_suffix.hex}" # Key Vault: alnum + hyphens, <=24 chars, globally unique, own random component
 
   # Plain-string app names (not resource attribute lookups) so a Container App can safely compute
@@ -545,8 +545,13 @@ resource "azurerm_container_app" "hapi_terminology" {
     max_replicas = 1
 
     container {
-      name   = "hapi-terminology"
-      image  = "hapiproject/hapi:latest"
+      name = "hapi-terminology"
+      # Imported into this ACR (az acr import, not docker build/push -- it's a stock third-party
+      # image, no Dockerfile of our own) under the same image_tag as the 3 custom images, so it was
+      # previously pulling hapiproject/hapi:latest straight from Docker Hub on every deploy/cold
+      # start -- much slower (Docker Hub rate limits + cross-registry latency) than pulling from
+      # this ACR, which sits in the same region as the Container Apps environment.
+      image  = "${azurerm_container_registry.acr.login_server}/hapi-terminology:${var.image_tag}"
       cpu    = 1.0
       memory = "2Gi"
 
@@ -646,6 +651,10 @@ resource "azurerm_container_app" "fhirbridge_app" {
       env {
         name  = "ConnectionStrings__Redis"
         value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
+      }
+      env {
+        name  = "Redis__TrustedCertificateThumbprint"
+        value = var.redis_trusted_certificate_thumbprint
       }
       env {
         name        = "Authentication__SigningKey"
@@ -796,8 +805,8 @@ resource "azurerm_container_app" "demo_app" {
 # don't do it just to unblock a custom domain).
 
 resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
-  count             = var.fhirbridge_app_custom_domain != "" ? 1 : 0
-  name              = var.fhirbridge_app_custom_domain
+  count            = var.fhirbridge_app_custom_domain != "" ? 1 : 0
+  name             = var.fhirbridge_app_custom_domain
   container_app_id = azurerm_container_app.fhirbridge_app.id
 
   certificate_binding_type                 = "Disabled"
@@ -805,8 +814,8 @@ resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
 }
 
 resource "azurerm_container_app_custom_domain" "demo_app" {
-  count             = var.demo_app_custom_domain != "" ? 1 : 0
-  name              = var.demo_app_custom_domain
+  count            = var.demo_app_custom_domain != "" ? 1 : 0
+  name             = var.demo_app_custom_domain
   container_app_id = azurerm_container_app.demo_app.id
 
   certificate_binding_type                 = "Disabled"
@@ -814,8 +823,8 @@ resource "azurerm_container_app_custom_domain" "demo_app" {
 }
 
 resource "azurerm_container_app_custom_domain" "hapi_terminology" {
-  count             = var.hapi_terminology_custom_domain != "" ? 1 : 0
-  name              = var.hapi_terminology_custom_domain
+  count            = var.hapi_terminology_custom_domain != "" ? 1 : 0
+  name             = var.hapi_terminology_custom_domain
   container_app_id = azurerm_container_app.hapi_terminology.id
 
   certificate_binding_type                 = "Disabled"
@@ -872,6 +881,10 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "ConnectionStrings__Redis"
         value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
+      }
+      env {
+        name  = "Redis__TrustedCertificateThumbprint"
+        value = var.redis_trusted_certificate_thumbprint
       }
       env {
         name  = "RuntimeWorker__Enabled"

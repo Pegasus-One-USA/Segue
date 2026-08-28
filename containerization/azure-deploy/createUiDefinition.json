@@ -91,6 +91,17 @@
             }
           },
           {
+            "name": "redisTrustedCertificateThumbprint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Redis TLS certificate thumbprint",
+            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
+            "constraints": {
+              "required": true,
+              "regex": "^[0-9A-Fa-f]{40}$",
+              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
+            }
+          },
+          {
             "name": "hapiTerminologyPostgresPassword",
             "type": "Microsoft.Common.PasswordBox",
             "label": {
@@ -253,15 +264,36 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "Custom domains are set up AFTER this deployment finishes, not here — Azure only assigns each app's domain-verification ID once the app already exists, so a domain can never be entered on the very first deploy (this used to be a field on this step; it caused exactly this failure for anyone who filled it in, so it's been removed).\n\nOnce this deployment completes, run the guided setup script — it finds your deployed apps, shows you each one's exact CNAME + TXT records, waits for you to create them, then links the domain and issues a free managed SSL certificate, all in one pass:\n\n  containerization/scripts/setup-custom-domains-wizard.ps1 -ResourceGroup <your resource group> -NamePrefix <your name prefix>\n\n(Bash equivalent: setup-custom-domains-wizard.sh. Both live next to manage-custom-domain.ps1|.sh, which they call under the hood — that script still works directly for one-off changes.)"
+              "text": "The domain fields below are just a reminder for later — entering one here does NOT configure anything in Azure yet. Azure only assigns each app's domain-verification ID once the app already exists, so a domain can never be activated on the very first deploy. Once this deployment finishes, use the separate Step 2 (custom-domain.bicep) Deploy-to-Azure link to actually activate a domain — it re-asks for the domain and does the real work against the now-existing app."
             }
+          },
+          {
+            "name": "fhirbridgeAppIntendedDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "FHIRBridge app domain (optional, informational only)",
+            "defaultValue": "",
+            "toolTip": "e.g. app.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
+          },
+          {
+            "name": "demoAppIntendedDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Demo app domain (optional, informational only)",
+            "defaultValue": "",
+            "toolTip": "e.g. demo.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
+          },
+          {
+            "name": "hapiTerminologyIntendedDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Terminology server domain (optional, informational only)",
+            "defaultValue": "",
+            "toolTip": "e.g. terminology.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
           },
           {
             "name": "hapiTerminologyExternalAccess",
             "type": "Microsoft.Common.CheckBox",
             "label": "Expose the terminology server externally",
             "defaultValue": false,
-            "toolTip": "The HAPI terminology server is internal-only by default (reached only by the FHIRBridge app/Worker, same as SQL Server/Redis). Check this only if it needs to be reached directly from outside — e.g. a separate terminology admin tool, or a third-party integration. Not required for a custom domain on it later — the setup script turns this on automatically when you give it a domain for the terminology server."
+            "toolTip": "The HAPI terminology server is internal-only by default (reached only by the FHIRBridge app/Worker, same as SQL Server/Redis). Check this only if it needs to be reached directly from outside — e.g. a separate terminology admin tool, or a third-party integration. Not required for a custom domain on it later — Step 2 turns this on automatically when you give it a domain for the terminology server."
           }
         ]
       },
@@ -275,7 +307,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 7 Container Apps — SQL Server Express, Redis, the HAPI Terminology Server + its own Postgres database, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 7\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Terminology server data, Data Protection keys)\n\nCustom domains are optional and set up AFTER this deployment finishes, via containerization/scripts/setup-custom-domains-wizard.ps1|.sh — see the Network Access step. SQL Server, Redis, and the Terminology Server are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• 7 Container Apps — SQL Server Express, Redis, the HAPI Terminology Server + its own Postgres database, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 7\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Terminology server data, Data Protection keys)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. SQL Server, Redis, and the Terminology Server are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -295,6 +327,7 @@
       "sqlSaPassword": "[steps('fhirbridgeSettings').sqlSaPassword]",
       "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
       "redisPassword": "[steps('fhirbridgeSettings').redisPassword]",
+      "redisTrustedCertificateThumbprint": "[steps('fhirbridgeSettings').redisTrustedCertificateThumbprint]",
       "hapiTerminologyPostgresPassword": "[steps('fhirbridgeSettings').hapiTerminologyPostgresPassword]",
       "sqlServerSize": "[steps('containerSizing').sqlServerSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
@@ -304,6 +337,9 @@
       "hapiTerminologySize": "[steps('containerSizing').hapiTerminologySize]",
       "hapiTerminologyPostgresSize": "[steps('containerSizing').hapiTerminologyPostgresSize]",
       "hapiTerminologyExternalAccess": "[steps('customDomains').hapiTerminologyExternalAccess]",
+      "fhirbridgeAppIntendedDomain": "[steps('customDomains').fhirbridgeAppIntendedDomain]",
+      "demoAppIntendedDomain": "[steps('customDomains').demoAppIntendedDomain]",
+      "hapiTerminologyIntendedDomain": "[steps('customDomains').hapiTerminologyIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",

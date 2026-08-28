@@ -1,5 +1,5 @@
 output "acr_login_server" {
-  description = "Push the 3 custom images here before the first apply (or before updating image_tag): containerization/scripts/build-images.sh -r <this> -t <image_tag> -p"
+  description = "Push the 3 custom images here before the first apply (or before updating image_tag): containerization/scripts/build-images.sh -r <this> -t <image_tag> -p. hapi-terminology is 4th and different -- it's a stock third-party image, not built from our own Dockerfile, so it's imported instead: az acr import --name <this ACR's name, not the full login server> --source docker.io/hapiproject/hapi:latest --image hapi-terminology:<image_tag>"
   value       = azurerm_container_registry.acr.login_server
 }
 

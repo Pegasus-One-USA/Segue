@@ -29,6 +29,16 @@ $AcrName = "seguebuilds"
 $AcrLoginServer = "$AcrName.azurecr.io"
 $AzureDeployDir = "$RepoRoot\containerization\azure-deploy"
 
+Write-Host "==> Ensuring the Redis TLS certificate exists (generates one on first run, reuses it otherwise)"
+# -Quiet: Write-Host output can't be captured via a pipe/assignment anyway (it bypasses the
+# success stream entirely) - -Quiet just also suppresses it from being double-printed to this
+# console, since generate-cert.ps1's own "return $thumbprint" is the only thing actually captured.
+$RedisThumbprint = & "$RepoRoot\containerization\docker\redis-tls\generate-cert.ps1" -Quiet
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($RedisThumbprint)) {
+    throw "generate-cert.ps1 did not return a certificate thumbprint."
+}
+Write-Host "    Using Redis certificate thumbprint: $RedisThumbprint"
+
 Write-Host "==> Logging in to $AcrLoginServer"
 az acr login --name $AcrName
 if ($LASTEXITCODE -ne 0) { throw "az acr login failed - is Docker Desktop running?" }
@@ -38,7 +48,7 @@ if ($LASTEXITCODE -ne 0) { throw "az acr login failed - is Docker Desktop runnin
 # in that case, not a real error) - ErrorAction SilentlyContinue plus try/catch covers both how az
 # CLI failures can surface in PowerShell (non-zero exit code, and/or a terminating NativeCommandError
 # when $ErrorActionPreference = "Stop" is in effect, as it is for this whole script).
-$Images = @("fhirbridge-app", "demo-app", "fhirbridge-worker")
+$Images = @("fhirbridge-app", "demo-app", "fhirbridge-worker", "fhirbridge-redis", "hapi-terminology")
 foreach ($image in $Images) {
     try {
         $existing = az acr repository show-tags --name $AcrName --repository $image --query "[?@=='$Tag']" -o tsv --only-show-errors 2>$null
@@ -50,7 +60,7 @@ foreach ($image in $Images) {
     }
 }
 
-Write-Host "==> Building and pushing all 3 images, tag $Tag"
+Write-Host "==> Building and pushing all 4 custom images + importing hapi-terminology, tag $Tag"
 & "$RepoRoot\containerization\scripts\build-images.ps1" -Registry $AcrLoginServer -Tag $Tag -Push
 if ($LASTEXITCODE -ne 0) { throw "build-images.ps1 failed" }
 
@@ -71,6 +81,7 @@ az deployment group create `
     sqlSaPassword='CHANGE-ME-Str0ng!' `
     jwtSigningKey='CHANGE-ME-replace-with-a-long-random-string-32-chars-min' `
     redisPassword='CHANGE-ME-strong-redis-password' `
+    redisTrustedCertificateThumbprint=$RedisThumbprint `
     hapiTerminologyPostgresPassword='CHANGE-ME-strong-postgres-password'
 if ($LASTEXITCODE -ne 0) { throw "az deployment group create failed" }
 

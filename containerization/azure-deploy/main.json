@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "16744515964893383998"
+      "templateHash": "15345199952607564362"
     }
   },
   "parameters": {
@@ -83,6 +83,12 @@
         "description": "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App's configuration — same exposure level as any other command argument."
       }
     },
+    "redisTrustedCertificateThumbprint": {
+      "type": "string",
+      "metadata": {
+        "description": "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+      }
+    },
     "hapiTerminologyPostgresPassword": {
       "type": "securestring",
       "metadata": {
@@ -122,6 +128,27 @@
       "defaultValue": false,
       "metadata": {
         "description": "Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment."
+      }
+    },
+    "fhirbridgeAppIntendedDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Domain you intend to use for the FHIRBridge app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment's outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2)."
+      }
+    },
+    "demoAppIntendedDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Domain you intend to use for the Demo app later - purely a reminder, echoed in this deployment's outputs. Activate it afterward with custom-domain.bicep (Step 2)."
+      }
+    },
+    "hapiTerminologyIntendedDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Domain you intend to use for the HAPI terminology server later - purely a reminder, echoed in this deployment's outputs. Activate it afterward with custom-domain.bicep (Step 2)."
       }
     },
     "sqlServerSize": {
@@ -242,7 +269,7 @@
       "ManagedBy": "Bicep"
     },
     "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
-    "storageAccountName": "[toLower(format('{0}st{1}', parameters('namePrefix'), variables('uniqueSuffix')))]",
+    "storageAccountName": "[toLower(format('{0}st{1}', take(parameters('namePrefix'), 9), variables('uniqueSuffix')))]",
     "sqlServerName": "[format('{0}-sqlserver', parameters('namePrefix'))]",
     "redisName": "[format('{0}-redis', parameters('namePrefix'))]",
     "hapiTerminologyPostgresName": "[format('{0}-term-db', parameters('namePrefix'))]",
@@ -332,17 +359,6 @@
       ]
     },
     {
-      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-      "apiVersion": "2023-01-01",
-      "name": "[format('{0}/default/hapi-terminology-data', variables('storageAccountName'))]",
-      "properties": {
-        "shareQuota": 10
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
-      ]
-    },
-    {
       "type": "Microsoft.App/managedEnvironments/storages",
       "apiVersion": "2024-03-01",
       "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
@@ -393,24 +409,6 @@
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.App/managedEnvironments/storages",
-      "apiVersion": "2024-03-01",
-      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'hapi-terminology-data')]",
-      "properties": {
-        "azureFile": {
-          "accountName": "[variables('storageAccountName')]",
-          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
-          "shareName": "hapi-terminology-data",
-          "accessMode": "ReadWrite"
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
@@ -588,10 +586,6 @@
                 {
                   "name": "POSTGRES_PASSWORD",
                   "secretRef": "hapi-terminology-postgres-password"
-                },
-                {
-                  "name": "PGDATA",
-                  "value": "/var/lib/postgresql/data/pgdata"
                 }
               ],
               "volumeMounts": [
@@ -605,8 +599,7 @@
           "volumes": [
             {
               "name": "hapi-terminology-data",
-              "storageType": "AzureFile",
-              "storageName": "hapi-terminology-data"
+              "storageType": "EmptyDir"
             }
           ],
           "scale": {
@@ -616,8 +609,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'hapi-terminology-data')]"
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
       ]
     },
     {
@@ -629,12 +621,8 @@
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
-          "secrets": [
-            {
-              "name": "hapi-terminology-postgres-password",
-              "value": "[parameters('hapiTerminologyPostgresPassword')]"
-            }
-          ],
+          "secrets": "[concat(variables('registrySecret'), createArray(createObject('name', 'hapi-terminology-postgres-password', 'value', parameters('hapiTerminologyPostgresPassword'))))]",
+          "registries": "[variables('registryConfig')]",
           "ingress": {
             "external": "[or(parameters('hapiTerminologyExternalAccess'), not(empty(parameters('hapiTerminologyCustomDomain'))))]",
             "targetPort": 8080,
@@ -646,7 +634,7 @@
           "containers": [
             {
               "name": "hapi-terminology",
-              "image": "hapiproject/hapi:latest",
+              "image": "[format('{0}/hapi-terminology:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('hapiTerminologySize')]]",
               "env": [
                 {
@@ -754,7 +742,7 @@
               "name": "fhirbridge-app",
               "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
-              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true'), createObject('name', 'Terminology__BaseUrl', 'value', format('http://{0}:8080/fhir', variables('hapiTerminologyName')))), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint')), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true'), createObject('name', 'Terminology__BaseUrl', 'value', format('http://{0}:8080/fhir', variables('hapiTerminologyName')))), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
               "volumeMounts": [
                 {
                   "volumeName": "keys-data",
@@ -869,6 +857,10 @@
                   "value": "[format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
                 },
                 {
+                  "name": "Redis__TrustedCertificateThumbprint",
+                  "value": "[parameters('redisTrustedCertificateThumbprint')]"
+                },
+                {
                   "name": "RuntimeWorker__Enabled",
                   "value": "true"
                 },
@@ -943,6 +935,18 @@
       "type": "string",
       "value": "[if(and(empty(parameters('fhirbridgeAppCustomDomain')), empty(parameters('demoAppCustomDomain'))), 'none', if(parameters('bindCustomDomainCertificates'), 'ssl-bound-or-binding', 'hostname-only-set-dns-then-redeploy-with-bind-true'))]"
     },
+    "intendedCustomDomains": {
+      "type": "object",
+      "value": {
+        "fhirbridgeApp": "[parameters('fhirbridgeAppIntendedDomain')]",
+        "demoApp": "[parameters('demoAppIntendedDomain')]",
+        "hapiTerminology": "[parameters('hapiTerminologyIntendedDomain')]"
+      }
+    },
+    "customDomainActivationNote": {
+      "type": "string",
+      "value": "[if(and(and(empty(parameters('fhirbridgeAppIntendedDomain')), empty(parameters('demoAppIntendedDomain'))), empty(parameters('hapiTerminologyIntendedDomain'))), '', 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.')]"
+    },
     "resourceManifest": {
       "type": "array",
       "value": [
@@ -955,11 +959,9 @@
         "[resourceId('Microsoft.App/containerApps', variables('workerName'))]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'hapi-terminology-data')]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/hapi-terminology-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",

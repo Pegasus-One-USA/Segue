@@ -171,8 +171,10 @@ resource "aws_ecs_task_definition" "hapi_terminology" {
 
   container_definitions = jsonencode([
     {
-      name         = "hapi-terminology"
-      image        = "hapiproject/hapi:latest"
+      name = "hapi-terminology"
+      # Pulled from this environment's own ECR mirror (populated by build-images.sh|ps1), not
+      # Docker Hub directly on every task start/scale event — see aws_ecr_repository.hapi_terminology.
+      image        = "${aws_ecr_repository.hapi_terminology.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = 8080, protocol = "tcp" }]
       environment = [
         { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://hapi-terminology-postgres.${var.name_prefix}.internal:5432/hapi_terminology" },
@@ -213,6 +215,7 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
         { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
+        { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "DataProtection__KeyRingPath", value = "/app/keys" },
         # The demo app is a separate origin whose frontend calls this API cross-origin — the ALB's
         # DNS name is known from this same apply (a different resource, not a self-reference).
@@ -284,6 +287,7 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
         { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
+        { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
         { name = "Terminology__BaseUrl", value = "http://hapi-terminology.${var.name_prefix}.internal:8080/fhir" },

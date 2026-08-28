@@ -4,7 +4,7 @@
 #
 #   ../../../scripts/build-images.sh -r <account>.dkr.ecr.<region>.amazonaws.com/<name_prefix> -t <image_tag> -p
 #
-# (bootstrap order: `terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.demo_app -target=aws_ecr_repository.worker -target=aws_ecr_repository.redis`
+# (bootstrap order: `terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.demo_app -target=aws_ecr_repository.worker -target=aws_ecr_repository.redis -target=aws_ecr_repository.hapi_terminology`
 # first, then run the build script, then a full `terraform apply`.)
 #
 # All 7 containers run in PRIVATE subnets with no public IP — only the ALB is internet-facing.
@@ -236,6 +236,15 @@ resource "aws_ecr_repository" "worker" {
 # all (FHIRBridge.Api/.Worker refuse a plaintext Redis connection outside Development).
 resource "aws_ecr_repository" "redis" {
   name                 = "${var.name_prefix}/fhirbridge-redis"
+  image_tag_mutability = "MUTABLE"
+}
+
+# Mirrors the upstream hapiproject/hapi image (Docker Hub) so Fargate pulls it from this
+# same-region ECR repo instead of Docker Hub on every task start/scale event — populated by
+# build-images.sh|ps1's pull/tag/push fallback (ECR has no server-to-server import like az acr
+# import), not built from a Dockerfile we own.
+resource "aws_ecr_repository" "hapi_terminology" {
+  name                 = "${var.name_prefix}/hapi-terminology"
   image_tag_mutability = "MUTABLE"
 }
 
