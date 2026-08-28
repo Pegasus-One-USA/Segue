@@ -54,61 +54,64 @@
     </div>
 
     <div class="table-wrapper">
-      <table mat-table [dataSource]="paginated()" class="data-table">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-menu"></th>
+            <th>Tenant Name</th>
+            <th>Code</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of paginated(); track t.id) {
+            <tr class="data-row">
+              <td class="col-menu">
+                <div class="row-menu" (click)="$event.stopPropagation()">
+                  <button
+                    class="btn-icon"
+                    type="button"
+                    title="More actions"
+                    (click)="$event.stopPropagation(); toggleActionMenu($event, t.id)"
+                  ><mat-icon>more_vert</mat-icon></button>
 
-        <!-- # Column -->
-        <ng-container matColumnDef="index">
-          <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
-          <td mat-cell *matCellDef="let t; let i = index" class="col-index">
-            {{ pageIndex() * pageSize() + i + 1 }}
-          </td>
-        </ng-container>
+                  @if (openActionMenuId() === t.id && actionMenuPosition(); as pos) {
+                    <div
+                      class="row-menu-panel"
+                      [style.top.px]="pos.top"
+                      [style.bottom.px]="pos.bottom"
+                      [style.left.px]="pos.left"
+                    >
+                      <button
+                        type="button"
+                        class="row-menu-item"
+                        (click)="openEdit(t); openActionMenuId.set(null)"
+                      >
+                        <mat-icon>edit</mat-icon> Edit
+                      </button>
 
-        <!-- Name Column -->
-        <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef>Tenant Name</th>
-          <td mat-cell *matCellDef="let t">
-            <div class="cell-name">
-              <div class="tenant-avatar">{{ t.name.charAt(0).toUpperCase() }}</div>
-              <span class="cell-primary">{{ t.name }}</span>
-            </div>
-          </td>
-        </ng-container>
-
-        <!-- Code Column -->
-        <ng-container matColumnDef="code">
-          <th mat-header-cell *matHeaderCellDef>Code</th>
-          <td mat-cell *matCellDef="let t">
-            <span class="code-badge">{{ t.code }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Created Column -->
-        <ng-container matColumnDef="createdAt">
-          <th mat-header-cell *matHeaderCellDef>Created</th>
-          <td mat-cell *matCellDef="let t">
-            <span class="cell-muted">{{ formatDate(t.createdAt) }}</span>
-          </td>
-        </ng-container>
-
-        <!-- Actions Column -->
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
-          <td mat-cell *matCellDef="let t" class="col-actions">
-            <div class="actions-cell">
-              <button mat-icon-button class="btn-edit" (click)="openEdit(t)">
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button mat-icon-button class="btn-delete" (click)="confirmDelete(t)">
-                <mat-icon>delete_outline</mat-icon>
-              </button>
-            </div>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
-
+                      <button
+                        type="button"
+                        class="row-menu-item row-menu-item--danger"
+                        (click)="confirmDelete(t); openActionMenuId.set(null)"
+                      >
+                        <mat-icon>delete_outline</mat-icon> Delete
+                      </button>
+                    </div>
+                  }
+                </div>
+              </td>
+              <td>
+                <div class="cell-name">
+                  <div class="tenant-avatar">{{ t.name.charAt(0).toUpperCase() }}</div>
+                  <span class="cell-primary">{{ t.name }}</span>
+                </div>
+              </td>
+              <td><span class="code-badge">{{ t.code }}</span></td>
+              <td><span class="cell-muted">{{ formatDate(t.createdAt) }}</span></td>
+            </tr>
+          }
+        </tbody>
       </table>
     </div>
 

@@ -88,6 +88,20 @@
   right: 16px;
   z-index: 20;
   width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+// "Remove Suggested Tables from Map Fields" — shown above the create/pick-a-table control whenever the
+// active resource has no confirmed-or-pending table yet, so the empty canvas (no card rendered — see
+// FieldMappingCanvasComponent.isPrimaryTargetValid) reads as "nothing chosen yet" rather than "broken".
+.fm-no-target-hint {
+  font-family: var(--font-family);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-align: right;
 }
 
 .fm-add-table-select {

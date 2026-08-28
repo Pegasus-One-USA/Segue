@@ -465,6 +465,8 @@ public static class DependencyInjection
         }
 
         services.AddScoped<SqlServerMappingSchemaProvider>();
+        services.AddScoped<MySqlMappingSchemaProvider>();
+        services.AddScoped<PostgreSqlMappingSchemaProvider>();
         services.AddScoped<IMappingSchemaProviderFactory, MappingSchemaProviderFactory>();
         // Read-back of a capped row sample from a relational destination table ("View destination data").
         services.AddScoped<IDestinationDataService, SqlDestinationDataService>();
