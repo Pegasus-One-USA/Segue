@@ -40,6 +40,58 @@ resource "aws_ecs_service" "redis" {
   }
 }
 
+resource "aws_ecs_service" "hapi_terminology_postgres" {
+  name            = "${var.name_prefix}-hapi-terminology-postgres"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.hapi_terminology_postgres.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.hapi_terminology_postgres.arn
+  }
+}
+
+resource "aws_ecs_service" "hapi_terminology" {
+  name            = "${var.name_prefix}-hapi-terminology"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.hapi_terminology.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  # aws_lb_listener.hapi_terminology is itself count-gated by the same variable (0 or 1 instances)
+  # — referencing the resource as a whole (not [0]) here keeps this a static list, which
+  # depends_on requires, while still depending on it only when it actually exists.
+  depends_on = [aws_ecs_service.hapi_terminology_postgres, aws_lb_listener.hapi_terminology]
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.hapi_terminology.arn
+  }
+
+  # Only registered with the ALB when var.hapi_terminology_external_access is true — internal
+  # reachability (fhirbridge-app/worker via Cloud Map) never depends on this.
+  dynamic "load_balancer" {
+    for_each = var.hapi_terminology_external_access ? [1] : []
+    content {
+      target_group_arn = aws_lb_target_group.hapi_terminology[0].arn
+      container_name   = "hapi-terminology"
+      container_port   = 8080
+    }
+  }
+}
+
 resource "aws_ecs_service" "fhirbridge_app" {
   name            = "${var.name_prefix}-app"
   cluster         = aws_ecs_cluster.main.id
@@ -47,9 +99,9 @@ resource "aws_ecs_service" "fhirbridge_app" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
-  # Connection strings reference sqlserver/redis by their predictable Cloud Map hostname rather
-  # than a resource attribute, so this dependency has to be spelled out explicitly.
-  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_lb_listener.fhirbridge_app]
+  # Connection strings reference sqlserver/redis/hapi-terminology by their predictable Cloud Map
+  # hostname rather than a resource attribute, so this dependency has to be spelled out explicitly.
+  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_ecs_service.hapi_terminology, aws_lb_listener.fhirbridge_app]
 
   network_configuration {
     subnets          = aws_subnet.private[*].id
@@ -97,7 +149,7 @@ resource "aws_ecs_service" "worker" {
   # on boot and can race on the initial CREATE DATABASE on a fresh database. ECS restarts a failed
   # task automatically (desired_count reconciliation), which turns a lost race into a self-healing
   # retry.
-  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_ecs_service.fhirbridge_app]
+  depends_on = [aws_ecs_service.sqlserver, aws_ecs_service.redis, aws_ecs_service.hapi_terminology, aws_ecs_service.fhirbridge_app]
 
   network_configuration {
     subnets          = aws_subnet.private[*].id

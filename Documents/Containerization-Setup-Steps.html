@@ -895,7 +895,7 @@ cp terraform.tfvars.example terraform.tfvars</code></pre>
 terraform apply</code></pre>
       <p>Type <code>yes</code> when prompted.</p>
       <div class="checkpoint"><strong>You'll know it worked</strong> if <code>terraform output acr_login_server</code>
-      prints something like <code>fhirbridgevendor8ae7f3.azurecr.io</code>.</div>
+      prints something like <code>seguebuilds.azurecr.io</code>.</div>
     </div>
   </div>
   <div class="callout azure">
@@ -912,7 +912,7 @@ terraform apply</code></pre>
     <div class="step-num">1</div>
     <div class="step-body">
       <strong>Log in to the registry</strong>
-      <pre><code>az acr login --name fhirbridgevendor8ae7f3</code></pre>
+      <pre><code>az acr login --name seguebuilds</code></pre>
       <p>Use the <em>short</em> registry name here (<code>terraform output acr_name</code>) — not
       the full <code>.azurecr.io</code> address.</p>
     </div>
@@ -922,8 +922,8 @@ terraform apply</code></pre>
     <div class="step-body">
       <strong>Build locally and push</strong>
       <pre><code>cd ../../scripts
-./build-images.sh -r fhirbridgevendor8ae7f3.azurecr.io -t v1.0.0 -p
-# PowerShell: ./build-images.ps1 -Registry fhirbridgevendor8ae7f3.azurecr.io -Tag v1.0.0 -Push</code></pre>
+./build-images.sh -r seguebuilds.azurecr.io -t v1.0.0 -p
+# PowerShell: ./build-images.ps1 -Registry seguebuilds.azurecr.io -Tag v1.0.0 -Push</code></pre>
       <p>Use the <em>full</em> registry hostname here (<code>terraform output acr_login_server</code>)
       — the opposite of step 1. This is the same script used for local/Azure/AWS testing; Docker
       builds each image on your own machine, then pushes only the finished, compiled image. Your
@@ -940,8 +940,8 @@ terraform apply</code></pre>
     <div class="step-num">3</div>
     <div class="step-body">
       <strong>Confirm what actually landed in the registry</strong>
-      <pre><code>az acr repository list --name fhirbridgevendor8ae7f3 --output table
-az acr repository show-tags --name fhirbridgevendor8ae7f3 --repository fhirbridge-app --output table</code></pre>
+      <pre><code>az acr repository list --name seguebuilds --output table
+az acr repository show-tags --name seguebuilds --repository fhirbridge-app --output table</code></pre>
     </div>
   </div>
 
@@ -950,9 +950,9 @@ az acr repository show-tags --name fhirbridgevendor8ae7f3 --repository fhirbridg
     <div class="step-num">1</div>
     <div class="step-body">
       <strong>Copy the published version into the client's own registry</strong>
-      <pre><code>az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/fhirbridge-app:v1.0.0 --image fhirbridge-app:v1.0.0
-az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/demo-app:v1.0.0 --image demo-app:v1.0.0
-az acr import --name &lt;client-acr-name&gt; --source fhirbridgevendor8ae7f3.azurecr.io/fhirbridge-worker:v1.0.0 --image fhirbridge-worker:v1.0.0</code></pre>
+      <pre><code>az acr import --name &lt;client-acr-name&gt; --source seguebuilds.azurecr.io/fhirbridge-app:v1.0.0 --image fhirbridge-app:v1.0.0
+az acr import --name &lt;client-acr-name&gt; --source seguebuilds.azurecr.io/demo-app:v1.0.0 --image demo-app:v1.0.0
+az acr import --name &lt;client-acr-name&gt; --source seguebuilds.azurecr.io/fhirbridge-worker:v1.0.0 --image fhirbridge-worker:v1.0.0</code></pre>
       <p>A server-to-server image copy — no rebuild, no source involved, and no local Docker needed
       for this step. <code>&lt;client-acr-name&gt;</code> is whichever registry that client's own
       Terraform (or Bicep) deployment already created for itself.</p>

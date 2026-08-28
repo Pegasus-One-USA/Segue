@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "16744515964893383998"
+      "templateHash": "3082100763136240721"
     }
   },
   "parameters": {
@@ -494,8 +494,6 @@
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
-          "secrets": "[variables('registrySecret')]",
-          "registries": "[variables('registryConfig')]",
           "ingress": {
             "external": false,
             "targetPort": "[parameters('redisPort')]",
@@ -506,20 +504,12 @@
           "containers": [
             {
               "name": "redis",
-              "image": "[format('{0}/fhirbridge-redis:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "image": "redis:7-alpine",
               "resources": "[variables('containerSizes')[parameters('redisSize')]]",
               "command": [
                 "redis-server",
-                "--tls-port",
-                "[string(parameters('redisPort'))]",
                 "--port",
-                "0",
-                "--tls-cert-file",
-                "/certs/redis.crt",
-                "--tls-key-file",
-                "/certs/redis.key",
-                "--tls-auth-clients",
-                "no",
+                "[string(parameters('redisPort'))]",
                 "--requirepass",
                 "[parameters('redisPassword')]"
               ],
@@ -754,7 +744,7 @@
               "name": "fhirbridge-app",
               "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
-              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true'), createObject('name', 'Terminology__BaseUrl', 'value', format('http://{0}:8080/fhir', variables('hapiTerminologyName')))), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true'), createObject('name', 'Terminology__BaseUrl', 'value', format('http://{0}:8080/fhir', variables('hapiTerminologyName')))), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
               "volumeMounts": [
                 {
                   "volumeName": "keys-data",
@@ -866,7 +856,7 @@
                 },
                 {
                   "name": "ConnectionStrings__Redis",
-                  "value": "[format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
+                  "value": "[format('{0}:{1},password={2}', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
                 },
                 {
                   "name": "RuntimeWorker__Enabled",

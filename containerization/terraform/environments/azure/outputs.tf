@@ -21,14 +21,24 @@ output "demo_app_url" {
   value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
 }
 
+output "hapi_terminology_url" {
+  description = "Only reachable once hapi_terminology_external_access is true (default false — internal-only otherwise), or a custom domain is set, which forces it on."
+  value       = "https://${local.hapi_terminology_name}.${azurerm_container_app_environment.main.default_domain}"
+}
+
 output "fhirbridge_app_domain_verification" {
-  description = "Always available. After Phase 1 (domain set, bind_custom_domain_certificates=false), add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value, wait for DNS, then set bind_custom_domain_certificates=true and re-apply."
+  description = "Add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value at your DNS provider to register the hostname. See fhirbridge_app_custom_domain's description for the current SSL-binding limitation (bind_custom_domain_certificates is a no-op until this environment is migrated to azurerm ~> 4.69)."
   value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id
 }
 
 output "demo_app_domain_verification" {
   description = "Same idea as fhirbridge_app_domain_verification, for the demo app's custom domain."
   value       = azurerm_container_app.demo_app.custom_domain_verification_id
+}
+
+output "hapi_terminology_domain_verification" {
+  description = "Same idea as fhirbridge_app_domain_verification, for the terminology server's custom domain. Always available regardless of hapi_terminology_external_access — needed even before external ingress is on, to prep DNS ahead of time."
+  value       = azurerm_container_app.hapi_terminology.custom_domain_verification_id
 }
 
 output "fhirbridge_app_custom_domain_url" {
@@ -41,10 +51,17 @@ output "demo_app_custom_domain_url" {
   value       = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null
 }
 
+output "hapi_terminology_custom_domain_url" {
+  description = "Populated once hapi_terminology_custom_domain is set; null otherwise."
+  value       = var.hapi_terminology_custom_domain != "" ? "https://${var.hapi_terminology_custom_domain}" : null
+}
+
+# Currently always false in effect — see bind_custom_domain_certificates' own description
+# (azurerm ~> 3.100 lacks the managed-certificate resource this flag would drive).
 output "bind_custom_domain_certificates" {
   value = var.bind_custom_domain_certificates
 }
 
 output "custom_domain_phase" {
-  value = var.fhirbridge_app_custom_domain == "" && var.demo_app_custom_domain == "" ? "none" : (var.bind_custom_domain_certificates ? "ssl-bound-or-binding" : "hostname-only-set-dns-then-reapply-with-bind-true")
+  value = (var.fhirbridge_app_custom_domain == "" && var.demo_app_custom_domain == "" && var.hapi_terminology_custom_domain == "") ? "none" : "hostname-registered-no-managed-ssl-until-azurerm-4.69-migration"
 }

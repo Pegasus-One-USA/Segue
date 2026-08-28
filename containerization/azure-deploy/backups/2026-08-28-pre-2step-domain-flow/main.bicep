@@ -11,13 +11,11 @@
 // itself.
 //
 // IMPORTANT — image publishing is a prerequisite, not something this template does: a genuinely
-// one-click deploy requires the 4 custom images (fhirbridge-app, demo-app, fhirbridge-worker,
-// fhirbridge-redis) to already exist in a registry the customer's Container Apps can reach BEFORE
-// they click deploy. fhirbridge-redis is stock redis:7-alpine plus a fixed, committed self-signed
-// TLS certificate — see containerization/docker/redis-tls/Dockerfile for why Redis needs a custom
-// image at all. Build and push them once (see containerization/scripts/build-images.sh|ps1) to
-// whatever registry you control, then point imageRegistryServer/imageTag at that release. See
-// README.md in this folder for the full publishing + one-click deploy story.
+// one-click deploy requires the 3 custom images (fhirbridge-app, demo-app, fhirbridge-worker) to
+// already exist in a registry the customer's Container Apps can reach BEFORE they click deploy.
+// Build and push them once (see containerization/scripts/build-images.sh|ps1) to whatever registry
+// you control, then point imageRegistryServer/imageTag at that release. See README.md in this
+// folder for the full publishing + one-click deploy story.
 
 @description('Short name used to build every resource name in this deployment.')
 param namePrefix string = 'fhirbridge'
@@ -329,8 +327,6 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
-      secrets: registrySecret
-      registries: registryConfig
       ingress: {
         external: false
         targetPort: redisPort
@@ -341,30 +337,9 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'redis'
-          // Custom image (not stock redis:7-alpine): FHIRBridge.Api/.Worker refuse a plaintext
-          // Redis connection outside Development (HIPAA #15), and stock Redis has no TLS
-          // configured at all. See containerization/docker/redis-tls/Dockerfile.
-          image: '${imageRegistryServer}/fhirbridge-redis:${imageTag}'
+          image: 'redis:7-alpine'
           resources: containerSizes[redisSize]
-          // --port 0 disables the plaintext port entirely — --tls-port is the only one Redis
-          // listens on. --tls-auth-clients no means server-side TLS + --requirepass, not mutual
-          // TLS (no client certificate required) — matches ConnectionStrings__Redis's "ssl=true"
-          // (no client cert options) on fhirbridgeApp/workerApp below.
-          command: [
-            'redis-server'
-            '--tls-port'
-            string(redisPort)
-            '--port'
-            '0'
-            '--tls-cert-file'
-            '/certs/redis.crt'
-            '--tls-key-file'
-            '/certs/redis.key'
-            '--tls-auth-clients'
-            'no'
-            '--requirepass'
-            redisPassword
-          ]
+          command: ['redis-server', '--port', string(redisPort), '--requirepass', redisPassword]
           volumeMounts: [
             { volumeName: 'redis-data', mountPath: '/data' }
           ]
@@ -572,7 +547,7 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
+            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
             // Gateway proxies /api to the Api process in this same container (entrypoint binds Api on loopback :5000).
@@ -667,7 +642,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
+            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
             { name: 'RuntimeWorker__Enabled', value: 'true' }
             { name: 'Messaging__Provider', value: 'InMemory' }
             { name: 'Terminology__BaseUrl', value: 'http://${hapiTerminologyName}:8080/fhir' }

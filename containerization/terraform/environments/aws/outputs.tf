@@ -16,3 +16,8 @@ output "demo_app_url" {
   description = "Uses a self-signed certificate — expect a browser trust warning until this is swapped for a real ACM certificate (see main.tf)."
   value       = "https://${aws_lb.main.dns_name}:${var.demo_app_port}"
 }
+
+output "hapi_terminology_url" {
+  description = "Only reachable when hapi_terminology_external_access = true (default false — internal-only otherwise). Uses a self-signed certificate — expect a browser trust warning until this is swapped for a real ACM certificate (see main.tf). Point your own DNS (CNAME) at aws_lb.main.dns_name for a custom domain."
+  value       = var.hapi_terminology_external_access ? "https://${aws_lb.main.dns_name}:${var.hapi_terminology_port}" : null
+}

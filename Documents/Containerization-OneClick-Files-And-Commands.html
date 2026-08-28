@@ -243,7 +243,7 @@
   <h3 id="f-vendor">Vendor registry</h3>
   <table class="file-table">
     <tr><th>Path</th><th>What it does</th></tr>
-    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\main.tf</td><td>Creates the persistent, protected ACR (<code>admin_enabled = false</code>, <code>anonymous_pull_enabled = false</code>) that published releases live in — <code>fhirbridgevendor8ae7f3</code> for this project. Separate from any per-deployment environment so it survives every teardown.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\main.tf</td><td>Creates the persistent, protected ACR (<code>admin_enabled = false</code>, <code>anonymous_pull_enabled = false</code>) that published releases live in — <code>seguebuilds</code> for this project. Separate from any per-deployment environment so it survives every teardown.</td></tr>
     <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\variables.tf</td><td>Inputs: <code>name_prefix</code>, <code>resource_group_name</code> (defaults to <code>rg-tusharpuri</code>).</td></tr>
     <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\outputs.tf</td><td>Exposes <code>acr_name</code> and <code>acr_login_server</code> for the build/push and token-creation commands.</td></tr>
   </table>
@@ -281,9 +281,9 @@
   <h2 id="commands-section" class="section-divider azure-divider"><span class="os-icon">&#9889;</span>Commands</h2>
 
   <h3 id="c-registry">Setting up the two one-time resources: the vendor registry &amp; the hosting storage account</h3>
-  <p class="file-summary">These two resources only need to exist once, ever — they're not part of any customer's <code>oneclick-*</code> deployment. The registry (<code>fhirbridgevendor8ae7f3</code>) is where you publish versioned release images; the storage account (<code>fhirbridgedeployfiles</code>) is where <code>main.json</code>/<code>createUiDefinition.json</code> live at a public HTTPS URL so the Deploy-to-Azure button can fetch them. Run the registry commands from <code>containerization/terraform/vendor-registry</code>.</p>
+  <p class="file-summary">These two resources only need to exist once, ever — they're not part of any customer's <code>oneclick-*</code> deployment. The registry (<code>seguebuilds</code>) is where you publish versioned release images; the storage account (<code>fhirbridgedeployfiles</code>) is where <code>main.json</code>/<code>createUiDefinition.json</code> live at a public HTTPS URL so the Deploy-to-Azure button can fetch them. Run the registry commands from <code>containerization/terraform/vendor-registry</code>.</p>
   <div class="cmd-block">
-    <h4>1. Create (or confirm) the vendor registry — <code>fhirbridgevendor8ae7f3</code></h4>
+    <h4>1. Create (or confirm) the vendor registry — <code>seguebuilds</code></h4>
     <pre><code>terraform init
 terraform apply</code></pre>
     <p>Creates the persistent, protected ACR if it doesn't exist yet. A rerun against an already-existing registry shows "0 to add, 0 to change" — that's the confirmation it's already live, not an error.</p>
@@ -292,12 +292,12 @@ terraform apply</code></pre>
     <h4>2. Read its name and login server</h4>
     <pre><code>terraform output -raw acr_name
 terraform output -raw acr_login_server</code></pre>
-    <p><code>acr_name</code> is the short name (<code>fhirbridgevendor8ae7f3</code>); <code>acr_login_server</code> is the full <code>fhirbridgevendor8ae7f3.azurecr.io</code>. The login server is what must be used everywhere else (Docker, <code>createUiDefinition.json</code>'s registry fields) — passing the short name to <code>docker</code> makes it silently default to Docker Hub instead of this registry.</p>
+    <p><code>acr_name</code> is the short name (<code>seguebuilds</code>); <code>acr_login_server</code> is the full <code>seguebuilds.azurecr.io</code>. The login server is what must be used everywhere else (Docker, <code>createUiDefinition.json</code>'s registry fields) — passing the short name to <code>docker</code> makes it silently default to Docker Hub instead of this registry.</p>
   </div>
   <div class="cmd-block">
     <h4>3. Confirm both are genuinely reachable before relying on them</h4>
     <pre><code>az account show --query "{name:name, id:id}" -o table
-az acr show --name fhirbridgevendor8ae7f3 --query "{name:name, loginServer:loginServer}" -o table</code></pre>
+az acr show --name seguebuilds --query "{name:name, loginServer:loginServer}" -o table</code></pre>
     <p>Confirms you're on the intended subscription and the registry actually exists before trying to build/push against it.</p>
   </div>
   <div class="cmd-block">

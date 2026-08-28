@@ -1,5 +1,6 @@
-# Persistent storage for SQL Server + Redis (Fargate tasks are otherwise stateless / ephemeral
-# storage only). One filesystem, two access points so each service gets an isolated root directory.
+# Persistent storage for SQL Server + Redis + the HAPI terminology server's Postgres (Fargate tasks
+# are otherwise stateless / ephemeral storage only). One filesystem, one access point per stateful
+# service so each gets an isolated root directory.
 
 resource "aws_security_group" "efs" {
   name        = "${var.name_prefix}-efs-sg"
@@ -66,6 +67,24 @@ resource "aws_efs_access_point" "redis_data" {
 
   root_directory {
     path = "/redis-data"
+    creation_info {
+      owner_uid   = 0
+      owner_gid   = 0
+      permissions = "0755"
+    }
+  }
+}
+
+resource "aws_efs_access_point" "hapi_terminology_postgres_data" {
+  file_system_id = aws_efs_file_system.main.id
+
+  posix_user {
+    uid = 0
+    gid = 0
+  }
+
+  root_directory {
+    path = "/hapi-terminology-postgres-data"
     creation_info {
       owner_uid   = 0
       owner_gid   = 0

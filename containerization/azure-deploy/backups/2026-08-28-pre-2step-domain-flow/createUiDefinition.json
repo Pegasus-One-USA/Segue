@@ -245,7 +245,7 @@
       },
       {
         "name": "customDomains",
-        "label": "Network Access",
+        "label": "Custom Domains",
         "elements": [
           {
             "name": "domainsInfo",
@@ -253,15 +253,52 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "Custom domains are set up AFTER this deployment finishes, not here — Azure only assigns each app's domain-verification ID once the app already exists, so a domain can never be entered on the very first deploy (this used to be a field on this step; it caused exactly this failure for anyone who filled it in, so it's been removed).\n\nOnce this deployment completes, run the guided setup script — it finds your deployed apps, shows you each one's exact CNAME + TXT records, waits for you to create them, then links the domain and issues a free managed SSL certificate, all in one pass:\n\n  containerization/scripts/setup-custom-domains-wizard.ps1 -ResourceGroup <your resource group> -NamePrefix <your name prefix>\n\n(Bash equivalent: setup-custom-domains-wizard.sh. Both live next to manage-custom-domain.ps1|.sh, which they call under the hood — that script still works directly for one-off changes.)"
+              "text": "Optional custom domains need THREE deploys, not two — Azure only assigns each app's domain-verification ID once the app itself already exists, and that ID has to be in DNS before Azure will accept the domain at all. There is no way to know the ID in advance, so it can never be entered on the very first deploy.\n\nIf you already entered a domain below on a FIRST-EVER deploy of this name prefix and hit 'InvalidCustomHostNameValidation' / 'a TXT record ... was not found' — that's this exact issue. Fix: clear the domain field(s) below back to blank and redeploy (Phase 0) before continuing to Phase 1.\n\nPhase 0 — Create the app first, with NO custom domain:\n• Leave all domain fields below BLANK on your first deploy of a given name prefix\n• Deploy — the app is created with its default *.azurecontainerapps.io URL\n\nPhase 1 — Register hostname only:\n• From deployment outputs, copy fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId / hapiTerminologyDomainVerificationId (or run containerization/scripts/manage-custom-domain.ps1|.sh -Action Info against the now-existing app)\n• At your DNS provider create: CNAME (your domain → the app's *.azurecontainerapps.io FQDN) and TXT (asuid.<your domain> = verification id)\n• Wait until DNS has propagated\n• NOW enter your domain(s) below, leave \"Bind managed SSL certificates now\" UNCHECKED, and redeploy — hostnames register successfully this time (no SSL yet)\n\nPhase 2 — Bind free managed SSL:\n• Redeploy again with the SAME domain values\n• CHECK \"Bind managed SSL certificates now\"\n• Deploy — Azure issues and binds the certificate\n\nLeaving all domain fields blank keeps the default *.azurecontainerapps.io URLs indefinitely — domains are entirely optional. Do not check Bind SSL before Phase 1's hostname is registered, or you will hit RequireCustomHostnameInEnvironment.\n\nFallback for any of this without a full redeploy: containerization/scripts/manage-custom-domain.ps1|.sh (Info → Add → Bind) against an already-deployed app."
             }
+          },
+          {
+            "name": "fhirbridgeAppCustomDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "FHIRBridge / Segue app custom domain",
+            "defaultValue": "",
+            "toolTip": "e.g. app.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
+            "constraints": {
+              "required": false
+            }
+          },
+          {
+            "name": "demoAppCustomDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Demo app custom domain",
+            "defaultValue": "",
+            "toolTip": "e.g. demo.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
+            "constraints": {
+              "required": false
+            }
+          },
+          {
+            "name": "bindCustomDomainCertificates",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Bind managed SSL certificates now (Phase 2 only)",
+            "defaultValue": false,
+            "toolTip": "Check ONLY after Phase 1 registered the hostnames and DNS CNAME + asuid TXT have propagated. Unchecked = register hostname only (Phase 1)."
           },
           {
             "name": "hapiTerminologyExternalAccess",
             "type": "Microsoft.Common.CheckBox",
             "label": "Expose the terminology server externally",
             "defaultValue": false,
-            "toolTip": "The HAPI terminology server is internal-only by default (reached only by the FHIRBridge app/Worker, same as SQL Server/Redis). Check this only if it needs to be reached directly from outside — e.g. a separate terminology admin tool, or a third-party integration. Not required for a custom domain on it later — the setup script turns this on automatically when you give it a domain for the terminology server."
+            "toolTip": "The HAPI terminology server is internal-only by default (reached only by the FHIRBridge app/Worker, same as SQL Server/Redis). Check this only if it needs to be reached directly from outside — e.g. a separate terminology admin tool, or a third-party integration."
+          },
+          {
+            "name": "hapiTerminologyCustomDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Terminology server custom domain",
+            "defaultValue": "",
+            "toolTip": "e.g. terminology.customer.com. Leave blank for the default *.azurecontainerapps.io URL. Setting this automatically exposes the terminology server externally, same two-phase flow as the other custom domains above.",
+            "constraints": {
+              "required": false
+            }
           }
         ]
       },
@@ -275,7 +312,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 7 Container Apps — SQL Server Express, Redis, the HAPI Terminology Server + its own Postgres database, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 7\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Terminology server data, Data Protection keys)\n\nCustom domains are optional and set up AFTER this deployment finishes, via containerization/scripts/setup-custom-domains-wizard.ps1|.sh — see the Network Access step. SQL Server, Redis, and the Terminology Server are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• 7 Container Apps — SQL Server Express, Redis, the HAPI Terminology Server + its own Postgres database, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 7\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Terminology server data, Data Protection keys)\n\nCustom domains are optional and require a two-phase deploy (hostname first, then Bind SSL) — see the Custom Domains step. SQL Server, Redis, and the Terminology Server are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -303,7 +340,11 @@
       "workerSize": "[steps('containerSizing').workerSize]",
       "hapiTerminologySize": "[steps('containerSizing').hapiTerminologySize]",
       "hapiTerminologyPostgresSize": "[steps('containerSizing').hapiTerminologyPostgresSize]",
+      "fhirbridgeAppCustomDomain": "[steps('customDomains').fhirbridgeAppCustomDomain]",
+      "demoAppCustomDomain": "[steps('customDomains').demoAppCustomDomain]",
+      "hapiTerminologyCustomDomain": "[steps('customDomains').hapiTerminologyCustomDomain]",
       "hapiTerminologyExternalAccess": "[steps('customDomains').hapiTerminologyExternalAccess]",
+      "bindCustomDomainCertificates": "[steps('customDomains').bindCustomDomainCertificates]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",

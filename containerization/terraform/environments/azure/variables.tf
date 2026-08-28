@@ -58,20 +58,38 @@ variable "redis_password" {
   sensitive   = true
 }
 
+variable "hapi_terminology_postgres_password" {
+  description = "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (internal-only — not the app's own FHIRBridgeDb). Stored in Key Vault like the other secrets above."
+  type        = string
+  sensitive   = true
+}
+
+variable "hapi_terminology_external_access" {
+  description = "Exposes the HAPI terminology server externally (Container Apps external ingress) so it can be reached directly from outside this environment — e.g. a separate terminology admin tool, or a third-party integration — rather than only internally by fhirbridge-app/worker. Defaults to false (internal-only, like sqlserver/redis). Setting hapi_terminology_custom_domain also forces this on, since Azure Container Apps custom domains require external ingress."
+  type        = bool
+  default     = false
+}
+
+variable "hapi_terminology_custom_domain" {
+  description = "Custom domain for the HAPI terminology server (e.g. terminology.customer.com). Leave blank to use the auto-generated *.azurecontainerapps.io URL once hapi_terminology_external_access is true. Same flow as fhirbridge_app_custom_domain (including the required first-apply-blank step and the current SSL-binding limitation) — see that variable's description and hapi_terminology_domain_verification."
+  type        = string
+  default     = ""
+}
+
 variable "fhirbridge_app_custom_domain" {
-  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank for *.azurecontainerapps.io. REQUIRED two-phase apply to avoid RequireCustomHostnameInEnvironment: (1) set domain with bind_custom_domain_certificates=false — registers hostname (Disabled binding); create DNS CNAME + asuid TXT using fhirbridge_app_domain_verification; (2) set bind_custom_domain_certificates=true and re-apply — creates managed cert and SniEnabled bind."
+  description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank for *.azurecontainerapps.io. REQUIRED to be blank on the very first apply that creates this app: Azure only assigns customDomainVerificationId once the Container App already exists, and there is no way to know that ID in advance — setting a domain before the app exists always fails with InvalidCustomHostNameValidation (\"a TXT record ... was not found\"), regardless of provider version. Correct order: (1) apply with this blank so the app gets created; (2) read fhirbridge_app_domain_verification, create DNS CNAME (domain -> the app's default hostname) + TXT asuid.<domain> = that id, wait for DNS; (3) NOW set this variable and re-apply — registers the hostname (certificate_binding_type Disabled). NOTE: managed-certificate SSL binding (bind_custom_domain_certificates) is currently a no-op — see that variable's description — so the domain resolves to this app but browsers won't get a trusted cert on it yet; front it with your own reverse proxy/CDN cert until the provider migration below happens, or bring your own cert manually."
   type        = string
   default     = ""
 }
 
 variable "demo_app_custom_domain" {
-  description = "Custom domain for the Demo app. Same two-phase flow as fhirbridge_app_custom_domain."
+  description = "Custom domain for the Demo app. Same flow as fhirbridge_app_custom_domain (including the required first-apply-blank step and the current SSL-binding limitation)."
   type        = string
   default     = ""
 }
 
 variable "bind_custom_domain_certificates" {
-  description = "Phase-2 flag. false (default) = register hostnames only (certificate_binding_type Disabled), no managed certificates. true = create managed certificates and SniEnabled bind. Only true AFTER Phase 1 hostname registration AND DNS has propagated."
+  description = "Currently a NO-OP: azurerm_container_app_environment_managed_certificate (the resource this flag would create) was only added in terraform-provider-azurerm v4.69.0, and this config is pinned to azurerm ~> 3.100 (see required_providers in main.tf) — no 3.x release has it. The custom-domain resources always use certificate_binding_type = \"Disabled\" regardless of this flag's value. Kept as a variable so existing tfvars files referencing it don't break, and so it's easy to re-wire once this environment is deliberately migrated to azurerm ~> 4.69 (a separate, larger change — see the comment above the azurerm_container_app_custom_domain resources in main.tf)."
   type        = bool
   default     = false
 }

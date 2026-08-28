@@ -4,17 +4,17 @@
 #
 #   ../../../scripts/build-images.sh -r <account>.dkr.ecr.<region>.amazonaws.com/<name_prefix> -t <image_tag> -p
 #
-# (bootstrap order: `terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.demo_app -target=aws_ecr_repository.worker`
+# (bootstrap order: `terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.demo_app -target=aws_ecr_repository.worker -target=aws_ecr_repository.redis`
 # first, then run the build script, then a full `terraform apply`.)
 #
-# All 5 containers run in PRIVATE subnets with no public IP — only the ALB is internet-facing.
+# All 7 containers run in PRIVATE subnets with no public IP — only the ALB is internet-facing.
 # A single NAT Gateway (one AZ, not HA — a documented cost/simplicity trade-off) lets the private
 # subnets still reach ECR/CloudWatch/Secrets Manager/the internet for image pulls. SQL Server
-# Express and Redis are additionally pinned to a single task each (EFS-backed data directories are
-# not safe for concurrent multi-instance processes) and are reachable by the other services via AWS
-# Cloud Map private DNS, never through the ALB. The ALB terminates TLS using a self-signed
-# certificate generated at apply time — swap in a real ACM certificate (DNS-validated against a
-# real domain) once one exists; see alb.tf.
+# Express, Redis, and the HAPI terminology server's Postgres are additionally pinned to a single
+# task each (EFS-backed data directories are not safe for concurrent multi-instance processes) and
+# are reachable by the other services via AWS Cloud Map private DNS, never through the ALB. The ALB
+# terminates TLS using a self-signed certificate generated at apply time — swap in a real ACM
+# certificate (DNS-validated against a real domain) once one exists; see alb.tf.
 
 terraform {
   required_version = ">= 1.6.0"
@@ -166,6 +166,17 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  dynamic "ingress" {
+    for_each = var.hapi_terminology_external_access ? [1] : []
+    content {
+      description = "hapi-terminology (opt-in — see var.hapi_terminology_external_access)"
+      from_port   = var.hapi_terminology_port
+      to_port     = var.hapi_terminology_port
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -220,6 +231,14 @@ resource "aws_ecr_repository" "worker" {
   image_tag_mutability = "MUTABLE"
 }
 
+# Stock redis:7-alpine plus a fixed, committed self-signed TLS certificate — see
+# containerization/docker/redis-tls/Dockerfile's own comment for why Redis needs a custom image at
+# all (FHIRBridge.Api/.Worker refuse a plaintext Redis connection outside Development).
+resource "aws_ecr_repository" "redis" {
+  name                 = "${var.name_prefix}/fhirbridge-redis"
+  image_tag_mutability = "MUTABLE"
+}
+
 # --- ECS cluster ---
 
 resource "aws_ecs_cluster" "main" {
@@ -258,6 +277,16 @@ resource "aws_secretsmanager_secret_version" "redis_password" {
   secret_string = var.redis_password
 }
 
+resource "aws_secretsmanager_secret" "hapi_terminology_postgres_password" {
+  name                    = "${var.name_prefix}/hapi-terminology-postgres-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "hapi_terminology_postgres_password" {
+  secret_id     = aws_secretsmanager_secret.hapi_terminology_postgres_password.id
+  secret_string = var.hapi_terminology_postgres_password
+}
+
 # --- IAM: task execution role (pulls from ECR, writes logs, reads the 2 secrets above) ---
 
 data "aws_iam_policy_document" "ecs_task_assume" {
@@ -287,6 +316,7 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
       aws_secretsmanager_secret.sql_sa_password.arn,
       aws_secretsmanager_secret.jwt_signing_key.arn,
       aws_secretsmanager_secret.redis_password.arn,
+      aws_secretsmanager_secret.hapi_terminology_postgres_password.arn,
     ]
   }
 }
@@ -321,6 +351,16 @@ resource "aws_cloudwatch_log_group" "sqlserver" {
 
 resource "aws_cloudwatch_log_group" "redis" {
   name              = "/ecs/${var.name_prefix}/redis"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "hapi_terminology_postgres" {
+  name              = "/ecs/${var.name_prefix}/hapi-terminology-postgres"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "hapi_terminology" {
+  name              = "/ecs/${var.name_prefix}/hapi-terminology"
   retention_in_days = 14
 }
 

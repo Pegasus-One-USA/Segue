@@ -7,10 +7,10 @@
 # create the ACR first with a targeted apply, or push after the first apply and re-apply to update
 # the Container Apps' image references).
 #
-# SQL Server Express and Redis are pinned to a single replica each (Azure Files-backed data
-# directories are not safe for concurrent multi-instance SQL Server / Redis processes) and are
-# reachable by other Container Apps in the same environment via their app name as hostname
-# (Container Apps' built-in internal DNS) — never exposed externally.
+# SQL Server Express, Redis, and the HAPI terminology server's Postgres are pinned to a single
+# replica each (Azure Files-backed data directories are not safe for concurrent multi-instance
+# processes) and are reachable by other Container Apps in the same environment via their app name
+# as hostname (Container Apps' built-in internal DNS) — never exposed externally.
 
 terraform {
   required_version = ">= 1.6.0"
@@ -87,11 +87,13 @@ locals {
   # its OWN public URL — Container Apps' FQDN is always "<app-name>.<environment-default-domain>",
   # and the environment's default_domain doesn't depend on any individual app, so this avoids the
   # self-reference a resource would otherwise need to read its own computed attributes.
-  sqlserver_name      = "${var.name_prefix}-sqlserver"
-  redis_name          = "${var.name_prefix}-redis"
-  fhirbridge_app_name = "${var.name_prefix}-app"
-  demo_app_name       = "${var.name_prefix}-demo-app"
-  worker_name         = "${var.name_prefix}-worker"
+  sqlserver_name                 = "${var.name_prefix}-sqlserver"
+  redis_name                     = "${var.name_prefix}-redis"
+  hapi_terminology_postgres_name = "${var.name_prefix}-term-db" # kept short — Container App names cap at 32 chars
+  hapi_terminology_name          = "${var.name_prefix}-term"
+  fhirbridge_app_name            = "${var.name_prefix}-app"
+  demo_app_name                  = "${var.name_prefix}-demo-app"
+  worker_name                    = "${var.name_prefix}-worker"
 
   # Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
   # everything this deployment created, and is what the tag-based teardown path (see
@@ -185,6 +187,21 @@ resource "azurerm_container_app_environment_storage" "redis_data" {
   access_mode                  = "ReadWrite"
 }
 
+resource "azurerm_storage_share" "hapi_terminology_data" {
+  name                 = "hapi-terminology-data"
+  storage_account_name = azurerm_storage_account.main.name
+  quota                = 10
+}
+
+resource "azurerm_container_app_environment_storage" "hapi_terminology_data" {
+  name                         = "hapi-terminology-data"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  account_name                 = azurerm_storage_account.main.name
+  access_key                   = azurerm_storage_account.main.primary_access_key
+  share_name                   = azurerm_storage_share.hapi_terminology_data.name
+  access_mode                  = "ReadWrite"
+}
+
 resource "azurerm_storage_share" "keys_data" {
   name                 = "keys-data"
   storage_account_name = azurerm_storage_account.main.name
@@ -264,6 +281,18 @@ resource "azurerm_key_vault_secret" "jwt_signing_key" {
 resource "azurerm_key_vault_secret" "redis_password" {
   name         = "redis-password"
   value        = var.redis_password
+  key_vault_id = azurerm_key_vault.main.id
+  tags         = local.common_tags
+  depends_on   = [azurerm_key_vault_access_policy.terraform_kv_secrets]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "azurerm_key_vault_secret" "hapi_terminology_postgres_password" {
+  name         = "hapi-terminology-postgres-password"
+  value        = var.hapi_terminology_postgres_password
   key_vault_id = azurerm_key_vault.main.id
   tags         = local.common_tags
   depends_on   = [azurerm_key_vault_access_policy.terraform_kv_secrets]
@@ -353,6 +382,17 @@ resource "azurerm_container_app" "redis" {
   revision_mode                = "Single"
   tags                         = local.common_tags
 
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
+  }
+
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
   template {
     min_replicas = 1
     max_replicas = 1
@@ -364,14 +404,29 @@ resource "azurerm_container_app" "redis" {
     }
 
     container {
-      name   = "redis"
-      image  = "redis:7-alpine"
+      name = "redis"
+      # Custom image (not stock redis:7-alpine): FHIRBridge.Api/.Worker refuse a plaintext Redis
+      # connection outside Development (HIPAA #15), and stock Redis has no TLS configured at all.
+      # See containerization/docker/redis-tls/Dockerfile.
+      image  = "${azurerm_container_registry.acr.login_server}/fhirbridge-redis:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
       # Redis has no env-var port/password override — this command override tells the redis-server
       # process itself to listen on var.redis_port and require var.redis_password, matching the
       # ingress target_port below (requirepass is defense-in-depth on top of network isolation).
-      command = ["redis-server", "--port", tostring(var.redis_port), "--requirepass", azurerm_key_vault_secret.redis_password.value]
+      # --port 0 disables the plaintext port entirely — --tls-port is the only one Redis listens
+      # on. --tls-auth-clients no means server-side TLS + --requirepass, not mutual TLS (no client
+      # certificate required) — matches ConnectionStrings__Redis's "ssl=true" (no client cert
+      # options) on fhirbridge_app/worker below.
+      command = [
+        "redis-server",
+        "--tls-port", tostring(var.redis_port),
+        "--port", "0",
+        "--tls-cert-file", "/certs/redis.crt",
+        "--tls-key-file", "/certs/redis.key",
+        "--tls-auth-clients", "no",
+        "--requirepass", azurerm_key_vault_secret.redis_password.value,
+      ]
 
       volume_mounts {
         name = "redis-data"
@@ -392,6 +447,152 @@ resource "azurerm_container_app" "redis" {
   }
 }
 
+# --- HAPI terminology server's Postgres (internal only, single replica) ---
+
+resource "azurerm_container_app" "hapi_terminology_postgres" {
+  name                         = local.hapi_terminology_postgres_name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = data.azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  secret {
+    name  = "hapi-terminology-postgres-password"
+    value = azurerm_key_vault_secret.hapi_terminology_postgres_password.value
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    volume {
+      name         = "hapi-terminology-data"
+      storage_type = "AzureFile"
+      storage_name = azurerm_container_app_environment_storage.hapi_terminology_data.name
+    }
+
+    container {
+      name   = "hapi-terminology-postgres"
+      image  = "postgres:16-alpine"
+      cpu    = 0.5
+      memory = "1Gi"
+
+      env {
+        name  = "POSTGRES_DB"
+        value = "hapi_terminology"
+      }
+      env {
+        name  = "POSTGRES_USER"
+        value = "hapi_terminology"
+      }
+      env {
+        name        = "POSTGRES_PASSWORD"
+        secret_name = "hapi-terminology-postgres-password"
+      }
+      # Azure Files (SMB) doesn't support the chown/chmod postgres's entrypoint does on PGDATA at
+      # first boot ("Operation not permitted") the way a native/NFS filesystem does - pointing
+      # PGDATA at a subdirectory postgres creates and owns itself (rather than the mount root,
+      # which is externally provisioned) works around it. SQL Server doesn't hit this because it
+      # never tries to chmod its own mount point.
+      env {
+        name  = "PGDATA"
+        value = "/var/lib/postgresql/data/pgdata"
+      }
+
+      volume_mounts {
+        name = "hapi-terminology-data"
+        path = "/var/lib/postgresql/data"
+      }
+    }
+  }
+
+  ingress {
+    external_enabled = false
+    target_port      = 5432
+    transport        = "tcp"
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+}
+
+# --- HAPI terminology server (internal only, single replica) ---
+#
+# Second, dedicated HAPI FHIR instance used only for code-system lookups/validation/expansion/
+# translation ($lookup et al.) and the automatic vocabulary syncs in
+# FHIRBridge.Infrastructure/Terminology/Hapi — separate from any EHR-sourced FHIR data, which never
+# touches this service. Reached only by hostname within the Container Apps environment, never
+# externally — see Terminology__BaseUrl on fhirbridge_app/worker below.
+
+resource "azurerm_container_app" "hapi_terminology" {
+  name                         = local.hapi_terminology_name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = data.azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  depends_on = [azurerm_container_app.hapi_terminology_postgres]
+
+  secret {
+    name  = "hapi-terminology-postgres-password"
+    value = azurerm_key_vault_secret.hapi_terminology_postgres_password.value
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    container {
+      name   = "hapi-terminology"
+      image  = "hapiproject/hapi:latest"
+      cpu    = 1.0
+      memory = "2Gi"
+
+      env {
+        name  = "SPRING_DATASOURCE_URL"
+        value = "jdbc:postgresql://${local.hapi_terminology_postgres_name}:5432/hapi_terminology"
+      }
+      env {
+        name  = "SPRING_DATASOURCE_USERNAME"
+        value = "hapi_terminology"
+      }
+      env {
+        name        = "SPRING_DATASOURCE_PASSWORD"
+        secret_name = "hapi-terminology-postgres-password"
+      }
+      env {
+        name  = "SPRING_DATASOURCE_DRIVERCLASSNAME"
+        value = "org.postgresql.Driver"
+      }
+      env {
+        name  = "SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT"
+        value = "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect"
+      }
+      env {
+        name  = "HAPI_FHIR_VERSION"
+        value = "R4"
+      }
+    }
+  }
+
+  # external_enabled defaults to false (internal-only, like sqlserver/redis) — flip on with
+  # var.hapi_terminology_external_access, or implicitly by setting hapi_terminology_custom_domain
+  # (Container Apps custom domains require external ingress). transport is "auto" rather than the
+  # "tcp" sqlserver/redis use because HAPI serves plain HTTP/REST, both internally and externally.
+  ingress {
+    external_enabled = var.hapi_terminology_external_access || var.hapi_terminology_custom_domain != ""
+    target_port      = 8080
+    transport        = "auto"
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+}
+
 # --- FHIRBridge app (Api + Gateway), public ---
 
 resource "azurerm_container_app" "fhirbridge_app" {
@@ -401,9 +602,9 @@ resource "azurerm_container_app" "fhirbridge_app" {
   revision_mode                = "Single"
   tags                         = local.common_tags
 
-  # Connection strings reference sqlserver/redis by their plain (predictable) name rather than a
-  # resource attribute, so this dependency has to be spelled out explicitly.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
+  # Connection strings reference sqlserver/redis/hapi-terminology by their plain (predictable) name
+  # rather than a resource attribute, so this dependency has to be spelled out explicitly.
+  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.hapi_terminology]
 
   secret {
     name  = "sql-sa-password"
@@ -444,7 +645,7 @@ resource "azurerm_container_app" "fhirbridge_app" {
       }
       env {
         name  = "ConnectionStrings__Redis"
-        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value}"
+        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
       }
       env {
         name        = "Authentication__SigningKey"
@@ -480,6 +681,10 @@ resource "azurerm_container_app" "fhirbridge_app" {
       env {
         name  = "AllowedHosts"
         value = "*"
+      }
+      env {
+        name  = "Terminology__BaseUrl"
+        value = "http://${local.hapi_terminology_name}:8080/fhir"
       }
 
       volume_mounts {
@@ -575,37 +780,28 @@ resource "azurerm_container_app" "demo_app" {
 #
 # Azure managed certificates require the hostname to already exist on a Container App
 # (RequireCustomHostnameInEnvironment otherwise). azurerm_container_app_custom_domain with
-# certificate_binding_type=Disabled registers the hostname without a cert (Phase 1).
-# Phase 2 (bind_custom_domain_certificates=true) creates managed certificates then binds SniEnabled.
+# certificate_binding_type=Disabled registers the hostname without a cert (Phase 1) — that's all
+# this config does right now.
 #
-# Do NOT set bind_custom_domain_certificates=true on the first apply for a new domain.
-
-resource "azurerm_container_app_environment_managed_certificate" "fhirbridge_app" {
-  count                        = var.fhirbridge_app_custom_domain != "" && var.bind_custom_domain_certificates ? 1 : 0
-  name                         = "${local.fhirbridge_app_name}-cert"
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  subject_name                 = var.fhirbridge_app_custom_domain
-  domain_control_validation    = "CNAME"
-  tags                         = local.common_tags
-}
+# Phase 2 (managed certs, SniEnabled binding) is currently DISABLED: it needs the
+# azurerm_container_app_environment_managed_certificate resource, which was only added in
+# terraform-provider-azurerm v4.69.0 — this config is pinned to `~> 3.100` (see the
+# required_providers block in this file), and no 3.x release has it. Referencing that resource
+# type at all — even behind count = 0 — makes Terraform fail schema validation on EVERY plan/apply/
+# destroy against a 3.x provider, not just when a custom domain is actually configured, which is
+# why it's removed here rather than left gated behind var.bind_custom_domain_certificates. Setting
+# bind_custom_domain_certificates = true currently has no effect (the ternaries below always
+# resolve to "Disabled"/null) until this environment is migrated to azurerm ~> 4.69 (a deliberate,
+# separate change — 4.x has its own breaking changes across many other resources in this file, so
+# don't do it just to unblock a custom domain).
 
 resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
   count             = var.fhirbridge_app_custom_domain != "" ? 1 : 0
   name              = var.fhirbridge_app_custom_domain
   container_app_id = azurerm_container_app.fhirbridge_app.id
 
-  certificate_binding_type = var.bind_custom_domain_certificates ? "SniEnabled" : "Disabled"
-
-  container_app_environment_certificate_id = var.bind_custom_domain_certificates ? azurerm_container_app_environment_managed_certificate.fhirbridge_app[0].id : null
-}
-
-resource "azurerm_container_app_environment_managed_certificate" "demo_app" {
-  count                        = var.demo_app_custom_domain != "" && var.bind_custom_domain_certificates ? 1 : 0
-  name                         = "${local.demo_app_name}-cert"
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  subject_name                 = var.demo_app_custom_domain
-  domain_control_validation    = "CNAME"
-  tags                         = local.common_tags
+  certificate_binding_type                 = "Disabled"
+  container_app_environment_certificate_id = null
 }
 
 resource "azurerm_container_app_custom_domain" "demo_app" {
@@ -613,9 +809,17 @@ resource "azurerm_container_app_custom_domain" "demo_app" {
   name              = var.demo_app_custom_domain
   container_app_id = azurerm_container_app.demo_app.id
 
-  certificate_binding_type = var.bind_custom_domain_certificates ? "SniEnabled" : "Disabled"
+  certificate_binding_type                 = "Disabled"
+  container_app_environment_certificate_id = null
+}
 
-  container_app_environment_certificate_id = var.bind_custom_domain_certificates ? azurerm_container_app_environment_managed_certificate.demo_app[0].id : null
+resource "azurerm_container_app_custom_domain" "hapi_terminology" {
+  count             = var.hapi_terminology_custom_domain != "" ? 1 : 0
+  name              = var.hapi_terminology_custom_domain
+  container_app_id = azurerm_container_app.hapi_terminology.id
+
+  certificate_binding_type                 = "Disabled"
+  container_app_environment_certificate_id = null
 }
 
 # --- Worker (no ingress) ---
@@ -630,7 +834,7 @@ resource "azurerm_container_app" "worker" {
   # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
   # on boot and can race on the initial CREATE DATABASE on a fresh database. Container Apps
   # replaces crashed replicas automatically, which turns a lost race into a self-healing retry.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
+  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.hapi_terminology, azurerm_container_app.fhirbridge_app]
 
   secret {
     name  = "sql-sa-password"
@@ -667,7 +871,7 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "ConnectionStrings__Redis"
-        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value}"
+        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
       }
       env {
         name  = "RuntimeWorker__Enabled"
@@ -676,6 +880,10 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "Messaging__Provider"
         value = "InMemory"
+      }
+      env {
+        name  = "Terminology__BaseUrl"
+        value = "http://${local.hapi_terminology_name}:8080/fhir"
       }
     }
   }
@@ -715,17 +923,22 @@ locals {
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
     "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
     "azurerm_storage_share.redis_data                      = ${azurerm_storage_share.redis_data.id}",
+    "azurerm_storage_share.hapi_terminology_data           = ${azurerm_storage_share.hapi_terminology_data.id}",
     "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
     "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
     "azurerm_container_app_environment_storage.redis_data  = ${azurerm_container_app_environment_storage.redis_data.id}",
+    "azurerm_container_app_environment_storage.hapi_terminology_data = ${azurerm_container_app_environment_storage.hapi_terminology_data.id}",
     "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",
     "azurerm_key_vault_secret.jwt_signing_key              = ${azurerm_key_vault_secret.jwt_signing_key.id}",
     "azurerm_key_vault_secret.redis_password               = ${azurerm_key_vault_secret.redis_password.id}",
+    "azurerm_key_vault_secret.hapi_terminology_postgres_password = ${azurerm_key_vault_secret.hapi_terminology_postgres_password.id}",
     "azurerm_container_app.sqlserver                       = ${azurerm_container_app.sqlserver.id}",
     "azurerm_container_app.redis                           = ${azurerm_container_app.redis.id}",
+    "azurerm_container_app.hapi_terminology_postgres       = ${azurerm_container_app.hapi_terminology_postgres.id}",
+    "azurerm_container_app.hapi_terminology                = ${azurerm_container_app.hapi_terminology.id}",
     "azurerm_container_app.fhirbridge_app                  = ${azurerm_container_app.fhirbridge_app.id}",
     "azurerm_container_app.demo_app                        = ${azurerm_container_app.demo_app.id}",
     "azurerm_container_app.worker                          = ${azurerm_container_app.worker.id}",

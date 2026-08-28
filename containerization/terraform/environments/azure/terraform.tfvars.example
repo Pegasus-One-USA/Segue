@@ -24,9 +24,10 @@ redis_password  = "replace-with-a-strong-redis-password"
 # HTTP ingress has no client-configurable port; it's always https://<app>.<domain> with no port
 # number in the URL. See the AWS environment if a client-chosen public port is required.
 
-# Custom domains — two-phase (see variables.tf). Phase 1: set domain(s), leave bind false.
-# After DNS CNAME + asuid TXT: set bind_custom_domain_certificates = true and re-apply.
+# Custom domains — see variables.tf. Registers the hostname (no managed SSL cert yet —
+# bind_custom_domain_certificates is currently a no-op; see its description in variables.tf).
 # fhirbridge_app_custom_domain        = "app.customer.com"
 # demo_app_custom_domain              = "demo.customer.com"
+# hapi_terminology_custom_domain      = "terminology.customer.com"
 # bind_custom_domain_certificates     = false
 

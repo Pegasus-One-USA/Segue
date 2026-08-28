@@ -38,6 +38,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Resilience;
+using StackExchange.Redis;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FHIRBridge.Infrastructure;
 
@@ -97,7 +100,13 @@ public static class DependencyInjection
 
             services.AddStackExchangeRedisCache(options =>
             {
-                options.Configuration = redisConnectionString;
+                // Parsed (not just options.Configuration = redisConnectionString) so
+                // CertificateValidation can be hooked below — needed for the containerized
+                // deployments' self-signed Redis certificate (see RedisTlsOptions), which a plain
+                // connection string has no way to express trust for.
+                var configOptions = ConfigurationOptions.Parse(redisConnectionString);
+                configOptions.CertificateValidation += ValidateRedisServerCertificate;
+                options.ConfigurationOptions = configOptions;
                 options.InstanceName = "fhirbridge:";
             });
         }
@@ -654,5 +663,42 @@ public static class DependencyInjection
         }
 
         return services;
+    }
+
+    // Thumbprint (SHA-1, .NET X509Certificate2.Thumbprint format) of
+    // containerization/docker/redis-tls/redis.crt — the fixed, committed self-signed certificate
+    // the containerized Redis image (Bicep + all 3 Terraform environments) presents. Regenerate
+    // this alongside that certificate if it's ever rotated; every containerized deployment's
+    // Redis connection fails closed (never silently accepts an unexpected certificate) until this
+    // value matches whatever certificate is actually presented.
+    private const string ContainerizedRedisCertificateThumbprint = "8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F";
+
+    // Accepts either: (a) a normally CA-trusted certificate (SslPolicyErrors.None) — the path a
+    // real managed service like Azure Cache for Redis takes, needing no special-casing here; or
+    // (b) a certificate whose thumbprint matches the one fixed, self-signed certificate the
+    // containerized deployments' own Redis image presents (see the Dockerfile in
+    // containerization/docker/redis-tls for why it's committed rather than generated per-deploy).
+    // Anything else — an unrelated self-signed certificate, a mismatched/expired one, a
+    // man-in-the-middle presenting something else entirely — is rejected. This is deliberately
+    // NOT "accept any self-signed certificate": that would defeat the point of the HIPAA #15
+    // check above, which exists specifically so a compromised or misconfigured Redis endpoint
+    // can't silently downgrade this connection's confidentiality guarantee.
+    private static bool ValidateRedisServerCertificate(
+        object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
+    {
+        if (sslPolicyErrors == SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        if (certificate is X509Certificate2 certificate2)
+        {
+            return string.Equals(
+                certificate2.Thumbprint,
+                ContainerizedRedisCertificateThumbprint,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 }

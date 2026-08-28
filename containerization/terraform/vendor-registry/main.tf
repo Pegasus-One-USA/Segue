@@ -59,7 +59,9 @@ data "azurerm_resource_group" "main" {
 }
 
 locals {
-  acr_name = "${var.name_prefix}vendor${random_id.suffix.hex}" # alnum only, globally unique
+  # alnum only, globally unique. Prefer var.acr_name_override (a real, memorable name) once one has
+  # been chosen — this auto-generated pattern only exists as a collision-free fallback.
+  acr_name = var.acr_name_override != "" ? var.acr_name_override : "${var.name_prefix}vendor${random_id.suffix.hex}"
 
   common_tags = {
     Project     = "FHIRBridge"

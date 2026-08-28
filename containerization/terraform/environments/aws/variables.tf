@@ -76,3 +76,21 @@ variable "redis_password" {
   type        = string
   sensitive   = true
 }
+
+variable "hapi_terminology_postgres_password" {
+  description = "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (internal-only, via Cloud Map — not the app's FHIRBridgeDb). Stored in Secrets Manager."
+  type        = string
+  sensitive   = true
+}
+
+variable "hapi_terminology_external_access" {
+  description = "Exposes the HAPI terminology server externally through the ALB (https://<alb-dns-name-or-your-own-domain>:hapi_terminology_port), for cases where it needs to be reached directly from outside the VPC (e.g. a separate terminology admin tool, or a third-party integration) rather than only internally by fhirbridge-app/worker. Defaults to false — internal-only via Cloud Map, matching sqlserver/redis. There is no per-service domain binding on this shared ALB the way Azure Container Apps has per-app custom domains (see the azure environment for that) — point your own DNS (CNAME) at the ALB's DNS name instead (aws_lb.main.dns_name, or the hapi_terminology_url output below), and swap aws_acm_certificate.alb for a real, DNS-validated certificate for your domain instead of the self-signed one (see main.tf)."
+  type        = bool
+  default     = false
+}
+
+variable "hapi_terminology_port" {
+  description = "Public port clients use to reach the HAPI terminology server through the load balancer, when hapi_terminology_external_access is true."
+  type        = number
+  default     = 8090
+}

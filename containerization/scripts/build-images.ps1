@@ -1,5 +1,8 @@
-# Builds (and optionally pushes) the 3 custom FHIRBridge container images from the repo root.
+# Builds (and optionally pushes) the 4 custom FHIRBridge container images from the repo root.
 # Terraform's azure/aws environments assume this has already been run against their registry.
+# fhirbridge-redis (containerization/docker/redis-tls) is stock redis:7-alpine plus a fixed,
+# committed self-signed TLS certificate — see that Dockerfile's own comment for why it's a custom
+# image at all (FHIRBridge.Api/.Worker refuse a plaintext Redis connection outside Development).
 #
 # Usage:
 #   ./build-images.ps1                                          # local tags only, no push
@@ -26,6 +29,7 @@ $Images = @{
     "fhirbridge-app"    = "containerization/docker/fhirbridge-app/Dockerfile"
     "demo-app"          = "containerization/docker/demo-app/Dockerfile"
     "fhirbridge-worker" = "containerization/docker/worker/Dockerfile"
+    "fhirbridge-redis"  = "containerization/docker/redis-tls/Dockerfile"
 }
 # fhirbridge-app and demo-app bake $Tag into their Angular build (footer version display) -
 # fhirbridge-worker has no UI, so it doesn't take this build-arg.

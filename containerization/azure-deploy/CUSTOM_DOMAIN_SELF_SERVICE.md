@@ -42,7 +42,7 @@ environment. Creating the cert first fails. Correct order:
 az deployment group create -g <rg> -n segue-phase1 -f main.bicep \
   -p namePrefix=segue6 sqlSaPassword=... jwtSigningKey=... redisPassword=... \
      fhirbridgeAppCustomDomain=app.example.com demoAppCustomDomain=demo.example.com \
-     bindCustomDomainCertificates=false imageRegistryServer=fhirbridgevendor8ae7f3.azurecr.io \
+     bindCustomDomainCertificates=false imageRegistryServer=seguebuilds.azurecr.io \
      imageTag=v1.0.4 imageRegistryUsername=one-click-pull imageRegistryPassword=...
 
 # After DNS is ready — Phase 2
