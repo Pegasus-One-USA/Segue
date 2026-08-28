@@ -26,6 +26,21 @@ export type PendingSchemaOp =
  *  still tell the SQL engines apart where it matters (e.g. destination.type on the wire). */
 export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob';
 
+/** True for every destType with a live, relational table/column schema — SQL Server, MySQL, PostgreSQL —
+ *  the "SQL family" that shares table creation/column ALTER/probe semantics, as opposed to CSV (flat
+ *  file), Mongo (schemaless collections), or the FHIR-native destinations. DestinationWizardComponent and
+ *  MappingProfileFormComponent each already have their own local `isSql` computed with this exact same
+ *  union (destType() === 'sql' || 'mysql' || 'postgres') since they hold a live destType() signal to
+ *  compute it from; this plain-function twin exists for the leaf field-mapping components (target-card,
+ *  canvas, preview-drawer) that only ever receive a MappingDestType value as an input, not a wizard
+ *  instance to call .isSql() on. Kept in one place so "is this destType SQL-like" can never drift into a
+ *  bare `=== 'sql'` literal that silently excludes MySQL/PostgreSQL again (see the Map Fields "MySQL shows
+ *  as CSV" bug this fixed — target-card's kind/status-badge/add-column branches and the output preview
+ *  drawer's format/title all used to check `=== 'sql'` directly). */
+export function isSqlFamilyDestType(destType: MappingDestType): boolean {
+  return destType === 'sql' || destType === 'mysql' || destType === 'postgres';
+}
+
 export interface MappingSourceRef {
   fhirPath: string;
   label: string;

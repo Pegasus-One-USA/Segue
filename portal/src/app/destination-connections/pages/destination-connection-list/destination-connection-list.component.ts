@@ -1,13 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, HostListener, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
-import { MatTableModule } from '@angular/material/table';
-import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { DestinationConfigurationService } from '../../services/destination-configuration.service';
@@ -38,11 +35,8 @@ import { PhaseConfigService } from '../../../services/phase-config.service';
   imports: [
     CommonModule,
     FormsModule,
-    MatTableModule,
-    MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatTooltipModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -104,10 +98,21 @@ export class DestinationConnectionListComponent implements OnInit {
    *  Delete independently of historyById (a never-run destination can still be wired into a live workflow). */
   readonly usedInWorkflowIds = signal<Set<string>>(new Set());
 
-  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn', 'actions'];
-
   /** Only one sortable column today — "Action on" — server-driven since this list is server-paged. */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
+
+  /** Which row's "more actions" menu is open, if any — keyed by connection id. See toggleActionMenu,
+   *  mirrored 1:1 from workflow-list.component.ts's identical row-menu pattern. */
+  readonly openActionMenuId = signal<string | null>(null);
+
+  /** Viewport-relative coordinates for the open action menu, computed from the trigger button's own
+   *  bounding rect at open time — see workflow-list.component.ts's actionMenuPosition for the full
+   *  rationale (position: fixed escapes .table-wrapper's overflow-x: auto clipping). */
+  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; left: number } | null>(null);
+
+  /** Rough panel height (View/Edit + Delete + divider + padding) — just needs to be in the right
+   *  ballpark to decide whether the panel fits below the trigger, not pixel-exact. */
+  private static readonly ACTION_MENU_ESTIMATED_HEIGHT = 140;
 
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
@@ -261,6 +266,39 @@ export class DestinationConnectionListComponent implements OnInit {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
     this.load();
+  }
+
+  toggleActionMenu(event: MouseEvent, id: string): void {
+    if (this.openActionMenuId() === id) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
+      return;
+    }
+
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const left = rect.left;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    this.actionMenuPosition.set(
+      spaceBelow < DestinationConnectionListComponent.ACTION_MENU_ESTIMATED_HEIGHT
+        ? { bottom: window.innerHeight - rect.top + 6, left }
+        : { top: rect.bottom + 6, left }
+    );
+    this.openActionMenuId.set(id);
+  }
+
+  // Single document:click listener for the whole component — closes the open row menu on any click
+  // outside it. Mirrors workflow-list.component.ts's closeFilterMenuIfOutside/onDocumentClick pair.
+  private closeActionMenuIfOutside(event: MouseEvent): void {
+    if (!(event.target as HTMLElement).closest('.row-menu')) {
+      this.openActionMenuId.set(null);
+      this.actionMenuPosition.set(null);
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    this.closeActionMenuIfOutside(event);
   }
 
   openNew(): void {

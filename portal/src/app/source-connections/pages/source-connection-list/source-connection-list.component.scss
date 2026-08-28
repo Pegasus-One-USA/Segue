@@ -1,5 +1,10 @@
 @use '../../../_list-page' as *;
 
+// The plain-<table> data-table sizing and the .col-menu/.row-menu/.row-menu-panel/.row-menu-item/
+// .btn-icon kebab-menu pattern below all now live in the shared _list-page.scss partial (@use'd above)
+// — see that file for the [mat-table]-attribute guard that keeps it from colliding with the ::ng-deep
+// .mat-mdc-* rules other, still-mat-table-based list pages rely on.
+
 // ─── Source Connection modal (any per-vendor form — Epic, Cerner, Athenahealth, ...) ───────────────────────────
 // Each wrapper hosts EhrVendorSourceFormComponent, which assumes it's sitting inside a sized shell (originally
 // NodeLibraryDialogComponent's .nld / .nld-detail--form): its sticky topbar/footer only pin correctly within a
@@ -83,41 +88,19 @@
   &[disabled] { opacity: 0.5; cursor: not-allowed; }
 }
 
-// ─── Column widths ────────────────────────────────────────────────────────────
-.col-actions {
-  width: 130px;
-  text-align: right;
-}
-
 // ─── Cell elements ────────────────────────────────────────────────────────────
-.cell-name {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.endpoint-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--color-primary-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  mat-icon {
-    font-size: 18px;
-    height: 18px;
-    width: 18px;
-    color: var(--color-primary);
-  }
-}
-
 .cell-url {
   font-size: 13px;
   color: var(--color-muted);
-  max-width: 320px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.cell-client-id {
+  max-width: 140px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -157,47 +140,3 @@
   }
 }
 
-// ─── Action buttons ───────────────────────────────────────────────────────────
-.actions-cell {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
-// so the actions read as distinct, colorful controls rather than plain icons.
-%action-chip {
-  width:         32px;
-  height:        32px;
-  border-radius: 50%;
-  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
-
-  mat-icon { font-size: 17px; height: 17px; width: 17px; }
-
-  &[disabled] { opacity: 0.35; }
-}
-
-.btn-view {
-  @extend %action-chip;
-  background: var(--color-side);
-  color:      var(--color-ink-2);
-
-  &:hover:not([disabled]) { background: var(--color-ink-2); color: var(--color-on-primary); }
-}
-
-.btn-edit {
-  @extend %action-chip;
-  background: var(--color-primary-soft);
-  color:      var(--color-primary);
-
-  &:hover:not([disabled]) { background: var(--color-primary); color: var(--color-on-primary); }
-}
-
-.btn-delete {
-  @extend %action-chip;
-  background: var(--color-error-soft);
-  color:      var(--color-error);
-
-  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
-}
