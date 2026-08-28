@@ -36,7 +36,6 @@
           [targetValue]="targetFor(card.resource)"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
-          [pendingTableNames]="pendingTableNames()"
           [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
           [columnDataType]="columnTypeOn(card.tableName)"
@@ -93,13 +92,6 @@
            add-collection picker — see showAddTablePicker()). -->
       @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled())) {
       <div class="fm-add-table-slot">
-        <!-- "Remove Suggested Tables from Map Fields": no card renders at all here when this resource has
-             no confirmed-or-pending table (see isPrimaryTargetValid) — a plain "+ Create a new table…"
-             button with nothing else on screen reads as broken/empty rather than "nothing to map onto
-             yet", so this hint says so explicitly instead of leaving that to be inferred. -->
-        @if (!isPrimaryTargetValid(primaryResource)) {
-          <span class="fm-no-target-hint">No destination table selected</span>
-        }
         @if (showAddTablePicker()) {
           <button
             type="button"
@@ -226,7 +218,6 @@
       [columnsForTable]="columnsForTable()"
       [submitting]="creatingTableSubmitting()"
       [error]="creatingTableError()"
-      [suggestedName]="creatingTableSuggestedName()"
       (submitted)="submitCreateTable($event)"
       (cancelled)="closeCreateTableModal()"
     />

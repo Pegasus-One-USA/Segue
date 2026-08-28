@@ -5,7 +5,7 @@
     (pointermove)="onHeadPointerMove($event)"
     (pointerup)="onHeadPointerUp($event)"
   >
-    <span class="fm-target-kind">{{ isSqlFamily() ? 'table' : destType() === 'mongo' ? 'collection' : destType() === 'blob' ? 'blob' : 'file' }}</span>
+    <span class="fm-target-kind">{{ destType() === 'sql' ? 'table' : destType() === 'mongo' ? 'collection' : destType() === 'blob' ? 'blob' : 'file' }}</span>
     @if (renamingTable()) {
       <input
         class="fm-target-name-edit"
@@ -27,16 +27,6 @@
           (click)="startRenameTable()"
         >✎</button>
       }
-    }
-    @if (isSqlFamily()) {
-      <span
-        class="fm-target-status"
-        [class.fm-target-status--pending]="tableStatus() === 'pending'"
-        [class.fm-target-status--confirmed]="tableStatus() === 'confirmed'"
-        [title]="tableStatus() === 'pending'
-          ? 'Staged this session — will be created for real when you Add to Pipeline / Update.'
-          : 'Confirmed to exist in the destination database.'"
-      >{{ tableStatus() === 'pending' ? 'Pending' : 'Confirmed' }}</span>
     }
     <div class="fm-target-search-wrap" (pointerdown)="$event.stopPropagation()">
       <input
@@ -73,11 +63,11 @@
 
 
   <div class="fm-target-rows" (scroll)="onRowsScroll()">
-    @if (isSqlFamily() && hasSqlTables() && !schemaAuthoringEnabled()) {
+    @if (destType() === 'sql' && hasSqlTables() && !schemaAuthoringEnabled()) {
       <!-- No live credentials to back a real ALTER TABLE here (see FieldMappingCanvasComponent.
            schemaAuthoringEnabled) — this table's real, already-probed columns are the only ones
            mappable; nothing to add. -->
-    } @else if (isSqlFamily()) {
+    } @else if (destType() === 'sql') {
       <div class="fm-target-row fm-target-row--add">
         <button
           type="button"

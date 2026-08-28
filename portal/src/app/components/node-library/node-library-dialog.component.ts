@@ -320,36 +320,7 @@ export class NodeLibraryDialogComponent {
 
   // Mirrors the open canvas's own destination type / mapping count so the header can show them
   // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
-  // Kept in sync by hand with DestinationWizardComponent.destLabel's own type->label mapping — was
-  // previously a hardcoded 'sql' ? 'SQL Server' : 'CSV' binary, silently mislabeling every other real
-  // destination type (MySQL, PostgreSQL, MongoDB, Blob, Medplum, FHIR, Azure FHIR) as "CSV" in this
-  // header badge, even though the mapping canvas itself (destType-driven "table"/"file"/"blob" wording,
-  // "delimiters" hint, etc.) was always using the correct type underneath.
-  readonly destMappingTypeLabel = computed(() => {
-    switch (this.destWizardType()) {
-      case 'sql': return 'SQL Server';
-      case 'mysql': return 'MySQL';
-      case 'postgres': return 'PostgreSQL';
-      case 'mongo': return 'MongoDB';
-      case 'medplum': return 'Medplum';
-      case 'fhir': return 'Aidbox';
-      case 'azurefhir': return 'Azure FHIR Service';
-      case 'blob': return 'Azure Blob Storage';
-      default: return 'CSV';
-    }
-  });
-
-  /** Same "was only ever SQL Server vs. everything-else" gap as destMappingTypeLabel above — a relational
-   *  destination (SQL Server/MySQL/PostgreSQL) gets the database icon, FHIR-shaped destinations get a
-   *  different one, blob/CSV keep the plain file icon. */
-  readonly destMappingTypeIcon = computed(() => {
-    switch (this.destWizardType()) {
-      case 'sql': case 'mysql': case 'postgres': return '🗄️';
-      case 'mongo': return '🍃';
-      case 'medplum': case 'fhir': case 'azurefhir': return '🔥';
-      default: return '📄';
-    }
-  });
+  readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
   readonly destMappingCount = signal(0);
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | null>(null);

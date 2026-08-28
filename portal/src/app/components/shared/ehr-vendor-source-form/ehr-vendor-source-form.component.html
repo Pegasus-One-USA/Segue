@@ -183,10 +183,16 @@
           @if (grantedScopesStatus() === 'loading') {
             <p class="eaf-hint">Authenticating with Epic (system/*.*)…</p>
           }
-          <!-- The granted-scopes list itself is intentionally not rendered (per request) — grantedScopes()/
-               grantedScopesStatus() still drive the real "does this app actually have the scopes we need"
-               check and the saved scope string elsewhere in this component; only this raw list display is
-               hidden. -->
+          @if (grantedScopesStatus() === 'done') {
+            <div class="eaf-granted-scopes">
+              <p class="eaf-granted-scopes-title">Scopes allowed for this Epic app:</p>
+              <ul class="eaf-granted-scopes-list">
+                @for (scope of grantedScopes(); track scope) {
+                  <li>{{ scope }}</li>
+                }
+              </ul>
+            </div>
+          }
           @if (grantedScopesStatus() === 'error') {
             <div class="eaf-granted-scopes eaf-granted-scopes--error">
               Could not determine granted scopes: {{ grantedScopesError() }}
