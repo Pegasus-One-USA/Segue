@@ -1,5 +1,5 @@
 import { Component, computed, input, output } from '@angular/core';
-import { MappingRow, MappingDestType, isSqlFamilyDestType } from './field-mapping-model';
+import { MappingRow, MappingDestType } from './field-mapping-model';
 import { buildSqlInsert, buildCsvPreview, CSV_DELIMITERS } from './field-mapping-preview.util';
 
 interface FmPreviewSection {
@@ -30,17 +30,12 @@ export class FieldMappingPreviewDrawerComponent {
 
   readonly closed = output<void>();
 
-  /** SQL Server/MySQL/PostgreSQL all render as INSERT statements here — only CSV (and Mongo/Blob, which
-   *  never reach this drawer today) get the flat-file preview. See isSqlFamilyDestType's doc comment for
-   *  why this can't be a bare `=== 'sql'` check. */
-  readonly isSqlFamily = computed(() => isSqlFamilyDestType(this.destType()));
-
   readonly sections = computed<FmPreviewSection[]>(() => {
     const delimiter = CSV_DELIMITERS[this.csvDelimiterKey()] ?? ',';
     return this.resources().map(resource => {
       const rowsForResource = this.rows().filter(r => r.resource === resource);
       const tableName = this.targetByResource()[resource] ?? '';
-      const text = this.isSqlFamily()
+      const text = this.destType() === 'sql'
         ? buildSqlInsert(tableName, rowsForResource)
         : buildCsvPreview(rowsForResource, delimiter);
       return { resource, tableName, text };

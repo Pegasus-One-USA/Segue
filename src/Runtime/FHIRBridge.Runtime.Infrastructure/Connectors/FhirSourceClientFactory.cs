@@ -36,18 +36,17 @@ public sealed class FhirSourceClientFactory : IFhirSourceClientFactory
     }
 
     /// <summary>
-    /// The Epic-only source clients for this branch. Shared by dependency injection and tests so the mapping has
-    /// a single source of truth.
+    /// The Phase 1 source clients. Shared by dependency injection and tests so the mapping has a single source of truth.
     /// </summary>
     public static IReadOnlyList<FhirSourceClientRegistration> DefaultRegistrations { get; } =
     [
         new(RuntimeSourceType.Epic, typeof(EpicFhirSourceClient)),
-        // GATED (Epic/SQL/CSV-only branch): every other vendor reuses the same paginated search client (the
-        // access-token grant is selected by the composite token provider per source); re-enable them here once
-        // this branch's scope widens again.
-        // new(RuntimeSourceType.Sample, typeof(SampleFhirSourceClient)),
-        // new(RuntimeSourceType.GenericFhir, typeof(EpicFhirSourceClient)),
-        // new(RuntimeSourceType.Athenahealth, typeof(AthenahealthFhirSourceClient)),
+        new(RuntimeSourceType.Sample, typeof(SampleFhirSourceClient)),
+        new(RuntimeSourceType.GenericFhir, typeof(EpicFhirSourceClient)),
+        new(RuntimeSourceType.Athenahealth, typeof(AthenahealthFhirSourceClient)),
+        // GATED (SQL/CSV phase): only Epic + Sample + GenericFhir sources are enabled. The other vendors reuse the
+        // same paginated search client (the access-token grant is selected by the composite token provider per
+        // source); re-enable them here once the generic Source hierarchy + ApplicationType axis land.
         // new(RuntimeSourceType.Cerner, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.Allscripts, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.Healow, typeof(EpicFhirSourceClient)),

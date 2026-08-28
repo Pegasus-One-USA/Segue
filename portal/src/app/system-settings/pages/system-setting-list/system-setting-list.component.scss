@@ -31,14 +31,13 @@
 }
 
 // ─── Group heading rows (e.g. "Terminology Settings") ────────────────────────
-// Same uppercase/letter-spaced micro-label treatment as the table's own header cells (see
-// _list-page.scss's plain-<table> thead th rules), so a group heading reads as "more of this
-// table", not a foreign UI element dropped into it. Plain <td> now (not ::ng-deep .mat-mdc-cell —
-// this page moved off mat-table), so the padding/typography apply directly.
+// Same uppercase/letter-spaced micro-label treatment as the table's own header
+// cells (see _list-page.scss .mat-mdc-header-cell), so a group heading reads
+// as "more of this table", not a foreign UI element dropped into it.
 .group-header-row {
   height: auto;
 
-  .group-header-cell {
+  ::ng-deep .group-header-cell {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -104,6 +103,11 @@
 }
 
 // ─── Column widths ────────────────────────────────────────────────────────────
+.col-actions {
+  width: 100px;
+  text-align: right;
+}
+
 .col-description {
   color: var(--color-muted);
   font-size: 13px;
@@ -114,10 +118,71 @@
 }
 
 // ─── Cell elements ────────────────────────────────────────────────────────────
-.cell-mono {
-  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cell-data {
+  font-family: var(--font-family, var(--brand-font));
   font-size: 13px;
   // Overrides .cell-primary's font-weight: 600 (from _list-page.scss) so the key and value
   // columns read at the same weight as each other, and match the app's font everywhere else.
   font-weight: 400;
+}
+
+.endpoint-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: var(--color-primary);
+  }
+}
+
+// ─── Action buttons ───────────────────────────────────────────────────────────
+.actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
+// so the actions read as distinct, colorful controls rather than plain icons.
+%action-chip {
+  width:         32px;
+  height:        32px;
+  border-radius: 50%;
+  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
+
+  mat-icon { font-size: 17px; height: 17px; width: 17px; }
+
+  &[disabled] { opacity: 0.35; }
+}
+
+.btn-edit {
+  @extend %action-chip;
+  background: var(--color-primary-soft);
+  color:      var(--color-primary);
+
+  &:hover:not([disabled]) { background: var(--color-primary); color: var(--color-on-primary); }
+}
+
+.btn-delete {
+  @extend %action-chip;
+  background: var(--color-error-soft);
+  color:      var(--color-error);
+
+  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
 }

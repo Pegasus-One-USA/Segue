@@ -1,23 +1,8 @@
 import {
-  migrateLegacyRow, serializeRowsFlat, resolveArrayPolicy, isApproximated, isSqlFamilyDestType,
-  MappingRow, LegacyMappingRow, MappingDestType,
+  migrateLegacyRow, serializeRowsFlat, resolveArrayPolicy, isApproximated,
+  MappingRow, LegacyMappingRow,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
-
-describe('isSqlFamilyDestType', () => {
-  it('is true for SQL Server, MySQL, and PostgreSQL — the relational, table/column destinations', () => {
-    expect(isSqlFamilyDestType('sql')).toBeTrue();
-    expect(isSqlFamilyDestType('mysql')).toBeTrue();
-    expect(isSqlFamilyDestType('postgres')).toBeTrue();
-  });
-
-  it('is false for CSV, Mongo, Blob, Medplum, and FHIR — the non-relational destinations', () => {
-    const nonSqlTypes: MappingDestType[] = ['csv', 'mongo', 'blob', 'medplum', 'fhir'];
-    for (const t of nonSqlTypes) {
-      expect(isSqlFamilyDestType(t)).withContext(t).toBeFalse();
-    }
-  });
-});
 
 describe('migrateLegacyRow', () => {
   it('defaults instance to {type:"first"} — not "all" — to preserve current buildMapping() behavior', () => {

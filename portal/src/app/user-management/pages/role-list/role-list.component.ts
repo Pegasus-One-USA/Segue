@@ -1,11 +1,14 @@
-import { Component, OnInit, HostListener, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
+import { MatTableModule } from '@angular/material/table';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
@@ -23,8 +26,11 @@ import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth
   imports: [
     CommonModule,
     FormsModule,
+    MatTableModule,
+    MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -54,21 +60,10 @@ export class RoleListComponent implements OnInit {
 
   readonly roles = signal<Role[]>([]);
 
+  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actionBy', 'actionOn', 'actions'];
+
   /** Only one sortable column today — "Action on" (createdAt, or modifiedOnUtc when later). */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
-
-  /** Which row's "more actions" menu is open, if any — keyed by role id. See toggleActionMenu,
-   *  mirrored 1:1 from workflow-list.component.ts's identical row-menu pattern. */
-  readonly openActionMenuId = signal<string | null>(null);
-
-  /** Viewport-relative coordinates for the open action menu — see workflow-list.component.ts's
-   *  actionMenuPosition for the full rationale (position: fixed escapes .table-wrapper's overflow-x: auto
-   *  clipping). */
-  readonly actionMenuPosition = signal<{ top?: number; bottom?: number; left: number } | null>(null);
-
-  /** Rough panel height (Edit + Permissions + Delete + padding) — just needs to be in the right ballpark
-   *  to decide whether the panel fits below the trigger, not pixel-exact. */
-  private static readonly ACTION_MENU_ESTIMATED_HEIGHT = 150;
 
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
@@ -127,39 +122,6 @@ export class RoleListComponent implements OnInit {
   onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
-  }
-
-  toggleActionMenu(event: MouseEvent, id: string): void {
-    if (this.openActionMenuId() === id) {
-      this.openActionMenuId.set(null);
-      this.actionMenuPosition.set(null);
-      return;
-    }
-
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const left = rect.left;
-    const spaceBelow = window.innerHeight - rect.bottom;
-
-    this.actionMenuPosition.set(
-      spaceBelow < RoleListComponent.ACTION_MENU_ESTIMATED_HEIGHT
-        ? { bottom: window.innerHeight - rect.top + 6, left }
-        : { top: rect.bottom + 6, left }
-    );
-    this.openActionMenuId.set(id);
-  }
-
-  // Single document:click listener for the whole component — closes the open row menu on any click
-  // outside it. Mirrors workflow-list.component.ts's closeFilterMenuIfOutside/onDocumentClick pair.
-  private closeActionMenuIfOutside(event: MouseEvent): void {
-    if (!(event.target as HTMLElement).closest('.row-menu')) {
-      this.openActionMenuId.set(null);
-      this.actionMenuPosition.set(null);
-    }
-  }
-
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent): void {
-    this.closeActionMenuIfOutside(event);
   }
 
   openAdd(): void {
