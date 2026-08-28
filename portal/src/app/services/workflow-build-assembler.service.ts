@@ -297,23 +297,38 @@ export class WorkflowBuildAssemblerService {
     // VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
     if (/healow/i.test(connector)) {
       const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      const healowAppType = this.applicationTypeFor(fields);
+      // Auth-method-driven, mirroring the Athenahealth branch above (same shared form field-bag). The previous
+      // version hardcoded authenticationType:'None' and dropped clientSecret/authPlacement, so a Client-Secret
+      // edit assembled a request byte-identical to the stored row → EF no-op → nothing persisted (ModifiedOnUtc
+      // stayed null). Guarded on 'Auth method' so the Healow Patient/public (PKCE) flow stays byte-identical:
+      // non-'secret' → authenticationType 'None', null secret refs, null placement — exactly as before.
+      const healowAuthMethod = fields['Auth method'] || 'public';
+      const healowTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
       return {
         name: fields['__name'] || 'eCW',
         sourceSystemType: 'Healow',
         baseUrl: fields['FHIR base URL'] || '',
         authentication: {
-          authenticationType: 'None',
+          authenticationType: healowAuthMethod === 'secret' ? 'OAuthClientCredentials' : 'None',
           clientId: fields['Client ID'] || fields['Active client ID'] || null,
           tokenEndpoint: fields['Token endpoint'] || null,
           scopes: healowScopes,
+          clientSecretKeyVaultName: healowTypedSecret ? 'workflow-secrets' : null,
+          clientSecretName: healowTypedSecret ? newInlineSecretName(fields['__name'] || 'ecw') : null,
+          inlineClientSecret: healowTypedSecret,
+          authPlacement: healowAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
         },
-        applicationType: this.applicationTypeFor(fields),
+        applicationType: healowAppType,
+        // Persist the EHR-launch metadata too (previously hardcoded empty), so Provider EHR Launch's trusted-issuer
+        // allow-list (required server-side, defaulted to the FHIR base URL by the form) and launch URL actually
+        // reach the backend. For the Patient audience these fields are empty/null just as before.
         interactive: {
           redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
-          launchUrl: null,
-          trustedIssuers: [],
+          launchUrl: fields['Launch URL'] || null,
+          trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
           patientSelectionMethod: null,
-          launchDisplayMode: null,
+          launchDisplayMode: healowAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
         },
       };
     }

@@ -756,18 +756,42 @@ public static class WorkflowEndpoints
             IWorkflowNodeResourceHistoryRecorder recorder,
             CancellationToken cancellationToken) =>
         {
-            var payloads = await recorder.GetPagedAsync(workflowRunId, page: 1, pageSize: 50, cancellationToken);
-            var sourcePayload = payloads.Items.FirstOrDefault(item => item.Contract == "ResourceBatch");
-            if (sourcePayload is null)
-            {
-                return Results.Ok(new { patient = (JsonNode?)null });
-            }
+            var payloads = await recorder.GetPagedAsync(workflowRunId, page: 1, pageSize: 500, cancellationToken);
+            var resourceBatches = payloads.Items.Where(item => item.Contract == "ResourceBatch");
 
-            var resources = (JsonNode.Parse(sourcePayload.PayloadJson) as JsonObject)?["Resources"] as JsonArray;
-            var patientEntry = resources?.FirstOrDefault(
-                resource => string.Equals(resource?["ResourceType"]?.GetValue<string>(), "Patient", StringComparison.OrdinalIgnoreCase));
-            var patientJson = patientEntry?["Payload"]?.GetValue<string>();
-            var patientResource = string.IsNullOrWhiteSpace(patientJson) ? null : JsonNode.Parse(patientJson);
+            // Aggregate ACROSS every ResourceBatch this run recorded (the source node emits one per resource type /
+            // page), not just the first — both to count each type and to find the Patient wherever it landed.
+            var resourceCounts = new SortedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            JsonNode? patientResource = null;
+
+            foreach (var batch in resourceBatches)
+            {
+                var resources = (JsonNode.Parse(batch.PayloadJson) as JsonObject)?["Resources"] as JsonArray;
+                if (resources is null)
+                {
+                    continue;
+                }
+
+                foreach (var resource in resources)
+                {
+                    var resourceType = resource?["ResourceType"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(resourceType))
+                    {
+                        continue;
+                    }
+
+                    resourceCounts[resourceType] = resourceCounts.TryGetValue(resourceType, out var current) ? current + 1 : 1;
+
+                    if (patientResource is null && string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var patientJson = resource?["Payload"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(patientJson))
+                        {
+                            patientResource = JsonNode.Parse(patientJson);
+                        }
+                    }
+                }
+            }
 
             return Results.Ok(new
             {
@@ -776,7 +800,62 @@ public static class WorkflowEndpoints
                 // different workflow that shares this one's source connection, so it reuses this exact launch's
                 // stored session/patient context instead of whichever session happens to be most recent by then.
                 patientId = (patientResource as JsonObject)?["id"]?.GetValue<string>(),
+                // Per-resource-type counts of everything this run's source node actually fetched — powers the
+                // "resources fetched" list on the demo's launch view.
+                resourceCounts,
             });
+        });
+
+        // Anonymous, read-only companion to the launch-result endpoint above for a third-party app that knows only
+        // the workflow id, not a specific run id — resolves the workflow's most recent run that actually produced a
+        // Patient and returns that Patient (same shape), so the app can show the latest fetched patient WITHOUT a
+        // fresh EHR launch. Gated on IsPubliclyLaunchable (the same public-launch opt-in the anonymous launch
+        // endpoints require) so an arbitrary caller can't read any workflow's data by id. Strictly read-only —
+        // reflects what the source last fetched from Execution History; it never triggers a new run.
+        group.MapGet("/workflows/{workflowId:guid}/latest-launch-result", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            IWorkflowRunStore runStore,
+            IWorkflowNodeResourceHistoryRecorder recorder,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null || !workflow.IsPubliclyLaunchable)
+            {
+                return Results.NotFound();
+            }
+
+            var runs = (await runStore.ListByDefinitionAsync(workflowId, cancellationToken))
+                .OrderByDescending(run => run.StartedAt);
+
+            foreach (var run in runs)
+            {
+                var payloads = await recorder.GetPagedAsync(run.Id, page: 1, pageSize: 50, cancellationToken);
+                var sourcePayload = payloads.Items.FirstOrDefault(item => item.Contract == "ResourceBatch");
+                if (sourcePayload is null)
+                {
+                    continue;
+                }
+
+                var resources = (JsonNode.Parse(sourcePayload.PayloadJson) as JsonObject)?["Resources"] as JsonArray;
+                var patientEntry = resources?.FirstOrDefault(
+                    resource => string.Equals(resource?["ResourceType"]?.GetValue<string>(), "Patient", StringComparison.OrdinalIgnoreCase));
+                var patientJson = patientEntry?["Payload"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(patientJson))
+                {
+                    continue;
+                }
+
+                var patientResource = JsonNode.Parse(patientJson);
+                return Results.Ok(new
+                {
+                    workflowRunId = run.Id,
+                    patient = patientResource,
+                    patientId = (patientResource as JsonObject)?["id"]?.GetValue<string>(),
+                });
+            }
+
+            return Results.Ok(new { workflowRunId = (Guid?)null, patient = (JsonNode?)null, patientId = (string?)null });
         });
 
         // Loads one workflow's full graph — the builder canvas's "open workflow" call. View-only: this must

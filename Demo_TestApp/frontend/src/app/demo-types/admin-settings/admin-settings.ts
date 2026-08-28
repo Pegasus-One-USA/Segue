@@ -26,6 +26,7 @@ interface AdminSettings {
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
   providerInAppWorkflowId: string;
+  ecwProviderInAppWorkflowId: string;
   backendSystemPractitionerImportWorkflowId: string;
 }
 
@@ -81,6 +82,9 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
   readonly providerInAppWorkflowId = signal('');
+  // Separate eCW (eClinicalWorks) Provider EMR EHR-launch workflow id — the mint endpoint auto-selects this over
+  // providerInAppWorkflowId when the launching EHR's iss is an eCW practice (host *.ecwcloud.com).
+  readonly ecwProviderInAppWorkflowId = signal('');
   readonly backendSystemPractitionerImportWorkflowId = signal('');
 
   // Feature flag (Default tab): whether the "New 11" tab shows up at all in every role's shell. Backed by a cookie
@@ -207,6 +211,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
+      this.ecwProviderInAppWorkflowId.set(current.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(current.backendSystemPractitionerImportWorkflowId);
     } catch {
       this.loadError.set('Could not load settings.');
@@ -240,6 +245,7 @@ export class AdminSettingsComponent implements OnInit {
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
             providerInAppWorkflowId: this.providerInAppWorkflowId(),
+            ecwProviderInAppWorkflowId: this.ecwProviderInAppWorkflowId(),
             backendSystemPractitionerImportWorkflowId: this.backendSystemPractitionerImportWorkflowId(),
           },
           { withCredentials: true }
@@ -261,6 +267,7 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
+      this.ecwProviderInAppWorkflowId.set(result.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(result.backendSystemPractitionerImportWorkflowId);
       this.saved.set(true);
     } catch {

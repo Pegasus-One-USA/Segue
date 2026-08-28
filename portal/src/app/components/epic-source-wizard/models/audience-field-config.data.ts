@@ -50,9 +50,11 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
  */
 export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
   Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
-  // eClinicalWorks (Healow): only the Patient audience has been rolled out so far — the other three are disabled
-  // until their own sandbox credentials/round-trip verification exist. Re-enable one-by-one as each is verified.
-  Healow: ['provider-ehr-launch', 'provider-standalone', 'backend-system'],
+  // eClinicalWorks (Healow): Patient AND Provider EHR launch are rolled out. Provider EHR launch (Provider EMR) was
+  // verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch → PKCE → confidential
+  // client_secret_basic token → multi-resource FHIR reads). Provider standalone and Backend stay disabled until
+  // their own sandbox credentials/round-trip verification exist — re-enable one-by-one as each is verified.
+  Healow: ['provider-standalone', 'backend-system'],
 };
 
 export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {

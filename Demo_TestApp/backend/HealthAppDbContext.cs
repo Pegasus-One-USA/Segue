@@ -175,6 +175,15 @@ public sealed class WorkflowSettingsEntity
     // rather than getting its own field — both demo types are Provider-role launches against the same deployment.
     public string ProviderInAppWorkflowId { get; set; } = string.Empty;
 
+    // Provider_InApp's SEPARATE eClinicalWorks (eCW) EHR-launch workflow id — same shape/role as
+    // ProviderInAppWorkflowId above (a raw workflow id, minted on demand, workflow must be opted into public
+    // launch), but for an eCW (Healow) Provider EMR source instead of Epic. The mint endpoint
+    // (/api/provider-in-app-launch-context) auto-selects this one when the launching EHR's iss is an eCW practice
+    // (host *.ecwcloud.com) and this is set, else falls back to the Epic ProviderInAppWorkflowId — so both vendors
+    // can be launched at the same registered Launch URL, disambiguated by iss. Reuses StandaloneBaseUrl like the
+    // Epic one. Empty by default (feature is off until an admin sets it), so existing Epic-only setups are unchanged.
+    public string EcwProviderInAppWorkflowId { get; set; } = string.Empty;
+
     // BackendSystem role's "Import Practitioner" flow (see BackendSystemEndpoints.cs's
     // /api/backend-system/practitioners/import) — the FHIRBridge workflow whose Practitioner source is run, scoped
     // to the practitioner ids the user submits (patientSearchCriteria=_id=<ids>). Its FHIRBridge base URL reuses

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -44,4 +46,31 @@ public sealed class EClinicalWorksFhirSourceClient : FhirSourceConnectorBase
 
         return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
     }
+
+    /// <summary>
+    /// eCW-specific per-resource search defaults, overriding the base's Epic table. Confirmed against the live eCW
+    /// sandbox during a real Provider EMR launch run:
+    /// <list type="bullet">
+    ///   <item>eCW's US Core <c>Observation</c> search requires a <c>category</c> (a bare patient search is rejected);
+    ///   eCW serves the three USCDI categories below (vitals, labs, social-history/smoking). The base's Epic table
+    ///   lists 11 categories eCW does not have, which only produce wasted/failed per-category requests — and enough of
+    ///   them to blow past eCW's ~5-minute access-token lifetime mid-run.</item>
+    ///   <item><c>MedicationRequest</c> and <c>Condition</c> are intentionally ABSENT (no default → one bare
+    ///   <c>?patient=</c> search). Unlike Epic, eCW accepts a bare Condition search, and it REJECTS a MedicationRequest
+    ///   <c>status</c> filter outright with 400 "does not know how to handle get operation with parameter
+    ///   [patient,status]". The base's Epic <c>status</c>/category defaults for these therefore break eCW.</item>
+    /// </list>
+    /// </summary>
+    protected override IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType { get; } =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Observation"] = ("category", "vital-signs,laboratory,social-history"),
+        };
+
+    /// <summary>
+    /// eCW has no CarePlan <c>activity-date</c> presence requirement (that is Epic business-rule 59108). Override the
+    /// base's Epic-only additional-required table to empty so no Epic-specific parameter is appended to eCW searches.
+    /// </summary>
+    protected override IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> AdditionalRequiredParametersByResourceType { get; } =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
 }

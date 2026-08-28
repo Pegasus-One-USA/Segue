@@ -225,7 +225,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // SourceConnection's own configured/detected/persisted scope version, so an existing eCW connection
             // saved with v2 scopes doesn't need to be re-saved by an admin to work. Non-resource scopes (openid,
             // fhirUser, offline_access, launch/patient, ...) have no dot suffix and pass through unchanged.
-            resolvedScope = NormalizeHealowScope(resolvedScope);
+            // offline_access is kept only for EHR launch (Provider EMR needs the refresh token); Patient/Standalone
+            // still drop it — see NormalizeHealowScope.
+            resolvedScope = NormalizeHealowScope(resolvedScope, isEhrLaunch: isEhrLaunch);
         }
 
         _logger.LogInformation(
@@ -284,11 +286,17 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     // See the eCW-specific block in BuildAuthorizationRequest above. Rewrites every "prefix/Type.<version-suffix>"
     // resource scope to "prefix/Type.read"; scopes with no dot suffix (openid, fhirUser, launch/patient, ...) pass
-    // through unchanged. Also drops "offline_access" regardless of the SourceConnection's own configured/persisted
-    // scope list — the working D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/
-    // practice_code) never requests it, and this app registration is not confirmed to be approved for
-    // offline/refresh-token access; requesting it anyway is a plausible independent cause of invalid_scope.
-    private static string NormalizeHealowScope(string resolvedScope)
+    // through unchanged. For the Patient/Standalone flows it also drops "offline_access": the working
+    // D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/practice_code) never requests it
+    // for patient access, and that app registration is not confirmed for offline/refresh access, so requesting it
+    // anyway is a plausible independent cause of invalid_scope.
+    //
+    // EHR launch (Provider EMR) is the exception (<paramref name="keepOfflineAccess"/> = true): the eCW Provider EMR
+    // app IS registered with "Refresh Token = Yes / offline_access", and an end-to-end POC (poc/ecw-ehr-launch-poc)
+    // confirmed the token endpoint returns a refresh_token for it. Dropping offline_access there would leave the
+    // provider session unable to silently refresh (Describe().SupportsRefreshToken = true relies on it). Guarded on
+    // the flow, so the Patient/Standalone behavior above is unchanged.
+    private static string NormalizeHealowScope(string resolvedScope, bool isEhrLaunch)
     {
         var scopes = resolvedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         for (var i = 0; i < scopes.Length; i++)
@@ -310,7 +318,27 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             scopes[i] = $"{scope[..(slashIndex + 1 + dotIndex)]}.read";
         }
 
-        return string.Join(' ', scopes.Where(scope => !string.Equals(scope, "offline_access", StringComparison.OrdinalIgnoreCase)));
+        return string.Join(' ', scopes.Where(scope =>
+        {
+            // Patient/Standalone: drop offline_access (see remarks). EHR launch keeps it (refresh token).
+            if (!isEhrLaunch && string.Equals(scope, "offline_access", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // EHR launch: drop openid/fhirUser. The eCW Provider EMR app is registered with OpenID = No, so
+            // requesting those SMART OpenID-Connect scopes makes eCW's authorize endpoint return invalid_scope
+            // (confirmed end-to-end — the launch failed with invalid_scope until they were removed). Scope
+            // generation (ScopeGeneratorService) adds openid/fhirUser for every interactive audience, so this must
+            // be stripped here at request time to survive a re-save. Patient flow is untouched (isEhrLaunch=false).
+            if (isEhrLaunch && (string.Equals(scope, "openid", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scope, "fhirUser", StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            return true;
+        }));
     }
 
     // See the practice_code block in BuildAuthorizationRequest above. Null when the base URL isn't
@@ -506,8 +534,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // mirrors OAuth2ClientCredentialsTokenProvider's identical AuthPlacement toggle for the Backend Services
             // grant, which this interactive flow previously ignored (always sent client_secret_post regardless of
             // the configured placement).
-            if (string.Equals(source.AuthPlacement, "basic", StringComparison.OrdinalIgnoreCase))
+            // eCW (Healow) is forced to Basic regardless of the configured/persisted AuthPlacement: its token endpoint
+            // rejects client_secret_post with invalid_client (confirmed end-to-end), and the portal wizard resets
+            // AuthPlacement to "post" on every re-save — so keying only off the persisted value is not save-proof.
+            var useBasic = string.Equals(source.AuthPlacement, "basic", StringComparison.OrdinalIgnoreCase)
+                || source.SourceType == RuntimeSourceType.Healow;
+            if (useBasic)
             {
+                // client_secret_basic puts client_id:client_secret in the Authorization header ONLY. The form body
+                // also carries client_id (set by the exchange/refresh builders) — leaving it there presents TWO
+                // client-authentication mechanisms in one request, which eCW (per RFC 6749 §2.3, "MUST NOT use more
+                // than one authentication method") rejects with invalid_client. Confirmed against the working
+                // poc/ecw-ehr-launch-poc, whose Basic request omitted the body client_id. Remove it so Basic is the
+                // sole mechanism. (The post branch below keeps client_id + client_secret in the body, as required.)
+                form.Remove("client_id");
                 var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.ClientId}:{source.ClientSecret}"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
             }

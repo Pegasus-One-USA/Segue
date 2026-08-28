@@ -5,6 +5,12 @@
       <span class="login-type-badge">{{ loginTypeLabel() }}</span>
     </div>
     <div class="fullscreen-shell__actions">
+      <button type="button" class="icon-btn" (click)="refresh()" [disabled]="isPatientLoading()" aria-label="Refresh patient data" title="Refresh (no re-launch)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </button>
       <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -25,7 +31,7 @@
         <mat-icon class="status-dot">circle</mat-icon>
         Connected via FHIRBridge
       </mat-chip>
-      <mat-chip class="status-chip">Environment: Epic Sandbox</mat-chip>
+      <mat-chip class="status-chip">Environment: {{ environmentLabel() }}</mat-chip>
       <mat-chip class="status-chip">Launch Type: Provider Launch</mat-chip>
     </mat-chip-set>
   </header>
@@ -34,6 +40,13 @@
     @if (isPatientLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
+      </div>
+    } @else if (breakoutUrl(); as url) {
+      <div class="breakout-container">
+        <p class="breakout-message">
+          This app was opened embedded inside the EHR. Continue in a full page to sign in and load the patient's data.
+        </p>
+        <a class="breakout-link" [href]="url" target="_top" rel="noopener">Continue to patient data</a>
       </div>
     } @else if (launchError() === 'context_mismatch') {
       <p class="error-banner">
@@ -200,6 +213,32 @@
             </div>
           </mat-card-content>
         </mat-card>
+
+        @if (resourceTypeList().length) {
+          <mat-card class="patient-card" appearance="outlined">
+            <mat-card-header>
+              <mat-icon mat-card-avatar>inventory_2</mat-icon>
+              <mat-card-title>Resources Fetched</mat-card-title>
+              <mat-card-subtitle>{{ resourceTypeList().length }} types · {{ totalResourceCount() }} total</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              @for (entry of resourceTypeList(); track entry.type) {
+                <div class="field-row">
+                  <span class="field-label">{{ entry.type }}</span>
+                  <span class="field-value">{{ entry.count }}</span>
+                </div>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
+      </div>
+    } @else if (canRetry()) {
+      <div class="retry-container">
+        <p class="retry-message">
+          No patient data could be loaded for this workflow yet. This does not need a fresh EHR launch — click
+          Refresh to fetch the latest patient again.
+        </p>
+        <button type="button" class="connect-btn" (click)="refresh()">Refresh</button>
       </div>
     }
   </section>

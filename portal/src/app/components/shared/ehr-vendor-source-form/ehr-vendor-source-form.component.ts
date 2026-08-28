@@ -1853,12 +1853,17 @@ export class EhrVendorSourceFormComponent
       }
     }
 
-    // New-source defaults for eClinicalWorks (Healow): App Name, forced Patient audience (the only one enabled —
-    // see VENDOR_DISABLED_AUDIENCES), and its FHIR Base URL/Token/Authorization Endpoint. Same "skip once editing"
-    // guard as Athenahealth above — never overwrites a connection the admin already saved or is customizing.
+    // New-source defaults for eClinicalWorks (Healow): App Name, default Patient audience, its FHIR Base URL, and
+    // client_secret_basic auth placement. eCW's token endpoint rejects client_secret_post with invalid_client and
+    // requires Basic (confirmed end-to-end by poc/ecw-ehr-launch-poc), so a confidential eCW source (e.g. Provider
+    // EMR / EHR launch) must default to 'basic' rather than the form-wide 'post' default — the admin can still
+    // change audience/placement. Same "skip once editing" guard as Athenahealth above — never overwrites a
+    // connection the admin already saved or is customizing. Harmless for eCW Patient (a public/PKCE client with no
+    // secret, where authPlacement is unused).
     if (!this.wiz.isEditing() && this.vendor() === 'Healow') {
       this.form.controls.appName.setValue('eCW');
       this.form.controls.audience.setValue('patient');
+      this.form.controls.authPlacement.setValue('basic');
       if (this.form.controls.environment.value === 'sandbox') {
         this.form.controls.epicBaseUrl.setValue(HEALOW_SANDBOX_BASE_URL);
       }
