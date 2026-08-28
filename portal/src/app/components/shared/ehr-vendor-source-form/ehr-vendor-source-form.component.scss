@@ -463,6 +463,8 @@
 
 /* ── Backend System: scopes Epic actually granted the app (real client_credentials exchange) ────────────── */
 .eaf-granted-scopes {
+  /* Hidden per request: keep markup/logic intact, just never show it. */
+  display: none;
   margin-top: 10px;
   color: var(--color-error-strong);
   font-weight: 700;
