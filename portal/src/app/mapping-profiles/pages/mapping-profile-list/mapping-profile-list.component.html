@@ -63,117 +63,127 @@
     } @else {
 
       <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-menu"></th>
-              <th class="col-sortable" (click)="onSort('name')">
-                Name
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
-                  {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-sortable" (click)="onSort('resourceType')">
-                Resource Type
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'resourceType'">
-                  {{ sortColumn() === 'resourceType' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th>Source</th>
-              <th>Destination</th>
-              <th class="col-sortable" (click)="onSort('destinationObject')">
-                Target Object
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'destinationObject'">
-                  {{ sortColumn() === 'destinationObject' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th>Fields</th>
-              <th class="col-sortable" (click)="onSort('isEnabled')">
-                Status
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
-                  {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-sortable" (click)="onSort('modifiedOnUtc')">
-                Modified
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'modifiedOnUtc'">
-                  {{ sortColumn() === 'modifiedOnUtc' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (m of items(); track m.id) {
-              <tr class="data-row">
-                <td class="col-menu">
-                  <div class="row-menu" (click)="$event.stopPropagation()">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      title="More actions"
-                      (click)="$event.stopPropagation(); toggleActionMenu($event, m.id)"
-                    ><mat-icon>more_vert</mat-icon></button>
+        <table mat-table [dataSource]="items()" class="data-table">
 
-                    @if (openActionMenuId() === m.id && actionMenuPosition(); as pos) {
-                      <div
-                        class="row-menu-panel"
-                        [style.top.px]="pos.top"
-                        [style.bottom.px]="pos.bottom"
-                        [style.left.px]="pos.left"
-                      >
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          *appHideWithoutPermission="'mappingprofiles.edit'"
-                          (click)="openEdit(m); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>edit</mat-icon> Edit
-                        </button>
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('name')">
+              Name
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let m">
+              <div class="cell-name">
+                <div class="dest-avatar"><mat-icon>swap_horiz</mat-icon></div>
+                <span class="cell-primary">{{ m.name }}</span>
+              </div>
+            </td>
+          </ng-container>
 
-                        <button
-                          type="button"
-                          class="row-menu-item row-menu-item--danger"
-                          *appHideWithoutPermission="'mappingprofiles.delete'"
-                          [disabled]="isUsedInWorkflow(m)"
-                          [title]="isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : ''"
-                          (click)="confirmDelete(m); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>delete_outline</mat-icon> Delete
-                        </button>
-                      </div>
-                    }
-                  </div>
-                </td>
-                <td><span class="cell-primary">{{ m.name }}</span></td>
-                <td><span class="type-badge">{{ m.resourceType }}</span></td>
-                <td><span class="cell-target" [title]="sourceName(m.sourceConnectionId)">{{ sourceName(m.sourceConnectionId) }}</span></td>
-                <td><span class="cell-target" [title]="destinationName(m.destinationId)">{{ destinationName(m.destinationId) }}</span></td>
-                <td><span class="cell-target" [title]="m.destinationObject">{{ m.destinationObject }}</span></td>
-                <td>{{ m.fields.length }}</td>
-                <td>
-                  <!-- The status itself is information every viewer of this row should see (hidden per the
-                       core hide-by-default rule would remove data, not just an action) — only the click-to-toggle
-                       affordance is permission-gated, rendered as a plain non-interactive badge without it. -->
-                  @if (permissions.hasPermission('mappingprofiles.deactivate')) {
-                    <button type="button" class="status-badge-btn" [title]="m.isEnabled ? 'Click to deactivate' : 'Click to activate'" (click)="toggleEnabled(m)">
-                      <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
-                        {{ m.isEnabled ? 'enabled' : 'disabled' }}
-                      </span>
-                    </button>
-                  } @else {
-                    <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
-                      {{ m.isEnabled ? 'enabled' : 'disabled' }}
-                    </span>
-                  }
-                </td>
-                <td>
-                  <span class="cell-muted" [title]="(m.modifiedBy || m.createdBy) ?? ''">
-                    {{ ((m.modifiedOnUtc || m.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}
+          <ng-container matColumnDef="resourceType">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('resourceType')">
+              Resource Type
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'resourceType'">
+                {{ sortColumn() === 'resourceType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let m"><span class="type-badge">{{ m.resourceType }}</span></td>
+          </ng-container>
+
+          <ng-container matColumnDef="source">
+            <th mat-header-cell *matHeaderCellDef>Source</th>
+            <td mat-cell *matCellDef="let m">
+              <span class="cell-target" [matTooltip]="sourceName(m.sourceConnectionId)">{{ sourceName(m.sourceConnectionId) }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="destination">
+            <th mat-header-cell *matHeaderCellDef>Destination</th>
+            <td mat-cell *matCellDef="let m">
+              <span class="cell-target" [matTooltip]="destinationName(m.destinationId)">{{ destinationName(m.destinationId) }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="destinationObject">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('destinationObject')">
+              Target Object
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'destinationObject'">
+                {{ sortColumn() === 'destinationObject' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let m">
+              <span class="cell-target" [matTooltip]="m.destinationObject">{{ m.destinationObject }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="fieldCount">
+            <th mat-header-cell *matHeaderCellDef>Fields</th>
+            <td mat-cell *matCellDef="let m">{{ m.fields.length }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="isEnabled">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
+              Status
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
+                {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let m">
+              <!-- The status itself is information every viewer of this row should see (hidden per the
+                   core hide-by-default rule would remove data, not just an action) — only the click-to-toggle
+                   affordance is permission-gated, rendered as a plain non-interactive badge without it. -->
+              @if (permissions.hasPermission('mappingprofiles.deactivate')) {
+                <button type="button" class="status-badge-btn" [matTooltip]="m.isEnabled ? 'Click to deactivate' : 'Click to activate'" (click)="toggleEnabled(m)">
+                  <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
+                    {{ m.isEnabled ? 'enabled' : 'disabled' }}
                   </span>
-                </td>
-              </tr>
-            }
-          </tbody>
+                </button>
+              } @else {
+                <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
+                  {{ m.isEnabled ? 'enabled' : 'disabled' }}
+                </span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actionOn">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('modifiedOnUtc')">
+              Modified
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'modifiedOnUtc'">
+                {{ sortColumn() === 'modifiedOnUtc' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let m">
+              <span class="cell-muted" [matTooltip]="(m.modifiedBy || m.createdBy) ?? ''">
+                {{ ((m.modifiedOnUtc || m.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let m" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-view" matTooltip="Edit" *appHideWithoutPermission="'mappingprofiles.edit'" (click)="openEdit(m)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="btn-delete"
+                  *appHideWithoutPermission="'mappingprofiles.delete'"
+                  [disabled]="isUsedInWorkflow(m)"
+                  [matTooltip]="isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : 'Delete'"
+                  (click)="confirmDelete(m)"
+                >
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
         </table>
       </div>
 

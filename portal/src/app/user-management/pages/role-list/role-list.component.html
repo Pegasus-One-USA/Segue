@@ -51,97 +51,101 @@
     } @else {
 
       <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-menu"></th>
-              <th>Role Name</th>
-              <th>Description</th>
-              <th>Permissions</th>
-              <th>Action by</th>
-              <th class="col-sortable" (click)="toggleActionOnSort()">
-                Action on
-                @if (actionOnSortDirection(); as dir) {
-                  <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
+        <table mat-table [dataSource]="paginated()" class="data-table">
+
+          <!-- # Column -->
+          <ng-container matColumnDef="index">
+            <th mat-header-cell *matHeaderCellDef class="col-index"></th>
+            <td mat-cell *matCellDef="let r; let i = index" class="col-index">
+              {{ pageIndex() * pageSize() + i + 1 }}
+            </td>
+          </ng-container>
+
+          <!-- Name Column -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Role Name</th>
+            <td mat-cell *matCellDef="let r">
+              <div class="cell-name">
+                <div class="role-avatar" [class.role-avatar--system]="r.isSystemRole">
+                  <mat-icon>shield</mat-icon>
+                </div>
+                <span class="cell-primary">{{ r.displayName }}</span>
+                @if (r.isSystemRole) {
+                  <span class="system-badge" matTooltip="System roles cannot be modified">System</span>
                 }
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (r of paginated(); track r.id) {
-              <tr class="data-row">
-                <td class="col-menu">
-                  <div class="row-menu" (click)="$event.stopPropagation()">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      title="More actions"
-                      (click)="$event.stopPropagation(); toggleActionMenu($event, r.id)"
-                    ><mat-icon>more_vert</mat-icon></button>
+              </div>
+            </td>
+          </ng-container>
 
-                    @if (openActionMenuId() === r.id && actionMenuPosition(); as pos) {
-                      <div
-                        class="row-menu-panel"
-                        [style.top.px]="pos.top"
-                        [style.bottom.px]="pos.bottom"
-                        [style.left.px]="pos.left"
-                      >
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          [disabled]="r.isSystemRole"
-                          [title]="r.isSystemRole ? 'System roles cannot be modified' : ''"
-                          *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Edit)"
-                          (click)="openEdit(r); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>edit</mat-icon> Edit
-                        </button>
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-description">{{ r.description }}</span>
+            </td>
+          </ng-container>
 
-                        <!-- Always visible to anyone on this page — this route already requires role.view, and a
-                             view-only role must still be able to open the (read-only) permission matrix. Mutating
-                             it (Save, checkboxes) is separately gated on role.edit inside that screen itself. -->
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          (click)="openPermissions(r); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>key</mat-icon> Permissions
-                        </button>
+          <!-- Permissions Column -->
+          <ng-container matColumnDef="permissions">
+            <th mat-header-cell *matHeaderCellDef>Permissions</th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-muted">{{ r.permissions.length }}</span>
+            </td>
+          </ng-container>
 
-                        <div class="row-menu-divider"></div>
+          <!-- Action by Column -->
+          <ng-container matColumnDef="actionBy">
+            <th mat-header-cell *matHeaderCellDef>Action by</th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-muted">{{ (r.modifiedBy || r.createdBy) ?? '—' }}</span>
+            </td>
+          </ng-container>
 
-                        <button
-                          type="button"
-                          class="row-menu-item row-menu-item--danger"
-                          [disabled]="r.isSystemRole"
-                          [title]="r.isSystemRole ? 'System roles cannot be modified' : ''"
-                          *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Delete)"
-                          (click)="confirmDelete(r); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>delete_outline</mat-icon> Delete
-                        </button>
-                      </div>
-                    }
-                  </div>
-                </td>
-                <td>
-                  <div class="cell-name">
-                    <div class="role-avatar" [class.role-avatar--system]="r.isSystemRole">
-                      <mat-icon>shield</mat-icon>
-                    </div>
-                    <span class="cell-primary">{{ r.displayName }}</span>
-                    @if (r.isSystemRole) {
-                      <span class="system-badge" title="System roles cannot be modified">System</span>
-                    }
-                  </div>
-                </td>
-                <td><span class="cell-description">{{ r.description }}</span></td>
-                <td><span class="cell-muted">{{ r.permissions.length }}</span></td>
-                <td><span class="cell-muted">{{ (r.modifiedBy || r.createdBy) ?? '—' }}</span></td>
-                <td><span class="cell-muted">{{ ((r.modifiedOnUtc || r.createdAt) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
-              </tr>
-            }
-          </tbody>
+          <!-- Action on Column -->
+          <ng-container matColumnDef="actionOn">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="toggleActionOnSort()">
+              Action on
+              @if (actionOnSortDirection(); as dir) {
+                <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
+              }
+            </th>
+            <td mat-cell *matCellDef="let r">
+              <span class="cell-muted">{{ ((r.modifiedOnUtc || r.createdAt) | date:'MMM d, h:mm a') ?? '—' }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let r" class="col-actions">
+              <div class="actions-cell">
+                <button
+                  mat-icon-button class="btn-edit" matTooltip="Edit Role"
+                  [disabled]="r.isSystemRole"
+                  *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Edit)"
+                  (click)="openEdit(r)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <!-- Always visible to anyone on this page — this route already requires role.view, and a
+                     view-only role must still be able to open the (read-only) permission matrix. Mutating
+                     it (Save, checkboxes) is separately gated on role.edit inside that screen itself. -->
+                <button mat-icon-button class="btn-permissions" matTooltip="Permissions" (click)="openPermissions(r)">
+                  <mat-icon>key</mat-icon>
+                </button>
+                <button
+                  mat-icon-button class="btn-delete" matTooltip="Delete Role"
+                  [disabled]="r.isSystemRole"
+                  *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Delete)"
+                  (click)="confirmDelete(r)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
         </table>
       </div>
 

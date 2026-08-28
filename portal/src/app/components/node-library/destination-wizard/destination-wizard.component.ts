@@ -63,9 +63,8 @@ import {
   LegacyMappingRow,
   PendingSchemaOp,
   MappingDestType,
-  isSqlFamilyDestType,
 } from './field-mapping/field-mapping-model';
-import { computePendingTableNames, runQueuedOpsSequentially, confirmedTableNames, describeSchemaVerificationOutcome, findConfirmedTableMatch } from './field-mapping/field-mapping-schema-ops.util';
+import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
 import {
   MappingSnapshot,
@@ -77,9 +76,6 @@ import {
   buildMappingSummaryDocument,
   applyMappingSummaryDocument,
   pruneOrphanedMappingRows,
-  bareName,
-  qualify,
-  reconcileRestoredTablesWithLiveSchema,
 } from './field-mapping/field-mapping-summary.model';
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
@@ -1135,14 +1131,6 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
-  /** Whether the reopen-time live re-probe (_refreshSqlTablesFromLiveSchema) has actually confirmed
-   *  sqlTables() against the real database yet — independent of probeState, which a mapping-summary
-   *  restore also sets to 'ok' on its own (see loadMappingSummary) without any live verification at all.
-   *  'failed' means every 'restoredUnverified' table currently on the canvas is genuinely still unverified
-   *  — surfaced as a toast the moment it happens (see _refreshSqlTablesFromLiveSchema) rather than only
-   *  showing up as an unlabeled "Suggested" badge the user has to notice on their own. */
-  readonly schemaVerificationState = signal<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
-
   // ── Mongo connection probe (test connection → load real collection names) ──
   // Copied from MongoFormApi.collections() on a successful "Next" (see next()'s Mongo branch) — Step 1's
   // dynamically-mounted form is gone once Step 2/3 mounts, so the mapping canvas's "+ Add a table" picker
@@ -1786,19 +1774,10 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   constructor() {
-    // Rebuild mapping rows whenever selected resources, destType, or the live schema change
+    // Rebuild mapping rows whenever selected resources or destType change
     effect(() => {
       const resources = this.selectedResources();
       const type = this.nonFhirDestType();
-      // Tracked (not read inside the untracked() below) so a live schema probe that resolves AFTER a
-      // resource was already selected — e.g. the async re-probe on reopen (_refreshSqlTablesFromLiveSchema)
-      // racing a user who's already back in Step 2 adding a resource — still gets a chance to auto-attach
-      // a real matching table the moment it arrives, instead of leaving that resource stuck with no target
-      // until something else happens to change resources/destType. Safe to re-run on every sqlTables()
-      // change: _rebuildRows's own `if (targets[r]) continue` guard means this only ever fills a resource
-      // that's STILL empty — it can never clobber an already-set target (confirmed, pending, or a CSV/blob
-      // filename).
-      this.sqlTables();
       // A FHIR repository (or Azure FHIR Service) has no per-resource table/file target and no mapping rows
       // at all — seeding either would only leave dead state behind on a destination that never renders the
       // mapping canvas.
@@ -3526,13 +3505,8 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
-  /** Table full-names this session can actually treat as "known to exist" — see confirmedTableNames's own
-   *  doc comment. Deliberately excludes a 'restoredUnverified' table (reconstructed from a saved mapping on
-   *  reopen, not yet confirmed by a live re-probe) — every consumer of this method (hasValidTarget,
-   *  canQueueAddColumn, describeCreateTableConflict, isConfirmedRealTable, and validateMappingForSave's own
-   *  knownTables set) relies on that exclusion to never again treat a stale cached table as real. */
   sqlTableOptions(): string[] {
-    return confirmedTableNames(this.sqlTables());
+    return this.sqlTables().map((t) => t.fullName);
   }
 
   // Columns of the table currently chosen for a resource (drives the target card's own rendering).
@@ -3784,15 +3758,6 @@ export class DestinationWizardComponent implements OnInit {
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
     this.availableFields(r);
-  /** Pre-fills the "Create a new table…" dialog's name field with a sensible bare suggestion (e.g.
-   *  "Patient") derived from the same DEST_RESOURCE_DEFS convention _rebuildRows uses to auto-attach a
-   *  real match — but this is ONLY ever a dialog placeholder the user can freely edit or clear, never
-   *  written into targetByResource on its own (see FieldMappingCreateTableModalComponent's suggestedName
-   *  input / FieldMappingCanvasComponent.creatingTableSuggestedName). Always bare (never schema-qualified)
-   *  regardless of destType — matches the existing convention that the user types a bare name here and
-   *  submitCreateTable adds whatever schema-qualification this destType needs. */
-  readonly suggestedTableNameForResourceFn = (r: string): string =>
-    bareName(this.defFor(r).sqlTable);
   readonly columnsForResourceTargetFn = (r: string): string[] =>
     this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (
@@ -3816,48 +3781,18 @@ export class DestinationWizardComponent implements OnInit {
       if (targets[r]) continue;
       // Seed the per-resource target once; preserve any value the user has already typed.
       const def = this.defFor(r);
-      if (type === 'csv') {
-        targets[r] = def.csvFile;
-        continue;
-      }
-      if (type === 'blob') {
-        // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject),
-        // not a container — the container itself is a single wizard-level field (blobForm.container) — so
-        // it seeds from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob
-        // writer already appends its own real extension — a literal "patients.csv" stem would double up as
-        // "patients.csv_....ndjson").
-        targets[r] = def.csvFile.replace(/\.csv$/i, '');
-        continue;
-      }
-      if (isSqlFamilyDestType(type)) {
-        // "Remove Suggested Tables from Map Fields": never guess. def.sqlTable is a *convention*
-        // (DEST_RESOURCE_DEFS' own SQL-Server-shaped default, e.g. "dbo.Patient") that this canvas used to
-        // trust blindly the moment a resource was selected — showing a table that might not exist at all
-        // as if it were real. The live database is the only source of truth now: this resource's target
-        // stays empty (no card renders — see FieldMappingCanvasComponent.isPrimaryTargetValid) unless the
-        // convention's bare name genuinely matches an already-confirmed real table, in which case THAT
-        // table's real name (exact case, exact schema qualification) is what gets used, not the guess
-        // itself.
-        //
-        // findConfirmedTableMatch checks both the table's fullName AND its bare tableName — required
-        // because the live schema probe qualifies fullName differently per engine: SQL Server's is
-        // "dbo.Patient" (which qualify() below already predicts), but MySQL's is "{the connected database's
-        // own name}.Patient" and PostgreSQL's is "public.Patient" — neither of which qualify() can predict
-        // (it only ever prefixes SQL Server's "dbo."), so matching fullName alone would (and did) leave
-        // MySQL/PostgreSQL unable to recognize their own real tables by name at all. See
-        // findConfirmedTableMatch's own doc comment for the full reasoning, and
-        // DestinationWizardComponent._resolveDestinationObjectForCanvas for the established fullName-or-
-        // tableName precedent this reuses. Matched case-insensitively throughout — a wrong-case coincidence
-        // just means the user picks the real table from the dropdown instead of it auto-attaching.
-        const candidate = qualify(bareName(def.sqlTable), type);
-        targets[r] = findConfirmedTableMatch(candidate, this.sqlTables())?.fullName ?? '';
-        continue;
-      }
-      // Mongo/Medplum/etc.: unchanged — no live "does this exist" concept for these today (out of scope
-      // for the SQL Server/MySQL/PostgreSQL-specific fix above), so the conventional name is still used as
-      // a plain default. Mongo has no dedicated default collection name of its own, so it reuses the same
-      // (bare, since qualify() only ever prefixes 'sql') name as a sensible default collection.
-      targets[r] = qualify(bareName(def.sqlTable), type);
+      // MySQL/PostgreSQL are relational like SQL Server (def.sqlTable); Mongo has no dedicated default
+      // collection name of its own, so it reuses the same table name as a sensible default collection.
+      // Blob's per-resource target becomes the blob name stem/folder (MappingProfile.DestinationObject), not
+      // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
+      // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
+      // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      targets[r] =
+        type === 'csv'
+          ? def.csvFile
+          : type === 'blob'
+            ? def.csvFile.replace(/\.csv$/i, '')
+            : def.sqlTable;
     }
     this.targetByResource.set(targets);
     this.mappingRows.update((rows) =>
@@ -4071,71 +4006,26 @@ export class DestinationWizardComponent implements OnInit {
    *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
    *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
   private _refreshSqlTablesFromLiveSchema(): void {
-    // MySQL/PostgreSQL need this re-probe on reopen exactly as much as SQL Server does — the ad-hoc probe
-    // path a few lines down already correctly handles all three via isSqlFamilyForm(form)/getProbeRequest();
-    // this early-return used to be the bare `!== 'sql'` literal, which skipped the WHOLE method (both the
-    // destinationId-based refresh and the ad-hoc probe) for MySQL/PostgreSQL — every table restored from a
-    // saved MySQL/PostgreSQL mapping stayed 'restoredUnverified' forever on reopen, wrongly showing
-    // "Suggested" instead of "Confirmed" and blocking the real "+ Add column" flow on a table that
-    // genuinely already exists.
-    if (!this.isSql()) return;
+    if (this.destType() !== 'sql') return;
 
     const destinationId = this.resolvedDestinationId();
     const applyTables = (tables: DestinationTable[]) => {
-      const liveTables = tables.map((t) => ({
-        ...t,
-        origin: 'probed' as const,
-        columns: t.columns.map((c) => ({ ...c, origin: 'probed' as const })),
-      }));
-      this.sqlTables.set(liveTables);
-
-      // A saved Mapping JSON always stores bare table names — applyMappingSummaryDocument (run earlier in
-      // _populateFromNode, before any live data existed) had no way to reconstruct MySQL's
-      // "{database}.Table"/PostgreSQL's "public.Table" shape on its own. Now that real data has arrived,
-      // resolve every still-unconfirmed restored table reference against it — reusing the exact same
-      // findConfirmedTableMatch the existing-table auto-attach fix (_rebuildRows) already uses, never a
-      // second matching implementation. A reference that still doesn't resolve is left completely
-      // untouched (never silently dropped, never invented) — see reconcileRestoredTablesWithLiveSchema's
-      // own doc comment for why that's what keeps validateMappingForSave correctly catching a genuinely
-      // stale mapping like a column that no longer exists.
-      const reconciled = reconcileRestoredTablesWithLiveSchema(
-        {
-          mappingRows: this.mappingRows(),
-          targetByResource: this.targetByResource(),
-          extraTablesByGroup: this.extraTablesByGroup(),
-          childTableRelationsByTable: this.childTableRelationsByTable(),
-        },
-        liveTables,
+      this.sqlTables.set(
+        tables.map((t) => ({
+          ...t,
+          origin: 'probed' as const,
+          columns: t.columns.map((c) => ({ ...c, origin: 'probed' as const })),
+        })),
       );
-      this.mappingRows.set(reconciled.mappingRows);
-      this.targetByResource.set(reconciled.targetByResource);
-      this.extraTablesByGroup.set(reconciled.extraTablesByGroup);
-      this.childTableRelationsByTable.set(reconciled.childTableRelationsByTable);
-
       this.probeState.set('ok');
-      this.schemaVerificationState.set('verified');
-    };
-    // Every 'restoredUnverified' table currently on the canvas (from loadMappingSummary, called just
-    // before this — see _populateFromNode) is still unverified until one of the paths below either
-    // confirms it (applyTables, a full replace — see DestinationTable.origin's own doc comment for why a
-    // table missing from the real live list simply disappears rather than staying "unverified" forever)
-    // or reports why it couldn't be checked at all (surfaceVerificationFailure).
-    this.schemaVerificationState.set('verifying');
-    const surfaceVerificationFailure = (result: { connected: boolean; error: string | null } | null) => {
-      const outcome = describeSchemaVerificationOutcome(result);
-      this.schemaVerificationState.set(outcome.state);
-      if (outcome.warning) this.toast.error('Destination schema not verified', outcome.warning);
     };
 
     if (destinationId) {
       this.schemaSvc.getSchema(destinationId).subscribe({
         next: (res) => applyTables(res.tables),
-        // Previously silent ("keep the mapping-summary-restored list; don't block editing on a failed
-        // reload") — that let a table only ever known from a stale save look identical to a live-confirmed
-        // one indefinitely whenever this call failed. The mapping-summary-restored list still stays in
-        // place (never blocks editing), but now stays correctly tagged 'restoredUnverified' and the user
-        // is told verification didn't happen, instead of the failure being invisible.
-        error: () => surfaceVerificationFailure(null),
+        error: () => {
+          /* keep the mapping-summary-restored list; don't block editing on a failed reload */
+        },
       });
       return;
     }
@@ -4144,25 +4034,19 @@ export class DestinationWizardComponent implements OnInit {
     // plaintext password), which may not exist yet this early (see _populateFromNode's queued patch above).
     // Not worth deferring further: this is a narrow edge case (editing a brand-new, never-saved SQL node),
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
-    // every other failure path here — but, same as above, no longer silently: nothing here was verified
-    // either, so schemaVerificationState must say so rather than staying 'verifying' forever.
+    // every other failure path here.
     const form = this.activeForm();
-    if (!isSqlFamilyForm(form)) {
-      surfaceVerificationFailure(null);
-      return;
-    }
+    if (!isSqlFamilyForm(form)) return;
     const request = form.getProbeRequest();
-    if (!request.server || !request.database || !request.password) {
-      surfaceVerificationFailure(null);
-      return;
-    }
+    if (!request.server || !request.database || !request.password) return;
 
     this.schemaSvc.probe(request).subscribe({
       next: (res) => {
         if (res.connected) applyTables(res.tables);
-        else surfaceVerificationFailure(res);
       },
-      error: () => surfaceVerificationFailure(null),
+      error: () => {
+        /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */
+      },
     });
   }
 

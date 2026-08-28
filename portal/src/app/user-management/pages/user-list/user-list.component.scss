@@ -1,5 +1,16 @@
 // user-management/pages/user-list/user-list.component.scss
-@use '../../../_list-page' as *;
+
+// ─── Page layout ─────────────────────────────────────────────────────────────
+.user-list-page {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100%;
+  background: var(--color-bg);
+}
 
 // ─── Page header ─────────────────────────────────────────────────────────────
 .page-header {
@@ -147,23 +158,11 @@
   }
 
   .toolbar-input {
-    width: 100%;
     padding-left: 36px;
     height:       40px;
     padding-top:  0;
     padding-bottom: 0;
     line-height:  40px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-base);
-    background: var(--color-bg);
-    font-size: 14px;
-    color: var(--color-ink);
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color var(--transition-base), box-shadow var(--transition-base);
-
-    &::placeholder { color: var(--color-muted); }
-    &:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
   }
 }
 
@@ -176,22 +175,14 @@
   position: relative;
 
   select {
-    width:            100%;
     height:           40px;
     padding-top:      0;
     padding-bottom:   0;
-    padding-left:     12px;
     padding-right:    32px;
     appearance:       none;
     -webkit-appearance: none;
     cursor:           pointer;
     line-height:      40px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-base);
-    background: var(--color-surface);
-    font-size: 13.5px;
-    color: var(--color-ink);
-    box-sizing: border-box;
   }
 
   .select-chevron {
@@ -209,18 +200,72 @@
   }
 }
 
-// ─── Table column widths ───────────────────────────────────────────────────────
-// Holds only the "View" primary CTA — same pattern as workflow-list.component.scss's .col-actions
-// (the row's other actions live in .col-menu's kebab instead).
-.col-actions { width: 90px; }
-
-// ─── Avatar + name cell ────────────────────────────────────────────────────────
-.user-name-cell-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+// ─── Table card ───────────────────────────────────────────────────────────────
+.table-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  position: relative;
+  flex: 1;
 }
 
+.table-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+// ─── Material table overrides ────────────────────────────────────────────────
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  ::ng-deep {
+    .mat-mdc-header-row {
+      background: var(--color-side);
+      border-bottom: 2px solid var(--color-border);
+    }
+
+    .mat-mdc-header-cell {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-ink-2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 12px 16px;
+      white-space: nowrap;
+    }
+
+    .mat-mdc-cell {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--color-border);
+      vertical-align: middle;
+    }
+
+    .mat-mdc-row:last-child .mat-mdc-cell {
+      border-bottom: none;
+    }
+
+    .mat-mdc-row {
+      height: 52px;
+    }
+  }
+}
+
+.user-row {
+  transition: background var(--transition-base);
+  cursor: default;
+
+  &:hover {
+    background: var(--color-side);
+  }
+
+  &.selected {
+    background: var(--color-primary-soft);
+  }
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
 .user-avatar {
   width: 38px;
   height: 38px;
@@ -241,6 +286,7 @@
   }
 }
 
+// ─── Name cell ────────────────────────────────────────────────────────────────
 .user-name-cell {
   display: flex;
   flex-direction: column;
@@ -340,32 +386,75 @@
   &--oauth  { color: #059669;  background: var(--color-success-soft); }
 }
 
-// ─── Row menu item icons ──────────────────────────────────────────────────────
-.icon-enable  { color: var(--color-success) !important; }
-.icon-disable { color: var(--color-muted) !important; }
+// ─── 2FA icons ────────────────────────────────────────────────────────────────
+.icon-2fa-on  { color: var(--color-success); font-size: 20px; height: 20px; width: 20px; }
+.icon-2fa-off { color: var(--color-border);  font-size: 20px; height: 20px; width: 20px; }
 
-// ─── View CTA (primary row action, outside the kebab menu) ────────────────────
-.btn-view {
-  display: inline-flex;
+// ─── Cell muted text ──────────────────────────────────────────────────────────
+.cell-muted {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+// ─── Actions cell ─────────────────────────────────────────────────────────────
+.actions-cell {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.btn-action-icon {
+  background: var(--color-side) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-base) !important;
+  color: var(--color-muted) !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  transition: border-color var(--transition-base), color var(--transition-base) !important;
+
+  &:hover {
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary) !important;
+    background: var(--color-primary-soft) !important;
+  }
+}
+
+.btn-view {
   font-size:   13px;
-  font-weight: 600;
-  color:       var(--color-primary);
-  background: var(--color-primary-soft);
-  border: none;
+  font-weight: 500;
+  color:       var(--color-primary) !important;
   border-radius: 6px;
   min-width:   52px;
   height:      32px;
-  padding: 0 12px;
-  cursor: pointer;
-  transition: background var(--transition-base), color var(--transition-base);
+  line-height: 32px;
 
   &:hover {
-    background: var(--color-primary);
-    color:      #fff;
+    background: var(--color-primary) !important;
+    color:      #fff !important;
   }
 }
+
+.btn-more {
+  // --mat-icon-button-state-layer-size drives Material's own width/height/padding/ripple-diameter
+  // calculations together (see .mat-mdc-icon-button in @angular/material/icon-button) — border-radius
+  // already defaults to 50% from the same token chain, so setting just this one custom property shrinks
+  // the whole button (including its ripple/focus circle) to match, with no per-property overrides needed.
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
+
+  &:hover {
+    background: var(--color-side) !important;
+    color:      var(--color-ink) !important;
+  }
+}
+
+// ─── Menu item icons ──────────────────────────────────────────────────────────
+.icon-enable  { color: var(--color-success) !important; }
+.icon-disable { color: var(--color-muted) !important; }
+.icon-suspend { color: var(--color-error) !important; }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 .empty-state {
@@ -398,3 +487,5 @@
     max-width: 320px;
   }
 }
+
+// ─── Paginator ────────────────────────────────────────────────────────────────

@@ -89,117 +89,145 @@
 
       <!-- Table meta row -->
       <div class="table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-menu"></th>
-              <th class="col-sortable" (click)="onSort('name')">
-                Name
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
-                  {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-sortable" (click)="onSort('sourceSystemType')">
-                EHR
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'sourceSystemType'">
-                  {{ sortColumn() === 'sourceSystemType' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-sortable" (click)="onSort('applicationType')">
-                Audience
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'applicationType'">
-                  {{ sortColumn() === 'applicationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th>Base URL</th>
-              <th>Client ID</th>
-              <th class="col-sortable" (click)="onSort('isEnabled')">
-                Status
-                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
-                  {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th>Action by</th>
-              <th class="col-sortable" (click)="toggleActionOnSort()">
-                Action on
-                @if (actionOnSortDirection(); as dir) {
-                  <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
-                }
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (c of items(); track c.id) {
-              <tr class="data-row">
-                <td class="col-menu">
-                  <div class="row-menu" (click)="$event.stopPropagation()">
-                    <button
-                      class="btn-icon"
-                      type="button"
-                      title="More actions"
-                      (click)="$event.stopPropagation(); toggleActionMenu($event, c.id)"
-                    ><mat-icon>more_vert</mat-icon></button>
+        <table mat-table [dataSource]="items()" class="data-table">
 
-                    @if (openActionMenuId() === c.id && actionMenuPosition(); as pos) {
-                      <div
-                        class="row-menu-panel"
-                        [style.top.px]="pos.top"
-                        [style.bottom.px]="pos.bottom"
-                        [style.left.px]="pos.left"
-                      >
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          *appHideWithoutPermission="'sourceconnections.view'"
-                          (click)="openView(c); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>visibility</mat-icon> View
-                        </button>
+          <!-- # Column -->
+          <ng-container matColumnDef="index">
+            <th mat-header-cell *matHeaderCellDef class="col-index"></th>
+            <td mat-cell *matCellDef="let c; let i = index" class="col-index">
+              {{ pageIndex() * pageSize() + i + 1 }}
+            </td>
+          </ng-container>
 
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          [disabled]="isUsedInWorkflow(c)"
-                          [title]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — edit disabled' : ''"
-                          *appHideWithoutPermission="vendorEditCode(c)"
-                          (click)="openEdit(c); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>edit</mat-icon> Edit
-                        </button>
+          <!-- Name Column -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('name')">
+              Name
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <div class="cell-name">
+                <div class="endpoint-avatar">
+                  <mat-icon>cable</mat-icon>
+                </div>
+                <span class="cell-primary">{{ c.name }}</span>
+              </div>
+            </td>
+          </ng-container>
 
-                        <div class="row-menu-divider"></div>
+          <!-- EHR Column -->
+          <ng-container matColumnDef="sourceSystemType">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('sourceSystemType')">
+              EHR
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'sourceSystemType'">
+                {{ sortColumn() === 'sourceSystemType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <span class="vendor-badge">{{ c.sourceSystemType }}</span>
+            </td>
+          </ng-container>
 
-                        <button
-                          type="button"
-                          class="row-menu-item row-menu-item--danger"
-                          [disabled]="isUsedInWorkflow(c)"
-                          [title]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — delete disabled' : ''"
-                          *appHideWithoutPermission="deleteCodes(c); mode: 'all'"
-                          (click)="confirmDelete(c); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>delete_outline</mat-icon> Delete
-                        </button>
-                      </div>
-                    }
-                  </div>
-                </td>
-                <td>
-                  <span class="cell-primary">{{ c.name }}</span>
-                </td>
-                <td><span class="vendor-badge">{{ c.sourceSystemType }}</span></td>
-                <td><span class="cell-muted">{{ audienceOf(c) }}</span></td>
-                <td><span class="cell-url" [title]="c.baseUrl">{{ c.baseUrl }}</span></td>
-                <td><span class="cell-muted cell-client-id" [title]="clientIdOf(c)">{{ clientIdOf(c) }}</span></td>
-                <td>
-                  <span class="status-badge" [class.status-badge--inactive]="!c.isEnabled">
-                    {{ c.isEnabled ? 'active' : 'disabled' }}
-                  </span>
-                </td>
-                <td><span class="cell-muted">{{ (c.modifiedBy || c.createdBy) ?? '—' }}</span></td>
-                <td><span class="cell-muted">{{ ((c.modifiedOnUtc || c.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
-              </tr>
-            }
-          </tbody>
+          <!-- Audience Column -->
+          <ng-container matColumnDef="audience">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('applicationType')">
+              Audience
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'applicationType'">
+                {{ sortColumn() === 'applicationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ audienceOf(c) }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Base URL Column -->
+          <ng-container matColumnDef="baseUrl">
+            <th mat-header-cell *matHeaderCellDef>Base URL</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-url" [matTooltip]="c.baseUrl">{{ c.baseUrl }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Client ID Column -->
+          <ng-container matColumnDef="clientId">
+            <th mat-header-cell *matHeaderCellDef>Client ID</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ clientIdOf(c) }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
+              Status
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
+                {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
+              </span>
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <span class="status-badge" [class.status-badge--inactive]="!c.isEnabled">
+                {{ c.isEnabled ? 'active' : 'disabled' }}
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Action by Column -->
+          <ng-container matColumnDef="actionBy">
+            <th mat-header-cell *matHeaderCellDef>Action by</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ (c.modifiedBy || c.createdBy) ?? '—' }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Action on Column -->
+          <ng-container matColumnDef="actionOn">
+            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="toggleActionOnSort()">
+              Action on
+              @if (actionOnSortDirection(); as dir) {
+                <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
+              }
+            </th>
+            <td mat-cell *matCellDef="let c">
+              <span class="cell-muted">{{ ((c.modifiedOnUtc || c.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let c" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-view" matTooltip="View Source Connection" *appHideWithoutPermission="'sourceconnections.view'" (click)="openView(c)">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="btn-edit"
+                  [matTooltip]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — edit disabled' : 'Edit Source Connection'"
+                  [disabled]="isUsedInWorkflow(c)"
+                  *appHideWithoutPermission="vendorEditCode(c)"
+                  (click)="openEdit(c)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="btn-delete"
+                  [matTooltip]="isUsedInWorkflow(c) ? 'This connection is used by a workflow — delete disabled' : 'Delete Source Connection'"
+                  [disabled]="isUsedInWorkflow(c)"
+                  *appHideWithoutPermission="deleteCodes(c); mode: 'all'"
+                  (click)="confirmDelete(c)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
         </table>
       </div>
 
