@@ -5,8 +5,29 @@
     (pointermove)="onHeadPointerMove($event)"
     (pointerup)="onHeadPointerUp($event)"
   >
-    <span class="fm-target-kind">{{ isSqlFamily() ? 'table' : destType() === 'blob' ? 'blob' : 'file' }}</span>
-    <span class="fm-target-name">{{ tableName() || resource() }}</span>
+    <span class="fm-target-kind">{{ isSqlFamily() ? 'table' : destType() === 'mongo' ? 'collection' : destType() === 'blob' ? 'blob' : 'file' }}</span>
+    @if (renamingTable()) {
+      <input
+        class="fm-target-name-edit"
+        [value]="tableName() || resource()"
+        (pointerdown)="$event.stopPropagation()"
+        (keydown)="onRenameTableKeydown($event)"
+        (blur)="onRenameTableBlur($event)"
+        #renameTableInput
+      />
+    } @else {
+      <span class="fm-target-name">{{ tableName() || resource() }}</span>
+      @if (destType() === 'mongo') {
+        <button
+          type="button"
+          class="fm-target-rename-btn"
+          aria-label="Rename this collection"
+          title="Rename this collection"
+          (pointerdown)="$event.stopPropagation()"
+          (click)="startRenameTable()"
+        >✎</button>
+      }
+    }
     @if (isSqlFamily()) {
       <span
         class="fm-target-status"

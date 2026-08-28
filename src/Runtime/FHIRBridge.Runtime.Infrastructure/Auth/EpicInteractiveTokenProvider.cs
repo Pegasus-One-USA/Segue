@@ -14,10 +14,9 @@ public sealed class EpicInteractiveTokenProvider : SmartAuthorizationCodeTokenPr
     public EpicInteractiveTokenProvider(
         HttpClient httpClient,
         IFhirAuthorizationCodeTokenStore tokenStore,
-        IFhirAccessTokenAuditSink? auditSink = null,
         IBackendServicesJwtFactory? jwtFactory = null,
         ILogger<SmartAuthorizationCodeTokenProvider>? logger = null)
-        : base(httpClient, tokenStore, auditSink, jwtFactory, logger)
+        : base(httpClient, tokenStore, jwtFactory, logger)
     {
     }
 

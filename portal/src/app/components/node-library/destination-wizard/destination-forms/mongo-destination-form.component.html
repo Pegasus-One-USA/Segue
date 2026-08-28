@@ -20,7 +20,16 @@
 
     <div class="dw-field" [class.dw-field--error]="mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched">
       <label class="dw-label" for="mf-collection">Collection <span class="dw-req">*</span></label>
-      <input id="mf-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients" />
+      <input id="mf-collection" class="dw-input" formControlName="collection" placeholder="e.g. patients"
+        list="mf-collections-list" autocomplete="off" />
+      @if (collections().length) {
+        <datalist id="mf-collections-list">
+          @for (c of collections(); track c) {
+            <option [value]="c"></option>
+          }
+        </datalist>
+        <span class="dw-hint">Pick an existing collection above, or type a new name.</span>
+      }
       @if (mongoForm.get('collection')!.invalid && mongoForm.get('collection')!.touched) {
         <span class="dw-error">Collection name is required.</span>
       }
@@ -34,6 +43,17 @@
           <option value="insert">Insert only</option>
         </select>
       </div>
+    </div>
+
+    <div class="dw-field dw-field--checkbox dw-field--full">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="createIfNotExists" />
+        Create collection if not exists
+      </label>
+      <span class="dw-hint">
+        Off by default — the collection above must already exist in your database. Enable this to have the
+        pipeline create it automatically instead of failing when it's missing.
+      </span>
     </div>
 
   </div><!-- /dw-grid-2 -->
@@ -50,8 +70,10 @@
   <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Testing connection…</div>
 }
 @if (probeState() === 'error') {
-  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">Connection failed: {{ probeError() }}</div>
+  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">{{ probeError() }}</div>
 }
 @if (probeState() === 'ok') {
-  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Connected — MongoDB reachable.</div>
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">
+    Connected — MongoDB reachable{{ mongoForm.value.collection ? ' and collection verified.' : '.' }}
+  </div>
 }

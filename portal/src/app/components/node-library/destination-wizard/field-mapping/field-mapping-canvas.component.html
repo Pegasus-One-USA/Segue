@@ -54,6 +54,7 @@
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
           (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
+          (renameTable)="onRenameTable(card.resource, card.tableName, $event, card.isExtra)"
           (deleteColumn)="onDeleteColumn(card.resource, card.tableName, $event)"
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
@@ -88,8 +89,9 @@
          data types (uniqueidentifier, bigint, …) that don't apply to a flat file's columns. -->
     @if (resources()[0]; as primaryResource) {
       <!-- Nothing to offer here at all when there's neither a real probed schema to pick an existing
-           table from, nor authoring rights to create a new one. -->
-      @if (!drawerOpen() && destType() !== 'csv' && (hasSqlTables() || schemaAuthoringEnabled())) {
+           table from, nor authoring rights to create a new one (nor, for Mongo, its own no-schema-needed
+           add-collection picker — see showAddTablePicker()). -->
+      @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled())) {
       <div class="fm-add-table-slot">
         <!-- "Remove Suggested Tables from Map Fields": no card renders at all here when this resource has
              no confirmed-or-pending table (see isPrimaryTargetValid) — a plain "+ Create a new table…"
@@ -98,13 +100,13 @@
         @if (!isPrimaryTargetValid(primaryResource)) {
           <span class="fm-no-target-hint">No destination table selected</span>
         }
-        @if (hasSqlTables()) {
+        @if (showAddTablePicker()) {
           <button
             type="button"
             class="fm-add-table-select fm-add-table-createbtn"
             [class.fm-add-table-select--open]="addTableMenuOpen()"
             (click)="$event.stopPropagation(); toggleAddTableMenu($event)"
-          >＋ Add a table from your database…</button>
+          >＋ Add a {{ destType() === 'mongo' ? 'collection' : 'table' }}{{ destType() === 'mongo' ? '' : ' from your database' }}…</button>
 
           @if (addTableMenuOpen() && addTableMenuStyle(); as pos) {
             <div
@@ -120,8 +122,8 @@
                   #addTableSearchInput
                   type="search"
                   class="fm-add-table-search"
-                  placeholder="Search tables…"
-                  aria-label="Search tables"
+                  [placeholder]="destType() === 'mongo' ? 'Search or type a new collection name…' : 'Search tables…'"
+                  [attr.aria-label]="destType() === 'mongo' ? 'Search or add a collection' : 'Search tables'"
                   [value]="addTableSearchQuery()"
                   (input)="onAddTableSearchInput($any($event.target).value)"
                 />
@@ -135,7 +137,16 @@
                     ✎ Create a new table…
                   </button>
                 }
-                @if (addTableSearchQuery() && filteredTablesToAdd(primaryResource).length === 0) {
+                <!-- Mongo has no schema to author (no columns to define), so a typed name that isn't an
+                     already-listed collection is offered straight from the search box — no modal needed,
+                     matching MappedMongoDestinationWriter's own "customer owns the destination" contract
+                     (existing unless "Create collection if not exists" is checked on the destination). -->
+                @if (destType() === 'mongo' && addTableSearchQuery().trim() && !filteredTablesToAdd(primaryResource).includes(addTableSearchQuery().trim())) {
+                  <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, addTableSearchQuery().trim())">
+                    ＋ Use "{{ addTableSearchQuery().trim() }}" as a new collection
+                  </button>
+                }
+                @if (addTableSearchQuery() && filteredTablesToAdd(primaryResource).length === 0 && destType() !== 'mongo') {
                   <div class="fm-add-table-no-match">No tables match "{{ addTableSearchQuery() }}".</div>
                 }
                 @for (t of filteredTablesToAdd(primaryResource); track t) {

@@ -5,11 +5,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
 import { SetSystemSettingRequest, SystemSetting } from '../../models/system-setting.model';
+import { describeSettingField, SettingFieldDescriptor } from '../../utils/terminology-setting-field';
 
 export interface SystemSettingDialogData {
   mode: 'create' | 'edit';
@@ -25,6 +28,8 @@ export interface SystemSettingDialogData {
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
+    MatSelectModule,
+    MatSlideToggleModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -43,18 +48,32 @@ export class SystemSettingDialogComponent {
   readonly saving        = signal(false);
   readonly errorMessage  = signal<string | null>(null);
 
+  // Only edit mode can infer a control type from the key — a brand-new key typed into "Add
+  // Setting" has no established meaning yet, so create mode keeps the plain free-text field.
+  readonly fieldDescriptor: SettingFieldDescriptor =
+    this.isEdit && this.data.setting ? describeSettingField(this.data.setting.key) : { kind: 'text' };
+
   readonly form = this.fb.group({
     key: [
       { value: this.data.setting?.key ?? '', disabled: this.isEdit },
       [Validators.required, Validators.maxLength(200)],
     ],
-    value: [this.data.setting?.value ?? '', [Validators.required, Validators.maxLength(2000)]],
+    value: [this.initialValue(), [Validators.required, Validators.maxLength(2000)]],
     description: [this.data.setting?.description ?? '', [Validators.maxLength(500)]],
   });
+
+  get frequencyOptions(): string[] {
+    return this.fieldDescriptor.kind === 'frequency' ? this.fieldDescriptor.options : [];
+  }
 
   hasError(ctrl: string, err: string): boolean {
     const c = this.form.get(ctrl)!;
     return c.hasError(err) && (c.touched || this.submitted());
+  }
+
+  private initialValue(): string | boolean {
+    const raw = this.data.setting?.value ?? '';
+    return this.fieldDescriptor.kind === 'toggle' ? raw.toLowerCase() === 'true' : raw;
   }
 
   save(): void {
@@ -64,8 +83,11 @@ export class SystemSettingDialogComponent {
 
     const raw = this.form.getRawValue();
     const key = raw.key!.trim();
+    const value = this.fieldDescriptor.kind === 'toggle'
+      ? (raw.value ? 'True' : 'False')
+      : String(raw.value ?? '').trim();
     const request: SetSystemSettingRequest = {
-      value: raw.value!.trim(),
+      value,
       description: raw.description?.trim() || null,
     };
     this.saving.set(true);

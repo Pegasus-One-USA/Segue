@@ -1,4 +1,5 @@
-using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 
 namespace FHIRBridge.Worker;
@@ -11,14 +12,17 @@ namespace FHIRBridge.Worker;
 /// </summary>
 public sealed class HcpcsHapiTerminologySyncWorker : BackgroundService
 {
+    private static readonly TerminologySyncScheduleConfig ScheduleConfig = new("Terminology:HcpcsHapi", "03:45");
+
     private readonly IServiceScopeFactory _scopes;
-    private readonly ISystemSettingsCache _settings;
+    private readonly ITerminologySyncScheduleEvaluator _scheduleEvaluator;
     private readonly ILogger<HcpcsHapiTerminologySyncWorker> _logger;
-    private DateOnly? _lastRunDate;
 
     public HcpcsHapiTerminologySyncWorker(
-        IServiceScopeFactory scopes, ISystemSettingsCache settings, ILogger<HcpcsHapiTerminologySyncWorker> logger) =>
-        (_scopes, _settings, _logger) = (scopes, settings, logger);
+        IServiceScopeFactory scopes,
+        ITerminologySyncScheduleEvaluator scheduleEvaluator,
+        ILogger<HcpcsHapiTerminologySyncWorker> logger) =>
+        (_scopes, _scheduleEvaluator, _logger) = (scopes, scheduleEvaluator, logger);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -26,27 +30,18 @@ public sealed class HcpcsHapiTerminologySyncWorker : BackgroundService
         {
             try
             {
-                if (await _settings.GetBoolAsync("Terminology:HcpcsHapi:SchedulerEnabled", false, stoppingToken))
+                if (await _scheduleEvaluator.IsDueAsync(ScheduleConfig, DateTimeOffset.Now, stoppingToken))
                 {
-                    var now = DateTimeOffset.Now;
-                    var frequency = await _settings.GetStringAsync("Terminology:HcpcsHapi:Frequency", "Monthly", stoppingToken);
-                    var configured = await _settings.GetStringAsync("Terminology:HcpcsHapi:ExecutionTime", "03:45", stoppingToken);
-                    var dueTime = TimeOnly.TryParse(configured, out var time) ? time : new TimeOnly(3, 45);
-                    var due = now.TimeOfDay >= dueTime.ToTimeSpan() && _lastRunDate != DateOnly.FromDateTime(now.DateTime)
-                        && (string.Equals(frequency, "Weekly", StringComparison.OrdinalIgnoreCase) || now.Day == 1);
-
-                    if (due)
-                    {
-                        using var scope = _scopes.CreateScope();
-                        var result = await scope.ServiceProvider
-                            .GetRequiredService<IHapiHcpcsTerminologySyncService>()
-                            .SyncAsync(stoppingToken);
-                        _lastRunDate = DateOnly.FromDateTime(now.DateTime);
-                        _logger.LogInformation(
-                            "HCPCS HAPI terminology sync completed: {Total} codes, {Elapsed}.",
-                            result.TotalConceptCount,
-                            result.Duration);
-                    }
+                    using var scope = _scopes.CreateScope();
+                    var result = await scope.ServiceProvider
+                        .GetRequiredService<IHapiHcpcsTerminologySyncService>()
+                        .SyncAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<ISystemSettingsService>()
+                        .SetAsync("Terminology:HcpcsHapi:LastRunUtc", DateTime.UtcNow.ToString("O"), null, stoppingToken);
+                    _logger.LogInformation(
+                        "HCPCS HAPI terminology sync completed: {Total} codes, {Elapsed}.",
+                        result.TotalConceptCount,
+                        result.Duration);
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

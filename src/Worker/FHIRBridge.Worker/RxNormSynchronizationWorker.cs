@@ -1,5 +1,6 @@
-using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 
 namespace FHIRBridge.Worker;
 
@@ -8,37 +9,32 @@ namespace FHIRBridge.Worker;
 /// worker there is no Frequency setting to read — only whether the scheduler is enabled and when to run.</summary>
 public sealed class RxNormSynchronizationWorker : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopes;
-    private readonly ISystemSettingsCache _settings;
-    private readonly ILogger<RxNormSynchronizationWorker> _logger;
-    private DateOnly? _lastRunDate;
+    private static readonly TerminologySyncScheduleConfig ScheduleConfig = new(
+        "Terminology:RxNorm", "02:00", DefaultFrequency: null, FixedCadence: now => now.Day == 1);
 
-    public RxNormSynchronizationWorker(IServiceScopeFactory scopes, ISystemSettingsCache settings, ILogger<RxNormSynchronizationWorker> logger)
-        => (_scopes, _settings, _logger) = (scopes, settings, logger);
+    private readonly IServiceScopeFactory _scopes;
+    private readonly ITerminologySyncScheduleEvaluator _scheduleEvaluator;
+    private readonly ILogger<RxNormSynchronizationWorker> _logger;
+
+    public RxNormSynchronizationWorker(IServiceScopeFactory scopes, ITerminologySyncScheduleEvaluator scheduleEvaluator, ILogger<RxNormSynchronizationWorker> logger)
+        => (_scopes, _scheduleEvaluator, _logger) = (scopes, scheduleEvaluator, logger);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (await _settings.GetBoolAsync("Terminology:RxNorm:SchedulerEnabled", false, stoppingToken))
+            if (await _scheduleEvaluator.IsDueAsync(ScheduleConfig, DateTimeOffset.Now, stoppingToken))
             {
-                var now = DateTimeOffset.Now;
-                var configured = await _settings.GetStringAsync("Terminology:RxNorm:ExecutionTime", "02:00", stoppingToken);
-                var dueTime = TimeOnly.TryParse(configured, out var time) ? time : new TimeOnly(2, 0);
-                var due = now.TimeOfDay >= dueTime.ToTimeSpan() && _lastRunDate != DateOnly.FromDateTime(now.DateTime) && now.Day == 1;
-                if (due)
+                try
                 {
-                    try
-                    {
-                        using var scope = _scopes.CreateScope();
-                        var result = await scope.ServiceProvider.GetRequiredService<IRxNormSynchronizationService>().SynchronizeAsync(stoppingToken);
-                        _lastRunDate = DateOnly.FromDateTime(now.DateTime);
-                        _logger.LogInformation("RxNorm synchronization completed: {Version}, {Count} concepts.", result.Version, result.ImportedConceptCount);
-                    }
-                    catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-                    {
-                        _logger.LogError(ex, "Scheduled RxNorm synchronization failed.");
-                    }
+                    using var scope = _scopes.CreateScope();
+                    var result = await scope.ServiceProvider.GetRequiredService<IRxNormSynchronizationService>().SynchronizeAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<ISystemSettingsService>().SetAsync("Terminology:RxNorm:LastRunUtc", DateTime.UtcNow.ToString("O"), null, stoppingToken);
+                    _logger.LogInformation("RxNorm synchronization completed: {Version}, {Count} concepts.", result.Version, result.ImportedConceptCount);
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogError(ex, "Scheduled RxNorm synchronization failed.");
                 }
             }
             await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);

@@ -17,6 +17,8 @@ public sealed class NotificationHistoryConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.Error).HasMaxLength(1000);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
+        builder.Property(x => x.Body).HasMaxLength(8000);
+        builder.Property(x => x.AttachmentNames).HasMaxLength(1000);
 
         builder.HasIndex(x => x.OccurredOnUtc);
         builder.HasIndex(x => x.CorrelationId);

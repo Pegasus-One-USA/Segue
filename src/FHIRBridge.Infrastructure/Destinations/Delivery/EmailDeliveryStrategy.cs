@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Notifications;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Email;
@@ -18,11 +19,14 @@ public sealed class EmailDeliveryStrategy : IArtifactDeliveryStrategy
 
     private readonly IEmailSender _emailSender;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly INotificationSettingsRepository _settingsRepository;
 
-    public EmailDeliveryStrategy(IEmailSender emailSender, IGovernanceLogger governanceLogger)
+    public EmailDeliveryStrategy(
+        IEmailSender emailSender, IGovernanceLogger governanceLogger, INotificationSettingsRepository settingsRepository)
     {
         _emailSender = emailSender;
         _governanceLogger = governanceLogger;
+        _settingsRepository = settingsRepository;
     }
 
     public async Task<DestinationWriteResult> DeliverAsync(
@@ -52,31 +56,52 @@ public sealed class EmailDeliveryStrategy : IArtifactDeliveryStrategy
         };
 
         var subject = EmailTemplateRenderer.Render(subjectTemplate, placeholders);
+        var body = EmailTemplateRenderer.Render(bodyTemplate, placeholders);
         var recipients = string.Join(", ", ccEmails.Count == 0 ? toEmails : [.. toEmails, .. ccEmails]);
+        var attachmentNames = new[] { file.FileName };
+        var settings = await _settingsRepository.GetAsync(cancellationToken);
+        var fromAddress = settings?.FromAddress ?? string.Empty;
 
+        bool sent;
         try
         {
-            await _emailSender.SendAsync(
+            sent = await _emailSender.SendAsync(
                 toEmails,
                 ccEmails.Count == 0 ? null : ccEmails,
                 subject,
-                EmailTemplateRenderer.Render(bodyTemplate, placeholders),
+                body,
                 [new EmailAttachment(file.FileName, file.Content, file.ContentType)],
                 cancellationToken);
         }
         catch (Exception exception)
         {
             await _governanceLogger.LogNotificationAsync(
-                new NotificationEntry("Email", recipients, "Failed", subject, exception.Message, context.CorrelationId),
+                new NotificationEntry("Email", recipients, "Failed", subject, exception.Message, context.CorrelationId, body, attachmentNames),
                 cancellationToken);
             throw;
         }
 
+        if (!sent)
+        {
+            // Notification Settings has email sending disabled (or was never configured) — SmtpEmailSender no-ops
+            // rather than throwing, so this destination write must surface that itself instead of reporting the
+            // false "Succeeded" this write would otherwise show (no exception was ever thrown).
+            const string skippedReason = "Email delivery is disabled in Notification Settings.";
+            await _governanceLogger.LogNotificationAsync(
+                new NotificationEntry("Email", recipients, "Skipped", subject, skippedReason, context.CorrelationId, body, attachmentNames),
+                cancellationToken);
+            throw new InvalidOperationException(
+                $"This destination is configured for Email delivery, but {skippedReason} Enable it under Settings > " +
+                "Email Settings, or switch this destination to a different delivery mode.");
+        }
+
         await _governanceLogger.LogNotificationAsync(
-            new NotificationEntry("Email", recipients, "Sent", subject, CorrelationId: context.CorrelationId),
+            new NotificationEntry("Email", recipients, "Sent", subject, CorrelationId: context.CorrelationId, Body: body, AttachmentNames: attachmentNames),
             cancellationToken);
 
-        return new DestinationWriteResult(recordCount);
+        return new DestinationWriteResult(
+            recordCount,
+            EmailDelivery: new EmailDeliveryDetail(fromAddress, toEmails, ccEmails, subject, body, attachmentNames, "Sent"));
     }
 
     private static IReadOnlyList<string> SplitAddresses(string? raw)

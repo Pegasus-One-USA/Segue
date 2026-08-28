@@ -178,6 +178,16 @@ export interface MedplumConnectionTestRequest {
 // Mongo connection test — the whole connection string is the credential (must embed the database name).
 export interface MongoConnectionTestRequest {
   connectionString: string;
+  /** When supplied, the test also checks whether this collection exists (not just connectivity). */
+  collection?: string;
+  /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
+  createIfNotExists?: boolean;
+}
+
+export interface MongoConnectionTestResult extends ConnectionTestResult {
+  /** The database's real collection names, returned on every successful connect — lets the form offer them
+   *  as an autocomplete instead of requiring the collection name to be typed blind. */
+  collections?: string[];
 }
 
 // Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /
@@ -253,9 +263,9 @@ export class DestinationSchemaService {
   }
 
   /** Tests an ad-hoc MongoDB connection for a not-yet-saved Mongo destination — opens a client on the
-   *  connection string and runs a ping server-side. */
-  testMongo(request: MongoConnectionTestRequest): Observable<ConnectionTestResult> {
-    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
+   *  connection string, runs a ping server-side, and (on success) returns the database's real collection names. */
+  testMongo(request: MongoConnectionTestRequest): Observable<MongoConnectionTestResult> {
+    return this.http.post<MongoConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
   }
 
   /** Tests an ad-hoc Azure Blob Storage connection for a not-yet-saved Blob destination — builds the container

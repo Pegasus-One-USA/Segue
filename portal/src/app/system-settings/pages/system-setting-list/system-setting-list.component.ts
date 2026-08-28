@@ -9,13 +9,21 @@ import { SystemSetting } from '../../models/system-setting.model';
 import { SystemSettingDialogComponent } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
 import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
+import { terminologyCodeOf, generalSettingGroupOf } from '../../utils/terminology-setting-field';
 
 interface GroupHeaderRow {
   isGroupHeader: true;
   label: string;
 }
 
-type GroupedRow = SystemSetting | GroupHeaderRow;
+interface CodeGroupHeaderRow {
+  isCodeGroupHeader: true;
+  code: string;
+  label: string;
+  collapsed: boolean;
+}
+
+type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow;
 
 @Component({
   selector: 'app-system-setting-list',
@@ -164,31 +172,135 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   // ── Group headings ──────────────────────────────────────────────────────────
-  // Purely a display grouping — "Terminology:*" keys (LOINC/SNOMED/RxNorm/ICD-10/HAPI-sync settings,
-  // etc.) render under their own heading, ahead of every other setting, so the growing list of
-  // terminology-server config doesn't just blend into one undifferentiated table.
+  // Purely a display grouping. "Terminology:*" keys (LOINC/SNOMED/RxNorm/ICD-10/HAPI-sync
+  // settings, etc.) render under their own heading, ahead of every other setting; everything
+  // else groups under "General Settings". Within each heading, settings further collapse into
+  // one sub-heading per code/prefix (e.g. "CVX (HAPI terminology server)", "Anomaly Detection") —
+  // collapsed by default — using the same expand/collapse chevron convention as the execution
+  // history detail page, so a growing list of config doesn't have to be scanned flatly.
+  private readonly collapsedCodes = signal<Set<string>>(new Set());
+
+  // Namespaced so a General Settings prefix can never collide with a terminology code in the
+  // shared collapsedCodes set (e.g. a hypothetical "Workflow" terminology code vs. the
+  // "Workflow:*" general prefix).
+  private static subGroupOf(key: string, isTerminology: boolean): { code: string; label: string } | null {
+    const info = isTerminology ? terminologyCodeOf(key) : generalSettingGroupOf(key);
+    if (!info) return null;
+    return { code: `${isTerminology ? 'term' : 'gen'}:${info.code}`, label: info.label };
+  }
+
+  private buildSection(rows: SystemSetting[], isTerminology: boolean, collapsed: Set<string>): GroupedRow[] {
+    const byCode = new Map<string, { label: string; rows: SystemSetting[] }>();
+    const ungrouped: SystemSetting[] = [];
+    for (const setting of rows) {
+      const groupInfo = SystemSettingListComponent.subGroupOf(setting.key, isTerminology);
+      if (!groupInfo) { ungrouped.push(setting); continue; }
+      const entry = byCode.get(groupInfo.code) ?? { label: groupInfo.label, rows: [] };
+      entry.rows.push(setting);
+      byCode.set(groupInfo.code, entry);
+    }
+
+    const result: GroupedRow[] = [...ungrouped];
+    for (const [code, entry] of [...byCode.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label))) {
+      const isCollapsed = collapsed.has(code);
+      result.push({ isCodeGroupHeader: true, code, label: entry.label, collapsed: isCollapsed });
+      if (!isCollapsed) result.push(...entry.rows);
+    }
+    return result;
+  }
+
+  private subGroupCodes(rows: SystemSetting[], isTerminology: boolean): Set<string> {
+    const codes = new Set<string>();
+    for (const s of rows) {
+      const groupInfo = SystemSettingListComponent.subGroupOf(s.key, isTerminology);
+      if (groupInfo) codes.add(groupInfo.code);
+    }
+    return codes;
+  }
+
   readonly groupedRows = computed<GroupedRow[]>(() => {
     const rows = this.filtered();
+    const collapsed = this.collapsedCodes();
     const terminology = rows.filter(s => s.key.startsWith('Terminology:'));
     const other = rows.filter(s => !s.key.startsWith('Terminology:'));
 
     const result: GroupedRow[] = [];
     if (terminology.length) {
-      result.push({ isGroupHeader: true, label: 'Terminology Settings' }, ...terminology);
+      result.push({ isGroupHeader: true, label: 'Terminology Settings' });
+      result.push(...this.buildSection(terminology, true, collapsed));
     }
     if (other.length) {
-      result.push({ isGroupHeader: true, label: 'General Settings' }, ...other);
+      result.push({ isGroupHeader: true, label: 'General Settings' });
+      result.push(...this.buildSection(other, false, collapsed));
     }
     return result;
   });
+
+  readonly terminologyCodes = computed(() =>
+    this.subGroupCodes(this.filtered().filter(s => s.key.startsWith('Terminology:')), true));
+
+  readonly generalCodes = computed(() =>
+    this.subGroupCodes(this.filtered().filter(s => !s.key.startsWith('Terminology:')), false));
+
+  readonly allTerminologyCollapsed = computed(() => {
+    const codes = this.terminologyCodes();
+    if (codes.size === 0) return true;
+    const collapsed = this.collapsedCodes();
+    return [...codes].every(code => collapsed.has(code));
+  });
+
+  readonly allGeneralCollapsed = computed(() => {
+    const codes = this.generalCodes();
+    if (codes.size === 0) return true;
+    const collapsed = this.collapsedCodes();
+    return [...codes].every(code => collapsed.has(code));
+  });
+
+  toggleCode(code: string): void {
+    this.collapsedCodes.update(set => {
+      const next = new Set(set);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }
+
+  toggleAllTerminology(): void {
+    this.toggleAllFor(this.terminologyCodes(), this.allTerminologyCollapsed());
+  }
+
+  toggleAllGeneral(): void {
+    this.toggleAllFor(this.generalCodes(), this.allGeneralCollapsed());
+  }
+
+  private toggleAllFor(codes: Set<string>, currentlyAllCollapsed: boolean): void {
+    this.collapsedCodes.update(set => {
+      const next = new Set(set);
+      for (const code of codes) {
+        currentlyAllCollapsed ? next.delete(code) : next.add(code);
+      }
+      return next;
+    });
+  }
 
   isGroupHeaderRow(_index: number, row: GroupedRow): row is GroupHeaderRow {
     return 'isGroupHeader' in row;
   }
 
+  isCodeGroupHeaderRow(_index: number, row: GroupedRow): row is CodeGroupHeaderRow {
+    return 'isCodeGroupHeader' in row;
+  }
+
+  isDataRow(_index: number, row: GroupedRow): row is SystemSetting {
+    return !('isGroupHeader' in row) && !('isCodeGroupHeader' in row);
+  }
+
   ngOnInit(): void {
     this.load();
   }
+
+  // Collapsed-by-default only on the very first load — a later reload (after saving/deleting one
+  // setting) must not reset whatever the admin currently has expanded.
+  private collapseDefaultsApplied = false;
 
   load(): void {
     this.loading.set(true);
@@ -196,6 +308,16 @@ export class SystemSettingListComponent implements OnInit {
       next: settings => {
         this.settings.set(settings);
         this.loading.set(false);
+
+        if (!this.collapseDefaultsApplied) {
+          this.collapseDefaultsApplied = true;
+          const codes = new Set<string>();
+          for (const s of settings) {
+            const groupInfo = SystemSettingListComponent.subGroupOf(s.key, s.key.startsWith('Terminology:'));
+            if (groupInfo) codes.add(groupInfo.code);
+          }
+          this.collapsedCodes.set(codes);
+        }
       },
       error: () => {
         this.loading.set(false);

@@ -76,9 +76,20 @@ public sealed class EfAlertEvaluationService : IAlertEvaluationService
             {
                 try
                 {
-                    await _emailSender.SendAsync(recipient, subject, summary, cancellationToken);
-                    await _governanceLogger.LogNotificationAsync(
-                        new NotificationEntry("Email", recipient, "Sent", subject), cancellationToken);
+                    // SendAsync returns false (not an exception) when email is disabled/unconfigured — that must
+                    // not be logged as "Sent" (see EmailDeliveryStrategy's own fix for this exact bug).
+                    var sent = await _emailSender.SendAsync(recipient, subject, summary, cancellationToken);
+                    if (sent)
+                    {
+                        await _governanceLogger.LogNotificationAsync(
+                            new NotificationEntry("Email", recipient, "Sent", subject), cancellationToken);
+                    }
+                    else
+                    {
+                        await _governanceLogger.LogNotificationAsync(
+                            new NotificationEntry("Email", recipient, "Skipped", subject,
+                                "Email delivery is disabled in Notification Settings."), cancellationToken);
+                    }
                 }
                 catch (Exception exception)
                 {

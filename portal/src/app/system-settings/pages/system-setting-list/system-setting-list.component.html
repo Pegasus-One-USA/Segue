@@ -98,11 +98,45 @@
             </tr>
           </thead>
           <tbody>
-            @for (row of groupedRows(); track $any(row).key ?? $any(row).label; let i = $index) {
+            @for (row of groupedRows(); track $any(row).code ?? $any(row).label ?? $any(row).key; let i = $index) {
               @if (isGroupHeaderRow(i, row)) {
                 <!-- Group Heading Row (e.g. "Terminology Settings") — spans every column -->
                 <tr class="group-header-row">
-                  <td class="group-header-cell" colspan="6">{{ row.label }}</td>
+                  <td class="group-header-cell" colspan="6">
+                    <span>{{ row.label }}</span>
+                    @if (row.label === 'Terminology Settings') {
+                      <button class="btn-link" type="button" (click)="toggleAllTerminology()">
+                        <mat-icon>{{ allTerminologyCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+                        {{ allTerminologyCollapsed() ? 'Expand all' : 'Collapse all' }}
+                      </button>
+                    } @else if (row.label === 'General Settings') {
+                      <button class="btn-link" type="button" (click)="toggleAllGeneral()">
+                        <mat-icon>{{ allGeneralCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+                        {{ allGeneralCollapsed() ? 'Expand all' : 'Collapse all' }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              } @else if (isCodeGroupHeaderRow(i, row)) {
+                <!-- Code Sub-Group Heading Row (e.g. "CVX (HAPI terminology server)") — collapsible,
+                     nested under the Terminology/General Settings heading, one per terminology
+                     code/prefix — collapsed by default so a growing settings list doesn't have to be
+                     scanned flatly. -->
+                <tr class="code-group-header-row">
+                  <td colspan="6">
+                    <div
+                      class="code-group-header"
+                      role="button"
+                      tabindex="0"
+                      [attr.aria-expanded]="!row.collapsed"
+                      (click)="toggleCode(row.code)"
+                      (keydown.enter)="toggleCode(row.code)"
+                      (keydown.space)="toggleCode(row.code); $event.preventDefault()"
+                    >
+                      <mat-icon class="chevron">{{ row.collapsed ? 'expand_more' : 'expand_less' }}</mat-icon>
+                      <span>{{ row.label }}</span>
+                    </div>
+                  </td>
                 </tr>
               } @else {
                 <tr class="data-row">

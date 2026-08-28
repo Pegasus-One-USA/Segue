@@ -9,14 +9,14 @@ public sealed class PipelineRun
     public PipelineRun(
         RuntimeSourceType sourceType,
         RuntimeDestinationType destinationType,
-        IEnumerable<string> requestedResourceTypes,
+        IReadOnlyList<string> requestedResourceTypes,
         string? triggeredBy,
         string? correlationId)
     {
         Id = Guid.NewGuid();
         SourceType = sourceType;
         DestinationType = destinationType;
-        RequestedResourceTypes = requestedResourceTypes.ToArray();
+        RequestedResourceTypes = requestedResourceTypes;
         TriggeredBy = triggeredBy;
         CorrelationId = correlationId;
         Status = PipelineRunStatus.Running;

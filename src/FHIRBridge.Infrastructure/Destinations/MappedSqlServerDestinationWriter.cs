@@ -534,6 +534,17 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
                 continue;
             }
 
+            // Defensive only: ConfiguredPipelineService.BuildChildTableRecords now leaves ForeignKeyColumn
+            // blank instead of dropping the child table outright when no mapped field carries it (a schema-
+            // less destination like Mongo can write such a table independently — see that method's doc
+            // comment) — a relational table with no FK to link back to its parent can't be written
+            // meaningfully here, so skip it. In practice this never fires for SQL: its mapping canvas only
+            // ever creates a child table via the create-table modal, which always sets this.
+            if (string.IsNullOrWhiteSpace(childTable.ForeignKeyColumn))
+            {
+                continue;
+            }
+
             var parentKeyValue = capturedParentColumns.TryGetValue(childTable.ParentKeyColumn, out var captured)
                 ? captured
                 : record.Values.TryGetValue(childTable.ParentKeyColumn, out var mapped) ? mapped : null;

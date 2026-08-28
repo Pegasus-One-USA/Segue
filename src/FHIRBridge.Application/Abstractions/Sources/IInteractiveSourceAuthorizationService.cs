@@ -57,6 +57,14 @@ public interface IInteractiveSourceAuthorizationService
     /// <summary>Completes a sign-in from the OAuth callback, exchanging the code (with the retained PKCE verifier) for a token, and triggering the launched pipeline route when the launch was route-scoped.</summary>
     Task<InteractiveAuthorizationResult> CompleteAsync(string state, string authorizationCode, CancellationToken cancellationToken);
 
+    /// <summary>Records a SmartLaunchLogs entry for a sign-in the EHR itself rejected before ever returning an
+    /// authorization code (e.g. <c>?error=invalid_grant</c> on the callback) — resolves the pending launch's source
+    /// connection from <paramref name="state"/> alone, the same lookup <see cref="CompleteAsync"/> starts with, so
+    /// this works even though no <paramref name="authorizationCode"/> was ever issued. A no-op (log-only, via the
+    /// caller's own logger) when <paramref name="state"/> is missing, invalid, or already expired/consumed — there is
+    /// no source connection to attach the record to in that case.</summary>
+    Task LogRejectedLaunchAsync(string state, string error, string? errorDescription, CancellationToken cancellationToken);
+
     /// <summary>Builds the opaque, encrypted launch-context token to embed in the launch URL registered with the EHR
     /// for a given pipeline route. <paramref name="ehrEndpointId"/> optionally names a specific hospital/organization
     /// EhrEndpoint to launch against instead of the source connection's own configured base URL. <paramref name="callerId"/>

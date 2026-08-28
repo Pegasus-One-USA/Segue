@@ -1,6 +1,8 @@
 using Azure.Messaging.ServiceBus;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Governance;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,15 +17,30 @@ public sealed class AzureServiceBusMessageConsumer<TMessage> : IMessageConsumer<
     private readonly ServiceBusClient _client;
     private readonly AzureServiceBusOptions _options;
     private readonly ILogger<AzureServiceBusMessageConsumer<TMessage>> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public AzureServiceBusMessageConsumer(
         ServiceBusClient client,
         IOptions<AzureServiceBusOptions> options,
-        ILogger<AzureServiceBusMessageConsumer<TMessage>> logger)
+        ILogger<AzureServiceBusMessageConsumer<TMessage>> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _client = client;
         _options = options.Value;
         _logger = logger;
+        _scopeFactory = scopeFactory;
+    }
+
+    // See RabbitMqMessageConsumer's identical helper — a poison message's deserialization failure otherwise leaves
+    // only an ILogger/Seq trace before it's dead-lettered, invisible in production without Seq.
+    private async Task CaptureDeserializationFailureAsync(Exception exception, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
+        await exceptionManager.CaptureAsync(
+            exception,
+            new ExceptionContext(Module: "Message Deserialization"),
+            cancellationToken);
     }
 
     public async Task StartAsync(Func<TMessage, CancellationToken, Task> handler, CancellationToken cancellationToken)
@@ -45,6 +62,7 @@ public sealed class AzureServiceBusMessageConsumer<TMessage> : IMessageConsumer<
             catch (Exception exception)
             {
                 _logger.LogError(exception, "Failed to deserialize {MessageType}; dead-lettering.", typeof(TMessage).Name);
+                await CaptureDeserializationFailureAsync(exception, CancellationToken.None);
                 await args.DeadLetterMessageAsync(args.Message, "DeserializationError", exception.Message, args.CancellationToken);
                 return;
             }

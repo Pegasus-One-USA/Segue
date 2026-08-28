@@ -86,7 +86,7 @@ public sealed class ForgotPasswordResetPasswordTests
         _repository.Setup(x => x.GetUserByEmailAsync(Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _passwordHasher.Setup(x => x.Hash(It.IsAny<string>())).Returns<string>(v => $"hashed:{v}");
         _email.Setup(x => x.SendAsync(Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var response = await Service().ForgotPasswordAsync(new ForgotPasswordRequest(Email), CancellationToken.None);
 
@@ -114,7 +114,7 @@ public sealed class ForgotPasswordResetPasswordTests
         _passwordHasher.Setup(x => x.Hash(It.IsAny<string>())).Returns<string>(RealHasher.Hash);
         _passwordHasher.Setup(x => x.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns<string, string>(RealHasher.Verify);
         _email.Setup(x => x.SendAsync(Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+            .ReturnsAsync(true);
 
         var response = await Service().ForgotPasswordAsync(new ForgotPasswordRequest(Email), CancellationToken.None);
 
