@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
+import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict } from './field-mapping-schema-ops.util';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -20,7 +21,7 @@ import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payl
 import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
-import { DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
+import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
 
 export interface FmTargetCardSpec {
   resource: string;
@@ -61,6 +62,12 @@ export interface FmTargetCardSpec {
 export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly anchors = inject(FieldMappingAnchorService);
   private readonly toast = inject(ToastService);
+  // Only ever called for the one live "does this table already exist for real" check submitCreateTable
+  // needs before queueing a CREATE TABLE — every other schema mutation (the actual create/add/drop/alter
+  // DDL) still stays owned by DestinationWizardComponent's own pendingSchemaOps flush, unchanged. Reuses
+  // the exact same singleton service (providedIn: 'root') and the exact same schema-preview endpoint the
+  // Step 1 connection-test flow already calls — not a new/duplicate table-existence API.
+  private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   // Not .required — only rendered while addTableMenuOpen() is true (see toggleAddTableMenu, which
@@ -91,6 +98,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // Extra tables added alongside the resource's primary table — either picked from tables the SQL
   // probe already found, or (when typed as a new name) created for real via CreateTableAsync.
   readonly extraTables = input<string[]>([]);
+  /** Table names any currently-queued (not-yet-flushed) schema op still references this session — see
+   *  field-mapping-schema-ops.util.ts's computePendingTableNames. Distinguishes "already exists for real"
+   *  from "only staged on this canvas so far", which is what "Create a new table…"/"Add column" need to
+   *  agree on to avoid the exact contradiction this exists to fix (one correctly says a table doesn't
+   *  exist yet via a live check, the other incorrectly refuses to create it because it's "already on the
+   *  canvas"). */
+  readonly pendingTableNames = input<ReadonlySet<string>>(new Set());
   readonly columnsForTable = input<(tableFullName: string) => string[]>(() => []);
   /** Real data type of one column on any already-known SQL table — undefined for CSV or free-text
    *  columns with no real schema behind them. Purely a display concern for each target card. */
@@ -239,7 +253,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // placeholder. Until then, the canvas-level "+ Add a table…" control is the one way in (see
   // onAddExtraTable/openCreateTableModal, which route there instead of "extra" while this is false).
   private isPrimaryTargetValid(resource: string): boolean {
-    return !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetFor(resource));
+    const target = this.targetFor(resource);
+    // Empty is never valid, for any destType — this is also what makes removing the primary card actually
+    // remove it (confirmRemoveTable clears targetByResource[resource] to '') instead of it reappearing
+    // immediately with the resource name as a fallback label, which is what happened before this check
+    // when hasSqlTables() is false (every non-SQL destination, including Mongo): the OR short-circuited to
+    // true regardless of whether target was actually set to anything.
+    if (!target) return false;
+    return !this.hasSqlTables() || this.sqlTableOptions().includes(target);
   }
 
   readonly targetCards = computed<FmTargetCardSpec[]>(() => {
@@ -708,6 +729,17 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.addTableSearchInput()?.nativeElement.focus();
   }
 
+  /** Whether the "+ Add a table" slot should render the searchable-list UI (vs. SQL's plain "+ Create a
+   *  new table…" @else branch, or nothing at all). Deliberately separate from the hasSqlTables INPUT —
+   *  that one also drives isPrimaryTargetValid's "primary target must be a known table" gate below, which
+   *  must stay false for Mongo (a not-yet-created collection is a valid primary target, paired with
+   *  "Create collection if not exists" on the destination). Mongo always gets the searchable UI regardless
+   *  of hasSqlTables()/whether any collections were loaded yet, since its own "type a new collection name"
+   *  option (see the template) needs the search box open even against a brand-new, empty database. */
+  showAddTablePicker(): boolean {
+    return this.hasSqlTables() || this.destType() === 'mongo';
+  }
+
   /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a
    *  computed() — it just re-filters on every call, same as tablesForResourceFn/columnsForResourceTableFn
    *  above; the table lists involved are small enough that this is cheap per change-detection pass. */
@@ -760,6 +792,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
     this.extraTablesChange.emit([...this.extraTables(), name]);
+
+    // Unlike SQL's child tables, a Mongo collection added here needs no parent-link relation to be written —
+    // it's independent, keyed on its own mapped upsert key if any (see ConfiguredPipelineService.
+    // BuildChildTableRecords / MappedMongoDestinationWriter.WriteChildTableAsync, which no longer require
+    // ForeignKeyColumn metadata to exist at all). No childTableRelationAdded emission needed here.
     this.toast.success('Table added', `${name} is ready to map.`);
   }
 
@@ -771,11 +808,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   /**
-   * Submits the create-table modal — no database call happens here. The real CREATE TABLE only runs
-   * once "Add to Pipeline" flushes the queue (see schemaOpQueued/DestinationWizardComponent), so the
-   * table shown here is a locally-synthesized preview (mirroring SqlDestinationSchemaService.
-   * CreateTableAsync's own shape/defaults) rather than the backend's authoritative response — the flush
-   * overwrites it with the real one once it actually executes.
+   * Submits the create-table modal. Unlike every other schema-authoring action on this canvas, this one
+   * DOES make a real (read-only) call before returning — a live existence probe, so a table that already
+   * exists in the real database is rejected here, immediately, rather than only once "Add to Pipeline"
+   * flushes a doomed CREATE TABLE minutes later (see describeLiveCreateTableConflict). Nothing is queued
+   * or previewed until that resolves clean — see _finishCreateTable for the actual staging step, which
+   * still queues rather than executes the real DDL, same as every other action here.
    */
   submitCreateTable(submission: FmCreateTableSubmit): void {
     const resource = this.creatingTableResource;
@@ -785,16 +823,58 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     // agree on the same key everywhere, or the new table's card resolves zero columns via
     // columnsForTable() even though the create appears to have "succeeded" (columns silently invisible).
     const name = typed.includes('.') ? typed : `dbo.${typed}`;
-    // targetFor(resource) may just be an unfulfilled guess (no card shown for it, see isPrimaryTargetValid)
-    // — that's exactly the name this create is most likely trying to fulfill, not a real dupe.
-    const targetAlreadyReal = this.isPrimaryTargetValid(resource) && this.targetFor(resource) === name;
-    if (this.extraTables().includes(name) || targetAlreadyReal) {
-      this.creatingTableError.set(`${name} is already on this canvas.`);
-      return;
-    }
     const connection = this.connectionInfo();
     if (!connection) return;
 
+    // Fast, synchronous, local-only check first — a name already staged this session (or already known
+    // real from the last probe) doesn't need a live round trip to answer. See
+    // field-mapping-schema-ops.util.ts's describeCreateTableConflict — blocks only a genuine duplicate,
+    // never a resource's own still-unfulfilled guessed target that merely happens to share this name
+    // (targetFor(resource) may just be a guess with no card shown for it yet — see isPrimaryTargetValid).
+    const localConflict = describeCreateTableConflict(name, {
+      extraTables: this.extraTables(),
+      sqlTableOptions: this.sqlTableOptions(),
+      pendingTableNames: this.pendingTableNames(),
+    });
+    if (localConflict) {
+      this.creatingTableError.set(localConflict);
+      return;
+    }
+
+    // Nothing locally known either way — that's exactly the gap a possibly-stale/never-probed
+    // sqlTableOptions can leave open (see the "TestPatient" bug report this fixes: a table that already
+    // exists in the real database but this canvas never learned about it). Confirm against the LIVE
+    // database via the same schema-preview probe the Step 1 connection-test flow already uses, before
+    // queueing anything — not a second/duplicate existence API, just the existing one called from one
+    // more place. No optimistic preview and nothing is queued until this resolves.
+    this.creatingTableSubmitting.set(true);
+    this.schemaSvc.probe(connection).subscribe({
+      next: (probe) => {
+        this.creatingTableSubmitting.set(false);
+        const liveConflict = describeLiveCreateTableConflict(name, probe);
+        if (liveConflict) {
+          this.creatingTableError.set(liveConflict);
+          return;
+        }
+        this._finishCreateTable(resource, name, submission, connection);
+      },
+      error: () => {
+        this.creatingTableSubmitting.set(false);
+        this.creatingTableError.set(`Could not verify "${name}" against the destination database — try again.`);
+      },
+    });
+  }
+
+  /** Everything that actually stages the create — the local preview + the queued schemaOpQueued('createTable')
+   *  op — split out from submitCreateTable so it only ever runs after both the local AND live existence
+   *  checks above have cleared. No database call happens here: the real CREATE TABLE only runs once "Add
+   *  to Pipeline" flushes the queue (see schemaOpQueued/DestinationWizardComponent), so the table shown
+   *  here is a locally-synthesized preview (mirroring SqlDestinationSchemaService.CreateTableAsync's own
+   *  shape/defaults) rather than the backend's authoritative response — the flush overwrites it with the
+   *  real one once it actually executes. */
+  private _finishCreateTable(
+    resource: string, name: string, submission: FmCreateTableSubmit, connection: DestinationProbeRequest,
+  ): void {
     const columns: DestinationColumn[] = submission.columns.map(c => ({
       name: c.name,
       dataType: c.dataType,
@@ -873,6 +953,33 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // both an extra table and the primary one (its own "✕" clears the resource's target instead of
   // filtering extraTables, since the primary slot isn't a member of that list).
   readonly pendingRemoveTable = signal<{ resource: string; tableName: string; isExtra: boolean } | null>(null);
+
+  /** Mongo-only inline rename (see FieldMappingTargetCardComponent.startRenameTable) — unlike remove +
+   *  re-add, this keeps every mapping already made onto this table/collection: they're carried over to the
+   *  new name (mapped by tableName), never filtered out the way confirmRemoveTable() discards them. */
+  onRenameTable(resource: string, oldName: string, newName: string, isExtra: boolean): void {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (this.targetFor(resource) === trimmed || this.extraTables().includes(trimmed)) {
+      this.toast.warning('Name already used', `${trimmed} is already on this canvas.`);
+      return;
+    }
+
+    if (isExtra) {
+      this.extraTablesChange.emit(this.extraTables().map(t => (t === oldName ? trimmed : t)));
+    } else {
+      this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: trimmed });
+    }
+
+    this.mappingRowsChange.emit(
+      this.mappingRows().map(r =>
+        r.resource === resource && r.tableName === oldName ? { ...r, tableName: trimmed } : r,
+      ),
+    );
+    // Any schema op queued against the old name (SQL-only in practice — Mongo never queues one) is stale now.
+    this.schemaOpsCancelledForTable.emit(oldName);
+    this.toast.success('Collection renamed', `${oldName} is now ${trimmed}.`);
+  }
 
   onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {
     this.pendingRemoveTable.set({ resource, tableName, isExtra });
@@ -987,6 +1094,18 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const connection = this.connectionInfo();
     if (!target || !connection) return;
 
+    // Refuse up front rather than queuing an op that's already guaranteed to fail once flushed —
+    // AddColumnAsync deliberately never auto-creates a missing table (see its own doc comment: "Never
+    // auto-create the table here"), so this canvas no longer pretends otherwise with an optimistic
+    // phantom-table preview either. See field-mapping-schema-ops.util.ts's canQueueAddColumn for exactly
+    // what "already known" means here: a real table, or one already staged via a pending "Create a new
+    // table…" this session (in which case the real CREATE runs immediately before this ADD COLUMN when
+    // the queue flushes — see runQueuedOpsSequentially).
+    if (!canQueueAddColumn(target.tableName, this.sqlTableOptions(), this.pendingTableNames())) {
+      this.addColumnError.set(`${target.tableName} does not exist yet. Create it first via "Create a new table…", then add columns to it.`);
+      return;
+    }
+
     const column: DestinationColumn = {
       name: submission.columnName,
       dataType: submission.dataType,
@@ -995,27 +1114,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       maxLength: null,
       origin: 'userCreated',
     };
-    // Mirrors AddColumnAsync's own "auto-create the table if it doesn't exist yet" behavior — if this
-    // target table isn't already known, the real call will bring it into existence too, so the local
-    // preview needs to register a bare (Id + this column) table, not just append to one that isn't there.
-    const tableAlreadyKnown = this.sqlTableOptions().includes(target.tableName);
-    let table: DestinationTable | undefined;
-    if (!tableAlreadyKnown) {
-      const dot = target.tableName.indexOf('.');
-      table = {
-        schemaName: dot >= 0 ? target.tableName.slice(0, dot) : 'dbo',
-        tableName: dot >= 0 ? target.tableName.slice(dot + 1) : target.tableName,
-        fullName: target.tableName,
-        origin: 'userCreated',
-        columns: [
-          // isAutoGenerated: true — see submitCreateTable's identical Id column for why.
-          { name: 'Id', dataType: 'bigint', mappingValueType: 'Integer', isNullable: false, maxLength: null, isPrimaryKey: true, isAutoGenerated: true, origin: 'userCreated' },
-          column,
-        ],
-      };
-    }
 
-    this.columnAdded.emit({ tableName: target.tableName, column, table });
+    // The guard above guarantees this table is already represented on the canvas one way or another (a
+    // real probed table, or a still-pending "Create a new table…" whose own optimistic preview already
+    // registered it) — so this is always a plain append onto an existing table, never a fabricated new
+    // one. See onColumnAdded (destination-wizard.component.ts): its no-`table` branch upserts just this
+    // one column into the table it already knows about, without disturbing any other column already
+    // staged on it (see submitCreateTable's own columns, or an earlier submitAddColumn's).
+    this.columnAdded.emit({ tableName: target.tableName, column });
     if (!this.hasSqlTables()) this.registerPendingColumn(target.resource, target.tableName, submission.columnName);
     this.schemaOpQueued.emit({
       kind: 'addColumn',
@@ -1309,17 +1415,20 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     );
   }
 
-  /** Only one row per resource can be the upsert key (the backend resolves a single key column — see
-   *  MappedSqlServerDestinationWriter.ResolveUpsertKeyColumn) — so marking one on clears any other
-   *  explicit key already set for the same resource. Marking the already-active row off drops the
-   *  explicit override entirely, reverting that resource to the real-PK fallback in serializeRowsFlat. */
+  /** Only one row per (resource, table/collection) can be the upsert key — the backend resolves one key
+   *  column per DestinationObject, independently for each one (see MappedSqlServerDestinationWriter's and
+   *  MappedMongoDestinationWriter's own ResolveUpsertKeyField, both scoped by DestinationObject, not just
+   *  resource) — so marking one on only clears any other explicit key already set for the SAME table, never
+   *  a key set on a different collection for this resource (e.g. the primary and an independently-added
+   *  extra Mongo collection each keep their own key). Marking the already-active row off drops the explicit
+   *  override entirely, reverting that table back to the real-PK fallback in serializeRowsFlat. */
   onToggleUpsertKey(resource: string, tableName: string, column: string): void {
     const target = this.rowForColumnFn(resource, tableName, column);
     if (!target) return;
     const turningOn = !target.isUpsertKey;
     this.mappingRowsChange.emit(
       this.mappingRows().map(r => {
-        if (r.resource !== resource) return r;
+        if (r.resource !== resource || r.tableName !== tableName) return r;
         if (r === target) return { ...r, isUpsertKey: turningOn };
         return r.isUpsertKey ? { ...r, isUpsertKey: false } : r;
       }),

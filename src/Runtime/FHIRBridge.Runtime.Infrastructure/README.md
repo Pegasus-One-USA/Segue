@@ -27,7 +27,6 @@ This project implements the ports defined in `FHIRBridge.Runtime.Application` ag
 - `Pkce.cs` — RFC 7636 S256 code-verifier/challenge helpers.
 - `DistributedFhirAccessTokenCache.cs` / `InMemoryFhirAccessTokenCache.cs` — `IFhirAccessTokenCache` over `IDistributedCache` (Redis or in-process) with a 1-minute expiry skew, and a pure in-memory fallback.
 - `InMemoryFhirAuthorizationCodeTokenStore.cs` — `IFhirAuthorizationCodeTokenStore` for the auth-code tokens.
-- `NoOpFhirAccessTokenAuditSink.cs` — default audit sink.
 
 ### `Connectors/`
 - `EpicFhirSourceClient.cs` — the workhorse `IFhirSourceClient`: bearer-authenticated paginated FHIR search (`_count`, follows `next` links up to `MaxPages`), transient-error retry with exponential backoff + jitter honoring `Retry-After`, and per-source request throttling. Reused for Cerner/Allscripts/Healow/MEDITECH/generic FHIR.

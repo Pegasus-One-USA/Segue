@@ -21,18 +21,26 @@ public sealed class FhirRepositoryHealthCheckProvider : IDestinationHealthCheckP
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IFhirDestinationTokenProvider _tokenProvider;
+    private readonly IAzureManagedIdentityFhirTokenProvider _managedIdentityTokenProvider;
 
+    // Shared with DestinationType.AzureFhirService — both are standard FHIR R4 servers behind the same
+    // dest_fhirAuthType-driven auth resolution (see FhirRepositoryAuthResolver), so one provider instance per
+    // type (constructed with the matching DestinationType) covers both.
     public FhirRepositoryHealthCheckProvider(
+        DestinationType destinationType,
         ISecretProvider secretProvider,
         IHttpClientFactory httpClientFactory,
-        IFhirDestinationTokenProvider tokenProvider)
+        IFhirDestinationTokenProvider tokenProvider,
+        IAzureManagedIdentityFhirTokenProvider managedIdentityTokenProvider)
     {
+        DestinationType = destinationType;
         _secretProvider = secretProvider;
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
+        _managedIdentityTokenProvider = managedIdentityTokenProvider;
     }
 
-    public DestinationType DestinationType => DestinationType.FhirRepository;
+    public DestinationType DestinationType { get; }
 
     public async Task<DestinationHealthCheckResult> CheckAsync(DestinationConfiguration destination, CancellationToken cancellationToken)
     {
@@ -55,7 +63,8 @@ public sealed class FhirRepositoryHealthCheckProvider : IDestinationHealthCheckP
 
                 baseUrl = destination.Target.TrimEnd('/');
                 authHeader = await FhirRepositoryAuthResolver.ResolveAsync(
-                    destination.ConnectionMetadataJson, destination.SecretReference, _secretProvider, _tokenProvider, cancellationToken);
+                    destination.ConnectionMetadataJson, destination.SecretReference, _secretProvider, _tokenProvider,
+                    _managedIdentityTokenProvider, baseUrl, cancellationToken);
             }
         }
         catch (Exception exception)

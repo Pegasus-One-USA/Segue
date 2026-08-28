@@ -137,6 +137,26 @@ public sealed class SqlDestinationSchemaServiceTests
 
         result.Success.Should().BeFalse();
         result.Error.Should().NotBeNullOrEmpty();
+        // AlreadyExisted is CreateTableAsync's own "the live existence check found it, but that's a
+        // success, not a failure" signal (see its doc comment) — a request rejected before any connection
+        // is even attempted must never be confused for that outcome.
+        result.AlreadyExisted.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateTableAsync_defaults_AlreadyExisted_to_false_on_an_ordinary_failure()
+    {
+        // Mirrors AddColumnAsync_accepts_an_allowed_data_type_and_fails_only_at_the_connection_stage above —
+        // a real connection to "localhost" fails in a unit-test sandbox, and that ordinary connection
+        // failure must never be reported as the table having "already existed" (see SchemaMutationResultDto's
+        // own doc comment on AlreadyExisted: it is set ONLY when a live TableExistsAsync check actually ran
+        // and found the table, which requires a real connection this test deliberately never reaches).
+        var result = await _sut.CreateTableAsync(
+            new CreateTableRequest(ValidConnection(), "dbo.NewTable"),
+            CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.AlreadyExisted.Should().BeFalse();
     }
 
     [Fact]

@@ -16,13 +16,11 @@ import {
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { forkJoin, of, from, Observable } from 'rxjs';
+import { forkJoin, of, Observable } from 'rxjs';
 import {
   catchError,
   map,
   switchMap,
-  concatMap,
-  toArray,
   finalize,
 } from 'rxjs/operators';
 import { CanvasNode } from '../../../models/node.model';
@@ -55,6 +53,7 @@ import {
   WizardDestinationFormApi,
   SqlFamilyFormApi,
   isSqlFamilyForm,
+  isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
 import {
@@ -65,6 +64,7 @@ import {
   PendingSchemaOp,
   MappingDestType,
 } from './field-mapping/field-mapping-model';
+import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
 import {
   MappingSnapshot,
@@ -85,7 +85,10 @@ import {
   TransformRulesDialogComponent,
   TransformRulesDialogData,
 } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
-import { TransformationRulesService } from './field-mapping/transformation-rules.service';
+import {
+  TransformationRulesService,
+  TransformationRule,
+} from './field-mapping/transformation-rules.service';
 import {
   ExistingMappingProfileDialogComponent,
   ExistingMappingProfileDialogData,
@@ -98,6 +101,7 @@ import { MappingProfileService } from '../../../mapping-profiles/services/mappin
 import {
   MappingProfileDto,
   MappingFieldDto,
+  MappingValueType,
 } from '../../../mapping-profiles/models/mapping-profile.model';
 import {
   sortByDependencyRank,
@@ -117,10 +121,11 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
 // ── FHIR-repository (Aidbox) destination ──────────────────────────────────────
 // This wizard's own destination-type union. MappingDestType (field-mapping-model.ts) covers only the
-// destinations that have a field-by-field mapping canvas; 'fhir' deliberately does NOT — it's a
-// passthrough/customize-rules destination — so it's widened here rather than in MappingDestType, and
-// nonFhirDestType() narrows back down at every call site that genuinely needs a mappable destination.
-export type WizardDestType = MappingDestType | 'fhir';
+// destinations that have a field-by-field mapping canvas; 'fhir' and 'azurefhir' deliberately do NOT —
+// both are FHIR-native, whole-resource passthrough destinations with no mapping canvas — so they're
+// widened here rather than in MappingDestType, and nonFhirDestType() narrows back down at every call
+// site that genuinely needs a mappable destination (guarded by isFhir()/isAzureFhir()).
+export type WizardDestType = MappingDestType | 'fhir' | 'azurefhir';
 
 /** All 20 transforms from Aidbox-Necessary-Transformations.md (Aidbox-Customize-Transform-UX-Plan.md's "All 20"
  *  section) — minus Redact/Rename, which stay the De-identification node's job (see that plan doc's Part 1c).
@@ -225,6 +230,24 @@ export interface PendingParentReferenceWarning {
   existingRow: MappingRow | null;
   destinationColumns: string[];
   selectedDestinationColumn: string | null;
+}
+
+/** One transform-rule/destination-column type mismatch blocking Save — see validateRuleConflictsForSave.
+ *  `rule` is the full effective rule as currently resolved (Global/DestinationType/ResourceType/Field tier;
+ *  never itself a Workflow-scoped row, since that would already have been the effective rule and wouldn't
+ *  conflict). The dialog's fixes never touch `rule` — they create a NEW Workflow-scoped row that outranks
+ *  it for this workflow only (see resolveRuleConflictOverride/resolveRuleConflictBypass). */
+export interface PendingTransformRuleConflict {
+  resource: string;
+  tableName: string;
+  targetName: string;
+  destinationType: DestinationType;
+  columnValueType: string;
+  columnDataType: string;
+  sourceSystem: string | null;
+  sourceField: string | null;
+  rule: TransformationRule;
+  message: string;
 }
 
 export interface ResourceDef {
@@ -543,6 +566,11 @@ export class DestinationWizardComponent implements OnInit {
    *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
    *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
   readonly sourceDiscoveredResourceTypes = input<string[]>([]);
+  /** The persisted ResourcePipelineRoute/workflow GUID when editing an already-saved workflow — null while
+   *  still building a brand-new one (see WorkflowBuilderComponent.currentWorkflowId). Threaded through so a
+   *  transform-rule-conflict override can be scoped to just this workflow (see validateRuleConflictsForSave /
+   *  resolveRuleConflictOverride) — undefined/null means no workflow exists yet to scope an override to. */
+  readonly currentWorkflowId = input<string | null>(null);
   // Incrementing counters from the parent's header-level Close/Save buttons (shown there instead of
   // the × while a group's mapping canvas is open) — any change triggers the matching action here.
   readonly exitMappingRequest = input<number>(0);
@@ -646,6 +674,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'BlobStorage';
       case 'medplum':
         return 'Medplum';
+      case 'azurefhir':
+        return 'AzureFhirService';
       // 'fhir' (Aidbox) deliberately has no case here — it's never registry-routed (see isFhir()'s doc
       // comment on the already-shipped, live-verified hand-rolled Aidbox form/wizard steps). Falling through
       // to the default is harmless because activeFormType()/activeForm() are never consulted for 'fhir' —
@@ -670,7 +700,8 @@ export class DestinationWizardComponent implements OnInit {
   activeFormInputs(): Record<string, unknown> {
     // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
     // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here.
+    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
+    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
     if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
     return {
       reusingExisting:
@@ -1100,6 +1131,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  // ── Mongo connection probe (test connection → load real collection names) ──
+  // Copied from MongoFormApi.collections() on a successful "Next" (see next()'s Mongo branch) — Step 1's
+  // dynamically-mounted form is gone once Step 2/3 mounts, so the mapping canvas's "+ Add a table" picker
+  // (fed this via availableTablesToAddFn below) needs its own copy to keep offering real names for
+  // additional resources.
+  readonly mongoCollections = signal<string[]>([]);
+
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -1327,15 +1365,21 @@ export class DestinationWizardComponent implements OnInit {
     return table ? table.columns.map((c) => c.name) : [];
   };
 
-  /** Already-probed tables not yet used as this group's primary or extra targets — offered in "+ Add a table". */
+  /** Already-known tables/collections not yet used as this group's primary or extra targets — offered in
+   *  "+ Add a table"/"+ Add a collection". Sourced from sqlTables() for SQL, mongoCollections() for Mongo —
+   *  deliberately NOT gated through hasSqlTables()/sqlTableOptions() (the canvas's own hasSqlTables input,
+   *  which also drives isPrimaryTargetValid's "must be a known table" check): a not-yet-created Mongo
+   *  collection is a valid primary target (paired with "Create collection if not exists"), so Mongo must
+   *  never flip that check on. */
   readonly availableTablesToAddFn = (group: string): string[] => {
     const used = new Set([
       this.targetFor(group),
       ...this.extraTablesFor(group),
     ]);
-    return this.sqlTables()
-      .map((t) => t.fullName)
-      .filter((t) => !used.has(t));
+    const known = this.isMongo()
+      ? this.mongoCollections()
+      : this.sqlTables().map((t) => t.fullName);
+    return known.filter((t) => !used.has(t));
   };
 
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
@@ -1477,6 +1521,11 @@ export class DestinationWizardComponent implements OnInit {
   // normally throughout; this queue exists purely to run the real DDL, in order, once confirmed.
   readonly pendingSchemaOps = signal<PendingSchemaOp[]>([]);
   readonly applyingSchemaOps = signal(false);
+  /** Every table name any currently-queued op still references — passed down to the canvas so its own
+   *  "Create a new table…"/"Add column" guards can tell "already exists for real" apart from "already
+   *  staged this session, not yet flushed" (see field-mapping-schema-ops.util.ts — this is the fix for
+   *  the canvas contradicting a live-database check with a local-only "already on this canvas" one). */
+  readonly pendingTableNames = computed(() => computePendingTableNames(this.pendingSchemaOps()));
 
   onSchemaOpQueued(op: PendingSchemaOp): void {
     this.pendingSchemaOps.update((ops) => [...ops, op]);
@@ -1502,23 +1551,18 @@ export class DestinationWizardComponent implements OnInit {
    *  the failing op and anything still after it stay queued, and the caller is told not to proceed with
    *  the rest of the save so a mapping profile is never persisted against schema that doesn't exist. */
   flushPendingSchemaOps(): Observable<boolean> {
-    const ops = this.pendingSchemaOps();
-    if (ops.length === 0) return of(true);
+    if (this.pendingSchemaOps().length === 0) return of(true);
 
     this.applyingSchemaOps.set(true);
-    return from(ops).pipe(
-      concatMap((op) =>
-        this._applyOneSchemaOp(op).pipe(
-          map(() => {
-            this.pendingSchemaOps.update((list) =>
-              list.filter((o) => o !== op),
-            );
-            return true;
-          }),
-        ),
-      ),
-      toArray(),
-      map((results) => results.every(Boolean)),
+    // The actual "run in order, stop at the first failure" sequencing is a pure, DI-free algorithm — see
+    // field-mapping-schema-ops.util.ts's runQueuedOpsSequentially — so it's unit-testable without a live
+    // database or Angular's TestBed. Reads pendingSchemaOps() fresh on each call rather than closing over
+    // a snapshot, matching the previous behavior exactly.
+    return runQueuedOpsSequentially(
+      this.pendingSchemaOps(),
+      (op) => this._applyOneSchemaOp(op),
+      (op) => this.pendingSchemaOps.update((list) => list.filter((o) => o !== op)),
+    ).pipe(
       catchError((err) => {
         const msg =
           err instanceof Error
@@ -1663,6 +1707,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
+  private static readonly AZUREFHIR_TYPES: DestinationType[] = ['AzureFhirService'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -1683,15 +1728,21 @@ export class DestinationWizardComponent implements OnInit {
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
+  /** Azure FHIR Service (Azure Health Data Services) — likewise FHIR-native/columnless, no field-mapping
+   *  canvas of its own; behaves like isFhir()/isMedplum() everywhere Step 3 gates the mapping canvas, but
+   *  (unlike them) is registry-routed — see registryKey() — since its own form declares `reusingExisting`. */
+  readonly isAzureFhir = computed(() => this.destType() === 'azurefhir');
   readonly isBlob = computed(() => this.destType() === 'blob');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
   /** Narrowing helper for everything that genuinely needs a mappable destination (the field-mapping canvas,
-   *  buildMappingSummaryDocument, MappingSnapshot, _rebuildRows). Those are all reached only when isFhir() is
-   *  false — the FHIR branch never renders the canvas and never builds a mapping document — but signal call
-   *  sites can't be narrowed by control flow (destType() and isFhir() are two independent function calls to
-   *  the type checker), so the cast is made explicit and centralized here. */
+   *  buildMappingSummaryDocument, MappingSnapshot, _rebuildRows). Those are all reached only when isFhir() and
+   *  isAzureFhir() are both false — neither FHIR-native branch renders the canvas or builds a mapping document —
+   *  but signal call sites can't be narrowed by control flow (destType() and isFhir()/isAzureFhir() are
+   *  independent function calls to the type checker), so the cast is made explicit and centralized here.
+   *  Every caller must guard on `isFhir() || isAzureFhir()` first, exactly as the constructor's row-rebuild
+   *  effect does. */
   nonFhirDestType(): MappingDestType {
     return this.destType() as MappingDestType;
   }
@@ -1709,9 +1760,11 @@ export class DestinationWizardComponent implements OnInit {
               ? 'Medplum'
               : this.destType() === 'fhir'
                 ? 'Aidbox'
-                : this.destType() === 'blob'
-                  ? 'Azure Blob Storage'
-                  : 'CSV',
+                : this.destType() === 'azurefhir'
+                  ? 'Azure FHIR Service'
+                  : this.destType() === 'blob'
+                    ? 'Azure Blob Storage'
+                    : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -1725,9 +1778,10 @@ export class DestinationWizardComponent implements OnInit {
     effect(() => {
       const resources = this.selectedResources();
       const type = this.nonFhirDestType();
-      // A FHIR repository has no per-resource table/file target and no mapping rows at all — seeding either
-      // would only leave dead state behind on a destination that never renders the mapping canvas.
-      if (this.isFhir()) return;
+      // A FHIR repository (or Azure FHIR Service) has no per-resource table/file target and no mapping rows
+      // at all — seeding either would only leave dead state behind on a destination that never renders the
+      // mapping canvas.
+      if (this.isFhir() || this.isAzureFhir()) return;
       untracked(() => this._rebuildRows(resources, type));
     });
 
@@ -2148,8 +2202,25 @@ export class DestinationWizardComponent implements OnInit {
         });
         return;
       }
-      // CSV/Mongo/Blob (and SQL once already probed 'ok'): provision (create/update) the real
+      // Mongo: same "test then advance" gate as SQL, so a collection that doesn't exist (and isn't opted into
+      // auto-create via the form's checkbox) blocks Next here instead of only failing at pipeline-run time.
+      if (isMongoForm(form) && form.probeState() !== 'ok') {
+        form.testConnection((result) => {
+          if (!result.connected) return;
+          this.mongoCollections.set(form.collections());
+          const metadata = form.getMetadata();
+          if (metadata)
+            this.provisionDestinationConnection(metadata, () =>
+              this._advancePastStep1(),
+            );
+        });
+        return;
+      }
+      // CSV/Blob (and SQL/Mongo once already probed 'ok'): provision (create/update) the real
       // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
+      // Mongo reaches here when the user already clicked Test Connection manually before Next — the branch
+      // above only fires on a stale/idle probe, so this is the other place collections needs copying.
+      if (isMongoForm(form)) this.mongoCollections.set(form.collections());
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>
@@ -2230,6 +2301,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly pendingExitConfirm = signal(false);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
+  /** Non-null while the transform-rule-conflict dialog is up — see saveGroupMapping/validateRuleConflictsForSave.
+   *  Unlike pendingSaveWarnings this genuinely blocks Save: it's only dismissed by fixing every conflict
+   *  (override/bypass) or cancelling back to the canvas, never by a "save anyway". */
+  readonly pendingRuleConflicts = signal<PendingTransformRuleConflict[] | null>(null);
+  /** Id of whichever conflict row currently has an override/bypass request in flight — disables that row's
+   *  buttons so a slow save can't be double-clicked; other rows stay usable. */
+  readonly resolvingRuleConflict = signal<string | null>(null);
 
   /** The real backend DestinationType for whichever destination family this wizard instance is
    *  configuring — same ternary already used inline at every mapping-profiles/import call site
@@ -2238,6 +2316,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isMongo()) return 'Mongo';
     if (this.isMedplum()) return 'Medplum';
     if (this.isFhir()) return 'FhirRepository';
+    if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
@@ -2523,12 +2602,9 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.validateRuleConflictsForSave(group).subscribe((ruleErrors) => {
-      if (ruleErrors.length > 0) {
-        this.toast.error(
-          `Fix ${ruleErrors.length} transform rule conflict${ruleErrors.length === 1 ? '' : 's'} before saving`,
-          ruleErrors.join(' '),
-        );
+    this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
+      if (conflicts.length > 0) {
+        this.pendingRuleConflicts.set(conflicts);
         return;
       }
       // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
@@ -2795,7 +2871,7 @@ export class DestinationWizardComponent implements OnInit {
    *  actually is (e.g. a Global NumberCast rule hitting a text column). Async because it needs one
    *  getEffectiveRules call per mapped field; returns [] immediately (no network calls) when there's no live
    *  SQL schema to check column types against, same short-circuit validateMappingForSave uses. */
-  private validateRuleConflictsForSave(resource: string): Observable<string[]> {
+  private validateRuleConflictsForSave(resource: string): Observable<PendingTransformRuleConflict[]> {
     if (!this.hasSqlTables()) return of([]);
 
     const destinationType = this.resolveDestinationTypeForRules();
@@ -2806,18 +2882,28 @@ export class DestinationWizardComponent implements OnInit {
       .filter((r) => r.resource === resource && r.mode === 'value');
     if (rows.length === 0) return of([]);
 
+    // Resolved with the real workflow id when editing an already-saved workflow, so an override already
+    // added for this workflow (see resolveRuleConflictOverride/resolveRuleConflictBypass) suppresses the
+    // broader-tier rule here exactly the way it will at pipeline-run time — see EffectiveRuleResolver.
+    // Null while still building a brand-new workflow (no ResourcePipelineRouteId exists yet).
+    const resourcePipelineRouteId = this.currentWorkflowId() ?? undefined;
+
     const checks = rows.map((row) => {
       const table = this.sqlTables().find((t) => t.fullName === row.tableName);
       const column = table?.columns.find((c) => c.name === row.targetName);
-      if (!column?.mappingValueType) return of([] as string[]);
+      if (!column?.mappingValueType) return of([] as PendingTransformRuleConflict[]);
+
+      const sourceSystem = this.sourceVendor() || null;
+      const sourceField = row.sources[0]?.fhirPath ?? null;
 
       return this.transformationRulesSvc
         .getEffectiveRules({
           destinationType,
           resourceType: resource,
           destinationField: row.targetName,
-          sourceSystem: this.sourceVendor() || null,
-          sourceField: row.sources[0]?.fhirPath ?? null,
+          resourcePipelineRouteId,
+          sourceSystem,
+          sourceField,
         })
         .pipe(
           map((rules) =>
@@ -2828,17 +2914,131 @@ export class DestinationWizardComponent implements OnInit {
                   rule.expectedValueType.toLowerCase() !== column.mappingValueType.toLowerCase(),
               )
               .map(
-                (rule) =>
-                  `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
-                  `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}). ` +
-                  `Add a workflow-level override for this field, or update the rule's expected type.`,
+                (rule): PendingTransformRuleConflict => ({
+                  resource,
+                  tableName: row.tableName,
+                  targetName: row.targetName,
+                  destinationType,
+                  columnValueType: column.mappingValueType,
+                  columnDataType: column.dataType,
+                  sourceSystem,
+                  sourceField,
+                  rule,
+                  message:
+                    `A ${rule.scope} rule (${rule.nodeType}) expects "${row.targetName}" on ${row.tableName} to be ` +
+                    `${rule.expectedValueType}, but it's a ${column.dataType} column (${column.mappingValueType}).`,
+                }),
               ),
           ),
-          catchError(() => of([] as string[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
+          catchError(() => of([] as PendingTransformRuleConflict[])), // A transient rule-lookup failure shouldn't block Save on its own — the server-side check is still the backstop.
         );
     });
 
     return forkJoin(checks).pipe(map((results) => results.flat()));
+  }
+
+  /** Stable per-row key for the conflicts dialog's @for track and resolvingRuleConflict guard — a rule can
+   *  appear more than once across fields, so id alone isn't unique to a row. */
+  ruleConflictKey(c: PendingTransformRuleConflict): string {
+    return `${c.tableName}::${c.targetName}::${c.rule.id}`;
+  }
+
+  /** User cancelled the transform-rule-conflict dialog — back to the canvas, nothing saved. */
+  cancelRuleConflicts(): void {
+    this.pendingRuleConflicts.set(null);
+  }
+
+  onRuleConflictsBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelRuleConflicts();
+  }
+
+  /** "Override" — adds a Workflow-scoped TransformationRule that clones the conflicting rule's transform
+   *  behavior (same node type/config/null-handling) but declares the destination column's own type as its
+   *  expectedValueType, so the field keeps being transformed the same way while no longer conflicting for
+   *  THIS workflow. The original rule (whatever broader tier it lives at) is never modified — this is a new
+   *  row that simply outranks it per EffectiveRuleResolver's Workflow-first resolution. */
+  resolveRuleConflictOverride(c: PendingTransformRuleConflict): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+    const key = this.ruleConflictKey(c);
+    this.resolvingRuleConflict.set(key);
+    const r = c.rule;
+    this.transformationRulesSvc
+      .save({
+        scope: 'Workflow',
+        nodeType: r.nodeType,
+        config: r.config,
+        destinationType: c.destinationType,
+        resourceType: c.resource,
+        destinationField: c.targetName,
+        resourcePipelineRouteId: workflowId,
+        sourceSystem: c.sourceSystem,
+        sourceField: c.sourceField,
+        order: r.order,
+        onNull: r.onNull,
+        errorPolicy: r.errorPolicy,
+        isEnabled: true,
+        onNullDefaultValue: r.onNullDefaultValue,
+        arrayMode: r.arrayMode,
+        fhirWriteBackJsonPath: r.fhirWriteBackJsonPath,
+        expectedValueType: c.columnValueType as MappingValueType,
+      })
+      .subscribe({
+        next: () => this.onRuleConflictResolved(c, key, 'Rule overridden for this workflow'),
+        error: () =>
+          this.onRuleConflictResolveFailed(key, 'Could not add the workflow override — try again.'),
+      });
+  }
+
+  /** "Bypass" — adds a disabled Workflow-scoped TransformationRule for this exact field. A Workflow-tier row
+   *  wins the tier the moment one exists (see EffectiveRuleResolver), even disabled, so this suppresses the
+   *  broader-tier rule for this field on this workflow entirely (no transform applied) without touching or
+   *  deleting the original rule anywhere else it still applies. */
+  resolveRuleConflictBypass(c: PendingTransformRuleConflict): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+    const key = this.ruleConflictKey(c);
+    this.resolvingRuleConflict.set(key);
+    const r = c.rule;
+    this.transformationRulesSvc
+      .save({
+        scope: 'Workflow',
+        nodeType: r.nodeType,
+        config: r.config,
+        destinationType: c.destinationType,
+        resourceType: c.resource,
+        destinationField: c.targetName,
+        resourcePipelineRouteId: workflowId,
+        sourceSystem: c.sourceSystem,
+        sourceField: c.sourceField,
+        order: r.order,
+        onNull: r.onNull,
+        errorPolicy: r.errorPolicy,
+        isEnabled: false,
+        expectedValueType: r.expectedValueType,
+      })
+      .subscribe({
+        next: () => this.onRuleConflictResolved(c, key, 'Rule bypassed for this workflow'),
+        error: () =>
+          this.onRuleConflictResolveFailed(key, 'Could not bypass the rule — try again.'),
+      });
+  }
+
+  private onRuleConflictResolved(c: PendingTransformRuleConflict, key: string, successTitle: string): void {
+    this.resolvingRuleConflict.set(null);
+    const remaining = (this.pendingRuleConflicts() ?? []).filter((x) => this.ruleConflictKey(x) !== key);
+    this.pendingRuleConflicts.set(remaining.length === 0 ? null : remaining);
+    this.toast.success(successTitle, `"${c.targetName}" on ${c.tableName} no longer conflicts.`);
+    if (remaining.length === 0) {
+      // Every conflict is resolved — re-run Save so the fixed mapping actually persists instead of leaving
+      // the user to click Save again themselves.
+      this.saveGroupMapping();
+    }
+  }
+
+  private onRuleConflictResolveFailed(key: string, message: string): void {
+    this.resolvingRuleConflict.set(null);
+    this.toast.error('Save failed', message);
   }
 
   /** Soft, confirm-before-proceed checks shown via pendingSaveWarnings — distinct from
@@ -3081,9 +3281,11 @@ export class DestinationWizardComponent implements OnInit {
                 ? DestinationWizardComponent.MEDPLUM_TYPES
                 : this.isFhir()
                   ? DestinationWizardComponent.FHIR_TYPES
-                  : this.isBlob()
-                    ? DestinationWizardComponent.BLOB_TYPES
-                    : DestinationWizardComponent.CSV_TYPES;
+                  : this.isAzureFhir()
+                    ? DestinationWizardComponent.AZUREFHIR_TYPES
+                    : this.isBlob()
+                      ? DestinationWizardComponent.BLOB_TYPES
+                      : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -3734,6 +3936,41 @@ export class DestinationWizardComponent implements OnInit {
             Array.from(new Set([...list, ...fromDestResources])),
           );
         }
+        // loadMappingSummary just overwrote targetByResource with the Mapping JSON's OWN inferred primary
+        // (isPrimary if the doc has it, else the older "primary = whichever table has no genuine relation"
+        // guess — see resolvePrimaryTable). dest_targets (parsed into targetByResource above, before that
+        // overwrite) is a second, independently-persisted record of the same fact — already treated as
+        // authoritative by workflow-build-assembler.service.ts on the save/build path (see its own comment
+        // there) — and reconciling against it here fixes an ALREADY-SAVED document that predates isPrimary
+        // (an independent Mongo extra collection saved with no relation and no isPrimary flag, where the
+        // guess can pick the wrong table), not just documents saved after this landed. A correctly-saved
+        // document already agrees with dest_targets, so this is a no-op for anything not actually broken.
+        if (f['dest_targets']) {
+          try {
+            const savedTargets = JSON.parse(f['dest_targets']) as Record<string, string>;
+            const targets = { ...this.targetByResource() };
+            const extras = { ...this.extraTablesByGroup() };
+            for (const [resource, savedPrimary] of Object.entries(savedTargets)) {
+              const currentPrimary = targets[resource];
+              if (!savedPrimary || currentPrimary === savedPrimary) continue;
+              const resourceExtras = extras[resource] ?? [];
+              // Only reconcile when dest_targets names a table this resource's Mapping JSON actually
+              // mapped something onto (as either the guessed primary or one of its extras) — never invent
+              // a table the summary never mapped anything onto.
+              const knownTables = new Set([currentPrimary, ...resourceExtras].filter(Boolean));
+              if (!knownTables.has(savedPrimary)) continue;
+              targets[resource] = savedPrimary;
+              extras[resource] = [
+                ...resourceExtras.filter((t) => t !== savedPrimary),
+                ...(currentPrimary && currentPrimary !== savedPrimary ? [currentPrimary] : []),
+              ];
+            }
+            this.targetByResource.set(targets);
+            this.extraTablesByGroup.set(extras);
+          } catch {
+            /* ignore malformed */
+          }
+        }
         return;
       } catch {
         /* fall through to the older loaders below */
@@ -3923,6 +4160,7 @@ export class DestinationWizardComponent implements OnInit {
     const isMongo = this.isMongo();
     const isMedplum = this.isMedplum();
     const isFhir = this.isFhir();
+    const isAzureFhir = this.isAzureFhir();
     const isBlob = this.isBlob();
     const name =
       metadata.fields['dest_name'] ||
@@ -3934,9 +4172,11 @@ export class DestinationWizardComponent implements OnInit {
             ? 'Medplum Destination'
             : isFhir
               ? 'Aidbox Destination'
-              : isBlob
-                ? 'Azure Blob Destination'
-                : 'File Destination');
+              : isAzureFhir
+                ? 'Azure FHIR Service Destination'
+                : isBlob
+                  ? 'Azure Blob Destination'
+                  : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -3960,7 +4200,15 @@ export class DestinationWizardComponent implements OnInit {
             destinationType: 'Mongo',
             keyVaultName: 'workflow-secrets',
             secretName,
-            target: metadata.fields['dest_collection'] || null,
+            // null, not the primary collection — matches SQL's own `target: null` above. Mongo can now map
+            // more than one resource to more than one collection (the mapping canvas's "+ Add a collection"
+            // picker), each resolved per-resource via its own MappingProfile.DestinationObject
+            // (workflow-build-assembler.service.ts's buildMappingForResource, already generic/not SQL-only).
+            // MappedMongoDestinationWriter resolves `destination.Target ?? mappingProfile.DestinationObject`
+            // — a non-null Target here would win for EVERY resource's write, collapsing every extra
+            // collection back onto the primary one (confirmed: this was exactly why a second collection
+            // added via the canvas was never actually created).
+            target: null,
             inlineSecret: metadata.secret ?? '',
             connectionMetadataJson: JSON.stringify(metadata.fields),
             deIdentificationProfileId,
@@ -3991,7 +4239,23 @@ export class DestinationWizardComponent implements OnInit {
                 connectionMetadataJson: JSON.stringify(metadata.fields),
                 deIdentificationProfileId,
               }
-            : isBlob
+            : isAzureFhir
+              ? {
+                  name,
+                  destinationType: 'AzureFhirService',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // Same target convention as the FHIR (Aidbox) branch above — AzureFhirServiceDestinationFormComponent's
+                  // getFullConfig() also emits the FHIR service URL as dest_baseUrl.
+                  target: metadata.fields['dest_baseUrl'] || null,
+                  // AzureFhirServiceDestinationFormComponent.getMetadata() already folds managed identity's "no Key
+                  // Vault secret" rule into metadata.secret (buildFhirSecretBlob returns '' for it) — no extra
+                  // auth-mode check needed here, mirroring the Blob branch below.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isBlob
               ? {
                   name,
                   destinationType: 'BlobStorage',
@@ -4172,9 +4436,11 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'dest-medplum'
                     : type === 'fhir'
                       ? 'dest-fhir'
-                      : type === 'blob'
-                        ? 'dest-blob'
-                        : 'dest-csv',
+                      : type === 'azurefhir'
+                        ? 'dest-azurefhir'
+                        : type === 'blob'
+                          ? 'dest-blob'
+                          : 'dest-csv',
         status: 'enabled',
         config,
       });

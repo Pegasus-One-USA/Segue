@@ -86,7 +86,37 @@
           <!-- Group Heading Row (e.g. "Terminology Settings") — spans every column -->
           <ng-container matColumnDef="groupHeader">
             <td mat-cell *matCellDef="let row" [attr.colspan]="displayedCols.length" class="group-header-cell">
-              {{ row.label }}
+              <span>{{ row.label }}</span>
+              @if (row.label === 'Terminology Settings') {
+                <button class="btn-link" type="button" (click)="toggleAllTerminology()">
+                  <mat-icon>{{ allTerminologyCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+                  {{ allTerminologyCollapsed() ? 'Expand all' : 'Collapse all' }}
+                </button>
+              } @else if (row.label === 'General Settings') {
+                <button class="btn-link" type="button" (click)="toggleAllGeneral()">
+                  <mat-icon>{{ allGeneralCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
+                  {{ allGeneralCollapsed() ? 'Expand all' : 'Collapse all' }}
+                </button>
+              }
+            </td>
+          </ng-container>
+
+          <!-- Code Sub-Group Heading Row (e.g. "CVX (HAPI terminology server)") — collapsible,
+               nested under the Terminology Settings heading, one per terminology code. -->
+          <ng-container matColumnDef="codeGroupHeader">
+            <td mat-cell *matCellDef="let row" [attr.colspan]="displayedCols.length">
+              <div
+                class="code-group-header"
+                role="button"
+                tabindex="0"
+                [attr.aria-expanded]="!row.collapsed"
+                (click)="toggleCode(row.code)"
+                (keydown.enter)="toggleCode(row.code)"
+                (keydown.space)="toggleCode(row.code); $event.preventDefault()"
+              >
+                <mat-icon class="chevron">{{ row.collapsed ? 'expand_more' : 'expand_less' }}</mat-icon>
+                <span>{{ row.label }}</span>
+              </div>
             </td>
           </ng-container>
 
@@ -98,7 +128,7 @@
                 <div class="endpoint-avatar">
                   <mat-icon>tune</mat-icon>
                 </div>
-                <span class="cell-primary cell-mono">{{ $any(row).key }}</span>
+                <span class="cell-primary cell-data">{{ $any(row).key }}</span>
               </div>
             </td>
           </ng-container>
@@ -106,7 +136,7 @@
           <!-- Value Column -->
           <ng-container matColumnDef="value">
             <th mat-header-cell *matHeaderCellDef>Value</th>
-            <td mat-cell *matCellDef="let row"><span class="cell-mono">{{ $any(row).value }}</span></td>
+            <td mat-cell *matCellDef="let row"><span class="cell-data">{{ $any(row).value }}</span></td>
           </ng-container>
 
           <!-- Description Column -->
@@ -149,7 +179,8 @@
 
           <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
           <tr mat-row *matRowDef="let row; columns: ['groupHeader']; when: isGroupHeaderRow" class="group-header-row"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['codeGroupHeader']; when: isCodeGroupHeaderRow" class="code-group-header-row"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols; when: isDataRow" class="data-row"></tr>
 
         </table>
       </div>

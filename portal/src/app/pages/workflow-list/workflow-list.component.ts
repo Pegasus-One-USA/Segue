@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal,
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import {
   WorkflowApiService,
@@ -40,7 +40,7 @@ type FilterCategory = 'status' | 'audience' | 'source';
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, MatIconModule],
+  imports: [CommonModule, DatePipe, FormsModule, MatIconModule, RouterLink],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -153,7 +153,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.summaries.update(rows =>
           rows.map(w =>
             w.workflowId === event.workflowDefinitionId
-              ? { ...w, lastRun: event.status, lastRunAt: event.occurredAt }
+              ? { ...w, lastRun: event.status, lastRunAt: event.occurredAt, lastRunErrorReferenceId: event.errorReferenceId }
               : w,
           ),
         );

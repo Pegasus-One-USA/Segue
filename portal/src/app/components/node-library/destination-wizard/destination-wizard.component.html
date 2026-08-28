@@ -665,11 +665,11 @@
           </div>
         }
       }
-    } @else if (isStepActive(3) && isMedplum()) {
-      <!-- ── Columnless FHIR server (Medplum): the whole normalized resource is written as-is (runtime
-           wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to map
-           field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
-           Aidbox above, Medplum has no per-field customize option. ── -->
+    } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
+      <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
+           as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to
+           map field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
+           Aidbox above, neither has a per-field customize option. ── -->
       <div class="dw-section-head">
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">Map fields</span>
@@ -769,8 +769,10 @@
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
+          [schemaAuthoringEnabled]="isSql()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
+          [pendingTableNames]="pendingTableNames()"
           [columnsForTable]="columnsForTableFn"
           [dataTypeForTable]="dataTypeForTableColumnFn"
           [keyInfoForTable]="keyInfoForTableColumnFn"
@@ -944,6 +946,19 @@
               <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobPathPrefix'] }}</span>
             </div>
           }
+        } @else if (isAzureFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR service URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_baseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_authType'] === 'managedIdentity' ? 'Managed identity' : 'Client credentials' }}</span>
+          </div>
         } @else {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -962,7 +977,7 @@
           <span class="dw-review-key">Data groups</span>
           <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
         </div>
-        @if (!isFhir()) {
+        @if (!isFhir() && !isAzureFhir()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Mapped fields</span>
             <span class="dw-review-val">{{ mappingRows().length }} fields</span>
@@ -1064,6 +1079,49 @@
         <div class="dw-confirm-actions">
           <button type="button" class="btn btn-secondary" (click)="cancelSaveWithWarnings()">Keep editing</button>
           <button type="button" class="btn btn-danger" (click)="confirmSaveWithWarnings()">Save anyway</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Transform rule conflicts blocking Save — per-conflict Override/Bypass, never edits the rule itself ── -->
+  @if (pendingRuleConflicts(); as conflicts) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onRuleConflictsBackdropClick($event)"
+         (keydown.escape)="cancelRuleConflicts()">
+      <div class="dw-confirm-dialog dw-confirm-dialog--wide">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">
+          Fix {{ conflicts.length }} transform rule conflict{{ conflicts.length === 1 ? '' : 's' }} before saving
+        </h3>
+        @if (!currentWorkflowId()) {
+          <p class="dw-rule-conflict-hint">
+            Save this workflow first, then reopen the mapping to override or bypass a conflicting rule for it.
+          </p>
+        }
+        <div class="dw-confirm-body">
+          @for (c of conflicts; track ruleConflictKey(c)) {
+            <div class="dw-ref-warning">
+              <p>{{ c.message }}</p>
+              @if (currentWorkflowId()) {
+                <div class="dw-ref-warning-fix">
+                  <button type="button" class="btn btn-secondary"
+                          [disabled]="resolvingRuleConflict() === ruleConflictKey(c)"
+                          (click)="resolveRuleConflictOverride(c)">
+                    Override for this workflow
+                  </button>
+                  <button type="button" class="btn btn-secondary"
+                          [disabled]="resolvingRuleConflict() === ruleConflictKey(c)"
+                          (click)="resolveRuleConflictBypass(c)">
+                    Bypass for this workflow
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelRuleConflicts()">Keep editing</button>
         </div>
       </div>
     </div>

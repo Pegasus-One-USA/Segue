@@ -31,7 +31,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
 
   readonly csvForm = this.fb.group({
     name: ['CSV Export', [Validators.required]],
-    deliveryMode: ['download', [Validators.required]],
+    deliveryMode: ['downloadUrl', [Validators.required]],
     filePattern: ['{resource}_{yyyyMMdd_HHmmss}.csv', [Validators.required]],
     delimiter: ['comma', []],
     encoding: ['utf-8', []],
@@ -63,8 +63,12 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
     });
   }
 
+  /** 'download' (inline bytes returned in the HTTP response) can never work for a canvas-workflow destination —
+   *  this engine's /run endpoint always returns a JSON result, never raw file bytes (see DownloadDeliveryStrategy's
+   *  remarks) — so it's no longer a selectable option, but an existing destination saved with that value before
+   *  this changed still needs to be blocked from saving again until switched to a working mode. */
   isValid(): boolean {
-    return this.csvForm.valid;
+    return this.csvForm.valid && this.csvForm.value.deliveryMode !== 'download';
   }
 
   getRawValue(): Record<string, unknown> {
@@ -102,7 +106,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
     const v = this.csvForm.value;
     const config: Record<string, string> = {
       dest_name: v.name ?? '',
-      dest_deliveryMode: v.deliveryMode ?? 'download',
+      dest_deliveryMode: v.deliveryMode ?? 'downloadUrl',
       dest_filePattern: v.filePattern ?? '',
       dest_delimiter: v.delimiter ?? 'comma',
       dest_encoding: v.encoding ?? 'utf-8',
@@ -137,7 +141,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
   patchFrom(fields: Record<string, string>, target?: string | null): void {
     this.csvForm.patchValue({
       name: fields['dest_name'] || this.csvForm.value.name || 'CSV Export',
-      deliveryMode: fields['dest_deliveryMode'] || 'download',
+      deliveryMode: fields['dest_deliveryMode'] || 'downloadUrl',
       filePattern: fields['dest_filePattern'] || target || '{resource}_{yyyyMMdd_HHmmss}.csv',
       delimiter: fields['dest_delimiter'] || 'comma',
       encoding: fields['dest_encoding'] || 'utf-8',
@@ -158,7 +162,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
 
   reset(): void {
     this.csvForm.reset({
-      name: 'CSV Export', deliveryMode: 'download', filePattern: '{resource}_{yyyyMMdd_HHmmss}.csv',
+      name: 'CSV Export', deliveryMode: 'downloadUrl', filePattern: '{resource}_{yyyyMMdd_HHmmss}.csv',
       delimiter: 'comma', encoding: 'utf-8', sftpHost: '', sftpPort: 22, sftpUsername: '', sftpAuthType: 'password',
       sftpPassword: '', sftpRemoteFolder: '', emailTo: '', emailCc: '',
       emailSubjectTemplate: 'FHIRBridge CSV Export - {{RouteName}} - {{RunDate}}',

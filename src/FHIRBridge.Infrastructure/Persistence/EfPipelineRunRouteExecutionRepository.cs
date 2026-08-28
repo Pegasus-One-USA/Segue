@@ -54,7 +54,8 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
         int writtenCount,
         string? errorMessage,
         DateTime completedOnUtc,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? errorReferenceId = null)
     {
         var execution = await _dbContext.PipelineRunRouteExecutions
             .FirstOrDefaultAsync(x => x.Id == routeExecutionId, cancellationToken);
@@ -63,7 +64,7 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
             return;
         }
 
-        execution.Complete(status, extractedCount, mappedCount, writtenCount, errorMessage, completedOnUtc);
+        execution.Complete(status, extractedCount, mappedCount, writtenCount, errorMessage, completedOnUtc, errorReferenceId);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -187,6 +188,7 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
             execution.WrittenCount,
             execution.ErrorMessage,
             correlationId,
-            errorCount);
+            errorCount,
+            execution.ErrorReferenceId);
     }
 }

@@ -472,6 +472,39 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
     }
 
+    /// <summary>
+    /// Executes the exact node/rank/edge shape of the production workflow "Epic | ehrLaunch | PatientOnly"
+    /// (WorkflowDefinitions.Id 8C8CFA21-01EF-4C7D-834F-2E22CC367642) through the real orchestrator end to end —
+    /// EpicSourceNode (rank 0) -&gt; MappingNode (rank 60) -&gt; SqlServerDestinationNode (rank 70) — with fake node
+    /// executors standing in for the real Epic connector / SQL Server writer (neither is reachable from a unit
+    /// test: the real run needs a live Epic OAuth handshake and a live SQL Server). Confirms the DAG itself
+    /// completes successfully — every node runs exactly once, in order, and the run finishes Succeeded — the same
+    /// check RankedWorkflowOrchestrator performs for a real run via PipelineOrchestrator.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_runs_the_production_epic_ehr_launch_patient_only_workflow_to_completion()
+    {
+        var workflow = new WorkflowDefinition(Guid.Parse("8C8CFA21-01EF-4C7D-834F-2E22CC367642"), "Epic | ehrLaunch | PatientOnly", 1);
+        var source = AddNode(workflow, WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, 0);
+        var mapping = AddNode(workflow, WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, 60);
+        var destination = AddNode(workflow, WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, 70);
+        workflow.AddEdge(source.Id, mapping.Id);
+        workflow.AddEdge(mapping.Id, destination.Id);
+
+        var calls = new List<string>();
+        var orchestrator = CreateOrchestrator(
+            new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+            new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+            new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult));
+
+        var result = await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        calls.Should().Equal(WorkflowNodeTypes.EpicSource, WorkflowNodeTypes.Mapping, WorkflowNodeTypes.SqlServerDestination);
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.Succeeded);
+        result.WorkflowRun.NodeRuns.Should().HaveCount(3);
+        result.WorkflowRun.NodeRuns.Should().OnlyContain(nodeRun => nodeRun.Status == WorkflowRunStatus.Succeeded);
+    }
+
     private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), name, 1);
@@ -599,10 +632,10 @@ public sealed class RankedWorkflowOrchestratorTests
             return Task.FromResult(new ErrorReport("ERR-TEST-000001", ErrorCategory.Unknown, "Something went wrong.", context.CorrelationId));
         }
 
-        public Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
+        public Task<string?> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default)
         {
             CapturedContexts.Add(context);
-            return Task.FromResult("ERR-TEST-000002");
+            return Task.FromResult<string?>("ERR-TEST-000002");
         }
     }
 

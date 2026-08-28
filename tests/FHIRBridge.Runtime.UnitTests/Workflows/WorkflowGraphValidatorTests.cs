@@ -78,4 +78,27 @@ public sealed class WorkflowGraphValidatorTests
             error.Contains("cannot accept output contract", StringComparison.Ordinal)
             || error.Contains("requires mapped records", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Reconstructs the exact node/rank/edge shape of the production workflow "Epic | ehrLaunch | PatientOnly"
+    /// (WorkflowDefinitions.Id 8C8CFA21-01EF-4C7D-834F-2E22CC367642 — EpicSourceNode rank 0 -&gt; MappingNode rank 60
+    /// -&gt; SqlServerDestinationNode rank 70, chained by two WorkflowEdges rows) pulled from the database, so a
+    /// future catalog/validator change that would silently break this specific, already-running production graph
+    /// fails a unit test instead of only surfacing at the next real run.
+    /// </summary>
+    [Fact]
+    public void Validate_accepts_the_production_epic_ehr_launch_patient_only_workflow_shape()
+    {
+        var workflow = new WorkflowDefinition(Guid.Parse("8C8CFA21-01EF-4C7D-834F-2E22CC367642"), "Epic | ehrLaunch | PatientOnly", 1);
+        var source = workflow.AddNode(WorkflowNodeTypes.EpicSource, WorkflowNodeCategory.Source, rank: 0, displayName: "ehr Launch");
+        var mapping = workflow.AddNode(WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, rank: 60, displayName: "Field Mapping");
+        var destination = workflow.AddNode(WorkflowNodeTypes.SqlServerDestination, WorkflowNodeCategory.Destination, rank: 70, displayName: "SQL Server");
+
+        workflow.AddEdge(source.Id, mapping.Id);
+        workflow.AddEdge(mapping.Id, destination.Id);
+
+        var result = new WorkflowGraphValidator().Validate(workflow);
+
+        result.IsValid.Should().BeTrue(because: string.Join("; ", result.Errors));
+    }
 }

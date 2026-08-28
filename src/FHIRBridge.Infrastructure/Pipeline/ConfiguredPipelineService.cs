@@ -112,7 +112,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
     // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
     // surfaces on both the Errors screen and Correlation Search, not just as a string in the run's `errors` list.
-    private Task CaptureFailureAsync(
+    // Returns the real ErrorReferenceId (null if no manager is registered, or its persist attempts all failed —
+    // see ErrorReport's remarks) so the caller can store it on the route execution row rather than discard it.
+    private async Task<string?> CaptureFailureAsync(
         Exception exception,
         Guid pipelineRunId,
         string? correlationId,
@@ -120,16 +122,18 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     {
         if (_exceptionManager is null)
         {
-            return Task.CompletedTask;
+            return null;
         }
 
-        return _exceptionManager.CaptureAsync(
+        var report = await _exceptionManager.CaptureAsync(
             exception,
             new ExceptionContext(
                 Module: "Pipeline Run",
                 CorrelationId: correlationId,
                 ExecutionId: pipelineRunId.ToString()),
             cancellationToken);
+
+        return report.ErrorReferenceId;
     }
 
     /// <summary>
@@ -741,7 +745,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             var failureDescription = DescribeFailure(exception);
             errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
 
-            await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
+            var errorReferenceId = await CaptureFailureAsync(exception, pipelineRunId, correlationId, cancellationToken);
 
             await _routeExecutionRepository.CompleteAsync(
                 routeExecutionId,
@@ -751,7 +755,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 0,
                 failureDescription,
                 DateTime.UtcNow,
-                cancellationToken);
+                cancellationToken,
+                errorReferenceId);
 
             return new RouteExecutionResult(0, 0);
         }
@@ -851,14 +856,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
             if (governanceDecision.DeIdentificationProfileId is { } deIdentificationProfileId)
             {
-                governedJson = await _deIdentificationService.DeIdentifyAsync(
+                governedJson = (await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
                         resourceType,
                         resource.ResourceId,
                         governedJson,
                         governanceDecision.AppliedPolicies,
                         deIdentificationProfileId),
-                    cancellationToken);
+                    cancellationToken)).Json;
             }
 
             preparedResources.Add(resource with { RawJson = governedJson });
@@ -1476,8 +1481,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     /// Converts the materializer's <see cref="MappingChildTableDto"/> output into writer-ready
     /// <see cref="MappedChildTableRecord"/>s, resolving each child table's FK/parent-key column names from the
     /// (already import-populated) <see cref="MappingFieldDto.ForeignKeyColumn"/>/<see cref="MappingFieldDto.ParentKeyColumn"/>
-    /// metadata on one of its own fields. A child table with no field carrying that metadata can't be linked back
-    /// to a parent row — skipped with a warning rather than attempted with a garbage/missing FK value.
+    /// metadata on one of its own fields, when present. A relational destination (SQL Server) needs a real FK to
+    /// link child rows back to their parent — <c>MappedSqlServerDestinationWriter</c> skips (with its own
+    /// warning) a child table with none, since an orphaned relational row is meaningless. A schema-less
+    /// destination (Mongo) has no such requirement: its own writer can write the child collection fully
+    /// independently, keyed on whatever upsert key is mapped for it (or not keyed at all). So this no longer
+    /// drops the child table outright when no field carries ForeignKeyColumn metadata — <see cref="MappedChildTableRecord.ForeignKeyColumn"/>/
+    /// <see cref="MappedChildTableRecord.ParentKeyColumn"/> are simply left blank, and each writer decides for
+    /// itself whether that's acceptable.
     /// </summary>
     private IReadOnlyList<MappedChildTableRecord>? BuildChildTableRecords(
         MaterializedDataset dataset, IReadOnlyList<MappingFieldDto> mappingFields, string resourceType)
@@ -1494,19 +1505,10 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 string.Equals(f.DestinationObject, childTable.Name, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(f.ForeignKeyColumn));
 
-            if (fkField is null)
-            {
-                _logger.LogWarning(
-                    "{ResourceType}: child table '{ChildTable}' produced {RowCount} row(s) but no mapped field " +
-                    "carries ForeignKeyColumn metadata for it — its rows cannot be linked to a parent and were not written.",
-                    resourceType, childTable.Name, childTable.Rows.Count);
-                continue;
-            }
-
             records.Add(new MappedChildTableRecord(
                 childTable.Name,
-                fkField.ForeignKeyColumn!,
-                fkField.ParentKeyColumn ?? "Id",
+                fkField?.ForeignKeyColumn ?? string.Empty,
+                fkField?.ParentKeyColumn ?? string.Empty,
                 childTable.Rows));
         }
 

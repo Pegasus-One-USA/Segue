@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Normalization;
@@ -187,17 +188,28 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         var (destinationType, destinationName) = await ResolveDestinationTypeAsync(destinationId, cancellationToken);
         var (sourceSystem, sourceConnectionName) = await ResolveSourceSystemAsync(sourceConnectionId, cancellationToken);
 
-        // Whole-resource FHIR destinations (Medplum, FHIR repository) persist the source resource itself
-        // (MappedDestinationRecord.SourceJson), not a set of mapped relational columns — so they legitimately have
-        // NO field mappings, and the "needs at least one mapped Value" gates below (which exist to avoid writing
-        // bogus empty rows into a relational table) would otherwise drop every resource, silently landing zero
-        // records. For these destinations we always emit one carrier record per resource, carrying SourceJson.
-        var wholeResourceFhir = destinationType is DestinationType.Medplum or DestinationType.FhirRepository;
+        // Whole-resource FHIR destinations (Medplum, FHIR repository, Azure FHIR Service) persist the source
+        // resource itself (MappedDestinationRecord.SourceJson), not a set of mapped relational columns — so
+        // they legitimately have NO field mappings, and the "needs at least one mapped Value" gates below
+        // (which exist to avoid writing bogus empty rows into a relational table) would otherwise drop every
+        // resource, silently landing zero records. For these destinations we always emit one carrier record
+        // per resource, carrying SourceJson.
+        var wholeResourceFhir = destinationType is DestinationType.Medplum or DestinationType.FhirRepository or DestinationType.AzureFhirService;
         // Caches each field's resolved rule chain for the lifetime of this ExecuteAsync call — the same
         // (resourceType, destinationField, sourceField) combination recurs once per record in the batch, and
         // re-querying the resolver/repository for every single record would be wasted round trips for a rule
         // set that can't have changed mid-batch.
         var ruleCache = new Dictionary<string, IReadOnlyList<TransformationRule>>();
+
+        // Each resource's PreMapping de-identification redactions (see WorkflowNodeOutputMetadataKeys.
+        // PreMappingRedactions), keyed by resource id — attached by an upstream DeIdentification node so its
+        // hops can be merged into the same Field Lineage chain this node builds for its own PostMapping rules.
+        // Empty (not an error) whenever no upstream node produced any, or nothing was redacted.
+        var preMappingRedactionsByResourceId = inputs
+            .Select(input => input.Metadata?.TryGetValue(WorkflowNodeOutputMetadataKeys.PreMappingRedactions, out var value) == true
+                ? value as IReadOnlyDictionary<string, IReadOnlyList<DeIdentificationFieldHop>>
+                : null)
+            .FirstOrDefault(value => value is not null);
 
         var records = new List<MappedDestinationRecord>();
         // One timestamp for the whole run so every row this node writes shares the same @now / WrittenOnUtc value.
@@ -266,9 +278,24 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().JsonPath, StringComparer.OrdinalIgnoreCase);
 
+            // Warms CachingTerminologyLookupService for every distinct code this group is about to look up,
+            // concurrently, before the per-resource pass below runs each one serially interleaved with the rest
+            // of that resource's mapping work. Pure performance optimization — see the method's own doc comment
+            // for why it can never change what value actually gets written.
+            if (destinationType is not null)
+            {
+                await PreWarmCodeableConceptLookupsAsync(
+                    group, fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
+                    context.WorkflowRunId, ruleCache, cancellationToken);
+            }
+
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                var preMappingHops = preMappingRedactionsByResourceId is not null
+                    && preMappingRedactionsByResourceId.TryGetValue(resource.ResourceId, out var resourceHops)
+                        ? resourceHops
+                        : (IReadOnlyList<DeIdentificationFieldHop>)[];
                 // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
                 // source FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
                 var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
@@ -311,7 +338,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
@@ -375,6 +402,134 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
                 ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
             });
+    }
+
+    /// <summary>
+    /// Resolves every field in this resource-type group that has a <see cref="TransformNodeType.CodeableConceptBuilder"/>
+    /// rule configured to look up its display text from the terminology DB, collects the distinct codes those
+    /// fields actually carry across the whole group, and issues all of those lookups concurrently — so
+    /// <see cref="Terminology.CachingTerminologyLookupService"/> (wherever it's wired in as
+    /// <c>ITerminologyLookupService</c>) is already warm by the time the real per-resource pass below reaches
+    /// each one, instead of every distinct code paying its network round trip serially, interleaved with the
+    /// rest of that resource's mapping work. Never changes what value ends up written anywhere: it calls the
+    /// exact same node with the exact same config the real pass would, so a cache write here is byte-identical
+    /// to the one the real pass would have produced on its own — this only changes WHEN and how concurrently
+    /// those network calls happen. Best-effort: any failure here is swallowed, since the real per-record pass
+    /// remains the correctness path and will simply pay the normal (uncached) cost for whichever codes didn't
+    /// warm successfully.
+    /// </summary>
+    private async Task PreWarmCodeableConceptLookupsAsync(
+        IEnumerable<ResourceEnvelope> group,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        string resourceType,
+        DestinationType destinationType,
+        string? sourceSystem,
+        Guid workflowRunId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        if (_mappingEngine is null || _ruleResolver is null || _transformNodeRegistry is null)
+        {
+            return;
+        }
+
+        var codeableConceptConfigByTarget = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
+            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
+            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            {
+                rules = await _ruleResolver.ResolveAsync(
+                    destinationType, resourceType, targetField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                ruleCache[cacheKey] = rules;
+            }
+
+            var codeableConceptRule = rules.FirstOrDefault(rule => rule.NodeType == TransformNodeType.CodeableConceptBuilder);
+            if (codeableConceptRule is null)
+            {
+                continue;
+            }
+
+            Dictionary<string, string> config;
+            try
+            {
+                config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(codeableConceptRule.ConfigJson) ?? [];
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            // Nothing to warm — a hand-typed display always wins outright, and lookup being explicitly disabled
+            // means the real pass never calls the terminology service for this field either. Mirrors
+            // CodeableConceptBuilderNode.ExecuteAsync's own reads of these same two config keys.
+            var resolveDisplayFromTerminology = !config.TryGetValue("resolveDisplayFromTerminology", out var resolveFlag)
+                || !bool.TryParse(resolveFlag, out var resolveFlagParsed)
+                || resolveFlagParsed;
+            var hasHandTypedDisplay = config.TryGetValue("display", out var handTypedDisplay) && !string.IsNullOrWhiteSpace(handTypedDisplay);
+            if (!resolveDisplayFromTerminology || hasHandTypedDisplay)
+            {
+                continue;
+            }
+
+            codeableConceptConfigByTarget[targetField] = config;
+        }
+
+        if (codeableConceptConfigByTarget.Count == 0)
+        {
+            return;
+        }
+
+        var distinctCodesByTarget = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var resource in group)
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+            var mapped = _mappingEngine.Map(sourceJson, fields, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+            if (mapped is null)
+            {
+                continue;
+            }
+
+            foreach (var targetField in codeableConceptConfigByTarget.Keys)
+            {
+                if (!mapped.Values.TryGetValue(targetField, out var rawValue) ||
+                    rawValue?.ToString() is not { Length: > 0 } code)
+                {
+                    continue;
+                }
+
+                if (!distinctCodesByTarget.TryGetValue(targetField, out var codes))
+                {
+                    codes = new HashSet<string>(StringComparer.Ordinal);
+                    distinctCodesByTarget[targetField] = codes;
+                }
+
+                codes.Add(code);
+            }
+        }
+
+        var codeableConceptBuilderNode = _transformNodeRegistry.Get(TransformNodeType.CodeableConceptBuilder);
+        var warmTasks = distinctCodesByTarget
+            .SelectMany(entry => entry.Value.Select(code =>
+                codeableConceptBuilderNode.ExecuteAsync(code, codeableConceptConfigByTarget[entry.Key], secret: null, cancellationToken)))
+            .ToList();
+
+        if (warmTasks.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(warmTasks);
+        }
+        catch
+        {
+            // Best-effort only — see the method's doc comment. The real per-record pass below is the
+            // correctness path and will retry (uncached) whichever codes failed to warm here.
+        }
     }
 
     /// <summary>
@@ -461,6 +616,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
         string resourceId,
         string? sourceJson,
+        IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
@@ -492,6 +648,34 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             sourceFieldByTarget.TryGetValue(destinationField, out var sourceField);
             var cacheKey = $"{resourceType}|{destinationField}|{sourceField}";
 
+            // PreMapping de-identification hops for this field, if any — prepended ahead of whatever runs below
+            // so the field's chain reads source-order: redaction first, then the PostMapping rule chain (or the
+            // plain pass-through hop). Continues the same NodeOrder sequence so the whole chain stays contiguous.
+            var nodeOrder = 0;
+            if (preMappingHops.Count > 0 && sourceField is not null)
+            {
+                foreach (var hop in preMappingHops)
+                {
+                    if (!string.Equals(hop.SourceField, sourceField, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    lineageEntries?.Add(new LineageHopEntryDto(
+                        destinationField,
+                        sourceField,
+                        nodeOrder++,
+                        "DeIdentification:" + hop.Strategy,
+                        hop.ConfigJson,
+                        hop.BeforeValueJson,
+                        hop.AfterValueJson,
+                        hop.Success,
+                        hop.ErrorMessage,
+                        null,
+                        DateTimeOffset.UtcNow));
+                }
+            }
+
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
@@ -501,12 +685,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
             if (rules.Count == 0)
             {
+                // No PostMapping rule chain for this field — still record a pass-through hop so every field the
+                // Mapping node actually writes has at least one lineage row (previously this `continue` meant a
+                // plain "Direct/write verbatim" mapping, the common case, never got any lineage at all).
+                lineageEntries?.Add(new LineageHopEntryDto(
+                    destinationField,
+                    sourceField,
+                    nodeOrder,
+                    "DirectMapping",
+                    "{}",
+                    SerializeLineageValue(value),
+                    SerializeLineageValue(value),
+                    true,
+                    null,
+                    null,
+                    DateTimeOffset.UtcNow));
                 continue;
             }
 
             var currentValue = value;
             string? writeBackPath = null;
-            var nodeOrder = 0;
             foreach (var rule in rules)
             {
                 var hopIndex = nodeOrder++;

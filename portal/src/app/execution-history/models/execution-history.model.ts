@@ -24,6 +24,10 @@ export interface RouteExecution {
   errorMessage: string | null;
   workflowDefinitionVersion: number;
   correlationId: string | null;
+  /** The Global Exception Manager's ERR-yyyyMMdd-NNNNNN id for this run's failure, when one was actually
+   *  persisted to ErrorLogs — null if capture never ran or failed to persist (never a placeholder). Link
+   *  straight to /operations/errors?errorReferenceId=... rather than asking the user to search by execution id. */
+  errorReferenceId: string | null;
 }
 
 export interface PagedResult<T> {
@@ -63,6 +67,29 @@ export interface ResourceHistoryEntry {
   payloadJson: string;
   itemCount: number | null;
   recordedAtUtc: string;
+}
+
+/** Shape of a DestinationWriteResult-contract node's decrypted payload JSON (PascalCase — serialized straight off
+ *  the backend's Runtime.Application.Workflows.Payloads.DestinationWriteResult record, no naming policy applied).
+ *  Parsed client-side from NodeRunPayloadDetail.payloadJson so the CSV destination node's Execution History row
+ *  can render a download link / email delivery card instead of the raw JSON dump. */
+export interface DestinationWriteResultPayload {
+  DestinationId: string;
+  RecordsWritten: number;
+  WrittenAt: string;
+  DownloadUrl: string | null;
+  EmailDelivery: EmailDeliveryDetail | null;
+}
+
+export interface EmailDeliveryDetail {
+  From: string;
+  To: string[];
+  Cc: string[];
+  Subject: string;
+  Body: string;
+  AttachmentNames: string[];
+  Status: 'Sent' | 'Failed' | 'Skipped' | string;
+  Error: string | null;
 }
 
 export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';

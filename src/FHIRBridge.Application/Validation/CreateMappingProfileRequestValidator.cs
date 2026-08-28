@@ -213,22 +213,76 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
         foreach (var rule in rules)
         {
-            if (rule.ExpectedValueType is not { } expectedValueType ||
-                string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase))
+            if (rule.ExpectedValueType is { } expectedValueType &&
+                !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase))
             {
-                continue;
+                var failure = new FluentValidation.Results.ValidationFailure(
+                    $"Fields[{fieldIndex}].TargetField",
+                    $"A {rule.Scope} rule ({rule.NodeType}) expects '{column.Name}' to be {expectedValueType}, " +
+                    $"but it's a {column.DataType} column ({column.MappingValueType}). Add a workflow-level " +
+                    "override for this field, or update the rule's expected type.")
+                {
+                    CustomState = new TransformationRuleTypeConflict(
+                        rule.Id, rule.Scope, rule.NodeType, rule.DestinationField, expectedValueType, column.MappingValueType),
+                };
+                context.AddFailure(failure);
             }
 
-            var failure = new FluentValidation.Results.ValidationFailure(
-                $"Fields[{fieldIndex}].TargetField",
-                $"A {rule.Scope} rule ({rule.NodeType}) expects '{column.Name}' to be {expectedValueType}, " +
-                $"but it's a {column.DataType} column ({column.MappingValueType}). Add a workflow-level " +
-                "override for this field, or update the rule's expected type.")
-            {
-                CustomState = new TransformationRuleTypeConflict(
-                    rule.Id, rule.Scope, rule.NodeType, rule.DestinationField, expectedValueType, column.MappingValueType),
-            };
-            context.AddFailure(failure);
+            CheckStructuredOutputFitsColumn(rule, column, fieldIndex, context);
         }
+    }
+
+    /// <summary>
+    /// The type-category check above (String vs Integer vs ...) is blind to actual size — a rule whose
+    /// declared <see cref="Domain.Entities.TransformationRule.ExpectedValueType"/> is String and a String
+    /// column both say "String" even when the rule emits a serialized JSON object (a Coding, a full
+    /// CodeableConcept) into a narrow column sized for a short plain value. That combination passes the
+    /// category check and only fails at pipeline-run time as a SQL truncation error — surfaced here instead,
+    /// for the two node types whose config can turn a short scalar output into a JSON object: ValueCodeMapping
+    /// with emitCoding on, and CodeableConceptBuilder with outputShape "object" (its default). The threshold
+    /// (200 chars) is a deliberately generous floor for "a single Coding or small CodeableConcept" — this is a
+    /// heuristic warning, not an exact prediction of the rendered JSON's length.
+    /// </summary>
+    private static void CheckStructuredOutputFitsColumn(
+        Domain.Entities.TransformationRule rule,
+        DestinationColumnSchemaDto column,
+        int fieldIndex,
+        ValidationContext<CreateMappingProfileRequest> context)
+    {
+        const int MinSafeLengthForStructuredOutput = 200;
+
+        if (!string.Equals(column.MappingValueType, "String", StringComparison.OrdinalIgnoreCase) ||
+            column.MaxLength is null || column.MaxLength >= MinSafeLengthForStructuredOutput)
+        {
+            return;
+        }
+
+        var configJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(rule.ConfigJson) ?? [];
+
+        var emitsStructuredOutput = rule.NodeType switch
+        {
+            TransformNodeType.ValueCodeMapping => configJson.TryGetValue("emitCoding", out var emitCoding) &&
+                string.Equals(emitCoding, "true", StringComparison.OrdinalIgnoreCase),
+            TransformNodeType.CodeableConceptBuilder => !configJson.TryGetValue("outputShape", out var shape) ||
+                string.Equals(shape, "object", StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+
+        if (!emitsStructuredOutput)
+        {
+            return;
+        }
+
+        context.AddFailure(new FluentValidation.Results.ValidationFailure(
+            $"Fields[{fieldIndex}].TargetField",
+            $"A {rule.Scope} rule ({rule.NodeType}) can emit a serialized JSON object (a Coding/CodeableConcept), " +
+            $"but '{column.Name}' only allows {column.MaxLength} characters — this will truncate at run time for " +
+            "any real code+system+display combination. Widen the column, switch the rule to a plain-value output " +
+            "(e.g. turn off emitCoding / set outputShape to \"displayTextOnly\"), or add a workflow-level override.")
+        {
+            CustomState = new TransformationRuleTypeConflict(
+                rule.Id, rule.Scope, rule.NodeType, rule.DestinationField,
+                MappingValueType.String, column.MappingValueType),
+        });
     }
 }

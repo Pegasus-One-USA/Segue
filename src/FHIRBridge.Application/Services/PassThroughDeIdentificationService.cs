@@ -4,10 +4,10 @@ namespace FHIRBridge.Application.Services;
 
 public sealed class PassThroughDeIdentificationService : IDeIdentificationService
 {
-    public Task<string> DeIdentifyAsync(
+    public Task<DeIdentificationResult> DeIdentifyAsync(
         DeIdentificationRequest request,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(request.RawJson);
+        return Task.FromResult(new DeIdentificationResult(request.RawJson, []));
     }
 }

@@ -32,20 +32,17 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     private readonly HttpClient _httpClient;
     private readonly IFhirAuthorizationCodeTokenStore _tokenStore;
-    private readonly IFhirAccessTokenAuditSink _auditSink;
     private readonly IBackendServicesJwtFactory? _jwtFactory;
     private readonly ILogger _logger;
 
     public SmartAuthorizationCodeTokenProvider(
         HttpClient httpClient,
         IFhirAuthorizationCodeTokenStore tokenStore,
-        IFhirAccessTokenAuditSink? auditSink = null,
         IBackendServicesJwtFactory? jwtFactory = null,
         ILogger<SmartAuthorizationCodeTokenProvider>? logger = null)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
-        _auditSink = auditSink ?? new NoOpFhirAccessTokenAuditSink();
         _jwtFactory = jwtFactory;
         _logger = (ILogger?)logger ?? NullLogger.Instance;
     }
@@ -412,16 +409,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         ApplyClientAuthentication(source, form, request);
         request.Content = new FormUrlEncodedContent(form);
 
-        HttpResponseMessage response;
-        try
-        {
-            response = await _httpClient.SendAsync(request, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            await _auditSink.RecordAsync(source, $"{action}Failed", "Failed", exception.Message, cancellationToken);
-            throw;
-        }
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         using (response)
         {
@@ -429,7 +417,6 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 var message = $"{ProviderName} token endpoint returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}".Trim();
-                await _auditSink.RecordAsync(source, $"{action}Failed", "Failed", message, cancellationToken);
                 throw new InvalidOperationException(message);
             }
 
@@ -437,7 +424,6 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 ?? throw new InvalidOperationException($"{ProviderName} token endpoint returned an empty response.");
             if (string.IsNullOrWhiteSpace(token.AccessToken))
             {
-                await _auditSink.RecordAsync(source, $"{action}Failed", "Failed", $"{ProviderName} token endpoint did not return an access_token.", cancellationToken);
                 throw new InvalidOperationException($"{ProviderName} token endpoint did not return an access_token.");
             }
 
@@ -491,7 +477,6 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 await SaveUnderBothKeysAsync(source, resolvedPatientId, stored, cancellationToken);
             }
 
-            await _auditSink.RecordAsync(source, $"{action}Succeeded", "Completed", $"{ProviderName} access token acquired.", cancellationToken);
             return new SmartAuthorizationCodeExchangeResult(
                 token.AccessToken!,
                 token.Scope,

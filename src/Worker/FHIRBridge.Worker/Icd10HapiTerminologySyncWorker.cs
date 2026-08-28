@@ -1,4 +1,5 @@
-using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 
 namespace FHIRBridge.Worker;
@@ -13,14 +14,17 @@ namespace FHIRBridge.Worker;
 /// </summary>
 public sealed class Icd10HapiTerminologySyncWorker : BackgroundService
 {
+    private static readonly TerminologySyncScheduleConfig ScheduleConfig = new("Terminology:Icd10Hapi", "03:00");
+
     private readonly IServiceScopeFactory _scopes;
-    private readonly ISystemSettingsCache _settings;
+    private readonly ITerminologySyncScheduleEvaluator _scheduleEvaluator;
     private readonly ILogger<Icd10HapiTerminologySyncWorker> _logger;
-    private DateOnly? _lastRunDate;
 
     public Icd10HapiTerminologySyncWorker(
-        IServiceScopeFactory scopes, ISystemSettingsCache settings, ILogger<Icd10HapiTerminologySyncWorker> logger) =>
-        (_scopes, _settings, _logger) = (scopes, settings, logger);
+        IServiceScopeFactory scopes,
+        ITerminologySyncScheduleEvaluator scheduleEvaluator,
+        ILogger<Icd10HapiTerminologySyncWorker> logger) =>
+        (_scopes, _scheduleEvaluator, _logger) = (scopes, scheduleEvaluator, logger);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,29 +32,20 @@ public sealed class Icd10HapiTerminologySyncWorker : BackgroundService
         {
             try
             {
-                if (await _settings.GetBoolAsync("Terminology:Icd10Hapi:SchedulerEnabled", false, stoppingToken))
+                if (await _scheduleEvaluator.IsDueAsync(ScheduleConfig, DateTimeOffset.Now, stoppingToken))
                 {
-                    var now = DateTimeOffset.Now;
-                    var frequency = await _settings.GetStringAsync("Terminology:Icd10Hapi:Frequency", "Monthly", stoppingToken);
-                    var configured = await _settings.GetStringAsync("Terminology:Icd10Hapi:ExecutionTime", "03:00", stoppingToken);
-                    var dueTime = TimeOnly.TryParse(configured, out var time) ? time : new TimeOnly(3, 0);
-                    var due = now.TimeOfDay >= dueTime.ToTimeSpan() && _lastRunDate != DateOnly.FromDateTime(now.DateTime)
-                        && (string.Equals(frequency, "Weekly", StringComparison.OrdinalIgnoreCase) || now.Day == 1);
-
-                    if (due)
-                    {
-                        using var scope = _scopes.CreateScope();
-                        var result = await scope.ServiceProvider
-                            .GetRequiredService<IHapiIcd10TerminologySyncService>()
-                            .SyncAsync(stoppingToken);
-                        _lastRunDate = DateOnly.FromDateTime(now.DateTime);
-                        _logger.LogInformation(
-                            "ICD-10-CM HAPI terminology sync completed: {Year}, {Total} codes ({Billable} billable), {Elapsed}.",
-                            result.ReleaseYear,
-                            result.TotalConceptCount,
-                            result.BillableConceptCount,
-                            result.Duration);
-                    }
+                    using var scope = _scopes.CreateScope();
+                    var result = await scope.ServiceProvider
+                        .GetRequiredService<IHapiIcd10TerminologySyncService>()
+                        .SyncAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<ISystemSettingsService>()
+                        .SetAsync("Terminology:Icd10Hapi:LastRunUtc", DateTime.UtcNow.ToString("O"), null, stoppingToken);
+                    _logger.LogInformation(
+                        "ICD-10-CM HAPI terminology sync completed: {Year}, {Total} codes ({Billable} billable), {Elapsed}.",
+                        result.ReleaseYear,
+                        result.TotalConceptCount,
+                        result.BillableConceptCount,
+                        result.Duration);
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

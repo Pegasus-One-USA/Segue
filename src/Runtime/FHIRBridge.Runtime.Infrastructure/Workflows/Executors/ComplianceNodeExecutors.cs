@@ -177,11 +177,21 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
         if (resourceInputs.Length > 0)
         {
             var deIdentifiedResources = new List<ResourceEnvelope>();
+            // Threaded onto this node's output metadata (see WorkflowNodeOutputMetadataKeys.PreMappingRedactions)
+            // so the downstream Mapping node can merge each field's PreMapping redaction into the same Field
+            // Lineage chain as its own PostMapping hops — SafeHarborDeIdentificationService.DeIdentifyAsync is
+            // the only place that knows what was actually changed at this stage.
+            var redactionsByResourceId = new Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>();
             foreach (var resource in resourceInputs)
             {
-                var sourceJson = _deIdentificationService is null
-                    ? Convert.ToString(resource.Payload) ?? "{}"
-                    : await _deIdentificationService.DeIdentifyAsync(
+                string sourceJson;
+                if (_deIdentificationService is null)
+                {
+                    sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                }
+                else
+                {
+                    var result = await _deIdentificationService.DeIdentifyAsync(
                         new DeIdentificationRequest(
                             resource.ResourceType,
                             resource.ResourceId,
@@ -189,6 +199,12 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                             [],
                             resolvedProfileId),
                         cancellationToken);
+                    sourceJson = result.Json;
+                    if (result.Hops.Count > 0)
+                    {
+                        redactionsByResourceId[resource.ResourceId] = result.Hops;
+                    }
+                }
 
                 deIdentifiedResources.Add(resource with { Payload = sourceJson });
             }
@@ -201,7 +217,8 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 new Dictionary<string, object?>
                 {
                     ["executor"] = GetType().Name,
-                    ["count"] = deIdentifiedResources.Count
+                    ["count"] = deIdentifiedResources.Count,
+                    [WorkflowNodeOutputMetadataKeys.PreMappingRedactions] = redactionsByResourceId,
                 });
         }
 
@@ -229,7 +246,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
         {
             foreach (var record in records)
             {
-                var sourceJson = await _deIdentificationService.DeIdentifyAsync(
+                var result = await _deIdentificationService.DeIdentifyAsync(
                     new DeIdentificationRequest(
                         record.ResourceType,
                         record.SourceResourceId,
@@ -238,7 +255,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                         resolvedProfileId),
                     cancellationToken);
 
-                deIdentified.Add(record with { SourceJson = sourceJson });
+                deIdentified.Add(record with { SourceJson = result.Json });
             }
         }
 

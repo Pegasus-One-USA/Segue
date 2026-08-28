@@ -159,11 +159,12 @@ public sealed class DestinationSchemaController : ControllerBase
 
     /// <summary>
     /// Tests an ad-hoc MongoDB connection for a not-yet-saved <c>Mongo</c> destination — opens a client on the
-    /// supplied connection string and runs a <c>ping</c>. Always returns 200 — connection failures come back as
+    /// supplied connection string, runs a <c>ping</c>, and (on success) returns the database's real collection
+    /// names so the form can offer them as an autocomplete. Always returns 200 — connection failures come back as
     /// <c>connected:false</c> + <c>error</c>.
     /// </summary>
     [HttpPost("mongo-test")]
-    [ProducesResponseType(typeof(ConnectionTestResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(MongoConnectionTestResultDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> TestMongoConnection(
         [FromBody] MongoConnectionTestRequest request,
         CancellationToken cancellationToken)

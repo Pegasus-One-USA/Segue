@@ -137,6 +137,9 @@
 .status-fail { background: var(--color-error-soft); color: var(--color-error-strong); }
 .status-neutral { background: var(--color-border); color: var(--color-ink-2); }
 
+.error-reference-link { display: block; margin-top: 4px; font-size: 11px; color: var(--color-primary); text-decoration: none; }
+.error-reference-link:hover { text-decoration: underline; }
+
 .empty-state {
   padding: 32px;
   text-align: center;

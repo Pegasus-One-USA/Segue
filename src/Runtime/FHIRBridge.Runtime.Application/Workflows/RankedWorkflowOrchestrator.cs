@@ -4,6 +4,8 @@ using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Runtime.Application.Workflows;
 
@@ -19,6 +21,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IServiceScopeFactory? _scopeFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
+    private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
     public RankedWorkflowOrchestrator(
         IWorkflowGraphValidator graphValidator,
@@ -30,7 +33,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IRunStatusNotifier? runStatusNotifier = null,
         IServiceScopeFactory? scopeFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
-        IBulkExportPauseRecorder? bulkExportPauseRecorder = null)
+        IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
+        ILogger<RankedWorkflowOrchestrator>? logger = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -42,6 +46,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _scopeFactory = scopeFactory;
         _workflowDefinitionStore = workflowDefinitionStore;
         _bulkExportPauseRecorder = bulkExportPauseRecorder;
+        _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -364,7 +369,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 // scope-authorization reason already shows up, via the same CaptureExpectedAsync/Informational path.
                 if (_exceptionManager is not null)
                 {
-                    await _exceptionManager.CaptureExpectedAsync(
+                    var partialSuccessReferenceId = await _exceptionManager.CaptureExpectedAsync(
                         new ExpectedFailure("PartialSuccess", summary),
                         new ExceptionContext(
                             Module: "Workflow",
@@ -373,6 +378,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                             WorkflowId: workflowDefinition.Id.ToString(),
                             ExecutionId: workflowRun.Id.ToString()),
                         cancellationToken);
+                    workflowRun.SetErrorReference(partialSuccessReferenceId);
                 }
             }
             else
@@ -394,7 +400,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             await PersistRunAsync(workflowRun, cancellationToken);
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, workflowRun.Status.ToString(), DateTimeOffset.UtcNow, workflowRun.ErrorMessage, cancellationToken);
+                workflowRun.Id, workflowDefinition.Id, workflowRun.Status.ToString(), DateTimeOffset.UtcNow, workflowRun.ErrorMessage, cancellationToken, workflowRun.ErrorReferenceId);
         }
         catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
         {
@@ -412,20 +418,10 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 DateTimeOffset.UtcNow,
                 cancelException.Message), cancellationToken);
 
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch
-            {
-                // Swallowed by design — see the matching remark in the generic failure branch below.
-            }
-
-            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None);
-
+            string? cancelReferenceId = null;
             if (_exceptionManager is not null)
             {
-                await _exceptionManager.CaptureExpectedAsync(
+                cancelReferenceId = await _exceptionManager.CaptureExpectedAsync(
                     new ExpectedFailure(nameof(FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException), cancelException.Message),
                     new ExceptionContext(
                         Module: "Workflow",
@@ -435,6 +431,25 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                         ExecutionId: workflowRun.Id.ToString()),
                     CancellationToken.None);
             }
+
+            workflowRun.SetErrorReference(cancelReferenceId);
+
+            try
+            {
+                await PersistRunAsync(workflowRun, CancellationToken.None);
+            }
+            catch (Exception persistException)
+            {
+                // Not rethrown by design — see the matching remark in the generic failure branch below — but must
+                // still be logged: this is the terminal write for the run's history, so a silent failure here means
+                // the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
+                _logger.LogError(persistException,
+                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                    workflowRun.Id, workflowDefinition.Id);
+            }
+
+            await NotifyRunStatusAsync(
+                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None, cancelReferenceId);
 
             throw;
         }
@@ -454,6 +469,25 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 DateTimeOffset.UtcNow,
                 exception.Message), cancellationToken);
 
+            // Capture into the Global Exception Manager BEFORE persisting/notifying, so the real ErrorReferenceId
+            // it mints (never a placeholder — see ErrorReport's remarks) is already on the run row and the live
+            // SignalR push, instead of only ever being discoverable later via CorrelationId/ExecutionId lookup.
+            string? failureReferenceId = null;
+            if (_exceptionManager is not null)
+            {
+                var report = await _exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: workflowDefinition.Id.ToString(),
+                        ExecutionId: workflowRun.Id.ToString()),
+                    CancellationToken.None);
+                failureReferenceId = report.ErrorReferenceId;
+            }
+
+            workflowRun.SetErrorReference(failureReferenceId);
+
             // Persist the failed run with its partial node-run timeline. Use None so the history is captured
             // even when the caller's token is the reason the run aborted. Best-effort: a store failure here
             // (e.g. a transient DB error) must not also suppress the "Failed" SignalR notify below, or the run
@@ -462,24 +496,18 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             {
                 await PersistRunAsync(workflowRun, CancellationToken.None);
             }
-            catch
+            catch (Exception persistException)
             {
-                // Swallowed by design — see the remark above; NotifyRunStatusAsync still runs regardless.
+                // Not rethrown by design — see the remark above; NotifyRunStatusAsync still runs regardless — but
+                // must still be logged: this is the terminal write for the run's history, so a silent failure here
+                // means the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
+                _logger.LogError(persistException,
+                    "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                    workflowRun.Id, workflowDefinition.Id);
             }
 
-            await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Failed", DateTimeOffset.UtcNow, exception.Message, CancellationToken.None);
-
-            if (_exceptionManager is not null)
-            {
-                await _exceptionManager.CaptureAsync(
-                    exception,
-                    new ExceptionContext(
-                        Module: "Workflow",
-                        CorrelationId: context.CorrelationId,
-                        WorkflowId: workflowDefinition.Id.ToString(),
-                        ExecutionId: workflowRun.Id.ToString()),
-                    CancellationToken.None);
-            }
+            await NotifyRunStatusAsync(
+                workflowRun.Id, workflowDefinition.Id, "Failed", DateTimeOffset.UtcNow, exception.Message, CancellationToken.None, failureReferenceId);
 
             throw;
         }
@@ -526,9 +554,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             await _runStore.SaveAsync(workflowRun, cancellationToken);
         }
-        catch
+        catch (Exception persistException)
         {
-            // Swallowed by design — see the XML doc above.
+            // Not rethrown by design — see the XML doc above — but must still be logged, since the terminal
+            // PersistRunAsync call at the end of the run is the only other place this history is captured.
+            _logger.LogError(persistException,
+                "Failed to persist the initial 'Running' placeholder for workflow run {WorkflowRunId}.", workflowRun.Id);
         }
     }
 
@@ -540,7 +571,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         string status,
         DateTimeOffset occurredAt,
         string? errorMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? errorReferenceId = null)
     {
         if (_runStatusNotifier is null)
         {
@@ -550,7 +582,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         try
         {
             await _runStatusNotifier.NotifyAsync(
-                new RunStatusChangedEvent(workflowRunId, workflowDefinitionId, status, occurredAt, errorMessage),
+                new RunStatusChangedEvent(workflowRunId, workflowDefinitionId, status, occurredAt, errorMessage, errorReferenceId),
                 cancellationToken);
         }
         catch

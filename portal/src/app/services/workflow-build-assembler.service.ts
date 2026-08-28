@@ -506,14 +506,21 @@ export class WorkflowBuildAssemblerService {
     const isMedplum =
       node.nodeType.includes('Medplum') ||
       (fields['__transformId'] ?? '') === 'dest-medplum';
+    const isAzureFhir =
+      node.nodeType.includes('AzureFhirService') ||
+      (fields['__transformId'] ?? '') === 'dest-azurefhir';
+    // Excludes isAzureFhir explicitly — 'AzureFhirServiceDestinationNode' itself contains the substring
+    // 'Fhir', so the plain node.nodeType.includes('Fhir') check below would otherwise also match it,
+    // silently misclassifying an Azure FHIR Service node as a generic FhirRepository (Aidbox) one.
     const isFhir =
-      node.nodeType.includes('Fhir') ||
-      (fields['__transformId'] ?? '') === 'dest-fhir';
+      !isAzureFhir &&
+      (node.nodeType.includes('Fhir') ||
+        (fields['__transformId'] ?? '') === 'dest-fhir');
     const isBlob =
       node.nodeType.includes('Blob') ||
       (fields['__transformId'] ?? '') === 'dest-blob';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -554,7 +561,11 @@ export class WorkflowBuildAssemblerService {
         destinationType: 'Mongo',
         keyVaultName,
         secretName,
-        target: fields['dest_collection'] || null,
+        // null, not the primary collection — matches SQL's own `target: null` above. A non-null Target here
+        // wins over EVERY resource's own MappingProfile.DestinationObject in MappedMongoDestinationWriter's
+        // `destination.Target ?? mappingProfile.DestinationObject` resolution, collapsing every additional
+        // collection (added via the mapping canvas's "+ Add a collection" picker) back onto the primary one.
+        target: null,
         // The whole connection string is treated as secret (see destination-wizard.component.ts's mongoForm
         // comment) — there's no split server/database/credentials form to assemble from, so this is a direct
         // pass-through of whatever the wizard collected, same "don't touch an already-provisioned secret unless
@@ -601,6 +612,30 @@ export class WorkflowBuildAssemblerService {
           hasExistingSecret && !hasNewSecretInput
             ? null
             : this.buildFhirSecretBlob(fields),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
+      };
+    }
+
+    if (isAzureFhir) {
+      // dest_clientSecret is redacted from persisted config (see WorkflowGraphMapperService's
+      // SECRET_FIELD_KEYS) and never round-trips back into the wizard on reload — same "don't blank an
+      // already-provisioned secret unless the user actually typed a new one" guard the FHIR/SQL/Mongo
+      // branches above use. Managed identity never resolves a Key Vault secret at all (see
+      // FhirRepositoryAuthResolver's "managedidentity" branch server-side) — always sent as '' for that
+      // mode, mirroring the Blob branch's managedIdentity handling below.
+      const hasNewSecretInput = !!fields['dest_clientSecret'];
+      return {
+        name,
+        destinationType: 'AzureFhirService',
+        keyVaultName,
+        secretName,
+        target: fields['dest_baseUrl'] || null,
+        inlineSecret:
+          fields['dest_authType'] === 'managedIdentity'
+            ? ''
+            : hasExistingSecret && !hasNewSecretInput
+              ? null
+              : this.buildFhirSecretBlob(fields),
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'fhir'),
       };
     }
@@ -666,7 +701,7 @@ export class WorkflowBuildAssemblerService {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode']
+          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
           : kind === 'medplum'
             ? [
                 'dest_name',
@@ -692,6 +727,12 @@ export class WorkflowBuildAssemblerService {
                 'dest_username',
                 'dest_fhirMapMode',
                 'dest_fhirCustomRules',
+                // Azure FHIR Service (Azure Health Data Services) — non-secret managed-identity/scope
+                // overrides. dest_fhirAuthType itself is set separately, via the dest_authType bridge below.
+                'dest_fhirAzureScope',
+                'dest_fhirManagedIdentityClientId',
+                'dest_autoFetchMissingReferences',
+                'dest_autoFetchMaxCount',
               ]
             : kind === 'blob'
               ? [
@@ -754,10 +795,23 @@ export class WorkflowBuildAssemblerService {
     if (authType === 'bearer') {
       return JSON.stringify({ token: f['dest_bearerToken'] ?? '' });
     }
+    // Managed identity (Azure FHIR Service) never resolves a Key Vault secret at all — see
+    // FhirRepositoryAuthResolver's "managedidentity" branch, which skips secret retrieval entirely for it.
+    if (authType === 'managedIdentity') {
+      return '';
+    }
     return JSON.stringify({
       clientId: f['dest_clientId'] ?? '',
       clientSecret: f['dest_clientSecret'] ?? '',
       tokenEndpoint: f['dest_tokenEndpoint'] ?? '',
+      // Only AzureFhirServiceDestinationFormComponent's config carries dest_fhirAzureScope (even blank) — the
+      // generic Aidbox/FhirRepository form never collects a scope at all, and its OAuth2 servers have
+      // tolerated an omitted scope, so this is deliberately scoped to Azure FHIR Service's config shape only.
+      // Entra ID's v2.0 token endpoint requires a non-empty scope for client_credentials (AADSTS90014
+      // otherwise) — default to Azure's own {resource}/.default convention when the user left it blank.
+      ...(f['dest_fhirAzureScope'] !== undefined
+        ? { scope: f['dest_fhirAzureScope'] || `${(f['dest_baseUrl'] ?? '').replace(/\/+$/, '')}/.default` }
+        : {}),
     });
   }
 

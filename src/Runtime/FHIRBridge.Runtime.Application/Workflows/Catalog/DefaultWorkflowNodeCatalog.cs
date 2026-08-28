@@ -45,9 +45,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.PostgreSqlDestination),
         Destination(WorkflowNodeTypes.MedplumDestination),
         Destination(WorkflowNodeTypes.FhirRepositoryDestination),
+        Destination(WorkflowNodeTypes.AzureFhirServiceDestination),
         Destination(WorkflowNodeTypes.BlobDestination),
-        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository + Blob
-        // destinations are exposed in the palette. The writers below remain registered in
+        // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
+        // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
         // Destination(WorkflowNodeTypes.AzureSqlDestination),
         // Destination(WorkflowNodeTypes.SnowflakeDestination),
@@ -209,6 +210,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.PostgreSqlDestination => "dest-postgres",
             WorkflowNodeTypes.MedplumDestination => "dest-medplum",
             WorkflowNodeTypes.FhirRepositoryDestination => "dest-fhir",
+            WorkflowNodeTypes.AzureFhirServiceDestination => "dest-azurefhir",
             WorkflowNodeTypes.BlobDestination => "dest-blob",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
@@ -229,6 +231,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.PostgreSqlDestination => "PostgreSQL",
             WorkflowNodeTypes.MedplumDestination => "Medplum (FHIR)",
             WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
+            WorkflowNodeTypes.AzureFhirServiceDestination => "Azure FHIR Service",
             WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
@@ -249,6 +252,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.PostgreSqlDestination => "Write mapped records to PostgreSQL.",
             WorkflowNodeTypes.MedplumDestination => "Write FHIR resources to a Medplum FHIR R4 store (idempotent upsert).",
             WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
+            WorkflowNodeTypes.AzureFhirServiceDestination => "Write FHIR resources to Azure Health Data Services (Azure AD client credentials or managed identity).",
             WorkflowNodeTypes.BlobDestination => "Write mapped records to Azure Blob Storage.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",

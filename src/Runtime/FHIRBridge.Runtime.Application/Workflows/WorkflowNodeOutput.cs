@@ -35,4 +35,12 @@ public static class WorkflowNodeOutputMetadataKeys
     /// FHIR Bulk Data <c>$export</c> job instead of blocking for its full duration. The orchestrator pauses the run
     /// at this node rather than treating the output as a normal completed result.</summary>
     public const string BulkExportDeferredJobId = "bulkExportDeferredJobId";
+
+    /// <summary>Set by <c>DeIdentificationNodeExecutor</c> to a
+    /// <c>Dictionary&lt;string, IReadOnlyList&lt;FHIRBridge.Application.Abstractions.Governance.DeIdentificationFieldHop&gt;&gt;</c>
+    /// keyed by resource id — each resource's PreMapping redactions, so the downstream Mapping node can merge
+    /// them into the same Field Lineage chain as its own PostMapping hops (see
+    /// <c>MappingNodeExecutor.ApplyTransformRulesAsync</c>). Absent (not just empty) when no resource in this
+    /// node's batch had anything redacted.</summary>
+    public const string PreMappingRedactions = "preMappingRedactions";
 }

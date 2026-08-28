@@ -32,7 +32,10 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         new(true, "Workflow", DateTimeOffset.UtcNow, FetchMissingReferenceAsync: fetchMissingReferenceAsync);
 
     private static (MappedFhirRepositoryDestinationWriter Writer, CapturingHandler Handler, Mock<ISecretProvider> SecretProvider)
-        CreateWriter(string secretValue = "https://fhir.example.com", IFhirDestinationTokenProvider? tokenProvider = null)
+        CreateWriter(
+            string secretValue = "https://fhir.example.com",
+            IFhirDestinationTokenProvider? tokenProvider = null,
+            IAzureManagedIdentityFhirTokenProvider? managedIdentityTokenProvider = null)
     {
         var handler = new CapturingHandler();
         var httpClientFactory = new Mock<IHttpClientFactory>();
@@ -44,7 +47,10 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
             .ReturnsAsync(secretValue);
 
         var writer = new MappedFhirRepositoryDestinationWriter(
-            secretProvider.Object, httpClientFactory.Object, tokenProvider ?? Mock.Of<IFhirDestinationTokenProvider>());
+            secretProvider.Object,
+            httpClientFactory.Object,
+            tokenProvider ?? Mock.Of<IFhirDestinationTokenProvider>(),
+            managedIdentityTokenProvider ?? Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
 
         return (writer, handler, secretProvider);
     }
@@ -128,6 +134,42 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     }
 
     [Fact]
+    public async Task ManagedIdentity_auth_attaches_token_from_managed_identity_provider_and_needs_no_secret()
+    {
+        var managedIdentityTokenProvider = new Mock<IAzureManagedIdentityFhirTokenProvider>();
+        managedIdentityTokenProvider
+            .Setup(t => t.GetAccessTokenAsync(
+                "https://myfhirservice.fhir.azurehealthcareapis.com/.default", null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("managed-identity-token");
+
+        var (writer, handler, secretProvider) = CreateWriter(managedIdentityTokenProvider: managedIdentityTokenProvider.Object);
+        var destination = Destination(
+            """{"dest_fhirAuthType":"managedIdentity"}""",
+            target: "https://myfhirservice.fhir.azurehealthcareapis.com");
+
+        await writer.WriteAsync(destination, Mapping(), [Record()], Context(), CancellationToken.None);
+
+        handler.LastRequest!.Headers.Authorization!.Parameter.Should().Be("managed-identity-token");
+        secretProvider.Verify(s => s.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AzureFhirService_destination_type_shares_this_writer_unchanged()
+    {
+        // AzureFhirService is registered to this same writer in ConfiguredDestinationWriterFactory (Azure Health
+        // Data Services is a standard FHIR R4 server) — confirms the shared write path is unaffected by which of
+        // the two DestinationType values the destination carries.
+        var (writer, handler, _) = CreateWriter();
+        var destination = new DestinationConfiguration(
+            "AHDS", DestinationType.AzureFhirService, new SecretReference("kv", "secret"),
+            "https://aidbox.example.com/fhir", connectionMetadataJson: null);
+
+        await writer.WriteAsync(destination, Mapping(), [Record()], Context(), CancellationToken.None);
+
+        handler.LastRequest!.RequestUri!.ToString().Should().StartWith("https://aidbox.example.com/fhir/Patient/");
+    }
+
+    [Fact]
     public async Task Auth_enabled_without_target_throws()
     {
         var (writer, _, _) = CreateWriter(secretValue: """{"token":"abc"}""");
@@ -149,6 +191,58 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
 
         handler.LastRequestBody.Should().Contain("\"resourceType\":\"Patient\"");
         handler.LastRequestBody.Should().Contain("\"id\":\"123\"");
+    }
+
+    // ── Ids that violate FHIR's id datatype constraint (some Epic-issued ids exceed 64 chars) ────────────────
+
+    [Fact]
+    public async Task An_id_longer_than_64_characters_is_replaced_with_a_deterministic_valid_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://fhir.example.com");
+        var longId = "ecLi-J.W4eNp2GKJJpFG5GQ55b1GMgCcd1920e3y5YJz.JEjypM5tY2ECMN1ZE8jw3"; // 66 chars, real Epic-style id
+        longId.Length.Should().BeGreaterThan(64);
+        var record = Record($$"""{"resourceType":"Observation","id":"{{longId}}"}""", sourceResourceId: longId, resourceType: "Observation");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequest!.RequestUri!.ToString().Should().NotContain(longId);
+        handler.LastRequest.RequestUri!.ToString().Should().MatchRegex(@"/Observation/[0-9a-fA-F\-]{36}$");
+        handler.LastRequestBody.Should().NotContain($"\"id\":\"{longId}\"");
+        // Original id preserved for traceability, not silently discarded.
+        handler.LastRequestBody.Should().Contain(longId);
+        handler.LastRequestBody.Should().Contain("\"system\":\"urn:fhirbridge:source-id\"");
+    }
+
+    [Fact]
+    public async Task The_same_invalid_id_maps_to_the_same_replacement_id_every_run()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://fhir.example.com");
+        var longId = new string('a', 70);
+        var record = Record($$"""{"resourceType":"Observation","id":"{{longId}}"}""", sourceResourceId: longId, resourceType: "Observation");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+        var firstEndpoint = handler.LastRequest!.RequestUri!.ToString();
+
+        var (writer2, handler2, _) = CreateWriter();
+        await writer2.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+        var secondEndpoint = handler2.LastRequest!.RequestUri!.ToString();
+
+        firstEndpoint.Should().Be(secondEndpoint);
+    }
+
+    [Fact]
+    public async Task An_id_within_the_64_character_limit_using_only_valid_characters_is_left_unchanged()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination(connectionMetadataJson: null, target: "https://fhir.example.com");
+        var validId = new string('a', 64); // exactly at the limit
+        var record = Record($$"""{"resourceType":"Observation","id":"{{validId}}"}""", sourceResourceId: validId, resourceType: "Observation");
+
+        await writer.WriteAsync(destination, Mapping(), [record], Context(), CancellationToken.None);
+
+        handler.LastRequest!.RequestUri!.ToString().Should().EndWith($"/Observation/{validId}");
     }
 
     // ── Coding.version stripping for stable HL7-core CodeSystems (avoids a destination FHIR server rejecting a

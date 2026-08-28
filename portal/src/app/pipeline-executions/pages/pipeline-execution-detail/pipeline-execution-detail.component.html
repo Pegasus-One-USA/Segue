@@ -22,7 +22,12 @@
     </div>
 
     @if (e.errorMessage) {
-      <div class="error-banner">{{ e.errorMessage }}</div>
+      <div class="error-banner">
+        {{ e.errorMessage }}
+        @if (e.errorReferenceId) {
+          <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: e.errorReferenceId }" title="View this error in Operations → Errors">Reference: {{ e.errorReferenceId }}</a>
+        }
+      </div>
     }
   }
 

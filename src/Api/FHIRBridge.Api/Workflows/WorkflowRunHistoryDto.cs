@@ -19,7 +19,8 @@ public sealed record WorkflowRunHistoryDto(
     int NodeRunCount,
     string? ErrorMessage,
     int WorkflowDefinitionVersion,
-    string? CorrelationId)
+    string? CorrelationId,
+    string? ErrorReferenceId)
 {
     public long? DurationMs => CompletedAt.HasValue
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds

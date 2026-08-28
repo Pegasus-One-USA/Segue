@@ -380,6 +380,22 @@ public sealed class OAuthController : ControllerBase
             _logger.LogWarning(
                 "[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription} state={State}",
                 error, errorDescription, state);
+
+            // Persists a SmartLaunchLogs row (Success: false) so this rejection is queryable from SQL, not just
+            // Seq — there is no production Seq instance. Best-effort: an audit-logging failure here must never
+            // break the actual rejection response back to the browser.
+            if (!string.IsNullOrWhiteSpace(state))
+            {
+                try
+                {
+                    await _authorizationService.LogRejectedLaunchAsync(state, error, errorDescription, cancellationToken);
+                }
+                catch (Exception auditException)
+                {
+                    _logger.LogWarning(auditException, "[Step 5/6] Could not persist the EHR-side rejection ({Error}) to SmartLaunchLogs.", error);
+                }
+            }
+
             // error is an OAuth-standard code (e.g. "access_denied") and safe to return; error_description is
             // freeform text from the EHR/IdP and must never be echoed back verbatim — log it above, show generic.
             return BadRequest(new { error, error_description = "Authorization failed. Please try connecting again." });

@@ -8,6 +8,7 @@ import { GovernanceApiService } from '../../services/governance-api.service';
 import { AlertRule, CreateAlertRuleRequest } from '../../models/governance.model';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
+import { ToastService } from '../../../services/toast.service';
 
 function emptyForm(): CreateAlertRuleRequest {
   return { name: '', eventTypeFilter: '', thresholdCount: 3, windowMinutes: 15, severity: 'Medium', recipients: '' };
@@ -33,6 +34,7 @@ export const SECURITY_EVENT_TYPES: { value: string; label: string }[] = [
 export class AlertRulesComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(GovernanceApiService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly toast = inject(ToastService);
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
@@ -82,7 +84,10 @@ export class AlertRulesComponent implements OnInit, HasUnsavedChanges {
   }
 
   toggleEnabled(rule: AlertRule): void {
-    this.api.setAlertRuleEnabled(rule.id, !rule.isEnabled).subscribe({ next: () => this.load() });
+    this.api.setAlertRuleEnabled(rule.id, !rule.isEnabled).subscribe({
+      next: () => this.load(),
+      error: () => this.toast.error(`Could not ${rule.isEnabled ? 'disable' : 'enable'} the alert rule.`),
+    });
   }
 
   // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────

@@ -1271,6 +1271,14 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AttachmentNames")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Body")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -2110,6 +2118,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<int>("ExtractedCount")
                         .HasColumnType("int");
@@ -4497,6 +4509,157 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("ProcessedMessages", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DestinationType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("ExtractedResourceCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FailureMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestedResourceTypes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("WrittenResourceCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("StartedOnUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("PipelineRuns", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PipelineRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("StepType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredOnUtc");
+
+                    b.HasIndex("PipelineRunId");
+
+                    b.ToTable("PipelineRunEvents", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("PipelineRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ResourceCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("StepType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PipelineRunId");
+
+                    b.ToTable("PipelineRunSteps", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4847,6 +5010,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -4913,7 +5080,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("DestinationConfigurationId");
 
-                            b1.ToTable("DestinationConfigurations", (string)null);
+                            b1.ToTable("DestinationConfigurations");
 
                             b1.WithOwner()
                                 .HasForeignKey("DestinationConfigurationId");
@@ -5076,7 +5243,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("NotificationSettingsId");
 
-                            b1.ToTable("NotificationSettings", (string)null);
+                            b1.ToTable("NotificationSettings");
 
                             b1.WithOwner()
                                 .HasForeignKey("NotificationSettingsId");
@@ -5301,7 +5468,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("SourceConfigurationId");
 
-                            b1.ToTable("SourceConfigurations", (string)null);
+                            b1.ToTable("SourceConfigurations");
 
                             b1.WithOwner()
                                 .HasForeignKey("SourceConfigurationId");
@@ -5312,163 +5479,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.SourceConnection", b =>
                 {
-                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceAuthenticationConfiguration", "Authentication", b1 =>
-                        {
-                            b1.Property<Guid>("SourceConnectionId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<string>("AuthPlacement")
-                                .HasMaxLength(20)
-                                .HasColumnType("nvarchar(20)")
-                                .HasColumnName("AuthPlacement");
-
-                            b1.Property<string>("AuthenticationType")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
-                                .HasColumnName("AuthenticationType");
-
-                            b1.Property<string>("ClientId")
-                                .HasMaxLength(300)
-                                .HasColumnType("nvarchar(300)")
-                                .HasColumnName("ClientId");
-
-                            b1.Property<string>("DiscoveredScopes")
-                                .HasColumnType("nvarchar(max)")
-                                .HasColumnName("DiscoveredScopes");
-
-                            b1.Property<string>("JwksUrl")
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("JwksUrl");
-
-                            b1.Property<string>("KeyId")
-                                .HasMaxLength(200)
-                                .HasColumnType("nvarchar(200)")
-                                .HasColumnName("KeyId");
-
-                            b1.Property<string>("PracticeId")
-                                .HasMaxLength(100)
-                                .HasColumnType("nvarchar(100)")
-                                .HasColumnName("PracticeId");
-
-                            b1.Property<string>("Scopes")
-                                .IsRequired()
-                                .HasColumnType("nvarchar(max)")
-                                .HasColumnName("Scopes");
-
-                            b1.Property<string>("TokenEndpoint")
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("TokenEndpoint");
-
-                            b1.HasKey("SourceConnectionId");
-
-                            b1.ToTable("SourceConnections", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("SourceConnectionId");
-
-                            b1.OwnsOne("FHIRBridge.Domain.ValueObjects.SecretReference", "ClientSecret", b2 =>
-                                {
-                                    b2.Property<Guid>("SourceAuthenticationConfigurationSourceConnectionId")
-                                        .HasColumnType("uniqueidentifier");
-
-                                    b2.Property<string>("KeyVaultName")
-                                        .IsRequired()
-                                        .HasMaxLength(200)
-                                        .HasColumnType("nvarchar(200)")
-                                        .HasColumnName("ClientSecretKeyVaultName");
-
-                                    b2.Property<string>("SecretName")
-                                        .IsRequired()
-                                        .HasMaxLength(200)
-                                        .HasColumnType("nvarchar(200)")
-                                        .HasColumnName("ClientSecretName");
-
-                                    b2.HasKey("SourceAuthenticationConfigurationSourceConnectionId");
-
-                                    b2.ToTable("SourceConnections", (string)null);
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("SourceAuthenticationConfigurationSourceConnectionId");
-                                });
-
-                            b1.OwnsOne("FHIRBridge.Domain.ValueObjects.SecretReference", "PrivateKey", b2 =>
-                                {
-                                    b2.Property<Guid>("SourceAuthenticationConfigurationSourceConnectionId")
-                                        .HasColumnType("uniqueidentifier");
-
-                                    b2.Property<string>("KeyVaultName")
-                                        .IsRequired()
-                                        .HasMaxLength(200)
-                                        .HasColumnType("nvarchar(200)")
-                                        .HasColumnName("PrivateKeyKeyVaultName");
-
-                                    b2.Property<string>("SecretName")
-                                        .IsRequired()
-                                        .HasMaxLength(200)
-                                        .HasColumnType("nvarchar(200)")
-                                        .HasColumnName("PrivateKeySecretName");
-
-                                    b2.HasKey("SourceAuthenticationConfigurationSourceConnectionId");
-
-                                    b2.ToTable("SourceConnections", (string)null);
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("SourceAuthenticationConfigurationSourceConnectionId");
-                                });
-
-                            b1.Navigation("ClientSecret");
-
-                            b1.Navigation("PrivateKey");
-                        });
-
-                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceInteractiveConfiguration", "Interactive", b1 =>
-                        {
-                            b1.Property<Guid>("SourceConnectionId")
-                                .HasColumnType("uniqueidentifier");
-
-                            b1.Property<string>("LaunchDisplayMode")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("LaunchDisplayMode");
-
-                            b1.Property<string>("LaunchUrl")
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("LaunchUrl");
-
-                            b1.Property<string>("PatientSelectionMethod")
-                                .HasMaxLength(50)
-                                .HasColumnType("nvarchar(50)")
-                                .HasColumnName("PatientSelectionMethod");
-
-                            b1.Property<string>("PostLaunchRedirectUri")
-                                .HasMaxLength(500)
-                                .HasColumnType("nvarchar(500)")
-                                .HasColumnName("PostLaunchRedirectUri");
-
-                            b1.Property<string>("RedirectUris")
-                                .IsRequired()
-                                .HasMaxLength(2000)
-                                .HasColumnType("nvarchar(2000)")
-                                .HasColumnName("RedirectUris");
-
-                            b1.Property<string>("TrustedIssuers")
-                                .IsRequired()
-                                .HasMaxLength(2000)
-                                .HasColumnType("nvarchar(2000)")
-                                .HasColumnName("TrustedIssuers");
-
-                            b1.HasKey("SourceConnectionId");
-
-                            b1.ToTable("SourceConnections", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("SourceConnectionId");
-                        });
-
                     b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceRetrievalConfiguration", "Retrieval", b1 =>
                         {
                             b1.Property<Guid>("SourceConnectionId")
@@ -5557,7 +5567,164 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("SourceConnectionId");
 
-                            b1.ToTable("SourceConnections", (string)null);
+                            b1.ToTable("SourceConnections");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SourceConnectionId");
+                        });
+
+                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceAuthenticationConfiguration", "Authentication", b1 =>
+                        {
+                            b1.Property<Guid>("SourceConnectionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("AuthPlacement")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)")
+                                .HasColumnName("AuthPlacement");
+
+                            b1.Property<string>("AuthenticationType")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("AuthenticationType");
+
+                            b1.Property<string>("ClientId")
+                                .HasMaxLength(300)
+                                .HasColumnType("nvarchar(300)")
+                                .HasColumnName("ClientId");
+
+                            b1.Property<string>("DiscoveredScopes")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("DiscoveredScopes");
+
+                            b1.Property<string>("JwksUrl")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("JwksUrl");
+
+                            b1.Property<string>("KeyId")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("KeyId");
+
+                            b1.Property<string>("PracticeId")
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("PracticeId");
+
+                            b1.Property<string>("Scopes")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("Scopes");
+
+                            b1.Property<string>("TokenEndpoint")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("TokenEndpoint");
+
+                            b1.HasKey("SourceConnectionId");
+
+                            b1.ToTable("SourceConnections");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SourceConnectionId");
+
+                            b1.OwnsOne("FHIRBridge.Domain.ValueObjects.SecretReference", "ClientSecret", b2 =>
+                                {
+                                    b2.Property<Guid>("SourceAuthenticationConfigurationSourceConnectionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("KeyVaultName")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("nvarchar(200)")
+                                        .HasColumnName("ClientSecretKeyVaultName");
+
+                                    b2.Property<string>("SecretName")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("nvarchar(200)")
+                                        .HasColumnName("ClientSecretName");
+
+                                    b2.HasKey("SourceAuthenticationConfigurationSourceConnectionId");
+
+                                    b2.ToTable("SourceConnections");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("SourceAuthenticationConfigurationSourceConnectionId");
+                                });
+
+                            b1.OwnsOne("FHIRBridge.Domain.ValueObjects.SecretReference", "PrivateKey", b2 =>
+                                {
+                                    b2.Property<Guid>("SourceAuthenticationConfigurationSourceConnectionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("KeyVaultName")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("nvarchar(200)")
+                                        .HasColumnName("PrivateKeyKeyVaultName");
+
+                                    b2.Property<string>("SecretName")
+                                        .IsRequired()
+                                        .HasMaxLength(200)
+                                        .HasColumnType("nvarchar(200)")
+                                        .HasColumnName("PrivateKeySecretName");
+
+                                    b2.HasKey("SourceAuthenticationConfigurationSourceConnectionId");
+
+                                    b2.ToTable("SourceConnections");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("SourceAuthenticationConfigurationSourceConnectionId");
+                                });
+
+                            b1.Navigation("ClientSecret");
+
+                            b1.Navigation("PrivateKey");
+                        });
+
+                    b.OwnsOne("FHIRBridge.Domain.ValueObjects.SourceInteractiveConfiguration", "Interactive", b1 =>
+                        {
+                            b1.Property<Guid>("SourceConnectionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("LaunchDisplayMode")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("LaunchDisplayMode");
+
+                            b1.Property<string>("LaunchUrl")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("LaunchUrl");
+
+                            b1.Property<string>("PatientSelectionMethod")
+                                .HasMaxLength(50)
+                                .HasColumnType("nvarchar(50)")
+                                .HasColumnName("PatientSelectionMethod");
+
+                            b1.Property<string>("PostLaunchRedirectUri")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("PostLaunchRedirectUri");
+
+                            b1.Property<string>("RedirectUris")
+                                .IsRequired()
+                                .HasMaxLength(2000)
+                                .HasColumnType("nvarchar(2000)")
+                                .HasColumnName("RedirectUris");
+
+                            b1.Property<string>("TrustedIssuers")
+                                .IsRequired()
+                                .HasMaxLength(2000)
+                                .HasColumnType("nvarchar(2000)")
+                                .HasColumnName("TrustedIssuers");
+
+                            b1.HasKey("SourceConnectionId");
+
+                            b1.ToTable("SourceConnections");
 
                             b1.WithOwner()
                                 .HasForeignKey("SourceConnectionId");
@@ -5591,6 +5758,15 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasOne("FHIRBridge.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunStep", b =>
+                {
+                    b.HasOne("FHIRBridge.Runtime.Domain.Entities.PipelineRun", null)
+                        .WithMany("Steps")
+                        .HasForeignKey("PipelineRunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -5631,7 +5807,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                             b1.HasKey("WorkflowDefinitionId");
 
-                            b1.ToTable("WorkflowDefinitions", (string)null);
+                            b1.ToTable("WorkflowDefinitions");
 
                             b1.WithOwner()
                                 .HasForeignKey("WorkflowDefinitionId");
@@ -5674,6 +5850,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkflowRunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRun", b =>
+                {
+                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition", b =>

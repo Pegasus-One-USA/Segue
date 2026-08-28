@@ -411,6 +411,9 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 .lastrun { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 
+.error-reference-link { font-family: monospace; font-size: 11px; color: var(--color-primary); text-decoration: none; }
+.error-reference-link:hover { text-decoration: underline; }
+
 // Enabled / disabled pill
 .pill {
   display: inline-flex; align-items: center;

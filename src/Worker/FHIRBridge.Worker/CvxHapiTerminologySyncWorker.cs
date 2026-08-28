@@ -1,4 +1,5 @@
-using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 
 namespace FHIRBridge.Worker;
@@ -10,14 +11,17 @@ namespace FHIRBridge.Worker;
 /// </summary>
 public sealed class CvxHapiTerminologySyncWorker : BackgroundService
 {
+    private static readonly TerminologySyncScheduleConfig ScheduleConfig = new("Terminology:CvxHapi", "03:15");
+
     private readonly IServiceScopeFactory _scopes;
-    private readonly ISystemSettingsCache _settings;
+    private readonly ITerminologySyncScheduleEvaluator _scheduleEvaluator;
     private readonly ILogger<CvxHapiTerminologySyncWorker> _logger;
-    private DateOnly? _lastRunDate;
 
     public CvxHapiTerminologySyncWorker(
-        IServiceScopeFactory scopes, ISystemSettingsCache settings, ILogger<CvxHapiTerminologySyncWorker> logger) =>
-        (_scopes, _settings, _logger) = (scopes, settings, logger);
+        IServiceScopeFactory scopes,
+        ITerminologySyncScheduleEvaluator scheduleEvaluator,
+        ILogger<CvxHapiTerminologySyncWorker> logger) =>
+        (_scopes, _scheduleEvaluator, _logger) = (scopes, scheduleEvaluator, logger);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,28 +29,19 @@ public sealed class CvxHapiTerminologySyncWorker : BackgroundService
         {
             try
             {
-                if (await _settings.GetBoolAsync("Terminology:CvxHapi:SchedulerEnabled", false, stoppingToken))
+                if (await _scheduleEvaluator.IsDueAsync(ScheduleConfig, DateTimeOffset.Now, stoppingToken))
                 {
-                    var now = DateTimeOffset.Now;
-                    var frequency = await _settings.GetStringAsync("Terminology:CvxHapi:Frequency", "Monthly", stoppingToken);
-                    var configured = await _settings.GetStringAsync("Terminology:CvxHapi:ExecutionTime", "03:15", stoppingToken);
-                    var dueTime = TimeOnly.TryParse(configured, out var time) ? time : new TimeOnly(3, 15);
-                    var due = now.TimeOfDay >= dueTime.ToTimeSpan() && _lastRunDate != DateOnly.FromDateTime(now.DateTime)
-                        && (string.Equals(frequency, "Weekly", StringComparison.OrdinalIgnoreCase) || now.Day == 1);
-
-                    if (due)
-                    {
-                        using var scope = _scopes.CreateScope();
-                        var result = await scope.ServiceProvider
-                            .GetRequiredService<IHapiCvxTerminologySyncService>()
-                            .SyncAsync(stoppingToken);
-                        _lastRunDate = DateOnly.FromDateTime(now.DateTime);
-                        _logger.LogInformation(
-                            "CVX HAPI terminology sync completed: {Total} codes ({Active} active), {Elapsed}.",
-                            result.TotalConceptCount,
-                            result.ActiveConceptCount,
-                            result.Duration);
-                    }
+                    using var scope = _scopes.CreateScope();
+                    var result = await scope.ServiceProvider
+                        .GetRequiredService<IHapiCvxTerminologySyncService>()
+                        .SyncAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<ISystemSettingsService>()
+                        .SetAsync("Terminology:CvxHapi:LastRunUtc", DateTime.UtcNow.ToString("O"), null, stoppingToken);
+                    _logger.LogInformation(
+                        "CVX HAPI terminology sync completed: {Total} codes ({Active} active), {Elapsed}.",
+                        result.TotalConceptCount,
+                        result.ActiveConceptCount,
+                        result.Duration);
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

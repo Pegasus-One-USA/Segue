@@ -62,6 +62,12 @@ export interface SchemaMutationResult {
    *  any). Also populated by addColumn() when its target table didn't already exist and had to be
    *  auto-created (Id + the one added column) — the caller otherwise has no prior record of that table. */
   table: DestinationTable | null;
+  /** Set only by createTable(), only when the requested table turned out to already exist for real by the
+   *  time this (deferred, queued) create actually ran — success, not failure, with `table` carrying its
+   *  real current shape rather than whatever columns were originally requested. See
+   *  SqlDestinationSchemaService.CreateTableAsync's own doc comment for why this must never be a hard
+   *  failure — a dependent queued addColumn() behind it would otherwise be stranded. */
+  alreadyExisted?: boolean;
 }
 
 /** One user-specified column for CreateTableRequest — name + a data type in the same shapes the
@@ -128,6 +134,12 @@ export interface FhirConnectionTestRequest {
   username?: string;
   password?: string;
   bearerToken?: string;
+  // Azure FHIR Service only — when tenantId is supplied the backend computes the Entra ID token endpoint
+  // directly instead of discovering it from a SMART configuration document (see FhirConnectionTestRequest.cs).
+  tenantId?: string;
+  scope?: string;
+  managedIdentityClientId?: string;
+  authorityHost?: string;
 }
 
 export interface ConnectionTestResult {
@@ -149,6 +161,16 @@ export interface MedplumConnectionTestRequest {
 // Mongo connection test — the whole connection string is the credential (must embed the database name).
 export interface MongoConnectionTestRequest {
   connectionString: string;
+  /** When supplied, the test also checks whether this collection exists (not just connectivity). */
+  collection?: string;
+  /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
+  createIfNotExists?: boolean;
+}
+
+export interface MongoConnectionTestResult extends ConnectionTestResult {
+  /** The database's real collection names, returned on every successful connect — lets the form offer them
+   *  as an autocomplete instead of requiring the collection name to be typed blind. */
+  collections?: string[];
 }
 
 // Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /
@@ -224,9 +246,9 @@ export class DestinationSchemaService {
   }
 
   /** Tests an ad-hoc MongoDB connection for a not-yet-saved Mongo destination — opens a client on the
-   *  connection string and runs a ping server-side. */
-  testMongo(request: MongoConnectionTestRequest): Observable<ConnectionTestResult> {
-    return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
+   *  connection string, runs a ping server-side, and (on success) returns the database's real collection names. */
+  testMongo(request: MongoConnectionTestRequest): Observable<MongoConnectionTestResult> {
+    return this.http.post<MongoConnectionTestResult>(DESTINATION_ENDPOINTS.mongoTest, request);
   }
 
   /** Tests an ad-hoc Azure Blob Storage connection for a not-yet-saved Blob destination — builds the container

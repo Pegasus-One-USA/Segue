@@ -30,7 +30,8 @@ public interface IPipelineRunRouteExecutionRepository
         int writtenCount,
         string? errorMessage,
         DateTime completedOnUtc,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? errorReferenceId = null);
 
     Task<PagedResult<PipelineRunRouteExecutionDto>> GetPagedAsync(
         PipelineRunRouteExecutionFilter filter,

@@ -13,6 +13,8 @@ import { ISourceConnectionService } from '../../services/i-source-connection.ser
 import { ApplicationTypeModel, SourceConnectionModel, SourceSortColumn, SortOrder } from '../../models/source-connection.model';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { WizardService } from '../../../services/wizard.service';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { SOURCES } from '../../../data/sources.data';
 import { EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from '../../../components/node-library/source-form.registry';
 import { EpicSourceFormComponent } from '../../../components/node-library/epic-source-form/epic-source-form.component';
 import { CernerSourceFormComponent } from '../../../components/node-library/cerner-source-form/cerner-source-form.component';
@@ -58,6 +60,7 @@ export class SourceConnectionListComponent implements OnInit {
   protected readonly wiz       = inject(WizardService);
   private readonly permissions = inject(PermissionService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg    = inject(PhaseConfigService);
 
   readonly searchQuery = signal('');
   readonly ehrFilter = signal<EhrVendor | ''>('');
@@ -91,19 +94,21 @@ export class SourceConnectionListComponent implements OnInit {
     this.actionOnSortDirection.set(null);
   }
 
-  readonly ehrOptions: { value: EhrVendor; label: string }[] = [
-    { value: 'Epic',               label: 'Epic' },
-    { value: 'Cerner',              label: 'Cerner' },
-    { value: 'GenericFhir',         label: 'Generic FHIR' },
-    { value: 'Athenahealth',        label: 'Athenahealth' },
-    { value: 'Allscripts',          label: 'Allscripts' },
-    { value: 'Hl7v2',               label: 'HL7v2' },
-    { value: 'Healow',              label: 'eCW (Healow)' },
-    { value: 'MeditechGreenfield',  label: 'MEDITECH Greenfield' },
-    { value: 'NewEHR',              label: 'NewEHR' },
-    { value: 'NewEHRTwo',           label: 'NewEHR Two' },
-    { value: 'Sample',              label: 'Sample' },
-  ];
+  /** Reverse of EHR_VENDOR_TO_SOURCE_FORM_KEY — SOURCES catalog id -> backend EhrVendor (SourceSystemType) name. */
+  private static readonly SOURCE_KEY_TO_EHR_VENDOR: Record<string, EhrVendor> = Object.fromEntries(
+    Object.entries(EHR_VENDOR_TO_SOURCE_FORM_KEY).map(([vendor, key]) => [key, vendor as EhrVendor]),
+  );
+
+  /** Loaded exactly like the workflow canvas's source node palette (see NodeLibraryDialogComponent.allCategories):
+   *  every SOURCES catalog entry, filtered by the active phase config (phaseCfg.isSourceEnabled) and by the
+   *  current role's `{vendor}.view` permission. Replaces the old hand-maintained array, which had drifted out of
+   *  sync with SOURCES (it still listed NewEHR/NewEHRTwo, neither of which exists there). */
+  readonly ehrOptions = computed(() =>
+    SOURCES
+      .filter(s => this.phaseCfg.isSourceEnabled(s.id) && (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`)))
+      .map(s => ({ value: SourceConnectionListComponent.SOURCE_KEY_TO_EHR_VENDOR[s.id], label: s.name }))
+      .filter((o): o is { value: EhrVendor; label: string } => !!o.value)
+  );
 
   /** Vendors offered when creating a brand-new Source Connection — narrower than ehrOptions (the row-list
    *  filter) above: only vendors with their own dedicated, WizardService-backed entity-mode form (see
@@ -113,7 +118,9 @@ export class SourceConnectionListComponent implements OnInit {
    *  in-form EHR `<select>` this page used to delegate vendor choice to before that control was removed from the
    *  shared engine (see ehr-vendor-source-form.component.ts).
    */
-  readonly createVendorOptions = this.ehrOptions.filter(o => o.value in EHR_VENDOR_TO_SOURCE_FORM_KEY && o.value !== 'GenericFhir' && o.value !== 'Hl7v2');
+  readonly createVendorOptions = computed(() =>
+    this.ehrOptions().filter(o => o.value in EHR_VENDOR_TO_SOURCE_FORM_KEY && o.value !== 'GenericFhir' && o.value !== 'Hl7v2')
+  );
 
   // There is no `sourceconnections.create` permission (RbacSeedData deliberately doesn't seed one —
   // Create is authorized per-vendor, e.g. `epic.create`, `cerner.create`). So "can this role create a
@@ -121,7 +128,7 @@ export class SourceConnectionListComponent implements OnInit {
   // createVendorOptions already offers (the ones with a real entity-mode form), so a permission the
   // user holds for a vendor with no form here (e.g. a future addition) never produces a dead option.
   readonly permittedCreateVendorOptions = computed(() =>
-    this.createVendorOptions.filter(o => this.permissions.hasPermission(`${o.value.toLowerCase()}.create`))
+    this.createVendorOptions().filter(o => this.permissions.hasPermission(`${o.value.toLowerCase()}.create`))
   );
 
   readonly addVendor = signal<EhrVendor>(this.permittedCreateVendorOptions()[0]?.value ?? 'Epic');

@@ -14,13 +14,13 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MongoDestinationConnectionTestService : IMongoDestinationConnectionTestService
 {
-    public async Task<ConnectionTestResultDto> TestConnectionAsync(
+    public async Task<MongoConnectionTestResultDto> TestConnectionAsync(
         MongoConnectionTestRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.ConnectionString))
         {
-            return new ConnectionTestResultDto(false, "Connection string is required.");
+            return new MongoConnectionTestResultDto(false, "Connection string is required.");
         }
 
         MongoUrl url;
@@ -30,12 +30,12 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
         }
         catch (Exception exception)
         {
-            return new ConnectionTestResultDto(false, $"Invalid connection string: {exception.Message}");
+            return new MongoConnectionTestResultDto(false, $"Invalid connection string: {exception.Message}");
         }
 
         if (string.IsNullOrWhiteSpace(url.DatabaseName))
         {
-            return new ConnectionTestResultDto(false, "The Mongo connection string must include a database name.");
+            return new MongoConnectionTestResultDto(false, "The Mongo connection string must include a database name.");
         }
 
         try
@@ -50,11 +50,31 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
             await database.RunCommandAsync<BsonDocument>(
                 new BsonDocument("ping", 1), cancellationToken: cancellationToken);
 
-            return new ConnectionTestResultDto(true, null);
+            // The full collection list is returned on every successful connect (not just when Collection is
+            // supplied) so the form can offer real names as an autocomplete instead of requiring one typed blind.
+            var collections = await (await database.ListCollectionNamesAsync(
+                cancellationToken: cancellationToken)).ToListAsync(cancellationToken);
+
+            // Collection existence is checked here too (not just at pipeline-run time in
+            // MappedMongoDestinationWriter) so a typo'd/never-created collection surfaces on the form
+            // immediately, unless the caller has opted into auto-create via the checkbox.
+            if (!string.IsNullOrWhiteSpace(request.Collection) && !request.CreateIfNotExists)
+            {
+                var collectionName = MongoCollectionNameResolver.Resolve(request.Collection);
+                if (!collections.Contains(collectionName, StringComparer.Ordinal))
+                {
+                    return new MongoConnectionTestResultDto(
+                        false,
+                        $"Connected, but collection '{collectionName}' does not exist. Create it in your database, or enable \"Create collection if not exists\".",
+                        collections);
+                }
+            }
+
+            return new MongoConnectionTestResultDto(true, null, collections);
         }
         catch (Exception exception)
         {
-            return new ConnectionTestResultDto(false, exception.Message);
+            return new MongoConnectionTestResultDto(false, exception.Message);
         }
     }
 }

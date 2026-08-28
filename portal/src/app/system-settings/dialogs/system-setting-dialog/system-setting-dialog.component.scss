@@ -108,6 +108,14 @@ mat-dialog-content {
       border-radius: var(--radius-base);
     }
   }
+
+  &--toggle {
+    display: flex;
+    align-items: center;
+    min-height: 56px;
+    font-size: 14px;
+    color: var(--color-ink);
+  }
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────

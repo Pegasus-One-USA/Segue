@@ -1,6 +1,8 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -80,15 +82,18 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IFhirDestinationTokenProvider _tokenProvider;
+    private readonly IAzureManagedIdentityFhirTokenProvider _managedIdentityTokenProvider;
 
     public MappedFhirRepositoryDestinationWriter(
         ISecretProvider secretProvider,
         IHttpClientFactory httpClientFactory,
-        IFhirDestinationTokenProvider tokenProvider)
+        IFhirDestinationTokenProvider tokenProvider,
+        IAzureManagedIdentityFhirTokenProvider managedIdentityTokenProvider)
     {
         _secretProvider = secretProvider;
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
+        _managedIdentityTokenProvider = managedIdentityTokenProvider;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -119,7 +124,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
             baseUrl = destination.Target.TrimEnd('/');
             authHeader = await FhirRepositoryAuthResolver.ResolveAsync(
-                destination.ConnectionMetadataJson, destination.SecretReference, _secretProvider, _tokenProvider, cancellationToken);
+                destination.ConnectionMetadataJson, destination.SecretReference, _secretProvider, _tokenProvider,
+                _managedIdentityTokenProvider, baseUrl, cancellationToken);
         }
 
         var httpClient = _httpClientFactory.CreateClient(nameof(MappedFhirRepositoryDestinationWriter));
@@ -177,7 +183,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 }
 
                 using var response = await httpClient.SendAsync(request, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                await EnsureSuccessOrThrowAsync(response, HttpMethod.Put, endpoint, cancellationToken);
             }
 
             return new DestinationWriteResult(
@@ -230,7 +236,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             }
 
             using var response = await httpClient.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            await EnsureSuccessOrThrowAsync(response, HttpMethod.Put, endpoint, cancellationToken);
             writtenResourceIds.Add(record.SourceResourceId);
         }
 
@@ -590,7 +596,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             }
 
             using var response = await httpClient.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            await EnsureSuccessOrThrowAsync(response, HttpMethod.Get, endpoint, cancellationToken);
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(body)
@@ -863,6 +869,27 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         => text.Length <= maxLength ? text : text[..maxLength] + "…";
 
     /// <summary>
+    /// Replaces a bare <c>response.EnsureSuccessStatusCode()</c> with one that captures the response body — a
+    /// non-2xx from a real FHIR server (Aidbox, Azure Health Data Services, ...) is almost always a FHIR
+    /// <c>OperationOutcome</c> carrying the actual diagnostic (e.g. "insufficient_scope", an RBAC denial, a
+    /// validation failure) — swallowing it left every 4xx/5xx here indistinguishable from every other one
+    /// ("Response status code does not indicate success: 403 (Forbidden)."), with no way to tell an auth/RBAC
+    /// problem apart from a malformed resource without external tracing.
+    /// </summary>
+    private static async Task EnsureSuccessOrThrowAsync(
+        HttpResponseMessage response, HttpMethod method, string endpoint, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        throw new HttpRequestException(
+            $"FHIR destination {method} '{endpoint}' returned {(int)response.StatusCode} ({response.ReasonPhrase}): {Truncate(body, 600)}");
+    }
+
+    /// <summary>
     /// Produces a (resourceType, id, body) triple to PUT. Prefers the normalized FHIR resource; reconciles its
     /// <c>id</c> to a stable value so URL and body agree. Falls back to the flattened payload for non-FHIR flows.
     /// Shares <paramref name="resolvedResourceCache"/> with every other caller in this class so a record's FHIR
@@ -1039,8 +1066,33 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 id = string.IsNullOrWhiteSpace(record.SourceResourceId)
                     ? Guid.NewGuid().ToString("N")
                     : record.SourceResourceId;
-                parsed["id"] = id;
             }
+
+            // Some source systems (Epic in particular) issue resource ids that violate FHIR's own `id`
+            // datatype constraint — most commonly by exceeding the 64-character limit, occasionally with a
+            // reserved character. A destination FHIR server rejects the write outright with 400 "Id must be
+            // any combination of..." (Azure Health Data Services enforces this strictly; some servers are
+            // lenient, Azure is not). Substituting a deterministic replacement keeps the write idempotent
+            // (the same source id always maps to the same replacement id across re-runs) at the cost of the
+            // logical id no longer visually matching the source system's own id — the original is preserved
+            // as an identifier so it's still traceable. Known gap: another resource in the SAME batch that
+            // references this one by its original (now-replaced) id won't resolve — narrow enough in
+            // practice (this only ever fires for a source id that was already invalid) that a full
+            // batch-wide reference-rewrite pass isn't implemented; revisit if that's actually hit.
+            if (!IsValidFhirId(id))
+            {
+                var sanitizedId = CreateNameBasedUuid(InvalidIdNamespace, $"{type}|{id}").ToString();
+                if (parsed["identifier"] is not JsonArray identifiers)
+                {
+                    identifiers = [];
+                    parsed["identifier"] = identifiers;
+                }
+
+                identifiers.Add(new JsonObject { ["system"] = "urn:fhirbridge:source-id", ["value"] = id });
+                id = sanitizedId;
+            }
+
+            parsed["id"] = id;
 
             StripVersionFromStableCodings(parsed);
 
@@ -1048,6 +1100,55 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         }
 
         return null;
+    }
+
+    // FHIR's id datatype: any combination of upper/lower-case ASCII letters, digits, '-', and '.', up to 64
+    // characters — https://hl7.org/fhir/R4/datatypes.html#id. Azure Health Data Services enforces this exactly
+    // and rejects a write outright when it's violated (see ParseFhirResource above).
+    private static readonly Regex ValidFhirIdPattern = new(@"^[A-Za-z0-9\-\.]{1,64}$", RegexOptions.Compiled);
+
+    private static bool IsValidFhirId(string id) => ValidFhirIdPattern.IsMatch(id);
+
+    // Fixed namespace for deriving a stable v5 (name-based) UUID replacement for a source id that violates
+    // FHIR's id constraint. Value is arbitrary but MUST stay constant — changing it re-maps every previously
+    // sanitized id to a new one and would duplicate on re-run. Deliberately a different constant than
+    // MappedMedplumDestinationWriter's own DeterministicIdNamespace so the two writers can never collide on
+    // the same derived id for the same source key.
+    private static readonly Guid InvalidIdNamespace = new("2f6b6f6d-1a2b-4c3d-9e8f-7a6b5c4d3e2f");
+
+    /// <summary>
+    /// Builds an RFC 4122 §4.3 name-based (version 5, SHA-1) UUID from a namespace and name — identical
+    /// algorithm to MappedMedplumDestinationWriter's own CreateNameBasedUuid (duplicated rather than shared,
+    /// since the two writers are otherwise independent). Deterministic: the same inputs always produce the
+    /// same GUID, which is what keeps a sanitized id stable across re-runs.
+    /// </summary>
+    private static Guid CreateNameBasedUuid(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapGuidByteOrder(namespaceBytes); // .NET stores the first three fields little-endian; RFC hashes big-endian.
+
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var toHash = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, toHash, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, toHash, namespaceBytes.Length, nameBytes.Length);
+
+        var hash = SHA1.HashData(toHash);
+
+        var uuid = new byte[16];
+        Array.Copy(hash, 0, uuid, 0, 16);
+        uuid[6] = (byte)((uuid[6] & 0x0F) | 0x50); // version 5
+        uuid[8] = (byte)((uuid[8] & 0x3F) | 0x80); // RFC 4122 variant
+
+        SwapGuidByteOrder(uuid); // back to .NET little-endian field order
+        return new Guid(uuid);
+    }
+
+    private static void SwapGuidByteOrder(byte[] guid)
+    {
+        (guid[0], guid[3]) = (guid[3], guid[0]);
+        (guid[1], guid[2]) = (guid[2], guid[1]);
+        (guid[4], guid[5]) = (guid[5], guid[4]);
+        (guid[6], guid[7]) = (guid[7], guid[6]);
     }
 
     /// <summary>

@@ -15,8 +15,10 @@ public interface IGlobalExceptionManager
     /// no <see cref="Exception"/>/stack trace required, no classification/diagnosis performed. Always recorded
     /// at Severity "Informational" so it stays out of Monitoring → Errors by default while remaining findable
     /// by CorrelationId/ExecutionId/etc. Returns just the reference id — there is no user-facing report to
-    /// build, since the caller already has its own safe client message.</summary>
-    Task<string> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default);
+    /// build, since the caller already has its own safe client message. Returns null if the record could not
+    /// actually be persisted (see remarks on <see cref="ErrorReport.ErrorReferenceId"/> — a caller must never
+    /// surface a reference id that has no matching ErrorLogs row behind it).</summary>
+    Task<string?> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A routine, expected domain outcome (e.g. a validation rejection, wrong password) that the caller
@@ -40,8 +42,11 @@ public sealed record ExceptionContext(
 
 /// <summary>The safe, user-facing result of capturing an exception. Contains no stack trace, technical
 /// message, or PHI/PII — only the reference id, category, a friendly message, and who should act on it.</summary>
+/// <param name="ErrorReferenceId">Null if every persistence attempt failed (e.g. the database was unreachable)
+/// — a caller MUST treat a null id as "no reference id to offer", never fall back to a placeholder, since
+/// nothing was actually written to ErrorLogs for the caller to quote or for Operations → Errors to find.</param>
 public sealed record ErrorReport(
-    string ErrorReferenceId,
+    string? ErrorReferenceId,
     ErrorCategory Category,
     string UserFriendlyMessage,
     string? CorrelationId,

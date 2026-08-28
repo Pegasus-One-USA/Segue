@@ -239,7 +239,9 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.Subject, 500),
             entry.Status,
             Truncate(entry.Error, 1000),
-            entry.CorrelationId));
+            entry.CorrelationId,
+            Truncate(entry.Body, 8000),
+            entry.AttachmentNames is { Count: > 0 } names ? Truncate(string.Join(", ", names), 1000) : null));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

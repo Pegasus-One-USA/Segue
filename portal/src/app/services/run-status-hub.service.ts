@@ -11,6 +11,9 @@ export interface RunStatusChangedEvent {
   status: 'Running' | 'Succeeded' | 'Failed';
   occurredAt: string;
   errorMessage: string | null;
+  /** The Global Exception Manager's ERR-yyyyMMdd-NNNNNN id for this failure, when one was actually persisted
+   *  to ErrorLogs — null if no capture ran or it failed to persist (never a placeholder). */
+  errorReferenceId: string | null;
 }
 
 /**

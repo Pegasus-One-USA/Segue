@@ -625,6 +625,42 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             WorkflowRunSkipped: skipWorkflowTrigger);
     }
 
+    public async Task LogRejectedLaunchAsync(
+        string state, string error, string? errorDescription, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(state))
+        {
+            return;
+        }
+
+        var nonce = _launchTokenProtector.UnprotectState(state);
+        if (nonce is null)
+        {
+            _logger.LogWarning(
+                "[Step 5/6] LogRejectedLaunchAsync: state is invalid or expired — cannot resolve a source connection " +
+                "to attach the EHR-side rejection ({Error}) to.", error);
+            return;
+        }
+
+        // Single-use, same as CompleteAsync's own lookup — this consumes the pending authorization, so a caller
+        // can't retry the same callback with a corrected `code` afterward; that matches today's behavior, where an
+        // EHR-side error already ends the flow with no way to recover the same state.
+        var pending = await _stateStore.TakeAsync(nonce, cancellationToken);
+        if (pending is null)
+        {
+            _logger.LogWarning(
+                "[Step 5/6] LogRejectedLaunchAsync: state is unknown or already used — cannot resolve a source " +
+                "connection to attach the EHR-side rejection ({Error}) to.", error);
+            return;
+        }
+
+        await _governanceLogger.LogSmartLaunchAsync(
+            new SmartLaunchEntry(
+                pending.SourceConnectionId, pending.SourceName, DetermineLaunchType(pending), Success: false,
+                $"EHR returned {error}: {errorDescription} {DescribeTokenKey(pending.SessionId)}"),
+            cancellationToken);
+    }
+
     // Enforces a permanent binding for sources that establish a durable per-user or per-patient context. Dispatches
     // to one of two genuinely different shapes depending on ApplicationType — see each helper's own remarks.
     // Returns true when THIS authorization must be rejected because it disagrees with a previously stored binding
