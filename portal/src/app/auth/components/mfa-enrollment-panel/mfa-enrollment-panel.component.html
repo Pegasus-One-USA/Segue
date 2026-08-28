@@ -16,7 +16,7 @@
         <p class="card-sub">Scan this with your authenticator app, or enter the secret manually:</p>
 
         @if (mfaQrDataUrl()) {
-          <img [src]="mfaQrDataUrl()" width="200" height="200" alt="MFA enrollment QR code — scan with your authenticator app" class="mfa-qr" />
+          <img [src]="mfaQrDataUrl()" width="150" height="150" alt="MFA enrollment QR code — scan with your authenticator app" class="mfa-qr" />
         }
 
         <div class="mfa-secret-row">
@@ -25,7 +25,7 @@
             {{ copiedField() === 'secret' ? 'Copied!' : 'Copy' }}
           </button>
         </div>
-        <p class="card-sub mono mfa-otp-uri">{{ mfaEnrollment()?.otpAuthUri }}</p>
+        <p class="card-sub mono mfa-otp-uri" [title]="mfaEnrollment()?.otpAuthUri">{{ mfaEnrollment()?.otpAuthUri }}</p>
 
         <div class="form-field">
           <label>6-digit code from your app</label>

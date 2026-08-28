@@ -1,11 +1,18 @@
 // auth/pages/mfa-setup-required/mfa-setup-required.component.scss
 
 .mfa-setup-page {
-  min-height: 100vh;
+  // position: fixed + inset: 0 fills the viewport exactly regardless of html/body's own overflow:hidden
+  // (styles.scss's fixed-viewport app shell) — same approach as login.component.scss's .auth-page. The
+  // card itself (see .mfa-setup-card and mfa-enrollment-panel.component.scss) is sized to comfortably fit
+  // a normal viewport with no scrolling needed; overflow stays hidden rather than auto so no scrollbar
+  // ever appears here.
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 28px 24px;
   background: var(--color-bg);
 }
 
@@ -13,39 +20,39 @@
   background: var(--color-surface);
   border-radius: 16px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-  padding: 36px 40px 40px;
+  padding: 28px 32px 32px;
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   border: 1px solid var(--color-border);
 }
 
 .card-header {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
 .header-icon-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   background: var(--color-primary-soft);
-  border-radius: 14px;
+  border-radius: 12px;
   flex-shrink: 0;
 }
 
 .header-icon {
-  font-size: 28px;
-  width: 28px;
-  height: 28px;
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
   color: var(--color-primary);
 }
 
 .card-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--color-ink);
   margin: 0 0 4px;
@@ -61,7 +68,7 @@
 .divider {
   border: none;
   border-top: 1px solid #F1F5F9;
-  margin: 0 0 24px;
+  margin: 0 0 16px;
 }
 
 .finishing {
@@ -76,8 +83,8 @@
 .sign-out-row {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
-  padding-top: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid #F1F5F9;
 }
 

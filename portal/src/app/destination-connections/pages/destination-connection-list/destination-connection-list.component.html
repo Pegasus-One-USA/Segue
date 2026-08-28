@@ -68,113 +68,108 @@
 
 
       <div class="table-wrapper">
-        <table mat-table [dataSource]="items()" class="data-table">
-
-          <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('name')">
-              Name
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
-                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <div class="cell-name">
-                <div class="dest-avatar"><mat-icon>storage</mat-icon></div>
-                <span class="cell-primary">{{ d.name }}</span>
-              </div>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="destinationType">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('destinationType')">
-              Type
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'destinationType'">
-                {{ sortColumn() === 'destinationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d"><span class="type-badge">{{ d.destinationType }}</span></td>
-          </ng-container>
-
-          <ng-container matColumnDef="target">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('target')">
-              Target
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'target'">
-                {{ sortColumn() === 'target' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-target" [matTooltip]="d.target || ''">{{ d.target || '—' }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="isEnabled">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
-              Status
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
-                {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="status-badge" [class.status-badge--inactive]="!d.isEnabled">
-                {{ d.isEnabled ? 'enabled' : 'disabled' }}
-              </span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actionBy">
-            <th mat-header-cell *matHeaderCellDef>Action by</th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-muted">{{ (d.modifiedBy || d.createdBy) ?? '—' }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actionOn">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="toggleActionOnSort()">
-              Action on
-              @if (actionOnSortDirection(); as dir) {
-                <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
-              }
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-muted">{{ ((d.modifiedOnUtc || d.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
-            <td mat-cell *matCellDef="let d" class="col-actions">
-              <div class="actions-cell">
-                @if (canOpenEntity(d)) {
-                  <button
-                    mat-icon-button
-                    class="btn-view"
-                    [matTooltip]="hasHistory(d) ? 'View (has execution history)' : 'Edit'"
-                    (click)="openEdit(d)"
-                  >
-                    <mat-icon>{{ hasHistory(d) ? 'visibility' : 'edit' }}</mat-icon>
-                  </button>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-menu"></th>
+              <th class="col-sortable" (click)="onSort('name')">
+                Name
+                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                  {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
+                </span>
+              </th>
+              <th class="col-sortable" (click)="onSort('destinationType')">
+                Type
+                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'destinationType'">
+                  {{ sortColumn() === 'destinationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
+                </span>
+              </th>
+              <th class="col-sortable" (click)="onSort('target')">
+                Target
+                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'target'">
+                  {{ sortColumn() === 'target' && sortDirection() === 'desc' ? '↓' : '↑' }}
+                </span>
+              </th>
+              <th class="col-sortable" (click)="onSort('isEnabled')">
+                Status
+                <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
+                  {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
+                </span>
+              </th>
+              <th>Action by</th>
+              <th class="col-sortable" (click)="toggleActionOnSort()">
+                Action on
+                @if (actionOnSortDirection(); as dir) {
+                  <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
                 }
-                <button
-                  mat-icon-button
-                  class="btn-delete"
-                  *appHideWithoutPermission="deleteCodes(d); mode: 'all'"
-                  [disabled]="hasHistory(d) || isUsedInWorkflow(d)"
-                  [matTooltip]="hasHistory(d)
-                    ? 'Cannot delete — has execution history'
-                    : isUsedInWorkflow(d)
-                      ? 'Cannot delete — referenced by a workflow'
-                      : 'Delete'"
-                  (click)="confirmDelete(d)"
-                >
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
-              </div>
-            </td>
-          </ng-container>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of items(); track d.id) {
+              <tr class="data-row">
+                <td class="col-menu">
+                  <div class="row-menu" (click)="$event.stopPropagation()">
+                    <button
+                      class="btn-icon"
+                      type="button"
+                      title="More actions"
+                      (click)="$event.stopPropagation(); toggleActionMenu($event, d.id)"
+                    ><mat-icon>more_vert</mat-icon></button>
 
-          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+                    @if (openActionMenuId() === d.id && actionMenuPosition(); as pos) {
+                      <div
+                        class="row-menu-panel"
+                        [style.top.px]="pos.top"
+                        [style.bottom.px]="pos.bottom"
+                        [style.left.px]="pos.left"
+                      >
+                        @if (canOpenEntity(d)) {
+                          <button
+                            type="button"
+                            class="row-menu-item"
+                            (click)="openEdit(d); openActionMenuId.set(null)"
+                          >
+                            <mat-icon>{{ hasHistory(d) ? 'visibility' : 'edit' }}</mat-icon>
+                            {{ hasHistory(d) ? 'View (has execution history)' : 'Edit' }}
+                          </button>
+                        }
 
+                        <button
+                          type="button"
+                          class="row-menu-item row-menu-item--danger"
+                          *appHideWithoutPermission="deleteCodes(d); mode: 'all'"
+                          [disabled]="hasHistory(d) || isUsedInWorkflow(d)"
+                          [title]="hasHistory(d)
+                            ? 'Cannot delete — has execution history'
+                            : isUsedInWorkflow(d)
+                              ? 'Cannot delete — referenced by a workflow'
+                              : 'Delete'"
+                          (click)="confirmDelete(d); openActionMenuId.set(null)"
+                        >
+                          <mat-icon>delete_outline</mat-icon> Delete
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </td>
+                <td>
+                  <span class="cell-primary">{{ d.name }}</span>
+                </td>
+                <td><span class="type-badge">{{ d.destinationType }}</span></td>
+                <td>
+                  <span class="cell-target" [title]="d.target || ''">{{ d.target || '—' }}</span>
+                </td>
+                <td>
+                  <span class="status-badge" [class.status-badge--inactive]="!d.isEnabled">
+                    {{ d.isEnabled ? 'enabled' : 'disabled' }}
+                  </span>
+                </td>
+                <td><span class="cell-muted">{{ (d.modifiedBy || d.createdBy) ?? '—' }}</span></td>
+                <td><span class="cell-muted">{{ ((d.modifiedOnUtc || d.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
+              </tr>
+            }
+          </tbody>
         </table>
       </div>
 

@@ -14,6 +14,7 @@ import type { ResourceFieldDef } from '../destination-wizard.component';
 import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
+import { findConfirmedTableMatch, TableIdentityInfo } from './field-mapping-schema-ops.util';
 
 /** SQL Server/MySQL/PostgreSQL all use the relational (sqlTables/columns, dbo-qualified) path here — only
  *  CSV, Mongo, Medplum, and FHIR Repository (columnless/schemaless FHIR) fall back to the flat/generic defaults. */
@@ -146,12 +147,17 @@ const DEFAULT_ID_TYPE = 'bigint';
 // ── name helpers — the summary document always uses bare table names (no "dbo." schema prefix),
 // matching the target JSON's convention; the app's own state keeps schema-qualified full names. ──
 
-function bareName(fullName: string): string {
+export function bareName(fullName: string): string {
   const i = fullName.lastIndexOf('.');
   return i === -1 ? fullName : fullName.slice(i + 1);
 }
 
-function qualify(name: string, destType: MappingDestType): string {
+/** The one place that decides whether a destType's table name gets a "dbo." schema prefix — only ever
+ *  SQL Server ('sql'); MySQL/PostgreSQL/Mongo all use bare names (MySQL/Postgres have no dbo-equivalent
+ *  default schema in how this app connects to them; Mongo has no schema concept at all). Exported so
+ *  DestinationWizardComponent's default-target seeding (_rebuildRows) can reuse this exact rule instead of
+ *  hardcoding "dbo." for every SQL-family destType the way DEST_RESOURCE_DEFS's own sqlTable strings do. */
+export function qualify(name: string, destType: MappingDestType): string {
   if (destType !== 'sql' || name.includes('.')) return name;
   return `dbo.${name}`;
 }
@@ -300,7 +306,18 @@ function resolveTable(
   return {
     fullName,
     bare: bareName(fullName),
-    isNew: known ? known.origin === 'userCreated' : true,
+    // Queued for creation (isNew: true — goes into schemaChanges.tablesToCreate, see buildSchemaChanges
+    // below) whenever this table is NOT confirmed to already exist: 'userCreated' (created/staged via this
+    // canvas's own "Create a new table…" — always queued, same as before this table gained a third origin
+    // state) OR 'restoredUnverified' (reconstructed from a saved mapping, never confirmed by this session's
+    // own live probe — must NOT fall into "assume it already exists": that silently produced a
+    // MappingProfile pointing at a table that may never have existed, with the only failure surfacing much
+    // later at actual pipeline-run time, "Invalid object name"). Only undefined/'probed' — a genuine live
+    // schema probe actually found it — counts as confirmed-not-new. Requesting creation for a table that
+    // turns out to already be real is always safe either way: the backend's CreateTableAsync
+    // (MappingImportService.ImportResourceMappingAsync) checks TableExistsAsync first and treats an
+    // already-real table as a no-op skip, never a failure.
+    isNew: known ? known.origin === 'userCreated' || known.origin === 'restoredUnverified' : true,
     relation,
     columns: known?.columns ?? [{
       name: 'Id',
@@ -599,7 +616,16 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
         tableName: table.name,
         fullName,
         columns,
-        origin: table.isNew ? 'userCreated' : existingTable?.origin,
+        // A table this entry's own save already confirmed created ('userCreated') keeps that tag; anything
+        // else defaults to 'restoredUnverified' — reconstructed from a SAVED mapping document, not this
+        // session's own live schema. NEVER falls through to undefined/'probed' here: those are reserved
+        // for a real live probe response (see DestinationWizardComponent._refreshSqlTablesFromLiveSchema),
+        // which is what actually upgrades (or evicts) this entry once it runs. Without this, a table only
+        // ever known via a stale save was indistinguishable from one this session just live-confirmed —
+        // the exact bug this three-state origin exists to fix. existingTable?.origin still wins when this
+        // same table was already resolved earlier in this same pass (e.g. shared by two resources), so a
+        // second sighting can't downgrade an origin already settled by the first.
+        origin: table.isNew ? 'userCreated' : (existingTable?.origin ?? 'restoredUnverified'),
       });
 
       for (const col of table.columns) {
@@ -636,4 +662,75 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
     childTableRelationsByTable,
     selectedResources: doc.mappings.map(e => e.resourceType),
   };
+}
+
+/**
+ * Reconciles every table reference restored by applyMappingSummaryDocument (mappingRows/targetByResource/
+ * extraTablesByGroup/childTableRelationsByTable) against a FRESH live schema probe, the moment one actually
+ * arrives (see DestinationWizardComponent._refreshSqlTablesFromLiveSchema's applyTables). A saved Mapping
+ * JSON always stores bare table names (qualify()'s own doc comment above), and applyMappingSummaryDocument
+ * runs synchronously at reopen time, before any live probe has resolved — it has no way to reconstruct
+ * MySQL's "{database}.Table" or PostgreSQL's "public.Table" shape on its own. This is the first point
+ * genuinely live data exists, so it's the right (and only) place to do that resolution.
+ *
+ * For every distinct table name currently referenced that ISN'T ALREADY a confirmed-real fullName, tries to
+ * resolve it against the fresh live tables via findConfirmedTableMatch — the exact same fullName-or-
+ * tableName match the existing-table auto-attach fix (DestinationWizardComponent._rebuildRows) already
+ * uses for a newly-selected resource, reused here rather than reimplemented. A name that resolves is
+ * rewritten to the table's real, live-confirmed fullName everywhere it appears. A name that still doesn't
+ * resolve is left completely untouched — never silently dropped, never invented, and never "fixed" by
+ * pretending the mapping is valid — so validateMappingForSave's own table-existence check (and, for a
+ * table that DOES resolve but is missing a specific column, its column-existence check) keeps catching a
+ * genuinely-stale mapping exactly as designed, just against a name the user can actually recognize instead
+ * of a bare one that never matches anything.
+ *
+ * SQL Server is unaffected in the common case: qualify() already reconstructs "dbo.Practitioner", which
+ * already matches a real SQL Server table's own fullName directly, so renameFor's own "already confirmed"
+ * check short-circuits before findConfirmedTableMatch is even called. CSV never reaches this function at
+ * all — _refreshSqlTablesFromLiveSchema's own `if (!this.isSql()) return;` guard means applyTables (and
+ * this call within it) never runs for CSV.
+ */
+export function reconcileRestoredTablesWithLiveSchema(
+  state: {
+    mappingRows: readonly MappingRow[];
+    targetByResource: Readonly<Record<string, string>>;
+    extraTablesByGroup: Readonly<Record<string, string[]>>;
+    childTableRelationsByTable: Readonly<Record<string, ChildTableRelation>>;
+  },
+  liveTables: readonly TableIdentityInfo[],
+): {
+  mappingRows: MappingRow[];
+  targetByResource: Record<string, string>;
+  extraTablesByGroup: Record<string, string[]>;
+  childTableRelationsByTable: Record<string, ChildTableRelation>;
+} {
+  const renameFor = (name: string): string => {
+    if (!name) return name;
+    // Already a confirmed-real name (the common SQL Server case, and any MySQL/PostgreSQL table a
+    // PREVIOUS reconciliation or a fresh mapping already correctly targeted) — nothing to resolve.
+    if (liveTables.some((t) => t.origin !== 'restoredUnverified' && t.fullName === name)) return name;
+    return findConfirmedTableMatch(name, liveTables)?.fullName ?? name;
+  };
+
+  const targetByResource: Record<string, string> = {};
+  for (const [resource, name] of Object.entries(state.targetByResource)) {
+    targetByResource[resource] = renameFor(name);
+  }
+
+  const extraTablesByGroup: Record<string, string[]> = {};
+  for (const [resource, names] of Object.entries(state.extraTablesByGroup)) {
+    extraTablesByGroup[resource] = names.map(renameFor);
+  }
+
+  const mappingRows = state.mappingRows.map((row) => ({ ...row, tableName: renameFor(row.tableName) }));
+
+  const childTableRelationsByTable: Record<string, ChildTableRelation> = {};
+  for (const [tableName, relation] of Object.entries(state.childTableRelationsByTable)) {
+    childTableRelationsByTable[renameFor(tableName)] = {
+      ...relation,
+      parentTable: renameFor(relation.parentTable),
+    };
+  }
+
+  return { mappingRows, targetByResource, extraTablesByGroup, childTableRelationsByTable };
 }

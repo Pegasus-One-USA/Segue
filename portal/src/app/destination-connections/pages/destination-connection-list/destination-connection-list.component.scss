@@ -1,5 +1,10 @@
 @use '../../../_list-page' as *;
 
+// The plain-<table> data-table sizing and the .col-menu/.row-menu/.row-menu-panel/.row-menu-item/
+// .btn-icon kebab-menu pattern below all now live in the shared _list-page.scss partial (@use'd above)
+// — see that file for the [mat-table]-attribute guard that keeps it from colliding with the ::ng-deep
+// .mat-mdc-* rules other, still-mat-table-based list pages rely on.
+
 // ─── Action Buttons ───────────────────────────────────────────────────────────
 .btn-add {
   display: inline-flex;
@@ -35,34 +40,10 @@
   color: var(--color-ink);
 }
 
-.col-actions {
-  width: 100px;
-  text-align: right;
-}
-
-.cell-name {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dest-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--color-primary-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  mat-icon { font-size: 18px; height: 18px; width: 18px; color: var(--color-primary); }
-}
-
 .cell-target {
   font-size: 13px;
   color: var(--color-muted);
-  max-width: 280px;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -102,36 +83,3 @@
   }
 }
 
-.actions-cell {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-%action-chip {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  transition: background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
-
-  mat-icon { font-size: 17px; height: 17px; width: 17px; }
-
-  &[disabled] { opacity: 0.35; }
-}
-
-.btn-view {
-  @extend %action-chip;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-
-  &:hover:not([disabled]) { background: var(--color-primary); color: var(--color-on-primary); }
-}
-
-.btn-delete {
-  @extend %action-chip;
-  background: var(--color-error-soft);
-  color: var(--color-error);
-
-  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
-}
