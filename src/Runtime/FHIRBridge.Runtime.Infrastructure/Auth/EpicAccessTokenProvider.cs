@@ -9,18 +9,15 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
 {
     private readonly HttpClient _httpClient;
     private readonly IBackendServicesJwtFactory _jwtFactory;
-    private readonly IFhirAccessTokenAuditSink _auditSink;
     private readonly IFhirAccessTokenCache _tokenCache;
 
     public EpicAccessTokenProvider(
         HttpClient httpClient,
         IBackendServicesJwtFactory jwtFactory,
-        IFhirAccessTokenAuditSink? auditSink = null,
         IFhirAccessTokenCache? tokenCache = null)
     {
         _httpClient = httpClient;
         _jwtFactory = jwtFactory;
-        _auditSink = auditSink ?? new NoOpFhirAccessTokenAuditSink();
         _tokenCache = tokenCache ?? new InMemoryFhirAccessTokenCache();
     }
 
@@ -58,70 +55,32 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             })
         };
         TokenResponse tokenResponse;
-        HttpResponseMessage response;
-        try
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        using (response)
         {
-            response = await _httpClient.SendAsync(request, cancellationToken);
-            using (response)
+            if (!response.IsSuccessStatusCode)
             {
-                if (!response.IsSuccessStatusCode)
-                {
-                    var message = await BuildFailureMessageAsync(
-                        "Epic token endpoint",
-                        response,
-                        cancellationToken);
-
-                    await _auditSink.RecordAsync(
-                        source,
-                        "EpicTokenRequestFailed",
-                        "Failed",
-                        message,
-                        cancellationToken);
-
-                    throw new InvalidOperationException(message);
-                }
-
-                tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
-                if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
-                {
-                    await _auditSink.RecordAsync(
-                        source,
-                        "EpicTokenRequestFailed",
-                        "Failed",
-                        "Epic token endpoint returned an empty access token.",
-                        cancellationToken);
-
-                    throw new InvalidOperationException("Epic token endpoint returned an empty access token.");
-                }
-
-                var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
-                var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
-                await _tokenCache.SetAsync(cacheKey, tokenResponse.AccessToken, expiresOnUtc, cancellationToken);
-                await _tokenCache.SetScopeAsync(cacheKey, tokenResponse.Scope, expiresOnUtc, cancellationToken);
-
-                await _auditSink.RecordAsync(
-                    source,
-                    "EpicTokenRequestSucceeded",
-                    "Completed",
-                    "Epic access token acquired.",
+                var message = await BuildFailureMessageAsync(
+                    "Epic token endpoint",
+                    response,
                     cancellationToken);
 
-                return tokenResponse.AccessToken;
+                throw new InvalidOperationException(message);
             }
+
+            tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
+            if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+            {
+                throw new InvalidOperationException("Epic token endpoint returned an empty access token.");
+            }
+
+            var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
+            var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+            await _tokenCache.SetAsync(cacheKey, tokenResponse.AccessToken, expiresOnUtc, cancellationToken);
+            await _tokenCache.SetScopeAsync(cacheKey, tokenResponse.Scope, expiresOnUtc, cancellationToken);
+
+            return tokenResponse.AccessToken;
         }
-        catch (Exception exception)
-        {
-            await _auditSink.RecordAsync(
-                source,
-                "EpicTokenRequestFailed",
-                "Failed",
-                exception.Message,
-                cancellationToken);
-
-            throw;
-        }
-
-
     }
 
     /// <summary>

@@ -14,6 +14,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Abstractions.Terminology;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Infrastructure.Caching;
 using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Destinations.Blob;
@@ -164,6 +165,7 @@ public static class DependencyInjection
         // cadence, thresholds, feature toggles). Registered unconditionally, works against either repository.
         services.AddSingleton<ISystemSettingsCache, InProcessSystemSettingsCache>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
+        services.AddSingleton<ITerminologySyncScheduleEvaluator, TerminologySyncScheduleEvaluator>();
 
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once

@@ -25,7 +25,6 @@ public static class DependencyInjection
             configuration.GetSection("Runtime:Epic"));
 
         services.AddSingleton<IBackendServicesJwtFactory, BackendServicesJwtFactory>();
-        services.AddSingleton<IFhirAccessTokenAuditSink, NoOpFhirAccessTokenAuditSink>();
 
         // Phase 2: source access tokens are cached in the distributed cache (Redis when configured, in-process memory
         // otherwise — registered by the composing host). TryAdd a memory fallback so this assembly also works when wired
