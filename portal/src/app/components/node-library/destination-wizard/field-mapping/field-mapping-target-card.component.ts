@@ -70,6 +70,14 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
+  /** Bare table names (no schema/database prefix) of every already-probed SQL table — only meaningful for
+   *  MySQL, whose live schema probe qualifies names with the connected database (e.g.
+   *  "fhirbridge_output.Patient", see SqlDestinationSchemaService.ReadColumnsAsync) while a saved/reopened
+   *  mapping only ever persists the bare table name (bareName(), field-mapping-summary.model.ts). Lets
+   *  hasValidTarget tolerate that bare-vs-qualified mismatch for MySQL specifically, mirroring
+   *  FieldMappingCanvasComponent.sqlTableNames — without loosening SQL Server/PostgreSQL's strict fullName
+   *  match (their dbo./public. qualification genuinely matches what the live probe returns). */
+  readonly sqlTableNames = input<string[]>([]);
   readonly columns = input.required<string[]>();
   readonly rowForColumn = input.required<(column: string) => MappingRow | undefined>();
   /** Real data type (e.g. "nvarchar(50)") for a probed/created SQL column — undefined for CSV or
@@ -154,7 +162,11 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    * so a column can't be added against a table nobody actually chose.
    */
   readonly hasValidTarget = computed(() =>
-    this.isExtra() || !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetValue())
+    this.isExtra() ||
+    !this.hasSqlTables() ||
+    this.sqlTableOptions().includes(this.targetValue()) ||
+    // MySQL-only bare-name fallback — see sqlTableNames' doc comment above.
+    (this.destType() === 'mysql' && this.sqlTableNames().includes(this.targetValue()))
   );
 
   /**

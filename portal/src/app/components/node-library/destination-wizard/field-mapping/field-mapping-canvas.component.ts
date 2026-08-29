@@ -89,6 +89,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly columnsForResourceTarget = input.required<(r: string) => string[]>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
+  /** Bare table names (no schema/database prefix) of every already-probed SQL table — only meaningful for
+   *  MySQL, whose live schema probe qualifies names with the connected database (e.g.
+   *  "fhirbridge_output.Patient", see SqlDestinationSchemaService.ReadColumnsAsync) while a saved/reopened
+   *  mapping only ever persists the bare table name (bareName(), field-mapping-summary.model.ts). Lets
+   *  isPrimaryTargetValid/columnsForTable tolerate that bare-vs-qualified mismatch for MySQL specifically,
+   *  without loosening SQL Server/PostgreSQL's strict fullName match (their dbo./public. schema genuinely
+   *  matches what the live probe returns, so no such mismatch exists there). */
+  readonly sqlTableNames = input<string[]>([]);
   readonly csvDelimiterKey = input<string>('comma');
   /** Toolbar-level search (dialog header, see NodeLibraryDialogComponent) — live text, forwarded
    *  straight through to both the payload source tree and every destination target card below, each of
@@ -260,7 +268,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     // when hasSqlTables() is false (every non-SQL destination, including Mongo): the OR short-circuited to
     // true regardless of whether target was actually set to anything.
     if (!target) return false;
-    return !this.hasSqlTables() || this.sqlTableOptions().includes(target);
+    return (
+      !this.hasSqlTables() ||
+      this.sqlTableOptions().includes(target) ||
+      // MySQL-only bare-name fallback — see sqlTableNames' doc comment above.
+      (this.destType() === 'mysql' && this.sqlTableNames().includes(target))
+    );
   }
 
   readonly targetCards = computed<FmTargetCardSpec[]>(() => {
@@ -1109,7 +1122,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     // what "already known" means here: a real table, or one already staged via a pending "Create a new
     // table…" this session (in which case the real CREATE runs immediately before this ADD COLUMN when
     // the queue flushes — see runQueuedOpsSequentially).
-    if (!canQueueAddColumn(target.tableName, this.sqlTableOptions(), this.pendingTableNames())) {
+    // MySQL-only bare-name fallback — see sqlTableNames' doc comment above. sqlTableOptions() is always the
+    // live-probed, database-qualified name for MySQL (e.g. "fhirbridge_output.Patient"), while a restored
+    // target from a saved mapping is the bare name (e.g. "Patient") — without this, a perfectly real,
+    // already-visible MySQL table is refused here as "does not exist yet". canQueueAddColumn() itself stays
+    // untouched; this only widens the list of names it's allowed to consider already-known, for MySQL only.
+    const knownTableNames = this.destType() === 'mysql'
+      ? [...this.sqlTableOptions(), ...this.sqlTableNames()]
+      : this.sqlTableOptions();
+    if (!canQueueAddColumn(target.tableName, knownTableNames, this.pendingTableNames())) {
       this.addColumnError.set(`${target.tableName} does not exist yet. Create it first via "Create a new table…", then add columns to it.`);
       return;
     }

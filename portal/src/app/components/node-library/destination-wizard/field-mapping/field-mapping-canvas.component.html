@@ -36,6 +36,7 @@
           [targetValue]="targetFor(card.resource)"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
+          [sqlTableNames]="sqlTableNames()"
           [columns]="columnsForCardFn(card.resource, card.tableName, card.isExtra)"
           [rowForColumn]="rowForColumnOn(card.resource, card.tableName)"
           [columnDataType]="columnTypeOn(card.tableName)"
