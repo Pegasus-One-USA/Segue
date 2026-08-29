@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, HostListener, OnInit, ViewChild, computed, input, output, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, computed, input, output, signal } from '@angular/core';
 import { FM_ADD_COLUMN_DATA_TYPES } from './field-mapping-add-column-modal.component';
 
 export interface FmCreateTableColumnDraft {
@@ -28,7 +28,7 @@ export interface FmCreateTableSubmit {
   templateUrl: './field-mapping-create-table-modal.component.html',
   styleUrl: './field-mapping-create-table-modal.component.scss',
 })
-export class FieldMappingCreateTableModalComponent implements OnInit, AfterViewInit {
+export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('parentTableSearchInput') private readonly parentTableSearchInput?: ElementRef<HTMLInputElement>;
 
@@ -38,11 +38,6 @@ export class FieldMappingCreateTableModalComponent implements OnInit, AfterViewI
   readonly columnsForTable = input<(tableFullName: string) => string[]>(() => []);
   readonly submitting = input<boolean>(false);
   readonly error = input<string | null>(null);
-  /** Bare name (e.g. "Patient") to pre-fill the name field with, derived from the resource this table is
-   *  being created for (see FieldMappingCanvasComponent.creatingTableSuggestedName). A starting point
-   *  only — the user can freely edit or clear it before submitting; nothing is committed anywhere until
-   *  they do (see FieldMappingCanvasComponent.submitCreateTable). Empty when there's no sensible guess. */
-  readonly suggestedName = input<string>('');
 
   readonly submitted = output<FmCreateTableSubmit>();
   readonly cancelled = output<void>();
@@ -50,14 +45,6 @@ export class FieldMappingCreateTableModalComponent implements OnInit, AfterViewI
   readonly dataTypes = FM_ADD_COLUMN_DATA_TYPES;
 
   readonly tableName = signal('');
-
-  /** Seeds tableName from suggestedName exactly once — a fresh component instance is created every time
-   *  this modal opens (see field-mapping-canvas.component.html's `@if (creatingNewTable())`), so ngOnInit
-   *  firing once per instance is exactly "pre-fill once when the dialog opens, then leave the user's own
-   *  typing alone" — never re-applied on a later change the way a reactive effect() would be. */
-  ngOnInit(): void {
-    if (this.suggestedName()) this.tableName.set(this.suggestedName());
-  }
   readonly relation = signal<'standalone' | 'child'>('standalone');
   readonly parentTable = signal('');
   readonly parentColumn = signal('Id');
@@ -136,11 +123,7 @@ export class FieldMappingCreateTableModalComponent implements OnInit, AfterViewI
   }
 
   ngAfterViewInit(): void {
-    // .select() (not just .focus()) so a pre-filled suggestion (see ngOnInit) is fully selected — the user
-    // can accept it as-is or start typing to immediately replace it, same affordance as the target card's
-    // own inline column-rename input.
     this.nameInput?.nativeElement.focus();
-    this.nameInput?.nativeElement.select();
   }
 
   canSubmit(): boolean {

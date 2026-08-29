@@ -175,12 +175,12 @@ public static class RbacSeedData
         new("Assign an Epic source connection to a tenant.", PermissionGroupCode.Epic, PermissionActionCode.Assign),
         new("Trigger a pipeline run against an Epic source connection.", PermissionGroupCode.Epic, PermissionActionCode.Execute),
 
-        // Athenahealth source connector permissions. "Edit" is auto-discovered, same as Epic's above.
+        // Athenahealth source connector permissions. Edit auto-discovered — see the Epic comment above.
         new("View Athenahealth source connection configuration.", PermissionGroupCode.Athenahealth, PermissionActionCode.Read),
         new("Assign an Athenahealth source connection to a tenant.", PermissionGroupCode.Athenahealth, PermissionActionCode.Assign),
         new("Trigger a pipeline run against an Athenahealth source connection.", PermissionGroupCode.Athenahealth, PermissionActionCode.Execute),
 
-        // Cerner source connector permissions. "Edit" is auto-discovered, same as Epic's above.
+        // Cerner source connector permissions. Edit auto-discovered — see the Epic comment above.
         new("View Cerner source connection configuration.", PermissionGroupCode.Cerner, PermissionActionCode.Read),
         new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
         new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),

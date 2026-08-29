@@ -104,67 +104,51 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var recordErrors = new List<string>();
         var writtenResourceIds = new List<string?>();
 
+        var resolvedRecords = new List<MappedDestinationRecord>(records.Count);
         foreach (var record in records)
         {
-            try
+            resolvedRecords.Add(await ResolveReferenceLookupsAsync(connection, record, cancellationToken));
+        }
+
+        // Insert/Upsert without child tables can be written as one multi-row statement instead of one round trip
+        // per record — the dominant cost for a large resource type (hundreds+ records) is round-trip latency, not
+        // the write itself. Update/Cdc and any record needing OUTPUT (child-table FK capture) keep the original
+        // per-record path, where OUTPUT/child-table semantics are already correct and batching would only add
+        // risk for comparatively little gain (those modes are rarely the large-volume case).
+        var batchSize = ComputeSafeBatchSize(resolvedRecords);
+
+        foreach (var chunk in resolvedRecords.Chunk(batchSize))
+        {
+            var canBatch = target.WriteMode is SqlDestinationWriteMode.Insert or SqlDestinationWriteMode.Upsert
+                && chunk.All(record => record.ChildTables is not { Count: > 0 })
+                && (target.WriteMode != SqlDestinationWriteMode.Upsert || chunk.All(record => TryGetKeyValue(record, keyColumn, out _)));
+
+            if (canBatch)
             {
-                var resolvedRecord = await ResolveReferenceLookupsAsync(connection, record, cancellationToken);
-
-                IReadOnlyDictionary<string, object?> capturedParentColumns;
-                var written = true;
-                switch (target.WriteMode)
+                try
                 {
-                    case SqlDestinationWriteMode.Upsert:
-                        capturedParentColumns = await UpsertRecordAsync(
-                            connection, target.SchemaName, target.TableName, resolvedRecord, keyColumn, existingColumns, context, cancellationToken);
-                        break;
-                    case SqlDestinationWriteMode.Update:
-                        if (!TryGetKeyValue(resolvedRecord, keyColumn, out _))
-                        {
-                            // Nothing to match on — "Update only" leaves an unmatched/keyless record unwritten.
-                            written = false;
-                            capturedParentColumns = EmptyColumnValues;
-                            break;
-                        }
+                    var batchWrittenIds = target.WriteMode == SqlDestinationWriteMode.Upsert
+                        ? await MergeBatchAsync(connection, target.SchemaName, target.TableName, chunk, keyColumn, existingColumns, context, cancellationToken)
+                        : await InsertBatchAsync(connection, target.SchemaName, target.TableName, chunk, existingColumns, context, cancellationToken);
 
-                        capturedParentColumns = await UpdateOnlyRecordAsync(
-                            connection, target.SchemaName, target.TableName, resolvedRecord, keyColumn, existingColumns, context, cancellationToken);
-                        break;
-                    case SqlDestinationWriteMode.Cdc:
-                        capturedParentColumns = await InsertRecordAsync(
-                            connection, target.SchemaName, target.TableName, resolvedRecord, existingColumns, context, cancellationToken);
-                        await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, resolvedRecord, cancellationToken);
-                        break;
-                    default:
-                        capturedParentColumns = await InsertRecordAsync(
-                            connection, target.SchemaName, target.TableName, resolvedRecord, existingColumns, context, cancellationToken);
-                        break;
+                    writtenResourceIds.AddRange(batchWrittenIds);
+                    continue;
                 }
-
-                if (written && resolvedRecord.ChildTables is { Count: > 0 } childTables)
+                catch (SqlException)
                 {
-                    await WriteChildTablesAsync(
-                        connection, resolvedRecord, childTables, capturedParentColumns,
-                        deleteExistingChildRows: target.WriteMode is SqlDestinationWriteMode.Upsert or SqlDestinationWriteMode.Update,
-                        cancellationToken);
-                }
-
-                if (written)
-                {
-                    writtenResourceIds.Add(record.SourceResourceId);
+                    // One bad record's fault (truncation, constraint violation, ...) must not discard the rest of
+                    // this chunk — fall through to the proven per-record path below for just this chunk, which
+                    // isolates the failure to whichever single record actually caused it.
                 }
             }
-            catch (SqlException exception)
-            {
-                recordErrors.Add(
-                    $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
 
-                if (_exceptionManager is not null)
+            foreach (var record in chunk)
+            {
+                var error = await WriteOneRecordAsync(
+                    connection, target, record, keyColumn, existingColumns, context, writtenResourceIds, _exceptionManager, cancellationToken);
+                if (error is not null)
                 {
-                    await _exceptionManager.CaptureAsync(
-                        exception,
-                        new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
-                        cancellationToken);
+                    recordErrors.Add(error);
                 }
             }
         }
@@ -173,6 +157,221 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             writtenResourceIds.Count,
             RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
             WrittenResourceIds: writtenResourceIds);
+    }
+
+    /// <summary>
+    /// SQL Server caps a single statement at 2100 parameters. Each batched row uses one parameter per column, so
+    /// the safe row count per statement is 2000/columnCount (a small margin under the real cap) — never more than
+    /// 200 rows per statement either way, since very wide tables (many optional columns) would otherwise make an
+    /// already-large statement string unwieldy for comparatively little extra round-trip savings.
+    /// </summary>
+    private static int ComputeSafeBatchSize(IReadOnlyList<MappedDestinationRecord> records)
+    {
+        var columnCount = records
+            .SelectMany(record => record.Values.Keys)
+            .Where(key => !ReservedColumns.Contains(key))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count() + UpsertSystemColumns.Length;
+
+        return Math.Max(1, Math.Min(200, 2000 / Math.Max(1, columnCount)));
+    }
+
+    /// <summary>The original per-record write path, extracted unchanged so the batched path above can fall back
+    /// to it for a chunk that isn't batch-eligible (Update/Cdc mode, a record with child tables) or whose batched
+    /// statement failed. Returns the record's error message (already captured via <paramref name="exceptionManager"/>
+    /// when present) instead of throwing, so the caller can keep processing the rest of the chunk.</summary>
+    private static async Task<string?> WriteOneRecordAsync(
+        SqlConnection connection,
+        SqlDestinationTarget target,
+        MappedDestinationRecord record,
+        string keyColumn,
+        IReadOnlySet<string> existingColumns,
+        PipelineWriteContext context,
+        List<string?> writtenResourceIds,
+        IGlobalExceptionManager? exceptionManager,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            IReadOnlyDictionary<string, object?> capturedParentColumns;
+            var written = true;
+            switch (target.WriteMode)
+            {
+                case SqlDestinationWriteMode.Upsert:
+                    capturedParentColumns = await UpsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, context, cancellationToken);
+                    break;
+                case SqlDestinationWriteMode.Update:
+                    if (!TryGetKeyValue(record, keyColumn, out _))
+                    {
+                        // Nothing to match on — "Update only" leaves an unmatched/keyless record unwritten.
+                        written = false;
+                        capturedParentColumns = EmptyColumnValues;
+                        break;
+                    }
+
+                    capturedParentColumns = await UpdateOnlyRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, keyColumn, existingColumns, context, cancellationToken);
+                    break;
+                case SqlDestinationWriteMode.Cdc:
+                    capturedParentColumns = await InsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, existingColumns, context, cancellationToken);
+                    await InsertCdcRecordAsync(connection, target.SchemaName, target.TableName, record, cancellationToken);
+                    break;
+                default:
+                    capturedParentColumns = await InsertRecordAsync(
+                        connection, target.SchemaName, target.TableName, record, existingColumns, context, cancellationToken);
+                    break;
+            }
+
+            if (written && record.ChildTables is { Count: > 0 } childTables)
+            {
+                await WriteChildTablesAsync(
+                    connection, record, childTables, capturedParentColumns,
+                    deleteExistingChildRows: target.WriteMode is SqlDestinationWriteMode.Upsert or SqlDestinationWriteMode.Update,
+                    cancellationToken);
+            }
+
+            if (written)
+            {
+                writtenResourceIds.Add(record.SourceResourceId);
+            }
+
+            return null;
+        }
+        catch (SqlException exception)
+        {
+            if (exceptionManager is not null)
+            {
+                await exceptionManager.CaptureAsync(
+                    exception,
+                    new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
+                    cancellationToken);
+            }
+
+            return $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}";
+        }
+    }
+
+    /// <summary>Multi-row INSERT for a chunk with no child tables (so no OUTPUT correlation is needed) — one
+    /// round trip for the whole chunk instead of one per record. Column set is the union across the chunk so an
+    /// optional field present on some records but not others doesn't break row alignment; a record missing a
+    /// given column writes NULL for it, same as <see cref="InsertRecordAsync"/> would for that record alone.</summary>
+    private static async Task<List<string?>> InsertBatchAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        IReadOnlyList<MappedDestinationRecord> chunk,
+        IReadOnlySet<string> existingColumns,
+        PipelineWriteContext context,
+        CancellationToken cancellationToken)
+    {
+        var columns = BuildBatchColumns(chunk, InsertSystemColumns, existingColumns);
+
+        await using var command = new SqlCommand { Connection = connection };
+        var valuesClauses = new List<string>(chunk.Count);
+        for (var rowIndex = 0; rowIndex < chunk.Count; rowIndex++)
+        {
+            valuesClauses.Add(AddRowParameters(command, chunk[rowIndex], columns, rowIndex, context));
+        }
+
+        command.CommandText = $"""
+            INSERT INTO [{schemaName}].[{tableName}]
+            (
+                {string.Join(", ", columns.Select(column => $"[{column}]"))}
+            )
+            VALUES
+            {string.Join(",\n", valuesClauses)};
+            """;
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        return chunk.Select(record => record.SourceResourceId).ToList();
+    }
+
+    /// <summary>Multi-row MERGE for an upsert chunk with no child tables — same one-round-trip idea as
+    /// <see cref="InsertBatchAsync"/>, using a VALUES-based derived table as the MERGE source. Only called once
+    /// every record in the chunk already has a usable key value (see the caller in <see cref="WriteAsync"/>); a
+    /// keyless record must go through <see cref="UpsertRecordAsync"/>'s per-record insert-instead-of-merge
+    /// fallback, which this batched form doesn't replicate.</summary>
+    private static async Task<List<string?>> MergeBatchAsync(
+        SqlConnection connection,
+        string schemaName,
+        string tableName,
+        IReadOnlyList<MappedDestinationRecord> chunk,
+        string keyColumn,
+        IReadOnlySet<string> existingColumns,
+        PipelineWriteContext context,
+        CancellationToken cancellationToken)
+    {
+        var columns = BuildBatchColumns(chunk, UpsertSystemColumns, existingColumns);
+        var validatedKeyColumn = ValidateIdentifier(keyColumn);
+        var updateColumns = columns
+            .Where(column => !string.Equals(column, "WrittenOnUtc", StringComparison.OrdinalIgnoreCase))
+            .Where(column => !string.Equals(column, validatedKeyColumn, StringComparison.OrdinalIgnoreCase))
+            .Select(column => $"target.[{column}] = source.[{column}]")
+            .ToList();
+        var onClause = existingColumns.Contains("ResourceType")
+            ? $"target.[ResourceType] = source.[ResourceType] AND target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]"
+            : $"target.[{validatedKeyColumn}] = source.[{validatedKeyColumn}]";
+
+        await using var command = new SqlCommand { Connection = connection };
+        var valuesClauses = new List<string>(chunk.Count);
+        for (var rowIndex = 0; rowIndex < chunk.Count; rowIndex++)
+        {
+            valuesClauses.Add(AddRowParameters(command, chunk[rowIndex], columns, rowIndex, context));
+        }
+
+        command.CommandText = $"""
+            MERGE [{schemaName}].[{tableName}] AS target
+            USING
+            (
+                VALUES
+                {string.Join(",\n", valuesClauses)}
+            ) AS source ({string.Join(", ", columns.Select(column => $"[{column}]"))})
+            ON {onClause}
+            WHEN MATCHED THEN
+                UPDATE SET {string.Join(", ", updateColumns)}
+            WHEN NOT MATCHED THEN
+                INSERT ({string.Join(", ", columns.Select(column => $"[{column}]"))})
+                VALUES ({string.Join(", ", columns.Select(column => $"source.[{column}]"))});
+            """;
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        return chunk.Select(record => record.SourceResourceId).ToList();
+    }
+
+    /// <summary>Union of mapped columns across every record in the chunk, plus whichever system columns the
+    /// target table actually has — shared by <see cref="InsertBatchAsync"/> and <see cref="MergeBatchAsync"/> so
+    /// every row in the batch statement aligns to the same column list regardless of which optional fields any
+    /// one record happened to carry.</summary>
+    private static List<string> BuildBatchColumns(
+        IReadOnlyList<MappedDestinationRecord> chunk, IReadOnlyList<string> systemColumnCandidates, IReadOnlySet<string> existingColumns)
+    {
+        var fieldNames = chunk
+            .SelectMany(record => record.Values.Keys)
+            .Where(key => !ReservedColumns.Contains(key))
+            .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var systemColumns = systemColumnCandidates.Where(existingColumns.Contains).ToList();
+        return systemColumns.Concat(fieldNames).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Adds this row's parameters to the shared batch command (index-based names — <c>@p{row}_{col}</c> —
+    /// so a column name is never itself part of a parameter name) and returns the row's own "(@p0_0, @p0_1, ...)"
+    /// VALUES clause fragment.</summary>
+    private static string AddRowParameters(
+        SqlCommand command, MappedDestinationRecord record, IReadOnlyList<string> columns, int rowIndex, PipelineWriteContext context)
+    {
+        var placeholders = new string[columns.Count];
+        for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
+        {
+            var paramName = $"@p{rowIndex}_{columnIndex}";
+            placeholders[columnIndex] = paramName;
+            command.Parameters.AddWithValue(paramName, ResolveColumnValue(record, columns[columnIndex], context) ?? DBNull.Value);
+        }
+
+        return $"({string.Join(", ", placeholders)})";
     }
 
     private static async Task EnsureTableAsync(

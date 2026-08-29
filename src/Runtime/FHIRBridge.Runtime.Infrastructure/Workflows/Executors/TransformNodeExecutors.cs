@@ -278,6 +278,17 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().JsonPath, StringComparer.OrdinalIgnoreCase);
 
+            // Warms CachingTerminologyLookupService for every distinct code this group is about to look up,
+            // concurrently, before the per-resource pass below runs each one serially interleaved with the rest
+            // of that resource's mapping work. Pure performance optimization — see the method's own doc comment
+            // for why it can never change what value actually gets written.
+            if (destinationType is not null)
+            {
+                await PreWarmCodeableConceptLookupsAsync(
+                    group, fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
+                    context.WorkflowRunId, ruleCache, cancellationToken);
+            }
+
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -391,6 +402,134 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
                 ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
             });
+    }
+
+    /// <summary>
+    /// Resolves every field in this resource-type group that has a <see cref="TransformNodeType.CodeableConceptBuilder"/>
+    /// rule configured to look up its display text from the terminology DB, collects the distinct codes those
+    /// fields actually carry across the whole group, and issues all of those lookups concurrently — so
+    /// <see cref="Terminology.CachingTerminologyLookupService"/> (wherever it's wired in as
+    /// <c>ITerminologyLookupService</c>) is already warm by the time the real per-resource pass below reaches
+    /// each one, instead of every distinct code paying its network round trip serially, interleaved with the
+    /// rest of that resource's mapping work. Never changes what value ends up written anywhere: it calls the
+    /// exact same node with the exact same config the real pass would, so a cache write here is byte-identical
+    /// to the one the real pass would have produced on its own — this only changes WHEN and how concurrently
+    /// those network calls happen. Best-effort: any failure here is swallowed, since the real per-record pass
+    /// remains the correctness path and will simply pay the normal (uncached) cost for whichever codes didn't
+    /// warm successfully.
+    /// </summary>
+    private async Task PreWarmCodeableConceptLookupsAsync(
+        IEnumerable<ResourceEnvelope> group,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        string resourceType,
+        DestinationType destinationType,
+        string? sourceSystem,
+        Guid workflowRunId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        if (_mappingEngine is null || _ruleResolver is null || _transformNodeRegistry is null)
+        {
+            return;
+        }
+
+        var codeableConceptConfigByTarget = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
+            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
+            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            {
+                rules = await _ruleResolver.ResolveAsync(
+                    destinationType, resourceType, targetField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                ruleCache[cacheKey] = rules;
+            }
+
+            var codeableConceptRule = rules.FirstOrDefault(rule => rule.NodeType == TransformNodeType.CodeableConceptBuilder);
+            if (codeableConceptRule is null)
+            {
+                continue;
+            }
+
+            Dictionary<string, string> config;
+            try
+            {
+                config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(codeableConceptRule.ConfigJson) ?? [];
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            // Nothing to warm — a hand-typed display always wins outright, and lookup being explicitly disabled
+            // means the real pass never calls the terminology service for this field either. Mirrors
+            // CodeableConceptBuilderNode.ExecuteAsync's own reads of these same two config keys.
+            var resolveDisplayFromTerminology = !config.TryGetValue("resolveDisplayFromTerminology", out var resolveFlag)
+                || !bool.TryParse(resolveFlag, out var resolveFlagParsed)
+                || resolveFlagParsed;
+            var hasHandTypedDisplay = config.TryGetValue("display", out var handTypedDisplay) && !string.IsNullOrWhiteSpace(handTypedDisplay);
+            if (!resolveDisplayFromTerminology || hasHandTypedDisplay)
+            {
+                continue;
+            }
+
+            codeableConceptConfigByTarget[targetField] = config;
+        }
+
+        if (codeableConceptConfigByTarget.Count == 0)
+        {
+            return;
+        }
+
+        var distinctCodesByTarget = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var resource in group)
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+            var mapped = _mappingEngine.Map(sourceJson, fields, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+            if (mapped is null)
+            {
+                continue;
+            }
+
+            foreach (var targetField in codeableConceptConfigByTarget.Keys)
+            {
+                if (!mapped.Values.TryGetValue(targetField, out var rawValue) ||
+                    rawValue?.ToString() is not { Length: > 0 } code)
+                {
+                    continue;
+                }
+
+                if (!distinctCodesByTarget.TryGetValue(targetField, out var codes))
+                {
+                    codes = new HashSet<string>(StringComparer.Ordinal);
+                    distinctCodesByTarget[targetField] = codes;
+                }
+
+                codes.Add(code);
+            }
+        }
+
+        var codeableConceptBuilderNode = _transformNodeRegistry.Get(TransformNodeType.CodeableConceptBuilder);
+        var warmTasks = distinctCodesByTarget
+            .SelectMany(entry => entry.Value.Select(code =>
+                codeableConceptBuilderNode.ExecuteAsync(code, codeableConceptConfigByTarget[entry.Key], secret: null, cancellationToken)))
+            .ToList();
+
+        if (warmTasks.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(warmTasks);
+        }
+        catch
+        {
+            // Best-effort only — see the method's doc comment. The real per-record pass below is the
+            // correctness path and will retry (uncached) whichever codes failed to warm here.
+        }
     }
 
     /// <summary>
