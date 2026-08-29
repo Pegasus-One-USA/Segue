@@ -11,7 +11,7 @@
 
 import { DestinationTable, DestinationColumn } from '../../../../services/destination-schema.service';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, qualifyTableName } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
@@ -151,10 +151,11 @@ function bareName(fullName: string): string {
   return i === -1 ? fullName : fullName.slice(i + 1);
 }
 
-function qualify(name: string, destType: MappingDestType): string {
-  if (destType !== 'sql' || name.includes('.')) return name;
-  return `dbo.${name}`;
-}
+// Re-qualification on load goes through the shared qualifyTableName (field-mapping-model.ts) — the same
+// function _qualifyDefaultTable/submitCreateTable use to qualify on creation, so a mapping saved (bare)
+// under one destType and reopened under the same destType always comes back exactly as it went out. This
+// used to be a private, SQL-Server-only qualify() here that never added "public." for PostgreSQL, so
+// reopening a PostgreSQL mapping restored "Appointment" instead of "public.Appointment".
 
 // ── array-context resolution — walks a node's id up through its ancestors (a leaf's own isArray is
 // always false, so starting at a leaf and starting at a group both fall through to the same walk) to
@@ -560,7 +561,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
   for (const entry of doc.mappings) {
     const resource = entry.resourceType;
     const siblingNames = entry.tables.map(t => t.name);
-    const fullNames = entry.tables.map(t => qualify(t.name, destType));
+    const fullNames = entry.tables.map(t => qualifyTableName(t.name, destType));
     const primaryIndex = Math.max(0, entry.tables.indexOf(resolvePrimaryTable(entry.tables) ?? entry.tables[0]));
     targetByResource[resource] = fullNames[primaryIndex] ?? fullNames[0] ?? '';
     extraTablesByGroup[resource] = fullNames.filter((_, i) => i !== primaryIndex);
@@ -569,7 +570,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
       const fullName = fullNames[i];
       if (isGenuineChildRelation(table.relation, siblingNames)) {
         childTableRelationsByTable[fullName] = {
-          parentTable: qualify(table.relation!.parentTable, destType),
+          parentTable: qualifyTableName(table.relation!.parentTable, destType),
           parentColumn: table.relation!.parentColumn,
           foreignKeyColumnName: table.relation!.childColumn,
         };

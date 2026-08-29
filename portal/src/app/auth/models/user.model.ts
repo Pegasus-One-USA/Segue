@@ -7,6 +7,12 @@ export type UserRole = string;
 /** The 4 built-in, non-deletable roles (UnifiedRoles.cs). Any other role name is a customer-created custom role. */
 export const SYSTEM_ROLE_NAMES = ['SuperAdmin', 'Admin', 'Operations', 'Audit'] as const;
 
+/** The one role whose permission grant is immutable (always "every permission that exists" — see
+ *  SystemRoleDefaultPermissions.cs). The other 3 built-ins (Admin, Operations, Audit) are still
+ *  non-deletable/non-renameable, but SuperAdmin may edit their permission grants — see
+ *  role-permissions.component.ts's isPermissionsLocked. */
+export const SUPER_ADMIN_ROLE_NAME = 'SuperAdmin';
+
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
 export type LoginType   = 'local' | 'sso' | 'oauth';
 

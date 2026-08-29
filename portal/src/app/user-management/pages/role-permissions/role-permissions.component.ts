@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { IRoleService } from '../../services/i-role.service';
-import { Role, Permission, PermissionCategory } from '../../../auth/models/user.model';
+import { Role, Permission, PermissionCategory, SUPER_ADMIN_ROLE_NAME } from '../../../auth/models/user.model';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ToastService } from '../../../services/toast.service';
@@ -146,6 +146,13 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   private originalExplicitCodes = new Set<string>();
 
   readonly isSystemRole = computed(() => !!this.role()?.isSystemRole);
+
+  // Only SuperAdmin's permission grant is actually immutable (see SystemRoleDefaultPermissions.cs —
+  // it's always "every permission that exists", so editing it here would be a silent no-op on the
+  // next backend restart/reconciliation). The other 3 built-ins (Admin, Operations, Audit) stay
+  // non-deletable/non-renameable elsewhere, but a SuperAdmin CAN edit their permission grants on this
+  // screen — see RoleManagementService.UpdateRoleAsync's matching server-side check.
+  readonly isPermissionsLocked = computed(() => this.role()?.name === SUPER_ADMIN_ROLE_NAME);
 
   private readonly allPermissionsFlat = computed<Permission[]>(() =>
     this.catalog().flatMap(cat => cat.groups.flatMap(g => g.permissions))
@@ -308,7 +315,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   }
 
   togglePermission(permissionId: string): void {
-    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    if (this.isPermissionsLocked() || !this.canEditPermissions()) return;
     const code = this.codeById().get(permissionId);
     if (!code) return;
     const checked = !this.selectedIds().has(permissionId);
@@ -335,7 +342,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   }
 
   toggleAll(checked: boolean): void {
-    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    if (this.isPermissionsLocked() || !this.canEditPermissions()) return;
     // Routed through toggleExplicitCode per code (not a raw bulk add/clear) so this stays consistent
     // with the dependency engine — in practice a select-all/none across every code in scope always
     // ends in the same end state regardless (every parent is either already included, or already
@@ -359,7 +366,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   }
 
   toggleRow(row: GridRow, checked: boolean): void {
-    if (this.isSystemRole() || !this.canEditPermissions()) return;
+    if (this.isPermissionsLocked() || !this.canEditPermissions()) return;
     // Per-code, not a raw bulk add/clear — this is what makes row-level "ALL" correctly cascade too:
     // checking Epic's ALL runs each of Epic's 5 actions through toggleExplicitCode, which is what
     // pulls in the matching Workflow action for every one of them (see permission-matrix-dependencies.ts).
@@ -386,7 +393,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
 
   save(): void {
     const role = this.role();
-    if (!role || this.isSystemRole()) return;
+    if (!role || this.isPermissionsLocked()) return;
     // The Save button is hidden entirely without role.edit (see the template) — this re-check guards
     // against a permission change landing in another tab while this screen is still open, and against
     // direct invocation, not against a normally-reachable gap.
