@@ -22,7 +22,7 @@ export interface PhaseConfig {
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic only
+// Sources:      Epic, Generic FHIR R4, Athenahealth
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SqlServer, AzureSql, Csv, BlobStorage, PostgreSql, MySql, Mongo, Medplum, AzureFhirService,
@@ -32,7 +32,9 @@ export interface PhaseConfig {
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
-    // Phase 2+: 'generic-fhir', 'athena', 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
+    'generic-fhir',
+    'athena',
+    // Phase 2+: 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
