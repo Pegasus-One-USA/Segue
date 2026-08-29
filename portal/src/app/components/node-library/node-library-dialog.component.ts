@@ -320,7 +320,10 @@ export class NodeLibraryDialogComponent {
 
   // Mirrors the open canvas's own destination type / mapping count so the header can show them
   // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
-  readonly destMappingTypeLabel = computed(() => this.destWizardType() === 'sql' ? 'SQL Server' : 'CSV');
+  // Delegates to destTypeLabel() below so the two never drift again — this used to be its own
+  // 'sql'-or-'CSV' ternary, predating MySQL/PostgreSQL/Mongo/etc. support, which meant every
+  // non-SQL-Server destination's mapping canvas header wrongly showed "CSV".
+  readonly destMappingTypeLabel = computed(() => this.destTypeLabel(this.destWizardType()));
   readonly destMappingCount = signal(0);
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | null>(null);

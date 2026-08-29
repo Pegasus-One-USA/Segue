@@ -2,7 +2,7 @@ import {
   Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy, OnInit,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType, qualifyTableName, splitTableName } from './field-mapping-model';
 import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict } from './field-mapping-schema-ops.util';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
@@ -819,10 +819,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const resource = this.creatingTableResource;
     const typed = submission.tableName.trim();
     if (!resource || !typed) return;
-    // Mirrors SqlDestinationSchemaService.SplitTableName's "dbo" default so extraTables()/sqlTables()
-    // agree on the same key everywhere, or the new table's card resolves zero columns via
-    // columnsForTable() even though the create appears to have "succeeded" (columns silently invisible).
-    const name = typed.includes('.') ? typed : `dbo.${typed}`;
+    // Mirrors SqlDestinationSchemaService.SplitTableName's own per-dialect default (via the shared
+    // qualifyTableName, field-mapping-model.ts) so extraTables()/sqlTables() agree on the same key
+    // everywhere, or the new table's card resolves zero columns via columnsForTable() even though the
+    // create appears to have "succeeded" (columns silently invisible).
+    const name = qualifyTableName(typed, this.destType());
     const connection = this.connectionInfo();
     if (!connection) return;
 
@@ -909,10 +910,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       });
     }
 
-    const dot = name.indexOf('.');
+    // Local preview only — the real backend response (once "Add to Pipeline" flushes this) overwrites
+    // it. This used to hardcode 'dbo' as the no-dot fallback, which was harmless for SQL Server/
+    // PostgreSQL (name always has a dot by the time it gets here — see qualifyTableName above) but wrong
+    // for MySQL, whose name never does: it should be "" (no schema layer), not "dbo".
+    const { schemaName, tableName } = splitTableName(name, this.destType());
     const table: DestinationTable = {
-      schemaName: dot >= 0 ? name.slice(0, dot) : 'dbo',
-      tableName: dot >= 0 ? name.slice(dot + 1) : name,
+      schemaName,
+      tableName,
       fullName: name,
       origin: 'userCreated',
       columns: [
@@ -1024,7 +1029,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly dropColumnSubmitting = signal(false);
 
   onDeleteColumn(resource: string, tableName: string, column: string): void {
-    if (this.destType() === 'sql' && this.hasSqlTables()) {
+    // hasSqlTables() already implies isSql() (sql/mysql/postgres) — see its own definition — so the
+    // extra destType() === 'sql' this used to require silently downgraded MySQL/PostgreSQL's real,
+    // schema-mutation-backed drop into a local-only un-mapping that never touched the real table.
+    if (this.hasSqlTables()) {
       this.pendingDropColumn.set({ resource, tableName, column });
       return;
     }

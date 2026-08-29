@@ -60,6 +60,13 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   /** True for an added extra (already-existing) table — shows a remove button, hides the table picker. */
   readonly isExtra = input<boolean>(false);
   readonly destType = input.required<MappingDestType>();
+  /** SQL Server/MySQL/PostgreSQL — the relational family that shares real, live-probed table/column
+   *  schema and ALTER TABLE-backed schema authoring (see DestinationWizardComponent.isSql/hasSqlTables,
+   *  which this mirrors). Distinct from a plain destType() === 'sql' check, which used to leave
+   *  MySQL/PostgreSQL wrongly falling through to CSV's free-text-only column handling everywhere below. */
+  readonly isSqlFamily = computed(
+    () => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres',
+  );
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();

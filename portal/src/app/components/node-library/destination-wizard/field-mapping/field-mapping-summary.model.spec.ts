@@ -328,6 +328,45 @@ describe('applyMappingSummaryDocument (round-trip)', () => {
   });
 });
 
+// Save (build) -> reopen (apply) per destType — the exact round trip a user's browser session does when
+// they close and reopen a saved mapping. The summary document itself always stores bare table names
+// (bareName() at build time — see this file's own header comment); qualifyTableName re-qualifies them for
+// the destType the document was applied against. This is the fix for: reopening a PostgreSQL mapping
+// used to restore "Appointment" instead of "public.Appointment" (the old qualify() only ever added "dbo.").
+describe('applyMappingSummaryDocument — save/reopen per destType', () => {
+  function buildAndReapply(destType: 'sql' | 'postgres' | 'mysql', tableFullName: string) {
+    const sqlTables: DestinationTable[] = [{
+      schemaName: tableFullName.includes('.') ? tableFullName.split('.')[0] : '',
+      tableName: tableFullName.includes('.') ? tableFullName.split('.')[1] : tableFullName,
+      fullName: tableFullName, origin: 'probed',
+      columns: [{ name: 'Id', dataType: 'bigint', mappingValueType: 'int', isNullable: false, maxLength: null }],
+    }];
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.id', label: 'Id' }], mode: 'value', instance: { type: 'first' }, targetName: 'Id', tableName: tableFullName },
+    ];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType, destLabel: destType,
+      mappingRows: rows, sqlTables, childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    return applyMappingSummaryDocument(doc, destType);
+  }
+
+  it('PostgreSQL: save then reopen restores "public.Patient", not bare "Patient"', () => {
+    const applied = buildAndReapply('postgres', 'public.Patient');
+    expect(applied.targetByResource['Patient']).toBe('public.Patient');
+  });
+
+  it('MySQL: save then reopen restores bare "Patient" (no schema layer)', () => {
+    const applied = buildAndReapply('mysql', 'Patient');
+    expect(applied.targetByResource['Patient']).toBe('Patient');
+  });
+
+  it('SQL Server: save then reopen restores "dbo.Patient" unchanged (pre-existing behavior, not regressed)', () => {
+    const applied = buildAndReapply('sql', 'dbo.Patient');
+    expect(applied.targetByResource['Patient']).toBe('dbo.Patient');
+  });
+});
+
 describe('reference lookup (referencesResource)', () => {
   it('resolves a reference field against the OTHER resource\'s own table + id column, regardless of mapping order', () => {
     // Observation's PatientId field is mapped BEFORE Patient's own Id field — the lookup must still resolve

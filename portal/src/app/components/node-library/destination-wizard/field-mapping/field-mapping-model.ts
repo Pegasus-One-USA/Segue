@@ -26,6 +26,90 @@ export type PendingSchemaOp =
  *  still tell the SQL engines apart where it matters (e.g. destination.type on the wire). */
 export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob';
 
+// ── SQL-family table-name qualification — the ONE place a bare table name becomes schema-qualified (or
+// vice versa) for SQL Server/MySQL/PostgreSQL. Mirrors SqlDestinationSchemaService.SplitTableName's own
+// per-dialect default exactly (src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs),
+// so a name derived here and one the backend independently derives from the same bare name always agree.
+// Every call site that used to hand-roll its own "dbo."/"public." ternary (destination-wizard.component.ts's
+// _qualifyDefaultTable, field-mapping-canvas.component.ts's submitCreateTable/_finishCreateTable,
+// field-mapping-summary.model.ts's old private qualify()) goes through these instead. ──────────────────
+
+const SQL_FAMILY_TYPES: readonly MappingDestType[] = ['sql', 'mysql', 'postgres'];
+
+/** Whether `type` is one of the three relational engines table qualification applies to at all. */
+export function isSqlFamilyDestType(type: MappingDestType): boolean {
+  return SQL_FAMILY_TYPES.includes(type);
+}
+
+/** The default schema a bare (unqualified) table name resolves into for `type` — "dbo" for SQL Server,
+ *  "public" for PostgreSQL, "" for MySQL (no schema layer distinct from the database) and for any
+ *  non-relational type (never actually schema-qualified; callers only invoke this for SQL-family types). */
+export function defaultSchemaFor(type: MappingDestType): string {
+  return type === 'sql' ? 'dbo' : type === 'postgres' ? 'public' : '';
+}
+
+/** Schema-qualifies a bare table name for `type`'s own default schema. Already-qualified names
+ *  (containing a ".") are returned completely unchanged, regardless of `type` — never re-qualified,
+ *  never double-qualified, since a "." means either a real, deliberately-typed schema.table (SQL
+ *  Server/PostgreSQL) or, for MySQL/anything else, a name this function has no business rewriting. */
+export function qualifyTableName(name: string, type: MappingDestType): string {
+  if (name.includes('.')) return name;
+  const schema = defaultSchemaFor(type);
+  return schema ? `${schema}.${name}` : name;
+}
+
+/** Splits a (possibly bare) table name into its schema/table parts, defaulting the schema via
+ *  defaultSchemaFor() when none is given — mirrors SqlDestinationSchemaService.SplitTableName exactly,
+ *  so a locally-synthesized preview (e.g. right after "Create a new table…", before the real backend
+ *  response overwrites it) always agrees with what the backend will actually store. */
+export function splitTableName(name: string, type: MappingDestType): { schemaName: string; tableName: string } {
+  const dot = name.indexOf('.');
+  if (dot >= 0) return { schemaName: name.slice(0, dot), tableName: name.slice(dot + 1) };
+  return { schemaName: defaultSchemaFor(type), tableName: name };
+}
+
+/**
+ * Reconciles a resource → target-table map across a destination-type switch between two SQL-family types
+ * (SQL Server ⇄ MySQL ⇄ PostgreSQL) — a no-op for any other pair, including into/out of Mongo/CSV/Blob/
+ * FHIR-native types, which have their own unrelated target shape and are never touched here.
+ *
+ * For each resource whose CURRENT target still exactly equals what qualifyTableName would have produced
+ * from that resource's own catalog entry under `previousType` — i.e. it's still the untouched auto-seeded
+ * default, never renamed/retargeted/recreated by the user — re-derives it for `type` instead: a resource
+ * nobody has touched since it was auto-seeded as "dbo.Appointment" under SQL Server correctly becomes
+ * "public.Appointment" the moment the destination switches to PostgreSQL.
+ *
+ * Any OTHER target — manually typed, renamed, created via "Create a new table…", or picked via "Select
+ * Existing" — never matches that exact shape, so it's left completely untouched. This is deliberately a
+ * pure string-equality check, not a "looks auto-generated" heuristic: a user who happens to manually type
+ * exactly the same string the auto-default would have produced is indistinguishable from — and behaves
+ * identically to — an untouched default, which is the same trade-off the rest of this screen already
+ * makes wherever it can't otherwise tell "guessed" from "confirmed" apart (see isPrimaryTargetValid).
+ *
+ * `catalogSqlTableByResource` supplies each resource's raw catalog entry (DEST_RESOURCE_DEFS/
+ * genericResourceDef's `sqlTable`, hand-authored as "dbo.X") — a resource missing from it is left alone.
+ */
+export function reconcileTargetsForDestTypeSwitch(
+  targets: Record<string, string>,
+  catalogSqlTableByResource: Record<string, string>,
+  previousType: MappingDestType,
+  type: MappingDestType,
+): Record<string, string> {
+  if (previousType === type || !isSqlFamilyDestType(previousType) || !isSqlFamilyDestType(type)) {
+    return targets;
+  }
+  const next = { ...targets };
+  for (const [resource, current] of Object.entries(targets)) {
+    const catalogSqlTable = catalogSqlTableByResource[resource];
+    if (!current || !catalogSqlTable) continue;
+    const bare = catalogSqlTable.replace(/^dbo\./i, '');
+    if (current === qualifyTableName(bare, previousType)) {
+      next[resource] = qualifyTableName(bare, type);
+    }
+  }
+  return next;
+}
+
 export interface MappingSourceRef {
   fhirPath: string;
   label: string;
@@ -267,6 +351,45 @@ function applyInstance(
 
 export function isApproximated(row: MappingRow): boolean {
   return resolveArrayPolicy(row).approximated;
+}
+
+/** The effective, backend-facing ValueType for a mapping row — the same one serializeRowsFlat() actually
+ *  sends to the API (see its own `valueType: arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType`):
+ *  'Json' for a childJson row (StoreJson comes exclusively from mode === 'childJson' — see
+ *  resolveArrayPolicy), the primary source field's own valueType for a 'value' row. */
+export function effectiveMappingValueType(row: MappingRow): string | undefined {
+  return row.mode === 'childJson' ? 'Json' : row.sources[0]?.valueType;
+}
+
+/**
+ * Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
+ * ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
+ * widening: Integer→Decimal is rejected exactly like String→Integer is). Extracted out of
+ * DestinationWizardComponent.validateMappingForSave so the exact rule it enforces is independently
+ * testable without standing up that component's full DI graph.
+ *
+ * Compares row's EFFECTIVE ValueType (effectiveMappingValueType — 'Json' for childJson, not just a
+ * 'value' row's own source type) against the column's mappingValueType, so a childJson mapping onto a
+ * column that doesn't accept Json (e.g. a plain varchar) is caught here too, instead of only surfacing
+ * once the whole workflow is saved.
+ *
+ * Returns the exact user-facing error text on a mismatch, or null when compatible / when there's nothing
+ * meaningful to compare yet (no column type metadata, or no known effective type — e.g. an empty row).
+ */
+export function checkColumnTypeCompatibility(
+  row: MappingRow,
+  column: { dataType: string; mappingValueType?: string } | undefined,
+): string | null {
+  if (!column?.mappingValueType) return null;
+  const sourceValueType = effectiveMappingValueType(row);
+  if (!sourceValueType || sourceValueType.toLowerCase() === column.mappingValueType.toLowerCase()) {
+    return null;
+  }
+  return (
+    `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
+    `but "${row.sources[0]?.label ?? row.targetName}" is mapped as ${sourceValueType} — pick a compatible ` +
+    `source field or retarget to a ${sourceValueType}-compatible column.`
+  );
 }
 
 /** True whenever this row could plausibly be designated as pointing at another mapped resource's table via
