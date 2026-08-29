@@ -1,0 +1,19 @@
+portal/src/app/services/phase-config.service.ts
+  s_c300f2c4dd13e3::t_c669ed9bad7193 25,35-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "17cdb819d147f61018cd92fce5571519526fed3e",
+  "prompts": {},
+  "sessions": {
+    "s_c300f2c4dd13e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "77bdb523-6e22-41d0-b11e-da8c33598d27",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
