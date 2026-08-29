@@ -175,11 +175,15 @@ public static class RbacSeedData
         new("Assign an Epic source connection to a tenant.", PermissionGroupCode.Epic, PermissionActionCode.Assign),
         new("Trigger a pipeline run against an Epic source connection.", PermissionGroupCode.Epic, PermissionActionCode.Execute),
 
-        // GATED (Epic/SQL/CSV-only branch): Athenahealth and Cerner source connector permissions are
-        // intentionally not seeded here (and their group is excluded from
-        // SourceSystemPermissionGroups.AllowedGroups) — removing them from this list deactivates any
-        // previously-seeded row on the next boot. Restore both blocks here, matching the Epic pattern
-        // above, once this branch's scope widens again.
+        // Athenahealth source connector permissions. "Edit" is auto-discovered, same as Epic's above.
+        new("View Athenahealth source connection configuration.", PermissionGroupCode.Athenahealth, PermissionActionCode.Read),
+        new("Assign an Athenahealth source connection to a tenant.", PermissionGroupCode.Athenahealth, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against an Athenahealth source connection.", PermissionGroupCode.Athenahealth, PermissionActionCode.Execute),
+
+        // Cerner source connector permissions. "Edit" is auto-discovered, same as Epic's above.
+        new("View Cerner source connection configuration.", PermissionGroupCode.Cerner, PermissionActionCode.Read),
+        new("Assign a Cerner source connection to a tenant.", PermissionGroupCode.Cerner, PermissionActionCode.Assign),
+        new("Trigger a pipeline run against a Cerner source connection.", PermissionGroupCode.Cerner, PermissionActionCode.Execute),
 
         // Governance module permissions.
         new(

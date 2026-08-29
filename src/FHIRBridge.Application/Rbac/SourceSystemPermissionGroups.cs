@@ -17,19 +17,21 @@ namespace FHIRBridge.Application.Security;
 public static class SourceSystemPermissionGroups
 {
     /// <summary>
-    /// GATED (Epic/SQL/CSV-only branch): the only source-vendor/destination-type groups a role can ever be
-    /// granted a dedicated permission for. Every other same-named <see cref="PermissionGroupCode"/> member
-    /// (Cerner, Healow, MeditechGreenfield, GenericFhir, Hl7v2, Sample, Athenahealth, Allscripts, NewEHR,
-    /// AzureSql, MySql, PostgreSql, Mongo, Sftp, BlobStorage, ...) stays a defined enum member — other code
-    /// still references it — but <see cref="AllGroupsFor"/> excludes it from auto-discovery, so no dedicated
-    /// permission for it is ever created or grantable, by any role including SuperAdmin. Widen this set to
-    /// widen the branch's scope; nothing else needs to change.
+    /// GATED (Epic/SQL/CSV/Athenahealth/Cerner branch): the only source-vendor/destination-type groups a
+    /// role can ever be granted a dedicated permission for. Every other same-named
+    /// <see cref="PermissionGroupCode"/> member (Healow, MeditechGreenfield, GenericFhir, Hl7v2, Sample,
+    /// Allscripts, NewEHR, AzureSql, MySql, PostgreSql, Mongo, Sftp, BlobStorage, ...) stays a defined enum
+    /// member — other code still references it — but <see cref="AllGroupsFor"/> excludes it from
+    /// auto-discovery, so no dedicated permission for it is ever created or grantable, by any role including
+    /// SuperAdmin. Widen this set to widen the branch's scope; nothing else needs to change.
     /// </summary>
     public static IReadOnlyCollection<PermissionGroupCode> AllowedGroups { get; } =
     [
         PermissionGroupCode.Epic,
         PermissionGroupCode.SqlServer,
         PermissionGroupCode.Csv,
+        PermissionGroupCode.Athenahealth,
+        PermissionGroupCode.Cerner,
     ];
 
     /// <summary>
