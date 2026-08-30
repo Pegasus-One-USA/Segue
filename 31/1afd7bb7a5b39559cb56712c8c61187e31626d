@@ -1,0 +1,301 @@
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_2369816e76e81b::t_4219d33000077c 1,51-55,58-67,94-105,110-126,131-142,147-158,163-174,179-190,195-206,211-222,227-238,243-269,274-285,290-301,306-317,322-333,338-349
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 1-6,10-11,22-26,40-59,100-105,107-112,114-117,119-122,214-215,219,227,229-234
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,15,37-41,46-47,71-74
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 15-18
+portal/src/app/core/components/dialog-shell/dialog-shell.component.scss
+  s_2369816e76e81b::t_4219d33000077c 1-115
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 9,12-13,16,42,49,136,294-295,310-311,326-327
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 10-14,22-27,104-105,628
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 1,214-220,320-329,356-360,847-855,857-873,876
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.ts
+  s_2369816e76e81b::t_4219d33000077c 1-410
+portal/src/app/components/node-library/destination-wizard/field-mapping/promote-mapping-profile-dialog/promote-mapping-profile-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,9,37,50-51
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_2369816e76e81b::t_4219d33000077c 6-7,12-17,19-41
+portal/src/app/core/components/confirm-dialog/confirm-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 1-34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-export-preview-modal.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 16,30
+portal/src/app/user/pages/preferences/preferences.component.html
+  s_2369816e76e81b::t_4219d33000077c 105
+portal/src/app/user-management/pages/user-list/user-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 360
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 9-10,26-27,29,34,36-37,39,44,61,63
+portal/src/app/governance/dialogs/diff-detail-dialog/diff-detail-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,5,28-29
+portal/src/app/components/node-library/node-library-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 1-5,137-143,232,240,248,256,264,272,280
+src/FHIRBridge.Infrastructure/Persistence/EfAllowedCorsOriginRepository.cs
+  s_2369816e76e81b::t_4219d33000077c 32-34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 160-161,189,192-193,195-217,276,278-284
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,10-11,17-20,35-36,40-41,43,49-56,64-67,74,80-84,91
+portal/src/app/components/node-library/allscripts-source-form/allscripts-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 9,17,74,77
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,16,41-42,44-47,82-85
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 175,227
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 10,20-21,47,56,109,280-287,304-305
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 39-40,75,78-81,83-86
+portal/src/app/user-management/dialogs/reset-password-link-dialog/reset-password-link-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,8,18-19
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2-5
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,8,26-29,33-34
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_2369816e76e81b::t_4219d33000077c 4,26-55,123,139,151-161,166-196,230-232
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 6,12,16,35,44,65,131-132,148-149,169-170
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 4,11,32-33,37-38,62-65
+portal/src/app/core/components/dialog-outlet/dialog-outlet.component.ts
+  s_2369816e76e81b::t_4219d33000077c 1-21
+portal/src/app/user-management/pages/role-list/role-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 189-190,237,240-243,245-248
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 23,30-31,70,98,222-223,230-231,243-244,259-260,314-315,351-354,356
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 70,72
+src/Api/FHIRBridge.Api/Controllers/V1/AllowedCorsOriginsController.cs
+  s_2369816e76e81b::t_4219d33000077c 45-57
+src/FHIRBridge.Application/Services/IAllowedCorsOriginsService.cs
+  s_2369816e76e81b::t_4219d33000077c 11-12
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 6,21,59-60,63,67,135-136
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_2369816e76e81b::t_4219d33000077c 146-181,185-187,195-224
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 26-34,36-44,46-55,57-66,68-69,71,76,78-87,89-98,115,117
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.scss
+  s_2369816e76e81b::t_4219d33000077c 1-274
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 144-151,153-161,163-173,175-188,190-199,201-209,211-212,214-222,224,243,252
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_2369816e76e81b::t_4219d33000077c 225-228
+portal/src/styles.scss
+  s_2369816e76e81b::t_4219d33000077c 857-890,1051-1159,1459-1465,1540
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 117-118,146-158,160-164,166-171,173
+portal/src/app/components/node-library/healow-source-form/healow-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 18-22,75,155-157
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 18-22,338
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_2369816e76e81b::t_4219d33000077c 86,529,2358,2362-2364,2393,2430
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.ts
+  s_2369816e76e81b::t_4219d33000077c 18-22
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 6,13,91,96
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 136-137,141-142,166-167,169-184
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 65-66,68-77
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 9,13-17,48,58,82,203-209,211-212,242-243
+portal/src/app/layout/app-shell/app-shell.component.scss
+  s_2369816e76e81b::t_4219d33000077c 129-131
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 3-5,26,31-36,42,50-60,62,64-72,74,76-84,86,88-100,103
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 125
+portal/src/app/user-management/dialogs/tenant-dialog/tenant-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 15-18
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 39-40,82,85-88,90-93
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 7-8,45,199-200,580-583
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_2369816e76e81b::t_4219d33000077c 35-36,104,388-389
+portal/src/app/allowed-origins/services/i-allowed-cors-origin.service.ts
+  s_2369816e76e81b::t_4219d33000077c 2,7
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 114
+portal/src/app/components/node-library/athenahealth-source-form/athenahealth-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/core/components/confirm-dialog/confirm-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 1-100
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 79,81
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 1-95,97-112,156-158,160-163,166-167,173-182
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 1-17,20,64-72,101,104-123
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 36-38
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 7,13,15,25,34,40,61-62,75-90,92-93
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 111-112,114-139
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.html
+  s_2369816e76e81b::t_4219d33000077c 1-133
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 433-443,549
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_2369816e76e81b::t_4219d33000077c 25,31-32,91,235,249,295-296,310-311
+src/FHIRBridge.Application/Abstractions/Persistence/IAllowedCorsOriginRepository.cs
+  s_2369816e76e81b::t_4219d33000077c 15-16
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 15-18,90,120-121
+portal/src/app/core/components/confirm-dialog/confirm-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 1-20
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 15-18,90,100-110,113-129,131,133-134,138-139,142-143
+src/FHIRBridge.Application/Services/AllowedCorsOriginsService.cs
+  s_2369816e76e81b::t_4219d33000077c 64-86
+portal/src/app/components/node-library/sample-source-form/sample-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_2369816e76e81b::t_4219d33000077c 8-19,448
+src/FHIRBridge.Infrastructure/Persistence/InMemoryAllowedCorsOriginRepository.cs
+  s_2369816e76e81b::t_4219d33000077c 31-36
+portal/src/app/core/services/dialog.service.ts
+  s_2369816e76e81b::t_4219d33000077c 1-224
+src/FHIRBridge.Application/DTOs/UpdateAllowedCorsOriginRequest.cs
+  s_2369816e76e81b::t_4219d33000077c 1-3
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 11,14-15,19,33,41,52,129,146
+src/FHIRBridge.Domain/Entities/AllowedCorsOrigin.cs
+  s_2369816e76e81b::t_4219d33000077c 29-34
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_2369816e76e81b::t_4219d33000077c 40-42,47-48,60,74
+portal/src/app/settings/pages/branding/branding-settings.component.html
+  s_2369816e76e81b::t_4219d33000077c 256
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,18,44-47,50,121-122,127-132
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 123,125
+portal/src/app/data/scope-constants.data.ts
+  s_2369816e76e81b::t_4219d33000077c 13,21-24
+portal/src/app/user/pages/profile/profile.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,6,17,33
+src/Runtime/FHIRBridge.Runtime.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_2369816e76e81b::t_4219d33000077c 47-69
+portal/src/app/allowed-origins/services/api-allowed-cors-origin.service.ts
+  s_2369816e76e81b::t_4219d33000077c 7,25-30
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 9-10,12,30,77,90
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 25-26,59,63,66-69,71-74
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 101-103,130,133-134,136-145
+portal/src/app/settings/pages/sso-configurations/sso-configurations.component.html
+  s_2369816e76e81b::t_4219d33000077c 110
+portal/src/app/allowed-origins/models/allowed-cors-origin.model.ts
+  s_2369816e76e81b::t_4219d33000077c 14-18
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2-5
+portal/src/app/components/node-library/destination-wizard/field-mapping/existing-mapping-profile-dialog/existing-mapping-profile-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,7,28,62,66-67,69,71,73,77,80
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 6,22-23,43-44,47-48,125-126,137-138
+portal/src/app/allowed-origins/dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 15-18,90,100-102,105-121,123-124,128-129,132-133
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 20-23,66
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 8-13,21-24
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 1
+portal/src/app/components/node-library/cerner-source-form/cerner-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/components/node-library/node-library-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2-6,8-9,11,17-18,26-27
+portal/src/app/core/components/dialog-shell/dialog-shell.component.html
+  s_2369816e76e81b::t_4219d33000077c 1-36
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 4,6-9,11,79-82,89,92,166-176
+portal/src/app/governance/dialogs/diff-detail-dialog/diff-detail-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 14-17
+portal/src/app/governance/pages/audit-logs/audit-logs.component.ts
+  s_2369816e76e81b::t_4219d33000077c 7,11-12,33,131
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_2369816e76e81b::t_4219d33000077c 8,33
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 107-108,135,139,142-145,147-150
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 3,8,18-19
+portal/src/app/components/node-library/epic-source-form/epic-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 3-14,22-25,36-41,43,48-54,67-82,128-129,162,166,169-172,174-177
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.ts
+  s_2369816e76e81b::t_4219d33000077c 31-37
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.scss
+  s_2369816e76e81b::t_4219d33000077c 36,50
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 6,8-14,124-128,137,139,146,173-178,245-254,268-280
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,11,27,44,60,79-82,87,192-197,337-338
+portal/src/app/system-security/pages/app-secret-list/app-secret-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 4,12,31,37,62-63
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_2369816e76e81b::t_4219d33000077c 167-168,170-179
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_2369816e76e81b::t_4219d33000077c 36
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  s_2369816e76e81b::t_4219d33000077c 5,12,51-52,57-58,103-106
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_2369816e76e81b::t_4219d33000077c 625-628
+portal/src/app/components/canvas/canvas.component.scss
+  s_2369816e76e81b::t_4219d33000077c 88-91
+portal/src/app/components/shared/modal-overlay/modal-overlay.component.scss
+  s_2369816e76e81b::t_4219d33000077c 2-5
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_2369816e76e81b::t_4219d33000077c 59-82
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_2369816e76e81b::t_4219d33000077c 18-22,76,142-144
+src/FHIRBridge.Domain/Fhir/SupportedFhirResourceTypes.cs
+  s_2369816e76e81b::t_4219d33000077c 47-69
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_2369816e76e81b::t_4219d33000077c 64,153-156,158-165
+portal/src/app/user/pages/account-settings/account-settings.component.html
+  s_2369816e76e81b::t_4219d33000077c 78
+portal/src/app/core/components/dialog-shell/dialog-shell.component.ts
+  s_2369816e76e81b::t_4219d33000077c 1-61
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  s_2369816e76e81b::t_4219d33000077c 75
+portal/src/app/user/dialogs/edit-profile-dialog/edit-profile-dialog.component.html
+  s_2369816e76e81b::t_4219d33000077c 63
+src/FHIRBridge.Application/Mapping/Catalog/fhir-r4-catalog.json
+  s_2369816e76e81b::t_78f49c0e008e26 25333,25335-25337,25342,25347-25349,25354,25359-25361,25366,25371-25373,25378,25383-25385,25390,25395-25397,25402,25407-25409,25411,25414,25419-25421,25423,25426,25431-25433,25438,25443-25445,25450,25452,25455-25457,25462,25467-25469,25474,25476-25478,25481-25483,25488,25493-25495,25500,25505-25507,25509,25512,25517-25519,25524,25529-25531,25533,25536,25541-25543,25548,25553-25555,25559,25563-25565,25567,25569,25573-25575,25579,25583-25585,25587,25589,25593-25595,25599,25603-25605,25610,25615-25617,25622,25627-25629,25634,25636,25639-25641,25643,25646,25651-25653,25655,25658,25663-25665,25670,25675-25677,25682-50829,50841-104138,104143-104145,104150-104151,104156-104158,104163-104164,104169-104184,104189-104190,104195-104197,104202,104207-104209,104214,104219-104221,104226,104231-104401,104406-104407,104412-104414,104419,104421,104424-104426,104431,104436-104438,104442-104444,104448-104450,104454-104456,104460-104462,104464,104466-104468,104472-104474,104476,104478-104480,104484-104486,104488,104490-104492,104496-104498,104502-104504,104508-104510,104514-104516,104520-104522,104526-104529,104532-104534,104538-104540,104544-104546,104548,104550-104552,104556-104558,104560,104562-104565,104569-104571,104573,104575-104578,104582-104585,104587-104591,104595-104597,104599,104602-104603,104608-104610,104615-104616,104621-104623,104628,104633-104635,104637,104640,104645-104647,104652,104657-104659,104661,104663-104665,104669-104671,104676,104681-104683,104688,104693-104695,104697,104700,104705-104707,104712,104717-104719,104724,104729-104731,104736,104741-104743,104745,104748,104753-104755,104757,104760,104765-104767,104769,104772,104777-104779,104784,104789-104791,104793,104796,104801-104803,104805,104808,104813-104815,104820,104825-104827,104832,104837-104839,104844,104849-104851,104853,104856,104858,104861-104863,104867
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "311afd7bb7a5b39559cb56712c8c61187e31626d",
+  "prompts": {},
+  "sessions": {
+    "s_2369816e76e81b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9565123e-7701-42e6-840e-868fc0fac6a7",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
