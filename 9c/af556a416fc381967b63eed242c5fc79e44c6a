@@ -1,0 +1,35 @@
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_22795f028d8e6b::t_f0b4fed85627a6 178-186
+src/FHIRBridge.Application/Rbac/SourceSystemPermissionGroups.cs
+  s_22795f028d8e6b::t_2f5fc0b4d7b86e 20-26,33-34
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_22795f028d8e6b::t_07eb84ff525375 54,57
+  s_22795f028d8e6b::t_33c6a0ac9fcd80 86
+  s_22795f028d8e6b::t_13aaf993562573 98,157,169
+  s_22795f028d8e6b::t_6965c7cc06bfd3 196
+portal/src/app/auth/models/user.model.ts
+  s_22795f028d8e6b::t_b087fc1a29a64d 10-15
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_22795f028d8e6b::t_9b0179358d1141 17
+  s_22795f028d8e6b::t_98c29a8123fe76 396
+  s_22795f028d8e6b::t_ca663123ef0441 318,345,369
+  s_22795f028d8e6b::t_c1fb7e210d4774 150-156
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_22795f028d8e6b::t_e7bf94188c6c86 124-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9caf556a416fc381967b63eed242c5fc79e44c6a",
+  "prompts": {},
+  "sessions": {
+    "s_22795f028d8e6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cbec4ab-1a2e-4787-bcc0-7a959aa32bea",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
