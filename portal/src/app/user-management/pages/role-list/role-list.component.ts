@@ -3,16 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { AuthService } from '../../../auth/services/auth.service';
@@ -31,6 +32,7 @@ import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -39,7 +41,7 @@ import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth
 })
 export class RoleListComponent implements OnInit {
   private readonly svc         = inject(IRoleService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   readonly authService         = inject(AuthService);
@@ -60,7 +62,7 @@ export class RoleListComponent implements OnInit {
 
   readonly roles = signal<Role[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'description', 'permissions', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" (createdAt, or modifiedOnUtc when later). */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
@@ -126,11 +128,10 @@ export class RoleListComponent implements OnInit {
 
   openAdd(): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Create), 'You do not have permission to create roles.')) return;
-    this.dialog
-      .open(RoleDialogComponent, {
+    this.customDialog
+      .open<RoleDialogComponent, {}, boolean>(RoleDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: {},
       })
       .afterClosed()
@@ -144,11 +145,10 @@ export class RoleListComponent implements OnInit {
 
   openEdit(role: Role): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Edit), 'You do not have permission to edit roles.')) return;
-    this.dialog
-      .open(RoleDialogComponent, {
+    this.customDialog
+      .open<RoleDialogComponent, { role: Role }, boolean>(RoleDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: { role },
       })
       .afterClosed()
@@ -166,10 +166,9 @@ export class RoleListComponent implements OnInit {
 
   confirmDelete(role: Role): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Delete), 'You do not have permission to delete roles.')) return;
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Role',
           message: `Are you sure you want to delete role "${role.displayName}"? This action cannot be undone.`,

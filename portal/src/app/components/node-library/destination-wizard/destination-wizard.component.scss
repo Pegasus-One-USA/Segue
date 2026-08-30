@@ -622,7 +622,10 @@
 
 /* ── Confirm before discarding an in-progress group mapping ─────────────────── */
 .dw-confirm-backdrop {
-  position: fixed;
+  // Scoped to the nearest positioned ancestor — .dw (position: relative, above) — rather than the
+  // viewport, matching the treatment applied to app-modal-overlay's backdrop (see
+  // modal-overlay.component.scss) and canvas.component.scss's .ctx-backdrop/.confirm-backdrop.
+  position: absolute;
   inset: 0;
   z-index: var(--z-modal, 200);
   background: rgba(15, 20, 30, 0.45);

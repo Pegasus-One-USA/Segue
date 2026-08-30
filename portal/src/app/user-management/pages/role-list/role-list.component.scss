@@ -185,16 +185,9 @@
 }
 
 // ─── Column widths ────────────────────────────────────────────────────────────
-.col-index {
-  width: 52px;
-  text-align: center !important;
-  color: var(--color-muted) !important;
-  font-size: 13px !important;
-}
-
 .col-actions {
-  width: 130px;
-  text-align: right !important;
+  width: 56px;
+  text-align: left !important;
 }
 
 // ─── Cell elements ────────────────────────────────────────────────────────────
@@ -202,31 +195,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.role-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #EDE9FE;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  mat-icon {
-    font-size: 18px;
-    height: 18px;
-    width: 18px;
-    color: #5B21B6;
-  }
-
-  // System roles can't be edited/deleted — flag them red instead of the regular purple.
-  &--system {
-    background: var(--color-error-soft);
-
-    mat-icon { color: var(--color-error); }
-  }
 }
 
 .cell-primary {
@@ -266,45 +234,18 @@
 .actions-cell {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: flex-start;
 }
 
-// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
-// so the three actions read as distinct, colorful controls rather than plain icons.
-%action-chip {
-  width:         32px !important;
-  height:        32px !important;
-  border-radius: 50% !important;
-  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base) !important;
+.btn-more {
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
 
-  mat-icon { font-size: 17px; height: 17px; width: 17px; }
-
-  &[disabled] { opacity: 0.35; }
-}
-
-.btn-edit {
-  @extend %action-chip;
-  background: var(--color-primary-soft) !important;
-  color:      var(--color-primary) !important;
-
-  &:hover:not([disabled]) { background: var(--color-primary) !important; color: #fff !important; }
-}
-
-.btn-permissions {
-  @extend %action-chip;
-  background: #EDE9FE !important;
-  color:      #5B21B6 !important;
-
-  &:hover:not([disabled]) { background: #5B21B6 !important; color: #fff !important; }
-}
-
-.btn-delete {
-  @extend %action-chip;
-  background: var(--color-error-soft) !important;
-  color:      var(--color-error) !important;
-
-  &:hover:not([disabled]) { background: var(--color-error) !important; color: #fff !important; }
+  &:hover {
+    background: var(--color-side) !important;
+    color:      var(--color-ink) !important;
+  }
 }
 
 // ─── Empty State ─────────────────────────────────────────────────────────────

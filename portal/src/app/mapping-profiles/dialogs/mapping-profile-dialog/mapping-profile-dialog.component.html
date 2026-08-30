@@ -1,5 +1,8 @@
 <div class="mpd-title-row">
   <div class="mpd-title-left">
+    <div class="mpd-title-icon">
+      <mat-icon>swap_horiz</mat-icon>
+    </div>
     <h2 mat-dialog-title class="mpd-title">
       @if (isCreate) { New Mapping Profile }
       @else if (isView) { View Mapping Profile — {{ data.mappingProfile?.name }} }
@@ -17,44 +20,26 @@
   </div>
 
   <div class="mpd-header-actions">
-    <button
-      type="button"
-      class="mpd-maximize"
-      [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
-      [attr.aria-pressed]="isMaximized()"
-      [title]="isMaximized() ? 'Restore' : 'Maximize'"
-      (click)="toggleMaximize()"
-    >
-      @if (isMaximized()) {
-        <svg class="mpd-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      } @else {
-        <svg class="mpd-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      }
-    </button>
-
-    <button mat-button type="button" (click)="cancel()">Close</button>
-
     @if (!isView) {
       <button
         mat-flat-button
-        color="primary"
+        class="btn-save"
         type="button"
         [disabled]="saving()"
         (click)="save()"
       >
-        {{ saving() ? 'Saving…' : 'Save' }}
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>save</mat-icon>
+        }
+        {{ isEdit ? 'Update' : 'Save' }}
       </button>
     }
   </div>
 </div>
 
-<mat-dialog-content class="mpd-content" [class.mpd-content--maximized]="isMaximized()">
+<mat-dialog-content class="mpd-content">
 
   <div class="mpd-meta-section">
     <h3 class="mpd-meta-title">Profile details</h3>
@@ -62,51 +47,60 @@
     <form [formGroup]="metaForm" class="mpd-meta-form">
       <div class="mpd-meta-grid">
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.name.invalid && metaForm.controls.name.touched">
-          <label for="mpd-name">Name <span class="mpd-req">*</span></label>
-          <input id="mpd-name" formControlName="name" placeholder="e.g. Patient → Warehouse" />
-        </div>
+        <mat-form-field appearance="outline" class="mpd-form-field">
+          <mat-label>Name</mat-label>
+          <input matInput id="mpd-name" formControlName="name" placeholder="e.g. Patient → Warehouse" autocomplete="off" />
+          @if (metaForm.controls.name.invalid && metaForm.controls.name.touched) {
+            <mat-error>Name is required.</mat-error>
+          }
+        </mat-form-field>
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched">
-          <label for="mpd-resourceType">Resource Type <span class="mpd-req">*</span></label>
-          <select id="mpd-resourceType" formControlName="resourceType">
-            <option value="" disabled>Choose a FHIR resource…</option>
+        <mat-form-field appearance="outline" class="mpd-form-field">
+          <mat-label>Resource Type</mat-label>
+          <mat-select id="mpd-resourceType" formControlName="resourceType" placeholder="Choose a FHIR resource…">
             @for (r of resourceTypeOptions; track r) {
-              <option [value]="r">{{ r }}</option>
+              <mat-option [value]="r">{{ r }}</mat-option>
             }
-          </select>
-        </div>
+          </mat-select>
+          @if (metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched) {
+            <mat-error>Resource type is required.</mat-error>
+          }
+        </mat-form-field>
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched">
-          <label for="mpd-source">Source Connection <span class="mpd-req">*</span></label>
-          <select id="mpd-source" formControlName="sourceConnectionId">
-            <option value="" disabled>Choose a source connection…</option>
+        <mat-form-field appearance="outline" class="mpd-form-field">
+          <mat-label>Source Connection</mat-label>
+          <mat-select id="mpd-source" formControlName="sourceConnectionId" placeholder="Choose a source connection…">
             @for (s of sourceOptions(); track s.id) {
-              <option [value]="s.id">{{ s.name }}</option>
+              <mat-option [value]="s.id">{{ s.name }}</mat-option>
             }
-          </select>
-        </div>
+          </mat-select>
+          @if (metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched) {
+            <mat-error>Source connection is required.</mat-error>
+          }
+        </mat-form-field>
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched">
-          <label for="mpd-destination">Destination <span class="mpd-req">*</span></label>
-          <select id="mpd-destination" formControlName="destinationId">
-            <option value="" disabled>Choose a destination…</option>
+        <mat-form-field appearance="outline" class="mpd-form-field">
+          <mat-label>Destination</mat-label>
+          <mat-select id="mpd-destination" formControlName="destinationId" placeholder="Choose a destination…">
             @for (d of destinationOptions(); track d.id) {
-              <option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</option>
+              <mat-option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</mat-option>
             }
-          </select>
-        </div>
+          </mat-select>
+          @if (metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched) {
+            <mat-error>Destination is required.</mat-error>
+          }
+        </mat-form-field>
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched">
-          <label for="mpd-destinationObject">Destination Object <span class="mpd-req">*</span></label>
-          <input id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" />
-        </div>
+        <mat-form-field appearance="outline" class="mpd-form-field">
+          <mat-label>Destination Object</mat-label>
+          <input matInput id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" autocomplete="off" />
+          @if (metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched) {
+            <mat-error>Destination object is required.</mat-error>
+          }
+        </mat-form-field>
 
         <div class="mpd-meta-field mpd-meta-field--checkbox">
-          <label>
-            <input type="checkbox" formControlName="isEnabled" />
-            Enabled
-          </label>
+          <mat-checkbox formControlName="isEnabled">Enabled</mat-checkbox>
         </div>
 
       </div>

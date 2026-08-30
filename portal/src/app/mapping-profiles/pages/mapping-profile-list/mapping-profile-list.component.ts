@@ -2,18 +2,19 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { MappingProfileDto, MappingProfileSortColumn, SortOrder } from '../../models/mapping-profile.model';
 import {
-  MappingProfileDialogComponent,
-  MappingProfileDialogData,
-} from '../../dialogs/mapping-profile-dialog/mapping-profile-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+  MappingProfileDialogV2Component,
+  MappingProfileDialogV2Data,
+} from '../../dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { SOURCE_CONNECTIONS_ENDPOINTS, DESTINATION_ENDPOINTS } from '../../../core/api-endpoints';
@@ -44,6 +45,7 @@ interface NamedEntity {
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
+    MatMenuModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -53,7 +55,7 @@ interface NamedEntity {
 export class MappingProfileListComponent implements OnInit {
   private readonly svc         = inject(MappingProfileService);
   private readonly http        = inject(HttpClient);
-  private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
   readonly permissions         = inject(PermissionService);
@@ -77,7 +79,7 @@ export class MappingProfileListComponent implements OnInit {
   readonly destinationNamesById = signal<Record<string, string>>({});
 
   readonly displayedCols = [
-    'name', 'resourceType', 'source', 'destination', 'destinationObject', 'fieldCount', 'isEnabled', 'actionOn', 'actions',
+    'actions', 'name', 'resourceType', 'source', 'destination', 'destinationObject', 'fieldCount', 'isEnabled', 'actionOn',
   ];
 
   readonly resourceTypeOptions = FHIR_RESOURCES;
@@ -198,25 +200,16 @@ export class MappingProfileListComponent implements OnInit {
     this._openDialog({ mode: 'edit', mappingProfile: item }, 'Mapping profile updated.');
   }
 
-  private _openDialog(data: MappingProfileDialogData, successMessage: string): void {
-    this.dialog
-      .open(MappingProfileDialogComponent, {
-        // Same "XL modal" size the design system already defines for exactly this kind of large dialog
-        // (§11: min(92vw, 1100px) / min(88vh, 740px) — what NodeLibraryDialogComponent itself uses on the
-        // workflow-builder canvas) instead of forcing near-fullscreen by default. Reads as an appropriately
-        // sized dialog rather than a mostly-empty near-fullscreen one before a resource type is picked; the
-        // maximize button (see MappingProfileDialogComponent.toggleMaximize) still covers whoever needs
-        // the full 100vw/100vh canvas room.
-        width: 'min(92vw, 1100px)',
-        height: 'min(88vh, 740px)',
-        // maxWidth/maxHeight stay at the full 100vw/100vh (not a tighter cap) — MatDialogConfig's
-        // maxWidth/maxHeight are applied once at open and aren't updated by dialogRef.updateSize() later,
-        // so a tighter static cap here would silently clamp
-        // MappingProfileDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
-        maxWidth: '100vw',
-        maxHeight: '100vh',
+  private _openDialog(data: MappingProfileDialogV2Data, successMessage: string): void {
+    // V2 (redesigned to match Add Role's polish — see mapping-profile-dialog-v2/): fills the content
+    // area edge-to-edge immediately on open, unconditionally — the same static treatment the Source
+    // Connection screen always gets, no waiting for the dialog to grow once a resource type is picked.
+    // maximize still escalates further, to the true full viewport (sidebar included).
+    this.customDialog
+      .open<MappingProfileDialogV2Component, MappingProfileDialogV2Data, MappingProfileDto | false>(MappingProfileDialogV2Component, {
         disableClose: true,
-        restoreFocus: false,
+        maximizable: true,
+        fillContent: true,
         data,
       })
       .afterClosed()
@@ -246,10 +239,9 @@ export class MappingProfileListComponent implements OnInit {
     if (this.isUsedInWorkflow(item)) return;
     if (!this.actionGuard.ensure('mappingprofiles.delete', 'You do not have permission to delete mapping profiles.')) return;
 
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Mapping Profile',
           message: `Are you sure you want to delete "${item.name}"? This action cannot be undone.`,

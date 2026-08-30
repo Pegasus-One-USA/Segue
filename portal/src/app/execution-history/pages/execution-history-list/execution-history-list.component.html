@@ -84,13 +84,6 @@
     <div class="table-wrapper">
       <table mat-table [dataSource]="result().items" class="data-table">
 
-        <ng-container matColumnDef="index">
-          <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
-          <td mat-cell *matCellDef="let r; let i = index" class="col-index">
-            {{ pageIndex() * pageSize() + i + 1 }}
-          </td>
-        </ng-container>
-
         <ng-container matColumnDef="name">
           <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('pipeline')">
             Workflow
@@ -100,9 +93,6 @@
           </th>
           <td mat-cell *matCellDef="let r">
             <div class="cell-name">
-              <div class="pipe-avatar">
-                <mat-icon>bolt</mat-icon>
-              </div>
               <span class="cell-primary">{{ r.pipelineName }}</span>
             </div>
           </td>
@@ -132,7 +122,7 @@
             </span>
           </th>
           <td mat-cell *matCellDef="let r">
-            <span class="status-badge" [class]="statusClass(r.status)">
+            <span class="badge" [ngClass]="statusClass(r.status)">
               {{ statusLabel(r.status) }}
             </span>
             @if (r.errorReferenceId) {

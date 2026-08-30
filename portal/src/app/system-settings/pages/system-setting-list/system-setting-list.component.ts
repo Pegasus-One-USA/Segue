@@ -1,18 +1,19 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
 import { SystemSetting } from '../../models/system-setting.model';
-import { SystemSettingDialogComponent } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { SystemSettingDialogComponent, SystemSettingDialogData } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { terminologyCodeOf, generalSettingGroupOf } from '../../utils/terminology-setting-field';
+import { DialogService } from '../../../core/services/dialog.service';
 
 interface GroupHeaderRow {
   isGroupHeader: true;
@@ -38,13 +39,14 @@ type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow;
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
   ],
   templateUrl: './system-setting-list.component.html',
   styleUrls: ['./system-setting-list.component.scss'],
 })
 export class SystemSettingListComponent implements OnInit {
   private readonly svc    = inject(ISystemSettingsService);
-  private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast  = inject(ToastService);
 
   readonly loading  = signal(true);
@@ -131,7 +133,7 @@ export class SystemSettingListComponent implements OnInit {
     return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
-  readonly displayedCols = ['key', 'value', 'description', 'actionBy', 'modifiedOnUtc', 'actions'];
+  readonly displayedCols = ['actions', 'key', 'value', 'description', 'actionBy', 'modifiedOnUtc'];
 
   // ── Group headings ──────────────────────────────────────────────────────────
   // Purely a display grouping. "Terminology:*" keys (LOINC/SNOMED/RxNorm/ICD-10/HAPI-sync
@@ -289,11 +291,10 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   openAdd(): void {
-    this.dialog
-      .open(SystemSettingDialogComponent, {
+    this.customDialog
+      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
         width: '520px',
         disableClose: true,
-        restoreFocus: false,
         data: { mode: 'create' },
       })
       .afterClosed()
@@ -306,11 +307,10 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   openEdit(setting: SystemSetting): void {
-    this.dialog
-      .open(SystemSettingDialogComponent, {
+    this.customDialog
+      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
         width: '520px',
         disableClose: true,
-        restoreFocus: false,
         data: { mode: 'edit', setting },
       })
       .afterClosed()
@@ -323,10 +323,9 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   confirmDelete(setting: SystemSetting): void {
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '440px',
-        restoreFocus: false,
         data: {
           title: 'Remove Setting Override',
           message: `Remove the DB override for "${setting.key}"? It will revert to its appsettings/code default on next read.`,

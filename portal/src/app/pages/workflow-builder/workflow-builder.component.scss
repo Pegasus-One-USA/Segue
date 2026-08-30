@@ -5,6 +5,18 @@
   height:         100%;
   overflow:       hidden;
   background:     var(--color-bg);
+
+  // Another clipping ancestor for the node config panel's maximize state (see the matching override on
+  // .shell/.shell-body/.shell-main/.shell-content in styles.scss, and the comment on isMaximized/the
+  // body-class-toggling effect in node-library-dialog.component.ts for the full explanation): this
+  // component's own :host sits between .shell-content and <app-node-library-dialog>, and its
+  // overflow:hidden clips the maximized panel's position:fixed content right back down just as those
+  // shell-level ones did, even after they're lifted. :host-context (not a plain global body selector)
+  // since :host itself is what needs overriding, and that's only expressible from within this
+  // component's own stylesheet.
+  &:host-context(body.nld-maximized) {
+    overflow: visible;
+  }
 }
 
 // ── Pipeline sub-header ────────────────────────────────────────────────────────
@@ -433,7 +445,7 @@
 
 // ── Reset confirmation dialog ──────────────────────────────────────────────────
 .reset-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: var(--z-modal, 200);
   background: rgba(15, 20, 30, 0.45);

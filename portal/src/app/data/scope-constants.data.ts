@@ -10,8 +10,7 @@ export const FHIR_RESOURCES: string[] = [
 
 /** FHIR resource types Epic sources/destinations support — the canonical list surfaced in the Epic
  *  source wizard's scope generation and the destination wizard's data-group picker. Keep in sync with
- *  SupportedFhirResourceTypes.All (backend) — the original MVP1 11 plus the resources added once their
- *  Epic templates (src/FHIRBridge.Application/Mapping/Catalog/EpicTemplates) existed to catalog them. */
+ *  SupportedFhirResourceTypes.All (backend) — the original 37 plus the 22 added afterward. */
 export const SUPPORTED_RESOURCE_TYPES: string[] = [
   'Patient', 'Practitioner', 'Encounter', 'AllergyIntolerance', 'Observation', 'Condition',
   'Procedure', 'ServiceRequest', 'DiagnosticReport', 'MedicationRequest', 'MedicationAdministration',
@@ -19,6 +18,10 @@ export const SUPPORTED_RESOURCE_TYPES: string[] = [
   'DocumentReference', 'FamilyMemberHistory', 'Goal', 'ImagingStudy', 'Immunization', 'Location', 'Medication',
   'MedicationDispense', 'MedicationStatement', 'Organization', 'PractitionerRole', 'Provenance',
   'Questionnaire', 'QuestionnaireResponse', 'RelatedPerson', 'Schedule', 'Slot', 'Specimen', 'Task',
+  'Account', 'AdverseEvent', 'BodyStructure', 'Claim', 'Consent', 'Contract', 'Coverage', 'DeviceRequest',
+  'DeviceUseStatement', 'Endpoint', 'EpisodeOfCare', 'ExplanationOfBenefit', 'Flag', 'Group',
+  'ImmunizationRecommendation', 'List', 'Media', 'NutritionOrder', 'RequestGroup', 'ResearchStudy',
+  'ResearchSubject', 'Substance',
 ];
 
 export const CODED_RESOURCES: string[] = [

@@ -1,9 +1,14 @@
 import { Component, inject, signal, computed, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { HttpErrorResponse } from '@angular/common/http';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { DestinationConnectionFormComponent } from '../../../components/node-library/destination-wizard/destination-connection-form.component';
 import { DestinationConfigurationService } from '../../services/destination-configuration.service';
 import {
@@ -71,17 +76,20 @@ export const DESTINATION_CREATE_PERMISSION_CODES: string[] = [
 @Component({
   selector: 'app-destination-connection-dialog',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, DestinationConnectionFormComponent],
+  imports: [
+    CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+    MatFormFieldModule, MatInputModule, MatProgressSpinnerModule, DestinationConnectionFormComponent,
+  ],
   templateUrl: './destination-connection-dialog.component.html',
   styleUrl: './destination-connection-dialog.component.scss',
 })
 export class DestinationConnectionDialogComponent {
   private readonly fb = inject(FormBuilder);
   private readonly svc = inject(DestinationConfigurationService);
-  private readonly dialogRef = inject(MatDialogRef<DestinationConnectionDialogComponent>);
+  readonly dialogRef = inject<DialogRef<DestinationConfigurationDto | false>>(DialogRef);
   private readonly actionGuard = inject(PermissionActionGuard);
   readonly permissions = inject(PermissionService);
-  readonly data = inject<DestinationConnectionDialogData>(MAT_DIALOG_DATA);
+  readonly data = inject<DestinationConnectionDialogData>(DIALOG_DATA) as DestinationConnectionDialogData;
 
   readonly connectionForm = viewChild(DestinationConnectionFormComponent);
 
@@ -155,8 +163,17 @@ export class DestinationConnectionDialogComponent {
     this.replaceSecret.update(v => !v);
   }
 
-  cancel(): void {
-    this.dialogRef.close(false);
+  // View mode disables metaForm outright (never dirty) and there's no type-picker step to have
+  // progressed past, so this is always false there — no confirm needed to "close" a read-only view.
+  // Create mode also counts having picked a connection type as unsaved progress: the rich per-type
+  // fields below it (Host/Database/Username/...) aren't individually dirty-tracked today, but a user
+  // who's chosen SQL Server and started filling it in has real progress worth confirming before losing.
+  hasUnsavedChanges(): boolean {
+    return this.metaForm.dirty || (this.isCreate && this.chosenType() !== null);
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

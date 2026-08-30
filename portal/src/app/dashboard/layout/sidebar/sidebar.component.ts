@@ -6,7 +6,6 @@ import { PermissionService } from '../../../auth/services/permission.service';
 
 interface NavItem {
   type: 'item';
-  icon: string;
   label: string;
   route: string;
   exact?: boolean;
@@ -38,15 +37,15 @@ const NAV_ENTRIES: NavEntry[] = [
   // WorkflowEndpoints.cs), which stay workflow.view-gated — a role without it still reaches this
   // page, just sees those specific widgets come back empty rather than erroring (see
   // dashboard.component.ts/pipeline-run.service.ts's permission-aware error handling).
-  { type: 'item', icon: '⊞',  label: 'Dashboard',        route: '/dashboard' },
-  { type: 'item', icon: '🔐', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
-  { type: 'item', icon: '👥', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
+  { type: 'item', label: 'Dashboard',        route: '/dashboard' },
+  { type: 'item', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
+  { type: 'item', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
   // Module access: workflow.view OR any workflow-node permission (epic.*, sqlserver.*, ...) — a role
   // holding only e.g. epic.view must still see this entry, since node access implies module access
   // (see PermissionService.hasWorkflowModuleAccess, the single shared source of truth also used by the
   // /workflows and /workflow-builder route guards and the Node Library's open-gate).
-  { type: 'item', icon: '🗂', label: 'Workflows',        route: '/workflows', customCheck: p => p.hasWorkflowModuleAccess() },
-  { type: 'item', icon: '▶',  label: 'Execution History', route: '/execution-history', permissions: ['workflow.view'] },
+  { type: 'item', label: 'Workflows',        route: '/workflows', customCheck: p => p.hasWorkflowModuleAccess() },
+  { type: 'item', label: 'Execution History', route: '/execution-history', permissions: ['workflow.view'] },
   // Settings hub — Branding/EHR Endpoints/Source & Destination Connections/Mapping Profiles/
   // Transformation Rules/Allowed Origins/System Settings (Email + Terminology Codes' four
   // independent systems) now live as tabs under here (settings-shell.component.ts). Visible to
@@ -58,7 +57,7 @@ const NAV_ENTRIES: NavEntry[] = [
   // sync elsewhere). SuperAdmin-only tabs (Allowed Origins, System Settings -> General/Security) are
   // gated again inside the shells themselves, so this entry doesn't need `superAdminOnly` of its own.
   {
-    type: 'item', icon: '⚙', label: 'Settings', route: '/settings',
+    type: 'item', label: 'Settings', route: '/settings',
     permissions: [
       'configuration.view', 'configuration.write',
       'sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view',
@@ -72,7 +71,7 @@ const NAV_ENTRIES: NavEntry[] = [
   // (Audit Logs/Correlation Search/Compliance Reports live under governance-shell.component.ts;
   // Errors lives under operations-shell.component.ts and is cross-linked from there via an absolute
   // route). Lands on /governance, which now surfaces Errors as one of its tabs.
-  { type: 'item', icon: '🛡',  label: 'Logs & Compliance', route: '/governance', permissions: ['governance.read'] },
+  { type: 'item', label: 'Logs & Compliance', route: '/governance', permissions: ['governance.read'] },
 ];
 
 @Component({

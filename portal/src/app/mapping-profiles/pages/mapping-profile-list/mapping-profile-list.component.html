@@ -74,7 +74,6 @@
             </th>
             <td mat-cell *matCellDef="let m">
               <div class="cell-name">
-                <div class="dest-avatar"><mat-icon>swap_horiz</mat-icon></div>
                 <span class="cell-primary">{{ m.name }}</span>
               </div>
             </td>
@@ -134,13 +133,13 @@
                    affordance is permission-gated, rendered as a plain non-interactive badge without it. -->
               @if (permissions.hasPermission('mappingprofiles.deactivate')) {
                 <button type="button" class="status-badge-btn" [matTooltip]="m.isEnabled ? 'Click to deactivate' : 'Click to activate'" (click)="toggleEnabled(m)">
-                  <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
-                    {{ m.isEnabled ? 'enabled' : 'disabled' }}
+                  <span class="badge" [class.badge-active]="m.isEnabled" [class.badge-inactive]="!m.isEnabled">
+                    {{ m.isEnabled ? 'Enabled' : 'Disabled' }}
                   </span>
                 </button>
               } @else {
-                <span class="status-badge" [class.status-badge--inactive]="!m.isEnabled">
-                  {{ m.isEnabled ? 'enabled' : 'disabled' }}
+                <span class="badge" [class.badge-active]="m.isEnabled" [class.badge-inactive]="!m.isEnabled">
+                  {{ m.isEnabled ? 'Enabled' : 'Disabled' }}
                 </span>
               }
             </td>
@@ -164,19 +163,25 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let m" class="col-actions">
               <div class="actions-cell">
-                <button mat-icon-button class="btn-view" matTooltip="Edit" *appHideWithoutPermission="'mappingprofiles.edit'" (click)="openEdit(m)">
-                  <mat-icon>edit</mat-icon>
+                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                  <mat-icon>more_vert</mat-icon>
                 </button>
-                <button
-                  mat-icon-button
-                  class="btn-delete"
-                  *appHideWithoutPermission="'mappingprofiles.delete'"
-                  [disabled]="isUsedInWorkflow(m)"
-                  [matTooltip]="isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : 'Delete'"
-                  (click)="confirmDelete(m)"
-                >
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
+                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <button mat-menu-item *appHideWithoutPermission="'mappingprofiles.edit'" (click)="openEdit(m)">
+                    <mat-icon>edit</mat-icon>
+                    Edit
+                  </button>
+                  <button
+                    mat-menu-item
+                    class="menu-item-danger"
+                    *appHideWithoutPermission="'mappingprofiles.delete'"
+                    [disabled]="isUsedInWorkflow(m)"
+                    (click)="confirmDelete(m)"
+                  >
+                    <mat-icon>delete_outline</mat-icon>
+                    {{ isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : 'Delete' }}
+                  </button>
+                </mat-menu>
               </div>
             </td>
           </ng-container>

@@ -2,20 +2,21 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint } from '../../models/ehr-endpoint.model';
-import { EhrEndpointDialogComponent } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { EhrEndpointDialogComponent, EhrEndpointDialogData } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
+import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-ehr-endpoint-list',
@@ -29,6 +30,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     HideWithoutPermissionDirective,
   ],
   templateUrl: './ehr-endpoint-list.component.html',
@@ -36,7 +38,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 })
 export class EhrEndpointListComponent implements OnInit {
   private readonly svc         = inject(IEhrEndpointService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly dialog      = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
 
@@ -47,7 +49,7 @@ export class EhrEndpointListComponent implements OnInit {
 
   readonly endpoints = signal<EhrEndpoint[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" (createdOnUtc, or modifiedOnUtc when later). */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
@@ -124,10 +126,9 @@ export class EhrEndpointListComponent implements OnInit {
   openAdd(): void {
     if (!this.actionGuard.ensure('ehrendpoints.create', 'You do not have permission to create EHR endpoints.')) return;
     this.dialog
-      .open(EhrEndpointDialogComponent, {
+      .open<EhrEndpointDialogComponent, EhrEndpointDialogData, boolean>(EhrEndpointDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: {},
       })
       .afterClosed()
@@ -142,10 +143,9 @@ export class EhrEndpointListComponent implements OnInit {
   openEdit(endpoint: EhrEndpoint): void {
     if (!this.actionGuard.ensure('ehrendpoints.edit', 'You do not have permission to edit EHR endpoints.')) return;
     this.dialog
-      .open(EhrEndpointDialogComponent, {
+      .open<EhrEndpointDialogComponent, EhrEndpointDialogData, boolean>(EhrEndpointDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: { endpoint },
       })
       .afterClosed()
@@ -162,7 +162,6 @@ export class EhrEndpointListComponent implements OnInit {
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete EHR Endpoint',
           message: `Are you sure you want to delete "${endpoint.name}"? This action cannot be undone.`,

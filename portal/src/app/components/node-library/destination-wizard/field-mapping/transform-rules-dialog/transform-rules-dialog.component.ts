@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
+import { DIALOG_DATA, DialogRef } from '../../../../../core/services/dialog.service';
 import { ToastService } from '../../../../../services/toast.service';
 import { DestinationType } from '../../../../../destination-connections/models/destination-configuration.model';
 import {
@@ -87,27 +88,16 @@ interface ColumnRuleRow {
   styleUrls: ['./transform-rules-dialog.component.scss'],
 })
 export class TransformRulesDialogComponent implements OnInit {
-  private readonly dialogRef = inject(MatDialogRef<TransformRulesDialogComponent>);
+  readonly dialogRef = inject<DialogRef<void>>(DialogRef);
   private readonly rulesService = inject(TransformationRulesService);
   private readonly toast = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
   readonly permissions = inject(PermissionService);
-  readonly data = inject<TransformRulesDialogData>(MAT_DIALOG_DATA);
+  readonly data = inject<TransformRulesDialogData>(DIALOG_DATA);
 
   readonly loading = signal(true);
   readonly rows = signal<ColumnRuleRow[]>([]);
   private nodeSchemas: TransformNodeSchema[] = [];
-
-  /** Maximizes to the same bounded "XL modal" size the Node Library Dialog itself uses (min(92vw,
-   *  1100px) / min(88vh, 740px)) — NOT true edge-to-edge fullscreen. A per-column rule chain never needs
-   *  the whole screen the way the mapping canvas does; capping it here keeps rounded corners/shadow
-   *  intact and avoids dwarfing the wizard dialog sitting behind it. */
-  readonly isMaximized = signal(false);
-  toggleMaximize(): void {
-    const next = !this.isMaximized();
-    this.isMaximized.set(next);
-    this.dialogRef.updateSize(next ? 'min(92vw, 1100px)' : '680px', next ? 'min(88vh, 740px)' : '');
-  }
 
   ngOnInit(): void {
     this.loadRows();
@@ -446,9 +436,5 @@ export class TransformRulesDialogComponent implements OnInit {
         if (!opts.silent) this.toast.error('Failed to save the rule.');
       },
     });
-  }
-
-  close(): void {
-    this.dialogRef.close();
   }
 }

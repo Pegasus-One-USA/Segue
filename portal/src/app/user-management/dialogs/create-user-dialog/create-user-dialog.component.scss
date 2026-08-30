@@ -17,7 +17,10 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px;
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner — see dialog-shell.component.scss), which
+  // replaced this header's own × button now that every dialog gets one from the shell instead.
+  padding: 20px 48px 20px 24px;
   border-bottom: 1px solid var(--color-border);
 
   &__icon {
@@ -58,14 +61,9 @@
   }
 }
 
-.dialog-close {
-  color: var(--color-muted) !important;
-  &:hover { background: var(--color-bg) !important; }
-}
-
 // ─── Content / Form ───────────────────────────────────────────────────────────
 mat-dialog-content {
-  padding: 20px 24px !important;
+  padding: 24px !important;
   overflow-y: auto;
   flex: 1;
   max-height: calc(90vh - 180px);

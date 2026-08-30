@@ -3,7 +3,7 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -18,6 +18,7 @@ import { User, UserRole, UserStatus } from '../../../auth/models/user.model';
 import { UpdateUserRequest } from '../../../auth/models/auth-request.model';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 interface DialogData {
   user: User;
@@ -55,13 +56,15 @@ const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
   templateUrl: './edit-user-dialog.component.html',
   styleUrls: ['./edit-user-dialog.component.scss'],
 })
+// No hasUnsavedChanges()/attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) generically
+// duck-types this component's own `form` property (present below) and reads its `.dirty` automatically.
 export class EditUserDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
-  private readonly dialogRef   = inject(MatDialogRef<EditUserDialogComponent>);
+  readonly dialogRef           = inject<DialogRef<User | null>>(DialogRef);
   private readonly toast       = inject(ToastService);
   private readonly fb          = inject(FormBuilder);
   private readonly actionGuard = inject(PermissionActionGuard);
-  readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
+  readonly data                = inject<DialogData>(DIALOG_DATA);
 
   // ─── State ───────────────────────────────────────────────────────────────
   loading   = signal(false);
@@ -129,7 +132,7 @@ export class EditUserDialogComponent implements OnInit {
     });
   }
 
-  cancel(): void {
-    this.dialogRef.close(null);
+  isSaveInProgress(): boolean {
+    return this.loading();
   }
 }

@@ -1,4 +1,4 @@
-import { Component, input, output, inject, computed, signal, effect, untracked, viewChild } from '@angular/core';
+import { Component, input, output, inject, computed, signal, effect, untracked, viewChild, DestroyRef } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { ModalOverlayComponent } from '../shared/modal-overlay/modal-overlay.component';
 import { PipelineStore } from '../../services/pipeline.store';
@@ -201,14 +201,6 @@ export class NodeLibraryDialogComponent {
   readonly sourceFormOutlet = viewChild(NgComponentOutlet);
   readonly sourceFormError = signal<string | null>(null);
 
-  // ── sidebar collapsed state (auto when a form opens, user-toggleable) ─────
-  readonly sidebarPinned = signal(false);
-  readonly isSidebarMini = computed(() =>
-    (this.openSourceFormType() !== null || this.showDestWizard()) && !this.sidebarPinned()
-  );
-
-  toggleSidebar(): void { this.sidebarPinned.update(v => !v); }
-
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | null>(null);
@@ -218,6 +210,13 @@ export class NodeLibraryDialogComponent {
   // selectItem()'s switch-type guard can check isStep1Dirty() procedurally at click time — see
   // DestinationWizardComponent.isStep1Dirty() for why destWizardHasProgressed alone isn't enough.
   private readonly destWizardRef = viewChild(DestinationWizardComponent);
+
+  // Whichever of the 7 self-contained vendor source forms (Epic, Cerner, ...) is currently rendered
+  // in the @switch below, read by its shared #activeSourceForm template ref rather than 7 separate
+  // viewChild(EpicSourceFormComponent)/viewChild(CernerSourceFormComponent)/... calls — only one case
+  // is ever in the DOM at a time, so exactly one of them would resolve regardless. Used by
+  // onOverlayClosed() to decide whether Escape/backdrop-click should prompt "Discard changes?".
+  private readonly activeSourceForm = viewChild<{ hasUnsavedChanges(): boolean }>('activeSourceForm');
 
   // FHIR resource types the pipeline's source(s) pull — union of every source node's saved "Resources" field plus the
   // active wizard selection. Passed to the destination wizard so its data groups mirror the source's Resource Type.
@@ -318,6 +317,16 @@ export class NodeLibraryDialogComponent {
   readonly isMaximized = signal(false);
   toggleMaximize(): void { this.isMaximized.update(v => !v); }
 
+  // .nld--maximized is `position: fixed; inset: 0` so it computes to full-viewport bounds, but every
+  // shell ancestor (.shell/.shell-body/.shell-main/.shell-content) sets `overflow: hidden|auto` for its
+  // own scrolling/layout — and an ancestor's overflow clips ALL descendants' painted content, including
+  // position:fixed ones, regardless of their own containing block. Without this, "maximize" visually
+  // gets clipped back down to just the content area instead of covering the sidebar/topbar/footer too.
+  // Toggling this body class (matched by a global rule in styles.scss, not a component-scoped one — see
+  // there) temporarily switches those ancestors to `overflow: visible` so the fixed panel can actually
+  // paint over the whole browser window while maximized. Wired up in the constructor below, alongside
+  // this component's other effects.
+
   // Mirrors the open canvas's own destination type / mapping count so the header can show them
   // without reaching into the wizard's nested-@if template (a template ref there is out of scope here).
   // Delegates to destTypeLabel() below so the two never drift again — this used to be its own
@@ -344,6 +353,11 @@ export class NodeLibraryDialogComponent {
   );
 
   constructor() {
+    effect(() => {
+      document.body.classList.toggle('nld-maximized', this.open() && this.isMaximized());
+    });
+    inject(DestroyRef).onDestroy(() => document.body.classList.remove('nld-maximized'));
+
     // When the dialog opens with an editNodeId, jump straight into the right form.
     effect(() => {
       const id = this.editNodeId();
@@ -830,11 +844,36 @@ export class NodeLibraryDialogComponent {
   // click whenever closeOnBackdropClick is true. Escape isn't covered by that input (see
   // ModalOverlayComponent.onEscape), so a form/wizard being open is checked here instead: closing outright
   // would otherwise silently discard whatever the user has entered.
+  //
+  // This used to set pendingCloseConfirm unconditionally whenever a form/wizard was merely open, which
+  // meant "Discard changes?" fired even on a form nobody had touched yet. Now it consults the SAME
+  // dirty signals the dest wizard's own switch-type/back-to-library guards already use
+  // (destWizardHasProgressed/isStep1Dirty), plus the active self-contained vendor form's own
+  // hasUnsavedChanges() (the same one its Cancel button already checks via
+  // EhrVendorSourceFormComponent.cancel()) — so this only prompts when there's actually something to
+  // lose. A "headless" source form (generic-fhir, hl7v2 — no dirty-tracking of its own) still falls
+  // back to always prompting, same as before, rather than guessing.
   onOverlayClosed(): void {
-    if (this.openSourceFormType() !== null || this.showDestWizard()) {
-      this.pendingCloseConfirm.set(true);
+    if (this.showDestWizard()) {
+      if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
+        this.pendingCloseConfirm.set(true);
+        return;
+      }
+      this.close();
       return;
     }
+
+    if (this.openSourceFormType() !== null) {
+      const outletInstance = this.sourceFormOutlet()?.componentInstance as { hasUnsavedChanges?: () => boolean } | undefined;
+      const dirty = this.activeSourceForm()?.hasUnsavedChanges() ?? outletInstance?.hasUnsavedChanges?.() ?? true;
+      if (dirty) {
+        this.pendingCloseConfirm.set(true);
+        return;
+      }
+      this.close();
+      return;
+    }
+
     this.close();
   }
 
@@ -855,7 +894,6 @@ export class NodeLibraryDialogComponent {
     this.closed.emit();
     this.selectedId.set(null);
     this.searchQuery.set('');
-    this.sidebarPinned.set(false);
     this.openSourceFormType.set(null);
     this.sourceFormEditNode.set(null);
     this.sourceFormError.set(null);

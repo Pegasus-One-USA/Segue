@@ -10,9 +10,6 @@
       <h2 mat-dialog-title>Invite User</h2>
       <p>Send an invitation email to onboard a new team member</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="cancel()">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <mat-divider></mat-divider>
@@ -78,9 +75,6 @@
   <!-- Actions -->
   <mat-dialog-actions>
     <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
-        Cancel
-      </button>
       <button
         mat-flat-button
         class="btn-submit"

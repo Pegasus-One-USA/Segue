@@ -29,6 +29,9 @@ public sealed class EfAllowedCorsOriginRepository : IAllowedCorsOriginRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public Task UpdateAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken) =>
+        _db.SaveChangesAsync(cancellationToken);
+
     public Task DeleteAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken)
     {
         _db.AllowedCorsOrigins.Remove(origin);

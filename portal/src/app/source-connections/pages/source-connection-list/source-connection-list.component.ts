@@ -2,12 +2,13 @@ import { Component, OnInit, inject, signal, effect, computed } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { ISourceConnectionService } from '../../services/i-source-connection.service';
 import { ApplicationTypeModel, SourceConnectionModel, SourceSortColumn, SortOrder } from '../../models/source-connection.model';
@@ -23,7 +24,7 @@ import { AllscriptsSourceFormComponent } from '../../../components/node-library/
 import { HealowSourceFormComponent } from '../../../components/node-library/healow-source-form/healow-source-form.component';
 import { MeditechSourceFormComponent } from '../../../components/node-library/meditech-source-form/meditech-source-form.component';
 import { SampleSourceFormComponent } from '../../../components/node-library/sample-source-form/sample-source-form.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { PermissionService } from '../../../auth/services/permission.service';
@@ -40,6 +41,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     HideWithoutPermissionDirective,
     EpicSourceFormComponent,
     CernerSourceFormComponent,
@@ -55,7 +57,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
 })
 export class SourceConnectionListComponent implements OnInit {
   private readonly svc         = inject(ISourceConnectionService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   protected readonly wiz       = inject(WizardService);
   private readonly permissions = inject(PermissionService);
@@ -74,11 +76,15 @@ export class SourceConnectionListComponent implements OnInit {
 
   readonly items = signal<SourceConnectionModel[]>([]);
   readonly totalCount = signal(0);
+  /** Whether the open per-vendor connection form is expanded to fill the whole browser window
+   *  (sidebar/topbar/footer included), same "maximize" concept as the workflow builder's node config
+   *  panel — see the vendor forms' own `isMaximized`/`toggleMaximizeRequest` and .sc-modal-panel--maximized. */
+  readonly formMaximized = signal(false);
   /** Ids of connections currently referenced by at least one workflow's Source node — Edit/Delete are disabled
    *  for these so a connection a workflow still depends on can't be changed or removed out from under it. */
   readonly usedConnectionIds = signal<ReadonlySet<string>>(new Set());
 
-  readonly displayedCols = ['index', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'sourceSystemType', 'audience', 'baseUrl', 'clientId', 'status', 'actionBy', 'actionOn'];
 
   /** Only one sortable column beyond the regular ones — "Action on" — server-driven since this list is
    *  server-paged. Mutually exclusive with sortColumn/sortDirection; see onSort/toggleActionOnSort. */
@@ -182,6 +188,12 @@ export class SourceConnectionListComponent implements OnInit {
     effect(() => {
       const current = this.wiz.saved();
       if (current !== this.savedBaseline) this.load();
+    });
+
+    // Reset once the form closes so the next one opens un-maximized rather than inheriting whatever
+    // state the previous connection's form was left in.
+    effect(() => {
+      if (!this.wiz.isOpen()) this.formMaximized.set(false);
     });
   }
 
@@ -322,10 +334,9 @@ export class SourceConnectionListComponent implements OnInit {
   confirmDelete(connection: SourceConnectionModel): void {
     if (this.isUsedInWorkflow(connection)) return;
     if (!this.actionGuard.ensure(this.deleteCodes(connection), `You do not have permission to delete this ${connection.sourceSystemType} source connection.`, 'all')) return;
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Source Connection',
           message: 'Are you sure you want to delete this Source Connection?',

@@ -2,7 +2,7 @@ import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -15,6 +15,7 @@ import { InvitationService } from '../../../auth/services/invitation.service';
 import { TenantRoleService } from '../../services/tenant-role.service';
 import { UserRole } from '../../../auth/models/user.model';
 import { Invitation } from '../../../auth/models/invitation.model';
+import { DialogRef } from '../../../core/services/dialog.service';
 
 const ROLES: { value: UserRole; label: string }[] = [
   { value: 'SuperAdmin', label: 'Super Admin' },
@@ -40,9 +41,13 @@ const ROLES: { value: UserRole; label: string }[] = [
   templateUrl: './create-user-dialog.component.html',
   styleUrls: ['./create-user-dialog.component.scss'],
 })
+// No explicit attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) calls this
+// component's own hasUnsavedChanges() override below (kept explicit, rather than relying on the
+// generic `form` duck-typing, because "unsaved" here also depends on inviteSent() — once the
+// invitation is sent there's nothing left to lose even if the form itself is still dirty).
 export class CreateUserDialogComponent implements OnInit {
   private readonly invitationSvc = inject(InvitationService);
-  private readonly dialogRef     = inject(MatDialogRef<CreateUserDialogComponent>);
+  readonly dialogRef             = inject<DialogRef<Invitation | null>>(DialogRef);
   private readonly toast         = inject(ToastService);
   private readonly fb            = inject(FormBuilder);
 
@@ -113,11 +118,17 @@ export class CreateUserDialogComponent implements OnInit {
     });
   }
 
+  // Once the invitation is sent, there's nothing left to lose — the success screen's own "Done"-style
+  // close (the header's × still routes through here) can just close immediately with the result.
   close(): void {
     this.dialogRef.close(this.inviteSent() ? this.sentInvitation() : null);
   }
 
-  cancel(): void {
-    this.dialogRef.close(null);
+  hasUnsavedChanges(): boolean {
+    return !this.inviteSent() && this.form.dirty;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.loading();
   }
 }

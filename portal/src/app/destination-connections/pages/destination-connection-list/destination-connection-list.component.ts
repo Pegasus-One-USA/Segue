@@ -2,12 +2,12 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { DestinationConfigurationService } from '../../services/destination-configuration.service';
@@ -17,7 +17,8 @@ import {
   DestinationConnectionDialogData,
   DESTINATION_CREATE_PERMISSION_CODES,
 } from '../../dialogs/destination-connection-dialog/destination-connection-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { PermissionService } from '../../../auth/services/permission.service';
@@ -43,6 +44,7 @@ import { PhaseConfigService } from '../../../services/phase-config.service';
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -51,7 +53,7 @@ import { PhaseConfigService } from '../../../services/phase-config.service';
 })
 export class DestinationConnectionListComponent implements OnInit {
   private readonly svc         = inject(DestinationConfigurationService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly permissions = inject(PermissionService);
   private readonly actionGuard = inject(PermissionActionGuard);
@@ -104,7 +106,7 @@ export class DestinationConnectionListComponent implements OnInit {
    *  Delete independently of historyById (a never-run destination can still be wired into a live workflow). */
   readonly usedInWorkflowIds = signal<Set<string>>(new Set());
 
-  readonly displayedCols = ['name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" — server-driven since this list is server-paged. */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
@@ -275,11 +277,15 @@ export class DestinationConnectionListComponent implements OnInit {
   }
 
   private _openDialog(data: DestinationConnectionDialogData, successMessage: string): void {
-    this.dialog
-      .open(DestinationConnectionDialogComponent, {
-        width: '640px',
+    this.customDialog
+      .open<DestinationConnectionDialogComponent, DestinationConnectionDialogData, DestinationConfigurationDto | false>(DestinationConnectionDialogComponent, {
+        // Centered, FIXED-width card — same treatment as Add Role/Invite User (560px) and the big
+        // user-edit dialog (820px), just wider to fit the type-choice grid and per-type connection
+        // forms. A vw-relative width (the old `min(92vw, 1100px)`) leaves almost no backdrop margin on
+        // a typical laptop-width window, unlike every other dialog in the app — a fixed px width keeps
+        // the same comfortable margin regardless of window size.
+        width: '820px',
         disableClose: true,
-        restoreFocus: false,
         data,
       })
       .afterClosed()
@@ -295,10 +301,9 @@ export class DestinationConnectionListComponent implements OnInit {
     if (this.hasHistory(item) || this.isUsedInWorkflow(item)) return;
     if (!this.actionGuard.ensure(this.deleteCodes(item), 'You do not have permission to delete this destination connection.', 'all')) return;
 
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Destination Connection',
           message: `Are you sure you want to delete "${item.name}"? This action cannot be undone.`,

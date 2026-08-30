@@ -2,10 +2,11 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { A11yModule } from '@angular/cdk/a11y';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { DIALOG_DATA, DialogRef } from '../../../../../core/services/dialog.service';
 
 export interface PromoteMappingProfileDialogData {
   resourceType: string;
@@ -33,7 +34,7 @@ export interface PromoteMappingProfileDialogData {
       </mat-form-field>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button type="button" mat-button (click)="cancel()">Cancel</button>
+      <button type="button" mat-button (click)="dialogRef.attemptClose()">Cancel</button>
       <button type="button" mat-flat-button color="primary" [disabled]="!name.trim()" (click)="confirm()">
         Save as master
       </button>
@@ -46,17 +47,13 @@ export interface PromoteMappingProfileDialogData {
   `],
 })
 export class PromoteMappingProfileDialogComponent {
-  private readonly dialogRef = inject(MatDialogRef<PromoteMappingProfileDialogComponent>);
-  readonly data = inject<PromoteMappingProfileDialogData>(MAT_DIALOG_DATA);
+  readonly dialogRef = inject<DialogRef<string | null>>(DialogRef);
+  readonly data = inject<PromoteMappingProfileDialogData>(DIALOG_DATA);
 
   name = this.data.suggestedName;
 
   confirm(): void {
     const trimmed = this.name.trim();
     if (trimmed) this.dialogRef.close(trimmed);
-  }
-
-  cancel(): void {
-    this.dialogRef.close(null);
   }
 }

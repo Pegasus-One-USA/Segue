@@ -1,13 +1,14 @@
 import { Component, inject, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TenantRoleService, Tenant } from '../../services/tenant-role.service';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 export interface TenantDialogData {
   tenant?: Tenant;
@@ -28,11 +29,13 @@ export interface TenantDialogData {
   templateUrl: './tenant-dialog.component.html',
   styleUrls: ['./tenant-dialog.component.scss'],
 })
+// No hasUnsavedChanges()/attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) generically
+// duck-types this component's own `form` property (present below) and reads its `.dirty` automatically.
 export class TenantDialogComponent {
   private readonly svc   = inject(TenantRoleService);
   private readonly fb    = inject(FormBuilder);
-  readonly dialogRef     = inject(MatDialogRef<TenantDialogComponent>);
-  readonly data: TenantDialogData = inject(MAT_DIALOG_DATA);
+  readonly dialogRef     = inject<DialogRef<boolean>>(DialogRef);
+  readonly data: TenantDialogData = inject(DIALOG_DATA) as TenantDialogData;
 
   readonly isEdit       = !!this.data?.tenant;
   readonly submitted    = signal(false);
@@ -54,6 +57,10 @@ export class TenantDialogComponent {
   hasError(ctrl: string, err: string): boolean {
     const c = this.form.get(ctrl)!;
     return c.hasError(err) && (c.touched || this.submitted());
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

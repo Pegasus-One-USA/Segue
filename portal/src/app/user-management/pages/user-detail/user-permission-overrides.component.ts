@@ -32,7 +32,8 @@ import {
 } from '../../../auth/models/user.model';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import {
   TriStateToggleComponent,
   TriState,
@@ -100,6 +101,7 @@ export class UserPermissionOverridesComponent
   private readonly userService = inject(IUserService);
   private readonly roleService = inject(IRoleService);
   private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly authService = inject(AuthService);
   private readonly actionGuard = inject(PermissionActionGuard);
@@ -383,10 +385,9 @@ export class UserPermissionOverridesComponent
   }
 
   private confirmClearOverrides(): void {
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '440px',
-        restoreFocus: false,
         data: {
           title: 'Inherit Permissions From Role',
           message:

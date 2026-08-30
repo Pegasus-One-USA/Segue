@@ -83,7 +83,7 @@ import {
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import {
   TransformRulesDialogComponent,
   TransformRulesDialogData,
@@ -505,7 +505,6 @@ function genericResourceDef(r: string): ResourceDef {
     NgComponentOutlet,
     FieldMappingCanvasComponent,
     FieldMappingExportPreviewModalComponent,
-    MatDialogModule,
   ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
@@ -527,7 +526,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
-  private readonly dialog = inject(MatDialog);
+  private readonly dialogService = inject(DialogService);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
   private readonly discoverySvc = inject(EpicDiscoveryService);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
@@ -2356,16 +2355,13 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(
+    this.dialogService.open<TransformRulesDialogComponent, TransformRulesDialogData>(
       TransformRulesDialogComponent,
       {
         width: '680px',
-        // NOT a tighter cap like '95vw' — MatDialogConfig's maxWidth/maxHeight apply once at open and
-        // aren't revisited by dialogRef.updateSize() later, so a smaller static cap here would silently
-        // clamp TransformRulesDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
-        maxWidth: '100vw',
-        maxHeight: '100vh',
-        restoreFocus: false,
+        // Opts into the shell's own maximize toggle — see TransformRulesDialogComponent's own
+        // scss/html for how it now fills whatever size the shell's panel gives it, in either state.
+        maximizable: true,
         data: {
           resourceType: resource,
           destinationType: this.resolveDestinationTypeForRules(),
@@ -2394,15 +2390,13 @@ export class DestinationWizardComponent implements OnInit {
       this.selectedExistingId() ?? this.resolvedDestinationId();
     if (!sourceConnectionId || !destinationId) return;
 
-    this.dialog
+    this.dialogService
       .open<
         ExistingMappingProfileDialogComponent,
         ExistingMappingProfileDialogData,
         MappingProfileDto | null
       >(ExistingMappingProfileDialogComponent, {
         width: '640px',
-        maxWidth: '95vw',
-        restoreFocus: false,
         data: { resourceType: resource, sourceConnectionId, destinationId },
       })
       .afterClosed()
@@ -2433,15 +2427,13 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.dialog
+    this.dialogService
       .open<
         PromoteMappingProfileDialogComponent,
         PromoteMappingProfileDialogData,
         string | null
       >(PromoteMappingProfileDialogComponent, {
         width: '480px',
-        maxWidth: '95vw',
-        restoreFocus: false,
         data: {
           resourceType: resource,
           suggestedName: `${resource} — ${this.destLabel()}`,

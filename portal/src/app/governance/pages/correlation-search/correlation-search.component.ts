@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
 import { ErrorLogEntry } from '../../../operations/models/operations.model';
@@ -21,6 +22,36 @@ export interface TimelineEntry {
   summary: string;
   raw: unknown;
 }
+
+export interface SectionInfo {
+  id: string;
+  label: string;
+  count: number;
+}
+
+/** Section ids/labels line up with the `<section [id]>` blocks in the template so the jump-nav
+ *  and collapse-all controls can target them without duplicating this list in two places. */
+const SECTION_DEFS: { id: string; label: string; count: (r: CorrelationSearchResult, visibleErrors: number) => number }[] = [
+  { id: 'sec-pipelineRun', label: 'Pipeline Run', count: r => (r.pipelineRun ? 1 : 0) },
+  { id: 'sec-workflowRuns', label: 'Workflow Runs', count: r => r.workflowRuns.length },
+  { id: 'sec-auditLogs', label: 'Audit Logs', count: r => r.auditLogs.length },
+  { id: 'sec-dataAccessLogs', label: 'Data Access Logs', count: r => r.dataAccessLogs.length },
+  { id: 'sec-authenticationLogs', label: 'Authentication Logs', count: r => r.authenticationLogs.length },
+  { id: 'sec-securityEvents', label: 'Security Events', count: r => r.securityEvents.length },
+  { id: 'sec-authorizationLogs', label: 'Authorization Logs', count: r => r.authorizationLogs.length },
+  { id: 'sec-schedulerHistory', label: 'Scheduler History', count: r => r.schedulerHistory.length },
+  { id: 'sec-retryHistory', label: 'Retry History', count: r => r.retryHistory.length },
+  { id: 'sec-errors', label: 'Errors', count: (_r, visibleErrors) => visibleErrors },
+  { id: 'sec-apiRequests', label: 'API Requests', count: r => r.apiRequests.length },
+  { id: 'sec-exports', label: 'Exports', count: r => r.exports.length },
+  { id: 'sec-notifications', label: 'Notifications', count: r => r.notifications.length },
+  { id: 'sec-validationFailures', label: 'Validation Failures', count: r => r.validationFailures.length },
+  { id: 'sec-smartLaunchLogs', label: 'SMART Launch Logs', count: r => r.smartLaunchLogs.length },
+];
+
+/** Sections with more rows than this are collapsed by default so the page opens as a scannable
+ *  overview instead of a wall of tables — the user still expands the ones they care about. */
+const AUTO_COLLAPSE_THRESHOLD = 10;
 
 /** Flattens every category array in a CorrelationSearchResult into one chronological, step-typed list —
  *  pure client-side composition over data the endpoint already returns, no new backend call. */
@@ -89,7 +120,7 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
 @Component({
   selector: 'app-correlation-search',
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterLink],
+  imports: [CommonModule, DatePipe, RouterLink, MatIconModule],
   templateUrl: './correlation-search.component.html',
   styleUrl: './correlation-search.component.scss',
 })
@@ -105,6 +136,7 @@ export class CorrelationSearchComponent implements OnInit {
 
   readonly viewMode = signal<'sections' | 'timeline'>('sections');
   readonly expandedIndex = signal<number | null>(null);
+  readonly collapsedSections = signal<Set<string>>(new Set());
 
   readonly timeline = computed<TimelineEntry[]>(() => {
     const r = this.result();
@@ -116,8 +148,50 @@ export class CorrelationSearchComponent implements OnInit {
     return r ? visibleErrors(r.errors) : [];
   });
 
+  readonly sections = computed<SectionInfo[]>(() => {
+    const r = this.result();
+    if (!r) {
+      return [];
+    }
+    const visibleErrorCount = this.visibleErrorRows().length;
+    return SECTION_DEFS
+      .map(def => ({ id: def.id, label: def.label, count: def.count(r, visibleErrorCount) }))
+      .filter(s => s.count > 0);
+  });
+
   setViewMode(mode: 'sections' | 'timeline'): void {
     this.viewMode.set(mode);
+  }
+
+  isSectionCollapsed(id: string): boolean {
+    return this.collapsedSections().has(id);
+  }
+
+  toggleSection(id: string): void {
+    const next = new Set(this.collapsedSections());
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.collapsedSections.set(next);
+  }
+
+  toggleAllSections(): void {
+    const allCollapsed = this.allSectionsCollapsed();
+    this.collapsedSections.set(allCollapsed ? new Set() : new Set(this.sections().map(s => s.id)));
+  }
+
+  allSectionsCollapsed(): boolean {
+    const collapsed = this.collapsedSections();
+    return this.sections().every(s => collapsed.has(s.id));
+  }
+
+  jumpToSection(id: string): void {
+    if (this.collapsedSections().has(id)) {
+      this.toggleSection(id);
+    }
+    queueMicrotask(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
   toggleRaw(index: number): void {
@@ -153,6 +227,9 @@ export class CorrelationSearchComponent implements OnInit {
       next: result => {
         this.result.set(result);
         this.loading.set(false);
+        const visibleErrorCount = visibleErrors(result.errors).length;
+        const largeSections = SECTION_DEFS.filter(def => def.count(result, visibleErrorCount) > AUTO_COLLAPSE_THRESHOLD);
+        this.collapsedSections.set(new Set(largeSections.map(def => def.id)));
       },
       error: () => {
         this.result.set(null);

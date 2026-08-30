@@ -5,6 +5,12 @@
   flex-direction: column;
   overflow: hidden;
   width: 100%;
+  // Lets this stretch to fill app-dialog-panel's full height when maximized (position:fixed;
+  // height:100vh — see dialog-shell.component.scss) instead of shrink-wrapping to its own short
+  // content and leaving the rest of the screen blank. Harmless at the normal (non-maximized) size,
+  // where the panel itself is content-sized and has no extra flex space to hand out.
+  flex: 1;
+  min-height: 0;
 }
 
 // ─── Header ────────────────────────────────────────────────────────────────────
@@ -12,7 +18,10 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px;
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner — see dialog-shell.component.scss), which
+  // replaced this header's own × button now that every dialog gets one from the shell instead.
+  padding: 20px 48px 20px 24px;
   border-bottom: 1px solid var(--color-border);
 
   &__icon {
@@ -50,12 +59,6 @@
       margin: 0;
     }
   }
-}
-
-.dialog-close {
-  color: var(--color-muted) !important;
-  flex-shrink: 0;
-  &:hover { background: var(--color-bg) !important; }
 }
 
 // ─── Notice ────────────────────────────────────────────────────────────────────

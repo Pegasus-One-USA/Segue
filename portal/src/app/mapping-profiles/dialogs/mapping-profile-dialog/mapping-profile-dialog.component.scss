@@ -1,40 +1,17 @@
-// Toggled via MatDialogRef.addPanelClass/removePanelClass (see toggleMaximize()) on the CDK overlay
-// pane itself — updateSize() alone resizes the pane to 100vw/100vh, but Material's own dialog surface
-// still draws its usual rounded corners/box-shadow/padding on top of that, which reads as "a bigger
-// centered card", not truly fullscreen. ::ng-deep is required here: .cdk-overlay-pane and the Material-
-// generated surface underneath it are outside this component's own view (ancestors added by the CDK),
-// unreachable by a normal view-encapsulated selector.
-::ng-deep .cdk-overlay-pane.mpd-fullscreen {
-  max-width: 100vw !important;
-  max-height: 100vh !important;
-
-  .mat-mdc-dialog-container, .mdc-dialog__surface {
-    border-radius: 0 !important;
-    box-shadow: none !important;
-  }
-}
-
+// .app-dialog-panel (dialog-shell.component.scss) sizes itself — min(92vw,1100px)/min(88vh,740px)
+// normally, true 100vw/100vh when maximized (via the shell's own generic maximize toggle, opted into
+// with `maximizable: true` in mapping-profile-list.component.ts's open() call) — so unlike the old
+// MatDialogConfig-driven sizing here, .mpd-content just needs to fill whatever height the panel gives
+// it, in EITHER state, rather than computing its own viewport-relative max-height and duplicating that
+// logic. flex: 1 on a flex-column ancestor (.app-dialog-panel) does exactly that.
 .mpd-content {
-  min-width: 640px;
-  max-width: 100%;
   width: 100%;
   box-sizing: border-box;
-  // Mirrors the dialog's own MatDialogConfig height (mapping-profile-list.component.ts's _openDialog —
-  // the same XL-modal min(92vw,1100px)/min(88vh,740px) NodeLibraryDialogComponent uses) minus the title
-  // row's own height, rather than a percentage-of-parent calc() — mat-dialog-content's actual parent
-  // chain up to the CDK overlay pane isn't guaranteed to carry an explicit height at every level for a
-  // percentage to resolve against, but the viewport-relative expression always does. Cancel/Save live in
-  // the header instead of a footer (see .mpd-header-actions), so no footer strip needs reserving either.
-  max-height: calc(min(88vh, 740px) - 60px);
+  flex: 1;
+  min-height: 0;
   padding-bottom: 8px !important;
   display: flex;
   flex-direction: column;
-
-  &--maximized {
-    min-width: unset;
-    max-width: unset;
-    max-height: calc(100vh - 60px);
-  }
 }
 
 .mpd-title-row {
@@ -42,7 +19,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  padding-right: 24px;
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner) — this row's own maximize/close buttons were
+  // removed in favor of the shell's universal ones (see mapping-profile-list.component.ts's
+  // `maximizable: true`).
+  padding-right: 84px;
   padding-bottom: var(--space-6);
   margin-bottom: var(--space-6);
   border-bottom: 1px solid var(--color-border);
@@ -54,6 +35,26 @@
   gap: var(--space-6);
   min-width: 0;
   line-height: 1;
+}
+
+// Same icon-avatar language as role-dialog/destination-connection-dialog's .dialog-header__icon,
+// sized down slightly to fit this row's tighter height alongside the badges.
+.mpd-title-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon {
+    color: var(--color-primary);
+    font-size: 19px;
+    height: 19px;
+    width: 19px;
+  }
 }
 
 .mpd-title {
@@ -96,26 +97,29 @@
   flex-shrink: 0;
 }
 
-.mpd-maximize {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-muted-2);
-  cursor: pointer;
-  padding: 6px;
+// Same save-button treatment as role-dialog/destination-connection-dialog's .btn-save, for visual
+// consistency — this dialog's Save lives up in the title row instead of a footer, but should look
+// identical to every other dialog's Save button.
+.btn-save {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 
-  &:hover { background: var(--color-side); color: var(--color-ink-2); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
-}
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
 
-.mpd-maximize-ico {
-  width: 16px;
-  height: 16px;
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { background: var(--color-muted); opacity: 0.7; }
+
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
 }
 
 // The canvas needs real, flexible height to be usable — a fixed short box would defeat the point of a
@@ -207,35 +211,26 @@
   gap: 12px;
 }
 
+// Now only wraps the Enabled mat-checkbox — Name/Resource Type/Source/Destination/Destination Object
+// are real mat-form-fields (see .mpd-form-field below).
 .mpd-meta-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-
-  label { font-size: 12.5px; font-weight: 600; color: var(--color-ink-2); }
-
-  input, select {
-    height: 36px;
-    padding: 0 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-base);
-    font-size: 13.5px;
-    background: var(--color-surface);
-    color: var(--color-ink);
-  }
+  justify-content: center;
 
   &--full { grid-column: 1 / -1; }
 
   &--checkbox {
     flex-direction: row;
     align-items: center;
-
-    label { display: flex; align-items: center; gap: 6px; font-weight: 500; }
-  }
-
-  &--error {
-    input, select { border-color: var(--color-error); }
   }
 }
 
-.mpd-req { color: var(--color-error); }
+.mpd-form-field {
+  width: 100%;
+
+  ::ng-deep {
+    .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
+    .mat-mdc-select-panel { background: var(--color-surface); }
+  }
+}

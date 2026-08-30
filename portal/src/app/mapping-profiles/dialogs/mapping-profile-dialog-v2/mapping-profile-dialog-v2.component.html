@@ -1,0 +1,133 @@
+<div class="mpd-title-row">
+  <div class="mpd-title-left">
+    <div class="mpd-title-icon">
+      <mat-icon>swap_horiz</mat-icon>
+    </div>
+    <h2 mat-dialog-title class="mpd-title">
+      @if (isCreate) { New Mapping Profile }
+      @else if (isView) { View Mapping Profile — {{ data.mappingProfile?.name }} }
+      @else { Edit Mapping Profile — {{ data.mappingProfile?.name }} }
+    </h2>
+    @if (metaForm.value.resourceType) {
+      <span class="mpd-badge mpd-badge--resource">{{ metaForm.value.resourceType }}</span>
+    }
+    @if (destTypeLabel()) {
+      <span class="mpd-badge mpd-badge--dest">{{ destTypeLabel() }}</span>
+    }
+    @if (metaForm.value.resourceType) {
+      <span class="mpd-badge mpd-badge--count">{{ mappingCount() }} field mapping{{ mappingCount() === 1 ? '' : 's' }}</span>
+    }
+  </div>
+
+  <div class="mpd-header-actions">
+    @if (!isView) {
+      <button
+        mat-flat-button
+        class="btn-save"
+        type="button"
+        [disabled]="saving()"
+        (click)="save()"
+      >
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        } @else {
+          <mat-icon>save</mat-icon>
+        }
+        {{ isEdit ? 'Update' : 'Save' }}
+      </button>
+    }
+  </div>
+</div>
+
+<mat-dialog-content class="mpd-content">
+<div class="mpd-body">
+
+  <div class="mpd-meta-section">
+    <h3 class="mpd-meta-title">Profile details</h3>
+
+    <form [formGroup]="metaForm" class="mpd-meta-form">
+      <div class="mpd-meta-grid">
+
+        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.name.invalid && metaForm.controls.name.touched">
+          <label for="mpd-name">Name <span class="mpd-req">*</span></label>
+          <input id="mpd-name" formControlName="name" placeholder="e.g. Patient → Warehouse" autocomplete="off" />
+        </div>
+
+        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched">
+          <label for="mpd-resourceType">Resource Type <span class="mpd-req">*</span></label>
+          <select id="mpd-resourceType" formControlName="resourceType">
+            <option value="" disabled>Choose a FHIR resource…</option>
+            @for (r of resourceTypeOptions; track r) {
+              <option [value]="r">{{ r }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched">
+          <label for="mpd-source">Source Connection <span class="mpd-req">*</span></label>
+          <select id="mpd-source" formControlName="sourceConnectionId">
+            <option value="" disabled>Choose a source connection…</option>
+            @for (s of sourceOptions(); track s.id) {
+              <option [value]="s.id">{{ s.name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched">
+          <label for="mpd-destination">Destination <span class="mpd-req">*</span></label>
+          <select id="mpd-destination" formControlName="destinationId">
+            <option value="" disabled>Choose a destination…</option>
+            @for (d of destinationOptions(); track d.id) {
+              <option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</option>
+            }
+          </select>
+        </div>
+
+        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched">
+          <label for="mpd-destinationObject">Destination Object <span class="mpd-req">*</span></label>
+          <input id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" autocomplete="off" />
+        </div>
+
+        <div class="mpd-meta-field mpd-meta-field--checkbox">
+          <label>
+            <input type="checkbox" formControlName="isEnabled" />
+            Enabled
+          </label>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  @if (metaForm.value.resourceType) {
+    <div class="mpd-canvas-wrap">
+      <app-mapping-profile-canvas
+        [resources]="[metaForm.value.resourceType!]"
+        [destType]="destType()"
+        [sqlTables]="sqlTables()"
+        [initialRows]="initialRows()"
+        [initialTargets]="initialTargets()"
+        [readOnly]="isView"
+      />
+    </div>
+  } @else {
+    <p class="mpd-hint">Choose a resource type to start mapping fields.</p>
+  }
+
+  @if (mappingErrors().length) {
+    <div class="mpd-error-banner" role="alert">
+      <p class="mpd-error-banner-title">
+        Fix {{ mappingErrors().length }} mapping issue{{ mappingErrors().length === 1 ? '' : 's' }} before saving:
+      </p>
+      <ul class="mpd-error-list">
+        @for (e of mappingErrors(); track e) {
+          <li>{{ e }}</li>
+        }
+      </ul>
+    </div>
+  } @else if (errorMessage()) {
+    <p class="mpd-error">{{ errorMessage() }}</p>
+  }
+
+</div>
+</mat-dialog-content>
