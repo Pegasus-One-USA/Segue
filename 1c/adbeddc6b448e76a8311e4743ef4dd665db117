@@ -1,0 +1,92 @@
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/core/services/patient.service.ts
+  s_cddc8f2857e289::t_128157aad6a3e6 89,91,103
+  s_cddc8f2857e289::t_af32238d2913d8 21-28
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_cddc8f2857e289::t_37b057e1ae3612 419-427
+  s_cddc8f2857e289::t_a950bd3b714f4a 510-516
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_cddc8f2857e289::t_e9c01d7bd90089 1856-1862,1866
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260826105833_SyncModelToLatest.cs
+  s_cddc8f2857e289::t_1d206540c46bd7 1-158
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_cddc8f2857e289::t_1d206540c46bd7 81-218,2676-2734,4081-4084,4294-4298,4307-4309,4321-4322,4856-4864,5544-5552
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/EClinicalWorksFhirSourceClient.cs
+  s_cddc8f2857e289::t_dbd85d41dff620 1-2
+  s_cddc8f2857e289::t_c5611b45f0f725 49-75
+Demo_TestApp/frontend/src/app/app.ts
+  s_cddc8f2857e289::t_55474bebd2ba72 128-139,144-146
+  s_cddc8f2857e289::t_064b24939f4206 140-143
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_cddc8f2857e289::t_20f2cec6eff23e 809-860
+  s_cddc8f2857e289::t_de19e1de4d1115 759-767,769-773,775-794,803-805
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_cddc8f2857e289::t_bab5023814b023 42
+Demo_TestApp/frontend/src/app/app.html
+  s_cddc8f2857e289::t_2d65caa827bbc9 1-9
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_cddc8f2857e289::t_d2f3dfeb7d88b5 178-186
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260826105833_SyncModelToLatest.Designer.cs
+  s_cddc8f2857e289::t_1d206540c46bd7 1-5671
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_cddc8f2857e289::t_993e34d9abd0ff 300-307,313,317-320,322-325,328-329,331
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_cddc8f2857e289::t_aac9a074f6dda3 53-57
+Demo_TestApp/backend/Program.cs
+  s_cddc8f2857e289::t_92edad248dfde4 366-367,370-377
+  s_cddc8f2857e289::t_a21f41bcd221b9 305
+  s_cddc8f2857e289::t_3f0d7e86e226c7 441-445,449,458,463,468
+  s_cddc8f2857e289::t_f655262857676e 845
+  s_cddc8f2857e289::t_b9ab57608e02b8 230,327
+  s_cddc8f2857e289::t_f100ea3f7d9245 425-440,446-448,450-457,459-462,464-467,469-471
+  s_cddc8f2857e289::t_97f78d9d3be168 849-852
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_cddc8f2857e289::t_df957703b7ce1c 29
+  s_cddc8f2857e289::t_f58f3de5000a22 85-87
+  s_cddc8f2857e289::t_d91dfd44c9a263 248
+  s_cddc8f2857e289::t_67df284fb723f7 214
+  s_cddc8f2857e289::t_189823d6ab4980 270
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartAuthorizationCodeTokenProvider.cs
+  s_cddc8f2857e289::t_754e0ba28442af 299,322-341
+  s_cddc8f2857e289::t_067cc5f0bf5f1b 537-542
+  s_cddc8f2857e289::t_d8b4ebda5119b9 230
+  s_cddc8f2857e289::t_3394ce0ddb6d9e 544-550
+  s_cddc8f2857e289::t_016033efb6c32c 289-298,321
+  s_cddc8f2857e289::t_6e33a0fb309dbb 228-229
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.ts
+  s_cddc8f2857e289::t_dd6aa87d03bd82 177-191
+  s_cddc8f2857e289::t_0aa1255918ca40 60-66
+  s_cddc8f2857e289::t_d02fa2dc573a9a 52-56,291-292
+  s_cddc8f2857e289::t_3c134b91212733 245-247
+  s_cddc8f2857e289::t_479183416f7068 272,274-279
+  s_cddc8f2857e289::t_bc9c0e8bdcd360 105,107,112,114-119,121
+  s_cddc8f2857e289::t_d58dfef8e0c1b3 168
+  s_cddc8f2857e289::t_c7ece53d55165d 85-96
+  s_cddc8f2857e289::t_9b8102e958a688 153
+  s_cddc8f2857e289::t_33fea356518dac 231-243,249,254,259-271,273,280-290
+  s_cddc8f2857e289::t_e7c11a91d4be13 57-59
+  s_cddc8f2857e289::t_4d273c257b9a25 143-152,154-159
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.html
+  s_cddc8f2857e289::t_2c5ec012df3e27 34
+  s_cddc8f2857e289::t_f7e1012f66019a 44-50,234
+  s_cddc8f2857e289::t_6b37683d0f7170 8-13
+  s_cddc8f2857e289::t_643426743c5b55 216-233
+  s_cddc8f2857e289::t_040bfd8571ad71 235-241
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_cddc8f2857e289::t_9cd36dc5ecb257 141,144-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1cadbeddc6b448e76a8311e4743ef4dd665db117",
+  "prompts": {},
+  "sessions": {
+    "s_cddc8f2857e289": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05f8277d-d6c5-400e-805b-bd1d37d319d2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
