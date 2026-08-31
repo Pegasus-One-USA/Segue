@@ -708,23 +708,64 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
 
-    const triggerRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const triggerEl = event.currentTarget as HTMLElement;
+    const triggerRect = triggerEl.getBoundingClientRect();
     const viewportRect = this.viewport().nativeElement.getBoundingClientRect();
     const margin = 8;
     const spaceBelow = viewportRect.bottom - triggerRect.bottom - margin;
     const spaceAbove = triggerRect.top - viewportRect.top - margin;
     const minUsableHeight = 120;
 
+    // .fm-add-table-panel renders position: fixed, but this dialog's own chrome (some ancestor between
+    // here and <body> — confirmed via a real fixed-position probe's offsetParent, since Chrome only sets
+    // that to a non-null element when one exists) establishes its own containing block for fixed
+    // descendants here, despite every standard CSS property that's supposed to cause this
+    // (transform/filter/backdrop-filter/will-change/contain/perspective) reporting none/default the whole
+    // way up every ancestor. Rather than depend on knowing exactly which ancestor or why, a throwaway
+    // probe dropped into this trigger's own parent (the same place the panel itself renders from) reports
+    // the real containing block directly, so left/top/bottom below are expressed relative to THAT — not
+    // naively assumed to be raw viewport coordinates, which is what silently rendered this panel well
+    // outside the visible canvas (confirmed up to ~220px right of every calculation's own intent).
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed; left:0; top:0; width:0; height:0; visibility:hidden;';
+    triggerEl.parentElement!.appendChild(probe);
+    const containingBlock = probe.offsetParent
+      ? probe.offsetParent.getBoundingClientRect()
+      : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    probe.remove();
+
+    // Clamp horizontally within whichever is narrower — the canvas's own visible area (.fm-viewport) or
+    // the actual browser window — same margin as the vertical clamp above. The trigger can sit anywhere
+    // along the canvas's pannable/zoomable width, including right up against its right edge (e.g. panned/
+    // zoomed so "+ Add a table…" ends up near the dialog's edge), and this panel is otherwise sized to
+    // exactly the trigger's own width with nothing keeping its right edge from running past the canvas.
+    // Bounding against the window too (not just .fm-viewport) covers a narrower browser/lower zoom level,
+    // where the dialog itself can be wider than what's actually visible on screen. These are all still
+    // real viewport coordinates — only the final style values (below) get translated into the panel's
+    // actual containing block.
+    const panelWidth = triggerRect.width;
+    const rightBound = Math.min(viewportRect.right, window.innerWidth) - margin;
+    const desiredLeft = Math.min(
+      Math.max(viewportRect.left + margin, triggerRect.left),
+      Math.max(viewportRect.left + margin, rightBound - panelWidth),
+    );
+    const left = desiredLeft - containingBlock.left;
+
     this.addTableMenuStyle.set(
       spaceBelow >= minUsableHeight || spaceBelow >= spaceAbove
-        ? { top: triggerRect.bottom + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceBelow) }
-        : { bottom: window.innerHeight - triggerRect.top + 6, left: triggerRect.left, width: triggerRect.width, maxHeight: Math.max(minUsableHeight, spaceAbove) }
+        ? { top: triggerRect.bottom + 6 - containingBlock.top, left, width: panelWidth, maxHeight: Math.max(minUsableHeight, spaceBelow) }
+        : { bottom: containingBlock.bottom - triggerRect.top + 6, left, width: panelWidth, maxHeight: Math.max(minUsableHeight, spaceAbove) }
     );
     this.addTableSearchQuery.set('');
     this.addTableMenuOpen.set(true);
     // One tick so the panel (and its search input, an @if-conditional sibling of this trigger) has
-    // actually rendered before we try to focus it.
-    setTimeout(() => this.addTableSearchInput()?.nativeElement.focus());
+    // actually rendered before we try to focus it. preventScroll matters here: .fm-viewport has
+    // overflow: hidden, and the search input's DOM layout position sits wherever this trigger happens to
+    // be on the pannable/zoomable canvas — even though the panel itself renders position: fixed at the
+    // coordinates computed above, a plain focus() still makes the browser scroll .fm-viewport's own
+    // overflow (based on that unrelated layout position, not the fixed visual one) to "reveal" it,
+    // panning the whole canvas out from under the just-positioned panel and throwing off left/top here.
+    setTimeout(() => this.addTableSearchInput()?.nativeElement.focus({ preventScroll: true }));
   }
 
   closeAddTableMenu(): void {
@@ -739,7 +780,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
 
   clearAddTableSearch(): void {
     this.addTableSearchQuery.set('');
-    this.addTableSearchInput()?.nativeElement.focus();
+    // preventScroll — see toggleAddTableMenu's own comment on its identical focus() call.
+    this.addTableSearchInput()?.nativeElement.focus({ preventScroll: true });
   }
 
   /** Whether the "+ Add a table" slot should render the searchable-list UI (vs. SQL's plain "+ Create a

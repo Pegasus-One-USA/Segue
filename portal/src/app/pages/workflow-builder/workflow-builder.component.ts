@@ -1,5 +1,6 @@
 import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Observable, Subject } from 'rxjs';
 import { PermissionService } from '../../auth/services/permission.service';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
@@ -821,6 +822,39 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
   isSaveInProgress(): boolean {
     return this.workflowBusy();
+  }
+
+  // ── "Leave this page?" inline confirm ───────────────────────────────────────
+  // Rendered directly in this component's own template (see workflow-builder.component.html/.scss)
+  // instead of the shared MatDialog-based ConfirmDialogComponent — same markup pattern as
+  // destination-wizard's "Exit mapping" confirm (pendingExitConfirm/dw-confirm-*), which is the
+  // design reference this needs to match pixel-for-pixel. A route-level CanDeactivate guard still
+  // runs while this component is mounted, so an inline overlay works exactly like a modal here.
+  readonly pendingLeaveConfirm = signal(false);
+  private leaveConfirmResult: Subject<boolean> | null = null;
+
+  confirmLeaveDialog(): Observable<boolean> {
+    this.leaveConfirmResult = new Subject<boolean>();
+    this.pendingLeaveConfirm.set(true);
+    return this.leaveConfirmResult.asObservable();
+  }
+
+  cancelLeavePage(): void {
+    this.pendingLeaveConfirm.set(false);
+    this.leaveConfirmResult?.next(false);
+    this.leaveConfirmResult?.complete();
+    this.leaveConfirmResult = null;
+  }
+
+  onLeaveBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.cancelLeavePage();
+  }
+
+  confirmLeavePage(): void {
+    this.pendingLeaveConfirm.set(false);
+    this.leaveConfirmResult?.next(true);
+    this.leaveConfirmResult?.complete();
+    this.leaveConfirmResult = null;
   }
 
   /** Post-save wrap-up — always returns to the Workflows list, where the save (new or updated) is now
