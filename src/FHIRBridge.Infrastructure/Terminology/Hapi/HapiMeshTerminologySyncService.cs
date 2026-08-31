@@ -32,25 +32,26 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiMeshTerminologySyncService> _logger;
+    private readonly HapiTerminologyServerClient _serverClient;
 
     public HapiMeshTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiMeshTerminologySyncService> logger)
+        ILogger<HapiMeshTerminologySyncService> logger,
+        HapiTerminologyServerClient serverClient)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _serverClient = serverClient;
     }
 
     public async Task<HapiMeshSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiMeshTerminologySyncService) + ".Download");
         downloadClient.Timeout = TimeSpan.FromMinutes(5);
@@ -61,18 +62,8 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
 
         var concepts = await DownloadAndParseAsync(downloadClient, fileUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} MeSH descriptor concepts from the official release.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
         var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(

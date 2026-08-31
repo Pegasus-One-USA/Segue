@@ -514,6 +514,9 @@ public static class DependencyInjection
         // closures resolved against whatever IServiceProvider is passed at call time), safe as a singleton.
         services.AddSingleton<HapiTerminologySystemRegistry>();
         services.AddScoped<IHapiTerminologyConfigurationService, HapiTerminologyConfigurationService>();
+        // Shared PUT-with-retry-and-verify used by all 13 Hapi*TerminologySyncService implementations
+        // for their final "load into the terminology server" step — see its own remarks for why.
+        services.AddSingleton<HapiTerminologyServerClient>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(

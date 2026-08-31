@@ -38,39 +38,30 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiDcmTerminologySyncService> _logger;
+    private readonly HapiTerminologyServerClient _serverClient;
 
     public HapiDcmTerminologySyncService(
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiDcmTerminologySyncService> logger)
+        ILogger<HapiDcmTerminologySyncService> logger,
+        HapiTerminologyServerClient serverClient)
     {
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _serverClient = serverClient;
     }
 
     public async Task<HapiDcmSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Downloading official DICOM Controlled Terminology (DCM) ontology via FTP.");
         var concepts = await DownloadAndParseAsync(cancellationToken);
         _logger.LogInformation("Parsed {Total} active DCM concepts from the official ontology.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(5),
-        };
-
         var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(

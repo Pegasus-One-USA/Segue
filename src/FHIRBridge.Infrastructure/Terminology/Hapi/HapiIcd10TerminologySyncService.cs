@@ -32,17 +32,20 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcd10TerminologySyncService> _logger;
+    private readonly HapiTerminologyServerClient _serverClient;
 
     public HapiIcd10TerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiIcd10TerminologySyncService> logger)
+        ILogger<HapiIcd10TerminologySyncService> logger,
+        HapiTerminologyServerClient serverClient)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _serverClient = serverClient;
     }
 
     public async Task<HapiIcd10SyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -52,7 +55,7 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
         // setting ("Terminology:BaseUrl", also used by FhirTerminologyLookupService et al.) governs
         // all of them rather than a separate ServerBaseUrl per vocabulary.
         var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
+        var serverBaseUrlForDelete = (await _settings.GetStringAsync(
             "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
 
         _logger.LogInformation("Downloading official ICD-10-CM {Year} release from CDC.", ReleaseYear);
@@ -66,20 +69,13 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
             concepts.Count,
             billableCount);
 
-        // Bypasses IHttpClientFactory: the app-wide resilience default (30s/attempt, 120s total —
-        // see AddFHIRBridgeInfrastructure) applies to every factory-created client regardless of a
-        // named-client override, since ConfigureHttpClientDefaults handlers stack rather than get
-        // replaced. A raw HttpClient sidesteps that entirely for this large, one-shot upload.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
         // Retire the earlier demo subset, if present, so only one CodeSystem claims this system URL.
+        // Best-effort only — a lightweight client of its own, separate from the retry/verify-aware
+        // one used for the real (large) upload below.
         try
         {
-            await serverClient.DeleteAsync($"CodeSystem/{DemoResourceId}", cancellationToken);
+            using var deleteClient = new HttpClient { BaseAddress = new Uri(serverBaseUrlForDelete + "/"), Timeout = TimeSpan.FromMinutes(1) };
+            await deleteClient.DeleteAsync($"CodeSystem/{DemoResourceId}", cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -87,8 +83,7 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
         }
 
         var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{FullResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _serverClient.PutCodeSystemAsync(FullResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(

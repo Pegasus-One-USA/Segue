@@ -30,28 +30,28 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiRxNormTerminologySyncService> _logger;
+    private readonly HapiTerminologyServerClient _serverClient;
 
     public HapiRxNormTerminologySyncService(
         IUtsReleaseClient releaseClient,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiRxNormTerminologySyncService> logger)
+        ILogger<HapiRxNormTerminologySyncService> logger,
+        HapiTerminologyServerClient serverClient)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _serverClient = serverClient;
     }
 
     public async Task<HapiRxNormSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Checking the current official RxNorm release.");
         var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
@@ -61,18 +61,8 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
 
         var concepts = ParseRxnConso(zipPath);
         _logger.LogInformation("Parsed {Total} RxNorm concepts from release {Version}.", concepts.Count, release.ReleaseName);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
         var resource = BuildCodeSystemResource(concepts, release.ReleaseName);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
