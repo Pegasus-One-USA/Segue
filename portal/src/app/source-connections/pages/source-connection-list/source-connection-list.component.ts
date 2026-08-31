@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, effect, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -55,7 +55,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
   templateUrl: './source-connection-list.component.html',
   styleUrls: ['./source-connection-list.component.scss'],
 })
-export class SourceConnectionListComponent implements OnInit {
+export class SourceConnectionListComponent implements OnInit, OnDestroy {
   private readonly svc         = inject(ISourceConnectionService);
   private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
@@ -199,6 +199,16 @@ export class SourceConnectionListComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+  }
+
+  // WizardService is a root singleton (providedIn: 'root'), so its isOpen/wizardMode state outlives
+  // this component — the template gates the entity-mode wizard purely on wiz.isOpen() (see the
+  // component's own template, around the @if (wiz.isOpen() && wiz.wizardMode() === 'entity') block).
+  // Without this, navigating away from this page mid-wizard (e.g. via the sidebar, without Cancel/×)
+  // leaves isOpen true; returning here later re-mounts this component fresh, but the singleton still
+  // says "open", so the wizard pops back up immediately instead of the list.
+  ngOnDestroy(): void {
+    this.wiz.close();
   }
 
   /** "Audience" column — the SMART application type (ApplicationType) this connection is configured under.

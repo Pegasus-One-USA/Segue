@@ -10,7 +10,7 @@
       <span class="refresh-hint">Last updated {{ lastRefreshed() | date:'h:mm a' }}</span>
       <button class="refresh-btn" type="button" (click)="refresh()">&#8635; Refresh</button>
       @if (canCreateWorkflow()) {
-        <a class="new-pipeline-btn" routerLink="/workflow-builder">+ New Workflow</a>
+        <a class="new-pipeline-btn" routerLink="/workflow-builder">New</a>
       }
     </div>
   </div>

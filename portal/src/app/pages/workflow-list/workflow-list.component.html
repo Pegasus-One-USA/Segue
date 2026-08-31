@@ -13,8 +13,7 @@
       </button>
       @if (canCreate()) {
         <button class="btn-cta" type="button" (click)="onNewWorkflow()">
-          <span class="btn-ico">&#43;</span>
-          New Workflow
+          New
         </button>
       }
     </div>
@@ -157,7 +156,7 @@
                        be changed. Relabeled so a view-only role isn't told it can "Edit". -->
                   <button mat-menu-item type="button" (click)="onEdit(w)">
                     <mat-icon>{{ canEdit() ? 'edit' : 'visibility' }}</mat-icon>
-                    {{ canEdit() ? 'Edit in Workflow Builder' : 'View in Workflow Builder' }}
+                    {{ canEdit() ? 'Edit' : 'View' }}
                   </button>
 
                   @if (canEdit()) {
@@ -309,8 +308,7 @@
         <p>{{ searchQuery() ? 'Try a different search term.' : 'Create your first workflow to see it here.' }}</p>
         @if (!searchQuery() && canCreate()) {
           <button class="btn-cta" type="button" (click)="onNewWorkflow()">
-            <span class="btn-ico">&#43;</span>
-            New Workflow
+            New
           </button>
         }
       </div>

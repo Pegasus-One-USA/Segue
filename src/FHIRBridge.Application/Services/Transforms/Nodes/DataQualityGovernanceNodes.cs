@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
@@ -54,9 +55,23 @@ public sealed class DateMathAgeNode : ITransformNode
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
         var raw = value?.ToString();
-        if (string.IsNullOrWhiteSpace(raw) || !DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (string.IsNullOrWhiteSpace(raw))
         {
             return TransformResult.Ok(null);
+        }
+
+        // Same partial-precision handling as DateTimeFormatNode: a Safe-Harbor-generalized birthDate arrives
+        // as a bare year ("1987") or year-month ("1987-05") — DateTime.TryParse rejects both outright, which
+        // otherwise nulls out every age computation for every de-identified record. Treat a bare year/year-month
+        // as January 1st of that year for age math; per the spec's "respect the original precision" rule, this
+        // under-counts age by at most 11 months, never over-counts it.
+        if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            var partialMatch = Regex.Match(raw, @"^(\d{4})(-\d{2})?$");
+            if (!partialMatch.Success || !DateTime.TryParse($"{partialMatch.Groups[1].Value}-01-01", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            {
+                return TransformResult.Ok(null);
+            }
         }
 
         switch (config.Get("operation", "age"))

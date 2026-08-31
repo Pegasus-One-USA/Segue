@@ -242,7 +242,7 @@
                           @if (step.saving) {
                             <mat-spinner diameter="16"></mat-spinner>
                           } @else {
-                            Save step
+                            {{ step.id ? 'Update' : 'Save' }}
                           }
                         </button>
                       </div>

@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
@@ -42,7 +43,7 @@ type FilterCategory = 'status' | 'audience' | 'source';
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink],
+  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })

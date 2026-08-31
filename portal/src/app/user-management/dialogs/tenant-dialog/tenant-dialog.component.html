@@ -66,8 +66,6 @@
       <button mat-flat-button class="btn-save" [disabled]="saving()" (click)="save()">
         @if (saving()) {
           <mat-spinner diameter="16"></mat-spinner>
-        } @else {
-          <mat-icon>save</mat-icon>
         }
         {{ isEdit ? 'Update' : 'Save' }}
       </button>

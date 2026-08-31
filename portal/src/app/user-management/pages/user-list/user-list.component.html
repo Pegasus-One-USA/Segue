@@ -227,7 +227,7 @@
                 <mat-menu #userMenu="matMenu" class="app-kebab-menu">
                   <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Edit)" (click)="openEditDialog(user)">
                     <mat-icon>edit</mat-icon>
-                    Edit User
+                    Edit
                   </button>
                   <button mat-menu-item *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Assign)" (click)="openAssignRolesDialog(user)">
                     <mat-icon>manage_accounts</mat-icon>

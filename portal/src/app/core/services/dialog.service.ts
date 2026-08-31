@@ -213,6 +213,16 @@ export class DialogService {
     this.scrollLockOriginalTop = content.scrollTop;
     content.style.overflowY = 'hidden';
     content.scrollTop = 0;
+
+    // Re-assert a moment later: when this dialog was opened from a mat-menu item (e.g. a row's ⋮ "Edit
+    // value"), the menu's own close restores focus to its trigger button asynchronously — and focusing
+    // an element that isn't fully in view auto-scrolls it back into view, silently undoing the reset
+    // above right after it happened. That's what made the panel (positioned against the now-reset
+    // .shell-content) end up looking like it rendered "above" the page: the scroll snapped back down a
+    // beat later while the panel didn't move. Re-clamping after the menu's close settles wins the race
+    // regardless of which task queue CDK's focus restore lands in.
+    setTimeout(() => { content.scrollTop = 0; }, 0);
+    setTimeout(() => { content.scrollTop = 0; }, 300);
   }
 
   private _unlockContentScroll(): void {
