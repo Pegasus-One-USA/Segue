@@ -1,0 +1,102 @@
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.scss
+  s_8d7f0d52feb19c::t_65dea01a671693 26-45,58
+  s_8d7f0d52feb19c::t_1d6248272f4a2b 1-25,59-97
+  s_8d7f0d52feb19c::t_024d5f2968fa30 46-57
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_8d7f0d52feb19c::t_71693dd98073f1 81
+portal/src/app/system-settings/dialogs/hapi-terminology-history-dialog/hapi-terminology-history-dialog.component.ts
+  s_8d7f0d52feb19c::t_affecdae1d14c5 1-46
+portal/src/app/system-settings/dialogs/hapi-terminology-history-dialog/hapi-terminology-history-dialog.component.scss
+  s_8d7f0d52feb19c::t_23c2dd35f6ed44 1-20
+portal/src/app/system-settings/dialogs/hapi-terminology-history-dialog/hapi-terminology-history-dialog.component.html
+  s_8d7f0d52feb19c::t_7c6ccc11946dd2 1-24
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_8d7f0d52feb19c::t_286d19ea90727a 184-187
+  s_8d7f0d52feb19c::t_3bd20d2a9514eb 43-46
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HapiTerminologyImportHistoryConfiguration.cs
+  s_8d7f0d52feb19c::t_111a893f5ad5ba 1-18
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_8d7f0d52feb19c::t_5e649e32d7c680 1-15,21-39,41-44,48-52,81-165
+  s_8d7f0d52feb19c::t_15c5beaefecd13 16,19-20
+  s_8d7f0d52feb19c::t_28958790e86c33 17-18
+  s_8d7f0d52feb19c::t_c32ca5a78b517c 47,53-56,59,63-80
+  s_8d7f0d52feb19c::t_2dbe2f495d034a 40,45-46,57-58,60-62
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_8d7f0d52feb19c::t_4678eb18d07a56 17-22
+  s_8d7f0d52feb19c::t_cc8247c88a425a 31-33
+  s_8d7f0d52feb19c::t_441ed9b29c387d 60
+  s_8d7f0d52feb19c::t_f0fe22cac12f57 30
+  s_8d7f0d52feb19c::t_7518a720a17676 291
+  s_8d7f0d52feb19c::t_bb6f37abb0a9b3 292
+  s_8d7f0d52feb19c::t_09146323bd5168 23-29
+portal/src/app/system-settings/dialogs/hapi-terminology-edit-dialog/hapi-terminology-edit-dialog.component.html
+  s_8d7f0d52feb19c::t_052f6708d8d702 52-58
+  s_8d7f0d52feb19c::t_77d993b7daa7a0 60,73
+  s_8d7f0d52feb19c::t_e13dabd6392658 1-51,59,61-72,74-91
+src/Api/FHIRBridge.Api/Program.cs
+  s_8d7f0d52feb19c::t_0b364b4c5813dd 16
+  s_8d7f0d52feb19c::t_13ea9e579b7ec5 165-184
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyConfigurationService.cs
+  s_8d7f0d52feb19c::t_10fbd6593dc4ab 73-83
+  s_8d7f0d52feb19c::t_89179ec1eabec3 1-22,24-30,33-39,41-72,84-106,108-144,148-150,152-203
+  s_8d7f0d52feb19c::t_90e45098b4d7c7 107
+  s_8d7f0d52feb19c::t_5e1aa9cb830c2b 23,31-32,40
+  s_8d7f0d52feb19c::t_331212d9fd1bc9 145-147,151
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_8d7f0d52feb19c::t_9d2f93d78d7a24 34
+  s_8d7f0d52feb19c::t_18db7bf7d27bf9 512-516
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologySystemRegistry.cs
+  s_8d7f0d52feb19c::t_e944fa647bef5e 1-23,31-87,89-125
+  s_8d7f0d52feb19c::t_1d29f4c46154e3 88
+  s_8d7f0d52feb19c::t_d84e9b0558768f 24-30
+src/FHIRBridge.Domain/Entities/Terminology/HapiTerminologyImportHistory.cs
+  s_8d7f0d52feb19c::t_250880a239099e 1-32
+src/FHIRBridge.Application/DTOs/HapiTerminologyConfigurationDtos.cs
+  s_8d7f0d52feb19c::t_df294bd5392817 18-22,30-31
+  s_8d7f0d52feb19c::t_cbc44f363e4468 1-17,23-29,32-43
+src/Api/FHIRBridge.Api/Controllers/V1/HapiTerminologyConfigurationController.cs
+  s_8d7f0d52feb19c::t_3afa7b91a5421e 1-60
+src/FHIRBridge.Application/Services/Terminology/IHapiTerminologyConfigurationService.cs
+  s_8d7f0d52feb19c::t_a9e149fa2d272c 1-23
+portal/src/app/system-settings/services/hapi-terminology-configuration.service.ts
+  s_8d7f0d52feb19c::t_4327bd7a36b65b 1-21,25-31,33-65
+  s_8d7f0d52feb19c::t_692242178572d3 22-24,32
+portal/src/app/system-settings/dialogs/hapi-terminology-edit-dialog/hapi-terminology-edit-dialog.component.ts
+  s_8d7f0d52feb19c::t_4cf1dded7a0bd3 1-59,61-64,69-101,103-117
+  s_8d7f0d52feb19c::t_2191a16811772a 60,65-68
+  s_8d7f0d52feb19c::t_6a0c9dd7a318fc 102
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260831090934_AddHapiTerminologyImportHistory.cs
+  s_8d7f0d52feb19c::t_4bdda3a0b0e9e2 1-48
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260831090934_AddHapiTerminologyImportHistory.Designer.cs
+  s_8d7f0d52feb19c::t_4bdda3a0b0e9e2 1-5921
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.html
+  s_8d7f0d52feb19c::t_c92e9b226a85e9 5,8-11
+  s_8d7f0d52feb19c::t_53b135139366e3 1-2,4,14-87
+  s_8d7f0d52feb19c::t_1ddf5498dc809f 6-7,12-13
+  h_44b3eb0c92b6da 3
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_8d7f0d52feb19c::t_4bdda3a0b0e9e2 2884-2922
+portal/src/app/core/api-endpoints.ts
+  s_8d7f0d52feb19c::t_d78e2480ef8d96 324-334
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "daa53950d2405c7bbf35082f01a8afefdedb5754",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_8d7f0d52feb19c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d5fb9b0-a058-4375-922a-e7fddb889a64",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
