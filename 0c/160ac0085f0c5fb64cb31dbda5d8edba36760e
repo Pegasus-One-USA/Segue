@@ -1,0 +1,32 @@
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_c300f2c4dd13e3::t_70976c3ad935ba 29-36
+  s_c300f2c4dd13e3::t_897031f65d7416 37
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_c300f2c4dd13e3::t_4f206e1b4dc904 827-858
+  s_c300f2c4dd13e3::t_0a01183cd9b68f 3
+  s_c300f2c4dd13e3::t_9a477796064c4c 859
+portal/src/app/pages/workflow-builder/workflow-builder.component.scss
+  s_c300f2c4dd13e3::t_d6642bf569d0e6 496-502,510-555
+  s_c300f2c4dd13e3::t_d331fe343b4da5 503-509
+portal/src/app/core/guards/has-unsaved-changes.ts
+  s_c300f2c4dd13e3::t_661b6964d76618 3-4,14-19
+  s_c300f2c4dd13e3::t_e12c8bbd07d0c9 13
+portal/src/app/pages/workflow-builder/workflow-builder.component.html
+  s_c300f2c4dd13e3::t_134c32909cbd55 134-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0c160ac0085f0c5fb64cb31dbda5d8edba36760e",
+  "prompts": {},
+  "sessions": {
+    "s_c300f2c4dd13e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "77bdb523-6e22-41d0-b11e-da8c33598d27",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
