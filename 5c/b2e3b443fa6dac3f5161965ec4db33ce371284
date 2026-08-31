@@ -1,0 +1,23 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_22795f028d8e6b::t_a004f890b188ec 711-712,719-736,743-745,748,752,756-757
+  s_22795f028d8e6b::t_d1d9307902faf7 783-784
+  s_22795f028d8e6b::t_626096f6ef6b8c 762-768
+  s_22795f028d8e6b::t_4387b2cda9b462 746,749,751,753
+  s_22795f028d8e6b::t_c7e50ef92acaf5 737-742,747,750
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5cb2e3b443fa6dac3f5161965ec4db33ce371284",
+  "prompts": {},
+  "sessions": {
+    "s_22795f028d8e6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4cbec4ab-1a2e-4787-bcc0-7a959aa32bea",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
