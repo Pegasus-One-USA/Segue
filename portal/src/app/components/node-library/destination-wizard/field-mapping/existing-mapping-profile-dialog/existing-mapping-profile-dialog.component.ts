@@ -1,9 +1,10 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
+import { DIALOG_DATA, DialogRef } from '../../../../../core/services/dialog.service';
 import { ToastService } from '../../../../../services/toast.service';
 import { MappingProfileService } from '../../../../../mapping-profiles/services/mapping-profile.service';
 import { MappingProfileDto } from '../../../../../mapping-profiles/models/mapping-profile.model';
@@ -24,7 +25,7 @@ export interface ExistingMappingProfileDialogData {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatButtonModule, MatProgressSpinnerModule],
   template: `
-    <h2 mat-dialog-title>Select Existing Mapping Profile — {{ data.resourceType }}</h2>
+    <h2 mat-dialog-title class="empd-title">Select Existing Mapping Profile — {{ data.resourceType }}</h2>
     <mat-dialog-content class="empd-content">
       @if (loading()) {
         <div class="empd-loading"><mat-spinner diameter="28"></mat-spinner></div>
@@ -58,23 +59,25 @@ export interface ExistingMappingProfileDialogData {
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button type="button" mat-button (click)="cancel()">Cancel</button>
+      <button type="button" mat-button (click)="dialogRef.attemptClose()">Cancel</button>
     </mat-dialog-actions>
   `,
   styles: [`
-    .empd-content { min-width: 480px; }
+    .empd-title { padding: 20px 48px 20px 24px !important; margin: 0 !important; border-bottom: 1px solid var(--color-border); }
+    .empd-content { min-width: 480px; padding: 20px 24px !important; }
     .empd-loading { display: flex; justify-content: center; padding: 24px; }
-    .empd-empty { color: var(--text-muted, #666); padding: 8px 0; }
+    .empd-empty { color: var(--color-muted); padding: 8px 0; }
     .empd-table { width: 100%; border-collapse: collapse; }
-    .empd-table th, .empd-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,.08); }
+    .empd-table th, .empd-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-border); }
     .empd-actions { text-align: right; }
+    mat-dialog-actions { padding: 16px 24px !important; margin: 0 !important; border-top: 1px solid var(--color-border); }
   `],
 })
 export class ExistingMappingProfileDialogComponent implements OnInit {
-  private readonly dialogRef = inject(MatDialogRef<ExistingMappingProfileDialogComponent>);
+  readonly dialogRef = inject<DialogRef<MappingProfileDto | null>>(DialogRef);
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly toast = inject(ToastService);
-  readonly data = inject<ExistingMappingProfileDialogData>(MAT_DIALOG_DATA);
+  readonly data = inject<ExistingMappingProfileDialogData>(DIALOG_DATA);
 
   readonly loading = signal(true);
   readonly profiles = signal<MappingProfileDto[]>([]);
@@ -101,9 +104,5 @@ export class ExistingMappingProfileDialogComponent implements OnInit {
 
   use(profile: MappingProfileDto): void {
     this.dialogRef.close(profile);
-  }
-
-  cancel(): void {
-    this.dialogRef.close(null);
   }
 }

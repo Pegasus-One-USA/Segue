@@ -11,3 +11,8 @@ export interface CreateAllowedCorsOriginRequest {
   originUrl: string;
   label: string | null;
 }
+
+export interface UpdateAllowedCorsOriginRequest {
+  originUrl: string;
+  label: string | null;
+}

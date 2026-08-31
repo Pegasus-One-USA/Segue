@@ -2,16 +2,14 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint, EhrEndpointRequest, EhrEndpointType, EhrVendor } from '../../models/ehr-endpoint.model';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 export interface EhrEndpointDialogData {
   endpoint?: EhrEndpoint;
@@ -43,9 +41,6 @@ export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string 
     CommonModule,
     ReactiveFormsModule,
     MatDialogModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -53,12 +48,14 @@ export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string 
   templateUrl: './ehr-endpoint-dialog.component.html',
   styleUrls: ['./ehr-endpoint-dialog.component.scss'],
 })
+// No hasUnsavedChanges()/attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) generically
+// duck-types this component's own `form` property (present below) and reads its `.dirty` automatically.
 export class EhrEndpointDialogComponent {
   private readonly svc = inject(IEhrEndpointService);
   private readonly fb  = inject(FormBuilder);
   private readonly actionGuard = inject(PermissionActionGuard);
-  readonly dialogRef   = inject(MatDialogRef<EhrEndpointDialogComponent>);
-  readonly data: EhrEndpointDialogData = inject(MAT_DIALOG_DATA);
+  readonly dialogRef   = inject<DialogRef<boolean>>(DialogRef);
+  readonly data: EhrEndpointDialogData = inject(DIALOG_DATA) as EhrEndpointDialogData;
 
   readonly isEdit       = !!this.data?.endpoint;
   readonly vendorOptions = EHR_VENDOR_OPTIONS;
@@ -101,6 +98,10 @@ export class EhrEndpointDialogComponent {
   hasError(ctrl: string, err: string): boolean {
     const c = this.form.get(ctrl)!;
     return c.hasError(err) && (c.touched || this.submitted());
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

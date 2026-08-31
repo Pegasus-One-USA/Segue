@@ -121,7 +121,26 @@ public sealed class RoleManagementService : IRoleManagementService
 
         if (role.IsSystem)
         {
-            throw new InvalidOperationException("System roles cannot be modified.");
+            // SuperAdmin's grant is always "every permission that exists" (see
+            // SystemRoleDefaultPermissions) — immutable in both name/description and permissions.
+            if (role.Id == SeededSecurityIds.SuperAdminRoleId)
+            {
+                throw new InvalidOperationException("System roles cannot be modified.");
+            }
+
+            // The other built-in roles (Admin, Operations, Audit) keep their name/description fixed —
+            // same as SuperAdmin — but a SuperAdmin CAN edit their permission grants via the Role
+            // Permissions screen, which always resends the role's own name/description unchanged (see
+            // role-permissions.component.ts's save()). A real rename/re-describe attempt on one of
+            // these still isn't allowed here; that stays the role dialog's own separate concern.
+            if (!string.Equals(role.Name, request.Name.Trim(), StringComparison.Ordinal) ||
+                !string.Equals(role.Description, request.Description.Trim(), StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("System roles' name and description cannot be modified.");
+            }
+
+            await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
+            return await ToDtoAsync(role, cancellationToken);
         }
 
         var duplicate = await _repository.GetRoleByNameAsync(request.Name.Trim(), cancellationToken);

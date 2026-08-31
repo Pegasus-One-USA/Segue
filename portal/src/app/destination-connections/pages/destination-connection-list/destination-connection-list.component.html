@@ -48,11 +48,7 @@
           Reset
         </button>
         <button class="btn-add" type="button" *appHideWithoutPermission="CREATE_CODES" (click)="openNew()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New Connection
+          New
         </button>
       </div>
 
@@ -79,7 +75,6 @@
             </th>
             <td mat-cell *matCellDef="let d">
               <div class="cell-name">
-                <div class="dest-avatar"><mat-icon>storage</mat-icon></div>
                 <span class="cell-primary">{{ d.name }}</span>
               </div>
             </td>
@@ -115,8 +110,8 @@
               </span>
             </th>
             <td mat-cell *matCellDef="let d">
-              <span class="status-badge" [class.status-badge--inactive]="!d.isEnabled">
-                {{ d.isEnabled ? 'enabled' : 'disabled' }}
+              <span class="badge" [class.badge-active]="d.isEnabled" [class.badge-inactive]="!d.isEnabled">
+                {{ d.isEnabled ? 'Enabled' : 'Disabled' }}
               </span>
             </td>
           </ng-container>
@@ -144,30 +139,34 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let d" class="col-actions">
               <div class="actions-cell">
-                @if (canOpenEntity(d)) {
-                  <button
-                    mat-icon-button
-                    class="btn-view"
-                    [matTooltip]="hasHistory(d) ? 'View (has execution history)' : 'Edit'"
-                    (click)="openEdit(d)"
-                  >
-                    <mat-icon>{{ hasHistory(d) ? 'visibility' : 'edit' }}</mat-icon>
-                  </button>
-                }
-                <button
-                  mat-icon-button
-                  class="btn-delete"
-                  *appHideWithoutPermission="deleteCodes(d); mode: 'all'"
-                  [disabled]="hasHistory(d) || isUsedInWorkflow(d)"
-                  [matTooltip]="hasHistory(d)
-                    ? 'Cannot delete — has execution history'
-                    : isUsedInWorkflow(d)
-                      ? 'Cannot delete — referenced by a workflow'
-                      : 'Delete'"
-                  (click)="confirmDelete(d)"
-                >
-                  <mat-icon>delete_outline</mat-icon>
+                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                  <mat-icon>more_vert</mat-icon>
                 </button>
+                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  @if (canOpenEntity(d)) {
+                    <button
+                      mat-menu-item
+                      (click)="openEdit(d)"
+                    >
+                      <mat-icon>{{ hasHistory(d) ? 'visibility' : 'edit' }}</mat-icon>
+                      {{ hasHistory(d) ? 'View (has execution history)' : 'Edit' }}
+                    </button>
+                  }
+                  <button
+                    mat-menu-item
+                    class="menu-item-danger"
+                    *appHideWithoutPermission="deleteCodes(d); mode: 'all'"
+                    [disabled]="hasHistory(d) || isUsedInWorkflow(d)"
+                    (click)="confirmDelete(d)"
+                  >
+                    <mat-icon>delete_outline</mat-icon>
+                    {{ hasHistory(d)
+                      ? 'Cannot delete — has execution history'
+                      : isUsedInWorkflow(d)
+                        ? 'Cannot delete — referenced by a workflow'
+                        : 'Delete' }}
+                  </button>
+                </mat-menu>
               </div>
             </td>
           </ng-container>

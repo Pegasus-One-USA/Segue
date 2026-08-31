@@ -1,0 +1,274 @@
+// .app-dialog-panel (dialog-shell.component.scss) sizes itself — min(92vw,1100px)/min(88vh,740px)
+// normally, true 100vw/100vh when maximized (via the shell's own generic maximize toggle, opted into
+// with `maximizable: true` in mapping-profile-list.component.ts's open() call) — so unlike the old
+// MatDialogConfig-driven sizing here, .mpd-content just needs to fill whatever height the panel gives
+// it, in EITHER state, rather than computing its own viewport-relative max-height and duplicating that
+// logic. flex: 1 on a flex-column ancestor (.app-dialog-panel) does exactly that.
+// mat-dialog-content itself is left as a plain, padding-less flex-sizing container — its own box
+// turned out unreliable for real padding (see destination-connection-dialog.component.scss's identical
+// fix and the yellow debug-fill test that exposed it there); a real inner div (.mpd-body) owns the
+// visual padding instead, and re-declares the same flex-column/flex:1/min-height:0 chain so
+// .mpd-canvas-wrap's flex:1 still fills all the way down through it.
+.mpd-content {
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.mpd-body {
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  padding-bottom: 8px;
+}
+
+.mpd-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner, at a FIXED top:10px — see dialog-shell.component.scss)
+  // — this row's own maximize/close buttons were removed in favor of the shell's universal ones (see
+  // mapping-profile-list.component.ts's `maximizable: true`). padding-top must stay small: the chrome's
+  // position is fixed regardless of this row's height, so a taller top inset pushes the Save button
+  // below the chrome icons' vertical center instead of matching it (this went to 24px once, then had
+  // to come back down — see git history if this needs adjusting again). Only padding-left/padding-bottom
+  // were actually missing before; those are the real fix for "no breathing room before the divider line".
+  padding: 12px 84px 20px 32px;
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mpd-title-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  line-height: 1;
+}
+
+// Same icon-avatar language as role-dialog/destination-connection-dialog's .dialog-header__icon,
+// sized down slightly to fit this row's tighter height alongside the badges.
+.mpd-title-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  mat-icon {
+    color: var(--color-primary);
+    font-size: 19px;
+    height: 19px;
+    width: 19px;
+  }
+}
+
+.mpd-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--color-ink);
+  letter-spacing: -0.2px;
+}
+
+.mpd-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 20px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &--resource { background: var(--color-primary-soft); color: var(--color-primary-dark); }
+  &--dest     { background: var(--color-info-soft); color: var(--color-info-strong); }
+  &--count    { background: var(--color-side); color: var(--color-muted); border: 1px solid var(--color-border); }
+}
+
+// Cancel/Save moved up here from the old bottom mat-dialog-actions row — frees that entire strip for
+// the canvas below (.mpd-canvas-wrap's flex: 1 absorbs whatever height this no longer takes).
+.mpd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+// Same save-button treatment as role-dialog/destination-connection-dialog's .btn-save, for visual
+// consistency — this dialog's Save lives up in the title row instead of a footer, but should look
+// identical to every other dialog's Save button.
+.btn-save {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { background: var(--color-muted); opacity: 0.7; }
+
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
+}
+
+// The canvas needs real, flexible height to be usable — a fixed short box would defeat the point of a
+// pan/zoom mapping surface, so this always fills whatever room .mpd-content (now flex-column at every
+// size, not just maximized) has left after the meta form and mapping-head hint above it.
+.mpd-canvas-wrap {
+  flex: 1;
+  min-height: 560px;
+  margin-bottom: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-8);
+  box-sizing: border-box;
+  overflow: hidden;
+
+  // NOT `display: block` — a plain tag selector here outranks the component's own `:host { display:
+  // flex }` (tag+attribute beats attribute-only in Angular's emulated scoping), which would silently
+  // flatten it back to block and break its internal flex-fill chain, leaving a tall, empty block-level
+  // box below whatever content that chain collapsed down to instead of the canvas actually growing.
+  app-mapping-profile-canvas {
+    height: 100%;
+  }
+}
+
+.mpd-hint {
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 4px 0 12px;
+}
+
+.mpd-error {
+  font-size: 13px;
+  color: var(--color-error);
+  margin-top: 12px;
+}
+
+.mpd-error-banner {
+  margin-top: 12px;
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-base);
+}
+
+.mpd-error-banner-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-error-strong);
+}
+
+.mpd-error-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--color-error-strong);
+
+  li { margin-bottom: 2px; }
+}
+
+.mpd-meta-section {
+  flex-shrink: 0;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.mpd-meta-title {
+  margin: 0 0 var(--space-6);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.mpd-meta-form {
+  margin-bottom: 8px;
+}
+
+// auto-fit instead of a fixed 2 columns — the dialog is 95vw wide (see .mpd-content), so this now flows
+// Name/Resource Type/Source/Destination/Destination Object/Enabled across 1-2 rows instead of 4,
+// handing the reclaimed height straight to the canvas below (same flex: 1 chain as the header-actions move).
+.mpd-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+// Plain native input/select — matches every non-Material control elsewhere in the app (Transformation
+// Rules, the Epic/Cerner/Athena wizards, Destination Connection's per-type forms), not Angular
+// Material's mat-form-field/mat-select. This dialog briefly used Material fields during an earlier
+// redesign pass; reverted back to native controls to match what's actually in production.
+.mpd-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  label { font-size: 12.5px; font-weight: 600; color: var(--color-ink-2); }
+
+  // :not([type='checkbox']) — this exact rule (copied from the original committed markup) is what
+  // caused the "Enabled" checkbox to render as a stretched, unclickable pill: it's an <input> too, and
+  // Angular's per-component style-scoping attribute gives this selector MORE specificity than the
+  // global native-checkbox reset (styles.scss), overriding its width/height/border-radius. The original
+  // code sidestepped this by switching to <mat-checkbox> instead of fixing the actual conflict — now
+  // that a global native-checkbox design system exists, excluding checkboxes here is the real fix.
+  input:not([type='checkbox']), select {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    font-size: 13.5px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+
+  &--full { grid-column: 1 / -1; }
+
+  &--checkbox {
+    flex-direction: row;
+    align-items: center;
+
+    label { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  }
+
+  &--error {
+    input:not([type='checkbox']), select { border-color: var(--color-error); }
+  }
+}
+
+.mpd-req { color: var(--color-error); }

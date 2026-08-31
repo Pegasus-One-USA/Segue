@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -9,7 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { IAppSecretsService } from '../../services/i-app-secrets.service';
 import { AppSecret } from '../../models/app-secret.model';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 
 @Component({
@@ -28,13 +28,13 @@ import { ToastService } from '../../../services/toast.service';
 })
 export class AppSecretListComponent implements OnInit {
   private readonly svc    = inject(IAppSecretsService);
-  private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast  = inject(ToastService);
 
   readonly loading = signal(true);
   readonly secrets  = signal<AppSecret[]>([]);
 
-  readonly displayedCols = ['displayName', 'provisioned', 'lastRotatedUtc', 'actions'];
+  readonly displayedCols = ['actions', 'displayName', 'provisioned', 'lastRotatedUtc'];
 
   ngOnInit(): void {
     this.load();
@@ -59,10 +59,9 @@ export class AppSecretListComponent implements OnInit {
       ? ' The Worker service must also be restarted afterward, or it may keep using the old value.'
       : '';
 
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '480px',
-        restoreFocus: false,
         data: {
           title: `Regenerate ${secret.displayName}`,
           message:

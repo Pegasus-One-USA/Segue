@@ -1,9 +1,9 @@
 import { Component, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { MatDialog } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import { UserProfileService } from '../../services/user-profile.service';
 import { ToastService } from '../../../services/toast.service';
-import { ROLE_DEFINITIONS } from '../../models/user-profile.model';
+import { ROLE_DEFINITIONS, UserProfile } from '../../models/user-profile.model';
 import { EditProfileDialogComponent } from '../../dialogs/edit-profile-dialog/edit-profile-dialog.component';
 
 @Component({
@@ -14,7 +14,7 @@ import { EditProfileDialogComponent } from '../../dialogs/edit-profile-dialog/ed
   styleUrl:    './profile.component.scss',
 })
 export class ProfileComponent {
-  private readonly dialog  = inject(MatDialog);
+  private readonly dialog  = inject(DialogService);
   private readonly toast   = inject(ToastService);
   protected readonly profSvc = inject(UserProfileService);
 
@@ -30,10 +30,9 @@ export class ProfileComponent {
   openEditDialog(): void {
     const p = this.profile();
     this.dialog
-      .open(EditProfileDialogComponent, {
+      .open<EditProfileDialogComponent, Partial<UserProfile>, boolean>(EditProfileDialogComponent, {
         width: '520px',
         disableClose: true,
-        restoreFocus: false,
         data: {
           firstName: p.firstName,
           lastName:  p.lastName,

@@ -12,5 +12,7 @@ public interface IAllowedCorsOriginRepository
 
     Task AddAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken);
 
+    Task UpdateAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken);
+
     Task DeleteAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken);
 }

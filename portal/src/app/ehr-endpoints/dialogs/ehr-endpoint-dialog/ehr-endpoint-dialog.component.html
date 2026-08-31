@@ -9,9 +9,6 @@
       <h2>{{ isEdit ? 'Edit EHR Endpoint' : 'Add EHR Endpoint' }}</h2>
       <p>{{ isEdit ? 'Update endpoint details' : 'Add a known client-organization FHIR endpoint' }}</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="dialogRef.close(false)">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <!-- Form -->
@@ -26,100 +23,79 @@
 
     <form [formGroup]="form" novalidate class="dialog-form">
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Vendor</mat-label>
-        <mat-select formControlName="vendor">
-          @for (option of vendorOptions; track option.value) {
-            <mat-option [value]="option.value">{{ option.label }}</mat-option>
-          }
-        </mat-select>
-        @if (hasError('vendor', 'required')) {
-          <mat-error>Vendor is required.</mat-error>
-        }
-      </mat-form-field>
+      <div class="form-row">
+        <div class="form-field" [class.form-field--error]="hasError('vendor', 'required')">
+          <label for="ehr-vendor">Vendor <span class="req">*</span></label>
+          <select id="ehr-vendor" formControlName="vendor">
+            @for (option of vendorOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </div>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Endpoint Type</mat-label>
-        <mat-select formControlName="endpointType">
-          @for (option of endpointTypeOptions; track option.value) {
-            <mat-option [value]="option.value">{{ option.label }}</mat-option>
-          }
-        </mat-select>
-        @if (hasError('endpointType', 'required')) {
-          <mat-error>Endpoint type is required.</mat-error>
-        }
-      </mat-form-field>
+        <div class="form-field" [class.form-field--error]="hasError('endpointType', 'required')">
+          <label for="ehr-endpointType">Endpoint Type <span class="req">*</span></label>
+          <select id="ehr-endpointType" formControlName="endpointType">
+            @for (option of endpointTypeOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Vendor Endpoint Id</mat-label>
+      <div class="form-row">
+        <div class="form-field" [class.form-field--error]="hasError('vendorEndpointId', 'required') || hasError('vendorEndpointId', 'maxlength')">
+          <label for="ehr-vendorEndpointId">Vendor Endpoint Id <span class="req">*</span></label>
+          <input
+            id="ehr-vendorEndpointId"
+            formControlName="vendorEndpointId"
+            placeholder="e.g. the vendor's org id for this endpoint"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-field" [class.form-field--error]="hasError('name', 'required') || hasError('name', 'maxlength')">
+          <label for="ehr-name">Name <span class="req">*</span></label>
+          <input
+            id="ehr-name"
+            formControlName="name"
+            placeholder="e.g. Acme Health System"
+            autocomplete="off"
+          />
+        </div>
+      </div>
+
+      <div class="form-field form-field--full" [class.form-field--error]="hasError('fhirBaseUrl', 'required') || hasError('fhirBaseUrl', 'maxlength')">
+        <label for="ehr-fhirBaseUrl">FHIR Base URL <span class="req">*</span></label>
         <input
-          matInput
-          formControlName="vendorEndpointId"
-          placeholder="e.g. the vendor's org id for this endpoint"
-          autocomplete="off"
-        />
-        @if (hasError('vendorEndpointId', 'required')) {
-          <mat-error>Vendor endpoint id is required.</mat-error>
-        } @else if (hasError('vendorEndpointId', 'maxlength')) {
-          <mat-error>Maximum 100 characters allowed.</mat-error>
-        }
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Name</mat-label>
-        <input
-          matInput
-          formControlName="name"
-          placeholder="e.g. Acme Health System"
-          autocomplete="off"
-        />
-        @if (hasError('name', 'required')) {
-          <mat-error>Name is required.</mat-error>
-        } @else if (hasError('name', 'maxlength')) {
-          <mat-error>Maximum 300 characters allowed.</mat-error>
-        }
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>FHIR Base URL</mat-label>
-        <input
-          matInput
+          id="ehr-fhirBaseUrl"
           formControlName="fhirBaseUrl"
           placeholder="https://fhir.example.org/api/FHIR/R4/"
           autocomplete="off"
         />
-        @if (hasError('fhirBaseUrl', 'required')) {
-          <mat-error>FHIR base URL is required.</mat-error>
-        } @else if (hasError('fhirBaseUrl', 'maxlength')) {
-          <mat-error>Maximum 500 characters allowed.</mat-error>
-        }
-      </mat-form-field>
+      </div>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Format Type</mat-label>
-        <input
-          matInput
-          formControlName="formatType"
-          placeholder="e.g. R4"
-          autocomplete="off"
-        />
-        @if (hasError('formatType', 'required')) {
-          <mat-error>Format type is required.</mat-error>
-        }
-      </mat-form-field>
+      <div class="form-row">
+        <div class="form-field" [class.form-field--error]="hasError('formatType', 'required')">
+          <label for="ehr-formatType">Format Type <span class="req">*</span></label>
+          <input
+            id="ehr-formatType"
+            formControlName="formatType"
+            placeholder="e.g. R4"
+            autocomplete="off"
+          />
+        </div>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Status</mat-label>
-        <input
-          matInput
-          formControlName="status"
-          placeholder="e.g. active"
-          autocomplete="off"
-        />
-        @if (hasError('status', 'required')) {
-          <mat-error>Status is required.</mat-error>
-        }
-      </mat-form-field>
+        <div class="form-field" [class.form-field--error]="hasError('status', 'required')">
+          <label for="ehr-status">Status <span class="req">*</span></label>
+          <input
+            id="ehr-status"
+            formControlName="status"
+            placeholder="e.g. active"
+            autocomplete="off"
+          />
+        </div>
+      </div>
 
     </form>
   </mat-dialog-content>
@@ -127,9 +103,6 @@
   <!-- Actions -->
   <mat-dialog-actions>
     <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">
-        Cancel
-      </button>
       <button
         mat-flat-button
         class="btn-save"
@@ -138,10 +111,8 @@
       >
         @if (saving()) {
           <mat-spinner diameter="16"></mat-spinner>
-        } @else {
-          <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
         }
-        {{ isEdit ? 'Save Changes' : 'Add Endpoint' }}
+        {{ isEdit ? 'Update' : 'Save' }}
       </button>
     </div>
   </mat-dialog-actions>

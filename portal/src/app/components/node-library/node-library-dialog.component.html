@@ -1,4 +1,8 @@
-<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!(openSourceFormType() !== null || showDestWizard())" (closed)="onOverlayClosed()">
+<app-modal-overlay
+  [open]="open()"
+  [closeOnBackdropClick]="!(openSourceFormType() !== null || showDestWizard())"
+  (closed)="onOverlayClosed()"
+>
   <div class="nld" [class.nld--maximized]="isMaximized()">
 
     <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
@@ -130,26 +134,13 @@
     <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
     <div class="nld-body">
 
-      <!-- LEFT: Node Library sidebar — hidden entirely (not just mini) while a group's mapping
-           canvas is open, so the canvas gets the full dialog width. -->
-      @if (!destMappingCanvasActive()) {
-      <nav class="nld-sidebar" [class.nld-sidebar--mini]="isSidebarMini()" aria-label="Node library">
-
-        <!-- Collapse / expand toggle (visible only when a form is active) -->
-        @if (openSourceFormType() !== null || showDestWizard()) {
-          <button
-            class="nld-sidebar-toggle"
-            type="button"
-            (click)="toggleSidebar()"
-            [title]="isSidebarMini() ? 'Expand sidebar' : 'Collapse sidebar'"
-          >
-            <svg class="nld-sidebar-toggle-ico" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect y="0"  width="18" height="2" rx="1" fill="currentColor"/>
-              <rect y="6"  width="18" height="2" rx="1" fill="currentColor"/>
-              <rect y="12" width="18" height="2" rx="1" fill="currentColor"/>
-            </svg>
-          </button>
-        }
+      <!-- LEFT: Node Library sidebar — hidden entirely (not just collapsed to a mini rail) once a
+           node's own form/wizard is open (source form, destination wizard, or a group's mapping
+           canvas), so the drawer's whole width goes to that form/wizard — the "add a node" browsing
+           list and "configure this node" panel are two distinct steps, not two panes shown at once.
+           "← Back to library" (each form's own topbar) is how you return to this list. -->
+      @if (!destMappingCanvasActive() && openSourceFormType() === null && !showDestWizard()) {
+      <nav class="nld-sidebar" aria-label="Node library">
 
         <!-- Search -->
         <div class="nld-search-wrap">
@@ -238,6 +229,7 @@
           @switch (openSourceFormType()) {
             @case ('epic') {
               <app-epic-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -245,6 +237,7 @@
             }
             @case ('cerner') {
               <app-cerner-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -252,6 +245,7 @@
             }
             @case ('athena') {
               <app-athenahealth-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -259,6 +253,7 @@
             }
             @case ('allscripts') {
               <app-allscripts-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -266,6 +261,7 @@
             }
             @case ('healow') {
               <app-healow-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -273,6 +269,7 @@
             }
             @case ('meditech') {
               <app-meditech-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
@@ -280,6 +277,7 @@
             }
             @case ('sample') {
               <app-sample-source-form
+                #activeSourceForm
                 [isMaximized]="isMaximized()"
                 (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"

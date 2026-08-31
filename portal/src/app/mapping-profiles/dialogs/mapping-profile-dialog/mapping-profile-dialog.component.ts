@@ -3,8 +3,15 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
 import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
@@ -114,7 +121,11 @@ function toMappingFieldDto(row: MappingRow): MappingFieldDto {
 @Component({
   selector: 'app-mapping-profile-dialog',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MappingProfileCanvasComponent],
+  imports: [
+    CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatProgressSpinnerModule,
+    MappingProfileCanvasComponent,
+  ],
   templateUrl: './mapping-profile-dialog.component.html',
   styleUrl: './mapping-profile-dialog.component.scss',
 })
@@ -123,29 +134,16 @@ export class MappingProfileDialogComponent {
   private readonly http = inject(HttpClient);
   private readonly svc = inject(MappingProfileService);
   private readonly schemaSvc = inject(DestinationSchemaService);
-  private readonly dialogRef = inject(MatDialogRef<MappingProfileDialogComponent>);
+  readonly dialogRef = inject<DialogRef<MappingProfileDto | false>>(DialogRef);
   private readonly actionGuard = inject(PermissionActionGuard);
-  readonly data = inject<MappingProfileDialogData>(MAT_DIALOG_DATA);
+  readonly data = inject<MappingProfileDialogData>(DIALOG_DATA) as MappingProfileDialogData;
 
   readonly mappingForm = viewChild(MappingProfileCanvasComponent);
-
-  /** Toggles the dialog between its normal size and true edge-to-edge fullscreen — same maximize
-   *  affordance NodeLibraryDialogComponent's own header offers, adapted to a MatDialogRef. updateSize()
-   *  alone would still leave Material's own dialog-surface padding/border-radius/box-shadow visible
-   *  (not truly fullscreen, just a bigger centered card) — the 'mpd-fullscreen' panel class (see this
-   *  component's .scss) strips those too. */
-  readonly isMaximized = signal(false);
-  toggleMaximize(): void {
-    const next = !this.isMaximized();
-    this.isMaximized.set(next);
-    this.dialogRef.updateSize(next ? '100vw' : 'min(92vw, 1100px)', next ? '100vh' : 'min(88vh, 740px)');
-    if (next) this.dialogRef.addPanelClass('mpd-fullscreen');
-    else this.dialogRef.removePanelClass('mpd-fullscreen');
-  }
 
   readonly mode = this.data.mode;
   readonly isCreate = this.mode === 'create';
   readonly isView = this.mode === 'view';
+  readonly isEdit = this.mode === 'edit';
 
   // The dropdown used to be scoped to FHIR_RESOURCES (the MVP1 11-resource subset the source-connection
   // scope picker still uses) — Mapping Profiles has no such scoping reason to hide the rest of what the
@@ -170,6 +168,12 @@ export class MappingProfileDialogComponent {
   // a real signal so selectedDestinationType/destType actually update when the dropdown changes.
   private readonly destinationIdValue = toSignal(this.metaForm.controls.destinationId.valueChanges, {
     initialValue: this.metaForm.controls.destinationId.value,
+  });
+
+  // Same toSignal bridge as destinationIdValue — needed so the fillContent effect below actually
+  // re-fires when Create's own resource-type picker changes, not just once at construction.
+  private readonly resourceTypeValue = toSignal(this.metaForm.controls.resourceType.valueChanges, {
+    initialValue: this.metaForm.controls.resourceType.value,
   });
 
   readonly selectedDestinationType = computed<DestinationType | undefined>(() =>
@@ -238,6 +242,16 @@ export class MappingProfileDialogComponent {
       const destinationId = this.destinationIdValue();
       untracked(() => this._loadSchemaFor(destinationId));
     });
+
+    // Fills the content area (edge-to-edge, like the Source Connection screen) the moment a resource
+    // type is known — Create starts without one (just Profile Details, a smaller card is fine), and
+    // this flips live the instant one's picked, when the field-mapping canvas actually appears. Edit/View
+    // always have one from the start, so this affirms fillContent immediately for them too (the opener
+    // already passes the same initial value — this just keeps it correct if it ever changes).
+    effect(() => {
+      const hasResourceType = !!this.resourceTypeValue();
+      untracked(() => this.dialogRef.fillContent.set(hasResourceType));
+    });
   }
 
   private _loadSchemaFor(destinationId: string | null | undefined): void {
@@ -251,8 +265,19 @@ export class MappingProfileDialogComponent {
     });
   }
 
-  cancel(): void {
-    this.dialogRef.close(false);
+  // The mapping canvas's own rows aren't individually dirty-tracked (each row's fields can change
+  // without the row count changing) — a row-count difference from the seeded baseline (initialRows) is
+  // a cheap, honest proxy that catches "added/removed a mapped field" but not "edited a field already
+  // mapped without adding/removing any row." metaForm.dirty covers the header fields (name, resource
+  // type, source/destination, enabled) fully and exactly.
+  hasUnsavedChanges(): boolean {
+    if (this.metaForm.dirty) return true;
+    const currentCount = this.mappingForm()?.rowsRich().length ?? 0;
+    return currentCount !== this.initialRows().length;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

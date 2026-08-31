@@ -1,15 +1,15 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { TenantRoleService, Tenant } from '../../services/tenant-role.service';
-import { TenantDialogComponent } from '../../dialogs/tenant-dialog/tenant-dialog.component';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { TenantDialogComponent, TenantDialogData } from '../../dialogs/tenant-dialog/tenant-dialog.component';
+import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-tenant-list',
@@ -27,7 +27,7 @@ import { ToastService } from '../../../services/toast.service';
 })
 export class TenantListComponent {
   private readonly svc    = inject(TenantRoleService);
-  private readonly dialog = inject(MatDialog);
+  private readonly dialog = inject(DialogService);
   private readonly toast  = inject(ToastService);
 
   readonly searchQuery = signal('');
@@ -74,10 +74,9 @@ export class TenantListComponent {
 
   openAdd(): void {
     this.dialog
-      .open(TenantDialogComponent, {
+      .open<TenantDialogComponent, TenantDialogData, boolean>(TenantDialogComponent, {
         width: '480px',
         disableClose: true,
-        restoreFocus: false,
         data: {},
       })
       .afterClosed()
@@ -88,10 +87,9 @@ export class TenantListComponent {
 
   openEdit(tenant: Tenant): void {
     this.dialog
-      .open(TenantDialogComponent, {
+      .open<TenantDialogComponent, TenantDialogData, boolean>(TenantDialogComponent, {
         width: '480px',
         disableClose: true,
-        restoreFocus: false,
         data: { tenant },
       })
       .afterClosed()
@@ -104,7 +102,6 @@ export class TenantListComponent {
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Tenant',
           message: `Are you sure you want to delete tenant "${tenant.name}"? This cannot be undone. A tenant that still has users cannot be deleted.`,

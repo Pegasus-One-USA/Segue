@@ -22,13 +22,14 @@ import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
 import { IRoleService } from '../../services/i-role.service';
 import {
-  User, UserRole, Permission, PermissionCategory,
+  User, UserRole, Permission, PermissionCategory, PasswordResetLinkResult,
 } from '../../../auth/models/user.model';
 import { ROLE_CONFIG } from '../user-list/user-list.component';
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
 import { ResetPasswordLinkDialogComponent } from '../../dialogs/reset-password-link-dialog/reset-password-link-dialog.component';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import { UserPermissionOverridesComponent } from './user-permission-overrides.component';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { ToastService } from '../../../services/toast.service';
@@ -87,6 +88,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   private readonly roleService = inject(IRoleService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
@@ -230,7 +232,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     const u = this.user();
     if (!u) return;
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
-    const ref = this.dialog.open(EditUserDialogComponent, {
+    const ref = this.customDialog.open<EditUserDialogComponent, { user: User }, User>(EditUserDialogComponent, {
       width: '640px',
       disableClose: true,
       data: { user: u },
@@ -244,9 +246,8 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     const u = this.user();
     if (!u) return;
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Assign), 'You do not have permission to assign roles.')) return;
-    const ref = this.dialog.open(AssignRolesDialogComponent, {
+    const ref = this.customDialog.open<AssignRolesDialogComponent, { user: User }, User>(AssignRolesDialogComponent, {
       width: '820px',
-      maxWidth: '95vw',
       disableClose: true,
       data: { user: u },
     });
@@ -291,8 +292,8 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (res) => {
-          this.dialog.open(ResetPasswordLinkDialogComponent, {
-            width: '540px', restoreFocus: false, data: res,
+          this.customDialog.open<ResetPasswordLinkDialogComponent, PasswordResetLinkResult, void>(ResetPasswordLinkDialogComponent, {
+            width: '540px', data: res,
           });
         },
         error: (err: {message?: string}) => {
@@ -306,8 +307,8 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     const u = this.user();
     if (!u) return;
 
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px', restoreFocus: false,
+    const ref = this.customDialog.open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+      width: '400px',
       data: {
         title:        'Disable two-factor authentication',
         message:      `This removes 2FA from "${u.fullName}"'s account without requiring a code — ` +

@@ -6,7 +6,7 @@ import { CommonModule } from '@angular/common';
 import { forkJoin, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule, MatRadioChange } from '@angular/material/radio';
@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { IRoleService } from '../../services/i-role.service';
@@ -70,10 +71,10 @@ export class AssignRolesDialogComponent implements OnInit {
   private readonly userService = inject(IUserService);
   private readonly roleService = inject(IRoleService);
   private readonly authStore   = inject(AuthStore);
-  private readonly dialogRef   = inject(MatDialogRef<AssignRolesDialogComponent>);
+  private readonly dialogRef   = inject<DialogRef<User>>(DialogRef);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
-  readonly data                = inject<DialogData>(MAT_DIALOG_DATA);
+  readonly data                = inject<DialogData>(DIALOG_DATA);
 
   // ─── State signals ────────────────────────────────────────────────────────
   allRoles      = signal<Role[]>([]);

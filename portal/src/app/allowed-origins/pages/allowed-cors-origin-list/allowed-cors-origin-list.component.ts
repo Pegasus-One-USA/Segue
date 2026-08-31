@@ -1,17 +1,18 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { IAllowedCorsOriginService } from '../../services/i-allowed-cors-origin.service';
 import { AllowedCorsOrigin } from '../../models/allowed-cors-origin.model';
 import { AllowedCorsOriginDialogComponent } from '../../dialogs/allowed-cors-origin-dialog/allowed-cors-origin-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-allowed-cors-origin-list',
@@ -21,6 +22,7 @@ import { ToastService } from '../../../services/toast.service';
     MatTableModule,
     MatButtonModule,
     MatIconModule,
+    MatMenuModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
   ],
@@ -29,13 +31,13 @@ import { ToastService } from '../../../services/toast.service';
 })
 export class AllowedCorsOriginListComponent implements OnInit {
   private readonly svc    = inject(IAllowedCorsOriginService);
-  private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast  = inject(ToastService);
 
   readonly loading = signal(true);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
 
-  readonly displayedCols = ['originUrl', 'label', 'createdOnUtc', 'createdBy', 'actions'];
+  readonly displayedCols = ['actions', 'originUrl', 'label', 'createdOnUtc', 'createdBy'];
 
   ngOnInit(): void {
     this.loadOrigins();
@@ -56,11 +58,10 @@ export class AllowedCorsOriginListComponent implements OnInit {
   }
 
   openAdd(): void {
-    this.dialog
-      .open(AllowedCorsOriginDialogComponent, {
+    this.customDialog
+      .open<AllowedCorsOriginDialogComponent, {}, boolean>(AllowedCorsOriginDialogComponent, {
         width: '480px',
         disableClose: true,
-        restoreFocus: false,
       })
       .afterClosed()
       .subscribe(res => {
@@ -71,11 +72,26 @@ export class AllowedCorsOriginListComponent implements OnInit {
       });
   }
 
+  openEdit(origin: AllowedCorsOrigin): void {
+    this.customDialog
+      .open<AllowedCorsOriginDialogComponent, { origin: AllowedCorsOrigin }, boolean>(AllowedCorsOriginDialogComponent, {
+        width: '480px',
+        disableClose: true,
+        data: { origin },
+      })
+      .afterClosed()
+      .subscribe(res => {
+        if (res) {
+          this.toast.success('Origin updated — takes effect immediately, no restart needed.');
+          this.loadOrigins();
+        }
+      });
+  }
+
   confirmDelete(origin: AllowedCorsOrigin): void {
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Remove Allowed Origin',
           message: `Are you sure you want to remove "${origin.originUrl}"? Browsers at this origin will lose API access immediately.`,

@@ -1,6 +1,115 @@
-.dcd-content {
+// ─── Header ─── same icon-avatar + title + subtitle pattern as role-dialog.component.scss, for visual
+// consistency across every custom-DialogService dialog.
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  // Extra right padding clears app-dialog-shell's own floating × chrome.
+  padding: 24px 56px 24px 32px;
+  border-bottom: 1px solid var(--color-border);
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    mat-icon {
+      color: var(--color-primary);
+      font-size: 22px;
+      height: 22px;
+      width: 22px;
+    }
+  }
+
+  &__text {
+    flex: 1;
+
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin: 0;
+    }
+  }
+}
+
+// ─── Actions ─── mat-dialog-actions itself is left padding-less (same host-box unreliability as
+// mat-dialog-content — see its comment below); .dialog-actions, a real inner div, owns the padding.
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+  padding: 20px 32px;
+  box-sizing: border-box;
+}
+
+.btn-cancel {
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  height: 40px;
+
+  &:hover { background: var(--color-bg); border-color: var(--color-muted); }
+}
+
+.btn-save {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 130px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
+
+  mat-icon { font-size: 18px; height: 18px; width: 18px; }
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+  &[disabled] { background: var(--color-muted); opacity: 0.7; }
+
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
+}
+
+// mat-dialog-content itself is left as a plain, padding-less scroll container — a real inner div
+// (.dcd-body) owns the visual padding instead. mat-dialog-content's own box turned out unreliable for
+// this (padding/background applied to the host weren't rendering consistently across its full box —
+// see the yellow debug-fill test), so this sidesteps whatever that was rather than keep fighting it.
+mat-dialog-content.dcd-content {
   min-width: 560px;
-  max-width: 720px;
+  width: 100%;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.dcd-body {
+  padding: 32px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+mat-dialog-actions {
+  padding: 0 !important;
+  margin: 0 !important;
+  border-top: 1px solid var(--color-border);
+  box-sizing: border-box;
 }
 
 .dcd-hint {
@@ -44,24 +153,33 @@
 }
 
 .dcd-meta-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
   margin-bottom: 12px;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
 }
 
+// Name/Target (edit mode) are real mat-form-fields now (see .form-field below) — this class is left
+// only for the read-only Type display, which has no input to style.
 .dcd-meta-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
 
-  label { font-size: 12.5px; font-weight: 600; color: var(--color-ink-2); }
-  input {
-    height: 36px;
-    padding: 0 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-base);
-    font-size: 13.5px;
+  // Has nothing to pair with — let it span both columns rather than sit alone next to empty grid space.
+  &--full { grid-column: 1 / -1; }
+}
+
+.form-field {
+  width: 100%;
+
+  ::ng-deep {
+    .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
+    .mat-mdc-select-panel { background: var(--color-surface); }
   }
 }
 

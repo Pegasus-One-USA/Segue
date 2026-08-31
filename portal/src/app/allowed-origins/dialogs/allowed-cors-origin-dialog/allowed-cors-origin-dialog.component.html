@@ -6,12 +6,9 @@
       <mat-icon>public</mat-icon>
     </div>
     <div class="dialog-header__text">
-      <h2>Add Allowed Origin</h2>
-      <p>Widen the API's CORS policy to allow this browser origin</p>
+      <h2>{{ isEdit ? 'Edit Allowed Origin' : 'Add Allowed Origin' }}</h2>
+      <p>{{ isEdit ? 'Update this browser origin\'s URL or label' : 'Widen the API\'s CORS policy to allow this browser origin' }}</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="dialogRef.close(false)">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <!-- Form -->
@@ -26,35 +23,25 @@
 
     <form [formGroup]="form" novalidate class="dialog-form">
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Origin URL</mat-label>
+      <div class="form-field" [class.form-field--error]="hasError('originUrl', 'required') || hasError('originUrl', 'pattern') || hasError('originUrl', 'maxlength')">
+        <label for="aco-originUrl">Origin URL <span class="req">*</span></label>
         <input
-          matInput
+          id="aco-originUrl"
           formControlName="originUrl"
           placeholder="https://portal.example.com"
           autocomplete="off"
         />
-        @if (hasError('originUrl', 'required')) {
-          <mat-error>Origin URL is required.</mat-error>
-        } @else if (hasError('originUrl', 'pattern')) {
-          <mat-error>Must be an absolute http(s) URL with no path, e.g. https://portal.example.com.</mat-error>
-        } @else if (hasError('originUrl', 'maxlength')) {
-          <mat-error>Maximum 500 characters allowed.</mat-error>
-        }
-      </mat-form-field>
+      </div>
 
-      <mat-form-field appearance="outline" class="form-field">
-        <mat-label>Label (optional)</mat-label>
+      <div class="form-field" [class.form-field--error]="hasError('label', 'maxlength')">
+        <label for="aco-label">Label (optional)</label>
         <input
-          matInput
+          id="aco-label"
           formControlName="label"
           placeholder="e.g. Prod VM"
           autocomplete="off"
         />
-        @if (hasError('label', 'maxlength')) {
-          <mat-error>Maximum 200 characters allowed.</mat-error>
-        }
-      </mat-form-field>
+      </div>
 
     </form>
   </mat-dialog-content>
@@ -62,9 +49,6 @@
   <!-- Actions -->
   <mat-dialog-actions>
     <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">
-        Cancel
-      </button>
       <button
         mat-flat-button
         class="btn-save"
@@ -73,10 +57,8 @@
       >
         @if (saving()) {
           <mat-spinner diameter="16"></mat-spinner>
-        } @else {
-          <mat-icon>add</mat-icon>
         }
-        Add Origin
+        {{ isEdit ? 'Update' : 'Save' }}
       </button>
     </div>
   </mat-dialog-actions>

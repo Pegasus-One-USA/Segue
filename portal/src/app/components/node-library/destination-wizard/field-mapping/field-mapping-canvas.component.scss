@@ -222,7 +222,10 @@
 
 /* ── Confirm before removing an extra table ─────────────────────────────────── */
 .fm-remove-confirm-backdrop {
-  position: fixed;
+  // Scoped to the nearest positioned ancestor — this component's own :host (position: relative,
+  // top of file) — rather than the viewport, matching the treatment applied to app-modal-overlay's
+  // backdrop (see modal-overlay.component.scss).
+  position: absolute;
   inset: 0;
   z-index: 200;
   background: rgba(15, 20, 30, 0.45);

@@ -4,11 +4,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuditLogEntry, PagedResult } from '../../models/governance.model';
 import { LocalDateTimePipe } from '../../../core/pipes/local-date-time.pipe';
-import { DiffDetailDialogComponent, FieldDiff } from '../../dialogs/diff-detail-dialog/diff-detail-dialog.component';
+import { DiffDetailDialogComponent, DiffDetailDialogData, FieldDiff } from '../../dialogs/diff-detail-dialog/diff-detail-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 
 function formatValue(value: unknown): string {
@@ -29,7 +30,7 @@ export class AuditLogsComponent implements OnInit {
   private readonly api = inject(GovernanceApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
 
   readonly loading = signal(false);
   readonly correlationId = signal('');
@@ -127,9 +128,8 @@ export class AuditLogsComponent implements OnInit {
   }
 
   openDiff(entry: AuditLogEntry): void {
-    this.dialog.open(DiffDetailDialogComponent, {
+    this.customDialog.open<DiffDetailDialogComponent, DiffDetailDialogData, void>(DiffDetailDialogComponent, {
       data: { module: entry.module, action: entry.action, diffs: this.diffFields(entry) },
-      autoFocus: false,
     });
   }
 

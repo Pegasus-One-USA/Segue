@@ -1,5 +1,8 @@
 .modal-backdrop {
-  position: fixed;
+  // Scoped to the nearest positioned ancestor — .shell-content (see app-shell.component.scss) — rather
+  // than the viewport, so every modal covers only the page's own content area and leaves the sidebar,
+  // topbar, and footer visible and clickable underneath.
+  position: absolute;
   inset: 0;
   z-index: 50;
   display: flex;

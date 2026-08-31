@@ -7,16 +7,11 @@
   width: 640px;
   max-width: 95vw;
   overflow: hidden;
-
-  // Fills whatever size dialogRef.updateSize() just gave the overlay pane (see toggleMaximize() — a
-  // bounded min(92vw,1100px)/min(88vh,740px), not the full viewport), rather than hardcoding a size
-  // here that would fight the pane's own.
-  &--maximized {
-    width: 100%;
-    height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-  }
+  // Lets this stretch to fill app-dialog-panel's full height when maximized via the shell's own
+  // maximize toggle (position: fixed; height: 100vh — see dialog-shell.component.scss) instead of
+  // shrink-wrapping to its own max-height: 88vh and leaving the rest of the screen blank.
+  flex: 1;
+  min-height: 0;
 }
 
 // ─── Header (mirrors assign-roles-dialog conventions) ──────────────────────
@@ -24,7 +19,12 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px;
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner — see dialog-shell.component.scss), which
+  // replaced this header's own ×/maximize buttons now that every dialog gets them from the shell
+  // (this dialog opts into `maximizable: true`, so both buttons show — see mapping-profile-dialog
+  // .component.scss's identical 84px for the same two-button case).
+  padding: 20px 84px 20px 24px;
 
   // The same gradient the dashboard's own KPI phase-badges use (design-spec §17,
   // linear-gradient(135deg,#00A89D,#0076A8)) — tokenized as primary→secondary rather than the flat
@@ -97,38 +97,12 @@
   &__sep { font-size: 14px; height: 14px; width: 14px; color: var(--color-muted-2); flex-shrink: 0; }
 }
 
-.dialog-close {
-  color: var(--color-muted) !important;
-  &:hover { background: var(--color-bg) !important; }
-}
-
-.dialog-maximize {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  background: none;
-  border: none;
-  color: var(--color-muted);
-  cursor: pointer;
-  padding: 8px;
-  border-radius: var(--radius-sm, 6px);
-
-  &:hover { background: var(--color-bg); color: var(--color-ink-2); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
-}
-
-.dialog-maximize-ico {
-  width: 18px;
-  height: 18px;
-}
-
 mat-dialog-content {
   padding: 4px 24px 16px !important;
   overflow-y: auto;
   // flex: 1 lets this grow to fill whatever room .dialog-container actually has — bounded by its own
-  // max-height: 88vh normally, and by 100vh once maximized (see .dialog-container--maximized).
+  // max-height: 88vh normally, and by app-dialog-panel's full height once the shell's own maximize
+  // toggle is used.
   flex: 1;
   min-height: 0;
 }
@@ -651,4 +625,4 @@ mat-dialog-content {
 
 // .dialog-actions (the "Done" footer) removed per request — the dialog now ends right after the last
 // step's own Remove step/Save step row (or "+ Add another step"), with no separate footer chrome below
-// it. Closing this dialog is the header's own ✕ button (see .dialog-close above).
+// it. Closing this dialog is the shell's own universal ✕ button (see dialog-shell.component.scss).

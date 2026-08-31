@@ -5,6 +5,7 @@ import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.compone
 import { UserMenuComponent } from '../../user/components/user-menu/user-menu.component';
 import { AppFooterComponent } from '../app-footer/app-footer.component';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
+import { DialogOutletComponent } from '../../core/components/dialog-outlet/dialog-outlet.component';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
@@ -29,7 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, UserMenuComponent, AppFooterComponent],
+  imports: [RouterOutlet, SidebarComponent, UserMenuComponent, AppFooterComponent, DialogOutletComponent],
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss',
 })

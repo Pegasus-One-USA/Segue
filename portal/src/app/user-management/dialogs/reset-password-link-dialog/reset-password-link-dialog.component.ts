@@ -1,10 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ToastService } from '../../../services/toast.service';
 import { PasswordResetLinkResult } from '../../../auth/models/user.model';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-reset-password-link-dialog',
@@ -14,8 +15,8 @@ import { PasswordResetLinkResult } from '../../../auth/models/user.model';
   styleUrls: ['./reset-password-link-dialog.component.scss'],
 })
 export class ResetPasswordLinkDialogComponent {
-  readonly dialogRef = inject(MatDialogRef<ResetPasswordLinkDialogComponent>);
-  readonly data: PasswordResetLinkResult = inject(MAT_DIALOG_DATA);
+  readonly dialogRef = inject<DialogRef<void>>(DialogRef);
+  readonly data: PasswordResetLinkResult = inject(DIALOG_DATA) as PasswordResetLinkResult;
   private readonly toast = inject(ToastService);
 
   copied = signal(false);

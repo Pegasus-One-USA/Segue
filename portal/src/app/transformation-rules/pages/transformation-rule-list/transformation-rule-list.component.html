@@ -14,7 +14,7 @@
       <h1>Transformation Rules</h1>
       @if (!creatingNew()) {
         <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
-          <mat-icon>add</mat-icon> New rule target
+          New
         </button>
       }
     </div>
@@ -103,7 +103,7 @@
                 (ngModelChange)="newProfileName.set($event)"
                 placeholder="New profile name…"
               />
-              <button mat-stroked-button type="button" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="createDeIdentificationProfileForNewTarget()">+ New profile</button>
+              <button mat-stroked-button type="button" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="createDeIdentificationProfileForNewTarget()">New</button>
             </div>
           </div>
         }
@@ -111,7 +111,7 @@
 
       <div class="form-actions">
         <button mat-button (click)="cancelNewTarget()">Cancel</button>
-        <button mat-flat-button color="primary" (click)="createTarget()">Create — add first step</button>
+        <button mat-flat-button color="primary" (click)="createTarget()">Save</button>
       </div>
     </div>
   }
@@ -156,7 +156,7 @@
         </p>
         @if (!creatingNew()) {
           <button mat-flat-button color="primary" class="empty-state__action" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
-            <mat-icon>add</mat-icon> New rule target
+            New
           </button>
         }
       }
@@ -330,7 +330,7 @@
                     <div class="step-card__actions">
                       <button class="btn-text-danger" type="button" *appHideWithoutPermission="'transformationrules.delete'" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
                       <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" [disabled]="step.saving" (click)="saveStep(group, step)">
-                        @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { Save step }
+                        @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { {{ step.id ? 'Update' : 'Save' }} }
                       </button>
                     </div>
                   </div>

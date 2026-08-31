@@ -28,6 +28,12 @@ public sealed class InMemoryAllowedCorsOriginRepository : IAllowedCorsOriginRepo
         return Task.CompletedTask;
     }
 
+    public Task UpdateAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken)
+    {
+        _store[origin.Id] = origin;
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(AllowedCorsOrigin origin, CancellationToken cancellationToken)
     {
         _store.TryRemove(origin.Id, out _);

@@ -1,17 +1,21 @@
 /* ── Dialog shell ──────────────────────────────────────────────────────────── */
+/* Fills the whole content area (see app-modal-overlay's backdrop, absolutely positioned against
+   .shell-content in app-shell.component.scss) — not the whole viewport, so the sidebar/topbar/footer
+   stay visible outside it, but it does cover the canvas underneath while a node is being added or
+   configured. --maximized is unchanged: it's still the escape hatch to a true full-viewport
+   position: fixed view, covering the chrome too, exactly as it behaved before this panel existed. */
 .nld {
-  position: relative;
-  width: min(92vw, 1100px);
-  height: min(88vh, 740px);
+  position: absolute;
+  inset: 0;
   background: var(--color-surface);
-  border-radius: var(--radius-2xl, 18px);
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width var(--transition-base, 150ms ease), height var(--transition-base, 150ms ease);
 
   &--maximized {
+    position: fixed;
+    inset: 0;
     width: 100vw;
     height: 100vh;
     border-radius: 0;
@@ -19,6 +23,8 @@
 }
 
 /* ── Confirm before discarding an in-progress destination config ─────────────── */
+// No border-radius here — matches .nld's own radius (always 0 now: edge-to-edge whether docked as
+// a drawer or maximized, since only the drawer's left edge is ever visible as a "corner").
 .nld-confirm-backdrop {
   position: absolute;
   inset: 0;
@@ -28,7 +34,6 @@
   display: grid;
   place-items: center;
   animation: fade-in var(--transition-base, 0.12s) ease;
-  border-radius: var(--radius-2xl, 18px);
 }
 
 .nld-confirm-dialog {
@@ -304,68 +309,6 @@
   flex-direction: column;
   background: var(--color-side, var(--color-side));
   overflow: hidden;
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &--mini {
-    width: 60px;
-
-    .nld-sidebar-toggle { padding: 7px 0; }
-
-    .nld-search-wrap { display: none; }
-
-    .nld-cats { padding: 8px 0; }
-
-    .nld-item {
-      justify-content: center;
-      padding: 8px 0;
-      border-left: none;
-
-      &.is-selected { background: var(--color-primary-soft); }
-    }
-
-    .nld-item-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      font-size: 10px;
-    }
-
-    .nld-item-body,
-    .nld-item-indicator,
-    .nld-merge-tag { display: none; }
-  }
-}
-
-/* Sidebar collapse / expand toggle — height matches the wizard topbars (.eaf-topbar/.dw-topbar) that
-   sit alongside it in the detail panel, so the sidebar and detail panel's top edges form one even
-   line instead of two mismatched strips now that there's no shared outer header spanning both. */
-.nld-sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 53px; /* matches .eaf-topbar/.dw-topbar's natural height (30px icon + 22px padding + 1px border) so the divider lines up flush across the sidebar/detail boundary */
-  box-sizing: border-box;
-  padding: 7px 10px;
-  background: var(--color-primary-soft);
-  border: none;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-primary-dark);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: background 0.12s;
-
-  &:hover { background: color-mix(in srgb, var(--color-primary) 18%, transparent); }
-}
-
-.nld-sidebar-toggle-ico {
-  width: 16px;
-  height: 12px;
-  flex-shrink: 0;
 }
 
 /* Search */

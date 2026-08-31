@@ -61,6 +61,29 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
         return dto with { CreatedBy = name };
     }
 
+    public async Task<AllowedCorsOriginDto> UpdateAsync(
+        Guid id, UpdateAllowedCorsOriginRequest request, CancellationToken cancellationToken)
+    {
+        var origin = await _repository.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException(nameof(AllowedCorsOrigin), id);
+
+        var normalizedOrigin = ValidateAndNormalize(request.OriginUrl);
+
+        if (!string.Equals(normalizedOrigin, origin.OriginUrl, StringComparison.OrdinalIgnoreCase)
+            && await _repository.ExistsAsync(normalizedOrigin, cancellationToken))
+        {
+            throw new InvalidOperationException("This origin is already allowed.");
+        }
+
+        origin.Update(normalizedOrigin, request.Label?.Trim());
+        await _repository.UpdateAsync(origin, cancellationToken);
+        _cache.Invalidate();
+
+        var dto = AllowedCorsOriginMapper.ToDto(origin);
+        var name = await _userDisplayNameResolver.ResolveOneAsync(dto.CreatedBy, cancellationToken);
+        return dto with { CreatedBy = name };
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var origin = await _repository.GetByIdAsync(id, cancellationToken)

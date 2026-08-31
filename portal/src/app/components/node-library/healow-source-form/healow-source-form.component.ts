@@ -30,4 +30,11 @@ export class HealowSourceFormComponent implements SourceConfigFormComponent {
   getFields(): Record<string, string> | null {
     return this.engine()?.getFields() ?? null;
   }
+
+  /** Passthrough so a host (node-library-dialog's onOverlayClosed) can check whether this form has
+   *  been edited before prompting "Discard changes?" on Escape/backdrop-click, the same way its own
+   *  Cancel button already does via EhrVendorSourceFormComponent.cancel(). */
+  hasUnsavedChanges(): boolean {
+    return this.engine()?.hasUnsavedChanges() ?? false;
+  }
 }

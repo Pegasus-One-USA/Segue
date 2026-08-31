@@ -104,8 +104,8 @@
 
 // ─── Column widths ────────────────────────────────────────────────────────────
 .col-actions {
-  width: 100px;
-  text-align: right;
+  width: 56px;
+  text-align: left;
 }
 
 .col-description {
@@ -132,57 +132,20 @@
   font-weight: 400;
 }
 
-.endpoint-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--color-primary-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  mat-icon {
-    font-size: 18px;
-    height: 18px;
-    width: 18px;
-    color: var(--color-primary);
-  }
-}
-
-// ─── Action buttons ───────────────────────────────────────────────────────────
+// ─── Action menu ────────────────────────────────────────────────────────────
 .actions-cell {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: flex-start;
 }
 
-// Each action gets its own soft-tinted "chip" background at rest (not just on hover)
-// so the actions read as distinct, colorful controls rather than plain icons.
-%action-chip {
-  width:         32px;
-  height:        32px;
-  border-radius: 50%;
-  transition:    background var(--transition-base), color var(--transition-base), opacity var(--transition-base);
+.btn-more {
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
 
-  mat-icon { font-size: 17px; height: 17px; width: 17px; }
-
-  &[disabled] { opacity: 0.35; }
-}
-
-.btn-edit {
-  @extend %action-chip;
-  background: var(--color-primary-soft);
-  color:      var(--color-primary);
-
-  &:hover:not([disabled]) { background: var(--color-primary); color: var(--color-on-primary); }
-}
-
-.btn-delete {
-  @extend %action-chip;
-  background: var(--color-error-soft);
-  color:      var(--color-error);
-
-  &:hover:not([disabled]) { background: var(--color-error); color: var(--color-on-primary); }
+  &:hover {
+    background: var(--color-side) !important;
+    color:      var(--color-ink) !important;
+  }
 }

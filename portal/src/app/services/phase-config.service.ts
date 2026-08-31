@@ -22,7 +22,7 @@ export interface PhaseConfig {
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic only
+// Sources:      Epic, Generic FHIR R4, Athenahealth
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
