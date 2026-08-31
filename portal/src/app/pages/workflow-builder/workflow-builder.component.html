@@ -131,3 +131,21 @@
     </div>
   </div>
 }
+
+<!-- ── "Leave this page?" confirm — same markup/classes as destination-wizard's "Exit mapping"
+     confirm (dw-confirm-*), the design reference, so this needs no CSS overrides to match it. ── -->
+@if (pendingLeaveConfirm()) {
+  <div class="leave-backdrop" tabindex="0"
+       (click)="onLeaveBackdropClick($event)"
+       (keydown.escape)="cancelLeavePage()">
+    <div class="leave-dialog">
+      <div class="leave-icon">⚠</div>
+      <h3 class="leave-title">Leave this page?</h3>
+      <p class="leave-body">You have unsaved changes that will be lost if you leave. Continue?</p>
+      <div class="leave-actions">
+        <button type="button" class="btn btn-secondary" (click)="cancelLeavePage()">Cancel</button>
+        <button type="button" class="btn btn-danger" (click)="confirmLeavePage()">Leave</button>
+      </div>
+    </div>
+  </div>
+}
