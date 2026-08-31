@@ -1,0 +1,25 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-node-classifier.ts
+  s_448fc9b6d02b1b::t_571c0a27cf9bc3 74-78
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_448fc9b6d02b1b::t_43a9fd8798d9b6 117-131
+src/FHIRBridge.Application/Services/Transforms/Nodes/DataQualityGovernanceNodes.cs
+  s_448fc9b6d02b1b::t_f6524cb091e77d 166-175,202-223
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_448fc9b6d02b1b::t_5f9aab6961a0ac 165-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3ff707b39efd2aca0e1cb7e48b248696b469a711",
+  "prompts": {},
+  "sessions": {
+    "s_448fc9b6d02b1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af9566b0-af55-4ef3-88b4-45c4b20602df",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

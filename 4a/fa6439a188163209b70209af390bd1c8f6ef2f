@@ -1,0 +1,51 @@
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_8d7f0d52feb19c::t_fd4b70b5df1e26 148,156
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 35,41-42,48,54,66
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiUcumTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 31,37-38,44,50,59
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiNdcTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 31,37-38,44,50,59
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 33,40-41,48,54,65
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 38,45-46,53,59,70
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_8d7f0d52feb19c::t_9a204cb0076450 517-519
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_0d8603b94baa3f 31,38-39,46,52,63
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyServerClient.cs
+  s_8d7f0d52feb19c::t_444f2bed3376f1 1-100
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10TerminologySyncService.cs
+  s_8d7f0d52feb19c::t_c628d22d8d6178 35,41-42,48
+  s_8d7f0d52feb19c::t_bce733ba6eebdb 58
+  s_8d7f0d52feb19c::t_d385ee191629cd 73-74,77-78,86
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiCvxTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_f0255cd857037b 38,44-45,51,67
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiDcmTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_e4face1e92de8d 41,46-47,52,58,64
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_226978afae5453 41,47-48,54,60,72
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  s_8d7f0d52feb19c::t_b89e23dff74ed2 38,44-45,51,57,71
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd11TerminologySyncService.cs
+  s_8d7f0d52feb19c::t_00d97ceedef838 36,42-43,49,55,64
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcpc3TerminologySyncService.cs
+  s_8d7f0d52feb19c::t_c0fbdea3acda5a 29,35-36,42,48,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4afa6439a188163209b70209af390bd1c8f6ef2f",
+  "prompts": {},
+  "sessions": {
+    "s_8d7f0d52feb19c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d5fb9b0-a058-4375-922a-e7fddb889a64",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
