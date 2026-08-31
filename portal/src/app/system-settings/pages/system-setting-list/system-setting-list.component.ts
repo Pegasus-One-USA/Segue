@@ -14,6 +14,23 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/compone
 import { ToastService } from '../../../services/toast.service';
 import { terminologyCodeOf, generalSettingGroupOf } from '../../utils/terminology-setting-field';
 import { DialogService } from '../../../core/services/dialog.service';
+import { HapiTerminologyTableComponent } from '../../components/hapi-terminology-table/hapi-terminology-table.component';
+
+// These now render in their own dedicated table (HapiTerminologyTableComponent, above this generic
+// list) with grouped settings, Run Now, and History — excluded here so they don't appear twice.
+const HAPI_TERMINOLOGY_KEY_PATTERN = /^Terminology:\w+Hapi:/;
+
+// LOINC/NDC/RxNorm/SNOMED CT/UCUM's non-Hapi settings already have a proper dedicated settings page
+// each (Settings → System Settings → Terminology → ...) — the raw key/value rows here are a
+// redundant, worse-labeled third way to edit the same data, so they're hidden. LOINC's one setting
+// that genuinely matters to the HAPI sync too (DownloadApiUrl) now lives in the HAPI LOINC edit
+// modal instead (see HapiTerminologySystemRegistry.DownloadApiUrlSettingKey) — everything else in
+// LOINC's legacy group is either superseded by LoincHapi:* or unused by any sync code at all.
+const LEGACY_TERMINOLOGY_KEY_PATTERN = /^Terminology:(Loinc|Ndc|RxNorm|Snomed|Ucum):/;
+
+// Now has a dedicated inline Edit button in the new table's header card (it's the one setting
+// genuinely shared across all 13 rows) — hidden here so there isn't a second, redundant way to edit it.
+const BASE_URL_KEY = 'Terminology:BaseUrl';
 
 interface GroupHeaderRow {
   isGroupHeader: true;
@@ -40,6 +57,7 @@ type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow;
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatMenuModule,
+    HapiTerminologyTableComponent,
   ],
   templateUrl: './system-setting-list.component.html',
   styleUrls: ['./system-setting-list.component.scss'],
@@ -270,7 +288,8 @@ export class SystemSettingListComponent implements OnInit {
     this.loading.set(true);
     this.svc.getAll().subscribe({
       next: settings => {
-        this.settings.set(settings);
+        this.settings.set(settings.filter(s =>
+          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key) && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key) && s.key !== BASE_URL_KEY));
         this.loading.set(false);
 
         if (!this.collapseDefaultsApplied) {

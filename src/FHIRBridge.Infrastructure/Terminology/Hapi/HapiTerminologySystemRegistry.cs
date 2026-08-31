@@ -1,0 +1,125 @@
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FHIRBridge.Infrastructure.Terminology.Hapi;
+
+/// <summary>What kind of stored credential (if any) a HAPI terminology sync needs before it can run.
+/// LoincBasicAuth and UtsApiKey point at the exact same ProvisionedSecrets the legacy per-system
+/// Terminology tabs (LoincConfigurationService/SnomedConfigurationService/RxNormConfigurationService)
+/// already write — entering a credential via either surface satisfies both.</summary>
+public enum HapiCredentialKind
+{
+    None,
+    LoincBasicAuth,
+    UtsApiKey,
+}
+
+/// <summary>Normalized result of one sync run, since the 13 concrete Hapi*SyncResult records differ
+/// slightly in shape (only Loinc/Snomed/RxNorm/Icd10 carry a version/release string).</summary>
+public sealed record HapiSyncOutcome(int Count, string? Version, TimeSpan Duration);
+
+public sealed record HapiTerminologySystemDescriptor(
+    string Code,
+    string DisplayName,
+    HapiCredentialKind CredentialKind,
+    Func<IServiceProvider, CancellationToken, Task<HapiSyncOutcome>> RunAsync,
+    /// <summary>Set only for the systems whose HAPI sync actually reads a configurable download
+    /// endpoint (currently just LOINC, via the shared ILoincReleaseClient) — the legacy per-system
+    /// setting key to read/write, e.g. "Terminology:Loinc:DownloadApiUrl". Everything else the legacy
+    /// group holds (SchedulerEnabled/Frequency/ExecutionTime, FhirApiUrl, retry/timeout settings) is
+    /// either superseded by this system's own *Hapi:* settings or unused by any sync code at all.</summary>
+    string? DownloadApiUrlSettingKey = null)
+{
+    public string SettingsKeyPrefix => $"Terminology:{Code}Hapi";
+    public static readonly IReadOnlyList<string> FrequencyOptions = new[] { "Weekly", "Monthly" };
+}
+
+/// <summary>
+/// Single source of truth for the 13 HAPI-terminology-server sync systems — display name, credential
+/// requirement, and how to actually run one (resolving the matching IHapi{Code}TerminologySyncService and
+/// normalizing its result). Used by HapiTerminologyConfigurationService for both settings and Run Now.
+/// </summary>
+public sealed class HapiTerminologySystemRegistry
+{
+    private readonly IReadOnlyDictionary<string, HapiTerminologySystemDescriptor> _byCode;
+
+    public HapiTerminologySystemRegistry()
+    {
+        var all = new List<HapiTerminologySystemDescriptor>
+        {
+            new("Cvx", "CVX", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiCvxTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Dcm", "DCM", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiDcmTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Hcpcs", "HCPCS", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiHcpcsTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Icd10", "ICD-10-CM", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiIcd10TerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.ReleaseYear, r.Duration);
+            }),
+            new("Icd10Pcs", "ICD-10-PCS", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiIcd10PcsTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Icd11", "ICD-11 MMS", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiIcd11TerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Icpc3", "ICPC-3", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiIcpc3TerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Loinc", "LOINC", HapiCredentialKind.LoincBasicAuth, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiLoincTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
+            }, DownloadApiUrlSettingKey: "Terminology:Loinc:DownloadApiUrl"),
+            new("Mesh", "MeSH", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiMeshTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("Ndc", "NDC", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiNdcTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+            new("RxNorm", "RxNorm", HapiCredentialKind.UtsApiKey, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiRxNormTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
+            }),
+            new("Snomed", "SNOMED CT", HapiCredentialKind.UtsApiKey, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiSnomedTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
+            }),
+            new("Ucum", "UCUM", HapiCredentialKind.None, async (sp, ct) =>
+            {
+                var r = await sp.GetRequiredService<IHapiUcumTerminologySyncService>().SyncAsync(ct);
+                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+            }),
+        };
+
+        _byCode = all.ToDictionary(x => x.Code, x => x, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public IReadOnlyList<HapiTerminologySystemDescriptor> All => _byCode.Values.ToList();
+
+    public HapiTerminologySystemDescriptor? TryGet(string code) => _byCode.GetValueOrDefault(code);
+
+    public HapiTerminologySystemDescriptor Get(string code) =>
+        TryGet(code) ?? throw new InvalidOperationException($"Unknown terminology code system '{code}'.");
+}

@@ -1,0 +1,24 @@
+<div class="dialog-container">
+
+  <div class="dialog-header">
+    <h2>{{ data.displayName }} History</h2>
+  </div>
+
+  <mat-dialog-content>
+    <app-terminology-import-history
+      title="Import History"
+      subtitle="The most recent {{ data.displayName }} terminology-server syncs — manual and scheduled runs."
+      emptyMessage="No {{ data.displayName }} sync has been run yet."
+      countColumnLabel="Concepts"
+      [history]="history()"
+      [loading]="loading()"
+    ></app-terminology-import-history>
+  </mat-dialog-content>
+
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button type="button" (click)="dialogRef.close()">Close</button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

@@ -40,6 +40,10 @@
     }
   </div>
 
+  <!-- Terminology Servers: grouped settings, Run Now, and History for the 13 HAPI-terminology-server
+       sync systems — replaces the flat "Terminology:*Hapi:*" rows that used to render below. -->
+  <app-hapi-terminology-table></app-hapi-terminology-table>
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">
@@ -177,7 +181,10 @@
             </td>
           </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <!-- Column header row intentionally omitted — group headings + row-level labels already
+               identify each cell, and a bare "ACTIONS / KEY / VALUE / ..." row above collapsible
+               group headers read as redundant clutter. -->
+
           <tr mat-row *matRowDef="let row; columns: ['groupHeader']; when: isGroupHeaderRow" class="group-header-row"></tr>
           <tr mat-row *matRowDef="let row; columns: ['codeGroupHeader']; when: isCodeGroupHeaderRow" class="code-group-header-row"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedCols; when: isDataRow" class="data-row"></tr>

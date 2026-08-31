@@ -31,6 +31,7 @@ using FHIRBridge.Infrastructure.Scheduling;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
 using FHIRBridge.Infrastructure.Terminology;
+using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -508,6 +509,11 @@ public static class DependencyInjection
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
         services.AddHostedService<TerminologyImportBackgroundService>();
+        // Grouped settings/Run Now/history for the 13 HAPI-terminology-server sync systems — see
+        // HapiTerminologyConfigurationController. The registry is stateless (pure lookup + delegate
+        // closures resolved against whatever IServiceProvider is passed at call time), safe as a singleton.
+        services.AddSingleton<HapiTerminologySystemRegistry>();
+        services.AddScoped<IHapiTerminologyConfigurationService, HapiTerminologyConfigurationService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(

@@ -321,6 +321,17 @@ export const RXNORM_ENDPOINTS = {
   history: `${API_V1_BASE}/terminology/rxnorm/configuration/history`,
 };
 
+// ─── HAPI terminology server sync (HapiTerminologyConfigurationController — api/v1/terminology/hapi)
+// One row per code system (Cvx/Dcm/Hcpcs/Icd10/Icd10Pcs/Icd11/Icpc3/Loinc/Mesh/Ndc/RxNorm/Snomed/Ucum),
+// grouped settings + manual Run Now + history, shown on Settings → System Settings → General.
+const HAPI_TERMINOLOGY_BASE = `${API_V1_BASE}/terminology/hapi`;
+export const HAPI_TERMINOLOGY_ENDPOINTS = {
+  list: HAPI_TERMINOLOGY_BASE,
+  configuration: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}`,
+  runNow: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/run-now`,
+  history: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/history`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,

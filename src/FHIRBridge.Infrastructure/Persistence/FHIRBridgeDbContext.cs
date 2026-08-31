@@ -78,6 +78,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<UcumUnit> UcumUnits => Set<UcumUnit>();
     public DbSet<UcumVersion> UcumVersions => Set<UcumVersion>();
     public DbSet<UcumImportHistory> UcumImportHistory => Set<UcumImportHistory>();
+    public DbSet<HapiTerminologyImportHistory> HapiTerminologyImportHistory => Set<HapiTerminologyImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();

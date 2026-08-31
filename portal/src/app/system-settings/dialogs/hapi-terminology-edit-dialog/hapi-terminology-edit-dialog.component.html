@@ -1,0 +1,91 @@
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>tune</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>Edit {{ config.displayName }} Settings</h2>
+      <p>Scheduler and credentials for the {{ config.displayName }} HAPI terminology-server sync — saved together in one update.</p>
+    </div>
+  </div>
+
+  <!-- Form -->
+  <mat-dialog-content>
+
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <form [formGroup]="form" novalidate class="dialog-form">
+
+      <div class="form-field form-field--toggle">
+        <mat-slide-toggle formControlName="schedulerEnabled">
+          {{ form.get('schedulerEnabled')?.value ? 'Enabled' : 'Disabled' }}
+        </mat-slide-toggle>
+      </div>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Frequency</mat-label>
+        <mat-select formControlName="frequency">
+          @for (option of config.frequencyOptions; track option) {
+            <mat-option [value]="option">{{ option }}</mat-option>
+          }
+        </mat-select>
+        @if (hasError('frequency', 'required')) {
+          <mat-error>Frequency is required.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Execution time</mat-label>
+        <input matInput type="time" formControlName="executionTime" />
+        @if (hasError('executionTime', 'required')) {
+          <mat-error>Execution time is required.</mat-error>
+        }
+      </mat-form-field>
+
+      @if (hasDownloadApiUrl) {
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Download API URL</mat-label>
+          <input matInput formControlName="downloadApiUrl" placeholder="https://loinc.regenstrief.org/api/v1" autocomplete="off" />
+        </mat-form-field>
+      }
+
+      @if (credentialControls.length) {
+        <ng-container formGroupName="credentials">
+          @for (field of credentialControls; track field.name) {
+            <mat-form-field appearance="outline" class="form-field">
+              <mat-label>{{ field.label }}</mat-label>
+              <input
+                matInput
+                type="password"
+                [formControlName]="field.name"
+                [placeholder]="placeholderFor(field.hasValue)"
+                autocomplete="new-password"
+              />
+            </mat-form-field>
+          }
+        </ng-container>
+      }
+
+    </form>
+  </mat-dialog-content>
+
+  <!-- Actions -->
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-flat-button class="btn-save" [disabled]="saving()" (click)="save()">
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        }
+        Update
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>
