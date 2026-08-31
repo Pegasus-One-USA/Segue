@@ -19,7 +19,7 @@
     <!-- The global loader already shows this page is busy — no local spinner here. -->
   } @else {
     <div class="table-wrapper">
-      <table mat-table [dataSource]="configs()" class="data-table">
+      <table mat-table [dataSource]="filteredConfigs()" class="data-table">
 
         <ng-container matColumnDef="displayName">
           <th mat-header-cell *matHeaderCellDef>Code System</th>

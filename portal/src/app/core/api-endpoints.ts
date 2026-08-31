@@ -220,6 +220,7 @@ export const CORS_ORIGINS_ENDPOINTS = {
 export const SYSTEM_SETTINGS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/settings`,
   byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
+  batch: `${API_V1_BASE}/system/settings/batch`,
   decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
 };
 

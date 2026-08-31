@@ -2,14 +2,6 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialogModule } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
   HapiTerminologyConfiguration,
   HapiTerminologyConfigurationService,
@@ -23,24 +15,17 @@ export interface HapiTerminologyEditDialogData {
 
 /** Grouped Edit form for one HAPI-terminology-server sync system — scheduler fields always present,
  * plus a credential field per entry in config.credentials (LOINC: username+password; SNOMED
- * CT/RxNorm: one shared UTS API key). Single Update button saves everything in one call. */
+ * CT/RxNorm: one shared UTS API key). Single Update button saves everything in one call.
+ *
+ * Plain, hand-styled HTML inputs — no Angular Material — matching the convention used by
+ * GeneralSettingGroupDialogComponent and the Source Connections wizard forms, rather than the
+ * Material-based dialogs used for individual System Settings edits. */
 @Component({
   selector: 'app-hapi-terminology-edit-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    MatDialogModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
-    MatSlideToggleModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-  ],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './hapi-terminology-edit-dialog.component.html',
-  styleUrls: ['../../dialogs/system-setting-dialog/system-setting-dialog.component.scss'],
+  styleUrls: ['../general-setting-group-dialog/general-setting-group-dialog.component.scss'],
 })
 export class HapiTerminologyEditDialogComponent {
   private readonly svc = inject(HapiTerminologyConfigurationService);

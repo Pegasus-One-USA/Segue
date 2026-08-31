@@ -43,6 +43,22 @@ public sealed class SystemSettingsController : ControllerBase
         return Ok(setting);
     }
 
+    /// <summary>Saves multiple settings in one call — e.g. every key in a General Settings group
+    /// (AlertEvaluation:Enabled, AlertEvaluation:IntervalSeconds, ...) from one Edit dialog's single
+    /// Update button, instead of one PUT per field.</summary>
+    [HttpPut("batch")]
+    [ProducesResponseType(typeof(IReadOnlyList<SystemSettingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetBatch([FromBody] BatchSetSystemSettingsRequest request, CancellationToken cancellationToken)
+    {
+        var results = new List<SystemSettingDto>(request.Items.Count);
+        foreach (var item in request.Items)
+        {
+            results.Add(await _service.SetAsync(item.Key, item.Value, item.Description, cancellationToken));
+        }
+
+        return Ok(results);
+    }
+
     [HttpDelete("{key}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(string key, CancellationToken cancellationToken)

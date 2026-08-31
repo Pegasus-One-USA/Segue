@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
@@ -39,14 +39,23 @@ export class HapiTerminologyTableComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly settingsSvc = inject(ISystemSettingsService);
 
+  /** Bound to the parent page's shared search box, so one search filters both General Settings
+   *  groups and this table's rows instead of needing a second search field. */
+  readonly searchTerm = input('');
+
   readonly loading = signal(true);
   readonly configs = signal<HapiTerminologyConfiguration[]>([]);
+  readonly filteredConfigs = computed(() => {
+    const term = this.searchTerm().trim().toLowerCase();
+    if (!term) return this.configs();
+    return this.configs().filter(c => c.displayName.toLowerCase().includes(term) || c.code.toLowerCase().includes(term));
+  });
   readonly runningCodes = signal<Set<string>>(new Set());
   // Shared across every row below — not per-system, so it's shown once here rather than repeated
   // in each row/dialog. Same key the old Terminology tabs' FHIR API URL points at too.
   readonly baseUrlSetting = signal<SystemSetting | null>(null);
 
-  readonly displayedCols = ['displayName', 'schedulerEnabled', 'frequency', 'executionTime', 'lastRunUtc', 'actions'];
+  readonly displayedCols = ['actions', 'displayName', 'schedulerEnabled', 'frequency', 'executionTime', 'lastRunUtc'];
 
   ngOnInit(): void {
     this.load();
@@ -121,6 +130,14 @@ export class HapiTerminologyTableComponent implements OnInit {
   }
 
   runNow(config: HapiTerminologyConfiguration): void {
+    const missing = config.credentials.filter((c) => !c.hasValue);
+    if (missing.length) {
+      this.toast.error(
+        `${config.displayName} is missing ${missing.map((c) => c.label).join(' and ')} — open Edit to set ${missing.length === 1 ? 'it' : 'them'} before running a sync.`,
+      );
+      return;
+    }
+
     this.setRunning(config.code, true);
     this.svc.runNow(config.code).subscribe({
       next: () => {

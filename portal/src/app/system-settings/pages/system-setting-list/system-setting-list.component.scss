@@ -132,6 +132,10 @@
   font-weight: 400;
 }
 
+.muted {
+  color: var(--color-muted);
+}
+
 // ─── Action menu ────────────────────────────────────────────────────────────
 .actions-cell {
   display: flex;
