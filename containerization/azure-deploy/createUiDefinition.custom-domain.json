@@ -6,7 +6,7 @@
     "config": {
       "isWizard": true,
       "basics": {
-        "description": "Step 2 of the FHIRBridge custom-domain flow. Binds a domain (and, once DNS is ready, a free Azure-managed SSL certificate) to any of the 3 public-facing apps from an already-deployed FHIRBridge stack. All 3 tabs below are independently optional - leave any/all blank to skip that app entirely this run. There is no certificate checkbox: run this SAME deploy (same name prefix, same domain(s)) TWICE. The first run registers the hostname only and shows the CNAME/TXT records to create; once you've created those and DNS has propagated, run this exact same deploy again - it detects the domain is already registered and automatically creates + binds the managed certificate instead.",
+        "description": "Step 2 of the FHIRBridge custom-domain flow. Binds a domain (hostname + free Azure-managed SSL certificate) to any of the 3 public-facing apps from an already-deployed FHIRBridge stack, in ONE deploy - no checkbox, no need to run this twice. All 3 tabs below are independently optional - leave any/all blank to skip that app entirely this run. IMPORTANT: create the CNAME + asuid TXT records shown per tab at your DNS provider and wait for them to propagate BEFORE deploying - Azure validates DNS as part of this same deploy and rejects it if the records are not there yet (InvalidCustomHostNameValidation); just wait and redeploy once they resolve.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App"
@@ -75,7 +75,7 @@
             "visible": "[not(empty(steps('fhirbridgeAppStep').domain))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'Create these records and wait for them to propagate BEFORE deploying - this one deploy registers the hostname, creates the certificate, and binds it, all together. Deploying before DNS is ready fails cleanly (InvalidCustomHostNameValidation) - just wait and redeploy once it resolves.')]"
             }
           }
         ]
@@ -126,7 +126,7 @@
             "visible": "[not(empty(steps('demoAppStep').domain))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('demoAppStep').domain, '   ->   ', first(split(last(split(string(steps('demoAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'Create these records and wait for them to propagate BEFORE deploying - this one deploy registers the hostname, creates the certificate, and binds it, all together. Deploying before DNS is ready fails cleanly (InvalidCustomHostNameValidation) - just wait and redeploy once it resolves.')]"
             }
           }
         ]
@@ -177,7 +177,7 @@
             "visible": "[not(empty(steps('hapiTerminologyStep').domain))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'First deploy with this domain registers the hostname only. Once the records above are created and propagated, run this exact same deploy again (same domain) to create and bind the managed SSL certificate.')]"
+              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('hapiTerminologyStep').domain, '   ->   ', first(split(last(split(string(steps('hapiTerminologyStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'Create these records and wait for them to propagate BEFORE deploying - this one deploy registers the hostname, creates the certificate, and binds it, all together. Deploying before DNS is ready fails cleanly (InvalidCustomHostNameValidation) - just wait and redeploy once it resolves.')]"
             }
           }
         ]

@@ -246,7 +246,7 @@
             "name": "imageTag",
             "type": "Microsoft.Common.TextBox",
             "label": "Version to install",
-            "defaultValue": "v1.0.0",
+            "defaultValue": "v1.2.1",
             "toolTip": "The published version tag to deploy (see the vendor registry's release list for available versions).",
             "constraints": {
               "required": true

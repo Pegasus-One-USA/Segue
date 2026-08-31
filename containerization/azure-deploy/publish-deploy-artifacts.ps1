@@ -2,13 +2,16 @@
 #
 # Uploads main.json + createUiDefinition.json (Step 1: full-stack deploy) and custom-domain.json +
 # createUiDefinition.custom-domain.json (Step 2: domain/certificate binder - see
-# custom-domain.bicep), then prints both Portal deep-links. Step 2 has no certificate checkbox at
-# all - run the SAME deploy (same name prefix, same domain(s)) twice: the first run registers the
-# hostname only; once its DNS records have propagated, running the exact same deploy again detects
-# the domain is already registered and automatically creates + binds the managed certificate
-# instead (custom-domain.bicep auto-detects this per app from live state). Each tab in the wizard
-# shows each app's name, default URL, and live domain-verification ID (Microsoft.Solutions.
-# ArmApiControl), plus which of the two actions this deploy is about to take.
+# custom-domain.bicep), then prints both Portal deep-links. Step 2 is ONE deploy per domain: it
+# registers the hostname, creates the managed certificate, and binds it, all in that single
+# deployment (internally sequenced via two module calls so Azure only ever sees "certificate
+# created" after "hostname added" has actually completed). The one thing you still do yourself
+# first: create the CNAME + asuid TXT records at your DNS provider and wait for them to propagate -
+# Azure validates DNS as part of this same deploy and rejects it if they are not ready yet
+# (InvalidCustomHostNameValidation); just wait and redeploy once they resolve. Each tab in the
+# wizard shows each app's name, default URL, and live domain-verification ID (Microsoft.Solutions.
+# ArmApiControl) so you never need a throwaway prior deploy just to learn those values.
+# containerization/scripts/auto-bind-custom-domain.ps1|sh automates the DNS-wait + deploy for you.
 # Requires: az login. Tries --auth-mode login (Storage Blob Data Contributor RBAC role) first,
 # then falls back to --auth-mode key (account-key access, via Contributor/Owner's key-list
 # permission - a separate, control-plane permission path from the Blob Data RBAC role above, and
@@ -76,7 +79,7 @@ Write-Host ""
 Write-Host "Step 1 - Deploy-to-Azure URL (full stack):" -ForegroundColor Cyan
 Write-Host $DeployUrl
 Write-Host ""
-Write-Host "Step 2 - Custom domain / certificate binding URL (run after step 1; run it again with the same domain(s) once DNS has propagated to bind the certificate):" -ForegroundColor Cyan
+Write-Host "Step 2 - Custom domain / certificate binding URL (run once per domain, after step 1 and after DNS has propagated):" -ForegroundColor Cyan
 Write-Host $CustomDomainDeployUrl
 Write-Host ""
 Write-Host "Opened step 1 in browser (if supported)."

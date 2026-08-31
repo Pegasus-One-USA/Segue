@@ -3,14 +3,20 @@
 For clients and operators. Fixes the Marketplace/Deploy-to-Azure gap where a single-shot
 domain+certificate deploy failed with `RequireCustomHostnameInEnvironment`.
 
-## Why two phases?
+## Why the hostname/cert ordering matters
 
 Azure managed certificates require the **hostname to already exist** on a Container App in the
 environment. Creating the cert first fails. Correct order:
 
 1. Register hostname (`bindingType: Disabled`)
-2. Create DNS (CNAME + `asuid` TXT)
-3. Create managed cert + bind (`SniEnabled`)
+2. Create managed cert + bind (`SniEnabled`) — requires step 1 to have already completed
+
+DNS (CNAME + `asuid` TXT) has to be ready **before step 1**, not just before step 2 — Azure
+validates the TXT record the moment you try to register the hostname at all, certificate or not.
+That's the one thing that can't be automated away: you get the verification ID from Step 1's
+outputs (no domain needs to be set for that), create the DNS records yourself, and wait for them to
+propagate — but once they have, `custom-domain.bicep` does steps 1 and 2 above **in one deploy**,
+sequencing them internally so Azure never sees them out of order.
 
 ## Path A — custom-domain.bicep (preferred — deployed on its own, after main.bicep)
 
@@ -32,21 +38,29 @@ validator rejects at deploy time — this doesn't show up under `az deployment g
 on a real deploy).
 
 There is ONE Deploy-to-Azure wizard for this template (`createUiDefinition.custom-domain.json`) —
-no certificate checkbox or separate link at all. `custom-domain.bicep` auto-detects, per app, which
-phase to run: if the domain you give isn't already in that app's `ingress.customDomains`, it
-registers the hostname only; if it's already there (from an earlier run), it automatically creates
-and binds the managed certificate instead. So the whole flow is just **run the same deploy twice**
-— same name prefix, same domain(s) — with DNS propagation in between. The wizard has a name-prefix
-field in Basics plus 3 tabs (one per app, `isWizard: true` so Basics must be completed before any
-tab renders). Azure shows a one-time "Do you trust the authors code?" prompt the first time any
-template using a live API lookup like this is opened — expected, not a bug, safe to accept.
+no certificate checkbox at all, and (as of the redesign below) only ONE deploy per domain, not two.
+`custom-domain.bicep` always does the full sequence — register hostname, create certificate, bind
+it — internally ordered via two module calls (`registerHostnames` then `bindCertificates`, the
+second explicitly `dependsOn` the first) so Azure's API only ever sees "certificate created" after
+"hostname added" has actually completed, which is the one ordering constraint Azure enforces. The
+wizard has a name-prefix field in Basics plus 3 tabs (one per app, `isWizard: true` so Basics must
+be completed before any tab renders). Azure shows a one-time "Do you trust the authors code?"
+prompt the first time any template using a live API lookup like this is opened — expected, not a
+bug, safe to accept.
 
-Each tab shows, in order: the app's name; a raw JSON dump of the live app (one
-`Microsoft.Solutions.ArmApiControl` GET per tab) with a note to look for `"fqdn"` (the CNAME target)
-and `"customDomainVerificationId"` (the TXT value) inside it; the domain textbox; and, once you type
-a domain, the exact CNAME/TXT record **names** to create (you pair those names with the values you
-found in the raw dump above). It's a raw dump rather than neatly-parsed fields for a concrete
-reason — see point 3 below.
+The one thing that genuinely cannot be folded into this single deploy: **DNS must already be
+propagated before you run it at all** — Azure validates the `asuid` TXT record the moment the
+hostname is registered, not just at certificate-creation, so there is no way to defer that check to
+later within the same deployment. But you don't need a throwaway prior deploy to learn the
+verification ID for that TXT record — `main.bicep`'s own outputs
+(`fhirbridgeAppDomainVerificationId` / `demoAppDomainVerificationId` /
+`hapiTerminologyDomainVerificationId`) already expose it unconditionally, the moment the app
+exists, whether or not any domain was ever set on that deploy.
+
+Each tab shows, in order: the app's name; the app's live default URL and domain-verification ID (one
+`Microsoft.Solutions.ArmApiControl` GET per tab, parsed out with a string-search expression — see
+point 3 below for why that's needed instead of plain property access); the domain textbox; and, once
+you type a domain, the exact CNAME/TXT record **names and values** to create.
 
 **Bug history worth knowing if this ever needs revisiting** (three real, independently-diagnosed
 bugs stacked on top of each other — worth reading in order if this area breaks again):
@@ -71,12 +85,18 @@ bugs stacked on top of each other — worth reading in order if this area breaks
    nested `tryGet()` calls). The practical rule this engine enforces: **at most one property access
    is honored immediately after a function-call result like `steps(...)`** — anything chained
    beyond that silently nulls out, in this schema version/control combination at least. There is no
-   known workaround for extracting a *specific* nested field this way. The only reliable pattern
-   found is `string(steps('step').controlName)` — the WHOLE control result, zero further chaining —
-   which is why the current wizard shows a raw dump instead of parsed `fqdn`/`verificationId` values.
-   If a cleaner display is ever wanted, revisit this constraint first (e.g. test whether a `variables`
-   section or an intermediate `Microsoft.Common.TextBlock` reference changes what's honored) before
-   attempting chained access again.
+   workaround for reading a specific nested field by property-chaining. The fix that actually works:
+   dump the WHOLE control result as one string (`string(steps('step').appDetailsApi)` — zero
+   chaining, so it's unaffected by the bug above) and pull a specific field out of that text with
+   string-search functions instead of property access — e.g.
+   `first(split(last(split(string(steps('step').appDetailsApi), '"fqdn":"')), '"'))` splits on the
+   `"fqdn":"` marker, takes everything after it (`last(split(...))`), then cuts it back off at the
+   next `"` (`first(split(...))`). This is what each tab's `liveInfo`/`dnsRecords` elements in
+   `createUiDefinition.custom-domain.json` use for `fqdn` and `customDomainVerificationId` — string
+   operations on the dumped text sidestep the chaining limit entirely, since nothing is being
+   accessed as a property. It also closed the earlier security concern: an unprettified raw dump was
+   putting plaintext env-var secrets (SQL/Redis passwords) on screen; the string-search approach only
+   ever surfaces the two specific fields asked for.
 4. Bicep-only syntax sugar (the `x => expr` arrow-lambda short form, `.?prop ?? default`
    safe-navigation) does NOT survive into raw createUiDefinition JSON — that's evaluated by a
    separate, more limited engine, so lambdas must use the explicit
@@ -85,41 +105,57 @@ bugs stacked on top of each other — worth reading in order if this area breaks
    sugar down to). Moot for the current wizard (no chaining left to need this), but relevant if
    nested-field extraction is ever revisited per point 3.
 
-### Run 1 — Register hostname(s)
+### Get the DNS values (no deploy needed)
 
-1. Open the Deploy-to-Azure link (`publish-deploy-artifacts.ps1`/`.sh` prints it).
-2. Fill in `namePrefix` (e.g. `segue12`), then whichever of the 3 tabs' domain fields you want —
-   leave the rest blank to skip those apps this run.
-3. In each tab's raw app-details dump, find `"fqdn"` and `"customDomainVerificationId"`.
-4. At your DNS provider create, per app:
-   - **CNAME** `your.domain` → the `fqdn` value
-   - **TXT** `asuid.your.domain` → the `customDomainVerificationId` value
-5. Deploy (this registers the hostname(s) only — no certificate yet, regardless of whether DNS is
-   ready). Wait for DNS propagation (minutes to hours). Check CAA if certs fail later.
+The verification ID and default FQDN exist the moment the app does — no need to deploy
+`custom-domain.bicep` at all just to learn them. Any of these work:
 
-### Run 2 — Bind managed SSL
+- `main.bicep`'s own deployment outputs (`fhirbridgeAppDomainVerificationId`, `fhirbridgeAppUrl`,
+  etc.) from Step 1.
+- `az containerapp show --name <prefix>-app --resource-group <rg> --query
+  "{fqdn:properties.configuration.ingress.fqdn, verificationId:properties.customDomainVerificationId}"`
+- `containerization/scripts/discover-custom-domains.ps1|sh` (prompts for prefix, lists all 3 apps).
+- The Step 2 wizard itself shows both live per tab, before you even fill in a domain.
 
-1. Open the **exact same** Deploy-to-Azure link again, with the **same** `namePrefix` and the
-   **same** domain(s) in the same tabs.
-2. Deploy — since each domain is now already registered on its app, `custom-domain.bicep`
-   auto-detects this and creates + binds the managed certificate(s) instead.
-3. Open `https://your.domain` and confirm the padlock, for each app.
+### Create DNS, then deploy once
 
-If you deploy Run 2 before DNS has actually propagated, Azure rejects it with
-`InvalidCustomHostNameValidation` (TXT record not found) — just wait and re-run once it resolves.
+1. At your DNS provider create, per app you want a domain on:
+   - **CNAME** `your.domain` → the app's default FQDN
+   - **TXT** `asuid.your.domain` → the app's verification ID
+2. Wait for propagation (minutes to hours — check with `nslookup`/`dig`, or just try the deploy and
+   let it tell you if it's not ready yet).
+3. Open the Deploy-to-Azure link (`publish-deploy-artifacts.ps1`/`.sh` prints it), fill in
+   `namePrefix` and whichever of the 3 tabs' domain fields you want, and deploy. One deploy
+   registers the hostname, creates the certificate, and binds it for every domain you set.
+4. Open `https://your.domain` and confirm the padlock, for each app.
 
-### CLI example (same command both times — set more domain params to do several apps at once)
+If DNS was not actually ready, Azure rejects the deploy with `InvalidCustomHostNameValidation` (TXT
+record not found) — wait and redeploy once it resolves; redeploying is always safe, including for a
+domain that's already fully bound (idempotent no-op, confirmed live — the certificate is reused,
+not recreated, and the app stays reachable throughout).
+
+### CLI example
 
 ```bash
-# Run 1 - domain not yet registered, so this registers the hostname only
-az deployment group create -g <rg> -f custom-domain.bicep \
-  -p namePrefix=segue12 hapiTerminologyDomain=term.example.com
-
-# After DNS is ready — Run 2, the EXACT same command: it detects the domain is already registered
-# and automatically creates + binds the managed certificate instead
 az deployment group create -g <rg> -f custom-domain.bicep \
   -p namePrefix=segue12 hapiTerminologyDomain=term.example.com
 ```
+
+### Automating the DNS wait
+
+`auto-bind-custom-domain.ps1`/`.sh` (in `containerization/scripts/`) does the manual "check DNS,
+wait, then deploy" for you: reads each app's FQDN/verification ID directly (no deploy needed for
+that), prints the DNS records, polls DNS itself until they resolve, then deploys
+`custom-domain.bicep` once:
+
+```powershell
+.\containerization\scripts\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue12 `
+  -HapiTerminologyDomain term.example.com
+```
+
+Drives `custom-domain.bicep` itself (not raw `az containerapp hostname` commands), so it can't hit
+the IaC-drift problem Path B below has. Safe to re-run — a domain that's already bound is reported
+and skipped without deploying anything.
 
 ### main.bicep's own domain parameters (fallback, not recommended)
 
@@ -164,6 +200,9 @@ After this domain flow is validated live:
 
 ## Do not
 
-- Check “Bind SSL” on the first domain deploy for a brand-new hostname
+- Deploy Path A (`custom-domain.bicep` / the Step 2 wizard) before DNS (CNAME + `asuid` TXT) has
+  actually propagated — it fails cleanly with `InvalidCustomHostNameValidation`, but there's no way
+  to skip that wait
 - Test in subscriptions other than the agreed Ragu / Sponsorship test directory
-- Leave custom domains out of template params after binding them with the script
+- Leave custom domains out of template params after binding them with the script (Path B) or
+  Terraform (Path C)
