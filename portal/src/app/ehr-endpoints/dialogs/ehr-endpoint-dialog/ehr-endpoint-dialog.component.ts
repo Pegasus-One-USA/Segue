@@ -20,7 +20,7 @@ export const EHR_VENDOR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'Cerner',             label: 'Cerner (Oracle Health)' },
   { value: 'Athenahealth',       label: 'Athenahealth' },
   { value: 'Allscripts',         label: 'Allscripts (Veradigm)' },
-  { value: 'Healow',             label: 'Healow (eClinicalWorks)' },
+  { value: 'Healow',             label: 'eCW (eClinicalWorks)' },
   { value: 'MeditechGreenfield', label: 'MEDITECH Greenfield' },
   { value: 'GenericFhir',        label: 'Generic FHIR R4' },
   { value: 'Hl7v2',              label: 'HL7 v2 / MLLP' },

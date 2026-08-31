@@ -55,7 +55,7 @@
              need yet. Always visible (no New/Existing toggle) — leaving it unselected just means "New Source". -->
         @if (showSourcePicker()) {
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-existingConnection">Existing {{ vendor() }} Connection</label>
+            <label class="eaf-label" for="eaf-existingConnection">Existing {{ displayVendor() }} Connection</label>
             <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
                 <select id="eaf-existingConnection" class="eaf-select"
@@ -76,7 +76,7 @@
               }
             </div>
             @if (!loadingExisting() && existingConnections().length === 0) {
-              <p class="eaf-hint">No existing {{ vendor() }} source connections found — configure a new one below.</p>
+              <p class="eaf-hint">No existing {{ displayVendor() }} source connections found — configure a new one below.</p>
             } @else {
               <p class="eaf-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</p>
             }
@@ -94,7 +94,7 @@
 
         <!-- Epic Audience | Environment -->
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
-          <label class="eaf-label" for="eaf-audience">Epic Audience <span class="eaf-req">*</span></label>
+          <label class="eaf-label" for="eaf-audience">Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
             <select id="eaf-audience" class="eaf-select" formControlName="audience">
               <option value="provider-ehr-launch" [disabled]="isAudienceDisabled('provider-ehr-launch')">Provider EHR Launch</option>
@@ -112,8 +112,8 @@
           } @else {
             <p class="eaf-hint">Patient-facing app with patient-context scopes.</p>
           }
-          @if (isAudienceDisabled('provider-standalone') || isAudienceDisabled('provider-ehr-launch')) {
-            <p class="eaf-hint">Provider Standalone and Provider EHR Launch are pending athenahealth provider sandbox credentials.</p>
+          @if (disabledAudienceHint()) {
+            <p class="eaf-hint">{{ disabledAudienceHint() }}</p>
           }
         </div>
 
@@ -121,7 +121,7 @@
           <label class="eaf-label" for="eaf-environment">Environment <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
             <select id="eaf-environment" class="eaf-select" formControlName="environment">
-              <option value="sandbox">Epic Sandbox</option>
+              <option value="sandbox">Sandbox</option>
               <option value="non-production">Customer Non-Production</option>
               <option value="production">Customer Production</option>
             </select>

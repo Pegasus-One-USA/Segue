@@ -32,7 +32,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'epic',
     'generic-fhir',
     'athena',
-    // Phase 2+: 'cerner', 'allscripts', 'healow', 'meditech', 'hl7v2', 'sample'
+    'healow',
+    // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [

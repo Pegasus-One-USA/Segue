@@ -44,12 +44,16 @@ public sealed class FhirSourceClientFactory : IFhirSourceClientFactory
         new(RuntimeSourceType.Sample, typeof(SampleFhirSourceClient)),
         new(RuntimeSourceType.GenericFhir, typeof(EpicFhirSourceClient)),
         new(RuntimeSourceType.Athenahealth, typeof(AthenahealthFhirSourceClient)),
-        // GATED (SQL/CSV phase): only Epic + Sample + GenericFhir sources are enabled. The other vendors reuse the
-        // same paginated search client (the access-token grant is selected by the composite token provider per
-        // source); re-enable them here once the generic Source hierarchy + ApplicationType axis land.
+        // eClinicalWorks (Healow) — Patient application type only so far (see VENDOR_DISABLED_AUDIENCES in the
+        // portal). No eCW-specific request headers/query params are confirmed yet, so this reuses the same
+        // paginated search/retry/throttle client as Epic/GenericFhir, just under its own SourceDisplayName for
+        // correct log/error messages — see EClinicalWorksFhirSourceClient.
+        new(RuntimeSourceType.Healow, typeof(EClinicalWorksFhirSourceClient)),
+        // GATED (SQL/CSV phase): only Epic + Sample + GenericFhir + Athenahealth + Healow sources are enabled. The
+        // other vendors reuse the same paginated search client (the access-token grant is selected by the composite
+        // token provider per source); re-enable them here once the generic Source hierarchy + ApplicationType axis land.
         // new(RuntimeSourceType.Cerner, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.Allscripts, typeof(EpicFhirSourceClient)),
-        // new(RuntimeSourceType.Healow, typeof(EpicFhirSourceClient)),
         // new(RuntimeSourceType.MeditechGreenfield, typeof(EpicFhirSourceClient))
     ];
 

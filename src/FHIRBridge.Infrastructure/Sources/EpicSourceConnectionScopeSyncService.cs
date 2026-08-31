@@ -69,7 +69,12 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         var workflows = await _workflowStore.ListAsync(cancellationToken);
         var usedResourceTypes = GetUsedResourceTypes(workflows, sourceConnectionId);
 
-        var scopeVersion = isAthenahealthBackend
+        // eClinicalWorks (Healow) has the same hard v1-only requirement as athenahealth (confirmed against a live
+        // authorize attempt, which eCW rejected with invalid_scope for a v2/.rs resource scope) — without this,
+        // DetectScopeVersionFromExistingScopes below just re-derives "v2" from whatever .rs scope is already
+        // stored and re-persists it unchanged on every workflow save that touches this connection, permanently
+        // perpetuating a wrong scope no amount of re-saving the connection's own wizard form can ever break out of.
+        var scopeVersion = isAthenahealthBackend || sourceConnection.SourceSystemType == SourceSystemType.Healow
             ? "v1"
             : DetectScopeVersionFromExistingScopes(sourceConnection.Authentication.Scopes);
         var generated = _scopeGenerator.Generate(
