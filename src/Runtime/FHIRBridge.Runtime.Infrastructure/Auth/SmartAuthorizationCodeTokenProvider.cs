@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -6,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Web;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -199,7 +201,32 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
         var codeVerifier = Pkce.CreateCodeVerifier();
         var isEhrLaunch = launch is not null;
+
+        // eClinicalWorks (Healow) deviates from the standard SMART authorize request in two confirmed ways: no v2
+        // granular resource scopes, and a mandatory practice_code parameter — confirmed against the working
+        // D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/practice_code). That same
+        // reference sends PKCE (code_challenge/code_challenge_method) unconditionally and it is accepted, which
+        // disproves the earlier "eCW rejects PKCE" assumption this file used to carry — PKCE is now sent for every
+        // vendor, including Healow (see the unconditional block below). Every ApplicationType strategy (Patient/
+        // Standalone/EhrLaunch) delegates to THIS one vendor-neutral provider regardless of vendor (see
+        // PatientApplicationStrategy etc.), so the remaining Healow-specific behavior must be checked here directly
+        // via source.SourceType rather than as a virtual hook a vendor subclass would override — a vendor subclass
+        // (e.g. HealowAuthorizationCodeTokenProvider) is never actually instantiated for those strategies.
+        var isHealow = source.SourceType == RuntimeSourceType.Healow;
+
         var resolvedScope = ResolveScopes(source, isEhrLaunch);
+        if (isHealow)
+        {
+            // eCW's authorize endpoint rejects a SMART v2 granular scope suffix (patient/Patient.rs) with
+            // invalid_scope. Rewrite every resource scope's suffix to v1's coarse ".read" regardless of the
+            // SourceConnection's own configured/detected/persisted scope version, so an existing eCW connection
+            // saved with v2 scopes doesn't need to be re-saved by an admin to work. Non-resource scopes (openid,
+            // fhirUser, offline_access, launch/patient, ...) have no dot suffix and pass through unchanged.
+            // offline_access is kept only for EHR launch (Provider EMR needs the refresh token); Patient/Standalone
+            // still drop it — see NormalizeHealowScope.
+            resolvedScope = NormalizeHealowScope(resolvedScope, isEhrLaunch: isEhrLaunch);
+        }
+
         _logger.LogInformation(
             "[Step 4/6] {Provider} BuildAuthorizationRequest: sourceConnectionId={SourceConnectionId} " +
             "applicationType={ApplicationType} hasCallerId={HasCallerId} inputScopes=[{InputScopes}] " +
@@ -213,8 +240,21 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         query["redirect_uri"] = redirectUri;
         query["scope"] = resolvedScope;
         query["state"] = state;
-        query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
-        query["code_challenge_method"] = "S256";
+
+        // eClinicalWorks (Healow) requires practice_code alongside aud — confirmed against the working
+        // D:\FHIR\RnD\ECW_Net reference client. Derived from source.BaseUrl's last path segment, which by this
+        // point already reflects a resolved EhrEndpoint's own FhirBaseUrl when one applies (see
+        // InteractiveSourceAuthorizationService.StartStandaloneCoreAsync's `baseUrl = ehrEndpoint?.FhirBaseUrl ??
+        // sourceConnection.BaseUrl`) — eCW deploys its FHIR API per-practice as /fhir/r4/{practiceCode}, so no
+        // separate config field is needed.
+        if (isHealow)
+        {
+            var practiceCode = ExtractHealowPracticeCode(source.BaseUrl);
+            if (!string.IsNullOrWhiteSpace(practiceCode))
+            {
+                query["practice_code"] = practiceCode;
+            }
+        }
 
         // Epic (and SMART generally) require the authorize request's audience to equal the FHIR base URL — omitting it
         // is the most common cause of a rejected launch.
@@ -222,6 +262,13 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         {
             query["aud"] = source.BaseUrl;
         }
+
+        // PKCE (RFC 7636) — sent for every vendor, including eClinicalWorks: the working ECW_Net reference client
+        // sends code_challenge/code_challenge_method unconditionally against the same real eCW sandbox and it is
+        // accepted, so there is no vendor exception here (a previous version of this file wrongly assumed eCW
+        // rejected PKCE).
+        query["code_challenge"] = Pkce.CreateS256Challenge(codeVerifier);
+        query["code_challenge_method"] = "S256";
 
         // EHR launch: forward the opaque launch token so the EHR restores the patient/encounter context.
         if (!string.IsNullOrWhiteSpace(launch))
@@ -232,6 +279,76 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         var separator = source.AuthorizationEndpoint!.Contains('?') ? "&" : "?";
         var authorizationUrl = $"{source.AuthorizationEndpoint}{separator}{query}";
         return new SmartAuthorizationRequest(authorizationUrl, codeVerifier, state);
+    }
+
+    // See the eCW-specific block in BuildAuthorizationRequest above. Rewrites every "prefix/Type.<version-suffix>"
+    // resource scope to "prefix/Type.read"; scopes with no dot suffix (openid, fhirUser, launch/patient, ...) pass
+    // through unchanged. For the Patient/Standalone flows it also drops "offline_access": the working
+    // D:\FHIR\RnD\ECW_Net reference client (same real eCW sandbox, same client_id/practice_code) never requests it
+    // for patient access, and that app registration is not confirmed for offline/refresh access, so requesting it
+    // anyway is a plausible independent cause of invalid_scope.
+    //
+    // EHR launch (Provider EMR) is the exception (<paramref name="keepOfflineAccess"/> = true): the eCW Provider EMR
+    // app IS registered with "Refresh Token = Yes / offline_access", and an end-to-end POC (poc/ecw-ehr-launch-poc)
+    // confirmed the token endpoint returns a refresh_token for it. Dropping offline_access there would leave the
+    // provider session unable to silently refresh (Describe().SupportsRefreshToken = true relies on it). Guarded on
+    // the flow, so the Patient/Standalone behavior above is unchanged.
+    private static string NormalizeHealowScope(string resolvedScope, bool isEhrLaunch)
+    {
+        var scopes = resolvedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < scopes.Length; i++)
+        {
+            var scope = scopes[i];
+            var slashIndex = scope.IndexOf('/');
+            if (slashIndex < 0)
+            {
+                continue;
+            }
+
+            var afterSlash = scope[(slashIndex + 1)..];
+            var dotIndex = afterSlash.LastIndexOf('.');
+            if (dotIndex < 0)
+            {
+                continue;
+            }
+
+            scopes[i] = $"{scope[..(slashIndex + 1 + dotIndex)]}.read";
+        }
+
+        return string.Join(' ', scopes.Where(scope =>
+        {
+            // Patient/Standalone: drop offline_access (see remarks). EHR launch keeps it (refresh token).
+            if (!isEhrLaunch && string.Equals(scope, "offline_access", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // EHR launch: drop openid/fhirUser. The eCW Provider EMR app is registered with OpenID = No, so
+            // requesting those SMART OpenID-Connect scopes makes eCW's authorize endpoint return invalid_scope
+            // (confirmed end-to-end — the launch failed with invalid_scope until they were removed). Scope
+            // generation (ScopeGeneratorService) adds openid/fhirUser for every interactive audience, so this must
+            // be stripped here at request time to survive a re-save. Patient flow is untouched (isEhrLaunch=false).
+            if (isEhrLaunch && (string.Equals(scope, "openid", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scope, "fhirUser", StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    // See the practice_code block in BuildAuthorizationRequest above. Null when the base URL isn't
+    // configured/parseable yet (e.g. a source still being set up), so no blank practice_code is ever sent.
+    private static string? ExtractHealowPracticeCode(string? baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl) || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : null;
     }
 
     /// <summary>
@@ -311,17 +428,25 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             }
 
             string? practitionerId = null;
+            string? patientFromIdToken = null;
             if (!string.IsNullOrWhiteSpace(token.IdToken))
             {
-                var fhirUser = await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
+                var (fhirUser, idTokenPatient) = await ValidateIdTokenAsync(source, token.IdToken!, cancellationToken);
                 practitionerId = ExtractPractitionerId(fhirUser);
+                patientFromIdToken = idTokenPatient ?? ExtractPatientId(fhirUser);
             }
 
-            // token.Patient is a FHIR resource id, not logged in full elsewhere in this line — only its presence is
-            // logged (never the value) to avoid writing patient identifiers into the log stream.
+            // Some SMART-on-FHIR EHRs don't surface `patient` at the top level of the token response for a Patient-
+            // context app — only inside the id_token's own claims (either a bare `patient` claim, or the `fhirUser`
+            // reference itself pointing at a Patient rather than a Practitioner). Only ever used when the top-level
+            // field is absent, so this has no effect on a vendor (Epic, athenahealth) that already returns it there.
+            var resolvedPatient = !string.IsNullOrWhiteSpace(token.Patient) ? token.Patient : patientFromIdToken;
+
+            // resolvedPatient is a FHIR resource id, not logged in full elsewhere in this line — only its presence
+            // is logged (never the value) to avoid writing patient identifiers into the log stream.
             _logger.LogInformation(
                 "[Step 6/6] {Provider} {Action} succeeded: grantedScope=\"{GrantedScope}\" hasPatientContext={HasPatientContext} expiresInSeconds={ExpiresInSeconds}",
-                ProviderName, action, token.Scope, !string.IsNullOrWhiteSpace(token.Patient), token.ExpiresInSeconds);
+                ProviderName, action, token.Scope, !string.IsNullOrWhiteSpace(resolvedPatient), token.ExpiresInSeconds);
 
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;
             var stored = new StoredOAuthToken(
@@ -329,7 +454,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
                 string.IsNullOrWhiteSpace(token.RefreshToken) ? fallbackRefreshToken : token.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(expiresIn),
                 token.Scope,
-                token.Patient,
+                resolvedPatient,
                 source.TokenEndpoint,
                 // By the time this runs, source.BaseUrl already carries whichever URL the caller actually issued
                 // this session against (the connection's own, or a resolved hospital/organization EhrEndpoint
@@ -346,7 +471,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // source.TargetPatientId was set to look the stored token up in the first place). This is what lets a
             // second, separately-triggered workflow ask for THIS patient's session explicitly and get it even after
             // a different patient has since logged in against the same source connection and overwritten "default".
-            var resolvedPatientId = token.Patient ?? source.TargetPatientId;
+            var resolvedPatientId = resolvedPatient ?? source.TargetPatientId;
             if (!string.IsNullOrWhiteSpace(resolvedPatientId))
             {
                 await SaveUnderBothKeysAsync(source, resolvedPatientId, stored, cancellationToken);
@@ -355,9 +480,9 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             return new SmartAuthorizationCodeExchangeResult(
                 token.AccessToken!,
                 token.Scope,
-                !string.IsNullOrWhiteSpace(token.Patient),
+                !string.IsNullOrWhiteSpace(resolvedPatient),
                 HashKey(BuildStoreKey(source, null)),
-                PatientId: token.Patient,
+                PatientId: resolvedPatient,
                 PractitionerId: practitionerId);
         }
     }
@@ -394,8 +519,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             // mirrors OAuth2ClientCredentialsTokenProvider's identical AuthPlacement toggle for the Backend Services
             // grant, which this interactive flow previously ignored (always sent client_secret_post regardless of
             // the configured placement).
-            if (string.Equals(source.AuthPlacement, "basic", StringComparison.OrdinalIgnoreCase))
+            // eCW (Healow) is forced to Basic regardless of the configured/persisted AuthPlacement: its token endpoint
+            // rejects client_secret_post with invalid_client (confirmed end-to-end), and the portal wizard resets
+            // AuthPlacement to "post" on every re-save — so keying only off the persisted value is not save-proof.
+            var useBasic = string.Equals(source.AuthPlacement, "basic", StringComparison.OrdinalIgnoreCase)
+                || source.SourceType == RuntimeSourceType.Healow;
+            if (useBasic)
             {
+                // client_secret_basic puts client_id:client_secret in the Authorization header ONLY. The form body
+                // also carries client_id (set by the exchange/refresh builders) — leaving it there presents TWO
+                // client-authentication mechanisms in one request, which eCW (per RFC 6749 §2.3, "MUST NOT use more
+                // than one authentication method") rejects with invalid_client. Confirmed against the working
+                // poc/ecw-ehr-launch-poc, whose Basic request omitted the body client_id. Remove it so Basic is the
+                // sole mechanism. (The post branch below keeps client_id + client_secret in the body, as required.)
+                form.Remove("client_id");
                 var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{source.ClientId}:{source.ClientSecret}"));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
             }
@@ -408,10 +545,11 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
     /// <summary>
     /// Validates the id_token's signature/issuer/audience/lifetime and returns its <c>fhirUser</c> claim (a
-    /// SMART-standard reference such as <c>Practitioner/123</c> or an absolute URL ending in one), or null when the
-    /// claim is absent.
+    /// SMART-standard reference such as <c>Practitioner/123</c> or an absolute URL ending in one, or null when the
+    /// claim is absent) alongside its own <c>patient</c> claim, when present — the fallback source for a Patient-
+    /// context app whose token response doesn't surface <c>patient</c> at the top level (see the caller).
     /// </summary>
-    private async Task<string?> ValidateIdTokenAsync(
+    private async Task<(string? FhirUser, string? Patient)> ValidateIdTokenAsync(
         FhirSourceConfiguration source,
         string idToken,
         CancellationToken cancellationToken)
@@ -435,7 +573,7 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             new HttpDocumentRetriever(_httpClient) { RequireHttps = !IsLocalHttp(metadataAddress) });
         var configuration = await configurationManager.GetConfigurationAsync(cancellationToken);
 
-        var principal = handler.ValidateToken(idToken, new TokenValidationParameters
+        var validationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuer = configuration.Issuer,
@@ -445,9 +583,25 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = configuration.SigningKeys,
             ClockSkew = TimeSpan.FromMinutes(2)
-        }, out _);
+        };
 
-        return principal.FindFirst("fhirUser")?.Value;
+        // eCW's sandbox jwks_uri serves a signing key whose X.509 certificate expired in 2022 and was apparently
+        // never rotated (confirmed live: IDX10249 "X509SecurityKey validation failed ... certificate has expired").
+        // The default IssuerSigningKeyValidator rejects any X509SecurityKey with an expired certificate, on top of
+        // (not instead of) actually verifying the token's signature against it. IssuerSigningKeys above was just
+        // fetched fresh from that same issuer's own live discovery document a few lines up, so there is no
+        // separate "is this key trusted" question the cert-lifetime check is protecting against here — skip only
+        // that assertion for Healow, keeping the "is this key one of the ones the issuer actually offered" check
+        // every other vendor still gets from the default validator.
+        if (source.SourceType == RuntimeSourceType.Healow)
+        {
+            validationParameters.IssuerSigningKeyValidator = (securityKey, _, parameters) =>
+                parameters.IssuerSigningKeys?.Contains(securityKey) == true;
+        }
+
+        var principal = handler.ValidateToken(idToken, validationParameters, out _);
+
+        return (principal.FindFirst("fhirUser")?.Value, principal.FindFirst("patient")?.Value);
     }
 
     // Parses a SMART fhirUser reference (relative "Practitioner/123" or absolute ".../Practitioner/123") into the
@@ -462,6 +616,22 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
 
         var segments = fhirUserReference.TrimEnd('/').Split('/');
         return segments.Length >= 2 && string.Equals(segments[^2], "Practitioner", StringComparison.Ordinal)
+            ? segments[^1]
+            : null;
+    }
+
+    // Same shape as ExtractPractitionerId, but for a patient-facing app whose fhirUser reference points at the
+    // Patient itself (e.g. a Patient Standalone launch with no separate top-level or id_token `patient` claim) —
+    // the last-resort fallback ValidateIdTokenAsync's caller tries after the id_token's own `patient` claim.
+    private static string? ExtractPatientId(string? fhirUserReference)
+    {
+        if (string.IsNullOrWhiteSpace(fhirUserReference))
+        {
+            return null;
+        }
+
+        var segments = fhirUserReference.TrimEnd('/').Split('/');
+        return segments.Length >= 2 && string.Equals(segments[^2], "Patient", StringComparison.Ordinal)
             ? segments[^1]
             : null;
     }

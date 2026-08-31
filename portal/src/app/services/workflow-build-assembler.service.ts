@@ -284,6 +284,55 @@ export class WorkflowBuildAssemblerService {
       };
     }
 
+    // eClinicalWorks (Healow) — same shared Epic-shaped wizard fields (Client ID, FHIR base URL, Scopes, App key,
+    // ...), but its own sourceSystemType so the backend's Healow-specific authorize-request handling actually
+    // applies (v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's last path
+    // segment, no offline_access — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest). The canvas
+    // node itself still resolves to NodeType "EpicSourceNode" (see workflow-graph-mapper.service.ts's
+    // transformIdForNode — the backend's workflow node catalog gates EClinicalWorksSourceNode out until the
+    // generic Source hierarchy lands), so this connection's actual pipeline RUN executes via
+    // EpicSourceNodeExecutor — which still picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
+    // based on this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType), just not via a
+    // dedicated Healow executor class. Healow only supports the Patient (standalone) audience (see
+    // VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
+    if (/healow/i.test(connector)) {
+      const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      const healowAppType = this.applicationTypeFor(fields);
+      // Auth-method-driven, mirroring the Athenahealth branch above (same shared form field-bag). The previous
+      // version hardcoded authenticationType:'None' and dropped clientSecret/authPlacement, so a Client-Secret
+      // edit assembled a request byte-identical to the stored row → EF no-op → nothing persisted (ModifiedOnUtc
+      // stayed null). Guarded on 'Auth method' so the Healow Patient/public (PKCE) flow stays byte-identical:
+      // non-'secret' → authenticationType 'None', null secret refs, null placement — exactly as before.
+      const healowAuthMethod = fields['Auth method'] || 'public';
+      const healowTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
+      return {
+        name: fields['__name'] || 'eCW',
+        sourceSystemType: 'Healow',
+        baseUrl: fields['FHIR base URL'] || '',
+        authentication: {
+          authenticationType: healowAuthMethod === 'secret' ? 'OAuthClientCredentials' : 'None',
+          clientId: fields['Client ID'] || fields['Active client ID'] || null,
+          tokenEndpoint: fields['Token endpoint'] || null,
+          scopes: healowScopes,
+          clientSecretKeyVaultName: healowTypedSecret ? 'workflow-secrets' : null,
+          clientSecretName: healowTypedSecret ? newInlineSecretName(fields['__name'] || 'ecw') : null,
+          inlineClientSecret: healowTypedSecret,
+          authPlacement: healowAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
+        },
+        applicationType: healowAppType,
+        // Persist the EHR-launch metadata too (previously hardcoded empty), so Provider EHR Launch's trusted-issuer
+        // allow-list (required server-side, defaulted to the FHIR base URL by the form) and launch URL actually
+        // reach the backend. For the Patient audience these fields are empty/null just as before.
+        interactive: {
+          redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
+          launchUrl: fields['Launch URL'] || null,
+          trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
+          patientSelectionMethod: null,
+          launchDisplayMode: healowAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
+        },
+      };
+    }
+
     // Epic (best-effort from the Epic source wizard fields).
     const scopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
     const discoveredScopes = (fields['Discovered scopes'] ?? '').split(/[\s,]+/).filter(Boolean);

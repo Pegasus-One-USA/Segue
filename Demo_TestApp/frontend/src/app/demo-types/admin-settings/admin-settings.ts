@@ -19,10 +19,14 @@ interface AdminSettings {
   athenaPatientWorkflowId: string;
   athenaPatientBaseUrl: string;
   athenaEhrEndpointId: string;
+  ecwPatientWorkflowId: string;
+  ecwPatientBaseUrl: string;
+  ecwEhrEndpointId: string;
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
   providerInAppWorkflowId: string;
+  ecwProviderInAppWorkflowId: string;
   backendSystemPractitionerImportWorkflowId: string;
 }
 
@@ -70,10 +74,17 @@ export class AdminSettingsComponent implements OnInit {
   readonly athenaPatientWorkflowId = signal('');
   readonly athenaPatientBaseUrl = signal('');
   readonly athenaEhrEndpointId = signal('');
+  // eClinicalWorks (eCW) variant of the same connect/list flow — same shape as the athenahealth fields above.
+  readonly ecwPatientWorkflowId = signal('');
+  readonly ecwPatientBaseUrl = signal('');
+  readonly ecwEhrEndpointId = signal('');
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
   readonly providerInAppWorkflowId = signal('');
+  // Separate eCW (eClinicalWorks) Provider EMR EHR-launch workflow id — the mint endpoint auto-selects this over
+  // providerInAppWorkflowId when the launching EHR's iss is an eCW practice (host *.ecwcloud.com).
+  readonly ecwProviderInAppWorkflowId = signal('');
   readonly backendSystemPractitionerImportWorkflowId = signal('');
 
   // Feature flag (Default tab): whether the "New 11" tab shows up at all in every role's shell. Backed by a cookie
@@ -193,10 +204,14 @@ export class AdminSettingsComponent implements OnInit {
       this.athenaPatientWorkflowId.set(current.athenaPatientWorkflowId);
       this.athenaPatientBaseUrl.set(current.athenaPatientBaseUrl);
       this.athenaEhrEndpointId.set(current.athenaEhrEndpointId);
+      this.ecwPatientWorkflowId.set(current.ecwPatientWorkflowId);
+      this.ecwPatientBaseUrl.set(current.ecwPatientBaseUrl);
+      this.ecwEhrEndpointId.set(current.ecwEhrEndpointId);
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
+      this.ecwProviderInAppWorkflowId.set(current.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(current.backendSystemPractitionerImportWorkflowId);
     } catch {
       this.loadError.set('Could not load settings.');
@@ -223,10 +238,14 @@ export class AdminSettingsComponent implements OnInit {
             athenaPatientWorkflowId: this.athenaPatientWorkflowId(),
             athenaPatientBaseUrl: this.athenaPatientBaseUrl(),
             athenaEhrEndpointId: this.athenaEhrEndpointId(),
+            ecwPatientWorkflowId: this.ecwPatientWorkflowId(),
+            ecwPatientBaseUrl: this.ecwPatientBaseUrl(),
+            ecwEhrEndpointId: this.ecwEhrEndpointId(),
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
             providerInAppWorkflowId: this.providerInAppWorkflowId(),
+            ecwProviderInAppWorkflowId: this.ecwProviderInAppWorkflowId(),
             backendSystemPractitionerImportWorkflowId: this.backendSystemPractitionerImportWorkflowId(),
           },
           { withCredentials: true }
@@ -241,10 +260,14 @@ export class AdminSettingsComponent implements OnInit {
       this.athenaPatientWorkflowId.set(result.athenaPatientWorkflowId);
       this.athenaPatientBaseUrl.set(result.athenaPatientBaseUrl);
       this.athenaEhrEndpointId.set(result.athenaEhrEndpointId);
+      this.ecwPatientWorkflowId.set(result.ecwPatientWorkflowId);
+      this.ecwPatientBaseUrl.set(result.ecwPatientBaseUrl);
+      this.ecwEhrEndpointId.set(result.ecwEhrEndpointId);
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
       this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
+      this.ecwProviderInAppWorkflowId.set(result.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(result.backendSystemPractitionerImportWorkflowId);
       this.saved.set(true);
     } catch {

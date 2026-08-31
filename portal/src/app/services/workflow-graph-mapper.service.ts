@@ -260,6 +260,14 @@ export class WorkflowGraphMapperService {
     const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
     if (/sample/i.test(connector)) return 'sample';
     if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
+    // Healow (eClinicalWorks) deliberately stays on the 'epic' fallback here, same as Athenahealth — the backend's
+    // workflow node catalog (DefaultWorkflowNodeCatalog.cs) still gates EClinicalWorksSourceNode out of its Items
+    // list ("GATED (SQL/CSV phase)"), and WorkflowGraphValidator rejects any node whose NodeType isn't in that
+    // catalog at RUN time (confirmed live: "Node 'EClinicalWorksSourceNode' is not in the workflow node catalog").
+    // The auth/token side doesn't care about NodeType at all (see SmartAuthorizationCodeTokenProvider and
+    // SourceConnections.SourceSystemType, set correctly by buildSource() below regardless of this), so labeling the
+    // node 'epic' here only costs a cosmetic mislabel on canvas reload — swapping it to a real 'healow' NodeType
+    // breaks the actual pipeline run until the catalog gate lifts.
     return 'epic';
   }
 

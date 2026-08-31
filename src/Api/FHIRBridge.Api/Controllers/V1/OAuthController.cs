@@ -371,7 +371,15 @@ public sealed class OAuthController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(error))
         {
-            _logger.LogWarning("[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription}", error, errorDescription);
+            // state is logged here (not sensitive beyond a short-lived CSRF nonce, already logged in full as part
+            // of the authorizationUrl below) specifically so this line can be correlated back to the "[Step 4/6]
+            // BuildAuthorizationRequest produced: ... authorizationUrl=..." log line for the SAME sign-in attempt —
+            // that URL is the only place the exact scope/aud/practice_code actually sent to the EHR is recorded.
+            // Without this, an EHR-side rejection (e.g. invalid_scope) has no way to be traced back to what request
+            // caused it.
+            _logger.LogWarning(
+                "[Step 5/6] /oauth/callback returned an EHR-side error: {Error} {ErrorDescription} state={State}",
+                error, errorDescription, state);
 
             // Persists a SmartLaunchLogs row (Success: false) so this rejection is queryable from SQL, not just
             // Seq — there is no production Seq instance. Best-effort: an audit-logging failure here must never

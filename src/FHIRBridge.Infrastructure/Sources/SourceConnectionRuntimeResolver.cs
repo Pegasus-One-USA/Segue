@@ -94,9 +94,13 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 
         // athenahealth's Backend System app registrations verified against the live preview sandbox are
         // provisioned with v1 coarse scopes only (system/{Type}.read) — v2 granular scopes (system/{Type}.rs)
-        // get rejected by the token endpoint with "Invalid Scope". Every other vendor keeps the v2 default (see
-        // the portal's identical vendor check in ehr-vendor-source-form.component.ts).
-        var scopeVersion = sourceConnection.SourceSystemType == SourceSystemType.Athenahealth ? "v1" : "v2";
+        // get rejected by the token endpoint with "Invalid Scope". eClinicalWorks (Healow) has the same v1-only
+        // requirement — confirmed against a live authorize attempt, which eCW rejected with invalid_scope for a
+        // v2 (.rs) resource scope. Every other vendor keeps the v2 default (see the portal's identical vendor
+        // check in ehr-vendor-source-form.component.ts).
+        var scopeVersion = sourceConnection.SourceSystemType is SourceSystemType.Athenahealth or SourceSystemType.Healow
+            ? "v1"
+            : "v2";
 
         // Backend System / Provider Standalone sources own their resource-type list directly (Retrieval.ResourceTypes
         // — the same Resource Type picker Settings already exposes), so it is always regenerated fresh here rather

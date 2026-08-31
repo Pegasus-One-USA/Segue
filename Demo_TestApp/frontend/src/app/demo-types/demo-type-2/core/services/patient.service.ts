@@ -18,6 +18,14 @@ function isConfiguredBaseUrl(value: string | null | undefined): boolean {
 
 interface LaunchResultResponse {
   patient: FhirPatient | null;
+  // Per-resource-type counts of everything the run's source node fetched (Patient, Condition, Observation, …).
+  resourceCounts?: Record<string, number>;
+}
+
+/** What getPatient resolves to: the bound Patient plus the run's per-resource-type fetch counts. */
+export interface LaunchOutcome {
+  patient: Patient;
+  resourceCounts: Record<string, number>;
 }
 
 // standaloneBaseUrl is WorkflowSettingsEntity.StandaloneBaseUrl — deliberately reused from Provider_Standalone
@@ -78,9 +86,9 @@ export class PatientService {
    * HealthApp account is logged in next on the same tab (that run's own result endpoint has no per-caller
    * ownership check), not just the account whose real EHR launch actually produced it.
    */
-  getPatient(workflowRunId: string | null): Observable<Patient> {
+  getPatient(workflowRunId: string | null): Observable<LaunchOutcome> {
     if (!workflowRunId) {
-      return of(MOCK_PATIENT).pipe(delay(600));
+      return of({ patient: MOCK_PATIENT, resourceCounts: {} }).pipe(delay(600));
     }
 
     return this.resolveBaseUrl().pipe(
@@ -92,7 +100,7 @@ export class PatientService {
                 `FHIRBridge's run ${workflowRunId} completed but returned no Patient resource — check Execution History for this run.`,
               );
             }
-            return this.toPatient(response.patient);
+            return { patient: this.toPatient(response.patient), resourceCounts: response.resourceCounts ?? {} };
           }),
           catchError((error: unknown) => {
             const detail =

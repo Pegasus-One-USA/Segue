@@ -1,4 +1,12 @@
-@if (!loggedIn()) {
+@if (isProviderInAppLaunchFlow) {
+  <!-- EHR-launch round-trip (inbound iss/launch OR post-OAuth workflowRunId) hands off directly to the launch
+       component BEFORE the login gate — an embedded launch has no hb_session cookie, so gating on login here
+       would trap it on the sign-in screen and its FHIRBridge hand-off / iframe break-out would never run. -->
+  <app-launch-provider-in-app
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-launch-provider-in-app>
+} @else if (!loggedIn()) {
   <main class="login-fullscreen">
     <div class="login-card">
       <div class="login-card__brand-row">
@@ -22,12 +30,6 @@
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
     </div>
   </main>
-} @else if (isRealEhrLaunch) {
-  <!-- Live Epic EHR launch (iss/launch on the URL) hands off directly — no menu, regardless of role. -->
-  <app-launch-provider-in-app
-    [loginTypeLabel]="loginTypeLabel()"
-    (logout)="logout()"
-  ></app-launch-provider-in-app>
 } @else if (role() === 'ProviderInApp') {
   <app-provider-in-app-new11
     [loginTypeLabel]="loginTypeLabel()"
