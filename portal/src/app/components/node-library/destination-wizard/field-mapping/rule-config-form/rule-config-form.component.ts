@@ -162,8 +162,12 @@ export class RuleConfigFormComponent {
     return [...rest, ...checkboxes];
   }
 
-  setValue(key: string, value: string): void {
-    this.config[key] = value;
+  setValue(key: string, value: string | number | null): void {
+    // A type="number" input's ngModelChange fires a real JS number (Angular's NumberValueAccessor), not a
+    // string — but `config` is a Record<string,string> serialized straight into the save request, so an
+    // un-stringified number goes out as a bare JSON number and the API rejects it (config must bind as
+    // Dictionary<string,string>). Coerce everything through this one path instead of trusting the caller.
+    this.config[key] = value === null || value === undefined ? '' : String(value);
   }
 
   /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current

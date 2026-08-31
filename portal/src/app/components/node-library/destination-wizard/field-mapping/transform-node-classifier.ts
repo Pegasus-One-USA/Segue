@@ -71,8 +71,11 @@ export function nodeAccentVar(nodeType: TransformNodeType): string {
   return NODE_ACCENT[nodeType]?.rankVar ?? 'var(--color-primary)';
 }
 
-// Nodes genuinely useful on almost any field, regardless of what kind of data it holds.
-const UNIVERSAL: TransformNodeType[] = ['DefaultNullHandling', 'StringNormalization'];
+// Nodes genuinely useful on almost any field, regardless of what kind of data it holds. HashingMasking is
+// here (not just on the identifier/telecom category rules below) because de-identification rules target
+// whatever FHIR path Safe Harbor names — including date and address fields, which otherwise fall under the
+// DateTimeFormat/AddressParsing category rules and would silently drop HashingMasking from the option list.
+const UNIVERSAL: TransformNodeType[] = ['DefaultNullHandling', 'StringNormalization', 'HashingMasking'];
 
 /**
  * (fhirPath/valueType test) -> the node types relevant when it matches. Tested against the SOURCE field's

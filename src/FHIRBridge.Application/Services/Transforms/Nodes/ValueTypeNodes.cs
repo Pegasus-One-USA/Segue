@@ -114,10 +114,21 @@ public sealed class NumberCastNode : ITransformNode
         }
 
         var targetType = config.Get("targetType", "decimal");
-        var result = targetType == "integer" ? Math.Round(parsed, 0, MidpointRounding.AwayFromZero) : parsed;
-        return FhirPrimitiveValidator.IsValidDecimalString(result.ToString(CultureInfo.InvariantCulture))
-            ? TransformResult.Ok(result)
-            : TransformResult.Fail($"'{result}' failed FHIR decimal validation.");
+        if (targetType != "integer")
+        {
+            return FhirPrimitiveValidator.IsValidDecimalString(parsed.ToString(CultureInfo.InvariantCulture))
+                ? TransformResult.Ok(parsed)
+                : TransformResult.Fail($"'{parsed}' failed FHIR decimal validation.");
+        }
+
+        // Rounding alone (the previous behavior) leaves the value as a decimal with zero fractional digits —
+        // still typed as decimal, so a destination that respects the CLR type (or a NUMERIC/DECIMAL column)
+        // renders it as "2.00" instead of a true integer "2". Cast to a real integral type instead.
+        var rounded = Math.Round(parsed, 0, MidpointRounding.AwayFromZero);
+        var intResult = (long)rounded;
+        return FhirPrimitiveValidator.IsValidDecimalString(intResult.ToString(CultureInfo.InvariantCulture))
+            ? TransformResult.Ok(intResult)
+            : TransformResult.Fail($"'{intResult}' failed FHIR decimal validation.");
     }
 }
 
