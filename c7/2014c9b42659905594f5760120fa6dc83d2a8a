@@ -1,0 +1,86 @@
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_6bf02c4a6811c6::t_09e9bbbf407609 169
+  s_6bf02c4a6811c6::t_ca304b8a95e6ff 66
+portal/src/app/user/pages/security/security.component.html
+  s_6bf02c4a6811c6::t_ac60e633052b18 124
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_6bf02c4a6811c6::t_b3f0e1695f1974 12
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_6bf02c4a6811c6::t_d33172abd415b1 71
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_6bf02c4a6811c6::t_36fa0d516e2cda 869
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_6bf02c4a6811c6::t_a878f73c1a7c85 46
+  s_6bf02c4a6811c6::t_39edd2e9734644 6
+src/FHIRBridge.Application/Services/Transforms/Nodes/DataQualityGovernanceNodes.cs
+  s_448fc9b6d02b1b::t_738eacefa36522 58,63-74
+  s_448fc9b6d02b1b::t_c0dd0d331066be 4,75-76
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_6bf02c4a6811c6::t_fd1512e13d8e86 202
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_6bf02c4a6811c6::t_00f638402734a7 230
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_6bf02c4a6811c6::t_666bf95cf002b5 35
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_6bf02c4a6811c6::t_493446093a9dc5 47
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_6bf02c4a6811c6::t_d8855ac916b51f 51
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_6bf02c4a6811c6::t_67cb5c08cb4ca4 30
+portal/src/app/governance/pages/alert-rules/alert-rules.component.html
+  s_6bf02c4a6811c6::t_2370771ed6669f 47
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.html
+  s_6bf02c4a6811c6::t_5315565fad708c 140
+portal/src/app/core/services/dialog.service.ts
+  s_6bf02c4a6811c6::t_b6b35a97d5cbbf 216-225
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_6bf02c4a6811c6::t_11d7369af09ac6 333
+  s_6bf02c4a6811c6::t_9407d512de2c70 114
+  s_6bf02c4a6811c6::t_9bd911f6b1cd58 159
+  s_6bf02c4a6811c6::t_bffdf4f53edd35 17
+  s_6bf02c4a6811c6::t_97b3c6ccb3d309 106
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_6bf02c4a6811c6::t_516ae0496a69fa 16
+  s_6bf02c4a6811c6::t_fd60cf345131aa 159
+  s_6bf02c4a6811c6::t_aced2b2f747174 311
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_448fc9b6d02b1b::t_265b419e8d1818 137-143
+  s_448fc9b6d02b1b::t_4c090d2ceae24d 158-184
+  s_448fc9b6d02b1b::t_0bfddbb92b5758 3
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_6bf02c4a6811c6::t_41cf4cf9dbf4fd 13
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.html
+  s_6bf02c4a6811c6::t_a67a60c573f2c7 111
+portal/src/app/components/node-library/destination-wizard/field-mapping/transform-rules-dialog/transform-rules-dialog.component.html
+  s_6bf02c4a6811c6::t_478173cac24313 245
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.html
+  s_6bf02c4a6811c6::t_ce29bb84cff508 30
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_6bf02c4a6811c6::t_8070242e04ec9f 1
+  s_6bf02c4a6811c6::t_b575a956fbfb2c 204-213
+  s_6bf02c4a6811c6::t_0af3a1472f4186 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c72014c9b42659905594f5760120fa6dc83d2a8a",
+  "prompts": {},
+  "sessions": {
+    "s_448fc9b6d02b1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af9566b0-af55-4ef3-88b4-45c4b20602df",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_6bf02c4a6811c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95bf7da2-fee0-4b8e-9729-6d213786e9e5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
