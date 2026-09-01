@@ -633,7 +633,14 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
     mappingRows,
     targetByResource,
     extraTablesByGroup,
-    sqlTables: Array.from(sqlTablesByName.values()),
+    // Non-relational destinations (CSV, Mongo, Medplum, FHIR) never have a real, probed schema — sqlTables
+    // must stay empty for them exactly like a fresh wizard session (see isRelational's own doc comment).
+    // Populating it here from the saved document's tables was actively harmful for CSV specifically: every
+    // CSV resource shares the same generic table name ("csv"), so restoring a document that only had Patient
+    // mapped seeded a "csv" table entry with just Patient's columns — then adding Encounter and saving made
+    // pruneOrphanedMappingRows compare Encounter's brand-new columns against that stale, wrong-resource
+    // column list and silently drop all of them as "orphaned" (the "Encounter gets Patient's data" bug).
+    sqlTables: isRelational(destType) ? Array.from(sqlTablesByName.values()) : [],
     childTableRelationsByTable,
     selectedResources: doc.mappings.map(e => e.resourceType),
   };

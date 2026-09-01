@@ -47,7 +47,7 @@ public sealed class MappedCsvDestinationWriter : IConfiguredDestinationWriter
         // itself. Only two or more resource types are bundled into one ZIP archive (named after the workflow, since
         // no single resource type would otherwise describe the whole export).
         var file = groups.Count == 1
-            ? BuildSingleCsvFile(groups[0], timestamp)
+            ? BuildSingleCsvFile(groups[0])
             : BuildZipFile(groups, context.RouteName, timestamp);
 
         var deliveryMode = ParseDeliveryMode(destination.ConnectionMetadataJson);
@@ -56,17 +56,16 @@ public sealed class MappedCsvDestinationWriter : IConfiguredDestinationWriter
         return await strategy.DeliverAsync(destination, file, records.Count, context, cancellationToken);
     }
 
-    private static GeneratedFile BuildSingleCsvFile(IGrouping<string, MappedDestinationRecord> group, DateTime timestamp)
+    private static GeneratedFile BuildSingleCsvFile(IGrouping<string, MappedDestinationRecord> group)
     {
         var csvBytes = Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToMappedOnlyCsv([.. group]));
-        return new GeneratedFile(BuildCsvEntryName(group.Key, timestamp), "text/csv", csvBytes);
+        return new GeneratedFile(BuildCsvEntryName(group.Key), "text/csv", csvBytes);
     }
 
     /// <summary>
-    /// One ZIP entry per resource type, named <c>{ResourceType}_{yyyyMMdd_HHmmss}.csv</c> (e.g.
-    /// "Patient_20260721_143022.csv") — every entry shares the same <paramref name="timestamp"/>, so every file
-    /// produced by one export run is trivially identifiable as a set. The archive itself is named
-    /// <c>{WorkflowName}_{yyyyMMdd_HHmmss}.zip</c>.
+    /// One ZIP entry per resource type, named <c>{ResourceType}.csv</c> (e.g. "Patient.csv") — plain and
+    /// stable so re-running the same workflow always produces identically-named entries. The archive itself
+    /// is still named <c>{WorkflowName}_{yyyyMMdd_HHmmss}.zip</c> so distinct export runs stay distinguishable.
     /// </summary>
     private static GeneratedFile BuildZipFile(
         IReadOnlyList<IGrouping<string, MappedDestinationRecord>> groups, string workflowName, DateTime timestamp)
@@ -76,7 +75,7 @@ public sealed class MappedCsvDestinationWriter : IConfiguredDestinationWriter
         {
             foreach (var group in groups)
             {
-                var entry = archive.CreateEntry(BuildCsvEntryName(group.Key, timestamp), CompressionLevel.Optimal);
+                var entry = archive.CreateEntry(BuildCsvEntryName(group.Key), CompressionLevel.Optimal);
                 using var entryStream = entry.Open();
                 var csvBytes = Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToMappedOnlyCsv([.. group]));
                 entryStream.Write(csvBytes);
@@ -87,8 +86,8 @@ public sealed class MappedCsvDestinationWriter : IConfiguredDestinationWriter
         return new GeneratedFile(zipFileName, "application/zip", buffer.ToArray());
     }
 
-    private static string BuildCsvEntryName(string resourceType, DateTime timestamp) =>
-        $"{CleanFileNamePart(resourceType)}_{timestamp:yyyyMMdd_HHmmss}.csv";
+    private static string BuildCsvEntryName(string resourceType) =>
+        $"{CleanFileNamePart(resourceType)}.csv";
 
     private static string CleanFileNamePart(string value)
     {
