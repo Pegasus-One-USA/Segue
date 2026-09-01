@@ -15,7 +15,10 @@
       (pointerup)="onHeadPointerUp($event)"
       (pointercancel)="onHeadPointerUp($event)"
     >
-      <span id="fm-popover-title" class="fm-popover-title">{{ d.tableName || d.resource }}.{{ d.targetName }}</span>
+      <div class="fm-popover-head-text">
+        <span id="fm-popover-title" class="fm-popover-title">Mapping configuration</span>
+        <span class="fm-popover-summary">{{ headerSummarySource() }} → {{ d.targetName }}</span>
+      </div>
       <button class="fm-popover-icon-btn" type="button" aria-label="Close" (click)="onClose()">✕</button>
     </div>
 
@@ -26,7 +29,7 @@
         </p>
       } @else {
         <div class="fm-popover-section">
-          <span class="fm-popover-section-title">Source field(s) — same level only</span>
+          <span class="fm-popover-section-title">{{ isJoin() ? 'Source fields — same level only' : 'Source field' }}</span>
           <div class="fm-popover-chips">
             @for (s of d.sources; track s.fhirPath; let i = $index) {
               <div class="fm-popover-chip">
@@ -35,6 +38,16 @@
                 <button type="button" [disabled]="i === d.sources.length - 1" aria-label="Move down" (click)="moveSource(i, 1)">↓</button>
                 <button type="button" aria-label="Remove source" (click)="removeSource(i)">✕</button>
               </div>
+            }
+          </div>
+        </div>
+
+        <div class="fm-popover-section">
+          <span class="fm-popover-section-title">Target field</span>
+          <div class="fm-popover-readonly-field">
+            <span class="fm-mono">{{ d.targetName }}</span>
+            @if (targetDataType(); as dt) {
+              <span class="fm-popover-type-badge">{{ dt }}</span>
             }
           </div>
         </div>
@@ -48,7 +61,7 @@
 
         @if (isReferenceCandidate(d)) {
           <div class="fm-popover-section">
-            <label class="fm-popover-section-title" for="fm-ref-resource">Resolves to</label>
+            <label class="fm-popover-section-title" for="fm-ref-resource">Value handling</label>
             <select
               id="fm-ref-resource" class="fm-popover-select"
               [value]="d.referencesResource ?? ''"
@@ -106,7 +119,7 @@
       @if (rulesDestinationType() && d.mode !== 'childJson') {
         <div class="fm-popover-section fm-popover-section--rule">
           <button type="button" class="fm-popover-rule-toggle" (click)="toggleRuleSection()">
-            <span>{{ ruleSectionOpen() ? '▾' : '▸' }} Transformation rule</span>
+            <span>{{ ruleSectionOpen() ? '▾' : '▸' }} Transformation</span>
             @if (existingRule() === undefined) {
               <span class="fm-popover-rule-status">checking…</span>
             } @else if (existingRule()) {
@@ -118,7 +131,7 @@
 
           @if (ruleSectionOpen()) {
             <div class="fm-popover-rule-body">
-              <label class="fm-popover-section-title" for="fm-rule-node-type">Node type</label>
+              <label class="fm-popover-section-title" for="fm-rule-node-type">Type</label>
               <select
                 id="fm-rule-node-type" class="fm-popover-select"
                 [ngModel]="ruleNodeType()"
@@ -134,7 +147,7 @@
               <div class="fm-popover-rule-actions">
                 @if (existingRule()) {
                   <button type="button" class="fm-popover-remove" [disabled]="ruleDeleting()" (click)="deleteRule()">
-                    {{ ruleDeleting() ? 'Removing…' : 'Remove rule' }}
+                    {{ ruleDeleting() ? 'Removing…' : 'Remove transformation' }}
                   </button>
                 }
                 <button type="button" class="fm-popover-save" [disabled]="ruleSaving()" (click)="saveRule()">
@@ -148,8 +161,11 @@
     </div>
 
     <div class="fm-popover-footer">
-      <button type="button" class="fm-popover-remove" (click)="onRemove()">Remove mapping</button>
-      <button type="button" class="fm-popover-save" (click)="onSave()">Save</button>
+      <button type="button" class="fm-popover-delete" (click)="onRemove()">Delete mapping</button>
+      <div class="fm-popover-footer-actions">
+        <button type="button" class="fm-popover-cancel" (click)="onClose()">Cancel</button>
+        <button type="button" class="fm-popover-save" (click)="onSave()">Save</button>
+      </div>
     </div>
   }
 </div>

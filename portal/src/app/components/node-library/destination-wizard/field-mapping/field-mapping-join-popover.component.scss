@@ -10,12 +10,12 @@
 
 .fm-popover {
   position: relative;
-  width: 328px;
-  min-width: 280px;
+  width: 420px;
+  min-width: 320px;
   max-width: min(640px, 90vw);
   height: auto;
   min-height: 220px;
-  max-height: 85vh;
+  max-height: 80vh;
   resize: both;
   display: flex;
   flex-direction: column;
@@ -25,8 +25,9 @@
   box-shadow: var(--shadow-md);
   // `resize` technically allows any non-visible overflow per spec, but `hidden` doesn't reliably show
   // the drag handle across browsers in practice — `auto` does. No visible scrollbar appears here since
-  // this element never actually overflows itself (its own content is exactly head+body+footer); the
-  // body's own `overflow: auto` below is what handles content that doesn't fit.
+  // this element never actually overflows itself (its own content is exactly head+body+footer, sized
+  // via the flex layout below); the body's own `overflow: auto` is what handles content that doesn't
+  // fit, which is also what keeps the head and footer visually "sticky" while only the body scrolls.
   overflow: auto;
 
   // Native resize handles are barely visible against a light background — draw an explicit grip so
@@ -63,11 +64,28 @@
   &:active { cursor: grabbing; }
 }
 
+.fm-popover-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .fm-popover-title {
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--color-ink);
+}
+
+// The actual "which field maps to which" detail, now that the title itself is just "Mapping
+// configuration" — kept in the same monospace/truncating style the source chips already use.
+.fm-popover-summary {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fm-popover-icon-btn {
@@ -76,13 +94,14 @@
   color: var(--color-muted);
   cursor: pointer;
   padding: var(--space-1);
+  flex-shrink: 0;
 
   &:hover { color: var(--color-ink); }
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); border-radius: var(--radius-sm); }
 }
 
 .fm-popover-body {
-  padding: var(--space-2) var(--space-8) var(--space-8);
+  padding: var(--space-6) var(--space-8) var(--space-8);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -97,7 +116,10 @@
   line-height: 1.5;
 }
 
-.fm-popover-section { display: flex; flex-direction: column; gap: var(--space-4); }
+// space-6 (12px), not the tighter space-4 (8px) this used to be — a label sitting right on top of its
+// own control still reads clearly at that distance, and it's what keeps every section in this modal at
+// or above the ~12–16px rhythm the rest of it uses, rather than one cramped outlier.
+.fm-popover-section { display: flex; flex-direction: column; gap: var(--space-6); }
 
 .fm-popover-section-title {
   font-size: 11px;
@@ -109,39 +131,70 @@
 
 .fm-popover-chips { display: flex; flex-direction: column; gap: var(--space-2); }
 
+// A neutral, "read-only field" look (not the teal accent tags used for e.g. active filters elsewhere)
+// — these values come from whatever was dragged onto the canvas, never free-typed here, so they should
+// read as fixed/inspectable rather than as an editable or removable tag in the everyday single-source
+// case. The ↑/↓/✕ controls (only meaningful once there's more than one, for a join) still work exactly
+// as before; they just no longer visually compete for attention in the common one-source case.
 .fm-popover-chip {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  background: var(--color-primary-soft);
-  border: 1px solid var(--color-primary-mid);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-6);
+  padding: var(--space-4) var(--space-6);
 
   button {
     background: none;
     border: none;
-    color: var(--color-primary-dark);
+    color: var(--color-muted);
     cursor: pointer;
     font-size: 12px;
     padding: 0 2px;
 
+    &:hover:not(:disabled) { color: var(--color-ink-2); }
     &:disabled { opacity: 0.3; cursor: default; }
-    &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary); }
+    &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); border-radius: var(--radius-sm); }
   }
 }
 
 .fm-popover-chip-label {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fm-popover-input, .fm-popover-select {
+// Same "fixed value" treatment as the source chip above, for the one thing this popover has never
+// displayed before — the destination field's own name (and real type, when a live schema has one).
+.fm-popover-readonly-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-6);
+}
+
+.fm-popover-type-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.fm-popover-input {
   font-family: var(--font-mono);
   font-size: 12px;
   padding: var(--space-2) var(--space-4);
@@ -158,6 +211,44 @@
 }
 
 .fm-popover-input--sm { width: 60px; }
+
+// Every <select> in this popover (Value handling, Node type, join-delimiter's own kind, instance-type,
+// criteria-op — not just the two named in the report) now matches the app's one canonical select style
+// exactly (rule-config-form.component.scss's select, which Target type/Decimal separator already use,
+// itself matching transform-rules-dialog/transformation-rule-list's ".form-field select") instead of a
+// second, plainer style living only here. Values/bindings/behavior are unchanged — this only replaces
+// property values on an existing class, nothing was renamed or restructured.
+.fm-popover-select {
+  width: 100%;
+  height: 42px;
+  padding: 0 var(--space-6);
+  padding-right: 32px;
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base);
+  font-size: 13.5px;
+  color: var(--color-ink);
+  background-color: var(--color-surface);
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  transition: border-color var(--transition-base, 150ms ease);
+  // A data: URI SVG can't reference a CSS custom property, so this one hex is unavoidable — it's
+  // --color-muted's own value (#64748B), matching rule-config-form's identical arrow exactly rather
+  // than approximating it, so both this popover and the config form draw the same glyph in the same spot.
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748B' d='M6 8 0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 7px;
+
+  &:hover { border-color: var(--color-muted); }
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
+  }
+}
 
 .fm-popover-inline-label {
   display: flex;
@@ -182,9 +273,14 @@
   padding: var(--space-4) var(--space-6);
 }
 
+// A full bordered/tinted card (not just a top divider line) so "Transformation" reads as one clearly
+// grouped block of controls, matching how every other section-with-a-background elsewhere in this
+// feature (e.g. the de-identification policy card) already groups related controls.
 .fm-popover-section--rule {
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-6);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: var(--space-6);
 }
 
 .fm-popover-rule-toggle {
@@ -199,6 +295,7 @@
   font-weight: 700;
   color: var(--color-ink);
   padding: 0;
+  width: 100%;
 
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); border-radius: var(--radius-sm); }
 }
@@ -217,8 +314,8 @@
 .fm-popover-rule-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+  gap: var(--space-6);
+  margin-top: var(--space-6);
 }
 
 .fm-popover-rule-actions {
@@ -239,6 +336,31 @@
   border-top: 1px solid var(--color-border);
 }
 
+.fm-popover-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+// A bare text link (same treatment "Remove transformation" above keeps, appropriately lighter for a
+// secondary action nested inside its own sub-section) reads as too easy to trigger by accident for the
+// one action here that discards the whole mapping — an outlined button gives it deliberate weight
+// without competing with Save's own solid-fill prominence.
+.fm-popover-delete {
+  background: none;
+  border: 1px solid var(--color-error-soft);
+  border-radius: var(--radius-base);
+  color: var(--color-error);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-6);
+  transition: background var(--transition-base), border-color var(--transition-base);
+
+  &:hover { background: var(--color-error-soft); border-color: var(--color-error); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-error-soft); }
+}
+
 .fm-popover-remove {
   background: none;
   border: none;
@@ -248,6 +370,21 @@
   padding: var(--space-2) var(--space-1);
 
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-error-soft); border-radius: var(--radius-sm); }
+}
+
+.fm-popover-cancel {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  color: var(--color-ink-2);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-8);
+  transition: background var(--transition-base), border-color var(--transition-base);
+
+  &:hover { background: var(--color-side); border-color: var(--color-muted); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
 }
 
 .fm-popover-save {

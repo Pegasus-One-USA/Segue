@@ -499,6 +499,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if ((ev.target as HTMLElement).closest('.fm-add-table-options')) {
       return;
     }
+    // The join/mapping-config popover is a sibling overlay floating on top of the canvas (see the
+    // template's own "never descendants of .fm-canvas-inner" comment), not part of the pannable
+    // surface itself — without this, scrolling over it fell into the same default branch as scrolling
+    // empty canvas space below and panned the whole canvas instead of the popover's own content.
+    if ((ev.target as HTMLElement).closest('.fm-popover')) {
+      return;
+    }
     const rows = (ev.target as HTMLElement).closest<HTMLElement>('.fm-source-rows, .fm-target-rows');
     if (rows && rows.scrollHeight > rows.clientHeight) {
       return;

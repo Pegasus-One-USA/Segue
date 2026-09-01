@@ -379,12 +379,25 @@ function computeProcessingOrder(tables: ResolvedTable[]): MappingProcessingStep[
  * probed/created at all yet (no entry in sqlTables) is treated as fully new — every one of its rows is kept,
  * since there's no existing schema yet to validate against. Deliberately NOT scoped to any one resource —
  * called once, on every save, across every mapped resource.
+ *
+ * Only a table whose columns came from an actual LIVE schema probe (origin: 'probed' — set solely by
+ * DestinationWizardComponent._refreshSqlTablesFromLiveSchema, which only ever runs for SQL-family
+ * destinations) is treated as authoritative enough to say a column is genuinely gone. A table known only
+ * from a restored Mapping JSON (origin: 'userCreated' or undefined — see applyMappingSummaryDocument) is
+ * just a snapshot of whatever ONE save happened to know about, not a live view of the real schema — for a
+ * destination table more than one resource shares (a single CSV output table is the common case: it has
+ * no live schema to probe at all, so its columns are ALWAYS restored-only, never 'probed'), that snapshot
+ * only ever reflects whichever resource(s) were mapped as of that earlier save. Pruning against it would
+ * remove a perfectly valid row the moment a second resource maps a new column onto the same shared table,
+ * before the next full reopen ever gets a chance to fold that column into a fresh snapshot. Not scoped by
+ * destination type — a SQL/MySQL table this session hasn't (re)probed yet gets exactly the same "insufficient
+ * evidence, keep it" treatment as a brand-new table does, per the table-not-found branch above.
  */
 export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: DestinationTable[]): MappingRow[] {
   const tablesByName = new Map(sqlTables.map(t => [t.fullName, t]));
   return mappingRows.filter(row => {
     const table = tablesByName.get(row.tableName);
-    return !table || table.columns.some(c => c.name === row.targetName);
+    return !table || table.origin !== 'probed' || table.columns.some(c => c.name === row.targetName);
   });
 }
 
