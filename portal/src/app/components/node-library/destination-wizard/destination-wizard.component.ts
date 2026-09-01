@@ -1430,7 +1430,14 @@ export class DestinationWizardComponent implements OnInit {
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
     this.sqlTables.update((tables) =>
       tables.map((t) => {
-        if (t.fullName !== e.tableName) return t;
+        // Same MySQL-only bare-name fallback as columnsForTableFn above: after reopening an existing
+        // MySQL mapping, e.tableName (from targetByResource, restored bare via qualifyTableName) can
+        // legitimately disagree with this entry's own fullName (database-qualified, from the live
+        // schema probe) for the exact same real table. Without this, the lookup below silently never
+        // matches — the column is queued (the toast fires unconditionally) but never actually appears
+        // on the canvas, since every table in sqlTables() comes back unchanged.
+        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
           idx === -1
@@ -1469,7 +1476,8 @@ export class DestinationWizardComponent implements OnInit {
   onColumnDropped(e: { tableName: string; column: string }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? { ...t, columns: t.columns.filter((c) => c.name !== e.column) }
           : t,
       ),
@@ -1486,7 +1494,8 @@ export class DestinationWizardComponent implements OnInit {
   }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? {
               ...t,
               columns: t.columns.map((c) =>
@@ -2780,8 +2789,10 @@ export class DestinationWizardComponent implements OnInit {
     // this resource has any mapped rows yet, hence ahead of the early-return below.
     for (const op of this.pendingSchemaOps()) {
       if (op.kind !== 'addColumn') continue;
+      // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above — without it this
+      // lookup silently finds nothing for a reopened MySQL mapping and the collision check below never runs.
       const table = this.sqlTables().find(
-        (t) => t.fullName === op.request.tableName,
+        (t) => t.fullName === op.request.tableName || (this.isMySql() && t.tableName === op.request.tableName),
       );
       const collides = table?.columns.some(
         (c) =>
