@@ -185,10 +185,15 @@ export class TransformationRuleListComponent implements OnInit {
 
   togglePreview(group: RuleTargetGroup): void {
     group.previewOpen = !group.previewOpen;
-    if (group.previewOpen && group.previewResourceType === undefined) {
-      group.previewResourceType = group.resourceType ?? '';
-      group.previewSampleJson = '';
-      group.previewResultJson = null;
+    if (group.previewOpen) {
+      // Preview and Steps are mutually exclusive within one card — see toggleEdit's own doc
+      // comment on why this is the only place either flag needs to know about the other.
+      group.editing = false;
+      if (group.previewResourceType === undefined) {
+        group.previewResourceType = group.resourceType ?? '';
+        group.previewSampleJson = '';
+        group.previewResultJson = null;
+      }
     }
     this.groups.set([...this.groups()]);
   }
@@ -410,6 +415,10 @@ export class TransformationRuleListComponent implements OnInit {
 
   toggleEdit(group: RuleTargetGroup): void {
     group.editing = !group.editing;
+    // Preview and Steps are mutually exclusive within one card (see togglePreview) — only the
+    // one being opened here ever needs to close the other; toggling either one OFF never touches
+    // the other flag, which is also what already lets clicking the currently-open one collapse it.
+    if (group.editing) group.previewOpen = false;
     this.groups.set([...this.groups()]);
   }
 
