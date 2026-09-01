@@ -273,6 +273,39 @@ resource "azurerm_key_vault_secret" "redis_password" {
   }
 }
 
+# --- Tenant secrets Key Vault (SourceConnection/DestinationConfiguration secrets) ---
+#
+# Separate from azurerm_key_vault.main above (which only ever holds 3 infra bootstrap secrets seeded
+# by Terraform itself) — this is an EXISTING vault, created and owned outside this config, that the
+# running app reads/writes tenant secrets from/to at runtime via CompositeSecretProvider/Writer. Its
+# Permission model must be Azure RBAC (not classic Access Policies), which is why this uses
+# azurerm_role_assignment below instead of azurerm_key_vault_access_policy like the vault above.
+data "azurerm_key_vault" "tenant_secrets" {
+  count               = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name                = var.tenant_secrets_key_vault_name
+  resource_group_name = data.azurerm_resource_group.main.name
+}
+
+# Assigning this role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
+# Administrator) on the vault/resource group — a Contributor-only account will get an authorization
+# error here specifically. If that happens: comment these two role assignments out, apply everything
+# else, then have someone with sufficient rights run, for each principal_id below:
+#   az role assignment create --role "Key Vault Secrets Officer" --assignee <principal_id> \
+#     --scope <tenant_secrets_key_vault_id output>
+resource "azurerm_role_assignment" "tenant_secrets_fhirbridge_app" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = data.azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "tenant_secrets_worker" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = data.azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_container_app.worker.identity[0].principal_id
+}
+
 # --- SQL Server Express (internal only, single replica) ---
 
 resource "azurerm_container_app" "sqlserver" {
@@ -405,6 +438,14 @@ resource "azurerm_container_app" "fhirbridge_app" {
   # resource attribute, so this dependency has to be spelled out explicitly.
   depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
 
+  # System-assigned so DefaultAzureCredential (AzureKeyVaultSecretProvider/Writer) can authenticate
+  # to the tenant secrets Key Vault with no credential material to manage. Added unconditionally —
+  # harmless when enable_tenant_secrets_key_vault is false, and this identity may be reused for other
+  # Azure resource access later.
+  identity {
+    type = "SystemAssigned"
+  }
+
   secret {
     name  = "sql-sa-password"
     value = azurerm_key_vault_secret.sql_sa_password.value
@@ -482,6 +523,29 @@ resource "azurerm_container_app" "fhirbridge_app" {
       env {
         name  = "ApiBaseUrl"
         value = "http://127.0.0.1:5000/"
+      }
+      # See enable_tenant_secrets_key_vault's description — only emitted when that flag is set, so a
+      # deployment that leaves it false keeps today's local-DB-only secret storage untouched.
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__UseAzureKeyVault"
+          value = "true"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__AllowConfigurationFallback"
+          value = "true"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__VaultName"
+          value = data.azurerm_key_vault.tenant_secrets[0].vault_uri
+        }
       }
 
       volume_mounts {
@@ -634,6 +698,11 @@ resource "azurerm_container_app" "worker" {
   # replaces crashed replicas automatically, which turns a lost race into a self-healing retry.
   depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
 
+  # See the identical block on azurerm_container_app.fhirbridge_app for why this exists.
+  identity {
+    type = "SystemAssigned"
+  }
+
   secret {
     name  = "sql-sa-password"
     value = azurerm_key_vault_secret.sql_sa_password.value
@@ -678,6 +747,27 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "Messaging__Provider"
         value = "InMemory"
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__UseAzureKeyVault"
+          value = "true"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__AllowConfigurationFallback"
+          value = "true"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "KeyVault__VaultName"
+          value = data.azurerm_key_vault.tenant_secrets[0].vault_uri
+        }
       }
     }
   }

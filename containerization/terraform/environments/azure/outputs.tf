@@ -8,6 +8,21 @@ output "key_vault_name" {
   value       = azurerm_key_vault.main.name
 }
 
+output "tenant_secrets_key_vault_id" {
+  description = "Populated only when enable_tenant_secrets_key_vault is true. Scope to use in a manual 'az role assignment create --role \"Key Vault Secrets Officer\" --assignee <principal_id> --scope <this>' if the azurerm_role_assignment resources in main.tf fail for lack of Owner/User Access Administrator rights."
+  value       = var.enable_tenant_secrets_key_vault ? data.azurerm_key_vault.tenant_secrets[0].id : null
+}
+
+output "fhirbridge_app_principal_id" {
+  description = "System-assigned managed identity principal ID for the fhirbridge_app Container App. Use as --assignee for the manual role-assignment fallback above."
+  value       = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+}
+
+output "worker_principal_id" {
+  description = "System-assigned managed identity principal ID for the worker Container App. Use as --assignee for the manual role-assignment fallback above."
+  value       = azurerm_container_app.worker.identity[0].principal_id
+}
+
 output "resource_manifest_download_cmd" {
   description = "Every resource ID this config created, as a fallback for cleanup from a machine without this environment's terraform.tfstate. Download with this command, then see the file's own header for how to delete each listed resource directly."
   value       = "az storage blob download --account-name ${azurerm_storage_account.main.name} --container-name ${azurerm_storage_container.manifest.name} --name ${azurerm_storage_blob.resource_manifest.name} --file resources.txt --auth-mode login"
