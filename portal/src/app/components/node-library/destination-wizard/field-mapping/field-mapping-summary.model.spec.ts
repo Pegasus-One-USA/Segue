@@ -464,4 +464,48 @@ describe('pruneOrphanedMappingRows', () => {
 
     expect(pruned).toHaveSize(1);
   });
+
+  it('never prunes against a table restored only from a saved Mapping JSON (no live probe) — the shared-CSV-table regression', () => {
+    // A single CSV output table two resources both write into. Restored via applyMappingSummaryDocument
+    // from a PREVIOUS save that only knew about Patient's own column — CSV has no live schema to probe at
+    // all (_refreshSqlTablesFromLiveSchema only ever runs for SQL-family destinations), so this table's
+    // origin is never 'probed', only 'userCreated' or undefined, regardless of how current the session is.
+    const sharedCsvTable: DestinationTable = {
+      schemaName: 'dbo', tableName: 'csv', fullName: 'csv', origin: 'userCreated',
+      columns: [
+        { name: 'Patient@now', dataType: 'string', mappingValueType: 'string', isNullable: true, maxLength: null },
+      ],
+    };
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.@now', label: 'now' }], mode: 'value', targetName: 'Patient@now', tableName: 'csv' },
+      // Just mapped THIS session, onto the same shared table — not yet reflected in sharedCsvTable.columns
+      // above (that snapshot predates this resource's own mapping) but a completely valid, current row.
+      { resource: 'Organization', sources: [{ fhirPath: 'Organization.@now', label: 'now' }], mode: 'value', targetName: 'Organization@now', tableName: 'csv' },
+    ];
+
+    const pruned = pruneOrphanedMappingRows(rows, [sharedCsvTable]);
+
+    expect(pruned).toHaveSize(2);
+    expect(pruned.map(r => r.resource)).toEqual(['Patient', 'Organization']);
+  });
+
+  it('still drops a genuinely orphaned column on a LIVE-probed table even when another resource shares it', () => {
+    // The authoritative case this fix must not weaken: once a shared table's columns actually come from a
+    // live probe, a target column that really isn't there anymore is still pruned, same as before.
+    const sharedProbedTable: DestinationTable = {
+      schemaName: 'dbo', tableName: 'Shared', fullName: 'dbo.Shared', origin: 'probed',
+      columns: [
+        { name: 'PatientField', dataType: 'nvarchar(50)', mappingValueType: 'string', isNullable: true, maxLength: null },
+      ],
+    };
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.a', label: 'a' }], mode: 'value', targetName: 'PatientField', tableName: 'dbo.Shared' },
+      { resource: 'Organization', sources: [{ fhirPath: 'Organization.a', label: 'a' }], mode: 'value', targetName: 'GoneField', tableName: 'dbo.Shared' },
+    ];
+
+    const pruned = pruneOrphanedMappingRows(rows, [sharedProbedTable]);
+
+    expect(pruned).toHaveSize(1);
+    expect(pruned[0].resource).toBe('Patient');
+  });
 });
