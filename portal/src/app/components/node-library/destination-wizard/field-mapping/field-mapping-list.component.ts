@@ -9,7 +9,6 @@ import { RuleConfigFormComponent, applyNodeDefaults } from './rule-config-form/r
 
 interface NewDeIdRuleDraft {
   resource: string;
-  scope: 'Global' | 'ResourceType';
   sourceField: string;
   config: Record<string, string>;
 }
@@ -263,17 +262,19 @@ export class FieldMappingListComponent {
     this.deIdEditingId.set(null);
     this.deIdDraft.set({
       resource: this.resources()[0] ?? '',
-      scope: 'ResourceType',
       sourceField: '',
       config: applyNodeDefaults(this.deIdSchema(), {}),
     });
   }
 
+  /** Loads an existing rule for editing regardless of its original scope — a rule authored elsewhere
+   *  (Settings screen, or before this quick-add form always scoped to ResourceType) can still be Global.
+   *  Re-saving it from here always writes it back as ResourceType, matching this form's "no scope choice"
+   *  simplification — editing a Global rule here narrows it to this resource going forward. */
   editDeIdRule(rule: TransformationRule): void {
     this.deIdEditingId.set(rule.id);
     this.deIdDraft.set({
       resource: rule.resourceType ?? this.resources()[0] ?? '',
-      scope: rule.scope === 'Global' ? 'Global' : 'ResourceType',
       sourceField: rule.sourceField ?? '',
       config: { ...rule.config },
     });
@@ -288,17 +289,13 @@ export class FieldMappingListComponent {
     this.deIdDraft.update(d => (d ? { ...d, resource, sourceField: '' } : d));
   }
 
-  updateDeIdDraftScope(scope: 'Global' | 'ResourceType'): void {
-    this.deIdDraft.update(d => (d ? { ...d, scope } : d));
-  }
-
   updateDeIdDraftSourceField(sourceField: string): void {
     this.deIdDraft.update(d => (d ? { ...d, sourceField } : d));
   }
 
   readonly canSubmitDeIdDraft = computed(() => {
     const d = this.deIdDraft();
-    return !!d && !!d.sourceField && (d.scope === 'Global' || !!d.resource);
+    return !!d && !!d.sourceField && !!d.resource;
   });
 
   submitDeIdDraft(): void {
@@ -310,10 +307,10 @@ export class FieldMappingListComponent {
     this.rulesService
       .save({
         id: this.deIdEditingId(),
-        scope: d.scope as TransformScope,
+        scope: 'ResourceType' as TransformScope,
         nodeType: 'HashingMasking',
         config: d.config,
-        resourceType: d.scope === 'ResourceType' ? d.resource : null,
+        resourceType: d.resource,
         sourceField: d.sourceField,
         order: 0,
         onNull: 'Skip',

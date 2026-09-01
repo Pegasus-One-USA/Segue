@@ -171,20 +171,11 @@
         <div class="fm-draft-form">
           <div class="fm-draft-row">
             <label class="fm-draft-field">
-              <span>Scope</span>
-              <select [value]="d.scope" (change)="updateDeIdDraftScope($any($event.target).value)">
-                <option value="ResourceType">This resource only</option>
-                <option value="Global">Global — every resource</option>
+              <span>Resource</span>
+              <select [value]="d.resource" (change)="updateDeIdDraftResource($any($event.target).value)">
+                @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
               </select>
             </label>
-            @if (d.scope === 'ResourceType') {
-              <label class="fm-draft-field">
-                <span>Resource</span>
-                <select [value]="d.resource" (change)="updateDeIdDraftResource($any($event.target).value)">
-                  @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
-                </select>
-              </label>
-            }
             <label class="fm-draft-field">
               <span>Source field</span>
               <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)">
