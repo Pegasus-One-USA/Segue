@@ -13,14 +13,15 @@
   overflow: visible;
 }
 
+// The visible line itself — now purely decorative (pointer-events: none). All click/hover
+// interaction moved to .fm-wire-hit below: a wider, invisible stroke on the exact same path, drawn
+// immediately after so it paints on top and wins hit-testing, while this one stays thin/undisturbed.
 .fm-wire {
   fill: none;
   stroke-width: 2.2;
   stroke-linecap: round;
-  pointer-events: stroke;
-  cursor: pointer;
-
-  &:hover { stroke-width: 3.2; }
+  pointer-events: none;
+  transition: filter var(--transition-base);
 }
 
 .fm-wire--dashed {
@@ -30,17 +31,40 @@
 .fm-wire--temp {
   stroke-dasharray: 6 5;
   opacity: 0.85;
-  pointer-events: none;
 }
 
 // A "does this look right?" candidate, not yet a real mapping — deliberately lighter/thinner and a
 // fixed neutral color (not the resource's rank color, which is reserved for real, confirmed wires) so
-// it reads as tentative at a glance. Clicking it accepts the suggestion (see onSuggestionClick).
+// it reads as tentative at a glance. Clicking its .fm-wire-hit sibling accepts it (onSuggestionClick).
 .fm-wire--suggestion {
   stroke: var(--color-warning-strong, #b45309);
   stroke-width: 1.6;
   stroke-dasharray: 3 4;
   opacity: 0.65;
+}
 
-  &:hover { stroke-width: 2.6; opacity: 1; }
+// Invisible, ~14px-wide hit target tracing the exact same "d" as its visible sibling just before it
+// — clicking/hovering anywhere within roughly 6px of the thin visible line now registers, instead of
+// requiring the cursor on the 1–2px stroke itself. Same treatment for both real and suggestion wires
+// (only the geometry, via [attr.d], differs — the hit area itself is identical either way).
+.fm-wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+// Hover lands on the invisible .fm-wire-hit path, so its visible .fm-wire sibling is what actually
+// needs to show feedback — a brightness bump only (no stroke-width change; the line must stay
+// visually thin). :has() reaches "backwards" to the preceding sibling, which plain CSS can't do with
+// a sibling combinator alone since the hit path has to come after (not before) the line it targets.
+.fm-wire:has(+ .fm-wire-hit:hover) {
+  filter: brightness(1.25);
+}
+
+.fm-wire--suggestion:has(+ .fm-wire-hit:hover) {
+  opacity: 1;
+  filter: brightness(1.15);
 }
