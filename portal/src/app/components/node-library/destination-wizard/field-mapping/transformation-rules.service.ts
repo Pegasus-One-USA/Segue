@@ -137,6 +137,9 @@ export interface TransformConfigFieldSchema {
   defaultValue?: string | null;
   /** Grey example text shown inside an empty box — never submitted as the real value, unlike defaultValue. */
   placeholder?: string | null;
+  /** True for a fine-tuning/edge-case field the rule works fine without touching — rendered under a
+   *  collapsed "Advanced Options" section by RuleConfigFormComponent instead of the main field list. */
+  isAdvanced?: boolean;
 }
 
 export interface TransformNodeSchema {
