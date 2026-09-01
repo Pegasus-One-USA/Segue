@@ -1,0 +1,21 @@
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_5849c970b9c366::t_fbf9234eca9128 274-294
+  s_5849c970b9c366::t_db7096619a873b 349-351,356-372
+  s_5849c970b9c366::t_6401c093b7fa99 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a2ee5f7825387a9cc4fd525632983683d653f54c",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
