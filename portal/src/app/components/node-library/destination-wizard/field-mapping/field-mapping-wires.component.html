@@ -5,6 +5,14 @@
       [class.fm-wire--dashed]="p.dashed"
       [attr.d]="p.d"
       [style.stroke]="p.stroke"
+    ></path>
+    <!-- Invisible, much wider stroke on the exact same "d" as the visible wire above -- drawn right
+         after it, so it paints on top and wins hit-testing, while the visible line stays thin and
+         undisturbed. All pointer interaction (click + hover-title) now lives here, not on the thin
+         visible path, so the actual click/hover target is comfortably larger than a 2.2px stroke. -->
+    <path
+      class="fm-wire-hit"
+      [attr.d]="p.d"
       (click)="onPathClick(p.rowKey)"
     >
       <title>Click to configure this mapping</title>
@@ -13,6 +21,10 @@
   @for (s of suggestionPaths(); track s.rowKey) {
     <path
       class="fm-wire fm-wire--suggestion"
+      [attr.d]="s.d"
+    ></path>
+    <path
+      class="fm-wire-hit"
       [attr.d]="s.d"
       (click)="onSuggestionClick(s.rowKey)"
     >

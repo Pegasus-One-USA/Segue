@@ -179,11 +179,22 @@
             </div>
             <div class="group-card__actions">
               @if (group.executionPhase === 'PreMapping') {
-                <button mat-stroked-button type="button" (click)="togglePreview(group)">
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="group-card__action-btn"
+                  [class.group-card__action-btn--active]="group.previewOpen"
+                  (click)="togglePreview(group)"
+                >
                   <mat-icon>visibility</mat-icon> Preview
                 </button>
               }
-              <button mat-stroked-button (click)="toggleEdit(group)">
+              <button
+                mat-stroked-button
+                class="group-card__action-btn"
+                [class.group-card__action-btn--active]="group.editing"
+                (click)="toggleEdit(group)"
+              >
                 <mat-icon>{{ group.editing ? 'expand_less' : 'edit' }}</mat-icon>
                 {{ group.steps.length }} step{{ group.steps.length === 1 ? '' : 's' }}
               </button>
@@ -191,7 +202,7 @@
           </div>
 
           @if (group.previewOpen) {
-            <div class="form-card" style="margin: 0 16px 16px;">
+            <div class="form-card" style="margin: 10px 16px 16px;">
               <h3>Preview</h3>
               <p>Paste a sample FHIR resource to see exactly what this profile's rules would change — nothing here is saved or sent to any destination.</p>
               <div class="form-grid">
