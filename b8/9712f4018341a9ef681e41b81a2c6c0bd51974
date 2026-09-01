@@ -1,0 +1,34 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_5849c970b9c366::t_c66fedc160210d 18-21,32,45-54,64,122,134,150,164-168
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_5849c970b9c366::t_3e43b26831fed9 83
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_5849c970b9c366::t_d65260810196ec 502-508
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_5849c970b9c366::t_7a3fb2154055df 197,215-223,225-251
+  s_5849c970b9c366::t_1b68a78c7d5e1f 13-14,18,28-30,67-73,75,80-90,97,104,119-122,134-138,143-144,146,151,156,158,165,172-195,276-278,280-283,298,317-318,339-363,375-388
+  s_5849c970b9c366::t_33a28be0b56e42 224
+  s_5849c970b9c366::t_d6e9f05e5a0ca2 196
+  s_5849c970b9c366::t_9216a8a334cf6b 252
+  s_5849c970b9c366::t_2c77e59988beef 389
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_5849c970b9c366::t_5ef877e2bfb113 36-40
+  s_5849c970b9c366::t_7b0a2e69f9f73e 228-241
+  s_5849c970b9c366::t_ad34c8eecd4117 242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b89712f4018341a9ef681e41b81a2c6c0bd51974",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
