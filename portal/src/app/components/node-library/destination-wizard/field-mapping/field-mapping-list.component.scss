@@ -223,7 +223,6 @@
   // this dense, resizable inline-editing strip where every cell holds a compact <select>/<input>.
   // Scoped overrides (Angular's own encapsulation keeps these local to this component) tighten it
   // to match the rest of the panel instead of editing the shared class for all 30+ tables that use it.
-  //
   // border-collapse: separate (not the shared class's own collapse) is required here too: Chrome
   // (and other engines) don't reliably keep `position: sticky` cells stuck inside a collapsed-border
   // table. Collapse mode is also *why* the shared class's row/header borders were declared on
