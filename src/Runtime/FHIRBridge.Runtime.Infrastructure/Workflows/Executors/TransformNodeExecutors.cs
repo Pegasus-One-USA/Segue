@@ -442,7 +442,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType, resourceType, targetField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                    destinationType, resourceType, targetField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -597,6 +598,27 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
+    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", from MappingFieldDto.JsonPath)
+    /// into the "ResourceType.field" format the portal's rule-authoring UI saves <c>TransformationRule.SourceField</c>
+    /// as (see field-mapping-join-popover.component.ts's saveRule/loadRuleFor, which both build it from
+    /// MappingRow.sources[].fhirPath) — <see cref="EfTransformationRuleRepository.GetFieldScopedAsync"/>'s match
+    /// on SourceField is an exact string comparison, so both sides of it must agree on one convention. The UI's
+    /// is the one actually persisted, so this side has to match it, not the other way around: without this, a
+    /// Field-scope rule authored against a specific source field (SourceField not null) could never resolve at
+    /// runtime, silently falling through to "no rule → pass the value through unchanged" for every record.
+    /// </summary>
+    private static string? ToRuleAuthoringSourceFieldFormat(string resourceType, string? jsonPath)
+    {
+        if (string.IsNullOrEmpty(jsonPath))
+        {
+            return null;
+        }
+
+        var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
+        return $"{resourceType}.{bare}";
+    }
+
+    /// <summary>
     /// Runs every already-mapped value in <paramref name="row"/> through whichever transform-rule chain
     /// currently applies to its destination field (Workflow → Field → ResourceType → DestinationType → Global,
     /// via <see cref="IEffectiveRuleResolver"/>) — the same resolve-then-apply logic
@@ -620,14 +642,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
-        {
-            return (row, null, null);
-        }
-
-        var hidden = _settingsCache is null
-            || await _settingsCache.GetBoolAsync(
-                TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
-        if (hidden)
         {
             return (row, null, null);
         }
@@ -679,7 +693,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 

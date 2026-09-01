@@ -45,13 +45,13 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         {
             var workflowRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
-                    await _repository.GetWorkflowScopedAsync(
-                        resourcePipelineRouteId.Value, resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                    Enabled(await _repository.GetWorkflowScopedAsync(
+                        resourcePipelineRouteId.Value, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
                     sourceSystem),
                 sourceField);
             if (workflowRules.Count > 0)
             {
-                return Order(workflowRules);
+                return OrderOnly(workflowRules);
             }
         }
 
@@ -59,34 +59,42 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             PreferSourceSpecific(
                 PreferResourceTypeSpecific(
                     PreferFieldSpecific(
-                        await _repository.GetFieldScopedAsync(resourceType, destinationField, sourceSystem, sourceField, cancellationToken),
+                        Enabled(await _repository.GetFieldScopedAsync(resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
                         destinationField),
                     resourceType),
                 sourceSystem),
             sourceField);
         if (fieldRules.Count > 0)
         {
-            return Order(fieldRules);
+            return OrderOnly(fieldRules);
         }
 
         var resourceTypeRules = PreferFieldSpecific(
-            await _repository.GetResourceTypeScopedAsync(resourceType, destinationField, cancellationToken), destinationField);
+            Enabled(await _repository.GetResourceTypeScopedAsync(resourceType, destinationField, cancellationToken)), destinationField);
         if (resourceTypeRules.Count > 0)
         {
-            return Order(resourceTypeRules);
+            return OrderOnly(resourceTypeRules);
         }
 
         var destinationTypeRules = PreferFieldSpecific(
-            await _repository.GetDestinationTypeScopedAsync(destinationType, destinationField, cancellationToken), destinationField);
+            Enabled(await _repository.GetDestinationTypeScopedAsync(destinationType, destinationField, cancellationToken)), destinationField);
         if (destinationTypeRules.Count > 0)
         {
-            return Order(destinationTypeRules);
+            return OrderOnly(destinationTypeRules);
         }
 
         var globalRules = PreferFieldSpecific(
-            await _repository.GetGlobalScopedAsync(destinationField, cancellationToken), destinationField);
-        return Order(globalRules);
+            Enabled(await _repository.GetGlobalScopedAsync(destinationField, cancellationToken)), destinationField);
+        return OrderOnly(globalRules);
     }
+
+    /// <summary>Filters out disabled rows BEFORE a tier's "did anything match" count check — applying this only
+    /// inside Order() (as the old code did) let a tier whose only match was disabled still win the tier
+    /// (Count &gt; 0 on the unfiltered list), return empty after the disabled row was dropped, and never fall
+    /// through to a broader tier — silently treating "disabled" as "no rule anywhere" instead of "check the
+    /// next tier".</summary>
+    private static IReadOnlyList<TransformationRule> Enabled(IReadOnlyList<TransformationRule> rules) =>
+        rules.Where(r => r.IsEnabled).ToList();
 
     /// <summary>Within one tier, a row that names this exact field takes priority over a blanket
     /// (DestinationField == null) row for the same tier.</summary>
@@ -137,6 +145,6 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         return sourceFieldSpecific.Count > 0 ? sourceFieldSpecific : rules;
     }
 
-    private static IReadOnlyList<TransformationRule> Order(IReadOnlyList<TransformationRule> rules) =>
-        rules.Where(r => r.IsEnabled).OrderBy(r => r.Order).ToList();
+    private static IReadOnlyList<TransformationRule> OrderOnly(IReadOnlyList<TransformationRule> rules) =>
+        rules.OrderBy(r => r.Order).ToList();
 }

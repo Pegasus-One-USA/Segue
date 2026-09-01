@@ -157,7 +157,7 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("WebhookIngestion:SignatureHeader", _configuration.GetValue("WebhookIngestion:SignatureHeader", "X-FHIRBridge-Signature"), "HTTP header expected to carry the webhook signature."),
 
             ("Workflow:GraphExecution:Enabled", Bool("Workflow:GraphExecution:Enabled", false), "Master switch for running the persisted workflow graph instead of the flat route path."),
-            (TransformationRulesFeatureFlag.SettingKey, Bool(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden), "When true, the destination wizard's Rules button, the Settings > Transformation Rules screen, and rule application during workflow execution are all hidden/skipped. Ships visible (not hidden) by default; set to true here to hide it."),
+            (TransformationRulesFeatureFlag.SettingKey, Bool(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden), "When true, hides the destination wizard's Rules button and the Settings > Transformation Rules screen. Does NOT stop already-configured rules from running during workflow execution. Ships visible (not hidden) by default; set to true here to hide it."),
             ("Compliance:RequireTde", Bool("Compliance:RequireTde", false), "When true, the TDE health check reports Unhealthy (not just Degraded) if the database is unencrypted."),
         };
 

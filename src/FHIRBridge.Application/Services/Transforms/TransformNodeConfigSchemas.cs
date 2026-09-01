@@ -3,11 +3,13 @@ using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
 
-/// <summary>The System Setting key gating the whole transformation-rules feature (Settings &gt; System
+/// <summary>The System Setting key gating the transformation-rules feature's UI surfaces only — the
+/// destination wizard's Rules button and the Settings &gt; Transformation Rules screen (Settings &gt; System
 /// Settings &gt; General). Seeded by <c>SystemSettingsSeeder</c> with <see cref="DefaultHidden"/> as the
-/// default value, read via <c>ISystemSettingsCache.GetBoolAsync</c> everywhere the flag is checked (the API's
-/// own hidden-check endpoint, and <c>MappingNodeExecutor</c>'s rule-application step) — one constant so the
-/// key string and its default can never drift between the two.</summary>
+/// default value, read via <c>ISystemSettingsCache.GetBoolAsync</c> from the API's hidden-check endpoint.
+/// Deliberately does NOT gate rule application at runtime — hiding the configuration UI must never silently
+/// stop already-configured rules from running (<c>MappingNodeExecutor</c>'s rule-application step ignores this
+/// flag entirely), so a workflow's output stays correct regardless of whether an admin has hidden the screen.</summary>
 public static class TransformationRulesFeatureFlag
 {
     public const string SettingKey = "TransformationRules:Hidden";
