@@ -24,6 +24,7 @@
     Mapping list
   </span>
   @if (!collapsed() && rulesDestinationType()) {
+    <span class="fm-list-divider" aria-hidden="true"></span>
     <span class="fm-list-tabs">
       <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'mappings'" (click)="$event.stopPropagation(); switchTab('mappings')">
         Mappings <span class="fm-list-count">{{ visibleRows().length }}</span>
@@ -113,31 +114,54 @@
 
 @if (!collapsed() && activeTab() === 'deidentification' && rulesDestinationType()) {
   <div class="fm-list-body">
-    <div class="fm-draft-row" style="margin-bottom: 12px;">
-      <label class="fm-draft-field">
-        <span>Policy</span>
-        <select
-          class="fm-inline-select"
-          [value]="selectedDeIdentificationProfileId() ?? ''"
-          (change)="onProfileSelectChange($any($event.target).value)"
-        >
-          <option value="">None</option>
-          @for (p of deIdentificationProfiles(); track p.id) {
-            <option [value]="p.id">{{ p.name }}</option>
-          }
-        </select>
-      </label>
-      <input
-        type="text" class="fm-inline-input" placeholder="New profile name…"
-        [value]="newProfileName()"
-        (input)="onNewProfileNameInput($any($event.target).value)"
-      />
-      <button type="button" class="fm-list-add" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="requestCreateProfile()">+ New</button>
+    <div class="fm-deid-card">
+      <div class="fm-deid-card__header">
+        <span class="fm-deid-card__title">De-identification Policy</span>
+      </div>
+
+      <div class="fm-deid-card__row">
+        <label class="fm-deid-policy-field">
+          <span>Policy</span>
+          <select
+            class="fm-deid-select"
+            [value]="selectedDeIdentificationProfileId() ?? ''"
+            (change)="onProfileSelectChange($any($event.target).value)"
+          >
+            <option value="">None</option>
+            @for (p of deIdentificationProfiles(); track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </label>
+
+        @if (selectedDeIdentificationProfileId()) {
+          <span class="fm-deid-status">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            {{ selectedProfileName() }} is active for this mapping
+          </span>
+        }
+
+        <input
+          type="text" class="fm-deid-name-input" placeholder="New policy name…"
+          [value]="newProfileName()"
+          (input)="onNewProfileNameInput($any($event.target).value)"
+        />
+        <button type="button" class="fm-list-add fm-deid-create-btn" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="requestCreateProfile()">
+          {{ creatingProfile() ? 'Creating…' : '+ New Policy' }}
+        </button>
+      </div>
+
+      @if (!selectedDeIdentificationProfileId()) {
+        <div class="fm-deid-empty">
+          <strong>No de-identification policy selected</strong>
+          <span>Select an existing policy above, or name and create a new one, to configure de-identification for this mapping.</span>
+        </div>
+      }
     </div>
 
-    @if (!selectedDeIdentificationProfileId()) {
-      <p class="fm-list-empty">Select or create a policy above to attach de-identification rules to it.</p>
-    } @else {
+    @if (selectedDeIdentificationProfileId()) {
       <table class="data-table">
         <thead class="data-table__header">
           <tr>

@@ -120,6 +120,12 @@ export class FieldMappingListComponent {
   readonly selectedDeIdentificationProfileIdChange = output<string | null>();
   readonly newProfileNameChange = output<string>();
   readonly createDeIdentificationProfileRequested = output<void>();
+
+  /** Display-only lookup for the "policy selected" status line — no new state, just resolves the id
+   *  already tracked above to the name already present in the list already loaded for the dropdown. */
+  readonly selectedProfileName = computed(
+    () => this.deIdentificationProfiles().find(p => p.id === this.selectedDeIdentificationProfileId())?.name ?? ''
+  );
   /** Inline edits from this row's own delimiter/instance controls — no popover required, mirroring the
    *  reference mockup's bottom panel. */
   readonly delimiterChanged = output<{ resource: string; tableName: string; targetName: string; delimiter: string }>();
