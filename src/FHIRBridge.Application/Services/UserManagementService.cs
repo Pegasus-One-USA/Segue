@@ -212,6 +212,11 @@ public sealed class UserManagementService : IUserManagementService
             throw new InvalidOperationException("Invitation is invalid or expired.");
         }
 
+        if (!request.AcceptTerms)
+        {
+            throw new InvalidOperationException("You must accept the Terms and Conditions to continue.");
+        }
+
         user.AcceptInvitation(
             _passwordHasher.Hash(request.Password),
             request.FirstName,
@@ -238,6 +243,11 @@ public sealed class UserManagementService : IUserManagementService
             !_passwordHasher.Verify(request.InvitationToken, user.InvitationTokenHash))
         {
             throw new InvalidOperationException("Invitation is invalid or expired.");
+        }
+
+        if (!request.AcceptTerms)
+        {
+            throw new InvalidOperationException("You must accept the Terms and Conditions to continue.");
         }
 
         var identity = await _externalTokenValidator.ValidateAsync(request.Provider, request.Token, cancellationToken);

@@ -4,5 +4,6 @@ public sealed record AcceptInviteRequest(
     string Email,
     string InvitationToken,
     string Password,
-    string? FirstName,
-    string? LastName);
+    bool AcceptTerms,
+    string? FirstName = null,
+    string? LastName = null);

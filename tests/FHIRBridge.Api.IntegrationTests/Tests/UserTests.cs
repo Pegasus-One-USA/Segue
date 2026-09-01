@@ -186,6 +186,7 @@ public sealed class UserTests(ApiFixture f)
             Email           = invEmail,
             InvitationToken = invToken,
             Password        = "Accepted@Pass123!",
+            AcceptTerms     = true,
             FirstName       = "Accepted",
             LastName        = "User"
         });

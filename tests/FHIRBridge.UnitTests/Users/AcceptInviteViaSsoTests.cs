@@ -56,7 +56,7 @@ public sealed class AcceptInviteViaSsoTests
             .ReturnsAsync(new ExternalIdentity(LoginProvider.Google, "sub-1", "someone-else@x.io", "Other"));
 
         var act = () => Service().AcceptInviteViaSsoAsync(
-            new AcceptInviteSsoRequest(inviteEmail, "raw-token", LoginProvider.Google, "ext-token"),
+            new AcceptInviteSsoRequest(inviteEmail, "raw-token", LoginProvider.Google, "ext-token", AcceptTerms: true),
             CancellationToken.None);
 
         // ArgumentException -> HTTP 400 via the API exception mapper.
@@ -79,7 +79,7 @@ public sealed class AcceptInviteViaSsoTests
             .ReturnsAsync(new ExternalIdentity(LoginProvider.Google, "sub-1", "INVITED@x.io", "Invited"));
 
         await Service().AcceptInviteViaSsoAsync(
-            new AcceptInviteSsoRequest(inviteEmail, "raw-token", LoginProvider.Google, "ext-token"),
+            new AcceptInviteSsoRequest(inviteEmail, "raw-token", LoginProvider.Google, "ext-token", AcceptTerms: true),
             CancellationToken.None);
 
         user.Status.Should().Be(UserStatus.Active);

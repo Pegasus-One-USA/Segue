@@ -14,7 +14,10 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 
 import { AppInitService } from '../../services/app-init.service';
-import { TermsAndConditionsDialogComponent } from '../../components/terms-and-conditions-dialog/terms-and-conditions-dialog.component';
+import {
+  TermsAndConditionsDialogComponent,
+  TermsAndConditionsDialogResult,
+} from '../../components/terms-and-conditions-dialog/terms-and-conditions-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PasswordPolicyService } from '../../../auth/services/password-policy.service';
 import { PasswordValidation } from '../../../auth/models/password-policy.model';
@@ -81,7 +84,10 @@ export class SetupSuperAdminComponent {
     smtpPassword:    [''],
     smtpFromAddress: ['', [Validators.required, Validators.email]],
     smtpFromName:    ['FHIRBridge', Validators.required],
-    acceptTerms:     [false, Validators.requiredTrue],
+    // Starts disabled — enabled only once the Terms and Conditions dialog reports the reader actually
+    // scrolled to the end (see openTermsDialog()). A disabled control's own .valid is false (status is
+    // DISABLED, not VALID), so canSubmit() below stays blocked without any extra wiring.
+    acceptTerms:     [{ value: false, disabled: true }, Validators.requiredTrue],
   }, { validators: matchPasswords });
 
   // Signal-backed live values for reactive computed
@@ -116,7 +122,15 @@ export class SetupSuperAdminComponent {
   );
 
   protected openTermsDialog(): void {
-    this.dialog.open(TermsAndConditionsDialogComponent, { autoFocus: false, restoreFocus: true });
+    this.dialog
+      .open<TermsAndConditionsDialogComponent, void, TermsAndConditionsDialogResult>(
+        TermsAndConditionsDialogComponent, { autoFocus: false, restoreFocus: true })
+      .afterClosed()
+      .subscribe((result) => {
+        if (result?.readToEnd) {
+          this.form.get('acceptTerms')!.enable();
+        }
+      });
   }
 
   protected togglePw():  void { this.showPw.update(v => !v); }

@@ -144,15 +144,19 @@
         </mat-select>
       </mat-form-field>
 
-      <!-- Accept Terms -->
+      <!-- Accept Terms — the links are deliberately siblings of mat-checkbox, not nested inside its
+           projected label content. mat-checkbox (plus its touch-target overlay) claims its whole label
+           area as one click target to toggle the checkbox; a nested <a> inside that region is an
+           unreliable click target in a real browser (works via synthetic dispatchEvent, not real clicks
+           — this is exactly the bug that shipped here once before). -->
       <div class="terms-row">
-        <mat-checkbox formControlName="acceptTerms" color="primary">
-          I agree to the
-          <a href="#" class="terms-link" (click)="$event.stopPropagation()">Terms of Service</a>
-          and
-          <a href="#" class="terms-link" (click)="$event.stopPropagation()">Privacy Policy</a>
-        </mat-checkbox>
-        @if (fieldError('acceptTerms', 'mustBeTrue')) {
+        <mat-checkbox formControlName="acceptTerms" color="primary">I agree to the</mat-checkbox>
+        <a href="javascript:void(0)" class="terms-link" (click)="openTermsDialog()">Terms and Conditions</a>
+        <span>and</span>
+        <a href="#" class="terms-link">Privacy Policy</a>
+        @if (form.get('acceptTerms')!.disabled) {
+          <div class="terms-hint">Open and scroll through the Terms and Conditions to enable this checkbox.</div>
+        } @else if (fieldError('acceptTerms', 'mustBeTrue')) {
           <div class="terms-error">You must accept the terms to continue</div>
         }
       </div>

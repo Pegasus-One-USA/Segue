@@ -2,28 +2,346 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Terms and Conditions</title>
+  <title>Product License, Data Security, and HIPAA Compliance Agreement</title>
   <style>
-    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1a1a1a; margin: 24px; line-height: 1.55; }
-    h1 { font-size: 20px; }
-    h2 { font-size: 16px; margin-top: 24px; }
-    p, li { font-size: 14px; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color: #1a1a1a;
+      margin: 0;
+      line-height: 1.55;
+    }
+    h1 { font-size: 20px; color: #1F3A5F; margin: 0 0 4px; }
+    h2 { font-size: 15px; color: #1F3A5F; margin: 26px 0 8px; border-bottom: 1px solid #dbe2ea; padding-bottom: 4px; }
+    h3 { font-size: 14px; color: #1F3A5F; margin: 16px 0 6px; }
+    p, li { font-size: 13.5px; }
+    p { margin: 0 0 10px; }
+    .subtitle { font-size: 13px; color: #4a5568; margin: 0 0 18px; }
+    .meta { font-size: 13px; margin: 2px 0; }
+    .callout {
+      background: #EEF3F6;
+      border: 1px solid #00A89D;
+      border-radius: 4px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+    .callout p { margin: 0; }
+    .callout-label { font-weight: 600; color: #00695f; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 13px; }
+    th, td { border: 1px solid #dbe2ea; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #f4f7f9; color: #1F3A5F; }
+    .clause-list { padding-left: 20px; }
+    .clause-list li { margin-bottom: 6px; }
+    .note { font-size: 12.5px; color: #5a6472; font-style: italic; }
   </style>
 </head>
 <body>
-  <h1>FHIRBridge Terms and Conditions</h1>
-  <p>Placeholder terms and conditions text. Replace this file with the final legal copy before release.</p>
 
-  <h2>1. Acceptance of Terms</h2>
-  <p>By creating an administrator account for this deployment, you agree to be bound by these Terms and Conditions.</p>
+  <h1>Product License, Data Security, and HIPAA Compliance Agreement</h1>
+  <p class="subtitle">Governing the licensing, security, and permitted use of the Segue Healthcare Integration Platform for the transmission and integration of protected health information.</p>
+  <p class="meta"><strong>Provider / Licensor:</strong> Pegasus One ("Pegasus One," "Provider")</p>
+  <p class="meta"><strong>Client / Licensee:</strong> [CLIENT LEGAL ENTITY NAME]</p>
+  <p class="meta"><strong>Effective Date:</strong> [EFFECTIVE DATE]</p>
 
-  <h2>2. Use of the Software</h2>
-  <p>This software is provided to facilitate healthcare data integration in accordance with your organization's licensing agreement.</p>
+  <h2>Preamble</h2>
+  <p>This Product License, Data Security, and HIPAA Compliance Agreement (the "Agreement") is entered into as of the Effective Date set forth above by and between Pegasus One, a [STATE/PROVINCE OF FORMATION] [entity type] having its principal place of business at [PROVIDER ADDRESS] ("Provider" or "Pegasus One"), and [CLIENT LEGAL ENTITY NAME], a [STATE/PROVINCE OF FORMATION] [entity type] having its principal place of business at [CLIENT ADDRESS] ("Client"). Provider and Client are each a "Party" and collectively the "Parties."</p>
 
-  <h2>3. Data Handling</h2>
-  <p>You are responsible for configuring this deployment in accordance with applicable data protection and healthcare privacy regulations.</p>
+  <h2>Recitals</h2>
+  <ol class="clause-list">
+    <li>WHEREAS, Provider has developed and offers the Segue Healthcare Integration Platform (also marketed as "FHIR Bridge") (the "Platform"), a software application that extracts healthcare data from source electronic health record ("EHR") systems, normalizes it to the HL7® FHIR® standard, and writes the resulting records to destination systems designated and controlled by the Client;</li>
+    <li>WHEREAS, Client wishes to license and use the Platform to integrate healthcare data that Client is authorized to access from one or more healthcare organizations (each a "Data Source Organization"), pursuant to Client's own agreements with such organizations;</li>
+    <li>WHEREAS, the Platform may Process protected health information ("PHI") and electronic protected health information ("ePHI") as those terms are defined under the Health Insurance Portability and Accountability Act of 1996, as amended by the HITECH Act, and their implementing regulations (collectively, "HIPAA"); and</li>
+    <li>WHEREAS, the Parties wish to set forth the terms governing the license of the Platform, the security safeguards implemented within the Platform, and the allocation of responsibilities for the protection of PHI, including the data governance framework applicable to data written to the Client's environment.</li>
+  </ol>
+  <p>NOW, THEREFORE, in consideration of the mutual covenants and promises set forth herein, and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the Parties agree as follows:</p>
 
-  <h2>4. Contact</h2>
-  <p>For questions about these terms, contact your solution provider.</p>
+  <h2>1. Definitions</h2>
+  <p>Capitalized terms used but not otherwise defined in this Agreement have the meanings set forth below. Terms defined in HIPAA and not otherwise defined herein have the meanings given to them under HIPAA.</p>
+  <ul class="clause-list">
+    <li><strong>"Business Associate"</strong> and <strong>"Covered Entity"</strong> have the meanings assigned to those terms under 45 C.F.R. § 160.103.</li>
+    <li><strong>"Business Associate Agreement"</strong> or <strong>"BAA"</strong> means a written agreement satisfying the requirements of 45 C.F.R. §§ 164.502(e) and 164.504(e).</li>
+    <li><strong>"Client Environment"</strong> means the databases, file storage, servers, cloud tenancy, credentials, and other infrastructure that are owned, leased, provisioned, controlled, or designated by Client and to which the Platform writes Destination Data, including any SQL Server database, file share, SFTP endpoint, or email recipient configured by Client as a Destination.</li>
+    <li><strong>"Destination"</strong> means a target system configured within the Platform to receive records, including SQL Server and CSV file outputs, located within the Client Environment.</li>
+    <li><strong>"Destination Data"</strong> means the healthcare data, including any PHI or ePHI, that is written by the Platform to a Destination in accordance with Client's configurations.</li>
+    <li><strong>"ePHI"</strong> means electronic protected health information as defined at 45 C.F.R. § 160.103 that is created, received, maintained, or transmitted by or through the Platform.</li>
+    <li><strong>"Platform"</strong> means the Segue Healthcare Integration Platform software licensed under this Agreement, including its application, worker, runtime, portal, and administrative components, together with any updates, patches, and Documentation provided by Provider.</li>
+    <li><strong>"Process"</strong> or <strong>"Processing"</strong> means any operation performed on PHI or ePHI, including extraction, transmission, transformation, normalization, de-identification, or transient handling in the course of routing data from a Source to a Destination.</li>
+    <li><strong>"Security Rule"</strong> means the HIPAA Security Standards for the Protection of Electronic Protected Health Information at 45 C.F.R. Part 160 and Part 164, Subparts A and C.</li>
+    <li><strong>"Source"</strong> means an EHR or FHIR data source configured within the Platform, including Epic and standards-compliant FHIR R4 servers.</li>
+    <li><strong>"Subprocessor"</strong> means a third party engaged by Provider to Process ePHI on Provider's behalf in connection with the Platform, including cloud hosting and infrastructure providers.</li>
+  </ul>
+
+  <h2>2. License Grant and Scope of Use</h2>
+  <h3>2.1 Grant</h3>
+  <p>Subject to the terms of this Agreement and Client's payment of all applicable fees, Provider grants Client a non-exclusive, non-transferable, non-sublicensable license to access and use the Platform during the Term solely for Client's internal business purposes of integrating healthcare data that Client is lawfully authorized to access.</p>
+  <h3>2.2 Restrictions</h3>
+  <p>Client shall not, and shall not permit any third party to: (a) copy, modify, or create derivative works of the Platform except as expressly permitted; (b) reverse engineer, decompile, or disassemble the Platform except to the extent permitted by applicable law; (c) rent, lease, sell, or provide the Platform on a service-bureau basis to third parties; (d) remove or obscure any proprietary notices; or (e) use the Platform to Process data that Client is not lawfully authorized to access.</p>
+  <h3>2.3 Deployment Configuration</h3>
+  <p>The Platform supports multiple source and destination connector types. The specific connectors enabled for Client (which, as of the Effective Date, comprise Epic and Generic FHIR R4 as Sources and SQL Server and CSV as Destinations) are a configuration matter set forth in the applicable order or statement of work. Availability of additional connectors is at Provider's discretion and may be subject to additional terms.</p>
+  <h3>2.4 Ownership</h3>
+  <p>As between the Parties, Provider retains all right, title, and interest in and to the Platform and all intellectual property rights therein. No rights are granted to Client other than as expressly set forth in this Agreement.</p>
+
+  <h2>3. The Platform and Data-Flow Architecture</h2>
+  <h3>3.1 Function</h3>
+  <p>The Platform operates as an integration and transmission layer. It connects to a Source, retrieves records that Client is authorized to access, applies the field mappings and transformation rules configured by Client, and writes the resulting records to a Destination within the Client Environment.</p>
+  <h3>3.2 Transient Processing</h3>
+  <p>The Platform Processes ePHI in the course of extraction, transformation, and delivery. Except for operational metadata, audit records, and short-lived caches and queues necessary to perform the integration (each secured as described in Section 6), the Platform is not designed to serve as the system of record or long-term repository for Destination Data.</p>
+  <h3>3.3 Client-Directed Delivery</h3>
+  <p>All Destination Data is delivered to the location(s) that Client selects and configures. Provider does not determine which records are delivered, to which Destination, or in what form; those determinations are made solely through Client's configurations, mappings, data-group selections, and delivery settings.</p>
+  <p>A summary of the data-flow architecture and the boundary between Provider-controlled Processing and the Client Environment is set forth in Exhibit A.</p>
+
+  <h2>4. Data Ownership, Residency, and the Client Environment</h2>
+  <div class="callout">
+    <p><span class="callout-label">Key data-governance principle.</span> Destination Data transmitted from Source EHRs to a Destination in accordance with Client's configurations comes to rest within the Client Environment. Such data, once written to the Client Environment, is owned and controlled by Client and is governed by Client's HIPAA Business Associate Agreement(s) and other agreements with the respective Data Source Organizations from which the data is accessed.</p>
+  </div>
+  <h3>4.1 Ownership of Destination Data</h3>
+  <p>As between the Parties, Client owns all Destination Data. Provider claims no ownership interest in Destination Data and will not use Destination Data except as necessary to provide, maintain, and support the Platform, or as required by law.</p>
+  <h3>4.2 Residency in the Client Environment</h3>
+  <p>Destination Data resides in the Client Environment. Client is solely responsible for provisioning, configuring, securing, encrypting, backing up, and administering the Client Environment, including the target SQL Server databases, file storage, transport endpoints, network controls, and access controls applicable to Destination Data at rest.</p>
+  <h3>4.3 Governance by Client's BAAs</h3>
+  <p>Client acknowledges and agrees that Destination Data at rest in the Client Environment is governed by, and Client's use and further disclosure of such data is subject to, Client's Business Associate Agreements and any other applicable agreements between Client and the Data Source Organizations. Nothing in this Agreement modifies, supersedes, or relieves Client of its obligations under those agreements.</p>
+  <h3>4.4 No Independent Authorization</h3>
+  <p>The Platform does not grant Client any right to access data from any Data Source Organization. Client represents that it holds all necessary authorizations, consents, and agreements required to access and Process the data it directs the Platform to retrieve.</p>
+
+  <h2>5. HIPAA Compliance and Business Associate Framework</h2>
+  <h3>5.1 Business Associate Status</h3>
+  <p>To the extent Provider creates, receives, maintains, or transmits ePHI on behalf of Client or a Covered Entity in connection with the Platform, Provider acts as a Business Associate. The Parties shall execute a Business Associate Agreement (or another mutually agreed form), which is incorporated by reference. In the event of a conflict between this Agreement and the BAA with respect to the handling of ePHI, the BAA controls.</p>
+  <h3>5.2 Chain of Responsibility</h3>
+  <p>The Parties acknowledge the layered HIPAA relationship applicable to the integration: (a) the Data Source Organization functions as a Covered Entity or Business Associate with respect to the source data; (b) Client accesses and receives such data under its own BAA with the Data Source Organization; and (c) Provider, through the Platform, Processes ePHI in transit on Client's behalf as a downstream Business Associate.</p>
+  <h3>5.3 Compliance with the Security Rule</h3>
+  <p>Provider has implemented and shall maintain reasonable and appropriate administrative, physical, and technical safeguards, consistent with the Security Rule, that are designed to protect the confidentiality, integrity, and availability of ePHI Processed by the Platform, as further described in Sections 6 through 10. Physical safeguards for hosting infrastructure are addressed through Provider's Subprocessors under Section 12.</p>
+  <h3>5.4 No Certification</h3>
+  <p>The Parties acknowledge that HIPAA does not provide for a certification, seal, or pass/fail examination. References in this Agreement to "compliance" mean the continuous operation of, and the ability to evidence, the safeguards required by the Security Rule.</p>
+
+  <h2>6. Technical Safeguards (45 C.F.R. § 164.312)</h2>
+  <p>Provider represents that the Platform implements, and Provider shall maintain, the technical safeguards described in this Section, which correspond to the standards of the Security Rule. A control-level summary is set forth in Exhibit B.</p>
+  <h3>6.1 Access Control (§ 164.312(a))</h3>
+  <ul class="clause-list">
+    <li><strong>Role-based access control.</strong> Access to sensitive functions and ePHI is restricted through enforced authorization and granular permission policies. No unauthenticated path to ePHI is exposed.</li>
+    <li><strong>Unique user identification.</strong> Each authenticated action is attributable to a unique, named user identity; shared or generic service accounts are not used for user activity.</li>
+    <li><strong>Automatic logoff.</strong> The administrative portal enforces an idle-session timeout, and access tokens expire after a defined interval in production environments.</li>
+    <li><strong>Strong authentication policy.</strong> Local authentication enforces a minimum twelve (12) character password with mixed character classes, and supports enforced password rotation and multi-factor authentication.</li>
+    <li><strong>Encryption and de-identification.</strong> Access controls are complemented by encryption and configurable de-identification, as described in Sections 8 and 10.</li>
+  </ul>
+  <h3>6.2 Audit Controls (§ 164.312(b))</h3>
+  <ul class="clause-list">
+    <li><strong>Tamper-evident audit log.</strong> Configuration and entity changes are recorded in a durable, append-only audit log secured with a cryptographic (SHA-256) hash chain, designed to make undetected alteration evident.</li>
+    <li><strong>Runtime pipeline audit trail.</strong> Pipeline extraction, transformation, and output events are recorded in a durable audit trail that persists across process restarts and does not embed PHI payloads.</li>
+    <li><strong>Access logging.</strong> The Platform records both authorization denials and successful access events at the resource level, enabling review of who accessed which resources and when.</li>
+    <li><strong>Correlation and traceability.</strong> Events are associated with correlation identifiers so that a specific transaction can be traced across the system.</li>
+  </ul>
+  <h3>6.3 Integrity (§ 164.312(c))</h3>
+  <p>The hash-chained audit log and append-only guards provide a mechanism to corroborate that recorded configuration and entity data have not been improperly altered or destroyed. Diagnostic tracing is configured to exclude request/response bodies, headers, and query parameter values, capturing only correlation identifiers.</p>
+  <h3>6.4 Person or Entity Authentication (§ 164.312(d))</h3>
+  <p>The Platform authenticates users through the credential and token controls described in Section 6.1 and authenticates to Sources using industry-standard OAuth 2.0 / SMART-on-FHIR flows, including public client with PKCE, client secret, or private-key JWT, as configured for the applicable Source.</p>
+  <h3>6.5 Transmission Security (§ 164.312(e))</h3>
+  <ul class="clause-list">
+    <li><strong>Encryption in transit.</strong> HTTPS is enforced for the application and portal, including HTTP Strict Transport Security and required-HTTPS metadata, outside of local development environments.</li>
+    <li><strong>Secure delivery channels.</strong> File delivery over SFTP uses an encrypted SSH channel with credentials sourced from a secret store; message-broker and cache transports enforce Transport Layer Security; and any HL7 MLLP transport, where enabled, is secured with TLS.</li>
+    <li><strong>Origin restriction.</strong> Cross-origin access is restricted through a managed allowlist of permitted origins rather than an open policy.</li>
+  </ul>
+
+  <h2>7. Administrative and Organizational Safeguards (45 C.F.R. § 164.308)</h2>
+  <h3>7.1 Security Program</h3>
+  <p>Provider maintains a documented information-security program that includes assigned security responsibility, workforce policies, a risk-management process, and a sanction policy, consistent with the administrative safeguards of the Security Rule. A summary of the organizational safeguards is set forth in Exhibit C.</p>
+  <h3>7.2 Assigned Security Responsibility</h3>
+  <p>Provider has designated a Security Official and a Privacy Official responsible for the development and implementation of its security and privacy policies.</p>
+  <h3>7.3 Risk Analysis</h3>
+  <p>Provider conducts and maintains a periodic risk analysis of the potential risks and vulnerabilities to the confidentiality, integrity, and availability of ePHI, and maintains a corresponding risk-treatment plan.</p>
+  <h3>7.4 Workforce Training and Sanctions</h3>
+  <p>Provider trains its workforce on its security and privacy policies and applies appropriate sanctions against workforce members who fail to comply.</p>
+  <h3>7.5 Evaluation</h3>
+  <p>Provider periodically evaluates the effectiveness of its safeguards through technical evaluation, which may include independent penetration testing of a non-production environment using synthetic data.</p>
+  <h3>7.6 Contingency Planning</h3>
+  <p>Provider maintains and periodically tests backup and disaster-recovery procedures for the components under its control, with documented recovery objectives.</p>
+
+  <h2>8. Encryption and Key Management</h2>
+  <h3>8.1 Encryption at Rest</h3>
+  <p>Secrets, access tokens, and generated output files handled within Provider-controlled components are encrypted at rest. Destination-connection secrets are stored in encrypted form or in a managed key vault; cached Source access tokens are encrypted; and generated file exports are encrypted prior to being written to disk and are subject to automated expiry and purge.</p>
+  <h3>8.2 Encryption in Transit</h3>
+  <p>All network transports carrying ePHI within Provider-controlled components enforce Transport Layer Security or an equivalent encrypted channel, as described in Section 6.5.</p>
+  <h3>8.3 Key Management</h3>
+  <p>Cryptographic keys and the data-protection key ring are themselves protected (for example, by certificate-based protection or a managed key vault) and are not stored in unprotected form. Signing secrets are provisioned automatically and may be rotated; rotation of a signing secret invalidates existing sessions.</p>
+  <h3>8.4 Client-Side Encryption</h3>
+  <p>Encryption of Destination Data at rest within the Client Environment, including transparent database encryption and storage-level encryption, is the responsibility of Client. The Platform surfaces a health check to flag an unencrypted target database, but does not administer the Client Environment.</p>
+
+  <h2>9. Audit Controls and Compliance Reporting</h2>
+  <h3>9.1 Immutable Audit Records</h3>
+  <p>The Platform maintains an immutable, hash-chained record of configuration and entity changes, capturing the actor, module, action, affected entity, status, and timestamp of each event.</p>
+  <h3>9.2 Execution History</h3>
+  <p>The Platform records the execution history of each pipeline run, including status, duration, and the identity of the triggering actor or schedule.</p>
+  <h3>9.3 Evidence Reports</h3>
+  <p>The Platform can generate compliance evidence reports for a selected date range, including audit-trail integrity verification, authentication activity, data-access summaries, security-event summaries, and error summaries, suitable for supporting an evaluation under 45 C.F.R. § 164.312(b).</p>
+  <h3>9.4 Availability to Client</h3>
+  <p>Client may access the audit, execution-history, and compliance-reporting functions applicable to its deployment, subject to the role-based permissions Client assigns to its users.</p>
+
+  <h2>10. De-Identification and Minimum Necessary</h2>
+  <h3>10.1 De-Identification Capability</h3>
+  <p>The Platform provides configurable de-identification services, including a Safe Harbor method and a k-anonymity method, that may be applied to a Destination on a per-Destination basis in accordance with Client's governance configuration.</p>
+  <h3>10.2 Client Configuration</h3>
+  <p>Whether a given Destination receives identified or de-identified data is a governance decision configured by Client. Client is responsible for determining, in consultation with its own compliance function, which Destinations require de-identification and which require identified data to function.</p>
+  <h3>10.3 Minimum Necessary</h3>
+  <p>The Platform's data-group and field-mapping controls allow Client to limit the categories and fields of ePHI delivered to a Destination. Client is responsible for configuring these controls consistent with the minimum-necessary standard and its own policies.</p>
+
+  <h2>11. Client Responsibilities</h2>
+  <p>Client acknowledges that the security of ePHI depends on the shared configuration and operation of the Platform and the Client Environment. Client shall:</p>
+  <ul class="clause-list">
+    <li>maintain all authorizations, consents, and BAAs required to access and Process data from each Data Source Organization, and comply with those agreements;</li>
+    <li>provision, secure, encrypt, monitor, patch, back up, and administer the Client Environment, including all Destinations and the network, storage, and access controls applicable to Destination Data at rest;</li>
+    <li>configure the Platform appropriately, including Source and Destination connections, data groups, field mappings, transformation and de-identification rules, delivery settings, and upsert keys;</li>
+    <li>administer user accounts, roles, and permissions within the Platform, applying least-privilege principles and using the built-in roles (SuperAdmin, Admin, Operations, Audit) or custom roles as appropriate;</li>
+    <li>safeguard credentials, tokens, and secrets under Client's control, and configure permitted origins and allowed recipients responsibly; and</li>
+    <li>promptly notify Provider of any suspected security incident affecting the Platform or the Processing of ePHI.</li>
+  </ul>
+
+  <h2>12. Subcontractors and Subprocessors</h2>
+  <h3>12.1 Flow-Down Obligations</h3>
+  <p>Provider shall not permit a Subprocessor to Process ePHI unless the Subprocessor has agreed in writing to restrictions and conditions at least as protective as those applicable to Provider under this Agreement and the BAA, consistent with 45 C.F.R. § 164.502(e)(1)(ii).</p>
+  <h3>12.2 Cloud Infrastructure</h3>
+  <p>Provider's hosting and infrastructure Subprocessors (for example, the applicable cloud platform and its constituent services) are engaged under a Business Associate Agreement where they Process ePHI, and physical safeguards for the hosting facilities are the responsibility of such Subprocessors.</p>
+  <h3>12.3 Register</h3>
+  <p>Provider maintains a register of Subprocessors that Process ePHI and will make relevant information available to Client upon reasonable request.</p>
+
+  <h2>13. Breach Notification</h2>
+  <h3>13.1 Notification</h3>
+  <p>Provider shall notify Client without unreasonable delay, and in any event within the time period required by the BAA or applicable law, following discovery of a Breach of Unsecured PHI or a Security Incident affecting ePHI Processed through the Platform.</p>
+  <h3>13.2 Cooperation</h3>
+  <p>Each Party shall reasonably cooperate with the other in investigating, mitigating, and, where required, providing notifications relating to any such event. Responsibility for notifications to individuals, regulators, or Data Source Organizations shall be allocated in accordance with the BAA and the Parties' respective roles.</p>
+
+  <h2>14. Representations and Warranties</h2>
+  <h3>14.1 Mutual</h3>
+  <p>Each Party represents and warrants that it has the full corporate power and authority to enter into and perform this Agreement.</p>
+  <h3>14.2 Provider</h3>
+  <p>Provider represents and warrants that: (a) the Platform will perform materially in accordance with its then-current Documentation; and (b) Provider has implemented the administrative, physical, and technical safeguards described in Sections 6 through 12 and Exhibits B and C as applicable to the Platform as deployed and configured for Client as of the Effective Date, and will maintain safeguards that are reasonable and appropriate under the Security Rule during the Term.</p>
+  <h3>14.3 Client</h3>
+  <p>Client represents and warrants that it is and will remain authorized to access and Process all data that it directs the Platform to retrieve, and that it will use the Platform in compliance with all applicable laws and its agreements with Data Source Organizations.</p>
+
+  <h2>15. Disclaimers</h2>
+  <p>Except as expressly set forth in this Agreement, the Platform is provided "as is," and Provider disclaims all other warranties, whether express, implied, statutory, or otherwise, including any implied warranties of merchantability, fitness for a particular purpose, title, and non-infringement. Provider does not warrant that the Platform will be uninterrupted or error-free, or that it will, by itself, cause Client to be in compliance with HIPAA or any other law. HIPAA compliance depends on the combined configuration, operation, and administration of the Platform and the Client Environment.</p>
+
+  <h2>16. Limitation of Liability</h2>
+  <h3>16.1 Exclusion of Indirect Damages</h3>
+  <p>Except for the Excluded Claims (defined below), neither Party will be liable for any indirect, incidental, special, consequential, or punitive damages, or for lost profits or revenues, arising out of or relating to this Agreement, even if advised of the possibility of such damages.</p>
+  <h3>16.2 Cap</h3>
+  <p>Except for the Excluded Claims, each Party's total aggregate liability arising out of or relating to this Agreement will not exceed the fees paid or payable by Client to Provider under this Agreement during the [TWELVE (12)] months preceding the event giving rise to the claim.</p>
+  <h3>16.3 Excluded Claims</h3>
+  <p>"Excluded Claims" means [a Party's indemnification obligations, breach of confidentiality, breach of the BAA, and liability that cannot be limited under applicable law]. The Parties shall complete this Section in consultation with counsel to reflect the agreed risk allocation for privacy and security incidents.</p>
+
+  <h2>17. Indemnification</h2>
+  <h3>17.1 By Provider</h3>
+  <p>Provider shall defend, indemnify, and hold harmless Client from third-party claims to the extent arising from (a) Provider's material breach of the BAA or of its security obligations under this Agreement, or (b) an allegation that the Platform, as provided, infringes a third party's intellectual-property rights, subject to customary exclusions.</p>
+  <h3>17.2 By Client</h3>
+  <p>Client shall defend, indemnify, and hold harmless Provider from third-party claims to the extent arising from (a) Client's access to or Processing of data that Client was not authorized to access, (b) Client's configuration or administration of the Platform or the Client Environment, or (c) Client's breach of its agreements with Data Source Organizations.</p>
+  <h3>17.3 Procedure</h3>
+  <p>The indemnified Party shall promptly notify the indemnifying Party, tender control of the defense, and reasonably cooperate. The indemnifying Party shall not settle any claim in a manner that imposes non-indemnified liability on the indemnified Party without its consent.</p>
+
+  <h2>18. Term and Termination</h2>
+  <h3>18.1 Term</h3>
+  <p>This Agreement commences on the Effective Date and continues for the initial term set forth in the applicable order, and renews as provided therein (the "Term").</p>
+  <h3>18.2 Termination for Cause</h3>
+  <p>Either Party may terminate this Agreement upon material breach by the other Party that remains uncured [thirty (30)] days after written notice.</p>
+  <h3>18.3 Effect</h3>
+  <p>Upon expiration or termination, Client's license to use the Platform ends. Sections that by their nature should survive (including confidentiality, data governance, disclaimers, limitation of liability, indemnification, and the BAA's survival provisions) survive.</p>
+
+  <h2>19. Return or Destruction of Data</h2>
+  <h3>19.1 Client Environment</h3>
+  <p>Because Destination Data resides in the Client Environment, Client retains custody and control of such data upon termination. Provider has no obligation to return or destroy Destination Data that resides solely within the Client Environment.</p>
+  <h3>19.2 Provider-Held ePHI</h3>
+  <p>With respect to any ePHI within Provider-controlled components (for example, transient caches, queues, audit metadata, or generated files pending delivery), Provider shall, in accordance with the BAA, return or destroy such ePHI upon termination where feasible, and where infeasible, extend the protections of the BAA to such ePHI and limit further use to that which makes return or destruction infeasible.</p>
+
+  <h2>20. Confidentiality</h2>
+  <p>Each Party shall protect the other Party's Confidential Information using at least the same degree of care it uses to protect its own confidential information of like kind, and not less than a reasonable degree of care, and shall use such information solely to perform under this Agreement. This Section does not limit the handling of PHI, which is governed by the BAA and the data-governance provisions of this Agreement.</p>
+
+  <h2>21. General Provisions</h2>
+  <h3>21.1 Governing Law</h3>
+  <p>This Agreement is governed by the laws of [GOVERNING JURISDICTION], without regard to its conflict-of-laws rules.</p>
+  <h3>21.2 Entire Agreement</h3>
+  <p>This Agreement, together with its Exhibits, the BAA, and any applicable order or statement of work, constitutes the entire agreement between the Parties regarding its subject matter and supersedes all prior understandings.</p>
+  <h3>21.3 Order of Precedence</h3>
+  <p>In the event of conflict: (a) the BAA controls with respect to the handling of ePHI; (b) then this Agreement; and (c) then the Exhibits and orders.</p>
+  <h3>21.4 Assignment</h3>
+  <p>Neither Party may assign this Agreement without the other Party's prior written consent, except to a successor in connection with a merger or sale of substantially all assets.</p>
+  <h3>21.5 Amendment; Waiver</h3>
+  <p>Any amendment must be in writing and signed by both Parties. No waiver is effective unless in writing.</p>
+  <h3>21.6 Severability</h3>
+  <p>If any provision is held unenforceable, the remaining provisions remain in full force and effect.</p>
+  <h3>21.7 Notices</h3>
+  <p>Notices must be in writing and delivered to the addresses set forth above or as later designated in writing.</p>
+  <h3>21.8 Counterparts</h3>
+  <p>This Agreement may be executed in counterparts, including by electronic signature, each of which is deemed an original.</p>
+
+  <h2>Exhibit A — Platform Data-Flow and Trust Boundary</h2>
+  <p>The following describes the flow of data and the boundary between Provider-controlled Processing and the Client Environment.</p>
+  <table>
+    <thead>
+      <tr><th>Stage</th><th>What happens</th><th>Controlling party</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1. Source</td><td>The Platform authenticates to an EHR/FHIR Source (e.g., Epic or a Generic FHIR R4 server) using OAuth 2.0 / SMART-on-FHIR and retrieves records Client is authorized to access.</td><td>Client authorization; Provider Processing</td></tr>
+      <tr><td>2. Transform</td><td>Records are normalized to FHIR and transformed per Client-configured mappings, data groups, transformation rules, and de-identification settings.</td><td>Client configuration; Provider Processing</td></tr>
+      <tr><td>3. Transit</td><td>Data is transmitted over encrypted channels; transient caches/queues used for delivery are encrypted and access-restricted.</td><td>Provider</td></tr>
+      <tr><td>4. Destination</td><td>Records are written to a Destination (SQL Server or CSV) that Client designates and controls.</td><td>Client</td></tr>
+      <tr><td>5. At rest</td><td>Destination Data comes to rest in the Client Environment and is governed by Client's BAA(s) with the Data Source Organization(s).</td><td>Client</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Exhibit B — Technical Safeguards Control Matrix (§ 164.312)</h2>
+  <p class="note">This matrix summarizes the Platform technical safeguards mapped to the Security Rule. It reflects the controls represented to be implemented and operating in the Client's deployment; it must be verified against the deployment before execution.</p>
+  <table>
+    <thead>
+      <tr><th>Security Rule standard</th><th>Platform control</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Access Control — § 164.312(a)</td><td>RBAC with granular permission policies; unique user IDs; automatic logoff / token expiry; 12+ character password policy with rotation; MFA support.</td><td>Implemented</td></tr>
+      <tr><td>Audit Controls — § 164.312(b)</td><td>SHA-256 hash-chained, append-only audit log; durable runtime pipeline audit trail; successful-access and denial logging; correlation IDs; compliance evidence reports.</td><td>Implemented</td></tr>
+      <tr><td>Integrity — § 164.312(c)</td><td>Hash-chain integrity verification; append-only guards; PHI excluded from tracing.</td><td>Implemented</td></tr>
+      <tr><td>Authentication — § 164.312(d)</td><td>User authentication; OAuth 2.0 / SMART-on-FHIR to Sources (PKCE, client secret, or private-key JWT).</td><td>Implemented</td></tr>
+      <tr><td>Transmission Security — § 164.312(e)</td><td>Enforced HTTPS/HSTS; TLS on broker/cache transports; encrypted SFTP; TLS for HL7 MLLP where enabled; origin allowlist.</td><td>Implemented</td></tr>
+      <tr><td>Encryption at rest (addressable)</td><td>Encrypted secrets/token cache; managed key vault option; encrypted generated exports with automated purge; protected data-protection key ring.</td><td>Implemented</td></tr>
+      <tr><td>De-identification (supporting minimum necessary)</td><td>Configurable Safe Harbor and k-anonymity methods applied per Destination by Client governance configuration.</td><td>Implemented</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Note: "Implemented" in this Exhibit is stated on the assumption, per the Parties' understanding, that all described safeguards are deployed and operating for the Client. The distinction between required and addressable implementation specifications under the Security Rule is preserved; addressable specifications are satisfied through the equivalent measures described above.</p>
+
+  <h2>Exhibit C — Administrative and Organizational Safeguards (§ 164.308)</h2>
+  <table>
+    <thead>
+      <tr><th>Safeguard</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Assigned security responsibility</td><td>Designated Security Official and Privacy Official.</td></tr>
+      <tr><td>Policies and procedures</td><td>Adopted information-security and privacy policy set governing access, authentication, retention/disposal, and incident response.</td></tr>
+      <tr><td>Risk analysis and management</td><td>Maintained risk analysis, asset inventory, threat/vulnerability register, and risk-treatment plan, reviewed periodically.</td></tr>
+      <tr><td>Workforce and sanctions</td><td>Workforce security training and a sanction policy for non-compliance.</td></tr>
+      <tr><td>Business Associate Agreements</td><td>Executed BAAs with cloud infrastructure and downstream Subprocessors that Process ePHI, tracked in a Subprocessor register.</td></tr>
+      <tr><td>Contingency plan</td><td>Implemented and periodically tested backup and disaster-recovery procedures with documented recovery objectives.</td></tr>
+      <tr><td>Evaluation</td><td>Periodic technical evaluation, which may include independent penetration testing against a synthetic-data environment.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Exhibit D — Allocation of Responsibilities</h2>
+  <p class="note">The following summarizes the primary allocation of security and compliance responsibilities between the Parties. "P" = Provider; "C" = Client; "Shared" = joint responsibility.</p>
+  <table>
+    <thead>
+      <tr><th>Responsibility</th><th>Allocation</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Platform application security (code, RBAC, encryption in Provider components)</td><td>P</td></tr>
+      <tr><td>Audit logging and compliance reporting features</td><td>P</td></tr>
+      <tr><td>Subprocessor / cloud infrastructure BAAs (Provider components)</td><td>P</td></tr>
+      <tr><td>Authorization to access Data Source Organization data; BAAs with Data Source Organizations</td><td>C</td></tr>
+      <tr><td>Client Environment security, encryption at rest, backup of Destination Data</td><td>C</td></tr>
+      <tr><td>Platform configuration (mappings, data groups, de-identification, delivery)</td><td>C</td></tr>
+      <tr><td>User, role, and permission administration within the Platform</td><td>C</td></tr>
+      <tr><td>Minimum-necessary determinations</td><td>C</td></tr>
+      <tr><td>Security-incident detection, notification, and response</td><td>Shared</td></tr>
+      <tr><td>Breach notification to individuals / regulators / Data Source Organizations</td><td>Shared</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Exhibit E — Business Associate Agreement</h2>
+  <p>The Business Associate Agreement between the Parties is executed as a standalone document and governs the permitted uses and disclosures of PHI, safeguards, subcontractor flow-down, breach notification, access and amendment obligations, and return or destruction of PHI upon termination, consistent with 45 C.F.R. §§ 164.502(e) and 164.504(e).</p>
+
+  <p class="note">Segue Healthcare Integration Platform — Product License, Data Security, and HIPAA Compliance Agreement. This document is provided for review by the Parties and their counsel and does not constitute legal advice.</p>
+
 </body>
 </html>

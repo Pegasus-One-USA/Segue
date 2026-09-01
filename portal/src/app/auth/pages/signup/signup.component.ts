@@ -16,9 +16,14 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { AuthService } from '../../services/auth.service';
 import { PasswordStrengthComponent } from '../../components/password-strength/password-strength.component';
 import { UserRole } from '../../models/user.model';
+import {
+  TermsAndConditionsDialogComponent,
+  TermsAndConditionsDialogResult,
+} from '../../../onboarding/components/terms-and-conditions-dialog/terms-and-conditions-dialog.component';
 
 // ── Validators ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +87,7 @@ interface RoleOption { value: UserRole; label: string; }
 })
 export class SignupComponent {
   private readonly fb     = inject(FormBuilder);
+  private readonly dialog = inject(MatDialog);
   protected readonly auth = inject(AuthService);
 
   protected readonly isLoading = this.auth.isLoading;
@@ -105,7 +111,9 @@ export class SignupComponent {
       password:        ['', [Validators.required, passwordStrengthValidator]],
       confirmPassword: ['', Validators.required],
       role:            ['Audit' as UserRole],
-      acceptTerms:     [false, mustBeTrueValidator],
+      // Starts disabled — enabled only once the Terms and Conditions dialog reports the reader
+      // actually scrolled to the end (see openTermsDialog()).
+      acceptTerms:     [{ value: false, disabled: true }, mustBeTrueValidator],
     },
     { validators: passwordMatchValidator('password', 'confirmPassword') }
   );
@@ -117,6 +125,18 @@ export class SignupComponent {
   protected togglePassword(): void { this.showPassword.update(v => !v); }
   protected toggleConfirm(): void  { this.showConfirm.update(v => !v); }
 
+  protected openTermsDialog(): void {
+    this.dialog
+      .open<TermsAndConditionsDialogComponent, void, TermsAndConditionsDialogResult>(
+        TermsAndConditionsDialogComponent, { autoFocus: false, restoreFocus: true })
+      .afterClosed()
+      .subscribe((result) => {
+        if (result?.readToEnd) {
+          this.form.get('acceptTerms')!.enable();
+        }
+      });
+  }
+
   protected fieldError(field: string, error: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.hasError(error) && (ctrl.touched || this.submitted()));
@@ -125,7 +145,10 @@ export class SignupComponent {
   protected submit(): void {
     this.submitted.set(true);
     this.form.markAllAsTouched();
-    if (this.form.invalid) return;
+    // A disabled control is excluded from its parent FormGroup's aggregate validity in Angular
+    // Reactive Forms, so form.invalid alone would NOT catch "acceptTerms still disabled/unchecked" —
+    // check it explicitly.
+    if (this.form.invalid || this.form.get('acceptTerms')!.value !== true) return;
 
     const { firstName, lastName, email, password, role, acceptTerms } = this.form.getRawValue();
     this.auth.register({
