@@ -1,0 +1,38 @@
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_036af994396749::t_964e8eecb6b6ca 501,523-528,533-537,546
+  s_036af994396749::t_0b6c40d65b927a 529-532,540-545
+  s_036af994396749::t_063ae6d3f53c0a 570
+  s_036af994396749::t_29e4916f3268f5 557,568-569
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_320eae0cd4c4e8::t_acefc808823372 6-7,9-12
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_320eae0cd4c4e8::t_acefc808823372 160
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_320eae0cd4c4e8::t_acefc808823372 445-446,600-620,696-697
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_320eae0cd4c4e8::t_acefc808823372 48-49,54,62,69,73,76,80,83,87-88,91-98,148-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a0b1dad446028a1870c1c5702fb59ce34e1f786d",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_320eae0cd4c4e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "012af6da-3f13-4d46-89f9-5f949c099939",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
