@@ -79,6 +79,7 @@
       <app-field-mapping-join-popover
         [row]="row"
         [allResources]="allResources()"
+        [rulesDestinationType]="rulesDestinationType()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"

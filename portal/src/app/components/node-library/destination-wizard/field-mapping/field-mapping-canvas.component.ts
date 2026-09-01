@@ -22,6 +22,7 @@ import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
+import { DestinationType } from '../../../../destination-connections/models/destination-configuration.model';
 
 export interface FmTargetCardSpec {
   resource: string;
@@ -83,6 +84,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  other than whichever one is presently being edited. */
   readonly allResources = input<string[]>([]);
   readonly destType = input.required<MappingDestType>();
+  /** The real backend DestinationType (e.g. 'SqlServer', 'Mongo') for this destination — distinct from
+   *  destType above (which is the coarser 'sql'/'csv'/'mongo' family used to drive UI branching). Threaded
+   *  down to the join popover so it can load/save a transformation rule scoped to the right destination.
+   *  Optional (not every host of this canvas — e.g. the Mapping Profiles dialog — has a resolved
+   *  destination type on hand); the popover simply hides its transformation-rule section when absent. */
+  readonly rulesDestinationType = input<DestinationType | null>(null);
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();

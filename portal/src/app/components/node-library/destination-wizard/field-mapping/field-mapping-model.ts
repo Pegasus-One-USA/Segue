@@ -376,11 +376,35 @@ export function effectiveMappingValueType(row: MappingRow): string | undefined {
  * Returns the exact user-facing error text on a mismatch, or null when compatible / when there's nothing
  * meaningful to compare yet (no column type metadata, or no known effective type — e.g. an empty row).
  */
+/**
+ * @param ruleExpectedType The `expectedValueType` of a Field-scope transformation rule already resolved
+ *   for this exact connector (destination-wizard.component.ts's resolveRuleExpectedTypesForSave), if
+ *   any: `undefined` — no rule on this field, fall back to comparing the raw source type (original
+ *   behavior); `null` — a rule exists but declares no output type, so there's nothing to validate against
+ *   and the raw-type check is skipped entirely (trust the rule); a string — the rule's declared output
+ *   type, compared against the column instead of the raw source type, since that's what actually reaches
+ *   the column at runtime. Without this, a rule that legitimately changes the value's shape (Date ->
+ *   Integer for an age calculation, String -> Json for a parsed name, etc.) always failed this check,
+ *   even though the transform makes the raw-type mismatch irrelevant.
+ */
 export function checkColumnTypeCompatibility(
   row: MappingRow,
   column: { dataType: string; mappingValueType?: string } | undefined,
+  ruleExpectedType?: string | null,
 ): string | null {
   if (!column?.mappingValueType) return null;
+
+  if (ruleExpectedType !== undefined) {
+    if (ruleExpectedType === null || ruleExpectedType.toLowerCase() === column.mappingValueType.toLowerCase()) {
+      return null;
+    }
+    return (
+      `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
+      `but its transformation rule declares an output type of ${ruleExpectedType} — fix the rule's Expected ` +
+      `output type, or retarget to a ${ruleExpectedType}-compatible column.`
+    );
+  }
+
   const sourceValueType = effectiveMappingValueType(row);
   if (!sourceValueType || sourceValueType.toLowerCase() === column.mappingValueType.toLowerCase()) {
     return null;

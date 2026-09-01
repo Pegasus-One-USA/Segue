@@ -1,6 +1,13 @@
-import { Component, HostBinding, computed, input, output, signal, effect } from '@angular/core';
+import { Component, HostBinding, computed, inject, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
+import { FormsModule } from '@angular/forms';
 import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
+import { DestinationType } from '../../../../destination-connections/models/destination-configuration.model';
+import { ToastService } from '../../../../services/toast.service';
+import {
+  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema,
+} from './transformation-rules.service';
+import { RuleConfigFormComponent, applyNodeDefaults } from './rule-config-form/rule-config-form.component';
 
 /**
  * Join order/delimiter + array instance-selection editor. Opens either from a wire click or from the
@@ -14,7 +21,7 @@ import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCa
 @Component({
   selector: 'app-field-mapping-join-popover',
   standalone: true,
-  imports: [A11yModule],
+  imports: [A11yModule, FormsModule, RuleConfigFormComponent],
   templateUrl: './field-mapping-join-popover.component.html',
   styleUrl: './field-mapping-join-popover.component.scss',
 })
@@ -23,6 +30,9 @@ export class FieldMappingJoinPopoverComponent {
   /** Every resource selected for this destination — populates the "Resolves to" picker for a reference
    *  field, offering resources beyond whichever one this row itself belongs to. */
   readonly allResources = input<string[]>([]);
+  /** See FieldMappingCanvasComponent's own doc comment — null hides the transformation-rule section
+   *  entirely (this popover has no destination type to scope a rule against). */
+  readonly rulesDestinationType = input<DestinationType | null>(null);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -30,8 +40,128 @@ export class FieldMappingJoinPopoverComponent {
 
   readonly draft = signal<MappingRow | null>(null);
 
+  private readonly rulesService = inject(TransformationRulesService);
+  private readonly toast = inject(ToastService);
+
+  // ── inline transformation rule (the connector IS the wiring; this is what happens to the value after) ──
+  readonly nodeSchemas = signal<TransformNodeSchema[]>([]);
+  /** The single rule currently in effect for this exact connector (Field-scope, keyed by resourceType +
+   *  destinationField + sourceField) — null once loaded means "none yet", undefined means "still loading". */
+  readonly existingRule = signal<TransformationRule | null | undefined>(undefined);
+  readonly ruleSectionOpen = signal(false);
+  readonly ruleNodeType = signal<TransformNodeType>('StringNormalization');
+  readonly ruleConfig = signal<Record<string, string>>({});
+  readonly ruleSaving = signal(false);
+  readonly ruleDeleting = signal(false);
+
+  readonly ruleSchema = computed<TransformNodeSchema | undefined>(() =>
+    this.nodeSchemas().find(s => s.nodeType === this.ruleNodeType()));
+
   constructor() {
     effect(() => this.draft.set(this.withForcedAggregate(structuredClone(this.row()))));
+    effect(() => this.loadRuleFor(this.row()));
+
+    this.rulesService.getNodeSchemas().subscribe(schemas => this.nodeSchemas.set(schemas));
+  }
+
+  private loadRuleFor(row: MappingRow): void {
+    const destinationType = this.rulesDestinationType();
+    if (!destinationType) return;
+
+    this.existingRule.set(undefined);
+    this.ruleSectionOpen.set(false);
+    this.rulesService
+      .getEffectiveRules({
+        destinationType,
+        resourceType: row.resource,
+        destinationField: row.targetName,
+        sourceField: row.sources[0]?.fhirPath ?? null,
+      })
+      .subscribe({
+        next: rules => {
+          // Multiple steps can legitimately chain at the Transformation Rules screen, but this popover only
+          // ever authors one — the same single-rule-per-connector shape every rule in this session's
+          // walkthrough was built to (chaining two here is exactly the duplicate-rule bug that nulled out
+          // MRN/AgeYears earlier). If more than one is already in effect, show the first and leave the rest
+          // untouched rather than silently collapsing them.
+          const rule = rules[0] ?? null;
+          this.existingRule.set(rule);
+          if (rule) {
+            this.ruleNodeType.set(rule.nodeType);
+            this.ruleConfig.set({ ...rule.config });
+            this.ruleSectionOpen.set(true);
+          }
+        },
+        error: () => this.existingRule.set(null),
+      });
+  }
+
+  toggleRuleSection(): void {
+    const opening = !this.ruleSectionOpen();
+    this.ruleSectionOpen.set(opening);
+    if (opening && !this.existingRule()) {
+      this.ruleConfig.set(applyNodeDefaults(this.ruleSchema(), {}));
+    }
+  }
+
+  onRuleNodeTypeChange(nodeType: TransformNodeType): void {
+    this.ruleNodeType.set(nodeType);
+    this.ruleConfig.set(applyNodeDefaults(this.nodeSchemas().find(s => s.nodeType === nodeType), {}));
+  }
+
+  saveRule(): void {
+    const row = this.row();
+    const destinationType = this.rulesDestinationType();
+    if (!destinationType) return;
+
+    this.ruleSaving.set(true);
+    this.rulesService
+      .save({
+        id: this.existingRule()?.id ?? null,
+        scope: 'Field',
+        nodeType: this.ruleNodeType(),
+        config: this.ruleConfig(),
+        destinationType,
+        resourceType: row.resource,
+        destinationField: row.targetName,
+        sourceField: row.sources[0]?.fhirPath ?? null,
+        order: 0,
+        onNull: 'Skip',
+        errorPolicy: 'NullOut',
+        isEnabled: true,
+        arrayMode: 'Whole',
+        executionPhase: 'PostMapping',
+      })
+      .subscribe({
+        next: saved => {
+          this.existingRule.set(saved);
+          this.ruleSaving.set(false);
+          this.toast.success('Transformation rule saved', `${saved.nodeType} will now run on ${row.targetName}.`);
+        },
+        error: err => {
+          this.ruleSaving.set(false);
+          this.toast.error('Could not save the transformation rule', err?.error?.detail ?? err?.message ?? '');
+        },
+      });
+  }
+
+  deleteRule(): void {
+    const rule = this.existingRule();
+    if (!rule) return;
+
+    this.ruleDeleting.set(true);
+    this.rulesService.delete(rule.id).subscribe({
+      next: () => {
+        this.ruleDeleting.set(false);
+        this.existingRule.set(null);
+        this.ruleConfig.set(applyNodeDefaults(this.ruleSchema(), {}));
+        this.toast.success('Transformation rule removed', '');
+      },
+      error: err => {
+        this.ruleDeleting.set(false);
+        this.toast.error('Could not remove the transformation rule', err?.error?.detail ?? err?.message ?? '');
+      },
+    });
   }
 
   /** "All records" without combining (RepeatParent) duplicates the entire destination row once per array

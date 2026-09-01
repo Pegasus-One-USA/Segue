@@ -102,6 +102,49 @@
       @if (approximationNote(); as note) {
         <div class="fm-popover-caveat">⚠ {{ note }}</div>
       }
+
+      @if (rulesDestinationType() && d.mode !== 'childJson') {
+        <div class="fm-popover-section fm-popover-section--rule">
+          <button type="button" class="fm-popover-rule-toggle" (click)="toggleRuleSection()">
+            <span>{{ ruleSectionOpen() ? '▾' : '▸' }} Transformation rule</span>
+            @if (existingRule() === undefined) {
+              <span class="fm-popover-rule-status">checking…</span>
+            } @else if (existingRule()) {
+              <span class="fm-popover-rule-status fm-popover-rule-status--active">{{ existingRule()!.nodeType }} applied</span>
+            } @else {
+              <span class="fm-popover-rule-status">none</span>
+            }
+          </button>
+
+          @if (ruleSectionOpen()) {
+            <div class="fm-popover-rule-body">
+              <label class="fm-popover-section-title" for="fm-rule-node-type">Node type</label>
+              <select
+                id="fm-rule-node-type" class="fm-popover-select"
+                [ngModel]="ruleNodeType()"
+                (ngModelChange)="onRuleNodeTypeChange($event)"
+              >
+                @for (s of nodeSchemas(); track s.nodeType) {
+                  <option [value]="s.nodeType">{{ s.label }}</option>
+                }
+              </select>
+
+              <app-rule-config-form [schema]="ruleSchema()" [config]="ruleConfig()" />
+
+              <div class="fm-popover-rule-actions">
+                @if (existingRule()) {
+                  <button type="button" class="fm-popover-remove" [disabled]="ruleDeleting()" (click)="deleteRule()">
+                    {{ ruleDeleting() ? 'Removing…' : 'Remove rule' }}
+                  </button>
+                }
+                <button type="button" class="fm-popover-save" [disabled]="ruleSaving()" (click)="saveRule()">
+                  {{ ruleSaving() ? 'Saving…' : (existingRule() ? 'Update rule' : 'Add rule') }}
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
     </div>
 
     <div class="fm-popover-footer">
