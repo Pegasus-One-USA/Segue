@@ -1,0 +1,26 @@
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.ts
+  s_5849c970b9c366::t_0e82ed6d3f8265 188-196
+  s_5849c970b9c366::t_76f7ac539f6370 418-421
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.scss
+  s_5849c970b9c366::t_754a925b5ff85d 260
+  s_5849c970b9c366::t_9f8464d296d180 247-255
+portal/src/app/transformation-rules/pages/transformation-rule-list/transformation-rule-list.component.html
+  s_5849c970b9c366::t_1e69c9a80a6e69 205
+  s_5849c970b9c366::t_d822bec4ab2e68 182-188,192-197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "73fb5e0b4e3f871fa61dcb1d52f2e1be3dfd3859",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
