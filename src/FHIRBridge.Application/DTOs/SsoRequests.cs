@@ -12,7 +12,8 @@ public sealed record AcceptInviteSsoRequest(
     string Email,
     string InvitationToken,
     LoginProvider Provider,
-    string Token);
+    string Token,
+    bool AcceptTerms);
 
 /// <summary>First-run creation of the sole SuperAdmin via an external IdP identity (no password).</summary>
 public sealed record CreateFirstSuperAdminSsoRequest(

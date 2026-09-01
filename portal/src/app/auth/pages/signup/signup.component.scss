@@ -274,8 +274,16 @@
 }
 
 // ── Terms row ─────────────────────────────────────────────────────────────────
+// Flex-wrap so "[checkbox] I agree to the Terms and Conditions and Privacy Policy" reads as one
+// sentence even though the links are now real siblings of mat-checkbox, not nested inside its label
+// (see the template comment — nesting them inside the label made them an unreliable click target).
 .terms-row {
   margin-bottom: 8px;
+  display:       flex;
+  flex-wrap:     wrap;
+  align-items:   center;
+  column-gap:    4px;
+  row-gap:       2px;
 
   .terms-link {
     color:           var(--color-primary);
@@ -284,12 +292,16 @@
     border-radius:   var(--radius-sm);
     padding:         1px 2px;
     transition:      color var(--transition-base), background var(--transition-base);
+    cursor:          pointer;
 
     &:hover {
       color:      var(--color-primary-dark);
       background: var(--color-primary-soft);
     }
   }
+
+  // The hint/error line always starts a fresh row below the checkbox sentence.
+  .terms-hint, .terms-error { flex-basis: 100%; margin-left: 28px; }
 }
 
 .terms-error {
@@ -297,8 +309,14 @@
   font-size:  12px;
   font-weight: 500;
   margin-top:  4px;
-  margin-left: 28px;
   animation:   slide-down 0.2s ease;
+}
+
+.terms-hint {
+  color:      var(--text-muted, #666);
+  font-size:  12px;
+  margin-top:  4px;
+  margin-left: 28px;
 }
 
 // ── Submit Button ─────────────────────────────────────────────────────────────
