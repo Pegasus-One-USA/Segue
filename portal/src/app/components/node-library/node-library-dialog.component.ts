@@ -421,21 +421,25 @@ export class NodeLibraryDialogComponent {
     // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
     // removing a node from view here is not a security control — it's purely so a user never sees, or
     // can search up, a type their role can't use.
-    const visibleSources = SOURCES.filter(s =>
-      this.phaseCfg.isSourceEnabled(s.id) &&
-      (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
-    );
-    byRank.set(0, visibleSources.map(s => ({
-      id:       s.id,
-      rank:     0,
-      name:     s.name,
-      sub:      s.sub,
-      abbr:     s.abbr,
-      color:    s.color,
-      category: null,
-      isSource: true,
-      status:   (m === 'source' ? 'enabled' : 'disabled') as ItemStatus,
-    })));
+    // Hidden entirely (not just disabled) while picking a destination/transform — a source tile is
+    // never a valid pick outside 'source' mode, so there's nothing useful to show it disabled for.
+    if (m === 'source') {
+      const visibleSources = SOURCES.filter(s =>
+        this.phaseCfg.isSourceEnabled(s.id) &&
+        (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
+      );
+      byRank.set(0, visibleSources.map(s => ({
+        id:       s.id,
+        rank:     0,
+        name:     s.name,
+        sub:      s.sub,
+        abbr:     s.abbr,
+        color:    s.color,
+        category: null,
+        isSource: true,
+        status:   'enabled' as ItemStatus,
+      })));
+    }
 
     // Rank 1-9 — Transforms (hidden ranks and disabled items filtered by phase config)
     const pickerMap = new Map(pm?.items.map(i => [i.id, i]) ?? []);
@@ -445,6 +449,9 @@ export class NodeLibraryDialogComponent {
       if (this.phaseCfg.isRankHidden(t.rank)) return;
       // Hide items not enabled in this phase (don't show as disabled)
       if (!this.phaseCfg.isTransformEnabled(t.id)) return;
+      // Destinations (rank 7) are hidden entirely while picking a source — never a valid pick outside
+      // 'transform' mode, same reasoning as hiding sources above.
+      if (t.rank === 7 && m === 'source') return;
       // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
       // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
       // the matching comment on the Sources filter above for why this is presentation-only, not a

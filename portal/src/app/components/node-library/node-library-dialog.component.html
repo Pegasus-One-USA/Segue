@@ -161,6 +161,10 @@
         <!-- Categories -->
         <div class="nld-cats">
           @for (cat of filteredCategories(); track cat.rank) {
+            <div class="nld-cat-header">
+              <span class="nld-cat-icon" [style.color]="cat.catColor">{{ cat.icon }}</span>
+              <span class="nld-cat-label">{{ cat.label }}</span>
+            </div>
             @for (item of cat.items; track item.id) {
               <button
                 class="nld-item"
