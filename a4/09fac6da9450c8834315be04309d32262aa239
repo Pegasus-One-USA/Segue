@@ -1,0 +1,63 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_448fc9b6d02b1b::t_af09c655a32d52 200
+  s_448fc9b6d02b1b::t_9dbfeea2b0a129 199
+  s_448fc9b6d02b1b::t_82c4285b74b47a 201-207
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_448fc9b6d02b1b::t_b7da3c26310b3e 95
+  s_448fc9b6d02b1b::t_ae233802631ba2 93-94,96-101
+  s_448fc9b6d02b1b::t_59181c975b9e52 25
+  s_448fc9b6d02b1b::t_2dbf2edff9bb42 1565-1576
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_448fc9b6d02b1b::t_8468ffe17bea1b 1130-1133
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_448fc9b6d02b1b::t_66889f5dac611d 85-113
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_448fc9b6d02b1b::t_1d7d424957459c 2672-2673,4305-4315,4338-4341,4347-4348,4357-4361
+  s_448fc9b6d02b1b::t_9f4c2e19abfafa 4316-4321
+  s_448fc9b6d02b1b::t_ce5aaf0fcdc38b 2629-2645,2650-2671
+  s_448fc9b6d02b1b::t_ae01ab16ff6572 1846-1854
+  s_448fc9b6d02b1b::t_98e3f1d595bb92 4297-4304,4322-4334,4342-4346,4349-4356
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_448fc9b6d02b1b::t_4570a6d9c9e779 838,841-842
+  s_448fc9b6d02b1b::t_21095edb1c98d1 1057-1058,1060-1064,1072,1078-1086
+  s_448fc9b6d02b1b::t_137934d529a4da 767-773
+  s_448fc9b6d02b1b::t_8ceba40127d4f6 1059,1065-1071,1073-1077
+  s_448fc9b6d02b1b::t_d2c571e8c72591 839-840,843-846
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_448fc9b6d02b1b::t_68958d391c29df 140-141
+  s_448fc9b6d02b1b::t_36e713658fd90e 239-342
+  s_448fc9b6d02b1b::t_a001760ffd7f7b 109-112
+  s_448fc9b6d02b1b::t_1b29495ba734a5 50
+  s_448fc9b6d02b1b::t_470186a8ce31db 139,142-151,153-173,193-195,199,211-238
+  s_448fc9b6d02b1b::t_329424224f1488 6-7,9-15
+  s_448fc9b6d02b1b::t_67ddfe648393be 1
+  s_448fc9b6d02b1b::t_d5b311aee19254 105-108
+  s_448fc9b6d02b1b::t_8bdf4755751c0f 8
+  s_448fc9b6d02b1b::t_2bcaf2e0c82ac9 113-123
+  s_448fc9b6d02b1b::t_e9220838e4a6ff 152
+  s_448fc9b6d02b1b::t_bee346a474ac68 174-192
+  s_448fc9b6d02b1b::t_31e46655217101 196-198,200-210
+  s_448fc9b6d02b1b::t_84a6130874d0c1 59
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_448fc9b6d02b1b::t_f070b50c27e532 114-115,117-212
+  s_448fc9b6d02b1b::t_be91b0d87bf40b 116
+  s_448fc9b6d02b1b::t_2199f31b97d9e2 34-39
+  s_448fc9b6d02b1b::t_de10dc3c5410ad 26-31,33,40-43,71-113,213
+  s_448fc9b6d02b1b::t_8af81e6729402f 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a409fac6da9450c8834315be04309d32262aa239",
+  "prompts": {},
+  "sessions": {
+    "s_448fc9b6d02b1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af9566b0-af55-4ef3-88b4-45c4b20602df",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

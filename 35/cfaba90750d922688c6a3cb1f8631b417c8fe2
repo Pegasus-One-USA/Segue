@@ -1,0 +1,41 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_448fc9b6d02b1b::t_f7074bab323f07 185-231
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_448fc9b6d02b1b::t_5ea5e3678ab54a 89-92
+  s_448fc9b6d02b1b::t_383f659bb692fc 25
+  s_448fc9b6d02b1b::t_78fa369f982c9c 87-88
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_448fc9b6d02b1b::t_8fc6ae0466b53f 2850-2857
+  s_448fc9b6d02b1b::t_bf07941f12a604 2889-2934
+  s_448fc9b6d02b1b::t_2297f045f48e95 2732
+  s_448fc9b6d02b1b::t_9beb8016037a23 2616-2630
+  s_448fc9b6d02b1b::t_d9cc625370cfec 2323-2326
+  s_448fc9b6d02b1b::t_63409972d67eea 2601-2611,2614-2615
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_448fc9b6d02b1b::t_940fc617da290e 105-147
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_448fc9b6d02b1b::t_8db3a26277659f 379-389,393,396-407
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_448fc9b6d02b1b::t_f4a803dba9fdf3 82
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_448fc9b6d02b1b::t_c62968ca593393 1,3,5-10
+  s_448fc9b6d02b1b::t_22e784517cb9bb 24,33-35,43-59,62-164
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_448fc9b6d02b1b::t_57ed0f13531151 766
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "35cfaba90750d922688c6a3cb1f8631b417c8fe2",
+  "prompts": {},
+  "sessions": {
+    "s_448fc9b6d02b1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af9566b0-af55-4ef3-88b4-45c4b20602df",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

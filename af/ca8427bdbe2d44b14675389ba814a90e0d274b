@@ -1,0 +1,23 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_448fc9b6d02b1b::t_69525a6e68f861 174-176
+src/Api/FHIRBridge.Api/Program.cs
+  s_448fc9b6d02b1b::t_8913611c387928 674-681
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_448fc9b6d02b1b::t_f94240dc2e37cc 270-273,298,310,313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "afca8427bdbe2d44b14675389ba814a90e0d274b",
+  "prompts": {},
+  "sessions": {
+    "s_448fc9b6d02b1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "af9566b0-af55-4ef3-88b4-45c4b20602df",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
