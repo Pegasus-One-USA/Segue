@@ -1,8 +1,18 @@
-import { Component, HostBinding, computed, inject, input, output, signal } from '@angular/core';
+import { Component, HostBinding, computed, effect, inject, input, output, signal } from '@angular/core';
 import { MappingRow, MappingInstanceSelection, isReferenceCandidate } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
+import { DestinationType, DeIdentificationProfileDto } from '../../../../destination-connections/models/destination-configuration.model';
+import { TransformationRulesService, TransformationRule, TransformNodeSchema, TransformScope } from './transformation-rules.service';
+import { RuleConfigFormComponent, applyNodeDefaults } from './rule-config-form/rule-config-form.component';
+
+interface NewDeIdRuleDraft {
+  resource: string;
+  scope: 'Global' | 'ResourceType';
+  sourceField: string;
+  config: Record<string, string>;
+}
 
 const STD_DELIMITERS = [',', '|', ';'];
 type InstanceType = MappingInstanceSelection['type'];
@@ -37,7 +47,7 @@ function collectGroups(node: FmTreeNode, out: FmTreeNode[] = []): FmTreeNode[] {
 @Component({
   selector: 'app-field-mapping-list',
   standalone: true,
-  imports: [],
+  imports: [RuleConfigFormComponent],
   templateUrl: './field-mapping-list.component.html',
   styleUrl: './field-mapping-list.component.scss',
 })
@@ -46,6 +56,7 @@ export class FieldMappingListComponent {
   // read the pan/zoom viewport's live height, so this panel's resize can be clamped against the real
   // total space it shares with the canvas, not a guessed constant.
   private readonly anchors = inject(FieldMappingAnchorService);
+  private readonly rulesService = inject(TransformationRulesService);
 
   /** Every mapping across the whole destination, not just the resource currently being edited — see
    *  visibleRows for the resource-scoped list this panel actually displays. */
@@ -91,6 +102,25 @@ export class FieldMappingListComponent {
   readonly addRow = output<MappingRow>();
   readonly removeRow = output<{ resource: string; tableName: string; targetName: string }>();
   readonly editRow = output<{ resource: string; tableName: string; targetName: string; invoker: HTMLElement }>();
+  /** Same DestinationType the join popover uses to load/save a per-connector rule — see
+   *  FieldMappingCanvasComponent's own doc comment. Null hides the "Transformations" tab entirely (nothing
+   *  to look rules up against). */
+  readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** Bumped by FieldMappingCanvasComponent every time the join popover closes — see its own doc comment.
+   *  Not read directly, just a dependency the ruleByRowKey effect below needs to re-run on, since a
+   *  transformation rule can change without any MappingRow (this component's real state) changing at all. */
+  readonly ruleRefreshTrigger = input<number>(0);
+
+  // ── "De-identification" tab — shares state with DestinationWizardComponent's Step 1 picker (same
+  // signals, two UI surfaces) rather than tracking its own copy, so a profile picked/created here or on
+  // Step 1 is immediately visible on both. ──────────────────────────────────────────────────────────────
+  readonly deIdentificationProfiles = input<DeIdentificationProfileDto[]>([]);
+  readonly selectedDeIdentificationProfileId = input<string | null>(null);
+  readonly newProfileName = input<string>('');
+  readonly creatingProfile = input<boolean>(false);
+  readonly selectedDeIdentificationProfileIdChange = output<string | null>();
+  readonly newProfileNameChange = output<string>();
+  readonly createDeIdentificationProfileRequested = output<void>();
   /** Inline edits from this row's own delimiter/instance controls — no popover required, mirroring the
    *  reference mockup's bottom panel. */
   readonly delimiterChanged = output<{ resource: string; tableName: string; targetName: string; delimiter: string }>();
@@ -105,6 +135,210 @@ export class FieldMappingListComponent {
   readonly draft = signal<NewMappingDraft | null>(null);
 
   toggleCollapsed(): void { this.collapsed.update(v => !v); }
+
+  // ── "Transformations" tab — flat view of every connector's attached rule, alongside "Mappings" ──────
+  readonly activeTab = signal<'mappings' | 'transformations' | 'deidentification'>('mappings');
+  switchTab(tab: 'mappings' | 'transformations' | 'deidentification'): void { this.activeTab.set(tab); }
+
+  /** ruleByRowKey (see rowKey) for every 'value'-mode row currently visible — refetched whenever the
+   *  visible rows or destination type change. Same getEffectiveRules lookup the join popover uses per
+   *  connector, just batched here across the whole resource so this tab doesn't need to open each
+   *  connector individually to see what's already configured. undefined while loading, null = no rule. */
+  readonly ruleByRowKey = signal<Map<string, TransformationRule | null>>(new Map());
+
+  constructor() {
+    effect(() => {
+      const destinationType = this.rulesDestinationType();
+      this.ruleRefreshTrigger(); // dependency only — see its own doc comment
+      const rows = this.visibleRows().filter(r => r.mode === 'value');
+      if (!destinationType || rows.length === 0) {
+        this.ruleByRowKey.set(new Map());
+        return;
+      }
+
+      for (const row of rows) {
+        const key = this.rowKey(row);
+        this.rulesService
+          .getEffectiveRules({
+            destinationType,
+            resourceType: row.resource,
+            destinationField: row.targetName,
+            sourceField: row.sources[0]?.fhirPath ?? null,
+          })
+          .subscribe({
+            next: rules => this.ruleByRowKey.update(m => new Map(m).set(key, rules[0] ?? null)),
+            error: () => this.ruleByRowKey.update(m => new Map(m).set(key, null)),
+          });
+      }
+    });
+
+    this.rulesService.getNodeSchemas().subscribe(schemas =>
+      this.deIdSchema.set(schemas.find(s => s.nodeType === 'HashingMasking')));
+
+    effect(() => {
+      const profileId = this.selectedDeIdentificationProfileId();
+      if (!profileId) {
+        this.deIdRules.set([]);
+        return;
+      }
+      this.deIdRules.set(undefined);
+      // No deIdentificationProfileId query param on the list endpoint (it was never built to filter by
+      // profile) — client-side filter over the full rule list, same workaround
+      // DestinationWizardComponent.profileHasActiveRules already uses.
+      this.rulesService.list({}).subscribe({
+        next: rules => this.deIdRules.set(rules.filter(r => r.deIdentificationProfileId === profileId)),
+        error: () => this.deIdRules.set([]),
+      });
+    });
+  }
+
+  /** displayedRows filtered to 'value'-mode rows only — childJson rows have no single sourceField the
+   *  same way, matching the join popover's own d.mode !== 'childJson' guard on the transform section.
+   *  The table lists every one of these (so a field with no rule yet still shows "Add rule…") — this is
+   *  NOT the tab's own count; see appliedRuleCount for "how many actually have a rule attached". */
+  readonly transformableRows = computed(() => this.displayedRows().filter(r => r.mode === 'value'));
+
+  /** How many of visibleRows() (not just the search-filtered/displayed subset) currently have a real
+   *  transformation rule attached — the number the "Transformations" tab badge shows. Deliberately not
+   *  transformableRows().length, which is every mappable field regardless of whether any of them has a
+   *  rule at all — that count answers "how many fields could have a rule", not "how many actually do". */
+  readonly appliedRuleCount = computed(() =>
+    this.visibleRows()
+      .filter(r => r.mode === 'value')
+      .filter(r => !!this.ruleByRowKey().get(this.rowKey(r)))
+      .length,
+  );
+
+  ruleFor(row: MappingRow): TransformationRule | null | undefined {
+    return this.ruleByRowKey().get(this.rowKey(row));
+  }
+
+  /** Short "key = value, key = value" preview of a rule's config, for the table cell — the full editor
+   *  lives in the join popover this row's "Configure…" action opens. */
+  ruleConfigSummary(rule: TransformationRule): string {
+    const entries = Object.entries(rule.config);
+    return entries.length ? entries.map(([k, v]) => `${k} = ${v}`).join(', ') : '—';
+  }
+
+  onConfigureRule(row: MappingRow, ev: MouseEvent): void {
+    this.editRow.emit({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      invoker: ev.currentTarget as HTMLElement,
+    });
+  }
+
+  removeRuleQuick(row: MappingRow): void {
+    const rule = this.ruleFor(row);
+    if (!rule) return;
+    const key = this.rowKey(row);
+    this.rulesService.delete(rule.id).subscribe({
+      next: () => this.ruleByRowKey.update(m => new Map(m).set(key, null)),
+    });
+  }
+
+  // ── "De-identification" tab — PreMapping rules (raw source path, before any column mapping exists)
+  // belonging to whichever profile is currently selected. Node type is always HashingMasking here — same
+  // simplification the Transformation Rules screen's own PreMapping flow already uses (addStep() there
+  // hardcodes it too), since redaction/masking/generalization is the only thing a PreMapping rule is for
+  // in practice. ────────────────────────────────────────────────────────────────────────────────────────
+  readonly deIdRules = signal<TransformationRule[] | undefined>(undefined); // undefined = loading
+  readonly deIdSchema = signal<TransformNodeSchema | undefined>(undefined);
+  readonly deIdDraft = signal<NewDeIdRuleDraft | null>(null);
+  readonly deIdEditingId = signal<string | null>(null);
+  readonly deIdSaving = signal(false);
+
+  onProfileSelectChange(value: string): void {
+    this.selectedDeIdentificationProfileIdChange.emit(value || null);
+  }
+
+  onNewProfileNameInput(value: string): void {
+    this.newProfileNameChange.emit(value);
+  }
+
+  requestCreateProfile(): void {
+    this.createDeIdentificationProfileRequested.emit();
+  }
+
+  startDeIdDraft(): void {
+    this.deIdEditingId.set(null);
+    this.deIdDraft.set({
+      resource: this.resources()[0] ?? '',
+      scope: 'ResourceType',
+      sourceField: '',
+      config: applyNodeDefaults(this.deIdSchema(), {}),
+    });
+  }
+
+  editDeIdRule(rule: TransformationRule): void {
+    this.deIdEditingId.set(rule.id);
+    this.deIdDraft.set({
+      resource: rule.resourceType ?? this.resources()[0] ?? '',
+      scope: rule.scope === 'Global' ? 'Global' : 'ResourceType',
+      sourceField: rule.sourceField ?? '',
+      config: { ...rule.config },
+    });
+  }
+
+  cancelDeIdDraft(): void {
+    this.deIdDraft.set(null);
+    this.deIdEditingId.set(null);
+  }
+
+  updateDeIdDraftResource(resource: string): void {
+    this.deIdDraft.update(d => (d ? { ...d, resource, sourceField: '' } : d));
+  }
+
+  updateDeIdDraftScope(scope: 'Global' | 'ResourceType'): void {
+    this.deIdDraft.update(d => (d ? { ...d, scope } : d));
+  }
+
+  updateDeIdDraftSourceField(sourceField: string): void {
+    this.deIdDraft.update(d => (d ? { ...d, sourceField } : d));
+  }
+
+  readonly canSubmitDeIdDraft = computed(() => {
+    const d = this.deIdDraft();
+    return !!d && !!d.sourceField && (d.scope === 'Global' || !!d.resource);
+  });
+
+  submitDeIdDraft(): void {
+    const d = this.deIdDraft();
+    const profileId = this.selectedDeIdentificationProfileId();
+    if (!d || !profileId || !this.canSubmitDeIdDraft()) return;
+
+    this.deIdSaving.set(true);
+    this.rulesService
+      .save({
+        id: this.deIdEditingId(),
+        scope: d.scope as TransformScope,
+        nodeType: 'HashingMasking',
+        config: d.config,
+        resourceType: d.scope === 'ResourceType' ? d.resource : null,
+        sourceField: d.sourceField,
+        order: 0,
+        onNull: 'Skip',
+        errorPolicy: 'NullOut',
+        isEnabled: true,
+        arrayMode: 'Whole',
+        executionPhase: 'PreMapping',
+        deIdentificationProfileId: profileId,
+      })
+      .subscribe({
+        next: saved => {
+          this.deIdSaving.set(false);
+          this.deIdRules.update(rules =>
+            rules ? [...rules.filter(r => r.id !== saved.id), saved] : [saved]);
+          this.cancelDeIdDraft();
+        },
+        error: () => this.deIdSaving.set(false),
+      });
+  }
+
+  removeDeIdRule(rule: TransformationRule): void {
+    this.rulesService.delete(rule.id).subscribe({
+      next: () => this.deIdRules.update(rules => rules?.filter(r => r.id !== rule.id) ?? []),
+    });
+  }
 
   // ── drag-to-resize this panel's whole height (handle + head + body) — the boundary between the
   // canvas above and this list. The canvas's own min-height (.fm-viewport CSS) MUST match

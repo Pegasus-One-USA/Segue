@@ -1127,6 +1127,10 @@
     font-family: ui-monospace, Consolas, monospace;
     font-size: 11.5px;
   }
+
+  &--warn {
+    color: var(--color-warning-strong);
+  }
 }
 
 /* ── Callouts ─────────────────────────────────────────────────────────────── */
