@@ -33,6 +33,11 @@ export class FieldMappingJoinPopoverComponent {
   /** See FieldMappingCanvasComponent's own doc comment — null hides the transformation-rule section
    *  entirely (this popover has no destination type to scope a rule against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** Same resolver FieldMappingCanvasComponent already threads through its own cards (display-only,
+   *  same role as its own dataTypeForTable) — used to show the target column's real type next to its
+   *  name, rather than inventing one. Undefined (no live schema, e.g. a CSV/Mongo destination) just
+   *  omits the badge. */
+  readonly dataTypeForTable = input<(tableFullName: string, column: string) => string | undefined>(() => undefined);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -218,6 +223,21 @@ export class FieldMappingJoinPopoverComponent {
   otherResources = computed(() => {
     const resource = this.draft()?.resource;
     return this.allResources().filter(r => r !== resource);
+  });
+
+  /** Compact "source → target" line under the header title — display-only, derived entirely from
+   *  fields already shown elsewhere in this same popover (the source chip list, the target name). */
+  headerSummarySource = computed(() => {
+    const d = this.draft();
+    if (!d) return '';
+    if (d.mode === 'childJson') return d.childNodeId ?? '';
+    return d.sources.length > 1 ? `${d.sources.length} fields` : (d.sources[0]?.fhirPath ?? '');
+  });
+
+  targetDataType = computed(() => {
+    const d = this.draft();
+    if (!d) return undefined;
+    return this.dataTypeForTable()(d.tableName, d.targetName);
   });
 
   approximationNote = computed(() => {
