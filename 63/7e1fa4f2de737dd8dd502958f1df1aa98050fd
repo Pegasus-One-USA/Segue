@@ -1,0 +1,30 @@
+tests/FHIRBridge.UnitTests/Destinations/MappedCsvDestinationWriterTests.cs
+  s_320eae0cd4c4e8::t_fc8516e1c93ccc 95-96
+  s_320eae0cd4c4e8::t_5a45fc065e9f9a 119
+  s_320eae0cd4c4e8::t_b44a0c4ba482f3 156,158
+src/FHIRBridge.Infrastructure/Destinations/MappedCsvDestinationWriter.cs
+  s_320eae0cd4c4e8::t_7a13b3de6dee4d 50
+  s_320eae0cd4c4e8::t_37c0f82c36bcbf 66-68,78,89-90
+  s_320eae0cd4c4e8::t_6aa42269901dfe 59,62
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_320eae0cd4c4e8::t_da1b74c9bae6e6 636-643
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_320eae0cd4c4e8::t_53aac7caba3953 321-334
+  s_320eae0cd4c4e8::t_717b63849be8d1 2448-2482
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "637e1fa4f2de737dd8dd502958f1df1aa98050fd",
+  "prompts": {},
+  "sessions": {
+    "s_320eae0cd4c4e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "012af6da-3f13-4d46-89f9-5f949c099939",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
