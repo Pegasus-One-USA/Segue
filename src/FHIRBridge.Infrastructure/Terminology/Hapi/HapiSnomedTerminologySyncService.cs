@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
@@ -26,7 +25,6 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 {
     private const string ReleaseType = "snomed-ct-us-edition";
     private const string SystemUrl = "http://snomed.info/sct";
-    private const string ResourceId = "snomed-full";
     private const string FullySpecifiedNameTypeId = "900000000000003001";
     private const string SynonymTypeId = "900000000000013009";
 
@@ -35,7 +33,7 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiSnomedTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiSnomedTerminologySyncService(
         IUtsReleaseClient releaseClient,
@@ -43,14 +41,14 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiSnomedTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiSnomedSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -66,8 +64,8 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 
         var (version, concepts) = ParseSnomedRf2(zipPath);
         _logger.LogInformation("Parsed {Total} active SNOMED CT concepts from release {Version}.", concepts.Count, version);
-        var resource = BuildCodeSystemResource(concepts, version);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "SNOMEDCT", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -179,23 +177,6 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 
     private static string Get(Dictionary<string, int> index, string[] row, string field) =>
         index.TryGetValue(field, out var i) && i < row.Length ? row[i] : string.Empty;
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "SNOMEDCT",
-            title = $"SNOMED CT US Edition {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
-    }
 
     private sealed record Concept(string Code, string Display);
 }

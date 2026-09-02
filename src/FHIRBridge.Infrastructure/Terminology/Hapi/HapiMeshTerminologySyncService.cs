@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
 using FHIRBridge.Application.Abstractions.Caching;
@@ -23,7 +22,6 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
 {
     private const string ListingPageUrl = "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/";
     private const string SystemUrl = "https://www.nlm.nih.gov/mesh";
-    private const string ResourceId = "mesh-full";
 
     private static readonly Regex DescFileLinkPattern = new(
         @"href=""(desc(\d{4})\.xml)""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -32,20 +30,20 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiMeshTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiMeshTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiMeshTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiMeshSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -62,8 +60,8 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
 
         var concepts = await DownloadAndParseAsync(downloadClient, fileUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} MeSH descriptor concepts from the official release.", concepts.Count);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "MeSH", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -143,22 +141,6 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "MeSH",
-            title = "Medical Subject Headings (auto-synced from NLM)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

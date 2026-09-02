@@ -12,7 +12,14 @@ public sealed record MappingTestResultDto(
     IReadOnlyList<MappingChildTableDto>? ChildTables = null,
     /// <summary>Fields whose value is a FHIR reference (e.g. "Patient/xyz") that must be resolved against
     /// another table's row rather than written verbatim — see <see cref="MappingReferenceLookupDto"/>.</summary>
-    IReadOnlyList<MappingReferenceLookupDto>? ReferenceLookups = null);
+    IReadOnlyList<MappingReferenceLookupDto>? ReferenceLookups = null,
+    /// <summary>The full resolved value list per field, BEFORE the array-policy collapse that produced
+    /// <see cref="Values"/> — e.g. every <c>reasonCode[*].text</c> occurrence, not just the one
+    /// <see cref="Values"/> kept. Populated for every field regardless of its ArrayPolicy, so a
+    /// transform-rule chain that genuinely needs every occurrence (ConcatenationTemplating,
+    /// ArrayListOperations) can opt into the real array instead of the already-collapsed scalar — see
+    /// MappingNodeExecutor.ApplyTransformRulesAsync / TransformationRuleService.PreviewAsync.</summary>
+    IReadOnlyDictionary<string, IReadOnlyList<object?>>? RawArrayValues = null);
 
 public sealed record MappingChildTableDto(
     string Name,

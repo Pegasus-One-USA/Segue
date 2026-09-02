@@ -10,10 +10,19 @@ public sealed class CodesTerminologyNodesTests
     private sealed class FakeTerminologyLookupService : ITerminologyLookupService
     {
         private readonly TerminologyLookupResult? _result;
-        public FakeTerminologyLookupService(TerminologyLookupResult? result) => _result = result;
+        private readonly TerminologyLookupResult? _anySystemResult;
+
+        public FakeTerminologyLookupService(TerminologyLookupResult? result, TerminologyLookupResult? anySystemResult = null)
+        {
+            _result = result;
+            _anySystemResult = anySystemResult;
+        }
 
         public Task<TerminologyLookupResult?> LookupAsync(string system, string code, CancellationToken cancellationToken) =>
             Task.FromResult(_result);
+
+        public Task<TerminologyLookupResult?> LookupAnyLocalSystemAsync(string code, CancellationToken cancellationToken) =>
+            Task.FromResult(_anySystemResult);
     }
 
     [Fact]
@@ -144,6 +153,69 @@ public sealed class CodesTerminologyNodesTests
         var result = await new CodeableConceptBuilderNode(lookup).ExecuteAsync("E11.9", config, null);
         var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
         concept["text"]!.GetValue<string>().Should().Be("E11.9");
+    }
+
+    [Fact]
+    public async Task CodeableConceptBuilderNode_ignores_a_different_local_system_match_when_autoDetect_is_off_by_default()
+    {
+        // A wildcard source field can extract codes from multiple codings using different systems, but
+        // without opting in, a rule configured for ICD10 must never silently borrow a SNOMED match — that
+        // would be a behavior change nobody asked for. The configured-system miss should just fall through
+        // to the bare code, same as before this feature existed.
+        var lookup = new FakeTerminologyLookupService(
+            result: null,
+            anySystemResult: new TerminologyLookupResult("http://snomed.info/sct", "243876005", "Screening status", "20260901", "HapiLocalTerminologyDatabase"));
+        var config = new Dictionary<string, string> { ["system"] = "ICD10" };
+        var result = await new CodeableConceptBuilderNode(lookup).ExecuteAsync("243876005", config, null);
+        var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        var coding = (System.Text.Json.Nodes.JsonObject)concept["coding"]![0]!;
+        coding["system"]!.GetValue<string>().Should().Be("http://hl7.org/fhir/sid/icd-10-cm");
+        concept["text"]!.GetValue<string>().Should().Be("243876005");
+        result.ResolvedSystemOverride.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CodeableConceptBuilderNode_corrects_the_system_when_autoDetect_finds_the_code_under_a_different_local_system()
+    {
+        var lookup = new FakeTerminologyLookupService(
+            result: null,
+            anySystemResult: new TerminologyLookupResult("http://snomed.info/sct", "243876005", "Screening status", "20260901", "HapiLocalTerminologyDatabase"));
+        var config = new Dictionary<string, string> { ["system"] = "ICD10", ["autoDetectSystemOnLocalMiss"] = "true" };
+        var result = await new CodeableConceptBuilderNode(lookup).ExecuteAsync("243876005", config, null);
+        var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        var coding = (System.Text.Json.Nodes.JsonObject)concept["coding"]![0]!;
+
+        // The emitted coding must be internally consistent — a SNOMED-only code paired with the ICD-10-CM
+        // system URI would be invalid FHIR, so the system itself is corrected, not just the display text.
+        coding["system"]!.GetValue<string>().Should().Be("http://snomed.info/sct");
+        coding["display"]!.GetValue<string>().Should().Be("Screening status");
+        result.ResolvedSystemOverride.Should().Be("http://snomed.info/sct");
+    }
+
+    [Fact]
+    public async Task CodeableConceptBuilderNode_autoDetect_does_not_flag_an_override_when_the_code_matches_the_configured_system()
+    {
+        var lookup = new FakeTerminologyLookupService(
+            result: null,
+            anySystemResult: new TerminologyLookupResult("http://hl7.org/fhir/sid/icd-10-cm", "E11.9", "Type 2 diabetes mellitus without complications", "2026", "HapiLocalTerminologyDatabase"));
+        var config = new Dictionary<string, string> { ["system"] = "ICD10", ["autoDetectSystemOnLocalMiss"] = "true" };
+        var result = await new CodeableConceptBuilderNode(lookup).ExecuteAsync("E11.9", config, null);
+        var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        var coding = (System.Text.Json.Nodes.JsonObject)concept["coding"]![0]!;
+
+        coding["system"]!.GetValue<string>().Should().Be("http://hl7.org/fhir/sid/icd-10-cm");
+        result.ResolvedSystemOverride.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CodeableConceptBuilderNode_autoDetect_falls_back_to_the_bare_code_when_no_local_system_has_it_either()
+    {
+        var lookup = new FakeTerminologyLookupService(result: null, anySystemResult: null);
+        var config = new Dictionary<string, string> { ["system"] = "ICD10", ["autoDetectSystemOnLocalMiss"] = "true" };
+        var result = await new CodeableConceptBuilderNode(lookup).ExecuteAsync("Z99.9", config, null);
+        var concept = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        concept["text"]!.GetValue<string>().Should().Be("Z99.9");
+        result.ResolvedSystemOverride.Should().BeNull();
     }
 
     [Fact]

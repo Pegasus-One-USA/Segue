@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using Microsoft.VisualBasic.FileIO;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
@@ -21,14 +20,13 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncService
 {
     private const string SystemUrl = "http://loinc.org";
-    private const string ResourceId = "loinc-full";
 
     private readonly ILoincReleaseClient _releaseClient;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiLoincTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiLoincTerminologySyncService(
         ILoincReleaseClient releaseClient,
@@ -36,14 +34,14 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiLoincTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiLoincSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -59,8 +57,8 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
 
         var concepts = ParseLoincCsv(zipPath);
         _logger.LogInformation("Parsed {Total} LOINC codes from release {Version}.", concepts.Count, release.Version);
-        var resource = BuildCodeSystemResource(concepts, release.Version);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "LOINC", release.Version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -119,23 +117,6 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
         }
 
         return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "LOINC",
-            title = $"LOINC {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

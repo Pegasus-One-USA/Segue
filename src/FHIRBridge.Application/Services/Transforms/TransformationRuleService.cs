@@ -111,7 +111,7 @@ public sealed class TransformationRuleService : ITransformationRuleService
 
         foreach (var rule in rules)
         {
-            if (TransformNullPolicy.IsNullOrEmpty(currentValue))
+            if (TransformNullPolicy.ShouldShortCircuit(rule, currentValue))
             {
                 var handled = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
                 steps.Add(new TransformStepTrace(rule.NodeType, rule.Scope, currentValue, handled, true, null));
