@@ -22,6 +22,7 @@ import { parseSourcePayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
+import { DestinationType, DeIdentificationProfileDto } from '../../../../destination-connections/models/destination-configuration.model';
 
 export interface FmTargetCardSpec {
   resource: string;
@@ -83,6 +84,21 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  other than whichever one is presently being edited. */
   readonly allResources = input<string[]>([]);
   readonly destType = input.required<MappingDestType>();
+  /** The real backend DestinationType (e.g. 'SqlServer', 'Mongo') for this destination — distinct from
+   *  destType above (which is the coarser 'sql'/'csv'/'mongo' family used to drive UI branching). Threaded
+   *  down to the join popover so it can load/save a transformation rule scoped to the right destination.
+   *  Optional (not every host of this canvas — e.g. the Mapping Profiles dialog — has a resolved
+   *  destination type on hand); the popover simply hides its transformation-rule section when absent. */
+  readonly rulesDestinationType = input<DestinationType | null>(null);
+  // ── pass-through to the "De-identification" tab (field-mapping-list) — same shared state
+  // DestinationWizardComponent's Step 1 picker owns; this canvas has no logic of its own here. ──────────
+  readonly deIdentificationProfiles = input<DeIdentificationProfileDto[]>([]);
+  readonly selectedDeIdentificationProfileId = input<string | null>(null);
+  readonly newProfileName = input<string>('');
+  readonly creatingProfile = input<boolean>(false);
+  readonly selectedDeIdentificationProfileIdChange = output<string | null>();
+  readonly newProfileNameChange = output<string>();
+  readonly createDeIdentificationProfileRequested = output<void>();
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();
@@ -481,6 +497,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
     if ((ev.target as HTMLElement).closest('.fm-add-table-options')) {
+      return;
+    }
+    // The join/mapping-config popover is a sibling overlay floating on top of the canvas (see the
+    // template's own "never descendants of .fm-canvas-inner" comment), not part of the pannable
+    // surface itself — without this, scrolling over it fell into the same default branch as scrolling
+    // empty canvas space below and panned the whole canvas instead of the popover's own content.
+    if ((ev.target as HTMLElement).closest('.fm-popover')) {
       return;
     }
     const rows = (ev.target as HTMLElement).closest<HTMLElement>('.fm-source-rows, .fm-target-rows');
@@ -1546,7 +1569,18 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if (row) this.updateRow({ ...row, referencesResource: e.referencesResource ?? undefined });
   }
 
-  closePopover(): void { this.popoverKey.set(null); }
+  /** Bumped every time the join popover closes — the "Transformations" tab's rule lookup (field-mapping-
+   *  list) depends on this too, purely to know when to re-fetch; the popover can save/delete a
+   *  transformation rule without ever touching a MappingRow, so nothing else here would otherwise tell
+   *  that tab a rule just changed. Always bumped on close (not just on an actual save) since a cheap
+   *  re-fetch on cancel/no-op close is simpler than tracking whether the popover's rule section was
+   *  actually touched this time. */
+  readonly ruleRefreshTrigger = signal(0);
+
+  closePopover(): void {
+    this.popoverKey.set(null);
+    this.ruleRefreshTrigger.update(v => v + 1);
+  }
 
   onPopoverSave(row: MappingRow): void {
     this.updateRow(row);

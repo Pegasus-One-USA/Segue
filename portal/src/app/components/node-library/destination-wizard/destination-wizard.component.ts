@@ -1430,7 +1430,14 @@ export class DestinationWizardComponent implements OnInit {
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
     this.sqlTables.update((tables) =>
       tables.map((t) => {
-        if (t.fullName !== e.tableName) return t;
+        // Same MySQL-only bare-name fallback as columnsForTableFn above: after reopening an existing
+        // MySQL mapping, e.tableName (from targetByResource, restored bare via qualifyTableName) can
+        // legitimately disagree with this entry's own fullName (database-qualified, from the live
+        // schema probe) for the exact same real table. Without this, the lookup below silently never
+        // matches — the column is queued (the toast fires unconditionally) but never actually appears
+        // on the canvas, since every table in sqlTables() comes back unchanged.
+        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
           idx === -1
@@ -1469,7 +1476,8 @@ export class DestinationWizardComponent implements OnInit {
   onColumnDropped(e: { tableName: string; column: string }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? { ...t, columns: t.columns.filter((c) => c.name !== e.column) }
           : t,
       ),
@@ -1486,7 +1494,8 @@ export class DestinationWizardComponent implements OnInit {
   }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? {
               ...t,
               columns: t.columns.map((c) =>
@@ -1842,6 +1851,15 @@ export class DestinationWizardComponent implements OnInit {
     this.fhirForm.controls.authType.valueChanges.subscribe((v) =>
       this._syncFhirAuthValidators(v),
     );
+
+    effect(() => {
+      const profileId = this.selectedDeIdentificationProfileId();
+      if (!profileId) {
+        this.selectedProfileHasRules.set(true); // the "no profile selected" case has its own dedicated flag
+        return;
+      }
+      this.profileHasActiveRules(profileId).subscribe(hasRules => this.selectedProfileHasRules.set(hasRules));
+    });
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -2320,7 +2338,10 @@ export class DestinationWizardComponent implements OnInit {
   /** The real backend DestinationType for whichever destination family this wizard instance is
    *  configuring — same ternary already used inline at every mapping-profiles/import call site
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
-  private resolveDestinationTypeForRules(): DestinationType {
+  /** Non-private: the field-mapping canvas's join popover needs this too, to load/save a per-connector
+   *  transformation rule with the right DestinationType — same resolution the "Rules" button/modal already
+   *  used, just also bound straight into the canvas template now instead of only called from this class. */
+  resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
     if (this.isMedplum()) return 'Medplum';
     if (this.isFhir()) return 'FhirRepository';
@@ -2594,31 +2615,69 @@ export class DestinationWizardComponent implements OnInit {
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
     if (!group) return;
-    const errors = this.validateMappingForSave(group);
-    if (errors.length > 0) {
-      this.toast.error(
-        `Fix ${errors.length} mapping issue${errors.length === 1 ? '' : 's'} before saving`,
-        errors.join(' '),
-      );
-      return;
-    }
 
-    this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
-      if (conflicts.length > 0) {
-        this.pendingRuleConflicts.set(conflicts);
+    // A rule's declared output type (if any) must win over the raw source type in checkColumnTypeCompatibility
+    // below — see resolveRuleExpectedTypesForSave's own doc comment — so that lookup has to resolve before
+    // validateMappingForSave runs, not after (validateRuleConflictsForSave, further down, is a separate/later
+    // check and doesn't help here: it flags a MISMATCHED rule type, it doesn't supersede the raw-type check).
+    this.resolveRuleExpectedTypesForSave(group).subscribe((ruleExpectedTypeByField) => {
+      const errors = this.validateMappingForSave(group, ruleExpectedTypeByField);
+      if (errors.length > 0) {
+        this.toast.error(
+          `Fix ${errors.length} mapping issue${errors.length === 1 ? '' : 's'} before saving`,
+          errors.join(' '),
+        );
         return;
       }
-      // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
-      // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
-      // parent resource's mapping in another group, or resolve it later, so they're shown a
-      // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
-      const warnings = this.buildParentReferenceWarnings(group);
-      if (warnings.length > 0) {
-        this.pendingSaveWarnings.set(warnings);
-        return;
-      }
-      this.completeSaveGroupMapping(group);
+
+      this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
+        if (conflicts.length > 0) {
+          this.pendingRuleConflicts.set(conflicts);
+          return;
+        }
+        // Soft checks — currently a missing required parent reference (buildParentReferenceWarnings) and
+        // no active de-identification coverage on this destination — don't block Save the way
+        // validateMappingForSave's errors do; each Save on each resource re-checks this, not just the
+        // one-time Step 1 gate, since a profile can be emptied out or unassigned after Step 1 already
+        // passed (e.g. its rules deleted elsewhere). Shown as a confirm-before-proceed dialog instead
+        // (pendingSaveWarnings) rather than forcing a fix right now.
+        this.buildDeIdentificationSaveWarning().subscribe((deIdWarning) => {
+          const warnings = [
+            ...this.buildParentReferenceWarnings(group),
+            ...(deIdWarning ? [deIdWarning] : []),
+          ];
+          if (warnings.length > 0) {
+            this.pendingSaveWarnings.set(warnings);
+            return;
+          }
+          this.completeSaveGroupMapping(group);
+        });
+      });
     });
+  }
+
+  /** The de-identification half of saveGroupMapping's soft-warning check — a single synthetic
+   *  PendingParentReferenceWarning (message-only, no fix-it UI) reusing the same dialog/array
+   *  buildParentReferenceWarnings' real warnings render through, rather than a separate dialog. `parent`
+   *  is a sentinel, not a real resource name, so it can't collide with a real warning's @for track key. */
+  private buildDeIdentificationSaveWarning(): Observable<PendingParentReferenceWarning | null> {
+    const profileId = this.selectedDeIdentificationProfileId();
+    const makeWarning = (message: string): PendingParentReferenceWarning => ({
+      resource: '', parent: '__deidentification__', message,
+      sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
+      destinationColumns: [], selectedDestinationColumn: null,
+    });
+
+    if (!profileId) {
+      return of(makeWarning(
+        'This destination has no de-identification profile selected — PHI will not be redacted or generalized before it\'s written.',
+      ));
+    }
+    return this.profileHasActiveRules(profileId).pipe(
+      map(hasRules => hasRules ? null : makeWarning(
+        `"${this.selectedDeIdentificationProfileName()}" is selected as this destination's de-identification policy, but it currently has no enabled rules — nothing will actually be redacted.`,
+      )),
+    );
   }
 
   /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
@@ -2719,7 +2778,7 @@ export class DestinationWizardComponent implements OnInit {
    *  unnoticed — checked right before "Save" is allowed to actually persist anything (see
    *  saveGroupMapping). Table/column-existence checks are skipped entirely when there's no live SQL
    *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
-  private validateMappingForSave(resource: string): string[] {
+  private validateMappingForSave(resource: string, ruleExpectedTypeByField: Map<string, string | null>): string[] {
     const errors: string[] = [];
 
     // A still-queued "add column" whose name collides with a column the live probe already found on
@@ -2730,8 +2789,10 @@ export class DestinationWizardComponent implements OnInit {
     // this resource has any mapped rows yet, hence ahead of the early-return below.
     for (const op of this.pendingSchemaOps()) {
       if (op.kind !== 'addColumn') continue;
+      // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above — without it this
+      // lookup silently finds nothing for a reopened MySQL mapping and the collision check below never runs.
       const table = this.sqlTables().find(
-        (t) => t.fullName === op.request.tableName,
+        (t) => t.fullName === op.request.tableName || (this.isMySql() && t.tableName === op.request.tableName),
       );
       const collides = table?.columns.some(
         (c) =>
@@ -2837,7 +2898,14 @@ export class DestinationWizardComponent implements OnInit {
         // 'Json'), not just 'value' rows — a childJson row used to be exempt here on the assumption that
         // "always written as JSON text" meant always valid, which is true of the write mechanics but not
         // of whether the destination column accepts Json at all (e.g. a plain varchar column doesn't).
-        const typeError = checkColumnTypeCompatibility(row, column);
+        // A transformation rule already resolved for this exact connector (see
+        // resolveRuleExpectedTypesForSave) overrides the raw source-type comparison — its declared output
+        // type is what actually reaches the column at runtime, not birthDate's own Date type, e.g.
+        const ruleKey = `${row.tableName}::${row.targetName}`;
+        const ruleExpectedType = ruleExpectedTypeByField.has(ruleKey)
+          ? ruleExpectedTypeByField.get(ruleKey)!
+          : undefined;
+        const typeError = checkColumnTypeCompatibility(row, column, ruleExpectedType);
         if (typeError) {
           errors.push(typeError);
           continue;
@@ -2867,6 +2935,52 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     return errors;
+  }
+
+  /** Feeds checkColumnTypeCompatibility's rule-aware branch (field-mapping-model.ts) — one getEffectiveRules
+   *  call per mapped 'value' row of this resource, reduced to just what that check needs: whether a rule is
+   *  already resolved for this exact connector, and if so, its declared expectedValueType. Map key matches
+   *  validateMappingForSave's own targetCounts key ("tableName::targetName"); a present-but-null value means
+   *  "a rule exists here but declares no output type" (skip the type check, trust the rule) — distinct from
+   *  a missing key, which means "no rule at all" (fall back to comparing the raw source type). Same
+   *  hasSqlTables()/destinationType short-circuit as validateRuleConflictsForSave below, which this always
+   *  runs directly ahead of. */
+  private resolveRuleExpectedTypesForSave(resource: string): Observable<Map<string, string | null>> {
+    if (!this.hasSqlTables()) return of(new Map());
+
+    const destinationType = this.resolveDestinationTypeForRules();
+    if (!destinationType) return of(new Map());
+
+    const rows = this.mappingRows().filter((r) => r.resource === resource && r.mode === 'value');
+    if (rows.length === 0) return of(new Map());
+
+    const resourcePipelineRouteId = this.currentWorkflowId() ?? undefined;
+    const sourceSystem = this.sourceVendor() || null;
+
+    const checks = rows.map((row) => {
+      const sourceField = row.sources[0]?.fhirPath ?? null;
+      return this.transformationRulesSvc
+        .getEffectiveRules({
+          destinationType,
+          resourceType: resource,
+          destinationField: row.targetName,
+          resourcePipelineRouteId,
+          sourceSystem,
+          sourceField,
+        })
+        .pipe(
+          map((rules): [string, string | null] | null =>
+            rules.length === 0 ? null : [`${row.tableName}::${row.targetName}`, rules[0].expectedValueType ?? null],
+          ),
+          // A transient rule-lookup failure shouldn't block Save on its own here either — same tolerance
+          // validateRuleConflictsForSave already uses; the server-side check is still the backstop.
+          catchError(() => of(null)),
+        );
+    });
+
+    return forkJoin(checks).pipe(
+      map((entries) => new Map(entries.filter((e): e is [string, string | null] => e !== null))),
+    );
   }
 
   /** Mirrors CreateMappingProfileRequestValidator.ValidateApplicableRulesAsync (the backend's mapping-profile
@@ -4191,7 +4305,69 @@ export class DestinationWizardComponent implements OnInit {
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
   // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
+  /** Set when Step 1 is about to advance (new connection or reused existing one alike) with no active
+   *  de-identification coverage — either no profile picked at all, or a profile that's picked but
+   *  currently has zero enabled rules under it (a profile record with nothing left attached still shows
+   *  up in the dropdown — see loadDeIdentificationProfiles — so "a profile is selected" alone doesn't
+   *  mean anything actually gets redacted). Blocks nothing on its own, just forces an explicit "Continue
+   *  anyway" click instead of silently letting an unprotected destination through. Holds the real
+   *  provisioning work to resume if the user confirms; cleared (discarding it) on "Go back". */
+  readonly pendingDeIdentificationWarning = signal<{ reason: 'none' | 'empty'; resume: () => void } | null>(null);
+
+  confirmProceedWithoutDeIdentification(): void {
+    const pending = this.pendingDeIdentificationWarning();
+    this.pendingDeIdentificationWarning.set(null);
+    pending?.resume();
+  }
+
+  cancelProceedWithoutDeIdentification(): void {
+    this.pendingDeIdentificationWarning.set(null);
+  }
+
+  /** Tracks whether the currently-selected profile actually has active rules — drives the Step 4 Review
+   *  card's warning flag the same way pendingDeIdentificationWarning drives Step 1's. Re-checked whenever
+   *  the selection changes; defaults true (no warning) while a check is in flight or none is selected,
+   *  since the "no profile at all" case already has its own, more specific flag in the template. */
+  readonly selectedProfileHasRules = signal(true);
+
+  /** Whether the given profile currently has at least one enabled rule under it. Client-side filter over
+   *  the full rule list (the backend's GET has no deIdentificationProfileId query param — this endpoint
+   *  wasn't built to be filtered by profile, only by resource/destination/field) rather than a new
+   *  backend param for what's otherwise a one-off check. Fails OPEN (treated as "has rules") on a
+   *  transient lookup error — same tolerance validateRuleConflictsForSave already uses elsewhere in this
+   *  file — this warning is a nudge, not the only safeguard, and shouldn't block Step 1 on a flaky call. */
+  private profileHasActiveRules(profileId: string): Observable<boolean> {
+    return this.transformationRulesSvc.list({}).pipe(
+      map(rules => rules.some(r => r.deIdentificationProfileId === profileId && r.isEnabled)),
+      catchError(() => of(true)),
+    );
+  }
+
   private provisionDestinationConnection(
+    metadata: { fields: Record<string, string>; secret?: string | null },
+    onDone: () => void,
+  ): void {
+    // Checked first, ahead of the 'existing'-mode early return below — an unprotected destination is just
+    // as real a gap whether it's being created fresh or reused as-is; selectedDeIdentificationProfileId is
+    // kept in sync with whichever destination is actually selected either way (see selectExisting()).
+    const profileId = this.selectedDeIdentificationProfileId();
+    const resume = () => this._provisionDestinationConnectionAfterDeIdCheck(metadata, onDone);
+
+    if (!profileId) {
+      this.pendingDeIdentificationWarning.set({ reason: 'none', resume });
+      return;
+    }
+
+    this.profileHasActiveRules(profileId).subscribe(hasRules => {
+      if (!hasRules) {
+        this.pendingDeIdentificationWarning.set({ reason: 'empty', resume });
+      } else {
+        resume();
+      }
+    });
+  }
+
+  private _provisionDestinationConnectionAfterDeIdCheck(
     metadata: { fields: Record<string, string>; secret?: string | null },
     onDone: () => void,
   ): void {

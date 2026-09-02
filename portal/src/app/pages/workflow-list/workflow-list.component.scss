@@ -397,10 +397,6 @@
 .col-menu  { width: 44px; text-align: center; }
 .col-num   { width: 80px; text-align: center; }
 td.col-num { text-align: center; color: var(--color-ink-2); }
-// Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
-// side — now that those 5 live inside the "more actions" (⋮) menu (moved to the first column, .col-menu),
-// this only needs to fit the Run button, so the old width just left a large empty gutter on the right.
-.col-actions { width: 90px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
@@ -422,12 +418,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   background: var(--color-side); color: var(--color-ink-2);
   border: 1px solid var(--color-border);
 }
-
-// ── Buttons ─────────────────────────────────────────────────────────────────
-// nowrap: the actions cell must never wrap onto a second line — .table-wrapper
-// already scrolls horizontally (see above) if a viewport is ever too narrow to
-// fit it, so wrapping here only ever produced an inconsistent, fragile layout.
-.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
 // ── Row "more actions" menu ───────────────────────────────────────────────────
 // A real mat-menu (CDK overlay) now backs the kebab trigger — see .btn-more below for the trigger's
@@ -468,11 +458,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:hover:not(:disabled) { filter: brightness(0.95); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
-
-// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and icon buttons
-// that follow always start at the same x position, whether this row shows that button or the shorter "Run" one
-// — without this the whole action row shifts left/right per row.
-.split-btn { position: relative; display: inline-flex; min-width: 103px; }
 
 // Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
 // action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal

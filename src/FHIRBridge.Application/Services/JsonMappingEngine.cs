@@ -498,7 +498,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        return valueType switch
+        var converted = valueType switch
         {
             MappingValueType.String => ValidateLength(
                 element.ValueKind switch
@@ -520,7 +520,29 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Json => element.GetRawText(),
             _ => element.ToString()
         };
+
+        // A genuine type mismatch (e.g. a date-shaped source value mapped with ValueType=Integer/Decimal/Boolean
+        // because a transformation rule attached to this field — not this raw-copy step — is what's actually
+        // supposed to produce the destination's real type) must not silently vanish into null. Every Convert*
+        // helper above already recorded why it couldn't convert into `errors`; fall back to the untouched raw
+        // value here so a transformation rule downstream still receives something real to work with, instead of
+        // null being mistaken for "field genuinely absent" (see TransformNullPolicy.IsNullOrEmpty). Excludes a
+        // deliberate constraint rejection (String over max length, Decimal exceeding column precision) — those
+        // null the value on purpose because it CAN'T fit the destination, and falling back would defeat that.
+        if (converted is null && !IsDeliberateRejection(valueType, precision))
+        {
+            return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
+        }
+
+        return converted;
     }
+
+    /// <summary>True when a null <see cref="ConvertElement"/>/<see cref="ConvertValue"/> result means "this
+    /// value can never fit the destination as configured" rather than "couldn't parse this as the declared
+    /// type" — the former (String's ValidateLength, Decimal's precision check) must stay null; the latter
+    /// should fall back to the raw value instead (see the caller's own comment).</summary>
+    private static bool IsDeliberateRejection(MappingValueType valueType, int? precision) =>
+        valueType == MappingValueType.String || (valueType == MappingValueType.Decimal && precision is not null);
 
     private static object? ConvertValue(
         string value,
@@ -532,7 +554,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         int? precision = null,
         int? scale = null)
     {
-        return valueType switch
+        var converted = valueType switch
         {
             MappingValueType.String => ValidateLength(value, maxLength, targetField, errors),
             MappingValueType.Integer => ConvertInteger(value, targetField, errors),
@@ -543,6 +565,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Json => value,
             _ => value
         };
+
+        // Same "don't let a type mismatch silently become null" fallback as ConvertElement — see its comment.
+        return converted is null && !IsDeliberateRejection(valueType, precision) ? value : converted;
     }
 
     /// <summary>Rejects a string value that would exceed the destination column's max length (e.g. an

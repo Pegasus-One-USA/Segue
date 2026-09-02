@@ -244,11 +244,20 @@
     flex-shrink: 0;
   }
 
+  // Preview / Steps are mutually exclusive (see togglePreview/toggleEdit) — this is just the
+  // "which one is currently open" visual, so a plain mat-stroked-button reads as its own normal/
+  // default state whenever it's the one that's collapsed.
+  &__action-btn--active {
+    --mdc-outlined-button-outline-color: var(--color-primary);
+    --mdc-outlined-button-label-text-color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+  }
+
   &__steps {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 14px;
+    margin-top: 10px;
   }
 }
 

@@ -318,7 +318,20 @@ public static class WorkflowEndpoints
 
                 if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
                 {
-                    idsForNode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    // Seed from whatever this destination's mapping node already had persisted BEFORE this
+                    // save — a later save that only touches some of a destination's already-mapped resource
+                    // types (e.g. the wizard adds Encounter without restoring Patient's rows into this
+                    // request.Mappings — CSV/Email destinations have no live-schema probe to catch a failed
+                    // restore the way SQL destinations do) must not silently drop the untouched resource
+                    // types from mappingProfileIds: that field is exactly what MappingNodeExecutor/
+                    // DestinationNodeExecutor read at run time to decide which resource types to process, so
+                    // losing an entry here means that resource's output vanishes from every future run, not
+                    // just an unsaved profile row (the "add Encounter, Patient stops appearing in the CSV/
+                    // email zip" regression this fixes). Matched via destinationId rather than node.Id since
+                    // a node's own row id is regenerated every save (see WorkflowDefinition.AddNode / the
+                    // "removed node" comment above) and can't be relied on to identify the same logical node
+                    // across saves.
+                    idsForNode = SeedExistingMappingProfileIds(existingDefinition, destinationId);
                     profileIdsByNode[spec.NodeId] = idsForNode;
                 }
                 idsForNode[spec.ResourceType] = mapping.Id.ToString();
@@ -2430,6 +2443,41 @@ public static class WorkflowEndpoints
             }
         }
         return ids;
+    }
+
+    // Finds the mappingProfileIds map already persisted on whichever existing node targets this same
+    // destination, keyed by resource type — see the seeding comment at its call site in BuildWorkflow.
+    // destinationId (not node.Id) is the only thing that reliably identifies "the same logical node" across
+    // saves, since AddNode mints a fresh row id every time.
+    private static Dictionary<string, string> SeedExistingMappingProfileIds(WorkflowDefinition? existingDefinition, Guid destinationId)
+    {
+        var seeded = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (existingDefinition is null)
+        {
+            return seeded;
+        }
+
+        foreach (var node in existingDefinition.Nodes)
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var nodeDestinationId)
+                || nodeDestinationId != destinationId)
+            {
+                continue;
+            }
+
+            if (TryParseConfiguration(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
+            {
+                foreach (var entry in idsByResource)
+                {
+                    if (entry.Value?.ToString() is { } id)
+                    {
+                        seeded[entry.Key] = id;
+                    }
+                }
+            }
+        }
+
+        return seeded;
     }
 
     // A node can carry the legacy single mappingProfileId, the per-resource mappingProfileIds map, or both (see

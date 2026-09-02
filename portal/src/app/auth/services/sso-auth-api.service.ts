@@ -46,11 +46,12 @@ export class SsoAuthApiService {
    * Returns the created UserDetailDto (NOT a session); the user logs in normally afterwards,
    * so we do not establish a session here. Backend returns 400 for invalid/expired tokens.
    */
-  acceptInvite(email: string, invitationToken: string, password: string): Observable<void> {
+  acceptInvite(email: string, invitationToken: string, password: string, acceptTerms: boolean): Observable<void> {
     return this.http.post<void>(`${API}/users/accept-invite`, {
       email,
       invitationToken,
       password,
+      acceptTerms,
     });
   }
 
@@ -60,6 +61,7 @@ export class SsoAuthApiService {
     invitationToken: string,
     provider: SsoProvider,
     token: string,
+    acceptTerms: boolean,
   ): Observable<LocalLoginResponse> {
     return this.http
       .post<LocalLoginResponse>(`${API}/users/accept-invite-sso`, {
@@ -67,6 +69,7 @@ export class SsoAuthApiService {
         invitationToken,
         provider,
         token,
+        acceptTerms,
       })
       .pipe(tap(res => this.establishSession(res)));
   }

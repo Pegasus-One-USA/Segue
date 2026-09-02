@@ -671,11 +671,14 @@ static void BootstrapDatabase(WebApplication app)
     var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
     systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-    // One-time: create the "HIPAA Safe Harbor — Default" de-identification profile + its rules, ported from
-    // the platform's original hardcoded rule list. Insert-only; never touches a profile an admin has since
-    // created or edited.
-    var deIdentificationProfileSeeder = scope.ServiceProvider.GetService<IDeIdentificationProfileSeeder>();
-    deIdentificationProfileSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+    // De-identification profiles/rules are no longer auto-seeded on a fresh environment — de-identification
+    // policy is now a deliberate, explicitly-authored decision (created via the mapping screen's
+    // "De-identification" tab or Settings > Transformation Rules), not a silent default nobody at the
+    // tenant reviewed. Left here, commented, rather than deleted: DeIdentificationProfileSeeder itself is
+    // unchanged and insert-only, so re-enabling this call is a safe, reversible one-line change if the
+    // decision changes.
+    // var deIdentificationProfileSeeder = scope.ServiceProvider.GetService<IDeIdentificationProfileSeeder>();
+    // deIdentificationProfileSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Generates and persists the JWT signing key / download-link signing secret the first time an install has

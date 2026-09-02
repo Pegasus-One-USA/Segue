@@ -5,6 +5,7 @@ using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
@@ -55,7 +56,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunHistoryPagedAsync(workflowRunId, page: 1, pageSize: 25, CancellationToken.None);
 
@@ -89,7 +90,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunPayloadAsync(workflowRunId, nodeRunId, CancellationToken.None);
 
@@ -103,7 +104,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
     public async Task GetNodeRunPayloadAsync_returns_null_when_the_node_run_never_wrote_a_payload()
     {
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunPayloadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
@@ -126,7 +127,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor());
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunHistoryPagedAsync(workflowRunId, page: 1, pageSize: 25, CancellationToken.None);
 

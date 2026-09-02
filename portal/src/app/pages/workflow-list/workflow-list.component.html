@@ -133,7 +133,6 @@
                 {{ sortColumn() === 'actionOn' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
-            <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -150,6 +149,17 @@
                 ><mat-icon>more_vert</mat-icon></button>
 
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  @if (w.action === 'Run' && canRun()) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="busyId() === w.workflowId"
+                      (click)="onAction(w, 'async')"
+                    >
+                      <mat-icon>play_arrow</mat-icon> Run
+                    </button>
+                  }
+
                   <!-- Always visible with workflow.view alone (the route guard already required it) —
                        opening the builder to look at an existing workflow is VIEW access; only its own
                        Save button (gated on workflow.edit there) decides whether anything can actually
@@ -266,32 +276,6 @@
               </td>
               <td><span class="cell-muted">{{ (w.modifiedBy || w.createdBy) ?? '—' }}</span></td>
               <td><span class="cell-muted">{{ ((w.modifiedOnUtc || w.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
-              <td class="col-actions">
-                <div class="row-actions">
-                  <div class="split-btn" (click)="$event.stopPropagation()">
-                    <!-- "Get Launch URL" hidden per request — only the Run button (backend workflows) still renders.
-                         The sync "Run (wait here)" option is hidden too — every run now always goes through the
-                         background path (see onAction's 'async' default) so the row stays interactive and the run
-                         survives navigating away, with live status now pushed via SignalR (RunStatusHubService)
-                         instead of requiring the old blocking wait. -->
-                    @if (w.action === 'Run' && canRun()) {
-                      <button
-                        class="btn-primary"
-                        type="button"
-                        [disabled]="busyId() === w.workflowId"
-                        (click)="onAction(w, 'async')"
-                      >
-                        @if (busyId() === w.workflowId) {
-                          <span class="spinner-sm"></span>
-                        } @else {
-                          <mat-icon class="btn-ico">play_arrow</mat-icon>
-                        }
-                        Run
-                      </button>
-                    }
-                  </div>
-                </div>
-              </td>
             </tr>
           }
         </tbody>
