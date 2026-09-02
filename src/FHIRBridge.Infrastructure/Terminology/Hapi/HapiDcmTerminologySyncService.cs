@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Xml.Linq;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -29,7 +28,6 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
 {
     private const string FtpUrl = "ftp://medical.nema.org/MEDICAL/Dicom/Resources/Ontology/DCM/dcm.owl";
     private const string SystemUrl = "http://dicom.nema.org/resources/ontology/DCM";
-    private const string ResourceId = "dcm-full";
 
     private static readonly XNamespace Rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     private static readonly XNamespace Skos = "http://www.w3.org/2004/02/skos/core#";
@@ -38,18 +36,18 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiDcmTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiDcmTerminologySyncService(
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiDcmTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiDcmSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -60,8 +58,8 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
         _logger.LogInformation("Downloading official DICOM Controlled Terminology (DCM) ontology via FTP.");
         var concepts = await DownloadAndParseAsync(cancellationToken);
         _logger.LogInformation("Parsed {Total} active DCM concepts from the official ontology.", concepts.Count);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "DCM", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -102,22 +100,6 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "DCM",
-            title = "DICOM Controlled Terminology (auto-synced from NEMA)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

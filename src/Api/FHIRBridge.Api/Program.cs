@@ -164,23 +164,23 @@ builder.Services
 
 // The 13 IHapi{Code}TerminologySyncService implementations were previously registered only in the Worker
 // host (see Worker/Program.cs), since only the scheduled workers called them. The new "Run Now" endpoint
-// (HapiTerminologyConfigurationController) needs to resolve the same services from this host too — lifetimes
-// mirror Worker/Program.cs exactly (Scoped for the two that depend on an already-Scoped release client,
-// Singleton otherwise).
+// (HapiTerminologyConfigurationController) needs to resolve the same services from this host too. All 13
+// are Scoped: every one of them now depends on HapiLocalTerminologyWriter (Scoped, holds a DbContext),
+// so a Singleton registration here would be a captive-dependency DI validation failure at startup.
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton<IHapiCvxTerminologySyncService, HapiCvxTerminologySyncService>();
-builder.Services.AddSingleton<IHapiDcmTerminologySyncService, HapiDcmTerminologySyncService>();
-builder.Services.AddSingleton<IHapiHcpcsTerminologySyncService, HapiHcpcsTerminologySyncService>();
-builder.Services.AddSingleton<IHapiIcd10TerminologySyncService, HapiIcd10TerminologySyncService>();
-builder.Services.AddSingleton<IHapiIcd10PcsTerminologySyncService, HapiIcd10PcsTerminologySyncService>();
-builder.Services.AddSingleton<IHapiIcd11TerminologySyncService, HapiIcd11TerminologySyncService>();
-builder.Services.AddSingleton<IHapiIcpc3TerminologySyncService, HapiIcpc3TerminologySyncService>();
+builder.Services.AddScoped<IHapiCvxTerminologySyncService, HapiCvxTerminologySyncService>();
+builder.Services.AddScoped<IHapiDcmTerminologySyncService, HapiDcmTerminologySyncService>();
+builder.Services.AddScoped<IHapiHcpcsTerminologySyncService, HapiHcpcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10TerminologySyncService, HapiIcd10TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10PcsTerminologySyncService, HapiIcd10PcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd11TerminologySyncService, HapiIcd11TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcpc3TerminologySyncService, HapiIcpc3TerminologySyncService>();
 builder.Services.AddScoped<IHapiLoincTerminologySyncService, HapiLoincTerminologySyncService>();
-builder.Services.AddSingleton<IHapiMeshTerminologySyncService, HapiMeshTerminologySyncService>();
-builder.Services.AddSingleton<IHapiNdcTerminologySyncService, HapiNdcTerminologySyncService>();
+builder.Services.AddScoped<IHapiMeshTerminologySyncService, HapiMeshTerminologySyncService>();
+builder.Services.AddScoped<IHapiNdcTerminologySyncService, HapiNdcTerminologySyncService>();
 builder.Services.AddScoped<IHapiRxNormTerminologySyncService, HapiRxNormTerminologySyncService>();
 builder.Services.AddScoped<IHapiSnomedTerminologySyncService, HapiSnomedTerminologySyncService>();
-builder.Services.AddSingleton<IHapiUcumTerminologySyncService, HapiUcumTerminologySyncService>();
+builder.Services.AddScoped<IHapiUcumTerminologySyncService, HapiUcumTerminologySyncService>();
 
 // Scenario A: back the graph engine's stores with SQL (must follow AddWorkflowCore to win the registration).
 // Scenario B: also wires the launch-graph projection/resolver + feature flag (default OFF). Gated the same way

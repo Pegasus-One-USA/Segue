@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
 using Microsoft.Extensions.Configuration;
@@ -23,14 +22,13 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
 {
     private const string ReleaseType = "rxnorm-full-monthly-release";
     private const string SystemUrl = "http://www.nlm.nih.gov/research/umls/rxnorm";
-    private const string ResourceId = "rxnorm-full";
 
     private readonly IUtsReleaseClient _releaseClient;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiRxNormTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiRxNormTerminologySyncService(
         IUtsReleaseClient releaseClient,
@@ -38,14 +36,14 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiRxNormTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiRxNormSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -61,8 +59,8 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
 
         var concepts = ParseRxnConso(zipPath);
         _logger.LogInformation("Parsed {Total} RxNorm concepts from release {Version}.", concepts.Count, release.ReleaseName);
-        var resource = BuildCodeSystemResource(concepts, release.ReleaseName);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "RxNorm", release.ReleaseName, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -125,23 +123,6 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
         }
 
         return candidate.IsPreferred && !existing.IsPreferred;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string? version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "RxNorm",
-            title = $"RxNorm {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Candidate(string Name, bool IsRxNormSource, bool IsPreferred);

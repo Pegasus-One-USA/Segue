@@ -3,10 +3,14 @@ using FHIRBridge.Domain.Enums;
 namespace FHIRBridge.Application.Services.Transforms;
 
 /// <summary>Outcome of one transform node execution — <see cref="Value"/> may be a scalar, a
-/// <see cref="System.Text.Json.Nodes.JsonObject"/> (for the FHIR complex-type builder nodes), or null.</summary>
-public sealed record TransformResult(bool Success, object? Value, string? Error)
+/// <see cref="System.Text.Json.Nodes.JsonObject"/> (for the FHIR complex-type builder nodes), or null.
+/// <paramref name="ResolvedSystemOverride"/> is set only by <see cref="Nodes.CodeableConceptBuilderNode"/>'s
+/// cross-system auto-detect: when a code isn't found under the rule's configured system but IS found under a
+/// different locally-synced one, this carries that actual system URI back to the caller so it can be recorded
+/// on the lineage hop — surfacing the substitution instead of silently masking a misconfigured "system".</summary>
+public sealed record TransformResult(bool Success, object? Value, string? Error, string? ResolvedSystemOverride = null)
 {
-    public static TransformResult Ok(object? value) => new(true, value, null);
+    public static TransformResult Ok(object? value, string? resolvedSystemOverride = null) => new(true, value, null, resolvedSystemOverride);
     public static TransformResult Fail(string error) => new(false, null, error);
 }
 

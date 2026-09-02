@@ -163,8 +163,13 @@
             <tr>
               <td colspan="7">
                 <div class="empty-state">
-                  <mat-icon>timeline</mat-icon>
-                  <p>No matching field lineage found.</p>
+                  @if (loadError()) {
+                    <mat-icon>error_outline</mat-icon>
+                    <p>Couldn't load field lineage for this view — try again, or check a different field.</p>
+                  } @else {
+                    <mat-icon>timeline</mat-icon>
+                    <p>No matching field lineage found.</p>
+                  }
                 </div>
               </td>
             </tr>

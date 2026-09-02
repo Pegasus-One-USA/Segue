@@ -8,6 +8,7 @@ using FHIRBridge.Domain.Entities.Terminology;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 
@@ -21,6 +22,7 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
     private readonly IAppSecretMetadataProvider _metadataProvider;
     private readonly FHIRBridgeDbContext _db;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<HapiTerminologyConfigurationService> _logger;
 
     public HapiTerminologyConfigurationService(
         HapiTerminologySystemRegistry registry,
@@ -29,7 +31,8 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         ISecretWriter secretWriter,
         IAppSecretMetadataProvider metadataProvider,
         FHIRBridgeDbContext db,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        ILogger<HapiTerminologyConfigurationService> logger)
     {
         _registry = registry;
         _settings = settings;
@@ -38,6 +41,7 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         _metadataProvider = metadataProvider;
         _db = db;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<HapiTerminologyConfigurationDto>> GetAllAsync(CancellationToken cancellationToken)
@@ -101,20 +105,36 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         var history = new HapiTerminologyImportHistory(descriptor.Code);
         _db.HapiTerminologyImportHistory.Add(history);
         await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("RunAndRecordHistoryAsync starting for {Code} (history {HistoryId}).", code, history.Id);
 
         try
         {
             var outcome = await descriptor.RunAsync(_serviceProvider, cancellationToken);
+            _logger.LogInformation("RunAndRecordHistoryAsync: {Code} sync returned {Count} concepts; marking history {HistoryId} complete.", code, outcome.Count, history.Id);
             history.Complete(outcome.Count, outcome.Version);
             await _settingsService.SetAsync($"{descriptor.SettingsKeyPrefix}:LastRunUtc", DateTime.UtcNow.ToString("O"), null, cancellationToken);
         }
         catch (Exception exception)
         {
+            _logger.LogWarning(exception, "RunAndRecordHistoryAsync: {Code} sync failed; marking history {HistoryId} failed.", code, history.Id);
             history.Fail(exception.Message);
+
+            // A sync failure often comes from a SaveChangesAsync call partway through a large concept
+            // batch (e.g. a truncation error) — those entities stay tracked as "Added" even though the
+            // save never committed. Left in place, the finally block's own SaveChangesAsync below would
+            // try to re-save that same broken batch, hit the identical error again, throw a SECOND time
+            // uncaught, and this history.Fail(...) write would never actually reach the database —
+            // exactly what caused every "stuck at Running forever" row this session. Detach everything
+            // except the history row itself so the finally block can cleanly persist just the failure.
+            foreach (var entry in _db.ChangeTracker.Entries().Where(e => !ReferenceEquals(e.Entity, history)).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
         }
         finally
         {
             await _db.SaveChangesAsync(CancellationToken.None);
+            _logger.LogInformation("RunAndRecordHistoryAsync finished for {Code} (history {HistoryId}), final status {Status}.", code, history.Id, history.Status);
         }
     }
 

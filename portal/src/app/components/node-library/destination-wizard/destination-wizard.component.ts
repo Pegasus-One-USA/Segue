@@ -1041,14 +1041,28 @@ export class DestinationWizardComponent implements OnInit {
   readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>(
     'idle',
   );
+  /** Backend-verified resource types this source's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService.
+   *  Null when no vendor is set yet, the vendor has no known restriction (e.g. Epic), or the request
+   *  failed — availableGroups treats null the same as "no filter", never narrowing the list below what
+   *  it would otherwise show. Only used when a live Discover probe hasn't already produced a more
+   *  authoritative, connection-specific result. */
+  readonly vendorResourceTypes = signal<string[] | null>(null);
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
   readonly availableGroups = computed(() => {
     const discovered = this.discoveredResourceTypes();
-    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
-    const discoveredSet = new Set(discovered);
-    return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    if (discovered) {
+      const discoveredSet = new Set(discovered);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    }
+    const vendorList = this.vendorResourceTypes();
+    if (vendorList) {
+      const vendorSet = new Set(vendorList);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => vendorSet.has(r));
+    }
+    return SUPPORTED_RESOURCE_TYPES;
   });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
@@ -2010,6 +2024,21 @@ export class DestinationWizardComponent implements OnInit {
             this.discoverProbeStatus.set('error');
           }
         });
+    });
+
+    // Vendor-level fallback for availableGroups when live Discover hasn't run/succeeded — e.g. a
+    // brand-new Athenahealth or Healow source that hasn't been saved yet. Refetches (cached per vendor
+    // in MappingCatalogService) whenever sourceVendor() changes; a vendor with no known restriction
+    // (Epic, GenericFhir, ...) resolves to null, same as "no filter".
+    effect(() => {
+      const vendor = this.sourceVendor();
+      if (!vendor) {
+        this.vendorResourceTypes.set(null);
+        return;
+      }
+      this.catalogSvc
+        .resourceTypes(vendor)
+        .subscribe((types) => this.vendorResourceTypes.set(types));
     });
   }
 

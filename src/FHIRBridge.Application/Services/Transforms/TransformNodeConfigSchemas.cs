@@ -192,6 +192,7 @@ public static class TransformNodeConfigSchemas
                 Select("system", "Code system", ["LOINC", "SNOMED", "ICD10", "RXNORM", "NPI", "HCPCS", "ICD10PCS", "NDC", "CVX", "UCUM", "CPT"], "LOINC"),
                 Text("display", "Display text (optional — leave blank to resolve from the local terminology DB)", placeholder: "e.g. Glucose", advanced: true),
                 Checkbox("resolveDisplayFromTerminology", "Look up real display text from the local terminology DB when Display is blank", true, advanced: true),
+                Checkbox("autoDetectSystemOnLocalMiss", "If the code isn't found under Code system above, check other locally-synced systems before giving up (e.g. a wildcard source field mixing SNOMED and ICD-10 codings) — corrects the system to match whichever one actually has the code", false, advanced: true),
                 Select("outputShape", "Output shape", ["object", "displayTextOnly"], "object"),
                 Checkbox("includeText", "Include CodeableConcept.text (only when Output shape is \"object\")", true, advanced: true),
                 Text("additionalCodings", "Additional codings (JSON array of {system,code,display}, optional — only when Output shape is \"object\")", placeholder: "e.g. [{\"system\":\"SNOMED\",\"code\":\"...\"}]", advanced: true),

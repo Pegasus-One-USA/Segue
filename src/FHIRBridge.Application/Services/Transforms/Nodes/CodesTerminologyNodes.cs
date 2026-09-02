@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Terminology;
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
@@ -115,6 +116,7 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         var systemKey = config.Get("system");
         var systemUri = SystemUris.GetValueOrDefault(systemKey, systemKey);
         var display = config.GetOrNull("display");
+        string? resolvedSystemOverride = null;
 
         // Display resolution order: (1) an author-hand-typed value always wins outright; (2) the local
         // terminology DB, when lookup isn't explicitly disabled; (3) whatever display the SOURCE resource's own
@@ -125,7 +127,26 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         // through.
         if (display is null && _terminologyLookupService is not null && config.GetBool("resolveDisplayFromTerminology", true))
         {
-            var lookup = await _terminologyLookupService.LookupAsync(systemUri, code, cancellationToken);
+            TerminologyLookupResult? lookup = null;
+
+            // Opt-in: a wildcard source field (e.g. Condition.code.coding[*].code) can extract codes from
+            // MULTIPLE codings on the same resource that use DIFFERENT systems (a SNOMED coding alongside an
+            // ICD-10-CM one is common from Epic) — one fixed "system" config can't be right for all of them.
+            // Rather than let a genuine mismatch fall through to a 120s network timeout, check every
+            // locally-synced system first; if the code turns up under a different one, use THAT system+display
+            // (never the configured-but-wrong one paired with a borrowed display — that would be self-
+            // contradictory FHIR) and surface the substitution via ResolvedSystemOverride for lineage.
+            if (config.GetBool("autoDetectSystemOnLocalMiss", false))
+            {
+                lookup = await _terminologyLookupService.LookupAnyLocalSystemAsync(code, cancellationToken);
+                if (lookup is not null && !string.Equals(lookup.System, systemUri, StringComparison.OrdinalIgnoreCase))
+                {
+                    resolvedSystemOverride = lookup.System;
+                    systemUri = lookup.System;
+                }
+            }
+
+            lookup ??= await _terminologyLookupService.LookupAsync(systemUri, code, cancellationToken);
             if (!string.IsNullOrWhiteSpace(lookup?.Display))
             {
                 display = lookup.Display;
@@ -144,7 +165,7 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         // entirely rather than building it and discarding it.
         if (string.Equals(config.Get("outputShape", "object"), "displayTextOnly", StringComparison.OrdinalIgnoreCase))
         {
-            return TransformResult.Ok(display ?? code);
+            return TransformResult.Ok(display ?? code, resolvedSystemOverride);
         }
 
         var primaryCoding = new JsonObject { ["system"] = systemUri, ["code"] = code };
@@ -192,7 +213,7 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
             concept["text"] = display ?? code;
         }
 
-        return TransformResult.Ok(concept);
+        return TransformResult.Ok(concept, resolvedSystemOverride);
     }
 }
 
