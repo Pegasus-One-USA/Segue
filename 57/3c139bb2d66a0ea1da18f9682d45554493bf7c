@@ -1,0 +1,31 @@
+tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderTests.cs
+  s_036af994396749::t_a0ddc6692b5607 59,93,107,130
+  s_036af994396749::t_89ce35de7be4a2 8
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.html
+  s_036af994396749::t_22a8f7727d883b 166-172
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_036af994396749::t_8bf5b20fb5c44f 600-601,603-606,609-618,628
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_036af994396749::t_69b209723e6cff 298-307,310-323
+  s_036af994396749::t_b1245230b885e3 157
+  s_036af994396749::t_2592095a1bd6dd 1,7,21,23-24,28
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.ts
+  s_036af994396749::t_a860b585462465 123,139
+  s_036af994396749::t_ccb5b689acfaba 51-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "573c139bb2d66a0ea1da18f9682d45554493bf7c",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
