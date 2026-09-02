@@ -5,10 +5,33 @@ import { MappingSuggestion } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 
 export interface FmWirePath {
+  /** Unique per rendered wire (a join draws one wire per source, all sharing the same resource/table/
+   *  target) — used only as the @for trackBy key; click/routing logic below reads the explicit fields
+   *  next to it instead of re-parsing this string. */
   rowKey: string;
+  resource: string;
+  tableName: string;
+  targetName: string;
+  /** The EXACT source this one wire represents — the real MappingSourceRef.fhirPath from the row's own
+   *  `sources[]` this wire was drawn for (see `paths` below), never inferred from index/order/visual
+   *  position. Null only for a childJson (whole-node-as-JSON) wire, which has no individual source to
+   *  single out — clicking it opens the whole row, there being nothing to narrow to. This is what lets a
+   *  connector-line click resolve to its own specific source → target relationship instead of always
+   *  opening every source mapped onto that target. */
+  sourceFhirPath: string | null;
   d: string;
   stroke: string;
   dashed: boolean;
+  /** Source leaf's display label (e.g. "Given Name") — shown in the hover tooltip only. */
+  sourceLabel: string;
+  /** Target column name — same tooltip-only role as sourceLabel. */
+  targetLabel: string;
+  /** Midpoint of the drawn curve (model-space), for the hover dot + tooltip anchor. Equal to the plain
+   *  average of the two endpoints — the cubic bezier's control points are anchored at each endpoint's own
+   *  y (see wireGeometry), so the curve's true point at t=0.5 always reduces to that average algebraically,
+   *  no separate curve-sampling math needed. */
+  midX: number;
+  midY: number;
 }
 
 export interface FmSuggestionPath {
@@ -50,18 +73,38 @@ export class FieldMappingWiresComponent {
    *  row's own dashed wire (which means "approximated", not "unconfirmed"). */
   readonly suggestions = input<MappingSuggestion[]>([]);
 
-  readonly wireClick = output<{ resource: string; tableName: string; targetName: string }>();
+  /** `sourceFhirPath` is the exact source this wire was drawn for (see FmWirePath) — carried straight
+   *  through from `p` untouched, never re-derived. Null for a childJson wire (open the whole row). */
+  readonly wireClick = output<{ resource: string; tableName: string; targetName: string; sourceFhirPath: string | null }>();
   readonly suggestionClick = output<{ resource: string; tableName: string; targetName: string }>();
 
-  onPathClick(rowKey: string): void {
-    const [resource, tableName, targetPart] = rowKey.split('::');
-    const targetName = targetPart.split('#')[0];
-    this.wireClick.emit({ resource, tableName, targetName });
+  onPathClick(p: FmWirePath): void {
+    this.wireClick.emit({
+      resource: p.resource, tableName: p.tableName, targetName: p.targetName, sourceFhirPath: p.sourceFhirPath,
+    });
   }
 
   onSuggestionClick(rowKey: string): void {
     const [resource, tableName, targetName] = rowKey.split('::');
     this.suggestionClick.emit({ resource, tableName, targetName });
+  }
+
+  /** Space/Enter on a focused (keyboard) wire hit-path opens the same mapping config a click would —
+   *  the hit path carries tabindex/role="button" in the template. preventDefault on Space stops the
+   *  page from scrolling, the browser's default action for Space on a focusable non-form element. */
+  onWireKeydown(event: KeyboardEvent, p: FmWirePath): void {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      this.onPathClick(p);
+    }
+  }
+
+  /** Same as onWireKeydown, for a suggestion wire's hit-path (accepts the suggestion instead). */
+  onSuggestionKeydown(event: KeyboardEvent, rowKey: string): void {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      this.onSuggestionClick(rowKey);
+    }
   }
 
   readonly paths = computed<FmWirePath[]>(() => {
@@ -86,12 +129,32 @@ export class FieldMappingWiresComponent {
 
       if (row.mode === 'childJson' && row.childNodeId) {
         const a = this.sourceAnchorPoint(row.childNodeId);
-        if (a) out.push({ rowKey: key, d: this.bezier(a, b), stroke, dashed: true });
+        if (a) {
+          const { d, mid } = this.wireGeometry(a, b);
+          const lastDot = row.childNodeId.lastIndexOf('.');
+          const sourceLabel = lastDot >= 0 ? row.childNodeId.slice(lastDot + 1) : row.childNodeId;
+          out.push({
+            rowKey: key, resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+            sourceFhirPath: null, d, stroke, dashed: true,
+            sourceLabel, targetLabel: row.targetName, midX: mid.x, midY: mid.y,
+          });
+        }
         continue;
       }
+      // rowKey still gets a `#i` suffix purely so @for's trackBy stays unique per source on this same
+      // target — nothing downstream parses it any more (see onPathClick, which reads the explicit
+      // resource/tableName/targetName/sourceFhirPath fields below instead); the real per-wire identity is
+      // s.fhirPath itself, taken directly from this row's own `sources[]`, never index/order-derived.
       row.sources.forEach((s, i) => {
         const a = this.sourceAnchorPoint(s.fhirPath);
-        if (a) out.push({ rowKey: `${key}#${i}`, d: this.bezier(a, b), stroke, dashed: approximated });
+        if (a) {
+          const { d, mid } = this.wireGeometry(a, b);
+          out.push({
+            rowKey: `${key}#${i}`, resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+            sourceFhirPath: s.fhirPath, d, stroke, dashed: approximated,
+            sourceLabel: s.label, targetLabel: row.targetName, midX: mid.x, midY: mid.y,
+          });
+        }
       });
     }
     return out;
@@ -145,5 +208,16 @@ export class FieldMappingWiresComponent {
   private bezier(a: { x: number; y: number }, b: { x: number; y: number }): string {
     const dx = Math.max(60, Math.abs(b.x - a.x) / 2);
     return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
+  }
+
+  /** Same curve as bezier() above, plus the point at the curve's own t=0.5 for the hover dot/tooltip
+   *  anchor. Both control points sit at their own endpoint's y (a.y / b.y respectively), so the standard
+   *  cubic-bezier weights at t=0.5 (⅛, ⅜, ⅜, ⅛) collapse algebraically to the plain average of the two
+   *  endpoints for both x and y — no need to actually sample the curve. */
+  private wireGeometry(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ): { d: string; mid: { x: number; y: number } } {
+    return { d: this.bezier(a, b), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
   }
 }

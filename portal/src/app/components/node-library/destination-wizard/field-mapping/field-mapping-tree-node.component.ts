@@ -12,6 +12,7 @@ export interface FmDragStart {
 }
 export interface FmDragMove { clientX: number; clientY: number }
 export interface FmDragEnd { clientX: number; clientY: number }
+export interface FmFieldClick { node: FmTreeNode; anchor: HTMLElement }
 
 /**
  * One recursive row in the source tree — a group header (accordion, foldable, itself a valid
@@ -46,6 +47,19 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
   readonly dragStart = output<FmDragStart>();
   readonly dragMove = output<FmDragMove>();
   readonly dragEnd = output<FmDragEnd>();
+  /** A leaf was pressed and released with essentially no movement in between — i.e. a plain click, not
+   *  a drag — so a mapped leaf can open its own Mapping Configuration (or a "choose which mapping"
+   *  popover, if it's the source of more than one) instead of only being reachable by dragging a wire
+   *  onto a target or by the connector line itself. Deliberately leaf-only (see onPointerUp): a group
+   *  header's plain click already means "expand/collapse" (onHeaderClick below), a long-established
+   *  gesture this must not also hijack. */
+  readonly fieldClick = output<FmFieldClick>();
+
+  private pointerDownAt: { x: number; y: number } | null = null;
+  /** Below this many px of total movement between press and release, the gesture reads as a click
+   *  rather than a drag — generous enough to absorb ordinary hand tremor/trackpad jitter without ever
+   *  mistaking an actual short drag (onto a target row right next to the source tree) for a click. */
+  private static readonly CLICK_MOVE_THRESHOLD_PX = 4;
 
   ngAfterViewInit(): void {
     this.anchors.register(this.node().id, this.row().nativeElement);
@@ -86,6 +100,7 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
     if (ev.button !== 0) return;
     const el = this.row().nativeElement;
     el.setPointerCapture(ev.pointerId);
+    this.pointerDownAt = { x: ev.clientX, y: ev.clientY };
     this.dragStart.emit({ node: this.node(), pointerId: ev.pointerId, clientX: ev.clientX, clientY: ev.clientY });
     ev.preventDefault();
   }
@@ -99,7 +114,18 @@ export class FieldMappingTreeNodeComponent implements AfterViewInit, OnDestroy {
     const el = this.row().nativeElement;
     if (!el.hasPointerCapture(ev.pointerId)) return;
     el.releasePointerCapture(ev.pointerId);
+    const downAt = this.pointerDownAt;
+    this.pointerDownAt = null;
     this.dragEnd.emit({ clientX: ev.clientX, clientY: ev.clientY });
+
+    // A real drag already completed (or no-op'd) via dragEnd above regardless — this only adds the
+    // click notification on top, for a leaf released close enough to where it was pressed.
+    if (!this.isGroup() && downAt) {
+      const moved = Math.hypot(ev.clientX - downAt.x, ev.clientY - downAt.y);
+      if (moved <= FieldMappingTreeNodeComponent.CLICK_MOVE_THRESHOLD_PX) {
+        this.fieldClick.emit({ node: this.node(), anchor: el });
+      }
+    }
   }
 
   onKeydown(ev: KeyboardEvent): void {
