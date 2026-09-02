@@ -597,15 +597,25 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return (sourceConnection?.SourceSystemType.ToString(), sourceConnection?.Name);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex ArrayIndexAnnotation = new(@"\[[^\]]*\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>
-    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", from MappingFieldDto.JsonPath)
-    /// into the "ResourceType.field" format the portal's rule-authoring UI saves <c>TransformationRule.SourceField</c>
-    /// as (see field-mapping-join-popover.component.ts's saveRule/loadRuleFor, which both build it from
+    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", or "$.code.coding[*].code" for
+    /// a repeating element, from MappingFieldDto.JsonPath) into the "ResourceType.field" format the portal's
+    /// rule-authoring UI saves <c>TransformationRule.SourceField</c> as (see
+    /// field-mapping-join-popover.component.ts's saveRule/loadRuleFor, both built from
     /// MappingRow.sources[].fhirPath) — <see cref="EfTransformationRuleRepository.GetFieldScopedAsync"/>'s match
     /// on SourceField is an exact string comparison, so both sides of it must agree on one convention. The UI's
-    /// is the one actually persisted, so this side has to match it, not the other way around: without this, a
-    /// Field-scope rule authored against a specific source field (SourceField not null) could never resolve at
-    /// runtime, silently falling through to "no rule → pass the value through unchanged" for every record.
+    /// is the one actually persisted, so this side has to match it, not the other way around.
+    ///
+    /// Two normalizations, both confirmed against real saved rows: strip the leading "$." (the UI's fhirPath has
+    /// none), and strip every "[...]" index/wildcard annotation (the UI's fhirPath never carries these either,
+    /// e.g. "Condition.code.coding.code" — not "code.coding[*].code" — regardless of which repeating instance
+    /// the field mapping itself resolves at runtime). Without the second normalization specifically, a
+    /// Field-scope rule on ANY array-nested source field — codings, identifiers, telecoms, names, essentially
+    /// most of FHIR — could never resolve, silently falling through to "no rule → pass the value through
+    /// unchanged" for every record (reproduced: Condition.code.coding[*].code vs the saved
+    /// "Condition.code.coding.code").
     /// </summary>
     private static string? ToRuleAuthoringSourceFieldFormat(string resourceType, string? jsonPath)
     {
@@ -615,6 +625,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
+        bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
         return $"{resourceType}.{bare}";
     }
 
