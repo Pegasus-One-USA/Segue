@@ -1,0 +1,207 @@
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_036af994396749::t_22a502088fe8b9 120-123,125,127,129,131,133,141,143,145,147,149
+src/FHIRBridge.Application/Services/Transforms/ITransformNode.cs
+  s_036af994396749::t_9e0eda2cbd85fa 6-11,13
+src/FHIRBridge.Application/Services/Transforms/TransformNullPolicy.cs
+  s_1c4aef56eec7d5::t_15c05ed57e1cde 19-28
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  s_036af994396749::t_024edec2f2e400 33,40,46
+  s_036af994396749::t_94c53878b04164 63-64
+tests/FHIRBridge.UnitTests/Transforms/CodesTerminologyNodesTests.cs
+  s_036af994396749::t_1ab4921944914c 13-19,23-25,158
+  s_036af994396749::t_32a2a8b30ee550 159-220
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_1c4aef56eec7d5::t_bf017758dd1c85 756
+  s_1c4aef56eec7d5::t_737a779dcd60b4 341-342
+  s_036af994396749::t_d340e5689346cf 890-908
+  s_036af994396749::t_34bf8593ca978d 816-818
+  s_1c4aef56eec7d5::t_72496a1ae36694 734-746
+  s_1c4aef56eec7d5::t_64d40885908180 654
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd11TerminologySyncService.cs
+  s_036af994396749::t_8fe80159ac2283 34,41,47
+  s_036af994396749::t_86db89baa15226 61-62
+src/Api/FHIRBridge.Api/Controllers/V1/MappingController.cs
+  s_d6a175d3cd28ec::t_e4dc2eda582c2b 46-55,59,61-69
+  s_d6a175d3cd28ec::t_8330f7b51dfa03 6
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HapiLocalTerminologyConfigurations.cs
+  s_036af994396749::t_9e42b641de1f20 53-57
+  s_036af994396749::t_5d3d99e0fecd66 46-51
+  s_036af994396749::t_d4a3d7c7059c84 1-39,52,58-59
+  s_036af994396749::t_4cb6a972bdfe28 40-45
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_1c4aef56eec7d5::t_37a16ea0b932c6 185-186
+  s_1c4aef56eec7d5::t_dadac3aeb54260 88
+  s_1c4aef56eec7d5::t_0d20f60d80a078 25-27
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiNdcTerminologySyncService.cs
+  s_036af994396749::t_7772be50f56c6a 29,36,42
+  s_036af994396749::t_3d8e9af387b812 56-57
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_1c4aef56eec7d5::t_93fa6764c01b9d 267,269-272,278-283
+  s_1c4aef56eec7d5::t_78a426c97b1a7b 259,263-264,266,268,273-277,284,302-305,311-326
+  s_1c4aef56eec7d5::t_d2722190d169be 214-220,306-307,327-328
+tests/FHIRBridge.UnitTests/Infrastructure/HapiLocalTerminologyTests.cs
+  s_036af994396749::t_139862dcb94c61 85
+  s_036af994396749::t_5d882bc2a6775b 4
+  s_036af994396749::t_297ce753b8e202 12,33-35
+  s_036af994396749::t_3589742eab843c 114
+  s_036af994396749::t_c17092f20c8964 5-10,14-32,36-44,46-78,80-84,86-94,179
+  s_036af994396749::t_4b3bb52128e5e3 45
+  s_036af994396749::t_d8cc7f3e83700c 125-158,163-170,174-178
+  s_036af994396749::t_7d97f024349071 159-162,171-173
+  s_036af994396749::t_6b664c332a5592 79
+  s_036af994396749::t_f8655f0fc3de61 1-3,11,13
+  s_036af994396749::t_7fb27060b8ce96 95-113,115-124
+src/FHIRBridge.Infrastructure/Terminology/CompositeTerminologyLookupService.cs
+  s_036af994396749::t_8dd936b183d489 59-61
+  s_036af994396749::t_0a3857122426dd 11,21,30,45-46
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  s_036af994396749::t_9874db228e9846 60-61
+  s_036af994396749::t_ac9966d8c38ea6 29,37,44
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_036af994396749::t_69bc39cf335991 520-524
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiUcumTerminologySyncService.cs
+  s_036af994396749::t_6b2df2b16b43e1 72-76,86,89
+  s_036af994396749::t_73b159a130b987 29,36,42
+  s_036af994396749::t_7b7d2d765d22db 56-57
+src/FHIRBridge.Application/Abstractions/Terminology/ITerminologyLookupService.cs
+  s_036af994396749::t_51656543e7c8fc 11-19
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiDcmTerminologySyncService.cs
+  s_036af994396749::t_2bcfa98de6a74c 39,45,50
+  s_036af994396749::t_9b83222d69dba1 61-62
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_036af994396749::t_72e045ec02ddf9 39,46,52
+  s_036af994396749::t_55fee408ca3f72 69-70
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  s_036af994396749::t_30872991819020 68-69
+  s_036af994396749::t_90465d01994079 36,43,49
+src/FHIRBridge.Infrastructure/Terminology/HapiLocalTerminologyLookupService.cs
+  s_036af994396749::t_af8b5407f644f6 1-43,73
+  s_036af994396749::t_c1e70b9bec59ba 44-72
+src/FHIRBridge.Domain/Fhir/VendorResourceTypeSupport.cs
+  s_d6a175d3cd28ec::t_3eefa29e35ad6b 1-58
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  s_036af994396749::t_85b25725dddd8d 62-63
+  s_036af994396749::t_03fe4d49d312fc 31,39,46
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_036af994396749::t_a850582466e610 60-62
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLocalTerminologyWriter.cs
+  s_036af994396749::t_b64fc02764d50c 5
+  s_036af994396749::t_5a1c47717f4236 1-3,6-26,28,34-42,44-56,58-66,68-71,79,94-95,97-104,106,108-109,111,113-123,134-136
+  s_036af994396749::t_2cefd2a609ca54 76-77
+  s_036af994396749::t_de957df16360a5 124-133
+  s_036af994396749::t_cc49d21a36304b 27,29-33,43,57,67,82-83,91-92,96,105,107,110,112
+  s_036af994396749::t_be41c9a534eec1 72-75,78,80-81,84-90,93
+  s_036af994396749::t_4a876d40a27502 4
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d6a175d3cd28ec::t_fb703ca0138b47 2014-2028
+  s_d6a175d3cd28ec::t_1665c7a7cf5c20 1044-1050,1056-1065
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiCvxTerminologySyncService.cs
+  s_036af994396749::t_9ead4d5ac3c91d 36,43,49
+  s_036af994396749::t_04b31c6ced9552 64-65
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_1c4aef56eec7d5::t_446750bd2e8ace 114
+src/FHIRBridge.Domain/Entities/Terminology/HapiLocalTerminologyEntities.cs
+  s_036af994396749::t_964b286e91e5f3 1-66
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcpc3TerminologySyncService.cs
+  s_036af994396749::t_765ee926d607a9 54-55
+  s_036af994396749::t_e17b375e9f6f9c 27,34,40
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  s_036af994396749::t_c6f57d0e066056 36,44,51
+  s_036af994396749::t_b9559baa3c7faa 67-68
+portal/src/app/core/api-endpoints.ts
+  s_d6a175d3cd28ec::t_8ad156aca624a3 172-178
+src/FHIRBridge.Application/DTOs/MappingTestResultDto.cs
+  s_1c4aef56eec7d5::t_ff1196a4929275 15-22
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_036af994396749::t_0e4346a533a68f 216
+  s_036af994396749::t_3d90efcb15bd9b 4
+  s_036af994396749::t_260f4dfa23e504 119,130-149
+  s_036af994396749::t_5c757b4382b8d5 168
+portal/src/app/services/mapping-catalog.service.ts
+  s_d6a175d3cd28ec::t_5cc360b16154a6 83
+  s_d6a175d3cd28ec::t_4867602369504a 84-96,98-101
+  s_d6a175d3cd28ec::t_882f1a48670e2b 97
+src/Api/FHIRBridge.Api/Program.cs
+  s_036af994396749::t_f8a67a1e6e2205 167-169,171-177,179-180,183
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyConfigurationService.cs
+  s_036af994396749::t_4247452b6169fa 122-131
+  s_036af994396749::t_1f97ba919beeda 108,113,119
+  s_036af994396749::t_6854617b9272e2 11,25,34-35,44
+  s_036af994396749::t_5875091b8b80f8 121
+  s_036af994396749::t_3903d1df8f0a2c 132
+  s_036af994396749::t_dd947403b5c714 137
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_036af994396749::t_c41f24d33b9499 195
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_d6a175d3cd28ec::t_0ce2a48686c742 956-961,966-968,971-972
+  s_d6a175d3cd28ec::t_29be620828e05f 1689-1697
+  s_d6a175d3cd28ec::t_c1956530fb0def 910
+  s_d6a175d3cd28ec::t_1f53277179f0d5 40
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10TerminologySyncService.cs
+  s_036af994396749::t_211102b29953b0 63-64
+  s_036af994396749::t_c415045e02d269 32,39,45
+src/FHIRBridge.Infrastructure/Terminology/CachingTerminologyLookupService.cs
+  s_036af994396749::t_3de1bb23a40838 60-65
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902102043_AddHapiLocalTerminologyTables.Designer.cs
+  s_036af994396749::t_076f0c8bb01087 1-6008
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902102043_AddHapiLocalTerminologyTables.cs
+  s_036af994396749::t_b4e6bfbbc1ef3a 1-99
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902125220_WidenTrmConceptDisplayColumn.Designer.cs
+  s_036af994396749::t_a89009c226b511 1-6008
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902125220_WidenTrmConceptDisplayColumn.cs
+  s_036af994396749::t_bf567faf1434ac 1-42
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902125702_MakeTrmConceptDisplayUnbounded.Designer.cs
+  s_036af994396749::t_544cc3d20cd063 1-6007
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902125702_MakeTrmConceptDisplayUnbounded.cs
+  s_036af994396749::t_f77c3055b10c0c 1-40
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902131123_MakeTrmConceptCodeValCaseSensitive.Designer.cs
+  s_036af994396749::t_1cfdbfde1b1e9b 1-6008
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902131123_MakeTrmConceptCodeValCaseSensitive.cs
+  s_036af994396749::t_4cd4d034952363 1-42
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902143651_AddTrmConceptCodeValIndex.Designer.cs
+  s_036af994396749::t_ff7e0932c5d077 1-6010
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260902143651_AddTrmConceptCodeValIndex.cs
+  s_036af994396749::t_bb7aa3d620196b 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_def493f5b3ce36::t_6fab3031db12dc 3993-4081
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "17df614b0486dd6ca6adc8206fe06971f7993e09",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_1c4aef56eec7d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46e3e6db-5c54-43f8-9fbb-d38657967bdf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_d6a175d3cd28ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2fa3f7d0-63b0-4667-95a4-a6881a778994",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_def493f5b3ce36": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4bd70306-9187-4c31-824e-63e1a1b60c81",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
