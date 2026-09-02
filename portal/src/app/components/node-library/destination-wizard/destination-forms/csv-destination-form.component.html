@@ -84,7 +84,8 @@
 
       <div class="dw-field" [class.dw-field--error]="csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched">
         <label class="dw-label" for="cf-sftpPassword">Password @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
-        <input id="cf-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
+        <input id="cf-sftpPassword" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password"
+          [placeholder]="reusingExisting() ? 'Leave blank to keep the current password' : ''" />
         @if (csvForm.get('sftpPassword')!.invalid && csvForm.get('sftpPassword')!.touched) {
           <span class="dw-error">SFTP password is required.</span>
         }

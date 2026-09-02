@@ -35,6 +35,9 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
    *  is never repopulated when patching from an existing connection, so requiring it here would permanently
    *  block reuse unless the user retypes it just to satisfy validation. */
   readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — when present, testConnection() sends it instead of a blank password so
+   *  the backend can resolve the stored secret server-side (see SftpDestinationConnectionTestService). */
+  readonly existingDestinationId = input<string | null>(null);
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
@@ -67,6 +70,7 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
       username: v.sftpUsername ?? '',
       password: v.sftpPassword ?? undefined,
       remoteFolder: v.sftpRemoteFolder ?? undefined,
+      destinationId: this.existingDestinationId() ?? undefined,
     }).subscribe({
       next: res => {
         this.probeState.set(res.connected ? 'ok' : 'error');
@@ -95,9 +99,14 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // buildSftpUri bakes the password into the URI even when it's blank (e.g. "sftp://user:@host/folder"),
+    // which is non-empty and would overwrite a working stored secret with a broken one on a no-op re-save —
+    // same guard as CsvDestinationFormComponent's sftp branch / WorkflowBuildAssemblerService's isSftp branch.
+    const secret =
+      this.reusingExisting() && !config['dest_sftpPassword'] ? null : buildSftpUri(config);
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: buildSftpUri(config),
+      secret,
     };
   }
 

@@ -1,5 +1,8 @@
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.SharedKernel.Exceptions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -14,11 +17,28 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MongoDestinationConnectionTestService : IMongoDestinationConnectionTestService
 {
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISecretProvider _secretProvider;
+
+    public MongoDestinationConnectionTestService(
+        IConfigurationRepository configurationRepository,
+        ISecretProvider secretProvider)
+    {
+        _configurationRepository = configurationRepository;
+        _secretProvider = secretProvider;
+    }
+
     public async Task<MongoConnectionTestResultDto> TestConnectionAsync(
         MongoConnectionTestRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.ConnectionString))
+        var connectionString = request.ConnectionString;
+        if (string.IsNullOrWhiteSpace(connectionString) && request.DestinationId is { } destinationId)
+        {
+            connectionString = await ResolveStoredConnectionStringAsync(destinationId, cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
             return new MongoConnectionTestResultDto(false, "Connection string is required.");
         }
@@ -26,7 +46,7 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
         MongoUrl url;
         try
         {
-            url = new MongoUrl(request.ConnectionString);
+            url = new MongoUrl(connectionString);
         }
         catch (Exception exception)
         {
@@ -75,6 +95,27 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
         catch (Exception exception)
         {
             return new MongoConnectionTestResultDto(false, exception.Message);
+        }
+    }
+
+    /// <summary>Resolves an already-saved Mongo destination's stored secret (the whole connection string — see
+    /// this file's own remarks: Mongo has no split server/database/credentials form, so the secret IS the
+    /// connection string, no parsing needed) so a Test Connection with a blank field can still verify against
+    /// the real stored credential without the browser ever holding it. Returns null (never throws) if the
+    /// destination or its secret isn't resolvable — the caller then reports "Connection string is required"
+    /// rather than masking the real problem.</summary>
+    private async Task<string?> ResolveStoredConnectionStringAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+            if (destination is null) return null;
+
+            return await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
         }
     }
 }

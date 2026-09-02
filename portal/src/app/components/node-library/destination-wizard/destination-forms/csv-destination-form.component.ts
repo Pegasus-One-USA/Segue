@@ -132,9 +132,20 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    const isSftp = config['dest_deliveryMode'] === 'sftp';
+    // buildSftpUri bakes the password into the URI even when it's blank (e.g. "sftp://user:@host/folder"),
+    // which is non-empty and would overwrite a working stored secret with a broken one on a no-op re-save —
+    // same guard as WorkflowBuildAssemblerService.buildDestinationRequest's isSftp branch. Only rebuild when
+    // the user actually typed a new password, or there's no existing secret to preserve yet.
+    const secret =
+      !isSftp
+        ? ''
+        : this.reusingExisting() && !config['dest_sftpPassword']
+          ? null
+          : buildSftpUri(config);
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
+      secret,
     };
   }
 
