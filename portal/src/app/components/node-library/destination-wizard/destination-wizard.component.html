@@ -774,6 +774,7 @@
           [mappingRows]="mappingRows()"
           [targetByResource]="targetByResource()"
           [availableFields]="availableFieldsFn"
+          [defaultAvailableFields]="defaultAvailableFieldsFn"
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
@@ -809,6 +810,7 @@
           (schemaOpQueued)="onSchemaOpQueued($event)"
           (schemaOpsCancelledForTable)="onSchemaOpsCancelledForTable($event)"
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+          (sourcePayloadReset)="onSourcePayloadReset($event)"
           (childTableRelationAdded)="onChildTableRelationAdded($event)"
         />
       }

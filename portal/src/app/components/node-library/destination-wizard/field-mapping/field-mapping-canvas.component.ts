@@ -18,7 +18,7 @@ import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-
 import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './field-mapping-edit-column-modal.component';
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
-import { parseSourcePayloadJson } from './field-mapping-payload.util';
+import { parseSourcePayloadJson, reconstructPayloadJsonFor } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
@@ -122,6 +122,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();
+  /** Same shape as availableFields, but never blended with a pasted-payload override — the real backend
+   *  FHIR catalog (or the built-in defs, until that catalog loads). See DestinationWizardComponent.
+   *  defaultAvailableFields's own doc comment: this is what the Load JSON Payload modal's "Reset to
+   *  Original" reconstructs from (originalPayloadJsonFor below), since availableFields() alone can't tell
+   *  "the true original" apart from "whatever override happens to be active right now" once ANY payload
+   *  has ever been loaded for this resource. */
+  readonly defaultAvailableFields = input.required<(r: string) => ResourceFieldDef[]>();
   readonly columnsForResourceTarget = input.required<(r: string) => string[]>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
@@ -225,6 +232,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly columnAltered = output<{ tableName: string; oldColumnName: string; column: DestinationColumn }>();
   /** A JSON payload was successfully parsed — the parent stores these fields as the resource's source tree. */
   readonly sourcePayloadLoaded = output<{ resource: string; fields: ResourceFieldDef[] }>();
+  /** "Reset to Original" was clicked in the Load JSON Payload modal — the parent drops this resource's
+   *  pasted-payload override (payloadFieldsByResource lives on the parent, not here) so availableFields()
+   *  falls back through to the real catalog again, same as defaultAvailableFields already does. */
+  readonly sourcePayloadReset = output<string>();
   /** A table created via "Create a new table…" was given a parent/FK relationship — the parent wizard
    *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
    *  between resources, node reload, and the Mapping JSON export/import. */
@@ -1381,6 +1392,37 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.loadPayloadError.set(null);
   }
 
+  /** Whatever this resource's source tree is ACTUALLY showing right now — reconstructed fresh (not
+   *  cached) from availableFields(), the exact same override-aware field list `forest` itself is built
+   *  from (see the computed just above). Pre-fills the Load JSON Payload modal's textarea every time it
+   *  opens, so re-opening it always shows the CURRENT payload — a previously loaded/edited one if there is
+   *  one, the true default catalog otherwise — never a stale default unrelated to what's on screen. See
+   *  originalPayloadJsonFor just below for the separate, override-FREE "true original" reconstruction. */
+  currentPayloadJsonFor(resource: string): string {
+    if (!resource) return '';
+    return reconstructPayloadJsonFor(resource, this.availableFields()(resource));
+  }
+
+  /** The TRUE original/default JSON payload for `resource` — reconstructed fresh (not cached) from
+   *  defaultAvailableFields(), which is deliberately override-free (see its own doc comment): the real
+   *  backend FHIR catalog, or the built-in defs until that loads — NEVER whatever a previously-pasted
+   *  payload already replaced it with. This is what "Reset to Original" restores back to — deliberately
+   *  separate from currentPayloadJsonFor just above, which DOES reflect any such override, precisely so
+   *  the two can't collapse into "always shows the same thing" the way a single shared source would. */
+  originalPayloadJsonFor(resource: string): string {
+    if (!resource) return '';
+    return reconstructPayloadJsonFor(resource, this.defaultAvailableFields()(resource));
+  }
+
+  /** Drops every existing mapping for `resource` — used by both submitLoadPayload (a genuinely new
+   *  payload shape just replaced this resource's fields; any row still pointing at the old shape's
+   *  fhirPaths would be silently dangling) and onResetToOriginalPayload (the Load JSON Payload modal's
+   *  own "Reset to Original", which clears the same way even though nothing was actually re-parsed here).
+   *  Every OTHER resource's rows are left completely untouched, same as removeRow's own identity filter. */
+  private clearMappingsForResource(resource: string): void {
+    this.mappingRowsChange.emit(this.mappingRows().filter(r => r.resource !== resource));
+  }
+
   submitLoadPayload(raw: string): void {
     const resource = this.resources()[0];
     if (!resource) return;
@@ -1392,15 +1434,32 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     }
 
     this.sourcePayloadLoaded.emit({ resource, fields: result.fields });
+    this.clearMappingsForResource(resource);
     this.loadPayloadOpen.set(false);
     this.loadPayloadError.set(null);
     const count = `${result.fields.length} field${result.fields.length === 1 ? '' : 's'}`;
     this.toast.success(
       'Payload loaded',
       result.declaredResourceType
-        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}").`
-        : `${count} found in the pasted ${resource} JSON.`,
+        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}") — previous mappings for ${resource} were cleared.`
+        : `${count} found in the pasted ${resource} JSON — previous mappings for ${resource} were cleared.`,
     );
+  }
+
+  /** "Reset to Original" in the Load JSON Payload modal — the textarea reset itself is entirely local to
+   *  that component (it just re-reads its own originalRaw input, see
+   *  FieldMappingLoadPayloadModalComponent.onResetToOriginal); this handles the two things the modal
+   *  can't do itself: clearing this resource's existing mappings (same as a real submit does), and telling
+   *  the parent to drop its pasted-payload override (sourcePayloadReset — payloadFieldsByResource lives on
+   *  the parent) so the SOURCE TREE itself also reverts to the true default catalog, not just the modal's
+   *  own textarea. */
+  onResetToOriginalPayload(): void {
+    const resource = this.resources()[0];
+    if (!resource) return;
+    this.clearMappingsForResource(resource);
+    this.sourcePayloadReset.emit(resource);
+    this.loadPayloadError.set(null);
+    this.toast.info('Reset to original', `Mappings for ${resource} were cleared.`);
   }
 
   // ── rank color per resource ─────────────────────────────────────────────

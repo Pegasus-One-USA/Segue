@@ -310,7 +310,10 @@
     <app-field-mapping-load-payload-modal
       [resource]="resources()[0]"
       [error]="loadPayloadError()"
+      [currentRaw]="currentPayloadJsonFor(resources()[0])"
+      [originalRaw]="originalPayloadJsonFor(resources()[0])"
       (submitted)="submitLoadPayload($event)"
+      (resetToOriginal)="onResetToOriginalPayload()"
       (cancelled)="closeLoadPayloadModal()"
     />
   }
