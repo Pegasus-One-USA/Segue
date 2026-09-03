@@ -528,7 +528,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
     'search-rest': {
       value: 'search-rest',
       label: 'Search (REST)',
-      description: 'Segue polls Epic’s FHIR REST API on a schedule.',
+      description: 'Segue polls the server’s FHIR REST API on a schedule.',
       fields: [
         // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
         // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
@@ -1545,6 +1545,9 @@ export class EhrVendorSourceFormComponent
         '"a-1.C-{Practice}" automatically.'
       );
     }
+    if (field.key === 'groupId' && this.vendor() !== 'Epic') {
+      return `${this.displayVendor()} Group FHIR ID to export.`;
+    }
     return field.hint;
   }
 
@@ -1898,6 +1901,20 @@ export class EhrVendorSourceFormComponent
       if (this.form.controls.environment.value === 'sandbox') {
         this.form.controls.epicBaseUrl.setValue(HEALOW_SANDBOX_BASE_URL);
       }
+    }
+
+    // Generic new-source App Name default for every other non-Epic vendor (Cerner, MEDITECH Greenfield,
+    // Allscripts, ...): wiz.stepName() above defaults to 'Epic' regardless of which vendor form is actually
+    // open (see WizardService.open()), and Athenahealth/Healow already correct it via their own overrides
+    // above (they also need other field defaults). Every remaining vendor gets this vendor-neutral fallback
+    // instead of silently keeping the word "Epic" on screen. Skipped once editing, same as the blocks above.
+    if (
+      !this.wiz.isEditing() &&
+      this.vendor() !== 'Epic' &&
+      this.vendor() !== 'Athenahealth' &&
+      this.vendor() !== 'Healow'
+    ) {
+      this.form.controls.appName.setValue(this.displayVendor());
     }
 
     this.prevAudience = this.audience();
@@ -3424,7 +3441,7 @@ export class EhrVendorSourceFormComponent
     //  - Edited: fork it as a new, independent connection. If the user left Name exactly as cloned,
     //    it collides with the original unless suffixed; if they typed their own distinct name, honor
     //    it as-is (only deduped on an actual collision) rather than silently suffixing a chosen name.
-    let resolvedName = v.appName ?? 'Epic';
+    let resolvedName = v.appName ?? this.displayVendor();
     let resolvedSourceConnectionId: string | null = null;
     if (this.sourceMode() === 'existing') {
       const original = this.existingConnections().find(

@@ -15,6 +15,23 @@ import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { SOURCES } from '../data/sources.data';
+
+/** EhrVendor (SourceSystemType) enum member name → SOURCES catalog id — duplicated from
+ *  EHR_VENDOR_TO_SOURCE_FORM_KEY (source-form.registry.ts) rather than imported, so this service never pulls in
+ *  that registry's component classes (every vendor source-form component) and risks a circular import back
+ *  through EhrVendorSourceFormComponent, which already injects WizardService. */
+const EHR_VENDOR_TO_SOURCES_ID: Record<string, string> = {
+  Epic: 'epic',
+  Cerner: 'cerner',
+  Athenahealth: 'athena',
+  Allscripts: 'allscripts',
+  Healow: 'healow',
+  MeditechGreenfield: 'meditech',
+  GenericFhir: 'generic-fhir',
+  Hl7v2: 'hl7v2',
+  Sample: 'sample',
+};
 
 export type WizardMode = 'canvas' | 'entity';
 
@@ -498,6 +515,11 @@ export class WizardService {
     // chance to load the existing-names list — a race that eager creation here would otherwise expose on every
     // single "Add to Pipeline" click, not just an edge case.
     if (this.wizardMode() === 'canvas') {
+      // Vendor-specific abbr/badge color/display name — this.ehrType() is kept in sync with whichever vendor form
+      // is actually open (see EhrVendorSourceFormComponent's constructor effect), so a Cerner/MEDITECH/Allscripts/
+      // etc. node gets its own SOURCES catalog entry instead of always falling back to Epic's.
+      const sourceMeta = SOURCES.find((s) => s.id === (EHR_VENDOR_TO_SOURCES_ID[this.ehrType()] ?? 'epic'))
+        ?? SOURCES.find((s) => s.id === 'epic')!;
       const editingId = this.store.editingNodeId();
       if (editingId) {
         // Merge onto the node's existing fields rather than replacing them outright — this form only manages a
@@ -505,7 +527,7 @@ export class WizardService {
         // by create-on-save, never surfaced as a form control) must survive an edit untouched.
         const previousFields = this.store.byId(editingId)?.fields ?? {};
         this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
-        this.toast.show('Epic updated', `${fields['__name']} saved.`);
+        this.toast.show(`${sourceMeta.name} updated`, `${fields['__name']} saved.`);
       } else {
         const count = this.store.nodes().filter(n => !n.kind).length;
         const newNode: SourceNode = {
@@ -515,11 +537,11 @@ export class WizardService {
           y:         320 + count * 40,
           fields,
           connected: this.connected(),
-          abbr:      'EP',
-          color:     '#ff5a4f',
+          abbr:      sourceMeta.abbr,
+          color:     sourceMeta.color,
         };
         this.store.addNode(newNode);
-        this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
+        this.toast.show(`${sourceMeta.name} added`, `${fields['__name']} added to the canvas.`);
       }
 
       this.saveOutcome$.next({ success: true });
