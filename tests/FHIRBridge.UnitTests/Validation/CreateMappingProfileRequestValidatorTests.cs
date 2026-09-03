@@ -303,4 +303,23 @@ public sealed class CreateMappingProfileRequestValidatorTests
 
         (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Rule_with_matching_expected_type_passes_even_when_raw_source_type_differs_from_column()
+    {
+        // The field's own ValueType reflects the raw JsonPath extraction (Date, from birthDate) — the rule
+        // (DateMathAge) is what actually turns that into the Integer the column expects. The raw-type check
+        // must defer to the rule's declared output type instead of comparing Date against Integer itself.
+        StubSchema(new DestinationColumnSchemaDto("BirthDateAge", "int", "Integer", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Field, TransformNodeType.DateMathAge, "{}",
+            expectedValueType: MappingValueType.Integer));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("BirthDateAge", "$.birthDate", MappingValueType.Date, false, null, null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
 }

@@ -1380,14 +1380,20 @@ export class EhrVendorSourceFormComponent
       : null;
   });
 
-  // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
+  // ── Data Retrieval Method (Backend System: Search REST + Bulk Export; Standalone: Search REST only, one-shot) ──
   /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
-   *  that don't fit a user-initiated, one-shot launch. */
+   *  that don't fit a user-initiated, one-shot launch.
+   *  Subscription and Webhook are excluded from the dropdown for every audience: SourceNodeExecutor (Runtime
+   *  plane) only ever executes search-rest/bulk-export today, so offering them would let a user pick a retrieval
+   *  method the backend silently never runs. The RetrievalMethod type/config entries stay (existing saved
+   *  connections may still reference them), only the selectable option list is filtered. */
   protected readonly retrievalMethodOptions = computed(() => {
-    const all = Object.values(RETRIEVAL_METHOD_CONFIG).map((c) => ({
-      value: c.value,
-      label: c.label,
-    }));
+    const all = Object.values(RETRIEVAL_METHOD_CONFIG)
+      .filter((c) => c.value !== 'subscription' && c.value !== 'webhook')
+      .map((c) => ({
+        value: c.value,
+        label: c.label,
+      }));
     return this.audienceConfig().retrievalScope === 'oneshot'
       ? all.filter((o) => o.value === 'search-rest')
       : all;
@@ -1494,9 +1500,16 @@ export class EhrVendorSourceFormComponent
    * the field currently has a value — drives the Search Criteria control's required validator (see
    * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
    * against the live value on every keystroke regardless.
+   *
+   * Gated on showRetrievalSection() — this section (and Search Criteria within it) only renders for the Backend
+   * System audience. Other audiences (Patient, Provider Standalone/EHR Launch) still carry a 'search-rest'
+   * retrievalMethod / Patient-inclusive resources from cloning an existing connection (see the clone fallback a
+   * few hundred lines down), but their data actually flows through the SMART launch context, not a live
+   * search-rest query — requiring a field the admin can never see would leave the form permanently invalid.
    */
   protected readonly athenaPatientSearchNeedsCriteria = computed(
     () =>
+      this.showRetrievalSection() &&
       this.vendor() === 'Athenahealth' &&
       this.retrievalMethod() === 'search-rest' &&
       this.activeRetrievalResourceTypes().includes('Patient'),
