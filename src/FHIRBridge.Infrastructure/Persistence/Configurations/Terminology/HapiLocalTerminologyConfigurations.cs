@@ -37,18 +37,19 @@ public sealed class TrmConceptConfiguration : IEntityTypeConfiguration<TrmConcep
         builder.ToTable("TRM_CONCEPT", "terminology");
         builder.HasKey(x => x.Pid);
         builder.Property(x => x.Pid).UseIdentityColumn();
-        // Case-sensitive collation: several code systems have genuinely distinct codes that differ
-        // only by case (confirmed via a real unique-index violation — UCUM's "S" (Siemens) and "s"
-        // (second) collided under the database's default case-insensitive collation even though they
-        // are different, valid concepts). Without this, the unique index below would silently treat
-        // case-variant codes as duplicates.
-        builder.Property(x => x.CodeVal).HasMaxLength(500).IsRequired().UseCollation("SQL_Latin1_General_CP1_CS_AS");
-        // Unbounded (nvarchar(max)), unlike HAPI's own trm_concept.display (varchar(400)) — HCPCS
-        // descriptions are built by concatenating multiple word-wrapped source-file chunks and can
-        // legitimately run well past 2000 characters (confirmed via repeated real truncation failures
-        // on genuine HCPCS descriptions during "Run Now"). Display is never filtered/joined/indexed on,
-        // so there's no cost to leaving it unbounded rather than guessing another fixed ceiling.
-        builder.Property(x => x.Display).HasColumnType("nvarchar(max)");
+        // Case sensitivity (several code systems have genuinely distinct codes that differ only by
+        // case — confirmed via a real unique-index violation, UCUM's "S" (Siemens) and "s" (second)
+        // collided under SQL Server's default case-insensitive collation) is applied per-provider in
+        // FHIRBridgeDbContext.OnModelCreating, since the SQL Server collation name has no Postgres
+        // equivalent (Postgres's default "C"-locale collation is already case-sensitive byte comparison).
+        builder.Property(x => x.CodeVal).HasMaxLength(500).IsRequired();
+        // Unbounded, unlike HAPI's own trm_concept.display (varchar(400)) — HCPCS descriptions are
+        // built by concatenating multiple word-wrapped source-file chunks and can legitimately run
+        // well past 2000 characters (confirmed via repeated real truncation failures on genuine HCPCS
+        // descriptions during "Run Now"). Display is never filtered/joined/indexed on, so there's no
+        // cost to leaving it unbounded — EF already maps an unconstrained string to nvarchar(max)/text
+        // on both providers, so no explicit HasColumnType is needed.
+        builder.Property(x => x.Display);
         builder.HasIndex(x => new { x.CodeSystemPid, x.CodeVal }).IsUnique();
         // A standalone (non-unique) index on CodeVal alone, for HapiLocalTerminologyLookupService's
         // cross-system search (CodeableConceptBuilder's opt-in auto-detect) — the composite index above

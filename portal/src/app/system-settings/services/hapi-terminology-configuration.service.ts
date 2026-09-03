@@ -56,6 +56,19 @@ export interface HapiTerminologyRunStartedResponse {
   message: string;
 }
 
+/** Result of checking one system's official source for a newer version than what's stored locally,
+ * without downloading/importing anything. `supported` is false for systems whose source has no
+ * discoverable "latest version" pointer — in that case `latestAvailableVersion` is always null and
+ * `updateAvailable` is always false, but `storedVersion` is still populated. */
+export interface HapiTerminologyVersionCheckResult {
+  code: string;
+  supported: boolean;
+  storedVersion: string | null;
+  latestAvailableVersion: string | null;
+  updateAvailable: boolean;
+  errorMessage: string | null;
+}
+
 /** Grouped settings, manual Run Now, and history for the 13 HAPI-terminology-server sync systems
  * (Settings → System Settings → General → Terminology Servers). */
 @Injectable({ providedIn: 'root' })
@@ -81,6 +94,16 @@ export class HapiTerminologyConfigurationService {
 
   getHistory(code: string): Observable<TerminologyImportHistoryEntry[]> {
     return this.http.get<TerminologyImportHistoryEntry[]>(HAPI_TERMINOLOGY_ENDPOINTS.history(code));
+  }
+
+  /** Checks one system's official source for a newer version than what's stored locally. */
+  scan(code: string): Observable<HapiTerminologyVersionCheckResult> {
+    return this.http.post<HapiTerminologyVersionCheckResult>(HAPI_TERMINOLOGY_ENDPOINTS.scan(code), {});
+  }
+
+  /** Scans all 13 systems for a newer available version. */
+  scanAll(): Observable<HapiTerminologyVersionCheckResult[]> {
+    return this.http.post<HapiTerminologyVersionCheckResult[]>(HAPI_TERMINOLOGY_ENDPOINTS.scanAll, {});
   }
 
   /** Server-side paged, searchable browse of one system's locally stored codes ("View All Codes"). */

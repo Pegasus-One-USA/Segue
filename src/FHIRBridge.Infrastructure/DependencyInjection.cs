@@ -382,7 +382,6 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(NdcReleaseClient));
         services.AddHttpClient(nameof(ReleaseFreshnessChecker));
         services.AddHttpClient(nameof(UcumReleaseClient));
-        services.AddHttpClient(nameof(FhirTerminologyTranslationService));
 
         services.AddSingleton<MappedInMemoryDestinationBuffer>();
         services.AddScoped<MappedInMemoryDestinationWriter>();
@@ -533,7 +532,6 @@ public static class DependencyInjection
             sp.GetRequiredService<ISystemSettingsCache>(),
             terminologyCacheTtl));
         services.AddSingleton<LocalTerminologyTranslationService>();
-        services.AddScoped<FhirTerminologyTranslationService>();
         services.AddScoped<CompositeTerminologyTranslationService>();
         services.AddScoped<ITerminologyTranslationService>(sp => new CachingTerminologyTranslationService(
             sp.GetRequiredService<CompositeTerminologyTranslationService>(),

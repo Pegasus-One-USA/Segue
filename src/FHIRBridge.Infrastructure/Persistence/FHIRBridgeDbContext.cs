@@ -137,6 +137,16 @@ public sealed class FHIRBridgeDbContext : DbContext
         var isNpgsql = Database.IsNpgsql();
         var createdOnUtcDefaultSql = isNpgsql ? "timezone('utc', now())" : "GETUTCDATE()";
 
+        // SQL Server's collation name has no Postgres equivalent; Postgres's default "C"-locale
+        // collation is already case-sensitive byte comparison, so no explicit collation is needed there.
+        // See TrmConceptConfiguration for why this column must be case-sensitive at all.
+        if (!isNpgsql)
+        {
+            modelBuilder.Entity<TrmConcept>()
+                .Property(x => x.CodeVal)
+                .UseCollation("SQL_Latin1_General_CP1_CS_AS");
+        }
+
         // Cross-cutting conventions applied after the per-entity configurations:
         //  • soft-deletable entities get a global "hide deleted rows" query filter
         //  • every entity carrying a RowVersion gets it mapped as an optimistic-concurrency token

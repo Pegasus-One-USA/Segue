@@ -42,6 +42,19 @@ public sealed record HapiTerminologyImportHistoryEntryDto(
     string Status,
     string? ErrorMessage);
 
+/// <summary>Result of checking one HAPI terminology system's source for a newer version than what's
+/// currently stored locally, without downloading/importing anything. <see cref="Supported"/> is false
+/// for the systems whose source has no discoverable "latest version" pointer to check (see
+/// HapiTerminologySystemRegistry.CheckLatestVersionAsync) — in that case StoredVersion is still
+/// populated but LatestAvailableVersion is always null and UpdateAvailable is always false.</summary>
+public sealed record HapiTerminologyVersionCheckResultDto(
+    string Code,
+    bool Supported,
+    string? StoredVersion,
+    string? LatestAvailableVersion,
+    bool UpdateAvailable,
+    string? ErrorMessage);
+
 /// <summary>One code/description row from a HAPI terminology system's local store (TRM_CONCEPT),
 /// browsable/editable from Settings → General → Terminology's "View All Codes" screen.</summary>
 public sealed record TerminologyConceptDto(long Pid, string Code, string? Display);

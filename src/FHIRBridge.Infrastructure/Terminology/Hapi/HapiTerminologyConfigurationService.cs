@@ -150,6 +150,50 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<HapiTerminologyVersionCheckResultDto> ScanForNewVersionAsync(string code, CancellationToken cancellationToken)
+    {
+        var descriptor = _registry.Get(code);
+        var storedVersion = await GetStoredVersionAsync(descriptor, cancellationToken);
+
+        if (descriptor.CheckLatestVersionAsync is null)
+        {
+            return new HapiTerminologyVersionCheckResultDto(descriptor.Code, false, storedVersion, null, false, null);
+        }
+
+        try
+        {
+            var latestVersion = await descriptor.CheckLatestVersionAsync(_serviceProvider, cancellationToken);
+            var updateAvailable = latestVersion is not null
+                && !string.Equals(latestVersion, storedVersion, StringComparison.OrdinalIgnoreCase);
+            return new HapiTerminologyVersionCheckResultDto(descriptor.Code, true, storedVersion, latestVersion, updateAvailable, null);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "ScanForNewVersionAsync: {Code} version check failed.", code);
+            return new HapiTerminologyVersionCheckResultDto(descriptor.Code, true, storedVersion, null, false, exception.Message);
+        }
+    }
+
+    public async Task<IReadOnlyList<HapiTerminologyVersionCheckResultDto>> ScanAllForNewVersionsAsync(CancellationToken cancellationToken)
+    {
+        // Sequential, not Task.WhenAll: every scan shares this instance's single DbContext (for
+        // GetStoredVersionAsync), and EF Core throws if two operations run concurrently on it.
+        var results = new List<HapiTerminologyVersionCheckResultDto>(_registry.All.Count);
+        foreach (var descriptor in _registry.All)
+        {
+            results.Add(await ScanForNewVersionAsync(descriptor.Code, cancellationToken));
+        }
+
+        return results;
+    }
+
+    private async Task<string?> GetStoredVersionAsync(HapiTerminologySystemDescriptor descriptor, CancellationToken cancellationToken) =>
+        await _db.HapiTerminologyImportHistory
+            .Where(x => x.CodeSystem == descriptor.Code && x.Status == "Succeeded")
+            .OrderByDescending(x => x.StartedOnUtc)
+            .Select(x => x.Version)
+            .FirstOrDefaultAsync(cancellationToken);
+
     private async Task<HapiTerminologyConfigurationDto> BuildDtoAsync(HapiTerminologySystemDescriptor descriptor, CancellationToken cancellationToken)
     {
         var prefix = descriptor.SettingsKeyPrefix;

@@ -22,7 +22,7 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Record layout (1-indexed): 1-5 HCPCS code; 6-10 sequence number; 12-91 long description chunk (80
 /// chars, word-wrapped, no mid-word splits). Confirmed against the real October 2026 release.
 /// </summary>
-public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncService
+public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncService, IHapiVersionCheckable
 {
     private const string ListingPageUrl =
         "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update";
@@ -67,7 +67,7 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         var concepts = await DownloadAndParseAsync(downloadClient, zipUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "HCPCS", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl, "HCPCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -75,6 +75,19 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed);
     }
+
+    /// <summary>CMS's quarterly zip filename itself (e.g. "october-2026-alpha-numeric-hcpcs-file.zip")
+    /// as the version identifier — there's no separately-published release number, but the filename
+    /// changes every quarter and is the same value used both to check for updates and to store what
+    /// was actually synced, so the comparison is reliable.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        using var client = _httpClientFactory.CreateClient(nameof(HapiHcpcsTerminologySyncService) + ".Download");
+        var zipUrl = await FindLatestZipUrlAsync(client, cancellationToken);
+        return VersionFromZipUrl(zipUrl);
+    }
+
+    private static string VersionFromZipUrl(string zipUrl) => zipUrl[(zipUrl.LastIndexOf('/') + 1)..];
 
     private static async Task<string> FindLatestZipUrlAsync(HttpClient http, CancellationToken ct)
     {

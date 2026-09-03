@@ -342,6 +342,8 @@ export const HAPI_TERMINOLOGY_ENDPOINTS = {
   history: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/history`,
   codes: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes`,
   code: (code: string, pid: number) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes/${pid}`,
+  scan: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/scan`,
+  scanAll: `${HAPI_TERMINOLOGY_BASE}/scan`,
 };
 
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────

@@ -62,6 +62,19 @@ public sealed class HapiTerminologyConfigurationController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<HapiTerminologyImportHistoryEntryDto>>> History(string code, CancellationToken cancellationToken) =>
         Ok(await _service.GetHistoryAsync(code, cancellationToken));
 
+    /// <summary>Checks this system's official source for a newer version than what's stored locally,
+    /// without downloading/importing anything. Returns Supported=false for systems whose source has no
+    /// discoverable "latest version" pointer to check.</summary>
+    [HttpPost("{code}/scan")]
+    public async Task<ActionResult<HapiTerminologyVersionCheckResultDto>> Scan(string code, CancellationToken cancellationToken) =>
+        Ok(await _service.ScanForNewVersionAsync(code, cancellationToken));
+
+    /// <summary>Scans all 13 systems for a newer available version — backs the Settings → General →
+    /// Terminology screen's "Scan for updates" action.</summary>
+    [HttpPost("scan")]
+    public async Task<ActionResult<IReadOnlyList<HapiTerminologyVersionCheckResultDto>>> ScanAll(CancellationToken cancellationToken) =>
+        Ok(await _service.ScanAllForNewVersionsAsync(cancellationToken));
+
     /// <summary>Server-side paged, searchable browse of one system's locally stored codes — backs
     /// the "View All Codes" screen under this system's ⋮ menu.</summary>
     [HttpGet("{code}/codes")]
