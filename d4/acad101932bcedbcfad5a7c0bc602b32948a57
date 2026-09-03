@@ -1,0 +1,30 @@
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.scss
+  s_036af994396749::t_9ebade0489cfb5 38-39,41-42
+  s_036af994396749::t_38577ec4e8730e 40
+  s_036af994396749::t_01554d8b5ccbbf 243,245-250,254,257-262
+  s_036af994396749::t_641992c14692d6 327-329
+  s_036af994396749::t_63db94d14c5abf 206-209,211-213,216,218
+  s_036af994396749::t_6d0913f3d43067 244
+  s_036af994396749::t_affed2e6f30b53 266
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.scss
+  s_036af994396749::t_89e92a22937cd4 59-60,62-63
+  s_036af994396749::t_1e42c894dd9a03 127
+  s_036af994396749::t_b1845d7d44a3c9 113-115,126,128-130,136-137,141-143,161,163
+  s_036af994396749::t_1af314adf5e168 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d4acad101932bcedbcfad5a7c0bc602b32948a57",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

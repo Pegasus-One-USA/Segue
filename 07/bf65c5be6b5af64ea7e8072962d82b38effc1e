@@ -1,0 +1,32 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_036af994396749::t_86e3209bc53103 263-305
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_036af994396749::t_032d3a6c55fa7b 150
+  s_036af994396749::t_fe58a865e2425d 174-186,192-200
+  s_036af994396749::t_f45e570a5d2522 39-63,201-202
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_036af994396749::t_129587a7095a3a 140-142
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_036af994396749::t_87859ec7d1be44 94-100
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_036af994396749::t_be9f087050a6dc 29-30,36-37,39-40,54-55,57-58
+  s_036af994396749::t_55aab764e1c072 144,149
+  s_036af994396749::t_bb0eaca09f1476 193-194,196-197,202,208-211,217,222-225,230,236,238,243-246,252,254,261-262,266-269,274-277,279-281,286-287
+  s_036af994396749::t_c7d4c9af2ac662 160-163,172-175,180,182-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "07bf65c5be6b5af64ea7e8072962d82b38effc1e",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

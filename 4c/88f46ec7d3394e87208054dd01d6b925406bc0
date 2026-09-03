@@ -1,0 +1,22 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_5849c970b9c366::t_af22a223decd3b 1479-1480
+  s_5849c970b9c366::t_549b3156d73936 2792-2793,2795
+  s_5849c970b9c366::t_ff18f8ae09fea7 1497-1498
+  s_5849c970b9c366::t_533012edac0b5b 1433-1440
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4c88f46ec7d3394e87208054dd01d6b925406bc0",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
