@@ -94,6 +94,28 @@ use — since Gateway is what the browser actually talks to, this should be the 
 origin, not the Api's own loopback address), and `AllowedHosts` — see the `Key Configuration
 Sections` table in the repo's `CLAUDE.md` for what each of these does.
 
+Also set `Database:Provider` (`SqlServer` / `PostgreSql`) explicitly — it defaults to `SqlServer`
+if unset, and the base `appsettings.json` shipped in the artifact is dev-shaped, not
+production-shaped, so this must match whatever engine `ConnectionStrings:FHIRBridgeDb` actually
+points at. The target database itself (e.g. `FHIRBridge` on Postgres) must already exist on that
+server before first start — `Database.Migrate()` runs automatically at startup but only
+creates/updates tables, not the database.
+
+**Optional: Azure Key Vault for secrets** instead of (or alongside) plaintext values in this file —
+set `KeyVault:UseAzureKeyVault` = `true`, `KeyVault:VaultName`, and
+`KeyVault:AllowConfigurationFallback` (`true` recommended — falls back to this file if the vault is
+unreachable at boot). If the vault is shared across environments/devs, also set
+`KeyVault:SecretPrefix` and prefix every secret name in the vault to match (`--` separates
+segments, e.g. `Dev--ConnectionStrings--FHIRBridgeDb`); for a vault dedicated to this deployment,
+leave it blank and use plain names (`ConnectionStrings--FHIRBridgeDb`). Authentication to the vault
+uses `DefaultAzureCredential` — this VM has no Azure Managed Identity, so that resolves via a
+service principal exposed as **machine-scope** `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`/
+`AZURE_TENANT_ID` environment variables (not per-service — `Deploy-FHIRBridge.ps1` overwrites each
+service's own registry `Environment` value on every deploy, machine-scope vars aren't touched by
+that and layer in underneath). That service principal needs the **Key Vault Secrets Officer** role
+on the vault (the app both reads and writes secrets), plus **Key Vault Crypto User** too if also
+using `DataProtection:KeyVaultKeyId` to wrap the DataProtection key ring.
+
 **`fhirbridge-gateway`** — set `StaticFiles:RootPath` to
 `C:\inetpub\wwwroot\fhirbridge-portal` (absolute path, so it doesn't matter what working directory
 the service starts in), and `ApiBaseUrl` to `http://127.0.0.1:<PROD_API_PORT>/` (a single flat
@@ -104,7 +126,9 @@ address, so this must match whatever `PROD_API_PORT` is set to in step 4.
 
 **`fhirbridge-worker`** — populate `ConnectionStrings:FHIRBridgeDb`, `RuntimeWorker:Enabled`, and
 `Messaging:Provider` (`InMemory` / `RabbitMQ` / `AzureServiceBus` — see `CLAUDE.md`), plus
-`Hl7MllpOptions` if the MLLP listener is in use.
+`Hl7MllpOptions` if the MLLP listener is in use. Also set `Database:Provider` to match
+`ConnectionStrings:FHIRBridgeDb`'s engine, and the same `Database:Provider`/`KeyVault:*` guidance
+under `fhirbridge-api` above applies here too if this service also reads secrets from Key Vault.
 
 **`demoapp-api`** — populate `ConnectionStrings:Default` (its own SQL Server database — this is a
 separate database from `FHIRBridgeDb`, used only by the demo app) and `AllowedFrontendOrigin` (set
