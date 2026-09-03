@@ -211,6 +211,13 @@ public sealed class AddressParsingNode : ITransformNode
 {
     private static readonly Regex StateZip = new(@"^([A-Za-z .]{2,})\s+(\d{5}(-\d{4})?)$", RegexOptions.Compiled);
 
+    // Epic's address.text renders "city state zip" as ONE comma segment (no comma between city and
+    // state, unlike the classic "line, city, state zip" shape StateZip above expects) followed by a
+    // separate country segment — e.g. "134 Elm St\r\nMadison WI 53706\r\nUnited States of America".
+    // Non-greedy city capture so "New York NY 10001" still splits city="New York" rather than the
+    // state token swallowing part of the city name.
+    private static readonly Regex CityStateZip = new(@"^(.+?)\s+([A-Za-z .]{2,})\s+(\d{5}(-\d{4})?)$", RegexOptions.Compiled);
+
     private static readonly IReadOnlyDictionary<string, string> UsStateAbbreviations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["alabama"] = "AL", ["alaska"] = "AK", ["arizona"] = "AZ", ["arkansas"] = "AR", ["california"] = "CA",
@@ -249,14 +256,32 @@ public sealed class AddressParsingNode : ITransformNode
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
         var address = new JsonObject();
+        var countryFromText = false;
 
         if (parts.Length >= 3)
         {
-            // Everything before the trailing "city" and "state zip" segments is a street line — supports a
-            // second Apt/Suite line instead of assuming exactly one line always precedes city.
+            // Everything before the trailing two segments is a street line — supports a second
+            // Apt/Suite line instead of assuming exactly one line always precedes city.
             address["line"] = new JsonArray(parts[..^2].Select(l => (JsonNode)l).ToArray());
-            address["city"] = parts[^2];
-            ApplyStateZip(address, parts[^1]);
+
+            if (CityStateZip.IsMatch(parts[^2]))
+            {
+                // Epic shape — "line, city state zip, country": the second-to-last segment already
+                // contains an embedded "ST 12345" (a zip glommed onto the city, no comma between them),
+                // which the classic shape below never has on its (zip-free) city segment. Treat it as
+                // "city state zip" combined, and the trailing segment as a country name.
+                ApplyCityStateZip(address, parts[^2]);
+                var countryText = parts[^1];
+                address["country"] = CountryIso3166.TryGetValue(countryText, out var isoCountryFromText)
+                    ? isoCountryFromText : countryText;
+                countryFromText = true;
+            }
+            else
+            {
+                // Classic "line, city, state zip" shape — city and state+zip are separate segments.
+                address["city"] = parts[^2];
+                ApplyStateZip(address, parts[^1]);
+            }
         }
         else
         {
@@ -274,9 +299,31 @@ public sealed class AddressParsingNode : ITransformNode
             address["type"] = type;
         }
 
-        var country = config.Get("country", "US");
-        address["country"] = CountryIso3166.TryGetValue(country, out var isoCountry) ? isoCountry : country;
+        if (!countryFromText)
+        {
+            var country = config.Get("country", "US");
+            address["country"] = CountryIso3166.TryGetValue(country, out var isoCountry) ? isoCountry : country;
+        }
+
         return TransformResult.Ok(address);
+    }
+
+    /// <summary>Splits a single "City ST ZIP" segment (no comma between city and state) into its three
+    /// parts — the Epic-shape counterpart to <see cref="ApplyStateZip"/>, which expects state+zip
+    /// already isolated on its own segment. Falls back to treating the whole segment as the city (no
+    /// state/postalCode) when it doesn't match the expected trailing "ST 12345" pattern at all.</summary>
+    private static void ApplyCityStateZip(JsonObject address, string cityStateZip)
+    {
+        var match = CityStateZip.Match(cityStateZip);
+        if (!match.Success)
+        {
+            address["city"] = cityStateZip;
+            return;
+        }
+
+        address["city"] = match.Groups[1].Value.Trim();
+        address["state"] = NormalizeState(match.Groups[2].Value.Trim());
+        address["postalCode"] = match.Groups[3].Value;
     }
 
     private static void ApplyStateZip(JsonObject address, string stateZip)

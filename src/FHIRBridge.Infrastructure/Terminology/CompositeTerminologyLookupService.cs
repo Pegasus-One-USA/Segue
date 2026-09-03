@@ -8,6 +8,7 @@ public sealed class CompositeTerminologyLookupService : ITerminologyLookupServic
 {
     public const string DisableNetworkFallbackSettingKey = "Terminology:DisableNetworkFallback";
 
+    private readonly HapiLocalTerminologyLookupService _hapiLocalLookupService;
     private readonly LocalTerminologyLookupService _localLookupService;
     private readonly LoincTerminologyLookupService _loincLookupService;
     private readonly Icd10TerminologyLookupService _icd10LookupService;
@@ -17,6 +18,7 @@ public sealed class CompositeTerminologyLookupService : ITerminologyLookupServic
     private readonly ISystemSettingsCache _settingsCache;
 
     public CompositeTerminologyLookupService(
+        HapiLocalTerminologyLookupService hapiLocalLookupService,
         LocalTerminologyLookupService localLookupService,
         LoincTerminologyLookupService loincLookupService,
         Icd10TerminologyLookupService icd10LookupService,
@@ -25,6 +27,7 @@ public sealed class CompositeTerminologyLookupService : ITerminologyLookupServic
         FhirTerminologyLookupService fhirLookupService,
         ISystemSettingsCache settingsCache)
     {
+        _hapiLocalLookupService = hapiLocalLookupService;
         _localLookupService = localLookupService;
         _loincLookupService = loincLookupService;
         _icd10LookupService = icd10LookupService;
@@ -39,7 +42,8 @@ public sealed class CompositeTerminologyLookupService : ITerminologyLookupServic
         string code,
         CancellationToken cancellationToken)
     {
-        var local = await _localLookupService.LookupAsync(system, code, cancellationToken)
+        var local = await _hapiLocalLookupService.LookupAsync(system, code, cancellationToken)
+            ?? await _localLookupService.LookupAsync(system, code, cancellationToken)
             ?? await _loincLookupService.LookupAsync(system, code, cancellationToken)
             ?? await _icd10LookupService.LookupAsync(system, code, cancellationToken)
             ?? await _snomedLookupService.LookupAsync(system, code, cancellationToken)
@@ -52,4 +56,7 @@ public sealed class CompositeTerminologyLookupService : ITerminologyLookupServic
         var networkDisabled = await _settingsCache.GetBoolAsync(DisableNetworkFallbackSettingKey, false, cancellationToken);
         return networkDisabled ? null : await _fhirLookupService.LookupAsync(system, code, cancellationToken);
     }
+
+    public Task<TerminologyLookupResult?> LookupAnyLocalSystemAsync(string code, CancellationToken cancellationToken) =>
+        _hapiLocalLookupService.LookupAnySystemAsync(code, cancellationToken);
 }

@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +24,6 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
 {
     private const string ListingPageUrl = "https://www.cms.gov/medicare/coding-billing/icd-10-codes";
     private const string SystemUrl = "http://www.cms.gov/Medicare/Coding/ICD10";
-    private const string ResourceId = "icd10pcs-full";
 
     private static readonly Regex ZipLinkPattern = new(
         @"href=""(/files/zip/[a-z0-9\-]*icd-10-pcs-order-file[a-z0-9\-]*\.zip)""",
@@ -35,20 +33,20 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcd10PcsTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiIcd10PcsTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiIcd10PcsTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiIcd10PcsSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -67,8 +65,8 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         var billableCount = concepts.Count(c => c.Billable);
         _logger.LogInformation(
             "Parsed {Total} ICD-10-PCS codes ({Billable} billable) from the official release.", concepts.Count, billableCount);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "ICD10PCS", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -126,22 +124,6 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "ICD10PCS",
-            title = "ICD-10-PCS (auto-synced from CMS)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display, bool Billable);

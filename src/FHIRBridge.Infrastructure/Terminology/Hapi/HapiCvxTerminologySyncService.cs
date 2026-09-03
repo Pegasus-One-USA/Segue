@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -21,7 +20,6 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
 {
     private const string SourceUrl = "https://www2.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx";
     private const string SystemUrl = "http://hl7.org/fhir/sid/cvx";
-    private const string ResourceId = "cvx-full";
 
     // Matches one table row and captures its raw inner HTML (non-greedy, single-line mode for '.').
     private static readonly Regex RowPattern = new(
@@ -35,20 +33,20 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiCvxTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiCvxTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiCvxTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiCvxSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -63,8 +61,8 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
         var activeCount = concepts.Count(c => c.Active);
         _logger.LogInformation(
             "Parsed {Total} CVX codes ({Active} active) from the official table.", concepts.Count, activeCount);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "CVX", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -102,22 +100,6 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "CVX",
-            title = "CVX Vaccine Administered (auto-synced from CDC)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display, bool Active);

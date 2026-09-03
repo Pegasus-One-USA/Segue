@@ -22,6 +22,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         // table name -> ordered rows keyed by index path
         var childTables = new Dictionary<string, Dictionary<string, Dictionary<string, object?>>>(StringComparer.OrdinalIgnoreCase);
         var referenceLookups = new List<MappingReferenceLookupDto>();
+        // Every field's full resolved value list, BEFORE whatever ArrayPolicy collapses it into `parent` —
+        // see MappingTestResultDto.RawArrayValues for why this survives alongside the collapsed view.
+        var rawArrayValues = new Dictionary<string, IReadOnlyList<object?>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var field in fields)
         {
@@ -82,6 +85,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             }
 
             var values = resolved.Select(r => r.Value).ToList();
+            rawArrayValues[field.TargetField] = values;
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -178,7 +182,8 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         return new MappingTestResultDto(
             rowsList[0], errors, rowsList, childTableDtos,
-            referenceLookups.Count > 0 ? referenceLookups : null);
+            referenceLookups.Count > 0 ? referenceLookups : null,
+            rawArrayValues.Count > 0 ? rawArrayValues : null);
     }
 
     /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL

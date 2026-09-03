@@ -57,4 +57,10 @@ public sealed class CachingTerminologyLookupService : ITerminologyLookupService
 
         return result;
     }
+
+    // Not cached: this is only ever consulted on a configured-system miss, itself already a rare path, and
+    // the code being searched for isn't known ahead of time — same reasoning as the "only positive hits are
+    // cached" rule above, just with no system in the key to cache against in the first place.
+    public Task<TerminologyLookupResult?> LookupAnyLocalSystemAsync(string code, CancellationToken cancellationToken) =>
+        _inner.LookupAnyLocalSystemAsync(code, cancellationToken);
 }

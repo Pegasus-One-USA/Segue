@@ -124,36 +124,36 @@ builder.Services.AddHostedService<UcumSynchronizationWorker>();
 // terminology server (docker-compose's hapi-terminology service), replacing the manual
 // `tools/TerminologyServerPoc --auto-icd10` run with a real scheduled background job. Disabled
 // by default via Terminology:Icd10Hapi:SchedulerEnabled — see Icd10HapiTerminologySyncWorker.
+// All 13 IHapi{Code}TerminologySyncService implementations are Scoped: every one of them now depends
+// on HapiLocalTerminologyWriter (Scoped, holds a DbContext), so a Singleton registration would be a
+// captive-dependency violation — each worker below already resolves its service from a fresh
+// IServiceScopeFactory-created scope per run, so Scoped is also what's actually needed here.
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton<IHapiIcd10TerminologySyncService, HapiIcd10TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10TerminologySyncService, HapiIcd10TerminologySyncService>();
 builder.Services.AddHostedService<Icd10HapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiCvxTerminologySyncService, HapiCvxTerminologySyncService>();
+builder.Services.AddScoped<IHapiCvxTerminologySyncService, HapiCvxTerminologySyncService>();
 builder.Services.AddHostedService<CvxHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiNdcTerminologySyncService, HapiNdcTerminologySyncService>();
+builder.Services.AddScoped<IHapiNdcTerminologySyncService, HapiNdcTerminologySyncService>();
 builder.Services.AddHostedService<NdcHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiHcpcsTerminologySyncService, HapiHcpcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiHcpcsTerminologySyncService, HapiHcpcsTerminologySyncService>();
 builder.Services.AddHostedService<HcpcsHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiUcumTerminologySyncService, HapiUcumTerminologySyncService>();
+builder.Services.AddScoped<IHapiUcumTerminologySyncService, HapiUcumTerminologySyncService>();
 builder.Services.AddHostedService<UcumHapiTerminologySyncWorker>();
-// Scoped, not Singleton like its siblings above — it depends on ILoincReleaseClient, which is
-// itself registered Scoped (see AddFHIRBridgeInfrastructure), so a Singleton registration here
-// would be a captive-dependency violation caught by ValidateScopes in Development.
 builder.Services.AddScoped<IHapiLoincTerminologySyncService, HapiLoincTerminologySyncService>();
 builder.Services.AddHostedService<LoincHapiTerminologySyncWorker>();
-// Scoped like HapiLoincTerminologySyncService above — depends on IUtsReleaseClient, itself Scoped.
 builder.Services.AddScoped<IHapiRxNormTerminologySyncService, HapiRxNormTerminologySyncService>();
 builder.Services.AddHostedService<RxNormHapiTerminologySyncWorker>();
 builder.Services.AddScoped<IHapiSnomedTerminologySyncService, HapiSnomedTerminologySyncService>();
 builder.Services.AddHostedService<SnomedHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiIcd10PcsTerminologySyncService, HapiIcd10PcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10PcsTerminologySyncService, HapiIcd10PcsTerminologySyncService>();
 builder.Services.AddHostedService<Icd10PcsHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiMeshTerminologySyncService, HapiMeshTerminologySyncService>();
+builder.Services.AddScoped<IHapiMeshTerminologySyncService, HapiMeshTerminologySyncService>();
 builder.Services.AddHostedService<MeshHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiDcmTerminologySyncService, HapiDcmTerminologySyncService>();
+builder.Services.AddScoped<IHapiDcmTerminologySyncService, HapiDcmTerminologySyncService>();
 builder.Services.AddHostedService<DcmHapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiIcpc3TerminologySyncService, HapiIcpc3TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcpc3TerminologySyncService, HapiIcpc3TerminologySyncService>();
 builder.Services.AddHostedService<Icpc3HapiTerminologySyncWorker>();
-builder.Services.AddSingleton<IHapiIcd11TerminologySyncService, HapiIcd11TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd11TerminologySyncService, HapiIcd11TerminologySyncService>();
 builder.Services.AddHostedService<Icd11HapiTerminologySyncWorker>();
 
 // Retention enforcement: was built (RetentionPurgeService/ConfiguredRetentionPolicyService/the purgeable-store

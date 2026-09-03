@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -28,7 +27,6 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
     private const string ListingPageUrl =
         "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update";
     private const string SystemUrl = "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets";
-    private const string ResourceId = "hcpcs-full";
 
     private static readonly Regex ZipLinkPattern = new(
         @"href=""(/files/zip/[a-z0-9\-]*alpha-numeric-hcpcs-file[a-z0-9\-]*\.zip)""",
@@ -38,20 +36,20 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiHcpcsTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiHcpcsTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiHcpcsTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiHcpcsSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -68,8 +66,8 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, zipUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "HCPCS", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -152,22 +150,6 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         FlushCurrent();
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "HCPCS",
-            title = "HCPCS Level II (auto-synced from CMS)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

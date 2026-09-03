@@ -16,6 +16,16 @@ public static class TransformNullPolicy
     public static bool IsNullOrEmpty(object? value) =>
         value is null || (value is string s && string.IsNullOrWhiteSpace(s));
 
+    /// <summary>Whether the rule's own <see cref="TransformationRule.OnNull"/> policy should intercept a
+    /// missing value BEFORE the node runs. True for every node type except <see cref="TransformNodeType.DefaultNullHandling"/>,
+    /// whose entire purpose is to receive a missing value and decide what to do with it (substitute its own
+    /// <c>default</c> config, treat it as a sentinel, emit a data-absent-reason marker, ...). Without this
+    /// exception, <see cref="Apply"/>'s three OnNull branches (Skip/Error/Default) all bypass the node
+    /// entirely whenever the input is missing — so a DefaultNullHandling rule could never actually see the
+    /// null value it exists to handle, and its own config was silently dead code for a truly-absent field.</summary>
+    public static bool ShouldShortCircuit(TransformationRule rule, object? currentValue) =>
+        rule.NodeType != TransformNodeType.DefaultNullHandling && IsNullOrEmpty(currentValue);
+
     /// <summary>Returns the value the chain should carry forward, and whether the chain must stop
     /// (mirrors the existing error-policy short-circuit for <see cref="TransformErrorPolicy.Fail"/>/
     /// <see cref="TransformErrorPolicy.RouteToDeadLetter"/>).</summary>

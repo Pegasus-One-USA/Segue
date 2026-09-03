@@ -517,6 +517,11 @@ public static class DependencyInjection
         // Shared PUT-with-retry-and-verify used by all 13 Hapi*TerminologySyncService implementations
         // for their final "load into the terminology server" step — see its own remarks for why.
         services.AddSingleton<HapiTerminologyServerClient>();
+        // Local MSSQL cache (mirroring HAPI's own trm_codesystem/trm_codesystem_ver/trm_concept
+        // schema) that the 13 Hapi*TerminologySyncService jobs now write into instead of PUTting to
+        // the remote HAPI server, and that CompositeTerminologyLookupService checks first.
+        services.AddScoped<HapiLocalTerminologyWriter>();
+        services.AddScoped<HapiLocalTerminologyLookupService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(

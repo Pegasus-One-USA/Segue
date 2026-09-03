@@ -169,7 +169,13 @@ export const MAPPING_PROFILE_ENDPOINTS = {
 // Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
 export const MAPPING_ENDPOINTS = {
-  resources:     `${API_V1_BASE}/mapping/catalog/resources`,
+  // vendor narrows the response to VendorResourceTypeSupport's known-supported list for that source
+  // system (Athenahealth, Healow today) — omitted (or a vendor with no known restriction, e.g. Epic)
+  // returns the full generic catalog's resource types, same as before this param existed.
+  resources: (vendor?: string | null) => {
+    const base = `${API_V1_BASE}/mapping/catalog/resources`;
+    return vendor ? `${base}?vendor=${encodeURIComponent(vendor)}` : base;
+  },
   // sourceConnectionId lets the backend resolve that source's vendor (Epic, ...) and prefer its
   // vendor-specific catalog over the generic base-FHIR-R4 one. sourceVendor is the fallback for a
   // source node that hasn't been saved yet (no real connection id assigned) but already has a vendor
