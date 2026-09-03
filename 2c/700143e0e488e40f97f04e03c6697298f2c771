@@ -1,0 +1,73 @@
+tests/FHIRBridge.Runtime.UnitTests/Transformations/FhirConformanceSanitizerTests.cs
+  s_5efbfd58cf2e78::t_b91f69b52497c8 56,58-64,68
+  s_5efbfd58cf2e78::t_d5149e9020b396 1-55,65-67,69-73,75-83,87-140
+  s_5efbfd58cf2e78::t_6aaed8709f202c 74,84-86
+  s_5efbfd58cf2e78::t_ed481b9c5aef6d 57
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_5efbfd58cf2e78::t_394d0436220577 53-59
+docs/backend/17-ecw-backend-bulkexport-integration-plan.md
+  s_5efbfd58cf2e78::t_92e00b4f31d9d6 1-152
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_5efbfd58cf2e78::t_ea6c4aa7dae17e 230-302
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_5efbfd58cf2e78::t_e172835b3560da 78-82
+tests/FHIRBridge.UnitTests/Governance/BulkExportKickOffFailureDiagnosisRuleTests.cs
+  s_5efbfd58cf2e78::t_e0cc1e2dd86088 1-59
+src/Runtime/FHIRBridge.Runtime.Application/Transformations/FhirConformanceSanitizer.cs
+  s_5efbfd58cf2e78::t_5951be422f3661 23,150-152,160,170,172,178-179
+  s_5efbfd58cf2e78::t_ce2d211ea8f0b5 180
+  s_5efbfd58cf2e78::t_bc8601db1ee4fe 1-22,24-149,153-159,161-169,171,173-177,181
+src/FHIRBridge.Infrastructure/Governance/BulkExportKickOffFailureDiagnosisRule.cs
+  s_5efbfd58cf2e78::t_eccfbfe238ee51 15-16,20-29,36-39,42-44,47-48
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirBulkExportOptions.cs
+  s_5efbfd58cf2e78::t_04d1568c9b78b2 13-20
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_5efbfd58cf2e78::t_45a692e3ee28e7 734-755
+  s_5efbfd58cf2e78::t_734f2a427fae4c 922-925,929-964
+  s_5efbfd58cf2e78::t_c50ef1307b25a5 756-772
+  s_5efbfd58cf2e78::t_da352401283374 14,965-966
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  s_5efbfd58cf2e78::t_e0ae1dde2d017d 544-583
+  s_5efbfd58cf2e78::t_a46db80b67f2c9 153-155
+  s_5efbfd58cf2e78::t_8dd68e2d3cfaeb 285-300
+  s_5efbfd58cf2e78::t_2cd9a37e7f2862 134
+  s_5efbfd58cf2e78::t_2df82ff1e67033 325-353
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirBulkExportClientTests.cs
+  s_5efbfd58cf2e78::t_40ac4be2f7c8c0 128-146
+  s_5efbfd58cf2e78::t_95b2850b68a021 185-205,243-268
+  s_5efbfd58cf2e78::t_f23b4aaf594ea9 206-242
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_5efbfd58cf2e78::t_06c17a5fb62157 2373-2381
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_5efbfd58cf2e78::t_259eb5a43af564 284-313
+  s_5efbfd58cf2e78::t_4edb729d29a68d 133-145
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_5efbfd58cf2e78::t_61940351c07099 198-299
+src/Runtime/FHIRBridge.Runtime.Application/Transformations/FhirResourceNormalizer.cs
+  s_5efbfd58cf2e78::t_3f6850cfe68e13 20-23,26
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_5efbfd58cf2e78::t_f1c952ce4d97ee 325-335,343-347,367-373
+  s_5efbfd58cf2e78::t_fdcf79a951a45f 350-366
+  s_5efbfd58cf2e78::t_d2845caec314ea 301-311
+  s_5efbfd58cf2e78::t_8ff095e7bf5897 296-298
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_5efbfd58cf2e78::t_fc662e8009cb99 179-191,193-197,199-207,209-231
+  s_5efbfd58cf2e78::t_fcbd72212979f3 104-110
+  s_5efbfd58cf2e78::t_e00bd66cb4529f 192,198,208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2c700143e0e488e40f97f04e03c6697298f2c771",
+  "prompts": {},
+  "sessions": {
+    "s_5efbfd58cf2e78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c581937a-5297-4992-bb3c-c53308893595",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
