@@ -18,7 +18,7 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// source vocabulary/term-type) — keeps the best candidate row per RXCUI (RXNORM-sourced wins, then
 /// ISPREF='Y' wins), same tie-break logic as the existing importer, so display names match exactly.
 /// </summary>
-public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyncService
+public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyncService, IHapiVersionCheckable
 {
     private const string ReleaseType = "rxnorm-full-monthly-release";
     private const string SystemUrl = "http://www.nlm.nih.gov/research/umls/rxnorm";
@@ -67,6 +67,14 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
             "RxNorm loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
         return new HapiRxNormSyncResult(release.ReleaseName, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Exact match: this is the same field this service passes to WriteConceptsAsync as the
+    /// stored version, so a comparison is fully reliable — no downstream re-extraction, unlike SNOMED.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
+        return release.ReleaseName;
     }
 
     private static IReadOnlyList<Concept> ParseRxnConso(string zipPath)

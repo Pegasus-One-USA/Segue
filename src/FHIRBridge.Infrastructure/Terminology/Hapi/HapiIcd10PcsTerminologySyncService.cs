@@ -20,7 +20,7 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// no decimal); 15 valid-for-submission flag ("1"=billable); 17-76 short description; 77+ long
 /// description. Confirmed against the real FY2027 release.
 /// </summary>
-public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminologySyncService
+public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminologySyncService, IHapiVersionCheckable
 {
     private const string ListingPageUrl = "https://www.cms.gov/medicare/coding-billing/icd-10-codes";
     private const string SystemUrl = "http://www.cms.gov/Medicare/Coding/ICD10";
@@ -66,7 +66,7 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         _logger.LogInformation(
             "Parsed {Total} ICD-10-PCS codes ({Billable} billable) from the official release.", concepts.Count, billableCount);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "ICD10PCS", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl, "ICD10PCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -74,6 +74,18 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
 
         return new HapiIcd10PcsSyncResult(concepts.Count, billableCount, stopwatch.Elapsed);
     }
+
+    /// <summary>CMS's fiscal-year zip filename itself as the version identifier — same reasoning as
+    /// HCPCS's quarterly filename: no separately-published release number, but the filename changes
+    /// with each fiscal-year release and is reused as both the check value and the stored version.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        using var client = _httpClientFactory.CreateClient(nameof(HapiIcd10PcsTerminologySyncService) + ".Download");
+        var zipUrl = await FindLatestZipUrlAsync(client, cancellationToken);
+        return VersionFromZipUrl(zipUrl);
+    }
+
+    private static string VersionFromZipUrl(string zipUrl) => zipUrl[(zipUrl.LastIndexOf('/') + 1)..];
 
     private static async Task<string> FindLatestZipUrlAsync(HttpClient http, CancellationToken ct)
     {

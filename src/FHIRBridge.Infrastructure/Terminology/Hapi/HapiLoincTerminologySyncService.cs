@@ -17,7 +17,7 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Parses LoincTable/Loinc.csv the same way LoincSynchronizationService does: code = LOINC_NUM,
 /// display = LONG_COMMON_NAME (falling back to SHORTNAME), status = STATUS ("DEPRECATED" excluded).
 /// </summary>
-public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncService
+public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncService, IHapiVersionCheckable
 {
     private const string SystemUrl = "http://loinc.org";
 
@@ -66,6 +66,14 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
             release.Version, concepts.Count, stopwatch.Elapsed);
 
         return new HapiLoincSyncResult(release.Version, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Exact match: the same field this service passes to WriteConceptsAsync as the stored
+    /// version — LOINC's Download API reports it directly, no downstream re-extraction needed.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(cancellationToken);
+        return release.Version;
     }
 
     private static IReadOnlyList<Concept> ParseLoincCsv(string zipPath)

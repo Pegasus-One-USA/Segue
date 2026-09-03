@@ -21,7 +21,7 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// plain code system, not the full graph) — sufficient for $lookup/$validate-code, not for ECL or
 /// hierarchy queries.
 /// </summary>
-public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyncService
+public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyncService, IHapiVersionCheckable
 {
     private const string ReleaseType = "snomed-ct-us-edition";
     private const string SystemUrl = "http://snomed.info/sct";
@@ -72,6 +72,17 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
             "SNOMED CT loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
         return new HapiSnomedSyncResult(version, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Best-effort: UTS's release-check endpoint reports a release date/name, not the exact
+    /// 8-digit date this service actually stores as its version (extracted from the downloaded RF2
+    /// file's own name — see <see cref="ExtractVersion"/>). Normalizing the release date to the same
+    /// yyyyMMdd shape keeps the two directly comparable for the common case; falls back to the raw
+    /// release name only if UTS didn't report a date at all.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
+        return release.ReleaseDateUtc?.ToString("yyyyMMdd") ?? release.ReleaseName;
     }
 
     private static (string Version, IReadOnlyList<Concept> Concepts) ParseSnomedRf2(string zipPath)

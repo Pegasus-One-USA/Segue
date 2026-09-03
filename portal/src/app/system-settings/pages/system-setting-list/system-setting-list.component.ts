@@ -29,10 +29,6 @@ const HAPI_TERMINOLOGY_KEY_PATTERN = /^Terminology:\w+Hapi:/;
 // LOINC's legacy group is either superseded by LoincHapi:* or unused by any sync code at all.
 const LEGACY_TERMINOLOGY_KEY_PATTERN = /^Terminology:(Loinc|Ndc|RxNorm|Snomed|Ucum):/;
 
-// Now has a dedicated inline Edit button in the new table's header card (it's the one setting
-// genuinely shared across all 13 rows) — hidden here so there isn't a second, redundant way to edit it.
-const BASE_URL_KEY = 'Terminology:BaseUrl';
-
 interface GroupHeaderRow {
   isGroupHeader: true;
   label: string;
@@ -311,7 +307,7 @@ export class SystemSettingListComponent implements OnInit {
     this.svc.getAll().subscribe({
       next: settings => {
         this.settings.set(settings.filter(s =>
-          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key) && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key) && s.key !== BASE_URL_KEY));
+          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key) && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key)));
         this.loading.set(false);
 
         if (!this.collapseDefaultsApplied) {
