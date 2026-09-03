@@ -50,11 +50,13 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
  */
 export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
   Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
-  // eClinicalWorks (Healow): Patient AND Provider EHR launch are rolled out. Provider EHR launch (Provider EMR) was
-  // verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch → PKCE → confidential
-  // client_secret_basic token → multi-resource FHIR reads). Provider standalone and Backend stay disabled until
-  // their own sandbox credentials/round-trip verification exist — re-enable one-by-one as each is verified.
-  Healow: ['provider-standalone', 'backend-system'],
+  // eClinicalWorks (Healow): Patient, Provider EHR launch, AND Backend System are rolled out. Provider EHR launch
+  // (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch → PKCE →
+  // confidential client_secret_basic token → multi-resource FHIR reads). Backend System was verified end-to-end
+  // against the live eCW sandbox (SMART Backend Services: RS384 private_key_jwt → client_credentials token →
+  // Group/{id}/$export → poll → NDJSON; see docs/backend/17-ecw-backend-bulkexport-integration-plan.md). Provider
+  // standalone stays disabled until its own sandbox credentials/round-trip verification exist — re-enable when verified.
+  Healow: ['provider-standalone'],
 };
 
 export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {

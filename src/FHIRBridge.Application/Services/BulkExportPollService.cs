@@ -101,7 +101,13 @@ public sealed class BulkExportPollService : IBulkExportPollService
                 break;
 
             case BulkExportPollStatus.Completed:
-                var resources = await _bulkExportClient.DownloadResultsAsync(result.Files ?? [], source, cancellationToken);
+                // Honor the user's resource-type selection strictly. The FHIR Bulk Data spec lets a server put
+                // resources it considers related to the requested `_type` into the output manifest — eCW returns
+                // Binary/Medication/Media/Specimen (referenced by the requested types) even though `_type` asked
+                // only for the selected set. Drop those manifest files up front so unrequested types are never
+                // downloaded (avoids, e.g., a long slow Binary-attachment tail) or written.
+                var outputFiles = FilterFilesToRequestedResourceTypes(result.Files ?? [], job.RequestedResourceTypesJson);
+                var resources = await _bulkExportClient.DownloadResultsAsync(outputFiles, source, cancellationToken);
 
                 // Partial success per the FHIR Bulk Data spec: the job as a whole completed (200), but the
                 // manifest's `error` array lists resource types the server excluded (e.g. not supported/authorized
@@ -170,6 +176,59 @@ public sealed class BulkExportPollService : IBulkExportPollService
     // one of those unrequested rejections surfaces to the caller as a "partial success" failure even though nothing
     // the workflow actually needed was missing. requestedResourceTypesJson is only set for jobs created after this
     // filter shipped; older/other-source-path jobs have none, so every reason is kept unfiltered (today's behavior).
+    // Keeps only the manifest output files whose resource type the run actually requested. Guarded so it can never
+    // turn a real export into an empty one: with no requested-type list, or when NOTHING matches (e.g. a server that
+    // labels every output file generically), the full file set is returned unchanged and the record/destination-side
+    // filters still apply downstream.
+    private IReadOnlyList<BulkExportFile> FilterFilesToRequestedResourceTypes(
+        IReadOnlyList<BulkExportFile> files, string? requestedResourceTypesJson)
+    {
+        var requested = ParseRequestedResourceTypeSet(requestedResourceTypesJson);
+        if (requested is null || files.Count == 0)
+        {
+            return files;
+        }
+
+        var kept = files.Where(file => requested.Contains(file.ResourceType)).ToList();
+        if (kept.Count == 0)
+        {
+            _logger.LogWarning(
+                "Bulk export manifest listed {FileCount} output file(s) but none matched the requested resource types " +
+                "[{Requested}] (files typed [{FileTypes}]); downloading all files rather than nothing.",
+                files.Count, string.Join(", ", requested), string.Join(", ", files.Select(f => f.ResourceType).Distinct()));
+            return files;
+        }
+
+        if (kept.Count < files.Count)
+        {
+            _logger.LogInformation(
+                "Bulk export manifest filter: keeping {Kept}/{Total} output file(s); skipping unrequested resource " +
+                "type(s) [{Dropped}] the server included beyond the requested _type.",
+                kept.Count, files.Count,
+                string.Join(", ", files.Where(f => !requested.Contains(f.ResourceType)).Select(f => f.ResourceType).Distinct()));
+        }
+
+        return kept;
+    }
+
+    private static HashSet<string>? ParseRequestedResourceTypeSet(string? requestedResourceTypesJson)
+    {
+        if (string.IsNullOrWhiteSpace(requestedResourceTypesJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var types = JsonSerializer.Deserialize<List<string>>(requestedResourceTypesJson);
+            return types is { Count: > 0 } ? new HashSet<string>(types, StringComparer.OrdinalIgnoreCase) : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static IReadOnlyList<string> FilterToRequestedResourceTypes(
         IReadOnlyList<string> reasons, string? requestedResourceTypesJson)
     {

@@ -2388,15 +2388,15 @@ export class EhrVendorSourceFormComponent
    *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
    *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
   private ensureRetrievalResourceTypeDefault(): void {
-    // athenahealth is excluded from this default: its OAuth server rejects the ENTIRE token request if even one
-    // requested scope isn't provisioned on the app registration (verified against the live preview sandbox), so
-    // silently seeding every MVP1 resource type here — appropriate for Epic, which just ignores an unsupported
-    // scope rather than rejecting the whole grant — reliably produces an unusable connection. Leaving this null/
-    // empty means a fresh athenahealth connection created in Source Connection Master requests no resource scopes
-    // at all until something explicit sets them (the workflow builder's destination-derived resourceTypes in
-    // workflow-build-assembler.service.ts, or a deliberate edit here) — never a broad guess that has to be
-    // manually pared back down every time, which was the actual repeated cause of "Invalid Scope" failures.
-    if (this.vendor() === 'Athenahealth') return;
+    // athenahealth AND eClinicalWorks (Healow) are excluded from this default: their OAuth servers reject the ENTIRE
+    // token request if even one requested scope isn't provisioned on the app registration (verified against both live
+    // sandboxes — eCW returns 400 invalid_scope), so silently seeding every canonical resource type here — fine for
+    // Epic, which just ignores an unsupported scope rather than rejecting the whole grant — reliably produces an
+    // unusable connection (the exact eCW backend bulk-export invalid_scope failure this guards against). Leaving it
+    // empty means a fresh athenahealth/eCW connection requests no resource scopes until something explicit sets them
+    // (the workflow builder's destination-derived resourceTypes, or a deliberate selection here) — the operator picks
+    // from the vendor's actually-registered resource types, never a broad guess that has to be pared back every time.
+    if (this.vendor() === 'Athenahealth' || this.vendor() === 'Healow') return;
 
     const key = (
       {
