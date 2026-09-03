@@ -1,0 +1,46 @@
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_9db7b195dbca7d::t_0e072655c85405 306-324
+portal/src/app/components/node-library/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_82161cfc79db06::t_60215149e8718f 23-25
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_82161cfc79db06::t_c38d07b67205ba 1383,1385-1389,1391-1396
+  s_35131a627e4fb6::t_77186a7183de37 1503-1508,1512
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_9db7b195dbca7d::t_3e068b43add2c5 202
+  s_9db7b195dbca7d::t_01cc99ead17c13 211-214,216,219-220
+  s_9db7b195dbca7d::t_0035162ba9d82d 166,168-180,182-185
+  s_9db7b195dbca7d::t_804de0e8ffb86d 167
+  s_9db7b195dbca7d::t_3abc8d2f715c72 181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3a624f27a29c44e082942d05063e6356772b09f1",
+  "prompts": {},
+  "sessions": {
+    "s_35131a627e4fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69f44034-fb47-44a0-8f9f-45fda123453c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_82161cfc79db06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b5e734b-e430-49e7-8994-c77c2c3f85ae",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_9db7b195dbca7d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9904e667-8498-4cf7-a2fa-1ddf9ae5869e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
