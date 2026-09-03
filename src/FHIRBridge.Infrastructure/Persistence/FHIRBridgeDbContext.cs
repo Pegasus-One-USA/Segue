@@ -236,6 +236,15 @@ public sealed class FHIRBridgeDbContext : DbContext
             modelBuilder.Entity<RxNormVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
             modelBuilder.Entity<SnomedVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
             modelBuilder.Entity<UcumVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+
+            // TrmConceptConfiguration's SQL Server-only collation ("SQL_Latin1_General_CP1_CS_AS") and column
+            // type ("nvarchar(max)") don't parse on Postgres. Clearing the collation back to the database
+            // default is sufficient there — unlike SQL Server, Postgres's default collation already compares
+            // text byte-for-byte (case-sensitive) for equality/uniqueness, which is the whole reason that
+            // collation was added (see TrmConceptConfiguration's remarks on the UCUM "S"/"s" collision). "text"
+            // is Npgsql's own equivalent of an unbounded column, same as nvarchar(max) is for SQL Server.
+            modelBuilder.Entity<TrmConcept>().Property(x => x.CodeVal).UseCollation(null);
+            modelBuilder.Entity<TrmConcept>().Property(x => x.Display).HasColumnType("text");
         }
     }
 

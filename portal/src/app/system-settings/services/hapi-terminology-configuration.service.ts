@@ -1,8 +1,28 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { HAPI_TERMINOLOGY_ENDPOINTS } from '../../core/api-endpoints';
 import { TerminologyImportHistoryEntry } from '../../settings/components/terminology-import-history/terminology-import-history.component';
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+/** One code/description row from a HAPI terminology system's local store (TRM_CONCEPT) — shown on
+ * the "View All Codes" screen under each system's ⋮ menu. */
+export interface TerminologyConcept {
+  pid: number;
+  code: string;
+  display: string | null;
+}
+
+export interface UpsertTerminologyConcept {
+  code: string;
+  display: string | null;
+}
 
 export interface HapiCredentialField {
   name: string;
@@ -61,5 +81,24 @@ export class HapiTerminologyConfigurationService {
 
   getHistory(code: string): Observable<TerminologyImportHistoryEntry[]> {
     return this.http.get<TerminologyImportHistoryEntry[]>(HAPI_TERMINOLOGY_ENDPOINTS.history(code));
+  }
+
+  /** Server-side paged, searchable browse of one system's locally stored codes ("View All Codes"). */
+  getCodes(code: string, search: string | undefined, page: number, pageSize: number): Observable<PagedResult<TerminologyConcept>> {
+    let params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
+    if (search) params = params.set('search', search);
+    return this.http.get<PagedResult<TerminologyConcept>>(HAPI_TERMINOLOGY_ENDPOINTS.codes(code), { params });
+  }
+
+  addCode(code: string, value: UpsertTerminologyConcept): Observable<TerminologyConcept> {
+    return this.http.post<TerminologyConcept>(HAPI_TERMINOLOGY_ENDPOINTS.codes(code), value);
+  }
+
+  updateCode(code: string, pid: number, value: UpsertTerminologyConcept): Observable<TerminologyConcept> {
+    return this.http.put<TerminologyConcept>(HAPI_TERMINOLOGY_ENDPOINTS.code(code, pid), value);
+  }
+
+  deleteCode(code: string, pid: number): Observable<void> {
+    return this.http.delete<void>(HAPI_TERMINOLOGY_ENDPOINTS.code(code, pid));
   }
 }

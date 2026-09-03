@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
@@ -11,6 +11,7 @@ import {
 } from '../../services/hapi-terminology-configuration.service';
 import { HapiTerminologyEditDialogComponent } from '../../dialogs/hapi-terminology-edit-dialog/hapi-terminology-edit-dialog.component';
 import { HapiTerminologyHistoryDialogComponent } from '../../dialogs/hapi-terminology-history-dialog/hapi-terminology-history-dialog.component';
+import { HapiTerminologyCodesDialogComponent, HapiTerminologyCodesDialogData } from '../../dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
@@ -33,7 +34,7 @@ const HISTORY_POLL_INTERVAL_MS = 3000;
   templateUrl: './hapi-terminology-table.component.html',
   styleUrls: ['./hapi-terminology-table.component.scss'],
 })
-export class HapiTerminologyTableComponent implements OnInit {
+export class HapiTerminologyTableComponent implements OnInit, OnDestroy {
   private readonly svc = inject(HapiTerminologyConfigurationService);
   private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
@@ -57,9 +58,18 @@ export class HapiTerminologyTableComponent implements OnInit {
 
   readonly displayedCols = ['actions', 'displayName', 'schedulerEnabled', 'frequency', 'executionTime', 'lastRunUtc'];
 
+  private readonly pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   ngOnInit(): void {
     this.load();
     this.loadBaseUrl();
+  }
+
+  ngOnDestroy(): void {
+    for (const timer of this.pollTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pollTimers.clear();
   }
 
   private loadBaseUrl(): void {
@@ -129,6 +139,13 @@ export class HapiTerminologyTableComponent implements OnInit {
     );
   }
 
+  openCodes(config: HapiTerminologyConfiguration): void {
+    this.dialog.open<HapiTerminologyCodesDialogComponent, HapiTerminologyCodesDialogData, void>(
+      HapiTerminologyCodesDialogComponent,
+      { width: '900px', maximizable: true, data: { systemCode: config.code, displayName: config.displayName } },
+    );
+  }
+
   runNow(config: HapiTerminologyConfiguration): void {
     const missing = config.credentials.filter((c) => !c.hasValue);
     if (missing.length) {
@@ -155,13 +172,20 @@ export class HapiTerminologyTableComponent implements OnInit {
     this.svc.getHistory(code).subscribe({
       next: (entries) => {
         if (entries.some((e) => e.status === 'Running')) {
-          setTimeout(() => this.pollUntilSettled(code), HISTORY_POLL_INTERVAL_MS);
+          this.pollTimers.set(
+            code,
+            setTimeout(() => this.pollUntilSettled(code), HISTORY_POLL_INTERVAL_MS),
+          );
           return;
         }
+        this.pollTimers.delete(code);
         this.setRunning(code, false);
         this.refreshRow(code);
       },
-      error: () => this.setRunning(code, false),
+      error: () => {
+        this.pollTimers.delete(code);
+        this.setRunning(code, false);
+      },
     });
   }
 

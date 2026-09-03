@@ -63,4 +63,10 @@ public sealed class TrmConcept
     public long CodeSystemPid { get; private set; }
     public string CodeVal { get; private set; } = default!;
     public string? Display { get; private set; }
+
+    public void Update(string codeVal, string? display)
+    {
+        CodeVal = codeVal.Trim();
+        Display = display?.Trim();
+    }
 }

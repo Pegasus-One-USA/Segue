@@ -151,6 +151,20 @@
           </td>
         </ng-container>
 
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.status === 'Running') {
+              <button
+                class="btn-link cancel-run"
+                type="button"
+                [disabled]="cancellingRunIds().has(r.pipelineRunId)"
+                (click)="cancelRun(r, $event)"
+              >{{ cancellingRunIds().has(r.pipelineRunId) ? 'Cancelling…' : 'Cancel' }}</button>
+            }
+          </td>
+        </ng-container>
+
         <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
         <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
       </table>

@@ -41,6 +41,7 @@ export const AUTH_ENDPOINTS = {
 // tenant-tab), previously backed only by an in-memory, non-persistent mock (TenantRoleService).
 export const TENANT_ENDPOINTS = {
   list:   `${API_V1_BASE}/tenants`,
+  paged:  `${API_V1_BASE}/tenants/paged`,
   byId:   (id: string) => `${API_V1_BASE}/tenants/${id}`,
   create: `${API_V1_BASE}/tenants`,
   update: (id: string) => `${API_V1_BASE}/tenants/${id}`,
@@ -80,8 +81,9 @@ export const USERS_ENDPOINTS = {
 
 // ─── Roles & Permissions (RolesController — api/v1/roles, permissions) ─────────
 export const ROLES_ENDPOINTS = {
-  list: `${API_V1_BASE}/roles`,
-  byId: (id: string) => `${API_V1_BASE}/roles/${id}`,
+  list:  `${API_V1_BASE}/roles`,
+  paged: `${API_V1_BASE}/roles/paged`,
+  byId:  (id: string) => `${API_V1_BASE}/roles/${id}`,
 };
 
 export const PERMISSIONS_ENDPOINTS = {
@@ -92,6 +94,7 @@ export const PERMISSIONS_ENDPOINTS = {
 // ─── EHR Endpoints (EhrEndpointsController — api/v1/ehr-endpoints) ─────────────
 export const EHR_ENDPOINTS_ENDPOINTS = {
   list: `${API_V1_BASE}/ehr-endpoints`,
+  paged: `${API_V1_BASE}/ehr-endpoints/paged`,
   byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
 };
 
@@ -337,6 +340,8 @@ export const HAPI_TERMINOLOGY_ENDPOINTS = {
   configuration: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}`,
   runNow: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/run-now`,
   history: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/history`,
+  codes: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes`,
+  code: (code: string, pid: number) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes/${pid}`,
 };
 
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
@@ -367,6 +372,10 @@ export const PIPELINE_RUNS_ENDPOINTS = {
   routeExecutions:         `${API_V1_BASE}/pipeline-runs/route-executions`,
   routeExecutionById:      (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}`,
   routeExecutionResources: (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}/resources`,
+  // Keyed by PipelineRunId (the batch a route execution belongs to, see PipelineExecutionEntry.pipelineRunId) —
+  // one Configured Pipeline run can process several routes in one pass, so cancelling stops the whole batch,
+  // not just the one route row the user clicked from.
+  cancel:                  (pipelineRunId: string) => `${API_V1_BASE}/pipeline-runs/${pipelineRunId}/cancel`,
 };
 
 // ─── Governance (GovernanceController — api/v1/governance) ─────────────────────
@@ -435,4 +444,5 @@ export const WORKFLOW_ENDPOINTS = {
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
+  cancelRun:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/cancel`,
 };

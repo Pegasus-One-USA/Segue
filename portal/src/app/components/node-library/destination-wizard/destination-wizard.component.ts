@@ -1051,7 +1051,11 @@ export class DestinationWizardComponent implements OnInit {
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
-  readonly availableGroups = computed(() => {
+  /** The filter's own strict opinion — discovery result, else vendor list, else everything — with no
+   *  regard for what's already selected. Never rendered directly; availableGroups (below) is what the
+   *  template actually uses, and unsupportedSelectedResources diffs against this to find selections the
+   *  filter would otherwise have hidden. */
+  private readonly strictAvailableGroups = computed(() => {
     const discovered = this.discoveredResourceTypes();
     if (discovered) {
       const discoveredSet = new Set(discovered);
@@ -1063,6 +1067,26 @@ export class DestinationWizardComponent implements OnInit {
       return SUPPORTED_RESOURCE_TYPES.filter((r) => vendorSet.has(r));
     }
     return SUPPORTED_RESOURCE_TYPES;
+  });
+  /** strictAvailableGroups, plus any already-selected resource the filter would otherwise have hidden —
+   *  e.g. a route saved before a vendor filter existed, or before a live Discover probe narrowed the
+   *  list further. The filter should only ever affect what's offered as a NEW selection, never make an
+   *  existing one invisible/un-toggleable (see unsupportedSelectedResources for the accompanying
+   *  warning surfaced in the template). */
+  readonly availableGroups = computed(() => {
+    const strict = this.strictAvailableGroups();
+    const selected = this.selectedResources();
+    if (selected.length === 0) return strict;
+    const strictSet = new Set(strict);
+    const extra = selected.filter((r) => !strictSet.has(r));
+    return extra.length > 0 ? [...strict, ...extra] : strict;
+  });
+  /** Selected resources the current filter (discovery or vendor) no longer confirms as supported —
+   *  drives the Step 2 warning callout and each affected card's inline badge. Empty whenever no filter
+   *  is active (Epic, GenericFhir, ...) or every selection is still within it. */
+  readonly unsupportedSelectedResources = computed(() => {
+    const strictSet = new Set(this.strictAvailableGroups());
+    return this.selectedResources().filter((r) => !strictSet.has(r));
   });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');

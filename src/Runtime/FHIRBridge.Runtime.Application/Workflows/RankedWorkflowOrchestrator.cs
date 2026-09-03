@@ -336,6 +336,30 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                         cancelException.Message), cancellationToken);
                     throw;
                 }
+                catch (OperationCanceledException)
+                {
+                    // A user-initiated cancel (see /workflow-runs/{runId}/cancel) interrupted this node mid-flight
+                    // (an HTTP/DB call inside the executor observed the same cancelled token) rather than being
+                    // caught at the between-node check above. Without this catch, the generic Exception handler
+                    // below would record this node as "Failed" — misleading, since nothing actually went wrong,
+                    // the user just asked it to stop. Uses CancellationToken.None for the follow-up writes since
+                    // the token that just threw is already cancelled.
+                    workflowRun.AddNodeRun(nodeRun);
+                    nodeRun.Cancel("Cancelled by user request.", DateTimeOffset.UtcNow);
+                    await _auditRecorder.RecordAsync(new(
+                        WorkflowAuditEventType.NodeExecutionCancelled,
+                        workflowDefinition.Id,
+                        workflowRun.Id,
+                        node.Id,
+                        node.NodeType,
+                        null,
+                        null,
+                        inputContract,
+                        WorkflowDataContract.None,
+                        DateTimeOffset.UtcNow,
+                        "Cancelled by user request."), CancellationToken.None);
+                    throw;
+                }
                 catch (Exception exception)
                 {
                     workflowRun.AddNodeRun(nodeRun);
@@ -452,6 +476,62 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None, cancelReferenceId);
 
             throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // A user-initiated cancel (see /workflow-runs/{runId}/cancel) signals the token this run was started
+            // with — caught here, between nodes (the ThrowIfCancellationRequested() call at the top of the loop
+            // above), rather than mid-node: the node that was already in flight when Cancel was requested is left
+            // to finish and keeps its normal terminal state, so no node run is ever left half-written. Unlike the
+            // WorkflowRunCancelledException branch above, this is deliberately not rethrown — it's a normal,
+            // successful stop, not a fault the caller (including the fire-and-forget async /run Task.Run) should
+            // log as an error.
+            const string reason = "Cancelled by user request.";
+            workflowRun.Cancel(reason, DateTimeOffset.UtcNow);
+            await _auditRecorder.RecordAsync(new(
+                WorkflowAuditEventType.WorkflowRunCancelled,
+                workflowDefinition.Id,
+                workflowRun.Id,
+                null,
+                null,
+                null,
+                null,
+                WorkflowDataContract.None,
+                WorkflowDataContract.None,
+                DateTimeOffset.UtcNow,
+                reason), CancellationToken.None);
+
+            string? cancelReferenceId = null;
+            if (_exceptionManager is not null)
+            {
+                cancelReferenceId = await _exceptionManager.CaptureExpectedAsync(
+                    new ExpectedFailure(nameof(OperationCanceledException), reason),
+                    new ExceptionContext(
+                        Module: "Workflow",
+                        Severity: "Informational",
+                        CorrelationId: context.CorrelationId,
+                        WorkflowId: workflowDefinition.Id.ToString(),
+                        ExecutionId: workflowRun.Id.ToString()),
+                    CancellationToken.None);
+            }
+
+            workflowRun.SetErrorReference(cancelReferenceId);
+
+            try
+            {
+                await PersistRunAsync(workflowRun, CancellationToken.None);
+            }
+            catch (Exception persistException)
+            {
+                _logger.LogError(persistException,
+                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                    workflowRun.Id, workflowDefinition.Id);
+            }
+
+            await NotifyRunStatusAsync(
+                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, reason, CancellationToken.None, cancelReferenceId);
+
+            return new WorkflowRunResult(workflowRun, outputsByNodeId);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

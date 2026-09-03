@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Tenancy;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -30,6 +31,15 @@ public sealed class TenantsController : ControllerBase
     {
         var tenants = await _service.GetAllAsync(cancellationToken);
         return Ok(tenants);
+    }
+
+    [HttpGet("paged")]
+    [ProducesResponseType(typeof(PagedResult<TenantDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] string? search, [FromQuery] int page, [FromQuery] int pageSize, CancellationToken cancellationToken)
+    {
+        var result = await _service.GetPagedAsync(search, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

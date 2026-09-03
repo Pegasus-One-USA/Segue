@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
 
@@ -6,6 +7,11 @@ namespace FHIRBridge.Application.Services;
 public interface IEhrEndpointService
 {
     Task<IReadOnlyList<EhrEndpointDto>> GetAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>Server-side paged/search listing backing the admin EHR Endpoints screen — see
+    /// <see cref="Abstractions.Persistence.IEhrEndpointRepository.GetPagedAsync"/>.</summary>
+    Task<PagedResult<EhrEndpointDto>> GetPagedAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>Anonymous-safe listing/search of EhrEndpoint rows for one audience, scoped by
     /// <paramref name="endpointType"/> — backs the public ehr-public-endpoints controller. See
