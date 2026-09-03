@@ -128,12 +128,10 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
-        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
-
         var resources = new List<ResourceEnvelope>();
         foreach (var file in files)
         {
-            resources.AddRange(await DownloadNdjsonAsync(file, accessToken, cancellationToken));
+            resources.AddRange(await DownloadWithRetryAsync(file, source, cancellationToken));
         }
 
         return resources;
@@ -149,11 +147,12 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
             return [];
         }
 
-        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
-
         var failures = new List<BulkExportPartialFailure>();
         foreach (var file in errorFiles)
         {
+            // Re-acquire per file — same reason as DownloadResultsAsync: one token held across a long multi-file
+            // download expires mid-loop and later files 401. The provider re-mints only when near expiry.
+            var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
             failures.AddRange(await DownloadOperationOutcomesAsync(file, accessToken, cancellationToken));
         }
 
@@ -283,6 +282,22 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         httpRequest.Headers.TryAddWithoutValidation("Prefer", "respond-async");
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+
+        // A duplicate kick-off is not always a 4xx: some servers (e.g. eCW) reject one with HTTP 200 carrying an
+        // OperationOutcome (issue code "duplicate" / text "already in progress"), so checking the status alone would
+        // read a job that was never started as success. Inspect the payload — a single export runs per group at a
+        // time, and the remedy (wait for or cancel the in-flight job) differs from a plain rejection.
+        if (response.StatusCode is HttpStatusCode.OK or HttpStatusCode.TooManyRequests)
+        {
+            var body = await SafeReadAsync(response, cancellationToken);
+            if (IsDuplicateJobResponse(body))
+            {
+                throw new InvalidOperationException(
+                    $"Bulk export kick-off rejected as a duplicate for {kickOffUrl}: a bulk export is already " +
+                    "running for this group. Wait for it to finish or cancel it before starting another.");
+            }
+        }
+
         if (response.StatusCode != HttpStatusCode.Accepted)
         {
             var body = await SafeReadAsync(response, cancellationToken);
@@ -305,6 +320,35 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         _logger.LogInformation("Bulk export kicked off; polling status at {StatusUrl}.", statusUrl);
 
         return statusUrl;
+    }
+
+    // Downloads one file, retrying transient failures on THAT file alone (each attempt with a freshly acquired token)
+    // rather than letting a single flaky 401 / gateway error / timeout throw and restart the whole multi-file
+    // download from scratch — which, against an intermittently-failing edge (eCW), can loop indefinitely on a small
+    // export. The token is fetched per attempt so an expired/near-expired one is re-minted; the provider serves the
+    // cached token while valid, so this stays cheap. Cancellation is never retried.
+    private async Task<IReadOnlyList<ResourceEnvelope>> DownloadWithRetryAsync(
+        BulkExportFile file,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var maxAttempts = Math.Max(1, _options.MaxDownloadAttempts);
+        for (var attempt = 1; ; attempt++)
+        {
+            var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+            try
+            {
+                return await DownloadNdjsonAsync(file, accessToken, cancellationToken);
+            }
+            catch (Exception ex) when (attempt < maxAttempts && ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(
+                    "Bulk export file download attempt {Attempt}/{MaxAttempts} failed for {Url}; retrying with a fresh token. {Error}",
+                    attempt, maxAttempts, file.Url, ex.Message);
+                var delaySeconds = Math.Max(1, _options.DownloadRetryDelaySeconds) * attempt;
+                await _delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+            }
+        }
     }
 
     private async Task<IReadOnlyList<ResourceEnvelope>> DownloadNdjsonAsync(
@@ -495,6 +539,46 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         writer.WriteString("name", name);
         writer.WriteString(valueField, value);
         writer.WriteEndObject();
+    }
+
+    // Mirrors the SMART Bulk Data duplicate signal a status code cannot express: an OperationOutcome whose issue
+    // carries code "duplicate", or free text saying an export is "already in progress". Kept resilient to a
+    // truncated/whitespace-normalised body (the substring check) as well as a well-formed one (the JSON check).
+    private static bool IsDuplicateJobResponse(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        if (body.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("issue", out var issues) &&
+                issues.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var issue in issues.EnumerateArray())
+                {
+                    if (string.Equals(GetString(issue, "code"), "duplicate", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Non-JSON or truncated body — the substring check above is the fallback.
+        }
+
+        return false;
     }
 
     private static async Task<string> SafeReadAsync(HttpResponseMessage response, CancellationToken cancellationToken)

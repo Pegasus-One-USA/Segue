@@ -75,7 +75,11 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             }
 
             var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
-            var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+            // Expire the cached token a minute early so a caller (e.g. the bulk-export per-file download loop) that
+            // fetches it just before the real expiry still gets one with time left, rather than a token that lapses
+            // mid-request and 401s. Floored so a very short-lived token is still cached briefly instead of never.
+            var cacheLifetimeSeconds = Math.Max(30, expiresIn - 60);
+            var expiresOnUtc = DateTimeOffset.UtcNow.AddSeconds(cacheLifetimeSeconds);
             await _tokenCache.SetAsync(cacheKey, tokenResponse.AccessToken, expiresOnUtc, cancellationToken);
             await _tokenCache.SetScopeAsync(cacheKey, tokenResponse.Scope, expiresOnUtc, cancellationToken);
 

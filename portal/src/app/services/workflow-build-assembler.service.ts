@@ -293,10 +293,22 @@ export class WorkflowBuildAssemblerService {
     // generic Source hierarchy lands), so this connection's actual pipeline RUN executes via
     // EpicSourceNodeExecutor — which still picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
     // based on this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType), just not via a
-    // dedicated Healow executor class. Healow only supports the Patient (standalone) audience (see
-    // VENDOR_DISABLED_AUDIENCES) — no Backend/EhrLaunch branch needed here.
+    // dedicated Healow executor class. Healow now supports Patient (standalone), Provider EHR launch, AND Backend
+    // System (see VENDOR_DISABLED_AUDIENCES) — the authentication block below handles all three (public / jwt /
+    // secret), mirroring the Epic branch, so Backend System's private_key_jwt key material is persisted, not dropped.
     if (/healow/i.test(connector)) {
       const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      // A Group-level Bulk Data $export needs system/Group.read (to read the Group definition) on top of the
+      // per-resource read scopes ScopeBuilderService derives from the selected resource types — otherwise eCW's
+      // token omits it and Group/{id}/$export is rejected. eCW's app registration already grants Group.read, so
+      // this only asks for what's available. Idempotent: skip if the scope string already carries it.
+      if (
+        fields['Retrieval method key'] === 'bulk-export' &&
+        fields['Export scope'] === 'group' &&
+        !healowScopes.includes('system/Group.read')
+      ) {
+        healowScopes.unshift('system/Group.read');
+      }
       const healowAppType = this.applicationTypeFor(fields);
       // Auth-method-driven, mirroring the Athenahealth branch above (same shared form field-bag). The previous
       // version hardcoded authenticationType:'None' and dropped clientSecret/authPlacement, so a Client-Secret
@@ -310,7 +322,17 @@ export class WorkflowBuildAssemblerService {
         sourceSystemType: 'Healow',
         baseUrl: fields['FHIR base URL'] || '',
         authentication: {
-          authenticationType: healowAuthMethod === 'secret' ? 'OAuthClientCredentials' : 'None',
+          // Backend System uses SMART Backend Services (private_key_jwt / RS384); Client Secret uses plain OAuth2
+          // client_credentials; Patient/public (PKCE) stores no client credentials at all. The previous version
+          // collapsed everything non-'secret' to 'None', which silently dropped the JWT key material for the
+          // Backend audience (authType None, keyId/privateKey* null) → token acquisition fell back to client-secret
+          // and threw "requires a client id and secret". Mirror the Epic backend branch below.
+          authenticationType:
+            healowAuthMethod === 'jwt'
+              ? 'SmartBackendServices'
+              : healowAuthMethod === 'secret'
+                ? 'OAuthClientCredentials'
+                : 'None',
           clientId: fields['Client ID'] || fields['Active client ID'] || null,
           tokenEndpoint: fields['Token endpoint'] || null,
           scopes: healowScopes,
@@ -318,18 +340,37 @@ export class WorkflowBuildAssemblerService {
           clientSecretName: healowTypedSecret ? newInlineSecretName(fields['__name'] || 'ecw') : null,
           inlineClientSecret: healowTypedSecret,
           authPlacement: healowAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
+          // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name)
+          // and identified by kid — same shape as the Epic backend branch. Null for the public/secret flows.
+          keyId: healowAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
+          privateKeyKeyVaultName: healowAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
+          privateKeySecretName: healowAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
         },
         applicationType: healowAppType,
-        // Persist the EHR-launch metadata too (previously hardcoded empty), so Provider EHR Launch's trusted-issuer
-        // allow-list (required server-side, defaulted to the FHIR base URL by the form) and launch URL actually
-        // reach the backend. For the Patient audience these fields are empty/null just as before.
-        interactive: {
-          redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
-          launchUrl: fields['Launch URL'] || null,
-          trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
-          patientSelectionMethod: null,
-          launchDisplayMode: healowAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
-        },
+        // Backend System has no interactive login — mirror the Epic branch (interactive: null for Backend). This is
+        // not just cosmetic: EpicSourceConnectionScopeSyncService only rewrites the scopes of connections whose
+        // Interactive is non-null, deriving them from the wired destination's resource types (+ auto-fetch reference
+        // widening). For eCW that expanded the token request to resource scopes eCW's app registration doesn't grant
+        // (Claim/FamilyMemberHistory/Questionnaire) → the whole token request came back invalid_scope. Leaving
+        // Interactive null exempts a Backend source from that sync, so it keeps exactly the wizard-configured scopes,
+        // same as Epic Backend. The interactive metadata below is only meaningful for EHR-launch / Patient anyway.
+        interactive:
+          healowAppType === 'Backend'
+            ? null
+            : {
+                redirectUris: [fields['Redirect URI'] || OAUTH_DEFAULT_URLS.redirectUri],
+                launchUrl: fields['Launch URL'] || null,
+                trustedIssuers: (fields['Trusted issuers'] ?? '').split(/[\s,]+/).filter(Boolean),
+                patientSelectionMethod: null,
+                launchDisplayMode: healowAppType === 'EhrLaunch' ? fields['Launch display mode'] || null : null,
+              },
+        // Backend System / Provider Standalone carry a retrieval config (bulk-export or Search REST) just like Epic;
+        // without this the connection persisted with null retrieval (method/scope/group), so a re-run or entity-mode
+        // edit had to recover it from the workflow node instead. Null for Patient/EHR-launch (no retrieval section).
+        retrieval:
+          healowAppType === 'Backend' || healowAppType === 'Standalone'
+            ? this.buildRetrieval(fields)
+            : null,
       };
     }
 
