@@ -16,17 +16,20 @@ public sealed class CompositeSecretWriter : ISecretWriter
     private readonly IConfiguration _configuration;
     private readonly AzureKeyVaultSecretWriter _azureKeyVaultSecretWriter;
     private readonly DbSecretStore _dbSecretStore;
+    private readonly ITenantSecretVaultResolver _vaultResolver;
     private readonly ILogger<CompositeSecretWriter> _logger;
 
     public CompositeSecretWriter(
         IConfiguration configuration,
         AzureKeyVaultSecretWriter azureKeyVaultSecretWriter,
         DbSecretStore dbSecretStore,
+        ITenantSecretVaultResolver vaultResolver,
         ILogger<CompositeSecretWriter> logger)
     {
         _configuration = configuration;
         _azureKeyVaultSecretWriter = azureKeyVaultSecretWriter;
         _dbSecretStore = dbSecretStore;
+        _vaultResolver = vaultResolver;
         _logger = logger;
     }
 
@@ -38,23 +41,33 @@ public sealed class CompositeSecretWriter : ISecretWriter
         var useAzureKeyVault = _configuration.GetValue("KeyVault:UseAzureKeyVault", false);
         var allowLocalFallback = _configuration.GetValue("KeyVault:AllowConfigurationFallback", true);
 
+        // See CompositeSecretProvider's identical resolve — fixes app-level secrets (JWT signing key,
+        // terminology credentials) that previously passed a hardcoded "app" placeholder straight through
+        // uncorrected, uniformly for every caller rather than each one having to remember to resolve first.
+        secretReference = new SecretReference(
+            _vaultResolver.ResolveVaultName(secretReference.KeyVaultName), secretReference.SecretName);
+
         if (!useAzureKeyVault)
         {
             await _dbSecretStore.WriteSecretAsync(secretReference, secretValue, cancellationToken);
             return;
         }
 
+        // See CompositeSecretProvider's identical use of SecretPrefixing — applied only to the reference
+        // actually sent to Key Vault, never persisted, never applied to the local fallback below.
+        var keyVaultReference = SecretPrefixing.Apply(secretReference, _configuration["KeyVault:SecretPrefix"]);
+
         try
         {
-            await _azureKeyVaultSecretWriter.WriteSecretAsync(secretReference, secretValue, cancellationToken);
+            await _azureKeyVaultSecretWriter.WriteSecretAsync(keyVaultReference, secretValue, cancellationToken);
         }
         catch (Exception exception) when (allowLocalFallback)
         {
             _logger.LogWarning(
                 exception,
                 "Azure Key Vault write failed for secret {SecretName} in vault {KeyVaultName}. Falling back to local storage.",
-                secretReference.SecretName,
-                secretReference.KeyVaultName);
+                keyVaultReference.SecretName,
+                keyVaultReference.KeyVaultName);
 
             await _dbSecretStore.WriteSecretAsync(secretReference, secretValue, cancellationToken);
         }

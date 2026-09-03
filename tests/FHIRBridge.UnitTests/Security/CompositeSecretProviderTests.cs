@@ -47,6 +47,7 @@ public sealed class CompositeSecretProviderTests
             new ConfigurationSecretProvider(new ConfigurationBuilder().Build()),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretProvider>.Instance);
 
         var value = await sut.GetSecretAsync(Reference, CancellationToken.None);
@@ -68,6 +69,7 @@ public sealed class CompositeSecretProviderTests
             new ConfigurationSecretProvider(new ConfigurationBuilder().Build()),
             keyVault.Object,
             CreateDbSecretStore(),
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretProvider>.Instance);
 
         var value = await sut.GetSecretAsync(Reference, CancellationToken.None);
@@ -89,6 +91,7 @@ public sealed class CompositeSecretProviderTests
             new ConfigurationSecretProvider(new ConfigurationBuilder().Build()),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretProvider>.Instance);
 
         var value = await sut.GetSecretAsync(Reference, CancellationToken.None);
@@ -108,6 +111,7 @@ public sealed class CompositeSecretProviderTests
             new ConfigurationSecretProvider(new ConfigurationBuilder().Build()),
             keyVault.Object,
             CreateDbSecretStore(),
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretProvider>.Instance);
 
         var act = () => sut.GetSecretAsync(Reference, CancellationToken.None);
@@ -123,6 +127,7 @@ public sealed class CompositeSecretProviderTests
             new ConfigurationSecretProvider(new ConfigurationBuilder().Build()),
             KeyVaultMock().Object,
             CreateDbSecretStore(),
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretProvider>.Instance);
 
         var act = () => sut.GetSecretAsync(Reference, CancellationToken.None);

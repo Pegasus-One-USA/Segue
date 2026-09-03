@@ -36,6 +36,12 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Pulls ConnectionStrings/messaging-broker secrets from Azure Key Vault when KeyVault:UseAzureKeyVault is set
+// — as early as possible, since ConnectionStrings:FHIRBridgeDb itself (read further below) is one of them. See
+// KeyVaultConfigurationExtensions' remarks for what this does and doesn't cover, and its graceful-on-failure
+// behavior.
+builder.Configuration.AddFhirBridgeKeyVaultConfiguration();
+
 // Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
 // Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
 // (http://localhost:5000) is a shared, unconfigurable port; silently landing on it risks colliding

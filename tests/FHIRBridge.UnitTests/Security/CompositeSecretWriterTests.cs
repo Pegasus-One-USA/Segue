@@ -44,6 +44,7 @@ public sealed class CompositeSecretWriterTests
             Configuration(useAzureKeyVault: false),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretWriter>.Instance);
 
         await sut.WriteSecretAsync(Reference, "local-value", CancellationToken.None);
@@ -66,6 +67,7 @@ public sealed class CompositeSecretWriterTests
             Configuration(useAzureKeyVault: true),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretWriter>.Instance);
 
         await sut.WriteSecretAsync(Reference, "kv-value", CancellationToken.None);
@@ -86,6 +88,7 @@ public sealed class CompositeSecretWriterTests
             Configuration(useAzureKeyVault: true, allowFallback: true),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretWriter>.Instance);
 
         await sut.WriteSecretAsync(Reference, "fallback-value", CancellationToken.None);
@@ -105,6 +108,7 @@ public sealed class CompositeSecretWriterTests
             Configuration(useAzureKeyVault: true, allowFallback: false),
             keyVault.Object,
             dbSecretStore,
+            new PassthroughTenantSecretVaultResolver(),
             NullLogger<CompositeSecretWriter>.Instance);
 
         var act = () => sut.WriteSecretAsync(Reference, "never-persisted", CancellationToken.None);
