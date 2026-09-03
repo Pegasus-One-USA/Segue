@@ -35,8 +35,11 @@
 }
 
 // ─── Content ───────────────────────────────────────────────────────────────────
-mat-dialog-content {
-  padding: 20px 24px !important;
+// Targets Material's own generated class (not the plain `mat-dialog-content` element
+// selector) — a single-class selector matches Material's own `.mat-mdc-dialog-content`
+// rule's specificity without needing the forced-priority escape hatch.
+.dialog-container .mat-mdc-dialog-content {
+  padding: 20px 24px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -200,16 +203,19 @@ mat-dialog-content {
   &:hover { background: var(--color-side); }
 }
 
-.col-index {
+// Qualified with the table's own class so this beats the mat-mdc-cell base rule
+// (also one class) via source order alone — but the extra qualifier makes that
+// non-fragile if that base rule's own specificity ever changes.
+.data-table .col-index {
   width: 52px;
-  text-align: center !important;
-  color: var(--color-muted) !important;
-  font-size: 13px !important;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
 }
 
-.col-actions {
+.data-table .col-actions {
   width: 100px;
-  text-align: right !important;
+  text-align: right;
 }
 
 .code-badge {
@@ -234,28 +240,30 @@ mat-dialog-content {
   gap: 2px;
 }
 
-.btn-edit {
-  color: var(--color-primary) !important;
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: var(--radius-base) !important;
-  transition: background var(--transition-base) !important;
+// Qualified with the parent cell class (.actions-cell .btn-edit) so this beats
+// Material's own two-class internal button rules without the forced-priority escape hatch.
+.actions-cell .btn-edit {
+  color: var(--color-primary);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-base);
+  transition: background var(--transition-base);
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; }
 
-  &:hover { background: var(--color-primary-soft) !important; }
+  &:hover { background: var(--color-primary-soft); }
 }
 
-.btn-delete {
-  color: var(--color-error) !important;
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: var(--radius-base) !important;
-  transition: background var(--transition-base) !important;
+.actions-cell .btn-delete {
+  color: var(--color-error);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-base);
+  transition: background var(--transition-base);
 
   mat-icon { font-size: 18px; height: 18px; width: 18px; }
 
-  &:hover { background: var(--color-error-soft) !important; }
+  &:hover { background: var(--color-error-soft); }
 }
 
 // ─── Empty State ─────────────────────────────────────────────────────────────
@@ -316,9 +324,9 @@ mat-dialog-content {
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
-mat-dialog-actions {
-  padding: 16px 24px !important;
-  margin: 0 !important;
+.dialog-container .mat-mdc-dialog-actions {
+  padding: 16px 24px;
+  margin: 0;
   border-top: 1px solid var(--color-border);
 }
 

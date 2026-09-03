@@ -56,8 +56,11 @@
 }
 
 // ─── Content ───────────────────────────────────────────────────────────────────
-mat-dialog-content {
-  padding: 24px !important;
+// Targets Material's own generated class (not the plain `mat-dialog-content` element
+// selector) — a single-class selector matches Material's own `.mat-mdc-dialog-content`
+// rule's specificity without needing the forced-priority escape hatch.
+.dialog-container .mat-mdc-dialog-content {
+  padding: 24px;
   overflow-y: auto;
 }
 
@@ -107,9 +110,9 @@ mat-dialog-content {
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
-mat-dialog-actions {
-  padding: 16px 24px !important;
-  margin: 0 !important;
+.dialog-container .mat-mdc-dialog-actions {
+  padding: 16px 24px;
+  margin: 0;
   border-top: 1px solid var(--color-border);
 }
 
@@ -120,22 +123,24 @@ mat-dialog-actions {
   width: 100%;
 }
 
-.btn-cancel {
-  border-color: var(--color-border) !important;
-  color: var(--color-ink-2) !important;
+// Two classes (.dialog-actions .btn-cancel) beat Material's own two-class internal
+// rules (e.g. .mat-mdc-button.mdc-button) without the forced-priority escape hatch.
+.dialog-actions .btn-cancel {
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
   border-radius: var(--radius-base);
   font-weight: 500;
   height: 40px;
 
   &:hover {
-    background: var(--color-bg) !important;
-    border-color: var(--color-muted) !important;
+    background: var(--color-bg);
+    border-color: var(--color-muted);
   }
 }
 
-.btn-save {
-  background: var(--color-primary) !important;
-  color: #fff !important;
+.dialog-actions .btn-save {
+  background: var(--color-primary);
+  color: #fff;
   border-radius: var(--radius-base);
   font-weight: 600;
   height: 40px;
@@ -153,7 +158,7 @@ mat-dialog-actions {
     width: 18px;
   }
 
-  &:hover:not([disabled]) { background: var(--color-primary-dark) !important; }
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
 
-  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0 !important; }
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
 }
