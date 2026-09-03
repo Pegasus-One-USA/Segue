@@ -1,3 +1,4 @@
+using Azure.Identity;
 using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Messaging;
@@ -68,6 +69,14 @@ if (!string.IsNullOrWhiteSpace(workerDataProtectionCertPath) && !builder.Environ
         : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
             workerDataProtectionCertPath, workerDataProtectionCertPassword);
     workerDataProtection.ProtectKeysWithCertificate(workerDataProtectionCert);
+}
+
+// Alternative to the certificate above — mirrors the Api host exactly (see its Program.cs comment). Off by
+// default; set DataProtection:KeyVaultKeyId to enable.
+var workerDataProtectionKeyVaultKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(workerDataProtectionKeyVaultKeyId))
+{
+    workerDataProtection.ProtectKeysWithAzureKeyVault(new Uri(workerDataProtectionKeyVaultKeyId), new DefaultAzureCredential());
 }
 
 // Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here
