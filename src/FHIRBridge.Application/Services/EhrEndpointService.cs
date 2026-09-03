@@ -41,6 +41,14 @@ public sealed class EhrEndpointService : IEhrEndpointService
         }).ToArray();
     }
 
+    public async Task<PagedResult<EhrEndpointDto>> GetPagedAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var paged = await _repository.GetPagedAsync(search, sortDescending, page, pageSize, cancellationToken);
+        var dtos = await ResolveDisplayNamesAsync(paged.Items.Select(EhrEndpointMapper.ToDto).ToArray(), cancellationToken);
+        return new PagedResult<EhrEndpointDto>(dtos, paged.TotalCount, paged.Page, paged.PageSize);
+    }
+
     public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken)
     {

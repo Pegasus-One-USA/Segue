@@ -27,7 +27,13 @@ public sealed record HapiTerminologySystemDescriptor(
     /// setting key to read/write, e.g. "Terminology:Loinc:DownloadApiUrl". Everything else the legacy
     /// group holds (SchedulerEnabled/Frequency/ExecutionTime, FhirApiUrl, retry/timeout settings) is
     /// either superseded by this system's own *Hapi:* settings or unused by any sync code at all.</summary>
-    string? DownloadApiUrlSettingKey = null)
+    string? DownloadApiUrlSettingKey = null,
+    /// <summary>The canonical FHIR CodeSystem URI this system's sync writes into
+    /// <see cref="FHIRBridge.Domain.Entities.Terminology.TrmCodeSystem.CodeSystemUri"/> (e.g.
+    /// "http://hl7.org/fhir/sid/icd-10-cm" for ICD-10-CM) — duplicated here from each private
+    /// Hapi*TerminologySyncService.SystemUrl constant so TerminologyConceptService can resolve a
+    /// short registry code to its local-storage row without depending on all 13 sync services.</summary>
+    string CodeSystemUri = "")
 {
     public string SettingsKeyPrefix => $"Terminology:{Code}Hapi";
     public static readonly IReadOnlyList<string> FrequencyOptions = new[] { "Weekly", "Monthly" };
@@ -50,67 +56,67 @@ public sealed class HapiTerminologySystemRegistry
             {
                 var r = await sp.GetRequiredService<IHapiCvxTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://hl7.org/fhir/sid/cvx"),
             new("Dcm", "DCM", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiDcmTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://dicom.nema.org/resources/ontology/DCM"),
             new("Hcpcs", "HCPCS", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiHcpcsTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets"),
             new("Icd10", "ICD-10-CM", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiIcd10TerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, r.ReleaseYear, r.Duration);
-            }),
+            }, CodeSystemUri: "http://hl7.org/fhir/sid/icd-10-cm"),
             new("Icd10Pcs", "ICD-10-PCS", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiIcd10PcsTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://www.cms.gov/Medicare/Coding/ICD10"),
             new("Icd11", "ICD-11 MMS", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiIcd11TerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://id.who.int/icd/release/11/mms"),
             new("Icpc3", "ICPC-3", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiIcpc3TerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://terminology.hl7.org/CodeSystem/ICPC-3"),
             new("Loinc", "LOINC", HapiCredentialKind.LoincBasicAuth, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiLoincTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
-            }, DownloadApiUrlSettingKey: "Terminology:Loinc:DownloadApiUrl"),
+            }, DownloadApiUrlSettingKey: "Terminology:Loinc:DownloadApiUrl", CodeSystemUri: "http://loinc.org"),
             new("Mesh", "MeSH", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiMeshTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "https://www.nlm.nih.gov/mesh"),
             new("Ndc", "NDC", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiNdcTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://hl7.org/fhir/sid/ndc"),
             new("RxNorm", "RxNorm", HapiCredentialKind.UtsApiKey, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiRxNormTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
-            }),
+            }, CodeSystemUri: "http://www.nlm.nih.gov/research/umls/rxnorm"),
             new("Snomed", "SNOMED CT", HapiCredentialKind.UtsApiKey, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiSnomedTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
-            }),
+            }, CodeSystemUri: "http://snomed.info/sct"),
             new("Ucum", "UCUM", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiUcumTerminologySyncService>().SyncAsync(ct);
                 return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
-            }),
+            }, CodeSystemUri: "http://unitsofmeasure.org"),
         };
 
         _byCode = all.ToDictionary(x => x.Code, x => x, StringComparer.OrdinalIgnoreCase);

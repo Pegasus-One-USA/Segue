@@ -111,6 +111,20 @@ public sealed class PipelineRunsController : ControllerBase
         return Ok(pipelineRuns);
     }
 
+    // Requests a graceful stop of an in-flight run. ConfiguredPipelineService only observes this between
+    // resource-type/route groups (whatever route was already in flight is left to finish and record its own
+    // normal terminal PipelineRunRouteExecution row), so cancelling never leaves a route half-written. A run
+    // already past this window (finished, or never registered as cancellable — e.g. never started) reports 409.
+    [HttpPost("{pipelineRunId:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public IActionResult Cancel(Guid pipelineRunId, [FromServices] IPipelineRunTracker pipelineRunTracker)
+    {
+        return pipelineRunTracker.RequestCancellation(pipelineRunId)
+            ? Accepted()
+            : Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+    }
+
     [HttpPost("{pipelineRunId:guid}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Deactivate(

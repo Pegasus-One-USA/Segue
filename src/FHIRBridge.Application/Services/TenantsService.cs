@@ -33,6 +33,20 @@ public sealed partial class TenantsService : ITenantsService
         }).ToArray();
     }
 
+    public async Task<PagedResult<TenantDto>> GetPagedAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var paged = await _repository.GetPagedAsync(search, page, pageSize, cancellationToken);
+        var dtos = paged.Items.Select(ToDto).ToArray();
+
+        var names = await _userDisplayNameResolver.ResolveAsync(dtos.Select(dto => dto.CreatedBy), cancellationToken);
+        var resolved = dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+        }).ToArray();
+
+        return new PagedResult<TenantDto>(resolved, paged.TotalCount, paged.Page, paged.PageSize);
+    }
+
     public async Task<TenantDto> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         var tenant = await _repository.GetByIdAsync(id, cancellationToken)

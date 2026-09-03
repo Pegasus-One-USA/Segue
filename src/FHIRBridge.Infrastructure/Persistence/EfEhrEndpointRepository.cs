@@ -17,6 +17,26 @@ public sealed class EfEhrEndpointRepository : IEhrEndpointRepository
     public async Task<IReadOnlyList<EhrEndpoint>> GetAllAsync(CancellationToken cancellationToken) =>
         await _db.EhrEndpoints.OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
+    public async Task<PagedResult<EhrEndpoint>> GetPagedAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var query = _db.EhrEndpoints
+            .Where(x => string.IsNullOrWhiteSpace(search)
+                || EF.Functions.Like(x.Name, $"%{search}%")
+                || EF.Functions.Like(x.FhirBaseUrl, $"%{search}%"));
+
+        query = sortDescending switch
+        {
+            true => query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            false => query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            null => query.OrderBy(x => x.Name),
+        };
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return new PagedResult<EhrEndpoint>(items, totalCount, page, pageSize);
+    }
+
     public async Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
         await _db.EhrEndpoints

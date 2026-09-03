@@ -522,6 +522,9 @@ public static class DependencyInjection
         // the remote HAPI server, and that CompositeTerminologyLookupService checks first.
         services.AddScoped<HapiLocalTerminologyWriter>();
         services.AddScoped<HapiLocalTerminologyLookupService>();
+        // Search/pagination and manual add/edit/delete over the same TRM_CONCEPT rows above, for the
+        // "View All Codes" screen under each HAPI terminology system's ⋮ menu.
+        services.AddScoped<ITerminologyConceptService, TerminologyConceptService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(
@@ -640,6 +643,9 @@ public static class DependencyInjection
         // the same on both the SQL-backed and InMemory paths above.
         services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();
 
+        // Singleton by design (see IPipelineRunTracker's remarks) — one shared in-flight-run registry that
+        // survives across the Scoped ConfiguredPipelineService instances created per request/message.
+        services.AddSingleton<IPipelineRunTracker, InMemoryPipelineRunTracker>();
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 
         // Synchronous patient-scoped aggregation read. Bound from "PatientAggregation"; defaults apply when absent.

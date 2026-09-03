@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    [Migration("20260826105833_SyncModelToLatest")]
-    partial class SyncModelToLatest
+    [Migration("20260903051303_AddHapiLocalTerminologyAndImportHistory")]
+    partial class AddHapiLocalTerminologyAndImportHistory
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1265,6 +1265,14 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AttachmentNames")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Body")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -2097,6 +2105,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<int>("ExtractedCount")
                         .HasColumnType("integer");
 
@@ -2844,6 +2856,45 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .IsUnique();
 
                     b.ToTable("CvxVersions", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.HapiTerminologyImportHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeSystem")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ImportedConceptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeSystem", "StartedOnUtc");
+
+                    b.ToTable("HapiTerminologyImportHistory", "terminology");
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.HcpcsCode", b =>
@@ -3915,6 +3966,91 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("SnomedVersions", "terminology");
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmCodeSystem", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<string>("CodeSystemUri")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CsName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long?>("CurrentVersionPid")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeSystemUri")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CODESYSTEM", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmCodeSystemVer", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<long>("CodeSystemPid")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CsDisplay")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CsVersionId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeSystemPid", "CsVersionId")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CODESYSTEM_VER", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmConcept", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<long>("CodeSystemPid")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CodeVal")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Display")
+                        .HasColumnType("text");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeVal");
+
+                    b.HasIndex("CodeSystemPid", "CodeVal")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CONCEPT", "terminology");
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.UcumImportHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4470,6 +4606,157 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("ProcessedMessages", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DestinationType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ExtractedResourceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FailureMessage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestedResourceTypes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("WrittenResourceCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("StartedOnUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("PipelineRuns", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("OccurredOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PipelineRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("StepType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredOnUtc");
+
+                    b.HasIndex("PipelineRunId");
+
+                    b.ToTable("PipelineRunEvents", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PipelineRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ResourceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("StepType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PipelineRunId");
+
+                    b.ToTable("PipelineRunSteps", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4819,6 +5106,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -5568,6 +5859,15 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRunStep", b =>
+                {
+                    b.HasOne("FHIRBridge.Runtime.Domain.Entities.PipelineRun", null)
+                        .WithMany("Steps")
+                        .HasForeignKey("PipelineRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition", b =>
                 {
                     b.OwnsOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowTrigger", "Trigger", b1 =>
@@ -5647,6 +5947,11 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasForeignKey("WorkflowRunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Entities.PipelineRun", b =>
+                {
+                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition", b =>

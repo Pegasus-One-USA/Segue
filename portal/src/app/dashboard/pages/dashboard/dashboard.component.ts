@@ -18,6 +18,7 @@ const EMPTY_RUN_STATUS_COUNTS: WorkflowRunStatusCounts = {
   succeeded: 0,
   failed: 0,
   cancelled: 0,
+  partialSuccess: 0,
 };
 
 // SignalR (RunStatusHubService) is the primary "keep this live" mechanism — see the constructor. This interval

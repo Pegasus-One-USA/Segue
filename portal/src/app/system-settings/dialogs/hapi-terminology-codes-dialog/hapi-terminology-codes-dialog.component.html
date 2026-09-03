@@ -1,0 +1,140 @@
+<div class="dialog-container">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="dialog-header__text">
+      <h2>{{ data.displayName }} — All Codes</h2>
+      <p>Search, add, edit, or delete codes stored locally for this system.</p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+
+    <!-- Filter Bar -->
+    <div class="filter-row">
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search by code or description..."
+          [value]="searchQuery()"
+          (input)="onSearch($any($event.target).value)"
+        />
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-reset" type="button" (click)="reset()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          Reset
+        </button>
+        <button class="btn-add" type="button" (click)="openAdd()">
+          <mat-icon>add</mat-icon>
+          Add Code
+        </button>
+      </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="table-card">
+
+      <div class="table-meta">
+        <span class="entries-info">
+          @if (totalCount() > 0) {
+            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ totalCount() }}
+            {{ totalCount() === 1 ? 'code' : 'codes' }}
+          } @else {
+            No codes found
+          }
+        </span>
+      </div>
+
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="concepts()" class="data-table">
+
+          <ng-container matColumnDef="index">
+            <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
+            <td mat-cell *matCellDef="let c; let i = index" class="col-index">
+              {{ pageIndex() * pageSize() + i + 1 }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef>Code</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="code-badge">{{ c.code }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="display">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let c">
+              {{ c.display || '—' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let c" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-edit" (click)="openEdit(c)">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button mat-icon-button class="btn-delete" (click)="confirmDelete(c)">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      @if (!loading() && totalCount() === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon-wrap">
+            <mat-icon>list_alt</mat-icon>
+          </div>
+          <h3 class="empty-state__title">
+            {{ searchQuery() ? 'No codes matched your search' : 'No codes stored yet' }}
+          </h3>
+          <p class="empty-state__sub">
+            {{ searchQuery() ? 'Try a different search term.' : 'Run a sync, or add the first code manually.' }}
+          </p>
+        </div>
+      }
+
+      <!-- Paginator -->
+      @if (totalCount() > pageSize()) {
+        <mat-paginator
+          [length]="totalCount()"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
+          [pageSizeOptions]="[25, 50, 100]"
+          showFirstLastButtons
+          (page)="onPageChange($event)"
+          class="table-paginator"
+        ></mat-paginator>
+      }
+
+    </div>
+
+  </mat-dialog-content>
+
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button type="button" (click)="dialogRef.close()">Close</button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

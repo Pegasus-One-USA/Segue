@@ -6,6 +6,10 @@ public interface ITenantRepository
 {
     Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken);
 
+    /// <summary>Paged, search-filtered listing for the admin Tenant Management screen. <paramref name="search"/>
+    /// is an optional case-insensitive contains-match on Name or Code.</summary>
+    Task<PagedResult<Tenant>> GetPagedAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
+
     Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Case-insensitive lookup by the URL-safe slug — the pre-login (<c>?tenant=code</c>) and

@@ -30,8 +30,8 @@
     }
 
     <div class="fm-loadpayload-actions">
-      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="useSample()">
-        Use sample FHIR {{ resource() }}
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="onResetToOriginal()">
+        Reset to Original
       </button>
       <span class="fm-loadpayload-actions-spacer"></span>
       <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
