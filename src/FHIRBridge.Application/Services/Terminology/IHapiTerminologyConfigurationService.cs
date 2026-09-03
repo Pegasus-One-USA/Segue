@@ -20,4 +20,13 @@ public interface IHapiTerminologyConfigurationService
     Task RunAndRecordHistoryAsync(string code, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<HapiTerminologyImportHistoryEntryDto>> GetHistoryAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>Checks one system's source for a newer version than what's currently stored locally,
+    /// without downloading/importing anything. Returns Supported=false (not an error) for systems whose
+    /// source has no discoverable "latest version" pointer.</summary>
+    Task<HapiTerminologyVersionCheckResultDto> ScanForNewVersionAsync(string code, CancellationToken cancellationToken);
+
+    /// <summary>Runs <see cref="ScanForNewVersionAsync"/> for all registered systems in parallel — backs
+    /// the "Scan for updates" action on the Settings → General → Terminology screen.</summary>
+    Task<IReadOnlyList<HapiTerminologyVersionCheckResultDto>> ScanAllForNewVersionsAsync(CancellationToken cancellationToken);
 }

@@ -55,6 +55,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
     private readonly IDestinationSchemaService? _destinationSchemaService;
     private readonly IGlobalExceptionManager? _exceptionManager;
+    private readonly IPipelineRunTracker _pipelineRunTracker;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -67,6 +68,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IPipelineRunRouteExecutionRepository routeExecutionRepository,
         IExecutionResourceHistoryRecorder resourceHistoryRecorder,
         ILogger<ConfiguredPipelineService> logger,
+        IPipelineRunTracker pipelineRunTracker,
         IResourceNormalizationService? normalizationService = null,
         IMappedRecordNormalizationService? mappedRecordNormalizationService = null,
         IGovernancePolicyService? governancePolicyService = null,
@@ -108,6 +110,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
         _destinationSchemaService = destinationSchemaService;
         _exceptionManager = exceptionManager;
+        _pipelineRunTracker = pipelineRunTracker;
     }
 
     // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
@@ -182,16 +185,31 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var inlineDownloads = new List<GeneratedFileDto>();
         var downloadUrls = new List<string>();
 
-        var config = await LoadConfigurationAsync(cancellationToken);
-        var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
+        // Owned by the tracker from here on — MarkComplete (in the finally below) disposes it once the run
+        // finishes either way, and RequestCancellation (see PipelineRunsController's cancel endpoint) is the
+        // only other thing that touches it. Reassigning the cancellationToken parameter itself means every
+        // downstream call in this method (and the private helpers it calls with `cancellationToken`) observes
+        // the linked/cancellable token without threading a second one through by hand.
+        var runCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _pipelineRunTracker.MarkRunning(pipelineRunId, runCancellationSource);
+        cancellationToken = runCancellationSource.Token;
 
         // TriggerType is derived from the request shape rather than trusting a caller-supplied value, so it can
         // never drift from TriggeredBy the way it used to (see CompleteRunAsync's old TriggerType: triggeredBy bug).
+        // Declared here (ahead of the try below) rather than after config load, since the cancellation catch
+        // block also needs it and variables declared inside a try aren't visible to its catch.
         var triggerType = request.UseBulkExport
             ? "Bulk"
             : request.RunDueSchedulesOnly
                 ? "Scheduled"
                 : "Manual";
+        var processedResourceTypes = new List<string>();
+
+        try
+        {
+
+        var config = await LoadConfigurationAsync(cancellationToken);
+        var scheduledAtUtc = request.ScheduledAtUtc ?? DateTime.UtcNow;
 
         // Only the synchronous, non-bulk-export API trigger (PipelineRunsController.Start) sets AllowInlineDownload —
         // schedules, dispatched/queued runs, and webhooks have no HTTP response to carry Download-mode bytes back
@@ -199,7 +217,6 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
-        var processedResourceTypes = new List<string>();
 
         // Patient-compartment resource types (Observation, Condition, ServiceRequest, …) need a resolved patient id
         // to scope their search — normally supplied by an interactive SMART launch context, but Backend Services
@@ -402,6 +419,14 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         request.CorrelationId,
                         cancellationToken);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // A user-initiated cancel (see /pipeline-runs/{id}/cancel) — propagate to StartAsync's outer
+                    // catch instead of swallowing this as a per-source failure and looping on to the next route
+                    // group, which would otherwise keep making (immediately-cancelled) calls for every remaining
+                    // resource type instead of stopping promptly.
+                    throw;
+                }
                 catch (Exception exception)
                 {
                     _logger.LogError(
@@ -467,6 +492,41 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             CombineInlineDownloads(inlineDownloads),
             downloadUrls,
             cancellationToken);
+        }
+        catch (OperationCanceledException) when (runCancellationSource.IsCancellationRequested)
+        {
+            // A user-initiated cancel (see /pipeline-runs/{id}/cancel) signals the linked token above — caught
+            // here, between resource-type groups (the outer loop has no per-item ThrowIfCancellationRequested of
+            // its own, but every awaited call inside observes the same token and throws once its current unit of
+            // work finishes), rather than mid-route: whatever route was already in flight completed and recorded
+            // its own terminal PipelineRunRouteExecution row before this fires, so nothing is left half-written.
+            _logger.LogInformation("Configured pipeline run {PipelineRunId} was cancelled by user request.", pipelineRunId);
+
+            var completedOnUtc = DateTime.UtcNow;
+            var cancelledRun = new ConfiguredPipelineRunDto(
+                pipelineRunId,
+                "Cancelled",
+                processedResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList(),
+                extractedCount,
+                mappedCount,
+                writtenCount,
+                errors,
+                startedOnUtc,
+                completedOnUtc,
+                IsEnabled: true,
+                TriggeredBy: request.TriggeredBy,
+                TriggerType: triggerType,
+                InlineDownload: null,
+                DownloadUrls: downloadUrls.Count == 0 ? null : downloadUrls,
+                CorrelationId: request.CorrelationId);
+
+            await _pipelineRunRepository.AddAsync(cancelledRun, CancellationToken.None);
+            return cancelledRun;
+        }
+        finally
+        {
+            _pipelineRunTracker.MarkComplete(pipelineRunId);
+        }
     }
 
     public async Task<ConfiguredPipelineRunDto> StartWebhookAsync(
@@ -733,6 +793,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     ? new GeneratedFileDto(inlineFile.FileName, inlineFile.ContentType, inlineFile.Content)
                     : null,
                 writeResult.DownloadUrl);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // See the matching catch in StartAsync's source-extraction loop above — propagate a user-initiated
+            // cancel instead of recording this route as a plain failure and letting the outer loop continue on
+            // to the next resource type.
+            throw;
         }
         catch (Exception exception)
         {

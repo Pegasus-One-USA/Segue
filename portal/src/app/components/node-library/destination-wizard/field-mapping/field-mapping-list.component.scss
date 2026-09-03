@@ -46,8 +46,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-6) var(--space-8);
+  padding: var(--space-8);
   background: var(--color-side);
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
 
   &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
@@ -82,11 +83,25 @@
   font-weight: 700;
 }
 
+// A real segmented control (sunken track + a raised pill for whichever tab is active) reads much
+// more clearly as "one control with three positions" than flat text that merely changes color on
+// active — and gives the count badges something calmer to sit on than the accordion header's own bg.
 .fm-list-tabs {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill, 999px);
   cursor: default;
+}
+
+.fm-list-divider {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  background: var(--color-border);
 }
 
 .fm-list-tab {
@@ -95,19 +110,31 @@
   gap: var(--space-2);
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-4);
-  font-size: 13px;
+  border-radius: var(--radius-pill, 999px);
+  // A real <button> already makes its own full padding box the click/hit target (not just its text
+  // glyphs) and is natively keyboard-reachable/activatable (Tab, then Enter or Space) with no extra
+  // wiring needed -- the padding was just genuinely tight (4px top/bottom), reading as a small,
+  // precise target. Doubled here for a comfortably larger one.
+  padding: var(--space-4) var(--space-6);
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base);
 
-  &:hover { color: var(--color-ink-2); }
+  // Previously only the text color changed on hover, so nothing visually confirmed that the padded
+  // area around the text was clickable too -- a real fill now covers the whole hit area.
+  &:hover { color: var(--color-ink-2); background: var(--color-primary-soft); }
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
 
   &--active {
     color: var(--color-primary-dark);
-    background: var(--color-primary-soft);
+    // A plain white pill read as almost invisible against this palette's very-close-together
+    // near-white tokens (--color-surface vs. the track's --color-bg differ by one shade). -soft
+    // (10% mix) was still too pale to read as "selected" at a glance -- -mid (25% mix) is the next
+    // step up the same teal family, still light enough for the text/badge to stay readable.
+    background: var(--color-primary-mid);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 }
 
@@ -176,8 +203,60 @@
 .fm-list-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: var(--space-6) var(--space-8);
+  overflow: auto; // the actual scroll container the sticky header below sticks relative to
+  padding: 0 var(--space-8) var(--space-6);
+
+  // The real cause of rows showing through "behind" the sticky header: position: sticky sticks
+  // relative to its scroll container's PADDING box, not its border box. This container had
+  // padding-top: var(--space-6) -- so "top: 0" left a permanent var(--space-6)-tall gap between the
+  // true top of the scrollport and where the header actually stuck, and whatever row had scrolled
+  // to that exact band kept showing through it, uncovered by anything (an opacity/z-index issue
+  // wouldn't have fixed this -- the header was never told to occupy that space in the first place).
+  // Moving the top spacing here, onto the first child, keeps the same visual gap before the content
+  // starts without it being part of the scroll container's own padding box.
+  > :first-child {
+    margin-top: var(--space-6);
+  }
+
+  // .data-table/.data-table__header/.data-table__row are the shared table look used app-wide
+  // (styles.scss) — its 52px rows and 10/16px cell padding are sized for spacious list pages, not
+  // this dense, resizable inline-editing strip where every cell holds a compact <select>/<input>.
+  // Scoped overrides (Angular's own encapsulation keeps these local to this component) tighten it
+  // to match the rest of the panel instead of editing the shared class for all 30+ tables that use it.
+  // border-collapse: separate (not the shared class's own collapse) is required here too: Chrome
+  // (and other engines) don't reliably keep `position: sticky` cells stuck inside a collapsed-border
+  // table. Collapse mode is also *why* the shared class's row/header borders were declared on
+  // <tr>/<thead> in the first place (only the collapsed model paints borders on those, per spec) --
+  // switching to separate would silently drop every row divider, so both are re-declared directly on
+  // td/th below to reproduce the exact same look under the model sticky needs to work correctly.
+  .data-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .data-table__header th {
+    position: sticky;
+    top: 0;
+    // Fully opaque (a solid token, not a translucent/alpha color) and above this table's own
+    // row content -- 2, not a bare 1, to read as a deliberate choice rather than "just enough":
+    // matches the modest z-index already used by this same feature's other non-overlay elements
+    // (field-mapping-source-tree, field-mapping-target-card), well below the canvas's own
+    // popover/modal layers (15–210) so it can never outrank those if this ever nests differently.
+    z-index: 2;
+    background: var(--color-side);
+    border-bottom: 2px solid var(--color-border);
+  }
+
+  .data-table__row {
+    height: auto;
+
+    td {
+      padding: var(--space-4) var(--space-6);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    &:last-child td { border-bottom: none; }
+  }
 }
 
 .fm-mono { font-family: var(--font-mono); font-size: 12px; }
@@ -193,12 +272,19 @@
   color: var(--color-primary);
   cursor: pointer;
   font-size: 12px;
-  padding: 0 var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-base), color var(--transition-base);
 
-  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); border-radius: var(--radius-sm); }
+  &:hover { background: var(--color-primary-soft); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
 }
 
-.fm-list-link--danger { color: var(--color-error); }
+.fm-list-link--danger {
+  color: var(--color-error);
+
+  &:hover { background: var(--color-error-soft); color: var(--color-error-strong); }
+}
 
 .fm-list-dash { color: var(--color-muted-2); }
 
@@ -219,6 +305,7 @@
   }
 }
 
+.fm-inline-select { min-width: 96px; }
 .fm-inline-input { width: 84px; }
 .fm-inline-input--narrow { width: 52px; }
 
@@ -249,6 +336,142 @@
 
   &:hover { background: var(--color-primary-mid); }
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+// ─── De-identification tab — policy picker card ──────────────────────────────────────────────
+// A small, self-contained card (border + spacing, no shadow) so "pick or create a policy" reads as
+// one deliberate control instead of a lone <select> floating in an otherwise-empty tab. Note: this
+// app has exactly one creation flow here (name a profile, create it — the dropdown calls that same
+// entity "Policy"; DestinationWizardComponent's own Step 1 picker shares these identical signals),
+// not a separate "policy" vs. "profile" pair — so unlike the create button, there's deliberately no
+// second create action anywhere in this card.
+.fm-deid-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+}
+
+.fm-deid-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fm-deid-card__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+// One row: Policy field, its status text, and the create-new controls all together — wraps as a
+// unit at narrow widths rather than forcing "select existing" and "create new" onto separate lines.
+.fm-deid-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+// Deliberately not sharing .fm-draft-field here -- that class's own nested "select, input" rule
+// would out-specificity .fm-deid-select's padding below (a plain class loses to class+element).
+// Kept self-contained instead of fighting that, at the cost of a few duplicated caption-label lines.
+.fm-deid-policy-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  flex-shrink: 0;
+}
+
+// Select, name input, and create button all sit in one row (.fm-deid-card__row) and need to read
+// as one aligned control group — an explicit shared height + border-box is what actually guarantees
+// that: a native <select>'s own UA chrome and a <button>'s content-driven padding don't naturally
+// settle at the same height as a plain text <input> even when their padding/border/font match.
+.fm-deid-select,
+.fm-deid-name-input,
+.fm-deid-create-btn {
+  height: 34px;
+  box-sizing: border-box;
+}
+
+.fm-deid-select {
+  font-family: var(--font-family);
+  font-size: 13px;
+  width: 260px;
+  max-width: 100%;
+  padding: 0 var(--space-6);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  color: var(--color-ink);
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
+  }
+}
+
+.fm-deid-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  // Matching the select's own 34px height (rather than centering against the row's full cross-axis,
+  // which also includes the "Policy" caption sitting above the select) is what actually lines this
+  // up with the select's true vertical center -- align-self: center against the taller full column
+  // landed it too high, above where the select itself sits.
+  height: 34px;
+  align-self: flex-end;
+}
+
+.fm-deid-name-input {
+  font-family: var(--font-family);
+  font-size: 13px;
+  width: 200px;
+  max-width: 100%;
+  padding: 0 var(--space-6);
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  color: var(--color-ink);
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
+  }
+}
+
+// Reuses .fm-list-add's existing soft-primary button look (same "+ Add …" language as the mappings/
+// rules tabs) rather than inventing a new button style -- cancels its margin-top (meant for sitting
+// below a table, not inline here) and centers its label explicitly rather than trusting line-height
+// to land the text in the middle of the shared 34px height above.
+.fm-deid-create-btn {
+  margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.fm-deid-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--space-6);
+  border-top: 1px dashed var(--color-border);
+
+  strong { font-size: 12.5px; font-weight: 700; color: var(--color-ink-2); }
+  span { font-size: 12px; color: var(--color-muted); }
 }
 
 .fm-draft-form {

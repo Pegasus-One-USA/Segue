@@ -37,6 +37,7 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { MappingCatalogService } from '../../../services/mapping-catalog.service';
 import { environment } from '../../../../environments/environment';
 import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
@@ -906,6 +907,7 @@ export class EhrVendorSourceFormComponent
   private readonly destroyRef = inject(DestroyRef);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
   private readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
+  private readonly catalogSvc = inject(MappingCatalogService);
 
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
@@ -951,16 +953,23 @@ export class EhrVendorSourceFormComponent
   // JSON as-is with no mapping-template dependency at all, so the cap was blocking resource types (Organization,
   // Location, ...) that already work fine end-to-end.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
+  /** Backend-verified resource types this instance's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService and kept
+   *  in sync with `vendor()` by the effect in the constructor. Null when the vendor has no known
+   *  restriction (Epic, GenericFhir, ...) or the request hasn't resolved yet — isResourceSupported treats
+   *  null the same as "no filter", never narrowing `resources` below SUPPORTED_RESOURCE_TYPES. */
+  protected readonly vendorResourceTypes = signal<string[] | null>(null);
   protected get resources(): string[] {
     return SUPPORTED_RESOURCE_TYPES;
   }
   protected isResourceSupported(r: string): boolean {
-    return SUPPORTED_RESOURCE_TYPES.includes(r);
+    if (!SUPPORTED_RESOURCE_TYPES.includes(r)) return false;
+    const vendorList = this.vendorResourceTypes();
+    return vendorList ? vendorList.includes(r) : true;
   }
 
-  /** Of `resources`, only the subset this pipeline actually supports today — drives "Select all" and the
-   *  selected-count display in the retrieval-method resource grids. Trivially equal to `resources` now that
-   *  both are SUPPORTED_RESOURCE_TYPES; kept as a defensive filter in case the two ever diverge again. */
+  /** Of `resources`, only the subset this vendor/pipeline actually supports today — drives "Select all"
+   *  and the selected-count display in the retrieval-method resource grids. */
   protected readonly selectableResources = computed(() =>
     this.resources.filter((r) => this.isResourceSupported(r)),
   );
@@ -1675,6 +1684,15 @@ export class EhrVendorSourceFormComponent
       if (this.wiz.wizardMode() === 'canvas' || !this.wiz.entityId()) {
         this.wiz.ehrType.set(vendor);
       }
+    });
+
+    // Narrows the resource-type grid to what this vendor's real FHIR API is verified to support
+    // (VendorResourceTypeSupport, backend) — e.g. hides Task/Communication for Athenahealth. A vendor
+    // with no known restriction resolves to null, same as "no filter" (isResourceSupported above).
+    effect(() => {
+      this.catalogSvc
+        .resourceTypes(this.vendor())
+        .subscribe((types) => this.vendorResourceTypes.set(types));
     });
 
     // A saved connection's audience can predate a vendor's disabled-audience list (e.g. was created before

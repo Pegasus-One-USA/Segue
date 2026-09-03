@@ -10,7 +10,7 @@ import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
 import { FieldMappingTargetCardComponent } from './field-mapping-target-card.component';
 import { FieldMappingWiresComponent, FmTempWire } from './field-mapping-wires.component';
-import { FmDragStart, FmDragMove, FmDragEnd } from './field-mapping-tree-node.component';
+import { FmDragStart, FmDragMove, FmDragEnd, FmFieldClick } from './field-mapping-tree-node.component';
 import { FieldMappingListComponent } from './field-mapping-list.component';
 import { FieldMappingJoinPopoverComponent } from './field-mapping-join-popover.component';
 import { FieldMappingPreviewDrawerComponent } from './field-mapping-preview-drawer.component';
@@ -18,7 +18,7 @@ import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-
 import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './field-mapping-edit-column-modal.component';
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
-import { parseSourcePayloadJson } from './field-mapping-payload.util';
+import { parseSourcePayloadJson, reconstructPayloadJsonFor } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
@@ -28,6 +28,24 @@ export interface FmTargetCardSpec {
   resource: string;
   tableName: string;
   isExtra: boolean;
+}
+
+/** One selectable option in the "Select mapping" popover (see fieldPickerState) — the exact identity a
+ *  MappingRow is already keyed by everywhere else in this file (resource/tableName/targetName), plus
+ *  display-only labels for the option's own "source → target" line. Never a new mapping identity of its
+ *  own; picking one just sets popoverKey to {resource, tableName, targetName}, identical to what a
+ *  connector-line click already does. */
+export interface FmMappingChoice {
+  resource: string;
+  tableName: string;
+  targetName: string;
+  sourceLabel: string;
+  targetLabel: string;
+  /** The one source this option represents within its row's `sources[]` — null only for a childJson
+   *  (whole-node-as-JSON) row, which has no individual source to single out. Carried through to
+   *  popoverKey.focusSourceFhirPath when this option is picked, so the popover it opens shows only this
+   *  one source → target relationship instead of the whole join. */
+  sourceFhirPath: string | null;
 }
 
 /**
@@ -75,6 +93,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // focuses it manually once open instead of the `autofocus` attribute, which @angular-eslint/template/
   // no-autofocus disallows for the accessibility reasons in its own rule description).
   private readonly addTableSearchInput = viewChild<ElementRef<HTMLInputElement>>('addTableSearchInput');
+  // Not .required — only rendered while fieldPickerState() is non-null (see activateFieldMappings).
+  private readonly fieldPickerPanel = viewChild<ElementRef<HTMLElement>>('fieldPickerPanel');
   private resizeObserver: ResizeObserver | null = null;
   private viewportResizeObserver: ResizeObserver | null = null;
 
@@ -102,6 +122,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly mappingRows = input.required<MappingRow[]>();
   readonly targetByResource = input.required<Record<string, string>>();
   readonly availableFields = input.required<(r: string) => ResourceFieldDef[]>();
+  /** Same shape as availableFields, but never blended with a pasted-payload override — the real backend
+   *  FHIR catalog (or the built-in defs, until that catalog loads). See DestinationWizardComponent.
+   *  defaultAvailableFields's own doc comment: this is what the Load JSON Payload modal's "Reset to
+   *  Original" reconstructs from (originalPayloadJsonFor below), since availableFields() alone can't tell
+   *  "the true original" apart from "whatever override happens to be active right now" once ANY payload
+   *  has ever been loaded for this resource. */
+  readonly defaultAvailableFields = input.required<(r: string) => ResourceFieldDef[]>();
   readonly columnsForResourceTarget = input.required<(r: string) => string[]>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
@@ -205,6 +232,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly columnAltered = output<{ tableName: string; oldColumnName: string; column: DestinationColumn }>();
   /** A JSON payload was successfully parsed — the parent stores these fields as the resource's source tree. */
   readonly sourcePayloadLoaded = output<{ resource: string; fields: ResourceFieldDef[] }>();
+  /** "Reset to Original" was clicked in the Load JSON Payload modal — the parent drops this resource's
+   *  pasted-payload override (payloadFieldsByResource lives on the parent, not here) so availableFields()
+   *  falls back through to the real catalog again, same as defaultAvailableFields already does. */
+  readonly sourcePayloadReset = output<string>();
   /** A table created via "Create a new table…" was given a parent/FK relationship — the parent wizard
    *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
    *  between resources, node reload, and the Mapping JSON export/import. */
@@ -228,7 +259,31 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   readonly dragTempWire = signal<FmTempWire | null>(null);
   private dragSourceId: string | null = null;
   private dragSourceKind: 'group' | 'leaf' | null = null;
-  readonly popoverKey = signal<{ resource: string; tableName: string; targetName: string } | null>(null);
+  /** `focusSourceFhirPath` is set whenever the popover is opened for one specific source rather than the
+   *  whole row — a source-field click, a connector-line click (onWireClick — resolved from the actual
+   *  wire clicked, see FmWirePath.sourceFhirPath, never guessed), or a "Select mapping" picker choice
+   *  (onSourceFieldClick/onTargetFieldClick/onFieldPickerChoice below). Left null/absent only by the
+   *  mapping-list's "Edit" button (onEditRow), which keeps opening the whole joined row exactly as
+   *  before. It never changes what MappingRow gets looked up (still purely resource/tableName/targetName,
+   *  same identity as always) — it only tells popoverDisplayRow which ONE of that row's sources to show,
+   *  when the row is a join. Clearing it back to null (without touching resource/tableName/targetName) —
+   *  see onShowAllSources — re-reveals every source of that same row. */
+  readonly popoverKey = signal<{
+    resource: string; tableName: string; targetName: string; focusSourceFhirPath?: string | null;
+  } | null>(null);
+  /** Non-null while the "Select mapping" popover (a source or target FIELD click that's ambiguous
+   *  between more than one option) is open — see openFieldPicker. A field click that resolves to exactly
+   *  one option skips this entirely and sets popoverKey directly, same as a connector-line click. */
+  readonly fieldPickerState = signal<{
+    /** Fully composed second header line, e.g. "6 source mappings → name" or "2 mappings for Name >
+     *  Family" — built once at the call site (onSourceFieldClick/onTargetFieldClick), which already knows
+     *  which direction of ambiguity this is, rather than the template gluing a title+count together
+     *  itself (that used to read as "name · 6 mappings" — the field name first, count second, with no
+     *  indication of direction at all). */
+    subtitle: string;
+    options: FmMappingChoice[];
+    style: { top?: number; bottom?: number; left: number; width: number; maxHeight: number };
+  } | null>(null);
   readonly drawerOpen = signal(false);
   /** Free-text column names typed via "+ Add column" that don't have a mapping yet (CSV / un-probed SQL only), keyed by "resource::tableName". */
   private readonly pendingFreeColumns = signal<Record<string, string[]>>({});
@@ -399,6 +454,23 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
 
     effect(() => this.suggestionCountChange.emit(this.suggestions().length));
     effect(() => this.zoomPercentChange.emit(this.zoomPercent()));
+
+    // Closes the "Select mapping" picker if the canvas pans or zooms while it's open — its position was
+    // computed once, in real screen pixels, from the clicked field's own row at open time
+    // (computeFieldPickerStyle); panning/zooming moves that row without moving the panel (position:
+    // fixed), so leaving it open would leave it floating over the wrong spot on screen. Same
+    // baseline-learning shape as watchTrigger above (an effect runs immediately on creation, and that
+    // first run is this instance catching up to whatever pan/zoom already is, never a real user action).
+    let lastPan: { x: number; y: number } | null = null;
+    let lastZoom: number | null = null;
+    effect(() => {
+      const pan = this.anchors.pan();
+      const zoom = this.anchors.zoom();
+      const changed = lastPan !== null && (pan.x !== lastPan.x || pan.y !== lastPan.y || zoom !== lastZoom);
+      lastPan = pan;
+      lastZoom = zoom;
+      if (changed && this.fieldPickerState()) this.closeFieldPicker();
+    });
   }
 
   /** Same baseline-learning behavior as the openLoadPayloadRequest/openPreviewRequest effects above,
@@ -491,6 +563,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  reintroduce the exact dead-zone bug this history describes. Still unconditionally deferred for
    *  .fm-add-table-options, a real, always-genuinely-scrollable dropdown panel. */
   onViewportWheel(ev: WheelEvent): void {
+    // The join/mapping-config popover and the "Select mapping" picker are both fixed overlay siblings
+    // floating on top of the canvas (see the template's own "never descendants of .fm-canvas-inner"
+    // comment), not part of the pannable/zoomable surface itself — checked BEFORE the ctrl/cmd zoom
+    // branch below, so neither scrolling NOR zooming (ctrl/cmd+wheel) over either one ever reaches the
+    // canvas; both are still DOM descendants of .fm-viewport (fixed positioning doesn't change where
+    // wheel events bubble to), so without this check scrolling/zooming over them fell into the same
+    // default branch as empty canvas space and panned/zoomed the whole canvas underneath them instead.
+    if ((ev.target as HTMLElement).closest('.fm-popover, .fm-field-picker')) {
+      return;
+    }
     if (ev.ctrlKey || ev.metaKey) {
       ev.preventDefault();
       this.anchors.setZoom(this.anchors.zoom() * (ev.deltaY < 0 ? 1.1 : 0.9), ev.clientX, ev.clientY);
@@ -836,6 +918,33 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if (this.addTableMenuOpen() && !(event.target as HTMLElement).closest('.fm-add-table-slot')) {
       this.closeAddTableMenu();
     }
+  }
+
+  /** Set true for exactly one document:click cycle right after opening the "Select mapping" popover
+   *  (see activateFieldMappings) — the very field click that opens it also bubbles up to this same
+   *  document listener a moment later (pointerup -> fieldClick/columnClick fires synchronously first,
+   *  then the browser's own native "click" event follows and bubbles all the way to document), which
+   *  would otherwise read as "clicked outside" and immediately close the popover it just opened.
+   *  Deliberately NOT a plain stopPropagation() on that originating click instead — this canvas has
+   *  other things that legitimately react to "the user clicked anywhere" (e.g. the "+ Add a table…"
+   *  menu's own click-outside-closes-it listener just below), which stopping propagation there would
+   *  have silently broken for every source/target field click, not just ones that open this popover. */
+  private suppressNextFieldPickerOutsideClick = false;
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClickForFieldPicker(event: MouseEvent): void {
+    if (this.suppressNextFieldPickerOutsideClick) {
+      this.suppressNextFieldPickerOutsideClick = false;
+      return;
+    }
+    if (this.fieldPickerState() && !(event.target as HTMLElement).closest('.fm-field-picker')) {
+      this.closeFieldPicker();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeForFieldPicker(): void {
+    if (this.fieldPickerState()) this.closeFieldPicker();
   }
 
   /** The only "create a table" entry point — the target card itself has no table picker of its own
@@ -1283,6 +1392,37 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.loadPayloadError.set(null);
   }
 
+  /** Whatever this resource's source tree is ACTUALLY showing right now — reconstructed fresh (not
+   *  cached) from availableFields(), the exact same override-aware field list `forest` itself is built
+   *  from (see the computed just above). Pre-fills the Load JSON Payload modal's textarea every time it
+   *  opens, so re-opening it always shows the CURRENT payload — a previously loaded/edited one if there is
+   *  one, the true default catalog otherwise — never a stale default unrelated to what's on screen. See
+   *  originalPayloadJsonFor just below for the separate, override-FREE "true original" reconstruction. */
+  currentPayloadJsonFor(resource: string): string {
+    if (!resource) return '';
+    return reconstructPayloadJsonFor(resource, this.availableFields()(resource));
+  }
+
+  /** The TRUE original/default JSON payload for `resource` — reconstructed fresh (not cached) from
+   *  defaultAvailableFields(), which is deliberately override-free (see its own doc comment): the real
+   *  backend FHIR catalog, or the built-in defs until that loads — NEVER whatever a previously-pasted
+   *  payload already replaced it with. This is what "Reset to Original" restores back to — deliberately
+   *  separate from currentPayloadJsonFor just above, which DOES reflect any such override, precisely so
+   *  the two can't collapse into "always shows the same thing" the way a single shared source would. */
+  originalPayloadJsonFor(resource: string): string {
+    if (!resource) return '';
+    return reconstructPayloadJsonFor(resource, this.defaultAvailableFields()(resource));
+  }
+
+  /** Drops every existing mapping for `resource` — used by both submitLoadPayload (a genuinely new
+   *  payload shape just replaced this resource's fields; any row still pointing at the old shape's
+   *  fhirPaths would be silently dangling) and onResetToOriginalPayload (the Load JSON Payload modal's
+   *  own "Reset to Original", which clears the same way even though nothing was actually re-parsed here).
+   *  Every OTHER resource's rows are left completely untouched, same as removeRow's own identity filter. */
+  private clearMappingsForResource(resource: string): void {
+    this.mappingRowsChange.emit(this.mappingRows().filter(r => r.resource !== resource));
+  }
+
   submitLoadPayload(raw: string): void {
     const resource = this.resources()[0];
     if (!resource) return;
@@ -1294,15 +1434,32 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     }
 
     this.sourcePayloadLoaded.emit({ resource, fields: result.fields });
+    this.clearMappingsForResource(resource);
     this.loadPayloadOpen.set(false);
     this.loadPayloadError.set(null);
     const count = `${result.fields.length} field${result.fields.length === 1 ? '' : 's'}`;
     this.toast.success(
       'Payload loaded',
       result.declaredResourceType
-        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}").`
-        : `${count} found in the pasted ${resource} JSON.`,
+        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}") — previous mappings for ${resource} were cleared.`
+        : `${count} found in the pasted ${resource} JSON — previous mappings for ${resource} were cleared.`,
     );
+  }
+
+  /** "Reset to Original" in the Load JSON Payload modal — the textarea reset itself is entirely local to
+   *  that component (it just re-reads its own originalRaw input, see
+   *  FieldMappingLoadPayloadModalComponent.onResetToOriginal); this handles the two things the modal
+   *  can't do itself: clearing this resource's existing mappings (same as a real submit does), and telling
+   *  the parent to drop its pasted-payload override (sourcePayloadReset — payloadFieldsByResource lives on
+   *  the parent) so the SOURCE TREE itself also reverts to the true default catalog, not just the modal's
+   *  own textarea. */
+  onResetToOriginalPayload(): void {
+    const resource = this.resources()[0];
+    if (!resource) return;
+    this.clearMappingsForResource(resource);
+    this.sourcePayloadReset.emit(resource);
+    this.loadPayloadError.set(null);
+    this.toast.info('Reset to original', `Mappings for ${resource} were cleared.`);
   }
 
   // ── rank color per resource ─────────────────────────────────────────────
@@ -1523,14 +1680,282 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   // ── popover / drawer ─────────────────────────────────────────────────────
+  /** The full, real MappingRow behind the current popoverKey — unfiltered, always every source. This is
+   *  the row identity/save-target lookup; the popover itself is shown popoverDisplayRow below, which may
+   *  be a narrowed view of this same row. */
   popoverRow = computed<MappingRow | null>(() => {
     const key = this.popoverKey();
     if (!key) return null;
     return this.rowForColumnFn(key.resource, key.tableName, key.targetName) ?? null;
   });
 
-  onWireClick(e: { resource: string; tableName: string; targetName: string }): void {
-    if (this.rowForColumnFn(e.resource, e.tableName, e.targetName)) this.popoverKey.set(e);
+  /** What actually gets passed to <app-field-mapping-join-popover>'s `row` input. Identical to
+   *  popoverRow() unless popoverKey.focusSourceFhirPath names one specific source of a genuine join
+   *  (mode 'value', more than one entry in `sources`) — in that case, returns a shallow view with
+   *  `sources` narrowed to just that one entry. The popover's own "Source fields" section, delimiter
+   *  box, and chip reorder/remove controls already render purely off however many entries `sources` has,
+   *  so a 1-source view renders — and behaves — exactly like an ordinary non-join mapping's popover
+   *  always has; it's also told the REAL total via [totalSourceCount] (see the template), purely so it
+   *  can offer "Show all N sources" back to the full row (onShowAllSources) when it's showing a narrowed
+   *  view. See onPopoverSave for the other half of this (merging edits made against this narrowed view
+   *  back into the real row's full source list). */
+  readonly popoverDisplayRow = computed<MappingRow | null>(() => {
+    const row = this.popoverRow();
+    const focus = this.popoverKey()?.focusSourceFhirPath;
+    if (!row || !focus || row.mode !== 'value' || row.sources.length <= 1) return row;
+    const source = row.sources.find(s => s.fhirPath === focus);
+    return source ? { ...row, sources: [source] } : row;
+  });
+
+  /** `e.sourceFhirPath` is the ACTUAL source the clicked wire was drawn for (FmWirePath.sourceFhirPath,
+   *  resolved by field-mapping-wires.component.ts's own `paths` computed directly from that row's real
+   *  `sources[]` — never guessed from the wire's on-screen position), so a join's individual connector
+   *  lines each open focused on their own specific source → target relationship instead of the whole
+   *  join every one of them happens to share a target with. */
+  onWireClick(e: { resource: string; tableName: string; targetName: string; sourceFhirPath: string | null }): void {
+    if (this.rowForColumnFn(e.resource, e.tableName, e.targetName)) {
+      this.popoverKey.set({
+        resource: e.resource, tableName: e.tableName, targetName: e.targetName,
+        focusSourceFhirPath: e.sourceFhirPath,
+      });
+    }
+  }
+
+  // ── field click (source leaf or target column) -> open its Mapping Configuration directly, or let
+  // the user choose which one when it's ambiguous ────────────────────────────────────────────────────
+  // Two DIFFERENT kinds of ambiguity can be behind one field, and each needs its own granularity:
+  //  - A single SOURCE field can be part of more than one MappingRow (e.g. "Name > Family" mapped both
+  //    onto `name` and onto `PatientId` — two fully separate rows, each its own resource/tableName/
+  //    targetName identity). Ambiguity here is ROW-granular: one picker option per matching row.
+  //  - A single TARGET column can only ever back one MappingRow (replaceRow enforces that uniqueness —
+  //    a join just means one row with multiple `sources`, never multiple rows), but that one row can
+  //    still be fed by more than one source. Ambiguity here is SOURCE-granular: one picker option per
+  //    entry in that row's `sources`, not one for the row as a whole — otherwise picking "the mapping
+  //    for this column" would always show the whole join, which is exactly the confusing behavior this
+  //    is meant to avoid (see popoverDisplayRow's doc comment above).
+  // Either way, an option never carries more than resource/tableName/targetName + which one source to
+  // focus on — never a new mapping identity, never a copy of the row itself.
+
+  /** Every MappingRow with `sourceId` (a leaf's own id/fhirPath, or a group's id in childJson mode) as
+   *  one of its sources. */
+  private rowsForSourceId(sourceId: string): MappingRow[] {
+    return this.mappingRows().filter(r =>
+      r.mode === 'childJson' ? r.childNodeId === sourceId : r.sources.some(s => s.fhirPath === sourceId),
+    );
+  }
+
+  /** "Patient.name.family" -> "Name > Family" — breadcrumb display for a source path/id, dropping the
+   *  leading resource-type segment (redundant once already scoped to one resource's own cards). Used only
+   *  for the field-picker's title/option labels — every other display of a source elsewhere in this
+   *  feature keeps using its own existing label (MappingSourceRef.label, childNodeId, etc.) unchanged. */
+  private sourceBreadcrumb(fhirPathOrId: string): string {
+    const segments = fhirPathOrId.split('.').slice(1).filter(Boolean);
+    if (!segments.length) return fhirPathOrId;
+    return segments.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' > ');
+  }
+
+  /** One "source → target" picker option for `row`, focused on `sourceFhirPath` — null only for a
+   *  childJson row (nothing to single out; the whole row already is one atomic JSON mapping). */
+  private toMappingChoice(row: MappingRow, sourceFhirPath: string | null): FmMappingChoice {
+    const sourceLabel = sourceFhirPath ? this.sourceBreadcrumb(sourceFhirPath) : (row.childNodeId ?? '');
+    return {
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName,
+      sourceLabel, targetLabel: row.targetName, sourceFhirPath,
+    };
+  }
+
+  /** Opens the exact same Mapping Configuration popup a connector-line click already opens (onWireClick)
+   *  — same popoverKey/popoverRow identity, so nothing about how the popup itself works changes for this
+   *  entry point. `focusSourceFhirPath` (see popoverDisplayRow) narrows what's actually SHOWN to one
+   *  source when the row is a join and the click resolved to one specific source; left null to show the
+   *  whole row, same as a connector-line click always has (harmless no-op when the row isn't a join —
+   *  there's only ever one source to show either way). */
+  private openMappingDirectly(row: MappingRow, focusSourceFhirPath: string | null): void {
+    this.popoverKey.set({
+      resource: row.resource, tableName: row.tableName, targetName: row.targetName, focusSourceFhirPath,
+    });
+  }
+
+  /** Opens the "Select mapping" popover for a pre-built option list — both call sites below only ever
+   *  call this once they already know there's more than one option, so an empty list never reaches here.
+   *  `subtitle` is the fully composed second header line (see fieldPickerState's own doc comment). */
+  private openFieldPicker(options: FmMappingChoice[], subtitle: string, anchorEl: HTMLElement): void {
+    const rect = anchorEl.getBoundingClientRect();
+    this.fieldPickerState.set({
+      subtitle,
+      options,
+      style: this.computeFieldPickerStyle(rect),
+    });
+    this.suppressNextFieldPickerOutsideClick = true;
+    // One tick so the panel (an @if-conditional sibling, just set into existence above) has actually
+    // rendered before it's focused — same reasoning/preventScroll as toggleAddTableMenu's identical
+    // pattern for its own search input.
+    setTimeout(() => this.fieldPickerPanel()?.nativeElement.focus({ preventScroll: true }));
+  }
+
+  private static readonly FIELD_PICKER_WIDTH = 280;
+  /** Hard cap on the WHOLE popup's height (fixed header + scrollable options together) — the header
+   *  never grows past its own content, so in practice this is roughly how tall the options list can get
+   *  before it starts scrolling internally instead of the panel just growing to fit every option (which
+   *  is exactly how it used to run off the bottom of the canvas for 6+ mappings). */
+  private static readonly FIELD_PICKER_MAX_HEIGHT = 300;
+  /** Below this many px of room in a direction, that direction doesn't count as "enough space" to anchor
+   *  the panel there at all — it would still show only a near-useless sliver. */
+  private static readonly FIELD_PICKER_MIN_HEIGHT = 100;
+
+  /**
+   * Viewport-aware placement — replaces the previous version's `Math.max(minUsableHeight, spaceX)`,
+   * which GUARANTEED at least ~120px of panel height regardless of how little room `spaceX` actually
+   * measured (including negative, for a field right at the canvas's own edge) — that's exactly how the
+   * panel ended up rendering past the visible boundary for a field near it, which is the bug reported.
+   *
+   * Vertical: tries below the clicked field first, falls back above when there's more (or only) room
+   * there, and — only when NEITHER side has FIELD_PICKER_MIN_HEIGHT to offer — pins the panel fully
+   * inside the usable rect instead of anchoring to either edge of the trigger at all. Whichever direction
+   * is chosen, `maxHeight` is capped at FIELD_PICKER_MAX_HEIGHT AND never asked to exceed the space that
+   * direction actually has, so the panel can never grow past either.
+   *
+   * Horizontal: opens to the right of the trigger by default (matching the previous behavior in the
+   * common case), flips to the left of the trigger when the panel's full width doesn't fit on the right,
+   * and only falls back to clamping against the usable rect's own edge when neither side fits the whole
+   * width either.
+   *
+   * "Usable rect" is the intersection of `.fm-viewport`'s own box and the real browser window (a field
+   * near the canvas's edge is bounded by whichever is smaller — the canvas panel can itself sit inside a
+   * dialog well within the window). `panelWidth` is similarly clamped down from FIELD_PICKER_WIDTH if the
+   * usable rect is ever narrower than that.
+   *
+   * The final absolute-to-CSS-offset conversion still goes through the same "escape the dialog's own
+   * fixed-position containing block" probe technique as the "+ Add a table…" panel (see
+   * toggleAddTableMenu's doc comment for why a plain viewport-relative fixed position is wrong here) —
+   * that part is unchanged; only the space/placement math above it is new.
+   */
+  private computeFieldPickerStyle(
+    triggerRect: DOMRect,
+  ): { top?: number; bottom?: number; left: number; width: number; maxHeight: number } {
+    const margin = 8;
+    const viewportRect = this.viewport().nativeElement.getBoundingClientRect();
+    const usable = {
+      top: Math.max(viewportRect.top, 0),
+      bottom: Math.min(viewportRect.bottom, window.innerHeight),
+      left: Math.max(viewportRect.left, 0),
+      right: Math.min(viewportRect.right, window.innerWidth),
+    };
+
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed; left:0; top:0; width:0; height:0; visibility:hidden;';
+    this.viewport().nativeElement.appendChild(probe);
+    const containingBlock = probe.offsetParent
+      ? probe.offsetParent.getBoundingClientRect()
+      : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    probe.remove();
+
+    const panelWidth = Math.min(
+      FieldMappingCanvasComponent.FIELD_PICKER_WIDTH,
+      Math.max(0, usable.right - usable.left - margin * 2),
+    );
+    const maxHeightCap = FieldMappingCanvasComponent.FIELD_PICKER_MAX_HEIGHT;
+    const minHeight = FieldMappingCanvasComponent.FIELD_PICKER_MIN_HEIGHT;
+
+    // ── vertical: absolute (client-pixel) Y coordinates first, converted to CSS top/bottom offsets
+    // (relative to containingBlock) only at the very end — exactly how `left` below already worked. ──
+    const spaceBelow = usable.bottom - triggerRect.bottom - margin;
+    const spaceAbove = triggerRect.top - usable.top - margin;
+
+    let topAbs: number | undefined;
+    let bottomAbs: number | undefined;
+    let maxHeight: number;
+    if (spaceBelow >= minHeight && spaceBelow >= spaceAbove) {
+      topAbs = triggerRect.bottom + 6;
+      maxHeight = Math.min(maxHeightCap, spaceBelow);
+    } else if (spaceAbove >= minHeight) {
+      bottomAbs = triggerRect.top - 6;
+      maxHeight = Math.min(maxHeightCap, spaceAbove);
+    } else {
+      // Neither side has enough room next to the field itself — pin fully inside the usable rect instead
+      // of anchoring to either edge of the trigger, sized to whatever vertical room genuinely exists.
+      topAbs = usable.top + margin;
+      maxHeight = Math.min(maxHeightCap, Math.max(0, usable.bottom - usable.top - margin * 2));
+    }
+
+    // ── horizontal: right of the trigger by default, flips left if the full width doesn't fit there,
+    // else clamped fully inside the usable rect (the previous version's only strategy). ──
+    const spaceRight = usable.right - triggerRect.left - margin;
+    const spaceLeft = triggerRect.right - usable.left - margin;
+    let leftAbs: number;
+    if (spaceRight >= panelWidth) {
+      leftAbs = triggerRect.left;
+    } else if (spaceLeft >= panelWidth) {
+      leftAbs = triggerRect.right - panelWidth;
+    } else {
+      leftAbs = Math.min(Math.max(usable.left + margin, triggerRect.left), usable.right - margin - panelWidth);
+    }
+
+    return {
+      top: topAbs !== undefined ? topAbs - containingBlock.top : undefined,
+      bottom: bottomAbs !== undefined ? containingBlock.bottom - bottomAbs : undefined,
+      left: leftAbs - containingBlock.left,
+      width: panelWidth,
+      maxHeight,
+    };
+  }
+
+  closeFieldPicker(): void {
+    this.fieldPickerState.set(null);
+  }
+
+  /** A "Select mapping" option was clicked — opens the popup focused on that exact one option's source
+   *  (see popoverDisplayRow), same as a direct (unambiguous) field click would have for it. */
+  onFieldPickerChoice(choice: FmMappingChoice): void {
+    this.popoverKey.set({
+      resource: choice.resource, tableName: choice.tableName, targetName: choice.targetName,
+      focusSourceFhirPath: choice.sourceFhirPath,
+    });
+    this.closeFieldPicker();
+  }
+
+  /** A source tree leaf was clicked (not dragged — see FieldMappingTreeNodeComponent.fieldClick). Groups
+   *  never reach here (their plain click already means expand/collapse); a group's own childJson mapping
+   *  stays reachable only via its connector line, same as today.
+   *
+   *  Ambiguity here is ROW-granular (see this section's own doc comment above): 0 rows reference this
+   *  source -> nothing to open; exactly 1 -> open it directly, focused on this source (whether or not
+   *  that row happens to be a join — harmless when it isn't); 2+ -> one picker option per row, each ALSO
+   *  focused on this same source id, so picking one still shows only that one relationship, not whichever
+   *  full join that row might be. */
+  onSourceFieldClick(e: FmFieldClick): void {
+    const sourceId = e.node.id;
+    const matches = this.rowsForSourceId(sourceId);
+    if (matches.length === 0) return;
+    const focus = (row: MappingRow) => (row.mode === 'value' ? sourceId : null);
+    if (matches.length === 1) {
+      this.openMappingDirectly(matches[0], focus(matches[0]));
+      return;
+    }
+    this.openFieldPicker(
+      matches.map(r => this.toMappingChoice(r, focus(r))),
+      `${matches.length} mappings for ${this.sourceBreadcrumb(sourceId)}`,
+      e.anchor,
+    );
+  }
+
+  /** A target card's column row was clicked. Always 0 or 1 MappingRow under the current data model (see
+   *  this section's own doc comment above) — but that one row can still be a genuine join, in which case
+   *  ambiguity is SOURCE-granular instead: one picker option per source feeding this column, each focused
+   *  on its own source, rather than opening the whole join directly the way a single-row match otherwise
+   *  would. A non-join row (or no row at all) behaves exactly as before. */
+  onTargetFieldClick(resource: string, tableName: string, e: { column: string; anchor: HTMLElement }): void {
+    const row = this.rowForColumnFn(resource, tableName, e.column);
+    if (!row) return;
+    if (row.mode === 'value' && row.sources.length > 1) {
+      this.openFieldPicker(
+        row.sources.map(s => this.toMappingChoice(row, s.fhirPath)),
+        `${row.sources.length} source mappings → ${e.column}`,
+        e.anchor,
+      );
+      return;
+    }
+    this.openMappingDirectly(row, row.mode === 'value' ? (row.sources[0]?.fhirPath ?? null) : null);
   }
 
   onEditRow(e: { resource: string; tableName: string; targetName: string; invoker: HTMLElement }): void {
@@ -1575,7 +2000,40 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.ruleRefreshTrigger.update(v => v + 1);
   }
 
+  /**
+   * `row` is whatever the popover emitted — its own `draft`, seeded from popoverDisplayRow(). When a
+   * focus is active AND the real underlying row is a genuine join, that draft only ever contains the ONE
+   * focused source (every other source was never even in it, deliberately hidden — see
+   * popoverDisplayRow), so it must never be written back wholesale: doing so would silently drop every
+   * other source from the join the instant the user hit Save, even if they changed nothing else. Instead,
+   * re-fetch the CURRENT full row and splice just the focused source's entry back in:
+   *  - still present in the draft (edited or not) -> replace that one entry in place, in its original
+   *    position, leaving every other source untouched.
+   *  - removed from the draft (the user clicked that one chip's own ✕ — the only way `sources` can come
+   *    back empty from a 1-source draft) -> drop just that one entry from the join instead, same as
+   *    removing one chip already does today when the WHOLE join is shown (e.g. via a connector-line
+   *    click) — narrowing a join by one source has always meant exactly this, this just makes it work
+   *    the same way when only that one chip was ever visible to begin with.
+   * `instance`/`referencesResource` are the only other row-level fields this popover can actually change
+   * (delimiter/reorder never apply to a 1-source view — see popoverDisplayRow) — carried over from the
+   * draft; everything else (delimiter, isUpsertKey, isRequired, defaultValue, format, …) comes from the
+   * real row, untouched, since the focused view never exposed them for editing in the first place.
+   * A non-focused save (connector-line click, mapping-list Edit, or a row that was never a join to begin
+   * with) is entirely unaffected — this only ever branches away from the original plain updateRow(row)
+   * once BOTH a focus is active AND the real row actually has more than one source.
+   */
   onPopoverSave(row: MappingRow): void {
+    const focus = this.popoverKey()?.focusSourceFhirPath;
+    const original = focus ? this.rowForColumnFn(row.resource, row.tableName, row.targetName) : undefined;
+    if (focus && original && original.mode === 'value' && original.sources.length > 1) {
+      const edited = row.sources[0];
+      const sources = edited
+        ? original.sources.map(s => (s.fhirPath === focus ? edited : s))
+        : original.sources.filter(s => s.fhirPath !== focus);
+      this.updateRow({ ...original, instance: row.instance, referencesResource: row.referencesResource, sources });
+      this.closePopover();
+      return;
+    }
     this.updateRow(row);
     this.closePopover();
   }
@@ -1584,6 +2042,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const key = this.popoverKey();
     if (key) this.removeRow(key.resource, key.tableName, key.targetName);
     this.closePopover();
+  }
+
+  /** "Show all sources" (field-mapping-join-popover's own link, shown only while a focus is narrowing a
+   *  genuine join) — clears focusSourceFhirPath back to null without touching resource/tableName/
+   *  targetName, so popoverDisplayRow falls back to the real, complete row again. Nothing is saved or
+   *  mutated here; this only changes what's currently being VIEWED. */
+  onShowAllSources(): void {
+    const key = this.popoverKey();
+    if (key) this.popoverKey.set({ ...key, focusSourceFhirPath: null });
   }
 
   openDrawer(): void { this.drawerOpen.set(true); }

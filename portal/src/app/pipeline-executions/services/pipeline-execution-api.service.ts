@@ -37,4 +37,10 @@ export class PipelineExecutionApiService {
     return this.http.get<PipelineResourceHistoryPagedResult>(
       PIPELINE_RUNS_ENDPOINTS.routeExecutionResources(routeExecutionId), { params });
   }
+
+  /** Requests a graceful stop of the whole batch this route execution belongs to — see PIPELINE_RUNS_ENDPOINTS.cancel.
+   *  409 (surfaced as an HttpErrorResponse) means the run already finished or was never cancellable to begin with. */
+  cancel(pipelineRunId: string): Observable<void> {
+    return this.http.post<void>(PIPELINE_RUNS_ENDPOINTS.cancel(pipelineRunId), {});
+  }
 }

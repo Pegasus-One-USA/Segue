@@ -1041,14 +1041,52 @@ export class DestinationWizardComponent implements OnInit {
   readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>(
     'idle',
   );
+  /** Backend-verified resource types this source's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService.
+   *  Null when no vendor is set yet, the vendor has no known restriction (e.g. Epic), or the request
+   *  failed — availableGroups treats null the same as "no filter", never narrowing the list below what
+   *  it would otherwise show. Only used when a live Discover probe hasn't already produced a more
+   *  authoritative, connection-specific result. */
+  readonly vendorResourceTypes = signal<string[] | null>(null);
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
-  readonly availableGroups = computed(() => {
+  /** The filter's own strict opinion — discovery result, else vendor list, else everything — with no
+   *  regard for what's already selected. Never rendered directly; availableGroups (below) is what the
+   *  template actually uses, and unsupportedSelectedResources diffs against this to find selections the
+   *  filter would otherwise have hidden. */
+  private readonly strictAvailableGroups = computed(() => {
     const discovered = this.discoveredResourceTypes();
-    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
-    const discoveredSet = new Set(discovered);
-    return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    if (discovered) {
+      const discoveredSet = new Set(discovered);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    }
+    const vendorList = this.vendorResourceTypes();
+    if (vendorList) {
+      const vendorSet = new Set(vendorList);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => vendorSet.has(r));
+    }
+    return SUPPORTED_RESOURCE_TYPES;
+  });
+  /** strictAvailableGroups, plus any already-selected resource the filter would otherwise have hidden —
+   *  e.g. a route saved before a vendor filter existed, or before a live Discover probe narrowed the
+   *  list further. The filter should only ever affect what's offered as a NEW selection, never make an
+   *  existing one invisible/un-toggleable (see unsupportedSelectedResources for the accompanying
+   *  warning surfaced in the template). */
+  readonly availableGroups = computed(() => {
+    const strict = this.strictAvailableGroups();
+    const selected = this.selectedResources();
+    if (selected.length === 0) return strict;
+    const strictSet = new Set(strict);
+    const extra = selected.filter((r) => !strictSet.has(r));
+    return extra.length > 0 ? [...strict, ...extra] : strict;
+  });
+  /** Selected resources the current filter (discovery or vendor) no longer confirms as supported —
+   *  drives the Step 2 warning callout and each affected card's inline badge. Empty whenever no filter
+   *  is active (Epic, GenericFhir, ...) or every selection is still within it. */
+  readonly unsupportedSelectedResources = computed(() => {
+    const strictSet = new Set(this.strictAvailableGroups());
+    return this.selectedResources().filter((r) => !strictSet.has(r));
   });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
@@ -1430,7 +1468,14 @@ export class DestinationWizardComponent implements OnInit {
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
     this.sqlTables.update((tables) =>
       tables.map((t) => {
-        if (t.fullName !== e.tableName) return t;
+        // Same MySQL-only bare-name fallback as columnsForTableFn above: after reopening an existing
+        // MySQL mapping, e.tableName (from targetByResource, restored bare via qualifyTableName) can
+        // legitimately disagree with this entry's own fullName (database-qualified, from the live
+        // schema probe) for the exact same real table. Without this, the lookup below silently never
+        // matches — the column is queued (the toast fires unconditionally) but never actually appears
+        // on the canvas, since every table in sqlTables() comes back unchanged.
+        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
           idx === -1
@@ -1469,7 +1514,8 @@ export class DestinationWizardComponent implements OnInit {
   onColumnDropped(e: { tableName: string; column: string }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? { ...t, columns: t.columns.filter((c) => c.name !== e.column) }
           : t,
       ),
@@ -1486,7 +1532,8 @@ export class DestinationWizardComponent implements OnInit {
   }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? {
               ...t,
               columns: t.columns.map((c) =>
@@ -1519,6 +1566,20 @@ export class DestinationWizardComponent implements OnInit {
       ...m,
       [e.resource]: e.fields,
     }));
+  }
+
+  /** "Reset to Original" in the Load JSON Payload modal (FieldMappingCanvasComponent.
+   *  onResetToOriginalPayload) — drops this resource's pasted-payload override so availableFields(r)
+   *  falls back through to the real backend catalog (or built-in defs) again, same as it would if this
+   *  resource had never had a payload loaded for it at all. This is the one thing the canvas itself can't
+   *  do (payloadFieldsByResource lives here, not on the canvas) — the canvas's own mapping-row clear
+   *  already happened by the time this fires. */
+  onSourcePayloadReset(resource: string): void {
+    this.payloadFieldsByResource.update((m) => {
+      const rest = { ...m };
+      delete rest[resource];
+      return rest;
+    });
   }
 
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
@@ -1987,6 +2048,21 @@ export class DestinationWizardComponent implements OnInit {
             this.discoverProbeStatus.set('error');
           }
         });
+    });
+
+    // Vendor-level fallback for availableGroups when live Discover hasn't run/succeeded — e.g. a
+    // brand-new Athenahealth or Healow source that hasn't been saved yet. Refetches (cached per vendor
+    // in MappingCatalogService) whenever sourceVendor() changes; a vendor with no known restriction
+    // (Epic, GenericFhir, ...) resolves to null, same as "no filter".
+    effect(() => {
+      const vendor = this.sourceVendor();
+      if (!vendor) {
+        this.vendorResourceTypes.set(null);
+        return;
+      }
+      this.catalogSvc
+        .resourceTypes(vendor)
+        .subscribe((types) => this.vendorResourceTypes.set(types));
     });
   }
 
@@ -2780,8 +2856,10 @@ export class DestinationWizardComponent implements OnInit {
     // this resource has any mapped rows yet, hence ahead of the early-return below.
     for (const op of this.pendingSchemaOps()) {
       if (op.kind !== 'addColumn') continue;
+      // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above — without it this
+      // lookup silently finds nothing for a reopened MySQL mapping and the collision check below never runs.
       const table = this.sqlTables().find(
-        (t) => t.fullName === op.request.tableName,
+        (t) => t.fullName === op.request.tableName || (this.isMySql() && t.tableName === op.request.tableName),
       );
       const collides = table?.columns.some(
         (c) =>
@@ -3869,10 +3947,22 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
+  /** Same precedence as availableFields() minus its FIRST branch — the real backend FHIR catalog (or the
+   *  built-in defs, until that catalog loads), never a pasted-payload override. This is "the true default
+   *  payload" the Load JSON Payload modal's "Reset to Original" restores back to: availableFields() alone
+   *  can't answer that question once ANY payload has ever been loaded for this resource (this session, or
+   *  restored from a previously-saved node/snapshot — payloadFieldsByResource isn't scoped to "pasted
+   *  just now"), since at that point it's permanently returning the override instead of the original. */
+  defaultAvailableFields(r: string): ResourceFieldDef[] {
+    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+  }
+
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
     this.availableFields(r);
+  readonly defaultAvailableFieldsFn = (r: string): ResourceFieldDef[] =>
+    this.defaultAvailableFields(r);
   readonly columnsForResourceTargetFn = (r: string): string[] =>
     this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (

@@ -338,7 +338,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
+                            mapped.RawArrayValues, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
@@ -442,7 +443,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType, resourceType, targetField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                    destinationType, resourceType, targetField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -596,6 +598,38 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return (sourceConnection?.SourceSystemType.ToString(), sourceConnection?.Name);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex ArrayIndexAnnotation = new(@"\[[^\]]*\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", or "$.code.coding[*].code" for
+    /// a repeating element, from MappingFieldDto.JsonPath) into the "ResourceType.field" format the portal's
+    /// rule-authoring UI saves <c>TransformationRule.SourceField</c> as (see
+    /// field-mapping-join-popover.component.ts's saveRule/loadRuleFor, both built from
+    /// MappingRow.sources[].fhirPath) — <see cref="EfTransformationRuleRepository.GetFieldScopedAsync"/>'s match
+    /// on SourceField is an exact string comparison, so both sides of it must agree on one convention. The UI's
+    /// is the one actually persisted, so this side has to match it, not the other way around.
+    ///
+    /// Two normalizations, both confirmed against real saved rows: strip the leading "$." (the UI's fhirPath has
+    /// none), and strip every "[...]" index/wildcard annotation (the UI's fhirPath never carries these either,
+    /// e.g. "Condition.code.coding.code" — not "code.coding[*].code" — regardless of which repeating instance
+    /// the field mapping itself resolves at runtime). Without the second normalization specifically, a
+    /// Field-scope rule on ANY array-nested source field — codings, identifiers, telecoms, names, essentially
+    /// most of FHIR — could never resolve, silently falling through to "no rule → pass the value through
+    /// unchanged" for every record (reproduced: Condition.code.coding[*].code vs the saved
+    /// "Condition.code.coding.code").
+    /// </summary>
+    private static string? ToRuleAuthoringSourceFieldFormat(string resourceType, string? jsonPath)
+    {
+        if (string.IsNullOrEmpty(jsonPath))
+        {
+            return null;
+        }
+
+        var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
+        bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
+        return $"{resourceType}.{bare}";
+    }
+
     /// <summary>
     /// Runs every already-mapped value in <paramref name="row"/> through whichever transform-rule chain
     /// currently applies to its destination field (Workflow → Field → ResourceType → DestinationType → Global,
@@ -617,17 +651,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string resourceId,
         string? sourceJson,
         IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
+        IReadOnlyDictionary<string, IReadOnlyList<object?>>? rawArrayValues,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
-        {
-            return (row, null, null);
-        }
-
-        var hidden = _settingsCache is null
-            || await _settingsCache.GetBoolAsync(
-                TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
-        if (hidden)
         {
             return (row, null, null);
         }
@@ -679,7 +706,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -703,7 +731,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 continue;
             }
 
-            var currentValue = value;
+            // A rule chain LED by ConcatenationTemplating/ArrayListOperations exists specifically to
+            // operate on every occurrence of a repeating field, not the single value ArrayPolicy already
+            // collapsed `value` down to (see MappingTestResultDto.RawArrayValues's doc comment) — hand it
+            // the real array instead, so its own operation/template/separator config becomes the actual
+            // authority over which/how many items are used (superseding the field's Instance Selection,
+            // which chose that single collapsed value in the first place).
+            var currentValue =
+                rules[0].NodeType is TransformNodeType.ConcatenationTemplating or TransformNodeType.ArrayListOperations
+                && rawArrayValues is not null
+                && rawArrayValues.TryGetValue(destinationField, out var rawItems)
+                && rawItems.Count > 1
+                    ? rawItems
+                    : value;
             string? writeBackPath = null;
             foreach (var rule in rules)
             {
@@ -713,7 +753,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     writeBackPath = rule.FhirWriteBackJsonPath;
                 }
 
-                if (TransformNullPolicy.IsNullOrEmpty(currentValue))
+                if (TransformNullPolicy.ShouldShortCircuit(rule, currentValue))
                 {
                     currentValue = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
                     if (stopChain)
@@ -773,7 +813,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     sourceField,
                     hopIndex,
                     rule.NodeType.ToString(),
-                    rule.ConfigJson,
+                    result.ResolvedSystemOverride is null
+                        ? rule.ConfigJson
+                        : WithResolvedSystemOverride(rule.ConfigJson, result.ResolvedSystemOverride),
                     SerializeLineageValue(hopInput),
                     result.Success ? SerializeLineageValue(result.Value) : null,
                     result.Success,
@@ -842,6 +884,25 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         catch (NotSupportedException)
         {
             return value.ToString();
+        }
+    }
+
+    /// <summary>Appends a "resolvedSystem" note to the rule's config JSON for THIS lineage hop only — the
+    /// persisted <see cref="TransformationRule.ConfigJson"/> itself is never touched. Used when
+    /// CodeableConceptBuilderNode's opt-in cross-system auto-detect finds a code under a different local
+    /// system than the rule's own "system" setting, so the substitution is visible in Execution History
+    /// instead of silently masking what the configured system actually was.</summary>
+    private static string WithResolvedSystemOverride(string configJson, string resolvedSystem)
+    {
+        try
+        {
+            var config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(configJson) ?? [];
+            config["resolvedSystem"] = resolvedSystem;
+            return System.Text.Json.JsonSerializer.Serialize(config);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return configJson;
         }
     }
 

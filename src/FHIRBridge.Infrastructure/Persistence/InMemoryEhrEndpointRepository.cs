@@ -17,6 +17,27 @@ public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(
             _store.Values.Where(x => !x.IsDeleted).OrderBy(x => x.Name).ToArray());
 
+    public Task<PagedResult<EhrEndpoint>> GetPagedAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        IEnumerable<EhrEndpoint> query = _store.Values
+            .Where(x => !x.IsDeleted)
+            .Where(x => string.IsNullOrWhiteSpace(search)
+                || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || x.FhirBaseUrl.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        query = sortDescending switch
+        {
+            true => query.OrderByDescending(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            false => query.OrderBy(x => x.ModifiedOnUtc ?? x.CreatedOnUtc),
+            null => query.OrderBy(x => x.Name),
+        };
+
+        var all = query.ToArray();
+        var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        return Task.FromResult(new PagedResult<EhrEndpoint>(items, all.Length, page, pageSize));
+    }
+
     public Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(

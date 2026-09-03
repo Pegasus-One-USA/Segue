@@ -33,10 +33,24 @@ export class FieldMappingJoinPopoverComponent {
   /** See FieldMappingCanvasComponent's own doc comment — null hides the transformation-rule section
    *  entirely (this popover has no destination type to scope a rule against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** Same resolver FieldMappingCanvasComponent already threads through its own cards (display-only,
+   *  same role as its own dataTypeForTable) — used to show the target column's real type next to its
+   *  name, rather than inventing one. Undefined (no live schema, e.g. a CSV/Mongo destination) just
+   *  omits the badge. */
+  readonly dataTypeForTable = input<(tableFullName: string, column: string) => string | undefined>(() => undefined);
+  /** How many sources the REAL underlying row actually has — independent of `row` above, which may be a
+   *  narrowed, single-source VIEW of it (see FieldMappingCanvasComponent.popoverDisplayRow). Defaults to
+   *  0 so a host that never passes it (there are none today) just never shows "Show all sources" rather
+   *  than throwing on a missing required input. */
+  readonly totalSourceCount = input<number>(0);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
   readonly closed = output<void>();
+  /** "Show all sources" was clicked (see isNarrowedView) — this popover never expands the view itself;
+   *  it has no access to the other, currently-hidden sources at all (only `row`, already narrowed to
+   *  one), so the host owns swapping back to the real, complete row. */
+  readonly showAllSources = output<void>();
 
   readonly draft = signal<MappingRow | null>(null);
 
@@ -209,6 +223,13 @@ export class FieldMappingJoinPopoverComponent {
 
   hasArrayAncestors = computed(() => (this.draft()?.sources[0]?.arrays?.length ?? 0) > 0);
   isJoin = computed(() => (this.draft()?.sources.length ?? 0) > 1);
+  /** True while `row` is a deliberately narrowed single-source VIEW of a real join with more sources than
+   *  are actually shown here (see FieldMappingCanvasComponent.popoverDisplayRow) — gates the "Show all N
+   *  sources" link, the only sign in this popover that anything is currently hidden. False for an
+   *  ordinary single-source mapping (totalSourceCount would equal draft().sources.length, 1, there too). */
+  isNarrowedView = computed(() => (this.draft()?.sources.length ?? 0) < this.totalSourceCount());
+
+  onShowAllSources(): void { this.showAllSources.emit(); }
   arrayAncestorLabel = computed(() => {
     const arrays = this.draft()?.sources[0]?.arrays;
     return arrays?.length ? arrays[arrays.length - 1] : '';
@@ -218,6 +239,21 @@ export class FieldMappingJoinPopoverComponent {
   otherResources = computed(() => {
     const resource = this.draft()?.resource;
     return this.allResources().filter(r => r !== resource);
+  });
+
+  /** Compact "source → target" line under the header title — display-only, derived entirely from
+   *  fields already shown elsewhere in this same popover (the source chip list, the target name). */
+  headerSummarySource = computed(() => {
+    const d = this.draft();
+    if (!d) return '';
+    if (d.mode === 'childJson') return d.childNodeId ?? '';
+    return d.sources.length > 1 ? `${d.sources.length} fields` : (d.sources[0]?.fhirPath ?? '');
+  });
+
+  targetDataType = computed(() => {
+    const d = this.draft();
+    if (!d) return undefined;
+    return this.dataTypeForTable()(d.tableName, d.targetName);
   });
 
   approximationNote = computed(() => {

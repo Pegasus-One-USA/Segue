@@ -111,6 +111,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
   readonly columnActivate = output<string>();
+  /** A mapped (or unmapped — the canvas no-ops then) column was clicked, not dragged onto — a row here
+   *  is a drop TARGET (drag always starts from the source tree), so unlike a source leaf there's no
+   *  drag-vs-click ambiguity to resolve first; see onRowClick. */
+  readonly columnClick = output<{ column: string; anchor: HTMLElement }>();
   readonly positionChange = output<{ x: number; y: number }>();
   readonly removeTable = output<void>();
   /** Mongo-only inline rename of this card's collection name (see startRenameTable) — preserves this
@@ -394,5 +398,18 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     if ((ev.target as HTMLElement).closest('button')) return;
     ev.preventDefault();
     this.columnActivate.emit(column);
+  }
+
+  /** Plain mouse click on a column row — opens its Mapping Configuration (via columnClick, handled by
+   *  the canvas orchestrator), same identity (resource/tableName/column) the connector-line click
+   *  already opens. Ignored when the click landed on one of the row's own buttons (key-toggle/edit/
+   *  delete), which already handle their own click. Deliberately does NOT stop this click from bubbling
+   *  further (e.g. to document) — the canvas's own "close the mapping-picker on the click that opened
+   *  it" guard is a one-shot flag instead (see FieldMappingCanvasComponent.activateFieldMappings), so
+   *  this click still reaches anything else that legitimately reacts to "the user clicked somewhere on
+   *  the canvas" (e.g. the "+ Add a table…" menu's own click-outside-closes-it listener). */
+  onRowClick(column: string, ev: MouseEvent): void {
+    if ((ev.target as HTMLElement).closest('button')) return;
+    this.columnClick.emit({ column, anchor: ev.currentTarget as HTMLElement });
   }
 }

@@ -42,6 +42,29 @@ public sealed class RoleManagementService : IRoleManagementService
         return dtos;
     }
 
+    public async Task<PagedResult<RoleDto>> GetPagedRolesAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var dtos = await GetRolesAsync(cancellationToken);
+
+        IEnumerable<RoleDto> query = string.IsNullOrWhiteSpace(search)
+            ? dtos
+            : dtos.Where(r =>
+                r.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                r.Description.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        query = sortDescending switch
+        {
+            true => query.OrderByDescending(r => r.ModifiedOnUtc ?? r.CreatedOnUtc),
+            false => query.OrderBy(r => r.ModifiedOnUtc ?? r.CreatedOnUtc),
+            null => query.OrderBy(r => r.Name),
+        };
+
+        var all = query.ToArray();
+        var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        return new PagedResult<RoleDto>(items, all.Length, page, pageSize);
+    }
+
     public async Task<RoleDto> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken)
     {
         var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)

@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
@@ -22,11 +21,10 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// plain code system, not the full graph) — sufficient for $lookup/$validate-code, not for ECL or
 /// hierarchy queries.
 /// </summary>
-public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyncService
+public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyncService, IHapiVersionCheckable
 {
     private const string ReleaseType = "snomed-ct-us-edition";
     private const string SystemUrl = "http://snomed.info/sct";
-    private const string ResourceId = "snomed-full";
     private const string FullySpecifiedNameTypeId = "900000000000003001";
     private const string SynonymTypeId = "900000000000013009";
 
@@ -35,7 +33,7 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiSnomedTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiSnomedTerminologySyncService(
         IUtsReleaseClient releaseClient,
@@ -43,14 +41,14 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiSnomedTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiSnomedSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -66,14 +64,25 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 
         var (version, concepts) = ParseSnomedRf2(zipPath);
         _logger.LogInformation("Parsed {Total} active SNOMED CT concepts from release {Version}.", concepts.Count, version);
-        var resource = BuildCodeSystemResource(concepts, version);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "SNOMEDCT", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "SNOMED CT loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
         return new HapiSnomedSyncResult(version, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Best-effort: UTS's release-check endpoint reports a release date/name, not the exact
+    /// 8-digit date this service actually stores as its version (extracted from the downloaded RF2
+    /// file's own name — see <see cref="ExtractVersion"/>). Normalizing the release date to the same
+    /// yyyyMMdd shape keeps the two directly comparable for the common case; falls back to the raw
+    /// release name only if UTS didn't report a date at all.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
+        return release.ReleaseDateUtc?.ToString("yyyyMMdd") ?? release.ReleaseName;
     }
 
     private static (string Version, IReadOnlyList<Concept> Concepts) ParseSnomedRf2(string zipPath)
@@ -179,23 +188,6 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 
     private static string Get(Dictionary<string, int> index, string[] row, string field) =>
         index.TryGetValue(field, out var i) && i < row.Length ? row[i] : string.Empty;
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "SNOMEDCT",
-            title = $"SNOMED CT US Edition {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
-    }
 
     private sealed record Concept(string Code, string Display);
 }

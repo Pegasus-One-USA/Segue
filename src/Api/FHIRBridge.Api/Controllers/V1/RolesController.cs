@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -27,6 +28,21 @@ public sealed class RolesController : ControllerBase
         var roles = await _roleManagementService.GetRolesAsync(cancellationToken);
 
         return Ok(roles);
+    }
+
+    [HttpGet("paged")]
+    [StandardPermission(PermissionGroupCode.Role, PermissionActionCode.View, description: "View roles and their permissions.")]
+    [ProducesResponseType(typeof(PagedResult<RoleDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] string? search,
+        [FromQuery] bool? sortDescending,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _roleManagementService.GetPagedRolesAsync(
+            search, sortDescending, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("{roleId:guid}")]

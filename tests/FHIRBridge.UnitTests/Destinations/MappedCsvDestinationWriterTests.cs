@@ -92,8 +92,8 @@ public sealed class MappedCsvDestinationWriterTests
         factory.Verify(f => f.Create(It.IsAny<ArtifactDeliveryMode>()), Times.Never);
     }
 
-    // Matches "{ResourceType}_{yyyyMMdd_HHmmss}.csv", e.g. "Patient_20260721_143022.csv".
-    private static readonly Regex CsvEntryNamePattern = new(@"^[A-Za-z]+_\d{8}_\d{6}\.csv$");
+    // Matches "{ResourceType}.csv", e.g. "Patient.csv".
+    private static readonly Regex CsvEntryNamePattern = new(@"^[A-Za-z]+\.csv$");
 
     [Fact]
     public async Task Single_selected_resource_is_delivered_as_a_plain_CSV_not_a_zip()
@@ -116,7 +116,7 @@ public sealed class MappedCsvDestinationWriterTests
         capturedFile.Should().NotBeNull();
         capturedFile!.ContentType.Should().Be("text/csv");
         CsvEntryNamePattern.IsMatch(capturedFile.FileName).Should().BeTrue();
-        capturedFile.FileName.Should().StartWith("Patient_");
+        capturedFile.FileName.Should().Be("Patient.csv");
         capturedFile.Content.Length.Should().BeGreaterThan(0);
     }
 
@@ -153,9 +153,9 @@ public sealed class MappedCsvDestinationWriterTests
 
         archive.Entries.Select(e => e.Name).Should().HaveCount(3);
         archive.Entries.Select(e => e.Name).Should().OnlyContain(name => CsvEntryNamePattern.IsMatch(name));
-        archive.Entries.Select(e => e.Name.Split('_')[0]).Should().BeEquivalentTo(["Patient", "Observation", "Condition"]);
+        archive.Entries.Select(e => e.Name).Should().BeEquivalentTo(["Patient.csv", "Observation.csv", "Condition.csv"]);
 
-        var patientEntry = archive.Entries.Single(e => e.Name.StartsWith("Patient_"));
+        var patientEntry = archive.Entries.Single(e => e.Name == "Patient.csv");
         using var reader = new StreamReader(patientEntry.Open(), Encoding.UTF8);
         var patientCsv = await reader.ReadToEndAsync();
         patientCsv.Should().Contain("Alice").And.Contain("Bob").And.NotContain("8302-2");

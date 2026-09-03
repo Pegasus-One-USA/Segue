@@ -164,6 +164,16 @@ export class MappingProfileCanvasComponent {
 
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] => this.availableFields(r);
 
+  /** Same precedence as availableFields() minus its pasted-payload override — see
+   *  DestinationWizardComponent.defaultAvailableFields's own doc comment for why this is needed
+   *  separately (the Load JSON Payload modal's "Reset to Original" must restore this, not whatever
+   *  override happens to be active right now). */
+  defaultAvailableFields(r: string): ResourceFieldDef[] {
+    return this.catalogByResource()[r] ?? this.defFor(r);
+  }
+
+  readonly defaultAvailableFieldsFn = (r: string): ResourceFieldDef[] => this.defaultAvailableFields(r);
+
   private ensureCatalog(resource: string): void {
     if (this._requested.has(resource)) return;
     this._requested.add(resource);
@@ -191,6 +201,17 @@ export class MappingProfileCanvasComponent {
   onSourcePayloadLoaded(e: { resource: string; fields: ResourceFieldDef[] }): void {
     if (this.readOnly()) return;
     this.payloadFieldsByResource.update(m => ({ ...m, [e.resource]: e.fields }));
+  }
+
+  /** "Reset to Original" in the Load JSON Payload modal — see DestinationWizardComponent.
+   *  onSourcePayloadReset's own doc comment; identical reasoning/behavior here. */
+  onSourcePayloadReset(resource: string): void {
+    if (this.readOnly()) return;
+    this.payloadFieldsByResource.update(m => {
+      const rest = { ...m };
+      delete rest[resource];
+      return rest;
+    });
   }
 
   // ── mapping rows (rich model — the canvas's own MappingRow, with joins/childJson/instance-selection

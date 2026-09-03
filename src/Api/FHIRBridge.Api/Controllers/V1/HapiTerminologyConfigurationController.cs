@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services.Terminology;
@@ -22,11 +23,14 @@ public sealed class HapiTerminologyConfigurationController : ControllerBase
 {
     private readonly IHapiTerminologyConfigurationService _service;
     private readonly TerminologyImportChannel _importChannel;
+    private readonly ITerminologyConceptService _conceptService;
 
-    public HapiTerminologyConfigurationController(IHapiTerminologyConfigurationService service, TerminologyImportChannel importChannel)
+    public HapiTerminologyConfigurationController(
+        IHapiTerminologyConfigurationService service, TerminologyImportChannel importChannel, ITerminologyConceptService conceptService)
     {
         _service = service;
         _importChannel = importChannel;
+        _conceptService = conceptService;
     }
 
     [HttpGet]
@@ -57,4 +61,41 @@ public sealed class HapiTerminologyConfigurationController : ControllerBase
     [HttpGet("{code}/history")]
     public async Task<ActionResult<IReadOnlyList<HapiTerminologyImportHistoryEntryDto>>> History(string code, CancellationToken cancellationToken) =>
         Ok(await _service.GetHistoryAsync(code, cancellationToken));
+
+    /// <summary>Checks this system's official source for a newer version than what's stored locally,
+    /// without downloading/importing anything. Returns Supported=false for systems whose source has no
+    /// discoverable "latest version" pointer to check.</summary>
+    [HttpPost("{code}/scan")]
+    public async Task<ActionResult<HapiTerminologyVersionCheckResultDto>> Scan(string code, CancellationToken cancellationToken) =>
+        Ok(await _service.ScanForNewVersionAsync(code, cancellationToken));
+
+    /// <summary>Scans all 13 systems for a newer available version — backs the Settings → General →
+    /// Terminology screen's "Scan for updates" action.</summary>
+    [HttpPost("scan")]
+    public async Task<ActionResult<IReadOnlyList<HapiTerminologyVersionCheckResultDto>>> ScanAll(CancellationToken cancellationToken) =>
+        Ok(await _service.ScanAllForNewVersionsAsync(cancellationToken));
+
+    /// <summary>Server-side paged, searchable browse of one system's locally stored codes — backs
+    /// the "View All Codes" screen under this system's ⋮ menu.</summary>
+    [HttpGet("{code}/codes")]
+    public async Task<ActionResult<PagedResult<TerminologyConceptDto>>> GetCodes(
+        string code, [FromQuery] string? search, [FromQuery] int page, [FromQuery] int pageSize, CancellationToken cancellationToken) =>
+        Ok(await _conceptService.GetPagedAsync(code, search, page <= 0 ? 1 : page, pageSize <= 0 ? 25 : pageSize, cancellationToken));
+
+    [HttpPost("{code}/codes")]
+    public async Task<ActionResult<TerminologyConceptDto>> AddCode(
+        string code, [FromBody] UpsertTerminologyConceptRequest request, CancellationToken cancellationToken) =>
+        Ok(await _conceptService.AddAsync(code, request, cancellationToken));
+
+    [HttpPut("{code}/codes/{pid:long}")]
+    public async Task<ActionResult<TerminologyConceptDto>> UpdateCode(
+        string code, long pid, [FromBody] UpsertTerminologyConceptRequest request, CancellationToken cancellationToken) =>
+        Ok(await _conceptService.UpdateAsync(code, pid, request, cancellationToken));
+
+    [HttpDelete("{code}/codes/{pid:long}")]
+    public async Task<IActionResult> DeleteCode(string code, long pid, CancellationToken cancellationToken)
+    {
+        await _conceptService.DeleteAsync(code, pid, cancellationToken);
+        return NoContent();
+    }
 }

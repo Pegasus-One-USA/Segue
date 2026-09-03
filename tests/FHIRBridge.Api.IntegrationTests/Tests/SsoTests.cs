@@ -47,7 +47,8 @@ public sealed class SsoTests(ApiFixture f)
             Email = "invited@testhospital.test",
             InvitationToken = f.InvitationToken,
             Provider = LoginProvider.Google,
-            Token = "google:someone-else@evil.test"
+            Token = "google:someone-else@evil.test",
+            AcceptTerms = true
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);

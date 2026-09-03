@@ -382,7 +382,6 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(NdcReleaseClient));
         services.AddHttpClient(nameof(ReleaseFreshnessChecker));
         services.AddHttpClient(nameof(UcumReleaseClient));
-        services.AddHttpClient(nameof(FhirTerminologyTranslationService));
 
         services.AddSingleton<MappedInMemoryDestinationBuffer>();
         services.AddScoped<MappedInMemoryDestinationWriter>();
@@ -517,6 +516,14 @@ public static class DependencyInjection
         // Shared PUT-with-retry-and-verify used by all 13 Hapi*TerminologySyncService implementations
         // for their final "load into the terminology server" step — see its own remarks for why.
         services.AddSingleton<HapiTerminologyServerClient>();
+        // Local MSSQL cache (mirroring HAPI's own trm_codesystem/trm_codesystem_ver/trm_concept
+        // schema) that the 13 Hapi*TerminologySyncService jobs now write into instead of PUTting to
+        // the remote HAPI server, and that CompositeTerminologyLookupService checks first.
+        services.AddScoped<HapiLocalTerminologyWriter>();
+        services.AddScoped<HapiLocalTerminologyLookupService>();
+        // Search/pagination and manual add/edit/delete over the same TRM_CONCEPT rows above, for the
+        // "View All Codes" screen under each HAPI terminology system's ⋮ menu.
+        services.AddScoped<ITerminologyConceptService, TerminologyConceptService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(
@@ -525,7 +532,6 @@ public static class DependencyInjection
             sp.GetRequiredService<ISystemSettingsCache>(),
             terminologyCacheTtl));
         services.AddSingleton<LocalTerminologyTranslationService>();
-        services.AddScoped<FhirTerminologyTranslationService>();
         services.AddScoped<CompositeTerminologyTranslationService>();
         services.AddScoped<ITerminologyTranslationService>(sp => new CachingTerminologyTranslationService(
             sp.GetRequiredService<CompositeTerminologyTranslationService>(),
@@ -631,6 +637,9 @@ public static class DependencyInjection
         // the same on both the SQL-backed and InMemory paths above.
         services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();
 
+        // Singleton by design (see IPipelineRunTracker's remarks) — one shared in-flight-run registry that
+        // survives across the Scoped ConfiguredPipelineService instances created per request/message.
+        services.AddSingleton<IPipelineRunTracker, InMemoryPipelineRunTracker>();
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 
         // Synchronous patient-scoped aggregation read. Bound from "PatientAggregation"; defaults apply when absent.

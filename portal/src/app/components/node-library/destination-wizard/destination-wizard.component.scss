@@ -468,6 +468,10 @@
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
   }
+  &.unsupported.selected {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+  }
 }
 
 .dw-rc-check {
@@ -512,6 +516,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dw-rc-warn-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-warning-strong);
 }
 
 /* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */

@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
 using FHIRBridge.Application.Abstractions.Caching;
@@ -19,11 +18,10 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// loading it into a DOM. Only DescriptorRecord/DescriptorUI + DescriptorName/String are read (the
 /// preferred term) — qualifiers, concepts, scope notes, etc. are skipped for speed.
 /// </summary>
-public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncService
+public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncService, IHapiVersionCheckable
 {
     private const string ListingPageUrl = "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/";
     private const string SystemUrl = "https://www.nlm.nih.gov/mesh";
-    private const string ResourceId = "mesh-full";
 
     private static readonly Regex DescFileLinkPattern = new(
         @"href=""(desc(\d{4})\.xml)""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -32,20 +30,20 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiMeshTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiMeshTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiMeshTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiMeshSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -57,13 +55,13 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         downloadClient.Timeout = TimeSpan.FromMinutes(5);
 
         _logger.LogInformation("Finding the latest official NLM MeSH descriptor file.");
-        var fileUrl = await FindLatestDescriptorUrlAsync(downloadClient, cancellationToken);
+        var (fileUrl, year) = await FindLatestDescriptorAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Downloading MeSH descriptor file from {FileUrl}.", fileUrl);
 
         var concepts = await DownloadAndParseAsync(downloadClient, fileUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} MeSH descriptor concepts from the official release.", concepts.Count);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "MeSH", year, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -72,7 +70,17 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         return new HapiMeshSyncResult(concepts.Count, stopwatch.Elapsed);
     }
 
-    private static async Task<string> FindLatestDescriptorUrlAsync(HttpClient http, CancellationToken ct)
+    /// <summary>The published year alone (NLM publishes one descriptor file per year, no finer-grained
+    /// versioning) — same value used both to pick the download URL and as the stored version, so a
+    /// later "is there a newer one" check is a direct, reliable comparison.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        using var client = _httpClientFactory.CreateClient(nameof(HapiMeshTerminologySyncService) + ".Download");
+        var (_, year) = await FindLatestDescriptorAsync(client, cancellationToken);
+        return year;
+    }
+
+    private static async Task<(string Url, string Year)> FindLatestDescriptorAsync(HttpClient http, CancellationToken ct)
     {
         var html = await http.GetStringAsync(ListingPageUrl, ct);
         var latest = DescFileLinkPattern.Matches(html)
@@ -86,7 +94,7 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
                 $"Could not find a desc<year>.xml link on {ListingPageUrl}. The page layout may have changed.");
         }
 
-        return ListingPageUrl + latest.FileName;
+        return (ListingPageUrl + latest.FileName, latest.Year.ToString());
     }
 
     private static async Task<IReadOnlyList<Concept>> DownloadAndParseAsync(HttpClient http, string fileUrl, CancellationToken ct)
@@ -143,22 +151,6 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "MeSH",
-            title = "Medical Subject Headings (auto-synced from NLM)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

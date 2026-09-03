@@ -318,7 +318,20 @@ public static class WorkflowEndpoints
 
                 if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
                 {
-                    idsForNode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    // Seed from whatever this destination's mapping node already had persisted BEFORE this
+                    // save — a later save that only touches some of a destination's already-mapped resource
+                    // types (e.g. the wizard adds Encounter without restoring Patient's rows into this
+                    // request.Mappings — CSV/Email destinations have no live-schema probe to catch a failed
+                    // restore the way SQL destinations do) must not silently drop the untouched resource
+                    // types from mappingProfileIds: that field is exactly what MappingNodeExecutor/
+                    // DestinationNodeExecutor read at run time to decide which resource types to process, so
+                    // losing an entry here means that resource's output vanishes from every future run, not
+                    // just an unsaved profile row (the "add Encounter, Patient stops appearing in the CSV/
+                    // email zip" regression this fixes). Matched via destinationId rather than node.Id since
+                    // a node's own row id is regenerated every save (see WorkflowDefinition.AddNode / the
+                    // "removed node" comment above) and can't be relied on to identify the same logical node
+                    // across saves.
+                    idsForNode = SeedExistingMappingProfileIds(existingDefinition, destinationId);
                     profileIdsByNode[spec.NodeId] = idsForNode;
                 }
                 idsForNode[spec.ResourceType] = mapping.Id.ToString();
@@ -1219,7 +1232,10 @@ public static class WorkflowEndpoints
 
             if (request?.Async == true)
             {
-                runTracker.MarkRunning(workflowRunId);
+                // Owned by the tracker from here on — MarkComplete disposes it once the run finishes either way,
+                // and RequestCancellation (see the /cancel endpoint below) is the only other thing that touches it.
+                var runCancellationSource = new CancellationTokenSource();
+                runTracker.MarkRunning(workflowRunId, runCancellationSource);
 
                 // Fire-and-forget on purpose: the caller gets the run id back now and polls for status, so this
                 // must survive the HTTP request (and its scoped DbContext) ending. Resolve a fresh scope rather
@@ -1235,7 +1251,7 @@ public static class WorkflowEndpoints
                     using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
                     try
                     {
-                        await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
+                        await scopedOrchestrator.ExecuteAsync(workflow, context, runCancellationSource.Token);
                     }
                     catch (Exception exception)
                     {
@@ -1292,6 +1308,21 @@ public static class WorkflowEndpoints
             }
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+
+        // Requests a graceful stop of an in-flight async run (see the Async branch of /run above). The orchestrator
+        // only checks for this between nodes (RankedWorkflowOrchestrator.RunNodesAsync) — the node already
+        // executing when this is called is left to finish and keeps its normal terminal state, so cancelling never
+        // leaves a node run half-written. A run already past this window (finished, or never started as async in
+        // the first place) reports 409 rather than silently no-op'ing.
+        group.MapPost("/workflow-runs/{runId:guid}/cancel", (
+            Guid runId,
+            IWorkflowRunTracker runTracker) =>
+        {
+            return runTracker.RequestCancellation(runId)
+                ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
+                : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Run)));
 
         // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
         // if any, and the unscoped "default" slot) — the next /run or launch requires a genuinely fresh interactive
@@ -1604,13 +1635,14 @@ public static class WorkflowEndpoints
 
             // AwaitingBulkExport is non-terminal — a node deferred to an async $export job and the run is still
             // in flight pending BulkExportPollWorker's resume — so it belongs in "Running", not invisible in no
-            // tile at all. PartialSuccess is a terminal, fully-written outcome (every node ran; only some non-parent
-            // resource types were skipped for lack of authorization) — it belongs in "Succeeded", same as the
-            // Recent Workflows table already labels it "Completed"-equivalent.
+            // tile at all. PartialSuccess gets its OWN dashboard tile (not folded into Succeeded) so a tile's
+            // count always matches exactly what clicking through to Execution History filtered by that same
+            // status shows — folding it into Succeeded here while the list only matches on the exact status
+            // string was the original source of the two screens looking inconsistent.
             return Results.Ok(new WorkflowRunStatusCountsDto(
                 counts[WorkflowRunStatus.Pending],
                 counts[WorkflowRunStatus.Running] + counts[WorkflowRunStatus.AwaitingBulkExport],
-                counts[WorkflowRunStatus.Succeeded] + counts[WorkflowRunStatus.PartialSuccess],
+                counts[WorkflowRunStatus.Succeeded],
                 counts[WorkflowRunStatus.Failed],
                 counts[WorkflowRunStatus.Cancelled],
                 counts[WorkflowRunStatus.PartialSuccess]));
@@ -2430,6 +2462,41 @@ public static class WorkflowEndpoints
             }
         }
         return ids;
+    }
+
+    // Finds the mappingProfileIds map already persisted on whichever existing node targets this same
+    // destination, keyed by resource type — see the seeding comment at its call site in BuildWorkflow.
+    // destinationId (not node.Id) is the only thing that reliably identifies "the same logical node" across
+    // saves, since AddNode mints a fresh row id every time.
+    private static Dictionary<string, string> SeedExistingMappingProfileIds(WorkflowDefinition? existingDefinition, Guid destinationId)
+    {
+        var seeded = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (existingDefinition is null)
+        {
+            return seeded;
+        }
+
+        foreach (var node in existingDefinition.Nodes)
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var nodeDestinationId)
+                || nodeDestinationId != destinationId)
+            {
+                continue;
+            }
+
+            if (TryParseConfiguration(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
+            {
+                foreach (var entry in idsByResource)
+                {
+                    if (entry.Value?.ToString() is { } id)
+                    {
+                        seeded[entry.Key] = id;
+                    }
+                }
+            }
+        }
+
+        return seeded;
     }
 
     // A node can carry the legacy single mappingProfileId, the per-resource mappingProfileIds map, or both (see

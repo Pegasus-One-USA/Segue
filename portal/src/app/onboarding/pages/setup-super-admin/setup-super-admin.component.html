@@ -258,15 +258,15 @@
           </div>
         </div>
 
-        <!-- Accept Terms -->
+        <!-- Accept Terms — the link is deliberately a sibling of mat-checkbox, not nested inside its
+             projected label content (a nested <a> there is an unreliable click target — mat-checkbox's
+             own label/touch-target claims that whole area as one click zone). -->
         <div class="terms-row">
-          <mat-checkbox formControlName="acceptTerms" color="primary">
-            I accept the
-            <a href="javascript:void(0)" class="terms-link" (click)="$event.stopPropagation(); openTermsDialog()">
-              Terms and Conditions
-            </a>
-          </mat-checkbox>
-          @if (submitted() && form.get('acceptTerms')!.invalid) {
+          <mat-checkbox formControlName="acceptTerms" color="primary">I accept the</mat-checkbox>
+          <a href="javascript:void(0)" class="terms-link" (click)="openTermsDialog()">Terms and Conditions</a>
+          @if (form.get('acceptTerms')!.disabled) {
+            <p class="field-hint">Open and scroll through the Terms and Conditions to enable this checkbox.</p>
+          } @else if (submitted() && form.get('acceptTerms')!.invalid) {
             <p class="field-hint field-hint--error">You must accept the Terms and Conditions to continue.</p>
           }
         </div>

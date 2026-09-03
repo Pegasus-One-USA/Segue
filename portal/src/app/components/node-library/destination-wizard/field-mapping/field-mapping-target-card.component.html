@@ -117,6 +117,7 @@
         [attr.aria-label]="col + (rowForColumn()(col) ? ', mapped' : ', unmapped')"
         [attr.data-fm-drop]="resource() + '::' + tableName() + '::' + col"
         (keydown)="onColumnKeydown(col, $event)"
+        (click)="onRowClick(col, $event)"
       >
         <span class="fm-target-port" aria-hidden="true"></span>
         @if (renamingColumn() === col) {
