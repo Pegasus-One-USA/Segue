@@ -40,6 +40,16 @@
               </div>
             }
           </div>
+          <!-- Only ever shown when `row` is a deliberately narrowed view of a real join (see
+               FieldMappingCanvasComponent.popoverDisplayRow) — this popover was opened focused on just
+               one of that join's sources, and this is the one way back to seeing (and editing) every
+               source of it again. Never shown for an ordinary single-source mapping, which has nothing
+               hidden to reveal. -->
+          @if (isNarrowedView()) {
+            <button type="button" class="fm-popover-show-all" (click)="onShowAllSources()">
+              Show all {{ totalSourceCount() }} sources
+            </button>
+          }
         </div>
 
         <div class="fm-popover-section">

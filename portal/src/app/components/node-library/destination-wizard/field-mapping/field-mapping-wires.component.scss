@@ -46,7 +46,9 @@
 // Invisible, ~14px-wide hit target tracing the exact same "d" as its visible sibling just before it
 // — clicking/hovering anywhere within roughly 6px of the thin visible line now registers, instead of
 // requiring the cursor on the 1–2px stroke itself. Same treatment for both real and suggestion wires
-// (only the geometry, via [attr.d], differs — the hit area itself is identical either way).
+// (only the geometry, via [attr.d], differs — the hit area itself is identical either way). Also a real
+// keyboard control (tabindex="0" + role="button" in the template), so its own focus-visible state gets
+// the same hover treatment below.
 .fm-wire-hit {
   fill: none;
   stroke: transparent;
@@ -54,17 +56,92 @@
   stroke-linecap: round;
   pointer-events: stroke;
   cursor: pointer;
+  // The default browser focus ring on an SVG path draws around its full (invisible, 14px-wide) bounding
+  // box, which reads as a stray rectangle rather than a highlight on the wire — the thicker/brighter
+  // .fm-wire + dot + tooltip below already form this control's visible focus indicator, so the native
+  // ring is suppressed rather than doubled up.
+  &:focus {
+    outline: none;
+  }
 }
 
-// Hover lands on the invisible .fm-wire-hit path, so its visible .fm-wire sibling is what actually
-// needs to show feedback — a brightness bump only (no stroke-width change; the line must stay
-// visually thin). :has() reaches "backwards" to the preceding sibling, which plain CSS can't do with
-// a sibling combinator alone since the hit path has to come after (not before) the line it targets.
-.fm-wire:has(+ .fm-wire-hit:hover) {
-  filter: brightness(1.25);
+// Hover/focus lands on the invisible .fm-wire-hit path, so its visible .fm-wire sibling is what
+// actually needs to show feedback: a brightness bump, a small stroke-width increase (2.2 -> 3.2 — still
+// only a hover/focus-time state, never the resting geometry), and a soft glow in the wire's own color
+// (drop-shadow reading currentColor, set via [style.color]="p.stroke" on the same element in the
+// template, since a plain stroke color isn't itself a valid currentColor source). :has() reaches
+// "backwards" to the preceding sibling, which plain CSS can't do with a sibling combinator alone since
+// the hit path has to come after (not before) the line it targets.
+.fm-wire:has(+ .fm-wire-hit:hover),
+.fm-wire:has(+ .fm-wire-hit:focus-visible) {
+  stroke-width: 3.2;
+  filter: brightness(1.25) drop-shadow(0 0 4px currentColor);
 }
 
-.fm-wire--suggestion:has(+ .fm-wire-hit:hover) {
+.fm-wire--suggestion:has(+ .fm-wire-hit:hover),
+.fm-wire--suggestion:has(+ .fm-wire-hit:focus-visible) {
   opacity: 1;
   filter: brightness(1.15);
+}
+
+// Small "this is interactive" indicator centered on the wire, invisible until its wire's hit-path is
+// hovered/focused. Chained adjacent-sibling selectors (hit -> dot, in that exact template order) keep
+// this scoped to only the matching row's own dot — a plain "~" (general sibling) would incorrectly also
+// match every LATER row's dot sharing the same <svg> parent.
+.fm-wire-dot {
+  fill: var(--color-surface);
+  stroke-width: 1.6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-base);
+}
+
+.fm-wire-hit:hover + .fm-wire-dot,
+.fm-wire-hit:focus-visible + .fm-wire-dot {
+  opacity: 1;
+}
+
+// Tooltip bubble, positioned (via the foreignObject's x/y in the template) just above the wire's
+// midpoint. Deliberately dark-on-light-text regardless of the app's own light/dark theme — same
+// treatment native browser tooltips and Angular Material tooltips already use — so it reads clearly
+// against either a light or dark canvas background without needing its own theme branch. Chained off
+// the same hit -> dot -> tooltip-fo sibling order as the dot above, for the same per-row scoping reason.
+.fm-wire-tooltip-fo {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.fm-wire-tooltip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-family);
+  line-height: 1.35;
+  white-space: nowrap;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+
+.fm-wire-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #F8FAFC;
+}
+
+.fm-wire-tooltip-detail {
+  font-size: 10.5px;
+  color: #CBD5E1;
+}
+
+.fm-wire-hit:hover + .fm-wire-dot + .fm-wire-tooltip-fo .fm-wire-tooltip,
+.fm-wire-hit:focus-visible + .fm-wire-dot + .fm-wire-tooltip-fo .fm-wire-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }

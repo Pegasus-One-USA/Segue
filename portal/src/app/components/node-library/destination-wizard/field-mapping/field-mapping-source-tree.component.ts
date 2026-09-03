@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { FmTreeNode, filterForest, flattenLeaves } from './field-mapping-tree.util';
-import { FieldMappingTreeNodeComponent, FmDragStart, FmDragMove, FmDragEnd } from './field-mapping-tree-node.component';
+import { FieldMappingTreeNodeComponent, FmDragStart, FmDragMove, FmDragEnd, FmFieldClick } from './field-mapping-tree-node.component';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { autoCardWidth } from './field-mapping-card-size.util';
 
@@ -48,6 +48,9 @@ export class FieldMappingSourceTreeComponent implements AfterViewInit, OnDestroy
   readonly dragStart = output<FmDragStart>();
   readonly dragMove = output<FmDragMove>();
   readonly dragEnd = output<FmDragEnd>();
+  /** A mapped (or unmapped — the canvas no-ops then) leaf was clicked, not dragged — see
+   *  FieldMappingTreeNodeComponent's own doc comment on fieldClick for the click/drag distinction. */
+  readonly fieldClick = output<FmFieldClick>();
   readonly positionChange = output<{ x: number; y: number }>();
 
   private dragOffset: { dx: number; dy: number } | null = null;

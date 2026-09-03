@@ -50,13 +50,23 @@
   }
 }
 
+// Deliberately dark regardless of the app's own light/dark theme (--color-header-dark/--color-on-header-dark
+// are theme-invariant semantic tokens, styles.scss — unlike --color-ink/--color-surface, which swap roles
+// between themes) — matches the "Select mapping" picker's own header (see
+// field-mapping-canvas.component.scss's .fm-field-picker-head), so both popups read as one consistent
+// convention. border-radius here (rather than relying on the parent's own overflow to clip it) matters
+// because .fm-popover itself uses `overflow: auto`, not `hidden` (see its own comment on why) — without
+// matching corners here, this header's square top corners would visibly poke out past the parent's
+// rounded card silhouette.
 .fm-popover-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-header-dark);
+  border-bottom: 1px solid color-mix(in srgb, black 25%, var(--color-header-dark));
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   flex-shrink: 0;
   cursor: grab;
   touch-action: none;
@@ -74,7 +84,7 @@
 .fm-popover-title {
   font-size: 13.5px;
   font-weight: 700;
-  color: var(--color-ink);
+  color: var(--color-on-header-dark);
 }
 
 // The actual "which field maps to which" detail, now that the title itself is just "Mapping
@@ -82,22 +92,34 @@
 .fm-popover-summary {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--color-muted);
+  color: color-mix(in srgb, var(--color-on-header-dark) 65%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+// Same circular red badge as .fm-target-remove (the target card's own "remove this table" button) and
+// .fm-field-picker-close (the "Select mapping" picker's own close button) — a soft red-tinted circle at
+// rest, deepening to a solid red fill on hover, instead of the previous plain fade-to-ink text button.
 .fm-popover-icon-btn {
-  background: none;
-  border: none;
-  color: var(--color-muted);
-  cursor: pointer;
-  padding: var(--space-1);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--color-error-soft);
+  border: none;
+  border-radius: 50%;
+  color: var(--color-error);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  transition: background var(--transition-base), color var(--transition-base);
 
-  &:hover { color: var(--color-ink); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); border-radius: var(--radius-sm); }
+  &:hover { background: var(--color-error); color: var(--color-on-primary); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-on-header-dark) 40%, transparent); }
 }
 
 .fm-popover-body {
@@ -157,6 +179,23 @@
     &:disabled { opacity: 0.3; cursor: default; }
     &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); border-radius: var(--radius-sm); }
   }
+}
+
+// Bare text link, same treatment as .fm-popover-rule-toggle — the only way back to seeing every source
+// of a join once a specific one is being focused on (see isNarrowedView). Self-aligned rather than
+// stretched full-width like the chips above it, since it reads as a small secondary action, not another row.
+.fm-popover-show-all {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: var(--space-2) 0;
+
+  &:hover { color: var(--color-primary-dark); text-decoration: underline; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); border-radius: var(--radius-sm); }
 }
 
 .fm-popover-chip-label {

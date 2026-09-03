@@ -190,6 +190,13 @@ html {
   --color-surface:      var(--brand-surface);
   --color-side:         var(--ref-neutral-75);
 
+  /* Deliberately theme-invariant dark chrome (e.g. a floating popup's own header bar) — unlike
+     --color-ink/--color-surface, which INVERT roles between light/dark theme, this pair stays the same
+     fixed dark-bar-with-light-text look regardless of the active theme, the way a toolbar or title bar
+     often does in other apps. Intentionally never redefined in the dark-theme override below. */
+  --color-header-dark:     var(--ref-neutral-900);
+  --color-on-header-dark:  var(--ref-white);
+
   /* ═══════════════════════════════════════════════════════════════════════
      TIER 3 · COMPONENT tokens — role-scoped, reference the semantic tier.
      Adoption in progress (page + cards wired); expand with cleanup pass.

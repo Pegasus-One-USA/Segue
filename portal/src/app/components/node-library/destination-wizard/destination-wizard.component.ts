@@ -1568,6 +1568,20 @@ export class DestinationWizardComponent implements OnInit {
     }));
   }
 
+  /** "Reset to Original" in the Load JSON Payload modal (FieldMappingCanvasComponent.
+   *  onResetToOriginalPayload) — drops this resource's pasted-payload override so availableFields(r)
+   *  falls back through to the real backend catalog (or built-in defs) again, same as it would if this
+   *  resource had never had a payload loaded for it at all. This is the one thing the canvas itself can't
+   *  do (payloadFieldsByResource lives here, not on the canvas) — the canvas's own mapping-row clear
+   *  already happened by the time this fires. */
+  onSourcePayloadReset(resource: string): void {
+    this.payloadFieldsByResource.update((m) => {
+      const rest = { ...m };
+      delete rest[resource];
+      return rest;
+    });
+  }
+
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
   // Every schema-authoring action on the canvas is staged here instead of hitting the database the
   // moment the user clicks it — nothing real happens until "Add to Pipeline" flushes this queue (see
@@ -3933,10 +3947,22 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
+  /** Same precedence as availableFields() minus its FIRST branch — the real backend FHIR catalog (or the
+   *  built-in defs, until that catalog loads), never a pasted-payload override. This is "the true default
+   *  payload" the Load JSON Payload modal's "Reset to Original" restores back to: availableFields() alone
+   *  can't answer that question once ANY payload has ever been loaded for this resource (this session, or
+   *  restored from a previously-saved node/snapshot — payloadFieldsByResource isn't scoped to "pasted
+   *  just now"), since at that point it's permanently returning the override instead of the original. */
+  defaultAvailableFields(r: string): ResourceFieldDef[] {
+    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+  }
+
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
     this.availableFields(r);
+  readonly defaultAvailableFieldsFn = (r: string): ResourceFieldDef[] =>
+    this.defaultAvailableFields(r);
   readonly columnsForResourceTargetFn = (r: string): string[] =>
     this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (
