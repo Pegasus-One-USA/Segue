@@ -328,6 +328,45 @@ describe('applyMappingSummaryDocument (round-trip)', () => {
   });
 });
 
+// Save (build) -> reopen (apply) per destType — the exact round trip a user's browser session does when
+// they close and reopen a saved mapping. The summary document itself always stores bare table names
+// (bareName() at build time — see this file's own header comment); qualifyTableName re-qualifies them for
+// the destType the document was applied against. This is the fix for: reopening a PostgreSQL mapping
+// used to restore "Appointment" instead of "public.Appointment" (the old qualify() only ever added "dbo.").
+describe('applyMappingSummaryDocument — save/reopen per destType', () => {
+  function buildAndReapply(destType: 'sql' | 'postgres' | 'mysql', tableFullName: string) {
+    const sqlTables: DestinationTable[] = [{
+      schemaName: tableFullName.includes('.') ? tableFullName.split('.')[0] : '',
+      tableName: tableFullName.includes('.') ? tableFullName.split('.')[1] : tableFullName,
+      fullName: tableFullName, origin: 'probed',
+      columns: [{ name: 'Id', dataType: 'bigint', mappingValueType: 'int', isNullable: false, maxLength: null }],
+    }];
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.id', label: 'Id' }], mode: 'value', instance: { type: 'first' }, targetName: 'Id', tableName: tableFullName },
+    ];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType, destLabel: destType,
+      mappingRows: rows, sqlTables, childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    return applyMappingSummaryDocument(doc, destType);
+  }
+
+  it('PostgreSQL: save then reopen restores "public.Patient", not bare "Patient"', () => {
+    const applied = buildAndReapply('postgres', 'public.Patient');
+    expect(applied.targetByResource['Patient']).toBe('public.Patient');
+  });
+
+  it('MySQL: save then reopen restores bare "Patient" (no schema layer)', () => {
+    const applied = buildAndReapply('mysql', 'Patient');
+    expect(applied.targetByResource['Patient']).toBe('Patient');
+  });
+
+  it('SQL Server: save then reopen restores "dbo.Patient" unchanged (pre-existing behavior, not regressed)', () => {
+    const applied = buildAndReapply('sql', 'dbo.Patient');
+    expect(applied.targetByResource['Patient']).toBe('dbo.Patient');
+  });
+});
+
 describe('reference lookup (referencesResource)', () => {
   it('resolves a reference field against the OTHER resource\'s own table + id column, regardless of mapping order', () => {
     // Observation's PatientId field is mapped BEFORE Patient's own Id field — the lookup must still resolve
@@ -424,5 +463,49 @@ describe('pruneOrphanedMappingRows', () => {
     const pruned = pruneOrphanedMappingRows(rows, [tableWithNewColumn]);
 
     expect(pruned).toHaveSize(1);
+  });
+
+  it('never prunes against a table restored only from a saved Mapping JSON (no live probe) — the shared-CSV-table regression', () => {
+    // A single CSV output table two resources both write into. Restored via applyMappingSummaryDocument
+    // from a PREVIOUS save that only knew about Patient's own column — CSV has no live schema to probe at
+    // all (_refreshSqlTablesFromLiveSchema only ever runs for SQL-family destinations), so this table's
+    // origin is never 'probed', only 'userCreated' or undefined, regardless of how current the session is.
+    const sharedCsvTable: DestinationTable = {
+      schemaName: 'dbo', tableName: 'csv', fullName: 'csv', origin: 'userCreated',
+      columns: [
+        { name: 'Patient@now', dataType: 'string', mappingValueType: 'string', isNullable: true, maxLength: null },
+      ],
+    };
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.@now', label: 'now' }], mode: 'value', targetName: 'Patient@now', tableName: 'csv' },
+      // Just mapped THIS session, onto the same shared table — not yet reflected in sharedCsvTable.columns
+      // above (that snapshot predates this resource's own mapping) but a completely valid, current row.
+      { resource: 'Organization', sources: [{ fhirPath: 'Organization.@now', label: 'now' }], mode: 'value', targetName: 'Organization@now', tableName: 'csv' },
+    ];
+
+    const pruned = pruneOrphanedMappingRows(rows, [sharedCsvTable]);
+
+    expect(pruned).toHaveSize(2);
+    expect(pruned.map(r => r.resource)).toEqual(['Patient', 'Organization']);
+  });
+
+  it('still drops a genuinely orphaned column on a LIVE-probed table even when another resource shares it', () => {
+    // The authoritative case this fix must not weaken: once a shared table's columns actually come from a
+    // live probe, a target column that really isn't there anymore is still pruned, same as before.
+    const sharedProbedTable: DestinationTable = {
+      schemaName: 'dbo', tableName: 'Shared', fullName: 'dbo.Shared', origin: 'probed',
+      columns: [
+        { name: 'PatientField', dataType: 'nvarchar(50)', mappingValueType: 'string', isNullable: true, maxLength: null },
+      ],
+    };
+    const rows: MappingRow[] = [
+      { resource: 'Patient', sources: [{ fhirPath: 'Patient.a', label: 'a' }], mode: 'value', targetName: 'PatientField', tableName: 'dbo.Shared' },
+      { resource: 'Organization', sources: [{ fhirPath: 'Organization.a', label: 'a' }], mode: 'value', targetName: 'GoneField', tableName: 'dbo.Shared' },
+    ];
+
+    const pruned = pruneOrphanedMappingRows(rows, [sharedProbedTable]);
+
+    expect(pruned).toHaveSize(1);
+    expect(pruned[0].resource).toBe('Patient');
   });
 });

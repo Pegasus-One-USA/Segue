@@ -8,6 +8,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog } from '@angular/material/dialog';
 import { HttpErrorResponse } from '@angular/common/http';
 import { PasswordPolicyService } from '../../services/password-policy.service';
 import { PasswordValidation } from '../../models/password-policy.model';
@@ -16,6 +18,10 @@ import { SsoAuthApiService } from '../../services/sso-auth-api.service';
 import { SsoResult } from '../../services/sso.service';
 import { AuthBrandHeaderComponent } from '../../components/auth-brand-header/auth-brand-header.component';
 import { ToastService } from '../../../services/toast.service';
+import {
+  TermsAndConditionsDialogComponent,
+  TermsAndConditionsDialogResult,
+} from '../../../onboarding/components/terms-and-conditions-dialog/terms-and-conditions-dialog.component';
 
 export type PageState = 'loading' | 'valid' | 'invalid' | 'expired' | 'accepted' | 'success';
 
@@ -36,6 +42,7 @@ function matchPasswords(group: AbstractControl): ValidationErrors | null {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    MatCheckboxModule,
     SsoButtonsComponent,
     AuthBrandHeaderComponent,
   ],
@@ -49,6 +56,7 @@ export class SetPasswordComponent implements OnInit {
   private readonly policySvc  = inject(PasswordPolicyService);
   private readonly ssoApi     = inject(SsoAuthApiService);
   private readonly toast      = inject(ToastService);
+  private readonly dialog     = inject(MatDialog);
 
   protected readonly state      = signal<PageState>('loading');
   /** Email being activated, sourced from the invite link query param. */
@@ -63,6 +71,12 @@ export class SetPasswordComponent implements OnInit {
   /** Accept-invite method toggle: password (default) vs single sign-on. */
   protected readonly method = signal<'password' | 'sso'>('password');
   protected readonly ssoBusy = signal(false);
+
+  // Applies to BOTH activation methods (password and SSO) — a plain signal rather than a control
+  // inside `form`, since the SSO path never touches that FormGroup at all. Starts unchecked and
+  // unlockable only once openTermsDialog() reports the reader scrolled the full document.
+  protected readonly acceptTermsChecked = signal(false);
+  protected readonly termsReadToEnd = signal(false);
 
   private token = '';
 
@@ -90,7 +104,7 @@ export class SetPasswordComponent implements OnInit {
   );
 
   protected readonly canSubmit = computed(() =>
-    this.pwValidation().allMet && this.passwordsMatch()
+    this.pwValidation().allMet && this.passwordsMatch() && this.acceptTermsChecked()
   );
 
   ngOnInit(): void {
@@ -117,14 +131,26 @@ export class SetPasswordComponent implements OnInit {
     this.method.set(m);
   }
 
+  protected openTermsDialog(): void {
+    this.dialog
+      .open<TermsAndConditionsDialogComponent, void, TermsAndConditionsDialogResult>(
+        TermsAndConditionsDialogComponent, { autoFocus: false, restoreFocus: true })
+      .afterClosed()
+      .subscribe((result) => {
+        if (result?.readToEnd) {
+          this.termsReadToEnd.set(true);
+        }
+      });
+  }
+
   // ─── SSO accept-invite ──────────────────────────────────────────────────────
   protected onSsoAuthenticated(result: SsoResult): void {
     const email = this.email();
-    if (!email || !this.token) return;
+    if (!email || !this.token || !this.acceptTermsChecked()) return;
     this.serverError.set('');
     this.ssoBusy.set(true);
     // SsoAuthApiService.establishSession stores tokens + populates AuthStore on success.
-    this.ssoApi.acceptInviteViaSso(email, this.token, result.provider, result.token).subscribe({
+    this.ssoApi.acceptInviteViaSso(email, this.token, result.provider, result.token, this.acceptTermsChecked()).subscribe({
       next: () => {
         this.ssoBusy.set(false);
         this.router.navigate(['/dashboard']);
@@ -152,7 +178,7 @@ export class SetPasswordComponent implements OnInit {
     const { password } = this.form.getRawValue();
     this.isLoading.set(true);
 
-    this.ssoApi.acceptInvite(this.email(), this.token, password).subscribe({
+    this.ssoApi.acceptInvite(this.email(), this.token, password, this.acceptTermsChecked()).subscribe({
       next: () => {
         this.isLoading.set(false);
         this.state.set('success');

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 
@@ -133,7 +134,13 @@ public sealed class ArrayListOperationsNode : ITransformNode
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
-        var items = value.AsItems().ToList();
+        // A field mapped with ArrayPolicy.StoreJson arrives here as a single JSON-encoded string (e.g.
+        // `["a","b","c"]`), not a real collection — AsItems() correctly treats a plain string as one opaque
+        // item (so a genuine scalar string isn't accidentally split into characters), which otherwise makes
+        // every operation here see "one item" (the whole JSON blob) instead of the real array. Unwrap a
+        // JSON-array-shaped string into real items first; anything that isn't valid JSON array syntax falls
+        // through to the normal single-item behavior unchanged.
+        var items = TryUnwrapJsonArrayString(value, out var unwrapped) ? unwrapped : value.AsItems().ToList();
 
         return config.Get("operation", "first") switch
         {
@@ -146,6 +153,33 @@ public sealed class ArrayListOperationsNode : ITransformNode
             "flatten" => TransformResult.Ok(Flatten(items).ToArray()),
             _ => TransformResult.Ok(items.Count > 0 ? items[0] : null)
         };
+    }
+
+    private static bool TryUnwrapJsonArrayString(object? value, out List<object?> items)
+    {
+        items = [];
+        if (value is not string s || !s.TrimStart().StartsWith('['))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(s);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            items = doc.RootElement.EnumerateArray()
+                .Select(element => (object?)(element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString()))
+                .ToList();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static object? TryNth(IReadOnlyList<object?> items, int index) =>

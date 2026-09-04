@@ -15,9 +15,6 @@
         }
       </p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="dialogRef.close(false)">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <!-- Form -->
@@ -114,9 +111,6 @@
   <!-- Actions -->
   <mat-dialog-actions>
     <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">
-        Cancel
-      </button>
       <button
         mat-flat-button
         class="btn-save"
@@ -125,10 +119,8 @@
       >
         @if (saving()) {
           <mat-spinner diameter="16"></mat-spinner>
-        } @else {
-          <mat-icon>{{ isEdit ? 'save' : 'add' }}</mat-icon>
         }
-        {{ isEdit ? 'Save' : 'Add Setting' }}
+        {{ isEdit ? 'Update' : 'Save' }}
       </button>
     </div>
   </mat-dialog-actions>

@@ -1,0 +1,164 @@
+:host { display: block; }
+
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
+// ─── Header ────────────────────────────────────────────────────────────────────
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  // Extra right padding clears app-dialog-shell's own floating ×/maximize chrome (absolutely
+  // positioned over this dialog's top-right corner — see dialog-shell.component.scss), which
+  // replaced this header's own × button now that every dialog gets one from the shell instead.
+  padding: 20px 48px 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    mat-icon {
+      color: var(--color-primary);
+      font-size: 22px;
+      height: 22px;
+      width: 22px;
+    }
+  }
+
+  &__text {
+    flex: 1;
+
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-ink);
+      margin: 0 0 2px;
+      padding: 0;
+    }
+
+    p {
+      font-size: 13px;
+      color: var(--color-muted);
+      margin: 0;
+    }
+  }
+}
+
+// ─── Content ───────────────────────────────────────────────────────────────────
+// Targets Material's own generated class (not the plain `mat-dialog-content` element
+// selector) — a single-class selector matches Material's own `.mat-mdc-dialog-content`
+// rule's specificity without needing the forced-priority escape hatch.
+.dialog-container .mat-mdc-dialog-content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+// Mirrors role-dialog.component.scss's identical notice banner (component styles don't leak across
+// components, so this is duplicated rather than shared — same as that file's own copy of the pattern).
+.no-tenant-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  font-size: 13px;
+  color: #92400E;
+  margin-bottom: 12px;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+
+  &.error-notice {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #991B1B;
+
+    mat-icon { color: #DC2626; }
+  }
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field {
+  width: 100%;
+
+  ::ng-deep {
+    .mat-mdc-text-field-wrapper {
+      border-radius: var(--radius-base);
+    }
+  }
+}
+
+// ─── Actions ───────────────────────────────────────────────────────────────────
+.dialog-container .mat-mdc-dialog-actions {
+  padding: 16px 24px;
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+// Two classes (.dialog-actions .btn-cancel) beat Material's own two-class internal
+// rules (e.g. .mat-mdc-button.mdc-button) without the forced-priority escape hatch.
+.dialog-actions .btn-cancel {
+  border-color: var(--color-border);
+  color: var(--color-ink-2);
+  border-radius: var(--radius-base);
+  font-weight: 500;
+  height: 40px;
+
+  &:hover {
+    background: var(--color-bg);
+    border-color: var(--color-muted);
+  }
+}
+
+.dialog-actions .btn-save {
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-base);
+  font-weight: 600;
+  height: 40px;
+  min-width: 130px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  --mat-flat-button-hover-state-layer-opacity: 0;
+  --mat-flat-button-focus-state-layer-opacity: 0;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+
+  &:hover:not([disabled]) { background: var(--color-primary-dark); }
+
+  ::ng-deep .mat-mdc-button-persistent-ripple::before { opacity: 0; }
+}

@@ -2102,6 +2102,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<int>("ExtractedCount")
                         .HasColumnType("integer");
 
@@ -2849,6 +2853,45 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .IsUnique();
 
                     b.ToTable("CvxVersions", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.HapiTerminologyImportHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeSystem")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("CompletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ImportedConceptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeSystem", "StartedOnUtc");
+
+                    b.ToTable("HapiTerminologyImportHistory", "terminology");
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.HcpcsCode", b =>
@@ -3920,6 +3963,91 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("SnomedVersions", "terminology");
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmCodeSystem", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<string>("CodeSystemUri")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CsName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long?>("CurrentVersionPid")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeSystemUri")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CODESYSTEM", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmCodeSystemVer", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<long>("CodeSystemPid")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CsDisplay")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CsVersionId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeSystemPid", "CsVersionId")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CODESYSTEM_VER", "terminology");
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.TrmConcept", b =>
+                {
+                    b.Property<long>("Pid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Pid"));
+
+                    b.Property<long>("CodeSystemPid")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CodeVal")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Display")
+                        .HasColumnType("text");
+
+                    b.HasKey("Pid");
+
+                    b.HasIndex("CodeVal");
+
+                    b.HasIndex("CodeSystemPid", "CodeVal")
+                        .IsUnique();
+
+                    b.ToTable("TRM_CONCEPT", "terminology");
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Terminology.UcumImportHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4975,6 +5103,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");

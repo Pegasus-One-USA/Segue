@@ -36,8 +36,31 @@ interface KeyValueRow {
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
     <div class="rule-config-form">
-      @for (field of orderedFields(); track field.key) {
-        @switch (field.inputKind) {
+      @for (field of primaryFields(); track field.key) {
+        <ng-container *ngTemplateOutlet="fieldControl; context: { $implicit: field }" />
+      }
+
+      @if (advancedFields().length > 0) {
+        <button type="button" class="advanced-toggle" (click)="toggleAdvanced()" [attr.aria-expanded]="advancedOpen">
+          <mat-icon>{{ advancedOpen ? 'expand_less' : 'chevron_right' }}</mat-icon>
+          Advanced Options ({{ advancedFields().length }})
+        </button>
+        @if (advancedOpen) {
+          <div class="advanced-fields">
+            @for (field of advancedFields(); track field.key) {
+              <ng-container *ngTemplateOutlet="fieldControl; context: { $implicit: field }" />
+            }
+          </div>
+        }
+      }
+
+      @if (!schema || schema.fields.length === 0) {
+        <p class="no-config">This node type needs no configuration.</p>
+      }
+    </div>
+
+    <ng-template #fieldControl let-field>
+      @switch (field.inputKind) {
           @case ('number') {
             <div class="config-control">
               <label [for]="'rcf-' + field.key">{{ field.label }}</label>
@@ -124,11 +147,7 @@ interface KeyValueRow {
             </div>
           }
         }
-      }
-      @if (!schema || schema.fields.length === 0) {
-        <p class="no-config">This node type needs no configuration.</p>
-      }
-    </div>
+    </ng-template>
   `,
   styleUrls: ['./rule-config-form.component.scss'],
 })
@@ -152,18 +171,41 @@ export class RuleConfigFormComponent {
   // (a new step/rule), not persisted, since applyNodeDefaults() already establishes the right starting mode.
   private readonly forcedCustomKeys = new Set<string>();
 
-  /** Checkbox fields always render last, after every text/select field — a lone toggle reads better as a
-   *  trailing "also do this" option than sitting wherever the schema happened to declare it. Reordering
-   *  the actual array (not a CSS order: override) keeps DOM/tab order in sync with visual order. */
-  orderedFields(): TransformConfigFieldSchema[] {
-    const fields = this.schema?.fields ?? [];
+  /** Starts collapsed every time — a fresh component instance per step/rule (same reasoning as
+   *  forcedCustomKeys below), so there's no stale "left open" state to restore between different rules. */
+  advancedOpen = false;
+
+  toggleAdvanced(): void {
+    this.advancedOpen = !this.advancedOpen;
+  }
+
+  /** Checkbox fields always render last, after every text/select field within whichever group (primary or
+   *  advanced) they belong to — a lone toggle reads better as a trailing "also do this" option than sitting
+   *  wherever the schema happened to declare it. Reordering the actual array (not a CSS order: override)
+   *  keeps DOM/tab order in sync with visual order. */
+  private ordered(fields: TransformConfigFieldSchema[]): TransformConfigFieldSchema[] {
     const rest = fields.filter(f => f.inputKind !== 'checkbox');
     const checkboxes = fields.filter(f => f.inputKind === 'checkbox');
     return [...rest, ...checkboxes];
   }
 
-  setValue(key: string, value: string): void {
-    this.config[key] = value;
+  /** Everything the schema doesn't mark isAdvanced — shown up front, no extra click needed. */
+  primaryFields(): TransformConfigFieldSchema[] {
+    return this.ordered((this.schema?.fields ?? []).filter(f => !f.isAdvanced));
+  }
+
+  /** Fine-tuning/edge-case fields (see TransformConfigFieldSchema.isAdvanced) — tucked behind the
+   *  "Advanced Options" toggle so the primary form stays short for the common case. */
+  advancedFields(): TransformConfigFieldSchema[] {
+    return this.ordered((this.schema?.fields ?? []).filter(f => f.isAdvanced));
+  }
+
+  setValue(key: string, value: string | number | null): void {
+    // A type="number" input's ngModelChange fires a real JS number (Angular's NumberValueAccessor), not a
+    // string — but `config` is a Record<string,string> serialized straight into the save request, so an
+    // un-stringified number goes out as a bare JSON number and the API rejects it (config must bind as
+    // Dictionary<string,string>). Coerce everything through this one path instead of trusting the caller.
+    this.config[key] = value === null || value === undefined ? '' : String(value);
   }
 
   /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current

@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,16 +43,30 @@ public sealed class MappingController : ControllerBase
 
     // Deliberately still backed by the generic catalog only, even for Epic sources: this is the
     // resource-TYPE picker (Patient, Condition, ...), and only Patient has an Epic-specific catalog so
-    // far (see fhir-r4-catalog.epic.json). Making this vendor-aware today would narrow an Epic source's
-    // resource picker down to just "Patient" until every resource gets its own Epic template — a
-    // regression versus what it shows now. Field-level lookup (below) is the one that's vendor-aware,
-    // with a fallback to generic per resource type, so this can follow once more resources are converted.
+    // far (see fhir-r4-catalog.epic.json). Making this vendor-aware for field CATALOG selection today
+    // would narrow an Epic source's resource picker down to just "Patient" until every resource gets its
+    // own Epic template — a regression versus what it shows now. Field-level lookup (below) is the one
+    // that's vendor-aware, with a fallback to generic per resource type, so this can follow once more
+    // resources are converted.
+    //
+    // The optional `vendor` query param is a different, narrower concern: which of these resource TYPES
+    // a vendor's live FHIR server is actually known to support at all (VendorResourceTypeSupport), not
+    // which have a richer field catalog. A vendor absent from that list (Epic included) gets no filter —
+    // same full response as before this param existed.
     [HttpGet("catalog/resources")]
     [Authorize(Policy = AuthorizationPolicies.MappingCatalogAccess)]
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
-    public IActionResult GetCatalogResources()
+    public IActionResult GetCatalogResources([FromQuery] string? vendor)
     {
-        return Ok(_genericCatalog.ResourceTypes);
+        var supported = VendorResourceTypeSupport.For(vendor);
+        if (supported is null)
+        {
+            return Ok(_genericCatalog.ResourceTypes);
+        }
+
+        var supportedSet = new HashSet<string>(supported, StringComparer.OrdinalIgnoreCase);
+        var filtered = _genericCatalog.ResourceTypes.Where(supportedSet.Contains).ToList();
+        return Ok(filtered);
     }
 
     /// <summary>

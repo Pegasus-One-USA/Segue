@@ -397,10 +397,6 @@
 .col-menu  { width: 44px; text-align: center; }
 .col-num   { width: 80px; text-align: center; }
 td.col-num { text-align: center; color: var(--color-ink-2); }
-// Was 340px to fit 6 individual icon buttons (Edit/Enable/Public/Duplicate/Copy ID/Delete) side by
-// side — now that those 5 live inside the "more actions" (⋮) menu (moved to the first column, .col-menu),
-// this only needs to fit the Run button, so the old width just left a large empty gutter on the right.
-.col-actions { width: 90px; }
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 .name-block { display: flex; flex-direction: column; gap: 2px; }
@@ -414,28 +410,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 .error-reference-link { font-family: monospace; font-size: 11px; color: var(--color-primary); text-decoration: none; }
 .error-reference-link:hover { text-decoration: underline; }
 
-// Enabled / disabled pill
-.pill {
-  display: inline-flex; align-items: center;
-  padding: 3px 10px; border-radius: var(--radius-pill);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
-
-  &.pill-on  { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &.pill-off { background: var(--color-side); color: var(--color-muted); }
-}
-
-// Run-status badge
-.status-badge {
-  display: inline-flex; align-items: center;
-  padding: 2px 9px; border-radius: var(--radius-pill);
-  font-size: 11.5px; font-weight: 600; white-space: nowrap;
-
-  &.status-completed { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &.status-running   { background: var(--color-info-soft); color: var(--color-info-strong); }
-  &.status-failed    { background: var(--color-error-soft); color: var(--color-error-strong); }
-  &.status-none      { background: var(--color-side); color: var(--color-muted); }
-}
-
 // Source tag
 .tag {
   display: inline-flex; align-items: center;
@@ -445,85 +419,19 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   border: 1px solid var(--color-border);
 }
 
-// ── Buttons ─────────────────────────────────────────────────────────────────
-// nowrap: the actions cell must never wrap onto a second line — .table-wrapper
-// already scrolls horizontally (see above) if a viewport is ever too narrow to
-// fit it, so wrapping here only ever produced an inconsistent, fragile layout.
-.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
-
 // ── Row "more actions" menu ───────────────────────────────────────────────────
-// Same look as .filter-dropdown-panel above, but position: fixed with top/right set inline from
-// toggleActionMenu's getBoundingClientRect() call, not position: absolute + static offsets. This row
-// sits inside .table-wrapper, whose overflow-x: auto silently forces its overflow-y to auto too (an
-// ancestor can't have overflow-x auto and overflow-y visible at once — the CSS spec coerces the
-// visible axis to auto) — an absolutely-positioned panel here would get clipped to almost nothing the
-// moment it needs to extend below the table's own visible bounds, since it never escapes the nearest
-// positioned ancestor. Fixed positioning is viewport-relative and escapes that clipping entirely.
-.row-menu { position: relative; }
+// A real mat-menu (CDK overlay) now backs the kebab trigger — see .btn-more below for the trigger's
+// own styling; menu-item styling comes from Angular Material + the global .menu-item-danger override
+// in styles.scss, so no local row-menu-* rules are needed anymore.
+.btn-more {
+  --mat-icon-button-state-layer-size: 32px;
+  color:      var(--color-muted) !important;
+  transition: background var(--transition-base), color var(--transition-base) !important;
 
-.row-menu-panel {
-  position: fixed;
-  z-index: 20;
-  min-width: 240px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-base);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-}
-
-.row-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-ink);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-
-  mat-icon { flex-shrink: 0; font-size: 18px; width: 18px; height: 18px; color: var(--color-muted); }
-
-  &:hover:not(:disabled) { background: var(--color-side); }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  &--danger {
-    color: var(--color-error);
-    mat-icon { color: var(--color-error); }
-    &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+  &:hover {
+    background: var(--color-side) !important;
+    color:      var(--color-ink) !important;
   }
-}
-
-.row-menu-divider { height: 1px; background: var(--color-border); margin: 4px 2px; }
-
-.btn-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  // The browser's native <button> padding was never reset here — combined with the fixed 32px box
-  // and border, it left too little room to center an 18px icon, so it rendered off-center. Zeroed so
-  // flexbox centering has the full box (minus border) to work with.
-  width: 32px; height: 32px; padding: 0;
-  // §5 table action buttons use the sm (6px) radius, not the general button base radius.
-  border: 1.5px solid var(--color-border); border-radius: var(--radius-sm);
-  background: transparent; color: var(--color-ink-2);
-  line-height: 1; cursor: pointer;
-  transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base);
-
-  mat-icon { width: 18px; height: 18px; font-size: 18px; }
-
-  &:hover:not(:disabled) { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
-  &:disabled { opacity: 0.45; cursor: not-allowed; }
-
-  &--danger:hover:not(:disabled) { border-color: var(--color-error); background: var(--color-error-soft); color: var(--color-error-strong); }
-  &--active { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-dark); }
 }
 
 .btn-danger {
@@ -550,11 +458,6 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   &:hover:not(:disabled) { filter: brightness(0.95); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
-
-// min-width matches the widest label this slot ever renders ("Get Launch URL") so the divider and icon buttons
-// that follow always start at the same x position, whether this row shows that button or the shorter "Run" one
-// — without this the whole action row shifts left/right per row.
-.split-btn { position: relative; display: inline-flex; min-width: 103px; }
 
 // Page-level primary CTA ("New Workflow") — deliberately distinct from .btn-primary above, which is the row
 // action button (soft-info by default, teal only for its .is-launch modifier). This is the one true teal
@@ -628,7 +531,7 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 // ── Modal ───────────────────────────────────────────────────────────────────
 .modal-overlay {
-  position: fixed; inset: 0; z-index: var(--z-modal, 200);
+  position: absolute; inset: 0; z-index: var(--z-modal, 200);
   background: rgba(15, 23, 42, 0.55);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;

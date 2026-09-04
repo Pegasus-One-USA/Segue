@@ -42,6 +42,19 @@ public sealed class AllowedCorsOriginsController : ControllerBase
         return CreatedAtAction(nameof(GetAll), origin);
     }
 
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(AllowedCorsOriginDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] UpdateAllowedCorsOriginRequest request,
+        CancellationToken cancellationToken)
+    {
+        var origin = await _service.UpdateAsync(id, request, cancellationToken);
+
+        return Ok(origin);
+    }
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

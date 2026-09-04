@@ -11,9 +11,20 @@ namespace FHIRBridge.Runtime.Application.Workflows;
 /// </summary>
 public interface IWorkflowRunTracker
 {
-    void MarkRunning(Guid workflowRunId);
+    /// <summary>Registers a tracked in-flight run along with the <see cref="CancellationTokenSource"/> its
+    /// execution was started with — the same source <see cref="RequestCancellation"/> later signals, and the
+    /// only handle to it (the caller runs detached, via Task.Run, so nothing else holds a reference).</summary>
+    void MarkRunning(Guid workflowRunId, CancellationTokenSource cancellationSource);
 
+    /// <summary>Also disposes the run's <see cref="CancellationTokenSource"/> — safe to call whether or not
+    /// cancellation was ever requested.</summary>
     void MarkComplete(Guid workflowRunId);
 
     bool IsRunning(Guid workflowRunId);
+
+    /// <summary>Signals the tracked run's <see cref="CancellationTokenSource"/> so the orchestrator's between-node
+    /// check (see RankedWorkflowOrchestrator.RunNodesAsync) stops it after the currently in-flight node finishes.
+    /// Returns false if <paramref name="workflowRunId"/> isn't currently tracked as running — already completed,
+    /// or never started as a cancellable async run in the first place.</summary>
+    bool RequestCancellation(Guid workflowRunId);
 }

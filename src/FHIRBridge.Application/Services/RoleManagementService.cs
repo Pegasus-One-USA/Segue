@@ -42,6 +42,29 @@ public sealed class RoleManagementService : IRoleManagementService
         return dtos;
     }
 
+    public async Task<PagedResult<RoleDto>> GetPagedRolesAsync(
+        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var dtos = await GetRolesAsync(cancellationToken);
+
+        IEnumerable<RoleDto> query = string.IsNullOrWhiteSpace(search)
+            ? dtos
+            : dtos.Where(r =>
+                r.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                r.Description.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        query = sortDescending switch
+        {
+            true => query.OrderByDescending(r => r.ModifiedOnUtc ?? r.CreatedOnUtc),
+            false => query.OrderBy(r => r.ModifiedOnUtc ?? r.CreatedOnUtc),
+            null => query.OrderBy(r => r.Name),
+        };
+
+        var all = query.ToArray();
+        var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        return new PagedResult<RoleDto>(items, all.Length, page, pageSize);
+    }
+
     public async Task<RoleDto> GetRoleByIdAsync(Guid roleId, CancellationToken cancellationToken)
     {
         var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
@@ -121,7 +144,26 @@ public sealed class RoleManagementService : IRoleManagementService
 
         if (role.IsSystem)
         {
-            throw new InvalidOperationException("System roles cannot be modified.");
+            // SuperAdmin's grant is always "every permission that exists" (see
+            // SystemRoleDefaultPermissions) — immutable in both name/description and permissions.
+            if (role.Id == SeededSecurityIds.SuperAdminRoleId)
+            {
+                throw new InvalidOperationException("System roles cannot be modified.");
+            }
+
+            // The other built-in roles (Admin, Operations, Audit) keep their name/description fixed —
+            // same as SuperAdmin — but a SuperAdmin CAN edit their permission grants via the Role
+            // Permissions screen, which always resends the role's own name/description unchanged (see
+            // role-permissions.component.ts's save()). A real rename/re-describe attempt on one of
+            // these still isn't allowed here; that stays the role dialog's own separate concern.
+            if (!string.Equals(role.Name, request.Name.Trim(), StringComparison.Ordinal) ||
+                !string.Equals(role.Description, request.Description.Trim(), StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("System roles' name and description cannot be modified.");
+            }
+
+            await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
+            return await ToDtoAsync(role, cancellationToken);
         }
 
         var duplicate = await _repository.GetRoleByNameAsync(request.Name.Trim(), cancellationToken);

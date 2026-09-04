@@ -1,0 +1,56 @@
+<div class="gsg-dialog" [formGroup]="form">
+
+  <div class="gsg-header">
+    <h2>Edit {{ data.label }} Settings</h2>
+    <p>Every setting in this group, saved together in one update.</p>
+  </div>
+
+  <div class="gsg-body">
+
+    @if (errorMessage()) {
+      <div class="gsg-notice">{{ errorMessage() }}</div>
+    }
+
+    @for (field of fields; track field.setting.key) {
+      <div class="gsg-field" [class.gsg-field--toggle]="field.descriptor.kind === 'toggle'">
+        @switch (field.descriptor.kind) {
+          @case ('toggle') {
+            <label class="gsg-toggle">
+              <input type="checkbox" [formControlName]="field.setting.key" />
+              <span class="gsg-toggle-track"><span class="gsg-toggle-thumb"></span></span>
+              <span class="gsg-field-label">{{ field.setting.key }}</span>
+            </label>
+          }
+          @case ('frequency') {
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <select class="gsg-input" [id]="field.setting.key" [formControlName]="field.setting.key">
+              @for (option of field.descriptor.options; track option) {
+                <option [value]="option">{{ option }}</option>
+              }
+            </select>
+          }
+          @case ('time') {
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <input class="gsg-input" type="time" [id]="field.setting.key" [formControlName]="field.setting.key" />
+          }
+          @default {
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <input class="gsg-input" type="text" [id]="field.setting.key" [formControlName]="field.setting.key" autocomplete="off" />
+          }
+        }
+        @if (field.setting.description) {
+          <p class="gsg-field-hint">{{ field.setting.description }}</p>
+        }
+      </div>
+    }
+
+  </div>
+
+  <div class="gsg-actions">
+    <button class="gsg-btn-cancel" type="button" (click)="dialogRef.close(false)">Cancel</button>
+    <button class="gsg-btn-save" type="button" [disabled]="saving()" (click)="save()">
+      {{ saving() ? 'Saving…' : 'Update' }}
+    </button>
+  </div>
+
+</div>

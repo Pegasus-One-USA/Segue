@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using Microsoft.VisualBasic.FileIO;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
@@ -18,38 +17,37 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Parses LoincTable/Loinc.csv the same way LoincSynchronizationService does: code = LOINC_NUM,
 /// display = LONG_COMMON_NAME (falling back to SHORTNAME), status = STATUS ("DEPRECATED" excluded).
 /// </summary>
-public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncService
+public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncService, IHapiVersionCheckable
 {
     private const string SystemUrl = "http://loinc.org";
-    private const string ResourceId = "loinc-full";
 
     private readonly ILoincReleaseClient _releaseClient;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiLoincTerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiLoincTerminologySyncService(
         ILoincReleaseClient releaseClient,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiLoincTerminologySyncService> logger)
+        ILogger<HapiLoincTerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiLoincSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Checking the current official LOINC release.");
         var release = await _releaseClient.GetCurrentReleaseAsync(cancellationToken);
@@ -59,18 +57,8 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
 
         var concepts = ParseLoincCsv(zipPath);
         _logger.LogInformation("Parsed {Total} LOINC codes from release {Version}.", concepts.Count, release.Version);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
-        var resource = BuildCodeSystemResource(concepts, release.Version);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "LOINC", release.Version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -78,6 +66,14 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
             release.Version, concepts.Count, stopwatch.Elapsed);
 
         return new HapiLoincSyncResult(release.Version, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Exact match: the same field this service passes to WriteConceptsAsync as the stored
+    /// version — LOINC's Download API reports it directly, no downstream re-extraction needed.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(cancellationToken);
+        return release.Version;
     }
 
     private static IReadOnlyList<Concept> ParseLoincCsv(string zipPath)
@@ -129,23 +125,6 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
         }
 
         return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "LOINC",
-            title = $"LOINC {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

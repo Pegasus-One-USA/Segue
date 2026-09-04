@@ -1,0 +1,266 @@
+<title>__PAGE_TITLE__</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f4f6f5; --surface:#ffffff; --surface-2:#eef2f1; --border:#dde3e1;
+    --ink:#111a18; --ink-2:#4b5a56; --ink-3:#7c8a86;
+    --accent:#00847a; --accent-ink:#00473f; --accent-soft:#e2f3f0;
+    --deid:#b8481c; --deid-soft:#fdece3;
+    --term:#5b4ba8; --term-soft:#eeeafb;
+    --field-badge:#0f6e64; --rtype-badge:#8a6d1f; --rtype-soft:#faf3df;
+    --offline-badge:#9c5b13; --offline-soft:#fdf1de;
+    --good:#0f7a3d; --good-soft:#e5f6ea;
+    --shadow: 0 1px 2px rgba(15,30,27,0.06), 0 8px 24px -12px rgba(15,30,27,0.18);
+    --row-hover:#f2f7f6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0d1412; --surface:#141e1b; --surface-2:#1a2521; --border:#26332f;
+      --ink:#eef3f1; --ink-2:#aebcb7; --ink-3:#7d8b86;
+      --accent:#3ecab8; --accent-ink:#bdf3ea; --accent-soft:#132a26;
+      --deid:#ff9066; --deid-soft:#2a1a12;
+      --term:#b3a4f5; --term-soft:#221c3a;
+      --field-badge:#3ecab8; --rtype-badge:#e0bf5f; --rtype-soft:#2a230f;
+      --offline-badge:#e0a75f; --offline-soft:#2a2110;
+      --good:#57d98a; --good-soft:#123322;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+      --row-hover:#182421;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1412; --surface:#141e1b; --surface-2:#1a2521; --border:#26332f;
+    --ink:#eef3f1; --ink-2:#aebcb7; --ink-3:#7d8b86;
+    --accent:#3ecab8; --accent-ink:#bdf3ea; --accent-soft:#132a26;
+    --deid:#ff9066; --deid-soft:#2a1a12;
+    --term:#b3a4f5; --term-soft:#221c3a;
+    --field-badge:#3ecab8; --rtype-badge:#e0bf5f; --rtype-soft:#2a230f;
+    --offline-badge:#e0a75f; --offline-soft:#2a2110;
+    --good:#57d98a; --good-soft:#123322;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    --row-hover:#182421;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",-apple-system,"Segoe UI",sans-serif;line-height:1.5;}
+  .wrap{max-width:1280px;margin:0 auto;padding:44px 26px 90px;}
+  header.hero{display:flex;flex-direction:column;gap:12px;padding-bottom:26px;margin-bottom:28px;border-bottom:1px solid var(--border);}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;}
+  h1{font-size:clamp(26px,3.6vw,36px);margin:0;font-weight:800;letter-spacing:-0.02em;text-wrap:balance;}
+  .hero-sub{color:var(--ink-2);font-size:15px;max-width:76ch;margin:0;}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:4px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);}
+  .hero-meta b{color:var(--ink-2);font-weight:600;}
+
+  .checklist{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:28px;}
+  .check{background:var(--good-soft);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--ink-2);display:flex;gap:8px;align-items:flex-start;}
+  .check .mark{color:var(--good);font-weight:700;flex-shrink:0;}
+  .check b{color:var(--ink);}
+
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:30px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat .n{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:24px;color:var(--ink);font-variant-numeric:tabular-nums;display:block;}
+  .stat .l{font-size:12px;color:var(--ink-2);margin-top:2px;}
+
+  .callout{background:var(--offline-soft);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13.5px;color:var(--ink-2);margin-bottom:28px;}
+  .callout b{color:var(--ink);}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;}
+  .toolbar input[type=search]{
+    flex:1;min-width:220px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink);font-family:"Public Sans",sans-serif;font-size:14px;
+  }
+  .toolbar select{padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13.5px;}
+  .toolbar .count{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-3);white-space:nowrap;}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow);}
+  table.rules{width:100%;border-collapse:collapse;font-size:13px;min-width:900px;}
+  table.rules thead th{
+    position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.05em;color:var(--ink-3);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--border);
+  }
+  table.rules td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  table.rules tbody tr:hover{background:var(--row-hover);}
+  table.rules tbody tr:last-child td{border-bottom:none;}
+  .rt{font-weight:600;}
+  .badge{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:5px;white-space:nowrap;display:inline-block;}
+  .badge.field{background:var(--accent-soft);color:var(--field-badge);}
+  .badge.rtype{background:var(--rtype-soft);color:var(--rtype-badge);}
+  .badge.offline{background:var(--offline-soft);color:var(--offline-badge);margin-left:6px;}
+  .rule-name{font-weight:500;}
+  .val{font-family:"IBM Plex Mono",monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;max-width:280px;}
+  .val.before{color:var(--ink-2);}
+  .val.after{color:var(--ink);font-weight:500;}
+  .arrow{color:var(--ink-3);padding:0 4px;}
+  .empty-hint{padding:30px;text-align:center;color:var(--ink-3);font-size:14px;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;font-size:12.5px;color:var(--ink-2);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:9px;height:9px;border-radius:3px;display:inline-block;}
+
+  section.block{margin:44px 0;}
+  .block-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap;}
+  .block-head h2{font-size:19px;margin:0;font-weight:700;letter-spacing:-0.01em;}
+  .block-head .count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-3);}
+  .block-desc{color:var(--ink-2);font-size:13.5px;margin:0 0 16px;max-width:78ch;}
+
+  table.deid-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.deid-table thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700;padding:0 10px 8px;border-bottom:1px solid var(--border);}
+  table.deid-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  table.deid-table tr:last-child td{border-bottom:none;}
+  .op-pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--deid-soft);color:var(--deid);}
+  .deid-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow);}
+  .mono{font-family:"IBM Plex Mono",monospace;font-size:12.5px;}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-3);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  @media (max-width:560px){ .wrap{padding:30px 14px 60px;} }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Field-Lineage-Style Rule Report &middot; FHIRBridge</span>
+    <h1>__WORKFLOW_NAME__</h1>
+    <p class="hero-sub">__HERO_SUBTITLE__</p>
+    <div class="hero-meta">
+      <span><b>Workflow</b> __WORKFLOW_NAME__</span>
+      <span><b>ID</b> __WORKFLOW_ID__</span>
+      <span><b>Ingestion</b> retrievalMethod: search-rest</span>
+      <span><b>Nodes</b> __SOURCE_VENDOR__Source &rarr; DeIdentification &rarr; FieldMapping &rarr; __DESTINATION_TYPE__Destination</span>
+    </div>
+  </header>
+
+  <!-- Fill this checklist from the actual step-5 verification results — do not mark a check
+       green unless you actually re-GET'd and confirmed it this run. -->
+  <div class="checklist">
+    <div class="check"><span class="mark">&#10003;</span><span><b>Mapping reflects correctly</b> &mdash; re-GET of the workflow shows all mappingProfileIds wired into the Field Mapping node.</span></div>
+    <div class="check"><span class="mark">&#10003;</span><span><b>Resource Type persists</b> &mdash; each mapping profile re-GET individually confirms its resourceType.</span></div>
+    <div class="check"><span class="mark">&#10003;</span><span><b>Connection settings saved</b> &mdash; destination list shows full connectionMetadataJson + secret reference, independent of the template's.</span></div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><span class="n">__RULE_COUNT__</span><span class="l">rules, real before/after</span></div>
+    <div class="stat"><span class="n">__RESOURCE_COVERAGE__</span><span class="l">resource types covered</span></div>
+    <div class="stat"><span class="n">__LIVE_COUNT__</span><span class="l">live-executed via /preview</span></div>
+    <div class="stat"><span class="n">__OFFLINE_COUNT__</span><span class="l">computed offline (see note)</span></div>
+    <div class="stat"><span class="n">9</span><span class="l">de-identification actions</span></div>
+  </div>
+
+  <div class="callout">
+    <b>Known preview-endpoint limitation:</b> FHIRBridge's <span class="mono">/api/v1/transformation-rules/preview</span> endpoint takes <span class="mono">sampleValue</span> as a bare <span class="mono">object?</span>. System.Text.Json deserializes a JSON array into that slot as a single boxed <span class="mono">JsonElement</span>, which is not <span class="mono">IEnumerable</span> &mdash; so <span class="mono">TransformConfigExtensions.AsItems()</span> treats the whole array as one item instead of enumerating it. <span class="mono">ConcatenationTemplating</span> and <span class="mono">ArrayListOperations</span> previews on array-shaped input silently no-op (output = input, unjoined) as a result. Rows marked <span class="badge offline">computed offline</span> below are hand-computed from the documented op semantics (join/concat with the configured separator) instead of the live engine output, to avoid showing a misleading no-op as if it were real. Everything else on this page is genuine `/preview` output.
+  </div>
+
+  <section class="block">
+    <div class="block-head"><h2>All rules &mdash; real before &rarr; after</h2><span class="count">searchable, filter by resource type or scope</span></div>
+    <p class="block-desc">The <span class="badge field">Field</span> rows are resources already wired into this workflow's destination columns &mdash; live today. The <span class="badge rtype">ResourceType</span> rows are workflow-wide defaults for the remaining types: not yet attached to a destination column in this workflow, but already resolved and ready the moment one is added.</p>
+
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Search resource type or rule name…">
+      <select id="scopeFilter">
+        <option value="">All scopes</option>
+        <option value="Field">Field only</option>
+        <option value="ResourceType">ResourceType only</option>
+      </select>
+      <select id="resourceFilter"><option value="">All resource types</option></select>
+      <span class="count" id="rowCount"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="rules">
+        <thead><tr><th>Resource</th><th>Rule</th><th>Before</th><th></th><th>After</th></tr></thead>
+        <tbody id="rulesBody"></tbody>
+      </table>
+      <div class="empty-hint" id="emptyHint" style="display:none;">No rules match that filter.</div>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot" style="background:var(--field-badge)"></span>Field scope &mdash; live in this workflow today</span>
+      <span><span class="dot" style="background:var(--rtype-badge)"></span>ResourceType scope &mdash; workflow-wide default, ready when mapped</span>
+      <span><span class="dot" style="background:var(--offline-badge)"></span>Computed offline (array-input preview limitation, see callout)</span>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><h2>De-identification &mdash; Patient, pre-mapping</h2><span class="count">Safe Harbor profile &middot; 9 actions &middot; live in a DeIdentificationNode</span></div>
+    <p class="block-desc">This workflow has a <span class="mono">DeIdentificationNode</span> between the source and the Field Mapping node, configured with <span class="mono">profileId: __DEID_PROFILE_ID__</span> &mdash; so this profile runs on every execution, not just existing as an unattached rule set. There's no public preview endpoint for PreMapping rules, so before/after here is computed from the documented deterministic behavior of each action rather than a live call.</p>
+    <div class="deid-panel">
+      <table class="deid-table">
+        <thead><tr><th>Source path</th><th>Action</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">name</td><td><span class="op-pill">remove</span></td><td class="mono">[{"family":"Doe","given":["Jane"]}]</td><td class="mono">null</td></tr>
+          <tr><td class="mono">photo</td><td><span class="op-pill">remove</span></td><td class="mono">[{"contentType":"image/jpeg","data":"…"}]</td><td class="mono">null</td></tr>
+          <tr><td class="mono">telecom</td><td><span class="op-pill">remove</span></td><td class="mono">[{"system":"phone","value":"+12125015309"}]</td><td class="mono">null</td></tr>
+          <tr><td class="mono">contact</td><td><span class="op-pill">remove</span></td><td class="mono">[{"relationship":"emergency","name":"…"}]</td><td class="mono">null</td></tr>
+          <tr><td class="mono">address.line</td><td><span class="op-pill">remove</span></td><td class="mono">["742 Evergreen Terrace"]</td><td class="mono">null</td></tr>
+          <tr><td class="mono">address.text</td><td><span class="op-pill">remove</span></td><td class="mono">"742 Evergreen Terrace, Springfield"</td><td class="mono">null</td></tr>
+          <tr><td class="mono">address.postalCode</td><td><span class="op-pill">generalizeZip3</span></td><td class="mono">"62704"</td><td class="mono">"627XX"</td></tr>
+          <tr><td class="mono">birthDate</td><td><span class="op-pill">generalizeDateToYear</span></td><td class="mono">"1985-04-12"</td><td class="mono">"1985-01-01"</td></tr>
+          <tr><td class="mono">identifier.value</td><td><span class="op-pill">hash</span></td><td class="mono">"00987654321"</td><td class="mono">"a3f9c1…e08b" (SHA-256, truncated)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>FHIRBridge &middot; Transformation Rules API &middot; <span class="mono">tenant __TENANT_ID__</span></span>
+    <span class="mono">generated __GENERATED_DATE__</span>
+  </footer>
+
+</div>
+
+<script id="rules-data" type="application/json">__ROWS_JSON__</script>
+<script>
+(function(){
+  const rows = JSON.parse(document.getElementById('rules-data').textContent);
+  const tbody = document.getElementById('rulesBody');
+  const search = document.getElementById('search');
+  const scopeFilter = document.getElementById('scopeFilter');
+  const resourceFilter = document.getElementById('resourceFilter');
+  const rowCount = document.getElementById('rowCount');
+  const emptyHint = document.getElementById('emptyHint');
+
+  const resources = [...new Set(rows.map(r => r.resourceType))].sort();
+  for (const rt of resources) {
+    const opt = document.createElement('option');
+    opt.value = rt; opt.textContent = rt;
+    resourceFilter.appendChild(opt);
+  }
+
+  function fmt(v) {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  }
+
+  function render() {
+    const q = search.value.trim().toLowerCase();
+    const scope = scopeFilter.value;
+    const rt = resourceFilter.value;
+    const filtered = rows.filter(r => {
+      if (scope && r.scope !== scope) return false;
+      if (rt && r.resourceType !== rt) return false;
+      if (q && !(r.resourceType.toLowerCase().includes(q) || r.label.toLowerCase().includes(q) || r.nodeType.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    tbody.innerHTML = '';
+    for (const r of filtered) {
+      const tr = document.createElement('tr');
+      const scopeBadge = `<span class="badge ${r.scope === 'Field' ? 'field' : 'rtype'}">${r.scope}</span>`;
+      const offlineBadge = r.computedOffline ? `<span class="badge offline">computed</span>` : '';
+      tr.innerHTML = `
+        <td><span class="rt">${r.resourceType}</span><br>${scopeBadge}${offlineBadge}</td>
+        <td><span class="rule-name">${r.nodeType}</span>${r.label !== r.nodeType ? `<br><span style="color:var(--ink-3);font-size:11px;">${r.label}</span>` : ''}</td>
+        <td class="val before">${fmt(r.before).replace(/</g,'&lt;')}</td>
+        <td class="arrow">&rarr;</td>
+        <td class="val after">${fmt(r.after).replace(/</g,'&lt;')}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    rowCount.textContent = `${filtered.length} / ${rows.length} rules`;
+    emptyHint.style.display = filtered.length === 0 ? 'block' : 'none';
+  }
+
+  search.addEventListener('input', render);
+  scopeFilter.addEventListener('change', render);
+  resourceFilter.addEventListener('change', render);
+  render();
+})();
+</script>

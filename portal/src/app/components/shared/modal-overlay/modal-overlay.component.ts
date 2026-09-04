@@ -15,10 +15,11 @@ export class ModalOverlayComponent {
   readonly closed = output<void>();
 
   constructor() {
-    // The backdrop is `position: fixed`, so on its own it doesn't stop the page underneath from
-    // scrolling — without this, a tall background page keeps its own scrollbar active (and
-    // interactive) right alongside whatever this modal's own content scrolls internally. Some browsers
-    // treat <html> (not <body>) as the actual root scroller, so both need locking.
+    // The backdrop is `position: absolute` against .shell-content (see modal-overlay.component.scss),
+    // so on its own it doesn't stop that content area from scrolling — without this, a tall page keeps
+    // its own scrollbar active (and interactive) right alongside whatever this modal's own content
+    // scrolls internally. Some browsers treat <html> (not <body>) as the actual root scroller, so both
+    // need locking.
     effect(() => {
       const value = this.open() ? 'hidden' : '';
       document.documentElement.style.overflow = value;

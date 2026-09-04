@@ -278,6 +278,17 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().JsonPath, StringComparer.OrdinalIgnoreCase);
 
+            // Warms CachingTerminologyLookupService for every distinct code this group is about to look up,
+            // concurrently, before the per-resource pass below runs each one serially interleaved with the rest
+            // of that resource's mapping work. Pure performance optimization — see the method's own doc comment
+            // for why it can never change what value actually gets written.
+            if (destinationType is not null)
+            {
+                await PreWarmCodeableConceptLookupsAsync(
+                    group, fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
+                    context.WorkflowRunId, ruleCache, cancellationToken);
+            }
+
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -327,7 +338,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops, cancellationToken);
+                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
+                            mapped.RawArrayValues, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
@@ -394,6 +406,135 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
+    /// Resolves every field in this resource-type group that has a <see cref="TransformNodeType.CodeableConceptBuilder"/>
+    /// rule configured to look up its display text from the terminology DB, collects the distinct codes those
+    /// fields actually carry across the whole group, and issues all of those lookups concurrently — so
+    /// <see cref="Terminology.CachingTerminologyLookupService"/> (wherever it's wired in as
+    /// <c>ITerminologyLookupService</c>) is already warm by the time the real per-resource pass below reaches
+    /// each one, instead of every distinct code paying its network round trip serially, interleaved with the
+    /// rest of that resource's mapping work. Never changes what value ends up written anywhere: it calls the
+    /// exact same node with the exact same config the real pass would, so a cache write here is byte-identical
+    /// to the one the real pass would have produced on its own — this only changes WHEN and how concurrently
+    /// those network calls happen. Best-effort: any failure here is swallowed, since the real per-record pass
+    /// remains the correctness path and will simply pay the normal (uncached) cost for whichever codes didn't
+    /// warm successfully.
+    /// </summary>
+    private async Task PreWarmCodeableConceptLookupsAsync(
+        IEnumerable<ResourceEnvelope> group,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        string resourceType,
+        DestinationType destinationType,
+        string? sourceSystem,
+        Guid workflowRunId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        if (_mappingEngine is null || _ruleResolver is null || _transformNodeRegistry is null)
+        {
+            return;
+        }
+
+        var codeableConceptConfigByTarget = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
+            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
+            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            {
+                rules = await _ruleResolver.ResolveAsync(
+                    destinationType, resourceType, targetField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
+                ruleCache[cacheKey] = rules;
+            }
+
+            var codeableConceptRule = rules.FirstOrDefault(rule => rule.NodeType == TransformNodeType.CodeableConceptBuilder);
+            if (codeableConceptRule is null)
+            {
+                continue;
+            }
+
+            Dictionary<string, string> config;
+            try
+            {
+                config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(codeableConceptRule.ConfigJson) ?? [];
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            // Nothing to warm — a hand-typed display always wins outright, and lookup being explicitly disabled
+            // means the real pass never calls the terminology service for this field either. Mirrors
+            // CodeableConceptBuilderNode.ExecuteAsync's own reads of these same two config keys.
+            var resolveDisplayFromTerminology = !config.TryGetValue("resolveDisplayFromTerminology", out var resolveFlag)
+                || !bool.TryParse(resolveFlag, out var resolveFlagParsed)
+                || resolveFlagParsed;
+            var hasHandTypedDisplay = config.TryGetValue("display", out var handTypedDisplay) && !string.IsNullOrWhiteSpace(handTypedDisplay);
+            if (!resolveDisplayFromTerminology || hasHandTypedDisplay)
+            {
+                continue;
+            }
+
+            codeableConceptConfigByTarget[targetField] = config;
+        }
+
+        if (codeableConceptConfigByTarget.Count == 0)
+        {
+            return;
+        }
+
+        var distinctCodesByTarget = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var resource in group)
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+            var mapped = _mappingEngine.Map(sourceJson, fields, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+            if (mapped is null)
+            {
+                continue;
+            }
+
+            foreach (var targetField in codeableConceptConfigByTarget.Keys)
+            {
+                if (!mapped.Values.TryGetValue(targetField, out var rawValue) ||
+                    rawValue?.ToString() is not { Length: > 0 } code)
+                {
+                    continue;
+                }
+
+                if (!distinctCodesByTarget.TryGetValue(targetField, out var codes))
+                {
+                    codes = new HashSet<string>(StringComparer.Ordinal);
+                    distinctCodesByTarget[targetField] = codes;
+                }
+
+                codes.Add(code);
+            }
+        }
+
+        var codeableConceptBuilderNode = _transformNodeRegistry.Get(TransformNodeType.CodeableConceptBuilder);
+        var warmTasks = distinctCodesByTarget
+            .SelectMany(entry => entry.Value.Select(code =>
+                codeableConceptBuilderNode.ExecuteAsync(code, codeableConceptConfigByTarget[entry.Key], secret: null, cancellationToken)))
+            .ToList();
+
+        if (warmTasks.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(warmTasks);
+        }
+        catch
+        {
+            // Best-effort only — see the method's doc comment. The real per-record pass below is the
+            // correctness path and will retry (uncached) whichever codes failed to warm here.
+        }
+    }
+
+    /// <summary>
     /// Resolves one resource type's fields + destination object, preferring (in order): <c>mappingProfileIds</c>
     /// — a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node
     /// (see WorkflowEndpoints.cs's Mappings step) — the id THIS node itself saved, so resolving by it can never
@@ -457,6 +598,38 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return (sourceConnection?.SourceSystemType.ToString(), sourceConnection?.Name);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex ArrayIndexAnnotation = new(@"\[[^\]]*\]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", or "$.code.coding[*].code" for
+    /// a repeating element, from MappingFieldDto.JsonPath) into the "ResourceType.field" format the portal's
+    /// rule-authoring UI saves <c>TransformationRule.SourceField</c> as (see
+    /// field-mapping-join-popover.component.ts's saveRule/loadRuleFor, both built from
+    /// MappingRow.sources[].fhirPath) — <see cref="EfTransformationRuleRepository.GetFieldScopedAsync"/>'s match
+    /// on SourceField is an exact string comparison, so both sides of it must agree on one convention. The UI's
+    /// is the one actually persisted, so this side has to match it, not the other way around.
+    ///
+    /// Two normalizations, both confirmed against real saved rows: strip the leading "$." (the UI's fhirPath has
+    /// none), and strip every "[...]" index/wildcard annotation (the UI's fhirPath never carries these either,
+    /// e.g. "Condition.code.coding.code" — not "code.coding[*].code" — regardless of which repeating instance
+    /// the field mapping itself resolves at runtime). Without the second normalization specifically, a
+    /// Field-scope rule on ANY array-nested source field — codings, identifiers, telecoms, names, essentially
+    /// most of FHIR — could never resolve, silently falling through to "no rule → pass the value through
+    /// unchanged" for every record (reproduced: Condition.code.coding[*].code vs the saved
+    /// "Condition.code.coding.code").
+    /// </summary>
+    private static string? ToRuleAuthoringSourceFieldFormat(string resourceType, string? jsonPath)
+    {
+        if (string.IsNullOrEmpty(jsonPath))
+        {
+            return null;
+        }
+
+        var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
+        bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
+        return $"{resourceType}.{bare}";
+    }
+
     /// <summary>
     /// Runs every already-mapped value in <paramref name="row"/> through whichever transform-rule chain
     /// currently applies to its destination field (Workflow → Field → ResourceType → DestinationType → Global,
@@ -478,17 +651,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string resourceId,
         string? sourceJson,
         IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
+        IReadOnlyDictionary<string, IReadOnlyList<object?>>? rawArrayValues,
         CancellationToken cancellationToken)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
-        {
-            return (row, null, null);
-        }
-
-        var hidden = _settingsCache is null
-            || await _settingsCache.GetBoolAsync(
-                TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, cancellationToken);
-        if (hidden)
         {
             return (row, null, null);
         }
@@ -540,7 +706,8 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem, sourceField, cancellationToken);
+                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -564,7 +731,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 continue;
             }
 
-            var currentValue = value;
+            // A rule chain LED by ConcatenationTemplating/ArrayListOperations exists specifically to
+            // operate on every occurrence of a repeating field, not the single value ArrayPolicy already
+            // collapsed `value` down to (see MappingTestResultDto.RawArrayValues's doc comment) — hand it
+            // the real array instead, so its own operation/template/separator config becomes the actual
+            // authority over which/how many items are used (superseding the field's Instance Selection,
+            // which chose that single collapsed value in the first place).
+            var currentValue =
+                rules[0].NodeType is TransformNodeType.ConcatenationTemplating or TransformNodeType.ArrayListOperations
+                && rawArrayValues is not null
+                && rawArrayValues.TryGetValue(destinationField, out var rawItems)
+                && rawItems.Count > 1
+                    ? rawItems
+                    : value;
             string? writeBackPath = null;
             foreach (var rule in rules)
             {
@@ -574,7 +753,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     writeBackPath = rule.FhirWriteBackJsonPath;
                 }
 
-                if (TransformNullPolicy.IsNullOrEmpty(currentValue))
+                if (TransformNullPolicy.ShouldShortCircuit(rule, currentValue))
                 {
                     currentValue = TransformNullPolicy.Apply(rule, currentValue, out var stopChain);
                     if (stopChain)
@@ -634,7 +813,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     sourceField,
                     hopIndex,
                     rule.NodeType.ToString(),
-                    rule.ConfigJson,
+                    result.ResolvedSystemOverride is null
+                        ? rule.ConfigJson
+                        : WithResolvedSystemOverride(rule.ConfigJson, result.ResolvedSystemOverride),
                     SerializeLineageValue(hopInput),
                     result.Success ? SerializeLineageValue(result.Value) : null,
                     result.Success,
@@ -703,6 +884,25 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         catch (NotSupportedException)
         {
             return value.ToString();
+        }
+    }
+
+    /// <summary>Appends a "resolvedSystem" note to the rule's config JSON for THIS lineage hop only — the
+    /// persisted <see cref="TransformationRule.ConfigJson"/> itself is never touched. Used when
+    /// CodeableConceptBuilderNode's opt-in cross-system auto-detect finds a code under a different local
+    /// system than the rule's own "system" setting, so the substitution is visible in Execution History
+    /// instead of silently masking what the configured system actually was.</summary>
+    private static string WithResolvedSystemOverride(string configJson, string resolvedSystem)
+    {
+        try
+        {
+            var config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(configJson) ?? [];
+            config["resolvedSystem"] = resolvedSystem;
+            return System.Text.Json.JsonSerializer.Serialize(config);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return configJson;
         }
     }
 

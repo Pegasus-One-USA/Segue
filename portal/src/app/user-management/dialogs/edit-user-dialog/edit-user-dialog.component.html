@@ -10,9 +10,6 @@
       <h2 mat-dialog-title>Edit User</h2>
       <p class="dialog-subtitle">{{ data.user.fullName }}</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="cancel()">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <mat-divider></mat-divider>
@@ -103,9 +100,6 @@
   <!-- Actions -->
   <mat-dialog-actions>
     <div class="dialog-actions">
-      <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
-        Cancel
-      </button>
       <button
         mat-flat-button
         class="btn-submit"
@@ -114,10 +108,9 @@
       >
         @if (loading()) {
           <mat-spinner diameter="18" color="accent"></mat-spinner>
-          Saving...
+          Updating...
         } @else {
-          <mat-icon>save</mat-icon>
-          Save Changes
+          Update
         }
       </button>
     </div>

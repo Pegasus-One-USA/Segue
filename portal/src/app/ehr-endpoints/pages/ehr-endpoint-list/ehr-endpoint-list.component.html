@@ -27,11 +27,7 @@
           Reset
         </button>
         <button class="btn-add" type="button" *appHideWithoutPermission="'ehrendpoints.create'" (click)="openAdd()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Add Endpoint
+          New
         </button>
       </div>
 
@@ -48,9 +44,9 @@
       <!-- Table meta row -->
       <div class="table-meta">
         <span class="entries-info">
-          @if (filtered().length > 0) {
-            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-            {{ filtered().length === 1 ? 'entry' : 'entries' }}
+          @if (totalCount() > 0) {
+            Showing {{ showingFrom() }} to {{ showingTo() }} of {{ totalCount() }}
+            {{ totalCount() === 1 ? 'entry' : 'entries' }}
           } @else {
             No entries found
           }
@@ -58,24 +54,13 @@
       </div>
 
       <div class="table-wrapper">
-        <table mat-table [dataSource]="paginated()" class="data-table">
-
-          <!-- # Column -->
-          <ng-container matColumnDef="index">
-            <th mat-header-cell *matHeaderCellDef class="col-index">#</th>
-            <td mat-cell *matCellDef="let e; let i = index" class="col-index">
-              {{ pageIndex() * pageSize() + i + 1 }}
-            </td>
-          </ng-container>
+        <table mat-table [dataSource]="endpoints()" class="data-table">
 
           <!-- Name Column -->
           <ng-container matColumnDef="name">
             <th mat-header-cell *matHeaderCellDef>Name</th>
             <td mat-cell *matCellDef="let e">
               <div class="cell-name">
-                <div class="endpoint-avatar">
-                  <mat-icon>dns</mat-icon>
-                </div>
                 <span class="cell-primary">{{ e.name }}</span>
               </div>
             </td>
@@ -109,7 +94,9 @@
           <ng-container matColumnDef="status">
             <th mat-header-cell *matHeaderCellDef>Status</th>
             <td mat-cell *matCellDef="let e">
-              <span class="status-badge" [class.status-badge--inactive]="e.status !== 'active'">{{ e.status }}</span>
+              <span class="badge" [class.badge-active]="e.status === 'active'" [class.badge-inactive]="e.status !== 'active'">
+                {{ e.status === 'active' ? 'Active' : 'Inactive' }}
+              </span>
             </td>
           </ng-container>
 
@@ -136,15 +123,22 @@
 
           <!-- Actions Column -->
           <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <th mat-header-cell *matHeaderCellDef class="col-actions"></th>
             <td mat-cell *matCellDef="let e" class="col-actions">
               <div class="actions-cell">
-                <button mat-icon-button class="btn-edit" matTooltip="Edit Endpoint" *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
-                  <mat-icon>edit</mat-icon>
+                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                  <mat-icon>more_vert</mat-icon>
                 </button>
-                <button mat-icon-button class="btn-delete" matTooltip="Delete Endpoint" *appHideWithoutPermission="'ehrendpoints.delete'" (click)="confirmDelete(e)">
-                  <mat-icon>delete_outline</mat-icon>
-                </button>
+                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <button mat-menu-item *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
+                    <mat-icon>edit</mat-icon>
+                    Edit
+                  </button>
+                  <button mat-menu-item class="menu-item-danger" *appHideWithoutPermission="'ehrendpoints.delete'" (click)="confirmDelete(e)">
+                    <mat-icon>delete_outline</mat-icon>
+                    Delete
+                  </button>
+                </mat-menu>
               </div>
             </td>
           </ng-container>
@@ -156,7 +150,7 @@
       </div>
 
       <!-- Empty State -->
-      @if (filtered().length === 0) {
+      @if (totalCount() === 0) {
         <div class="empty-state">
           <div class="empty-state__icon-wrap">
             <mat-icon>dns</mat-icon>
@@ -179,9 +173,9 @@
       }
 
       <!-- Paginator -->
-      @if (filtered().length > pageSize()) {
+      @if (totalCount() > pageSize()) {
         <mat-paginator
-          [length]="filtered().length"
+          [length]="totalCount()"
           [pageSize]="pageSize()"
           [pageIndex]="pageIndex()"
           [pageSizeOptions]="[5, 10, 25, 50]"

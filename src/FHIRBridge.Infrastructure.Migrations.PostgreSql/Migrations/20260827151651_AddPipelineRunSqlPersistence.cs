@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -9,117 +8,112 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
     public partial class AddPipelineRunSqlPersistence : Migration
     {
         /// <inheritdoc />
+        // Guarded raw SQL so re-applying this migration against a database where these tables/indexes
+        // already exist is a no-op instead of an error.
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "PipelineRunEvents",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    PipelineRunId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EventType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    StepType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    ResourceType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    ResourceId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    Message = table.Column<string>(type: "text", nullable: false),
-                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    OccurredOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PipelineRunEvents", x => x.Id);
-                });
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "PipelineRunEvents" (
+                    "Id" uuid NOT NULL,
+                    "PipelineRunId" uuid NOT NULL,
+                    "EventType" character varying(100) NOT NULL,
+                    "StepType" character varying(50) NULL,
+                    "ResourceType" character varying(200) NULL,
+                    "ResourceId" character varying(256) NULL,
+                    "Message" text NOT NULL,
+                    "CorrelationId" character varying(100) NULL,
+                    "OccurredOnUtc" timestamp with time zone NOT NULL,
+                    CONSTRAINT "PK_PipelineRunEvents" PRIMARY KEY ("Id")
+                );
+                """);
 
-            migrationBuilder.CreateTable(
-                name: "PipelineRuns",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    SourceType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    DestinationType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    RequestedResourceTypes = table.Column<string>(type: "text", nullable: false),
-                    TriggeredBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    ExtractedResourceCount = table.Column<int>(type: "integer", nullable: false),
-                    WrittenResourceCount = table.Column<int>(type: "integer", nullable: false),
-                    FailureMessage = table.Column<string>(type: "text", nullable: true),
-                    ErrorReferenceId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    StartedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CompletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PipelineRuns", x => x.Id);
-                });
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "PipelineRuns" (
+                    "Id" uuid NOT NULL,
+                    "SourceType" character varying(50) NOT NULL,
+                    "DestinationType" character varying(50) NOT NULL,
+                    "RequestedResourceTypes" text NOT NULL,
+                    "TriggeredBy" character varying(200) NULL,
+                    "CorrelationId" character varying(100) NULL,
+                    "Status" character varying(50) NOT NULL,
+                    "ExtractedResourceCount" integer NOT NULL,
+                    "WrittenResourceCount" integer NOT NULL,
+                    "FailureMessage" text NULL,
+                    "ErrorReferenceId" character varying(50) NULL,
+                    "StartedOnUtc" timestamp with time zone NOT NULL,
+                    "CompletedOnUtc" timestamp with time zone NULL,
+                    CONSTRAINT "PK_PipelineRuns" PRIMARY KEY ("Id")
+                );
+                """);
 
-            migrationBuilder.CreateTable(
-                name: "PipelineRunSteps",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    PipelineRunId = table.Column<Guid>(type: "uuid", nullable: false),
-                    StepType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    ResourceType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    ResourceCount = table.Column<int>(type: "integer", nullable: false),
-                    Message = table.Column<string>(type: "text", nullable: true),
-                    StartedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CompletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PipelineRunSteps", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PipelineRunSteps_PipelineRuns_PipelineRunId",
-                        column: x => x.PipelineRunId,
-                        principalTable: "PipelineRuns",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS "PipelineRunSteps" (
+                    "Id" uuid NOT NULL,
+                    "PipelineRunId" uuid NOT NULL,
+                    "StepType" character varying(50) NOT NULL,
+                    "Status" character varying(50) NOT NULL,
+                    "ResourceType" character varying(200) NULL,
+                    "ResourceCount" integer NOT NULL,
+                    "Message" text NULL,
+                    "StartedOnUtc" timestamp with time zone NOT NULL,
+                    "CompletedOnUtc" timestamp with time zone NULL,
+                    CONSTRAINT "PK_PipelineRunSteps" PRIMARY KEY ("Id"),
+                    CONSTRAINT "FK_PipelineRunSteps_PipelineRuns_PipelineRunId" FOREIGN KEY ("PipelineRunId")
+                        REFERENCES "PipelineRuns" ("Id") ON DELETE CASCADE
+                );
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRunEvents_OccurredOnUtc",
-                table: "PipelineRunEvents",
-                column: "OccurredOnUtc");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRunEvents_OccurredOnUtc" ON "PipelineRunEvents" ("OccurredOnUtc");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRunEvents_PipelineRunId",
-                table: "PipelineRunEvents",
-                column: "PipelineRunId");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRunEvents_PipelineRunId" ON "PipelineRunEvents" ("PipelineRunId");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRuns_CorrelationId",
-                table: "PipelineRuns",
-                column: "CorrelationId");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRuns_CorrelationId" ON "PipelineRuns" ("CorrelationId");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRuns_StartedOnUtc",
-                table: "PipelineRuns",
-                column: "StartedOnUtc");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRuns_StartedOnUtc" ON "PipelineRuns" ("StartedOnUtc");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRuns_Status",
-                table: "PipelineRuns",
-                column: "Status");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRuns_Status" ON "PipelineRuns" ("Status");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_PipelineRunSteps_PipelineRunId",
-                table: "PipelineRunSteps",
-                column: "PipelineRunId");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_PipelineRunSteps_PipelineRunId" ON "PipelineRunSteps" ("PipelineRunId");
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "PipelineRunEvents");
+            migrationBuilder.Sql(
+                """
+                DROP TABLE IF EXISTS "PipelineRunEvents";
+                """);
 
-            migrationBuilder.DropTable(
-                name: "PipelineRunSteps");
+            migrationBuilder.Sql(
+                """
+                DROP TABLE IF EXISTS "PipelineRunSteps";
+                """);
 
-            migrationBuilder.DropTable(
-                name: "PipelineRuns");
+            migrationBuilder.Sql(
+                """
+                DROP TABLE IF EXISTS "PipelineRuns";
+                """);
         }
     }
 }

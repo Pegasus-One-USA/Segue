@@ -14,7 +14,7 @@
       <h1>Transformation Rules</h1>
       @if (!creatingNew()) {
         <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
-          <mat-icon>add</mat-icon> New rule target
+          New
         </button>
       }
     </div>
@@ -103,7 +103,7 @@
                 (ngModelChange)="newProfileName.set($event)"
                 placeholder="New profile name…"
               />
-              <button mat-stroked-button type="button" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="createDeIdentificationProfileForNewTarget()">+ New profile</button>
+              <button mat-stroked-button type="button" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="createDeIdentificationProfileForNewTarget()">New</button>
             </div>
           </div>
         }
@@ -111,7 +111,7 @@
 
       <div class="form-actions">
         <button mat-button (click)="cancelNewTarget()">Cancel</button>
-        <button mat-flat-button color="primary" (click)="createTarget()">Create — add first step</button>
+        <button mat-flat-button color="primary" (click)="createTarget()">Save</button>
       </div>
     </div>
   }
@@ -156,7 +156,7 @@
         </p>
         @if (!creatingNew()) {
           <button mat-flat-button color="primary" class="empty-state__action" *appHideWithoutPermission="'transformationrules.write'" (click)="startNewTarget()">
-            <mat-icon>add</mat-icon> New rule target
+            New
           </button>
         }
       }
@@ -179,11 +179,22 @@
             </div>
             <div class="group-card__actions">
               @if (group.executionPhase === 'PreMapping') {
-                <button mat-stroked-button type="button" (click)="togglePreview(group)">
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="group-card__action-btn"
+                  [class.group-card__action-btn--active]="group.previewOpen"
+                  (click)="togglePreview(group)"
+                >
                   <mat-icon>visibility</mat-icon> Preview
                 </button>
               }
-              <button mat-stroked-button (click)="toggleEdit(group)">
+              <button
+                mat-stroked-button
+                class="group-card__action-btn"
+                [class.group-card__action-btn--active]="group.editing"
+                (click)="toggleEdit(group)"
+              >
                 <mat-icon>{{ group.editing ? 'expand_less' : 'edit' }}</mat-icon>
                 {{ group.steps.length }} step{{ group.steps.length === 1 ? '' : 's' }}
               </button>
@@ -191,7 +202,7 @@
           </div>
 
           @if (group.previewOpen) {
-            <div class="form-card" style="margin: 0 16px 16px;">
+            <div class="form-card" style="margin: 10px 16px 16px;">
               <h3>Preview</h3>
               <p>Paste a sample FHIR resource to see exactly what this profile's rules would change — nothing here is saved or sent to any destination.</p>
               <div class="form-grid">
@@ -330,7 +341,7 @@
                     <div class="step-card__actions">
                       <button class="btn-text-danger" type="button" *appHideWithoutPermission="'transformationrules.delete'" [disabled]="step.saving" (click)="removeStep(group, step)">Remove step</button>
                       <button mat-flat-button color="primary" *appHideWithoutPermission="'transformationrules.write'" [disabled]="step.saving" (click)="saveStep(group, step)">
-                        @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { Save step }
+                        @if (step.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { {{ step.id ? 'Update' : 'Save' }} }
                       </button>
                     </div>
                   </div>

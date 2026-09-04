@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Terminology;
 using Microsoft.Extensions.Configuration;
@@ -19,39 +18,38 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// source vocabulary/term-type) — keeps the best candidate row per RXCUI (RXNORM-sourced wins, then
 /// ISPREF='Y' wins), same tie-break logic as the existing importer, so display names match exactly.
 /// </summary>
-public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyncService
+public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyncService, IHapiVersionCheckable
 {
     private const string ReleaseType = "rxnorm-full-monthly-release";
     private const string SystemUrl = "http://www.nlm.nih.gov/research/umls/rxnorm";
-    private const string ResourceId = "rxnorm-full";
 
     private readonly IUtsReleaseClient _releaseClient;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiRxNormTerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiRxNormTerminologySyncService(
         IUtsReleaseClient releaseClient,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiRxNormTerminologySyncService> logger)
+        ILogger<HapiRxNormTerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _releaseClient = releaseClient;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiRxNormSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Checking the current official RxNorm release.");
         var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
@@ -61,24 +59,22 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
 
         var concepts = ParseRxnConso(zipPath);
         _logger.LogInformation("Parsed {Total} RxNorm concepts from release {Version}.", concepts.Count, release.ReleaseName);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
-        var resource = BuildCodeSystemResource(concepts, release.ReleaseName);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "RxNorm", release.ReleaseName, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "RxNorm loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
         return new HapiRxNormSyncResult(release.ReleaseName, concepts.Count, stopwatch.Elapsed);
+    }
+
+    /// <summary>Exact match: this is the same field this service passes to WriteConceptsAsync as the
+    /// stored version, so a comparison is fully reliable — no downstream re-extraction, unlike SNOMED.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        var release = await _releaseClient.GetCurrentReleaseAsync(ReleaseType, cancellationToken);
+        return release.ReleaseName;
     }
 
     private static IReadOnlyList<Concept> ParseRxnConso(string zipPath)
@@ -135,23 +131,6 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
         }
 
         return candidate.IsPreferred && !existing.IsPreferred;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts, string? version)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            version,
-            name = "RxNorm",
-            title = $"RxNorm {version} (auto-synced, credentialed)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Candidate(string Name, bool IsRxNormSource, bool IsPreferred);

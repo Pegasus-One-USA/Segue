@@ -39,6 +39,19 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     protected abstract string ColumnType(MappingValueType valueType);
     protected abstract string BuildTableExistsSql(string schema, string table);
 
+    /// <summary>
+    /// Dialect-specific multi-row upsert statement (MySQL's <c>ON DUPLICATE KEY UPDATE</c>, PostgreSQL's
+    /// <c>ON CONFLICT ... DO UPDATE</c>) — unlike <see cref="DeleteByKeyAsync"/>+<see cref="InsertRecordAsync"/>'s
+    /// portable-across-any-dialect approach, this trades that portability for one round trip per batch instead of
+    /// two per record. See <see cref="UpsertBatchAsync"/>'s doc comment for why that tradeoff is safe: a dialect
+    /// whose target table has no unique/primary key constraint on <paramref name="keyColumn"/> (PostgreSQL requires
+    /// one for <c>ON CONFLICT</c> to even parse) throws a <see cref="DbException"/> here, which the caller catches
+    /// and falls back to the original per-record path for — so this never silently changes behavior, only speed,
+    /// for whichever tables actually have the constraint this needs.
+    /// </summary>
+    protected abstract string BuildBatchUpsertSql(
+        string qualifiedTable, IReadOnlyList<string> columns, string keyColumn, IReadOnlyList<string> rowValueClauses);
+
     /// <summary>Qualified <c>schema.table</c> (or just the quoted table when the dialect has no schemas).</summary>
     protected virtual string QualifiedName(string schema, string table)
         => string.IsNullOrEmpty(schema) ? Quote(table) : $"{Quote(schema)}.{Quote(table)}";
@@ -63,56 +76,89 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
         await EnsureTableAsync(connection, target, mappingProfile, cancellationToken);
 
-        // Each record is written in its own transaction: a constraint violation (dup key, NOT NULL, truncation,
-        // conversion, ...) on one record's data must not discard every other record already validated and ready to
-        // write in the same batch. Only a DbException is caught here — anything else (e.g. the connection itself
-        // dying) can't be recovered from per-record and is left to propagate and fail the whole route, as before.
+        // Each record's write stands alone: a constraint violation (dup key, NOT NULL, truncation, conversion, ...)
+        // on one record's data must not discard every other record already validated and ready to write in the
+        // same batch. Only a DbException is caught here — anything else (e.g. the connection itself dying) can't
+        // be recovered from per-record and is left to propagate and fail the whole route, as before.
         var recordErrors = new List<string>();
         var writtenResourceIds = new List<string?>();
 
-        foreach (var record in records)
+        // Insert/Upsert can be written as one multi-row statement per chunk instead of one (Insert) or two
+        // (Upsert's delete-by-key + insert) round trips per record — the dominant cost for a large resource type
+        // is round-trip latency, not the write itself. Update-only keeps the original per-record path unchanged
+        // (it's a targeted single-row operation by nature, not a bulk-load scenario).
+        const int BatchSize = 200;
+        var recordList = records as IReadOnlyList<MappedDestinationRecord> ?? records.ToList();
+
+        foreach (var chunk in recordList.Chunk(BatchSize))
         {
-            try
+            var canBatch = !target.UpdateOnly
+                && (!target.Upsert || chunk.All(record => TryGetKeyValue(record, target.KeyColumn!, out _)));
+
+            if (canBatch)
             {
-                await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-
-                if (target.UpdateOnly)
+                try
                 {
-                    // Update-only never inserts: a record with no key value has nothing to match, so it's skipped
-                    // entirely rather than falling back to Insert.
-                    if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
-                    {
-                        var rowsAffected = await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
-                        await transaction.CommitAsync(cancellationToken);
-                        if (rowsAffected > 0)
-                        {
-                            writtenResourceIds.Add(record.SourceResourceId);
-                        }
-                    }
+                    var batchWrittenIds = target.Upsert
+                        ? await UpsertBatchAsync(connection, target, chunk, cancellationToken)
+                        : await InsertBatchAsync(connection, target, chunk, cancellationToken);
 
+                    writtenResourceIds.AddRange(batchWrittenIds);
                     continue;
                 }
-
-                if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
+                catch (DbException)
                 {
-                    await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
+                    // One bad record's fault (truncation, constraint violation, ...) — or, for Upsert, a target
+                    // table with no unique/primary key constraint on the key column at all, which
+                    // BuildBatchUpsertSql's ON CONFLICT/ON DUPLICATE KEY clause requires — must not discard the
+                    // rest of this chunk. Fall through to the proven per-record path below for just this chunk.
                 }
-
-                await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                writtenResourceIds.Add(record.SourceResourceId);
             }
-            catch (DbException exception)
-            {
-                recordErrors.Add(
-                    $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
 
-                if (_exceptionManager is not null)
+            foreach (var record in chunk)
+            {
+                try
                 {
-                    await _exceptionManager.CaptureAsync(
-                        exception,
-                        new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
-                        cancellationToken);
+                    await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+                    if (target.UpdateOnly)
+                    {
+                        // Update-only never inserts: a record with no key value has nothing to match, so it's
+                        // skipped entirely rather than falling back to Insert.
+                        if (TryGetKeyValue(record, target.KeyColumn!, out var updateKeyValue))
+                        {
+                            var rowsAffected = await UpdateRecordAsync(connection, transaction, target, record, updateKeyValue, cancellationToken);
+                            await transaction.CommitAsync(cancellationToken);
+                            if (rowsAffected > 0)
+                            {
+                                writtenResourceIds.Add(record.SourceResourceId);
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if (target.Upsert && TryGetKeyValue(record, target.KeyColumn!, out var keyValue))
+                    {
+                        await DeleteByKeyAsync(connection, transaction, target, keyValue, cancellationToken);
+                    }
+
+                    await InsertRecordAsync(connection, transaction, target, record, cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    writtenResourceIds.Add(record.SourceResourceId);
+                }
+                catch (DbException exception)
+                {
+                    recordErrors.Add(
+                        $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}: {exception.Message}");
+
+                    if (_exceptionManager is not null)
+                    {
+                        await _exceptionManager.CaptureAsync(
+                            exception,
+                            new ExceptionContext(Module: "Destination Write", CorrelationId: context.CorrelationId),
+                            cancellationToken);
+                    }
                 }
             }
         }
@@ -121,6 +167,91 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
             writtenResourceIds.Count,
             RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
             WrittenResourceIds: writtenResourceIds);
+    }
+
+    /// <summary>Multi-row INSERT for a chunk — one round trip instead of one per record.</summary>
+    private async Task<List<string?>> InsertBatchAsync(
+        DbConnection connection,
+        RelationalTarget target,
+        IReadOnlyList<MappedDestinationRecord> chunk,
+        CancellationToken cancellationToken)
+    {
+        var columns = BuildBatchColumns(chunk);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        var rowValueClauses = new List<string>(chunk.Count);
+        for (var rowIndex = 0; rowIndex < chunk.Count; rowIndex++)
+        {
+            rowValueClauses.Add(AddRowParameters(command, chunk[rowIndex], columns, rowIndex));
+        }
+
+        command.CommandText = $"INSERT INTO {QualifiedName(target.Schema, target.Table)} " +
+            $"({string.Join(", ", columns.Select(Quote))}) VALUES {string.Join(", ", rowValueClauses)}";
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return chunk.Select(record => record.SourceResourceId).ToList();
+    }
+
+    /// <summary>
+    /// Multi-row upsert for a chunk, via <see cref="BuildBatchUpsertSql"/>'s dialect-specific syntax — trades the
+    /// portable delete-by-key+insert-per-record approach's dialect-independence for one round trip per batch, only
+    /// for chunks where every record already has a usable key value (checked by the caller in <see cref="WriteAsync"/>;
+    /// a keyless record must go through the per-record path's own insert-instead-of-upsert handling, which this
+    /// batched form doesn't replicate).
+    /// </summary>
+    private async Task<List<string?>> UpsertBatchAsync(
+        DbConnection connection,
+        RelationalTarget target,
+        IReadOnlyList<MappedDestinationRecord> chunk,
+        CancellationToken cancellationToken)
+    {
+        var columns = BuildBatchColumns(chunk);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        var rowValueClauses = new List<string>(chunk.Count);
+        for (var rowIndex = 0; rowIndex < chunk.Count; rowIndex++)
+        {
+            rowValueClauses.Add(AddRowParameters(command, chunk[rowIndex], columns, rowIndex));
+        }
+
+        command.CommandText = BuildBatchUpsertSql(QualifiedName(target.Schema, target.Table), columns, target.KeyColumn!, rowValueClauses);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return chunk.Select(record => record.SourceResourceId).ToList();
+    }
+
+    /// <summary>Union of mapped columns across every record in the chunk, so every row in the batch statement
+    /// aligns to the same column list regardless of which optional fields any one record happened to carry — a
+    /// record missing a given column writes NULL for it, same as the per-record path would for that record alone.</summary>
+    private static List<string> BuildBatchColumns(IReadOnlyList<MappedDestinationRecord> chunk) =>
+        chunk.SelectMany(record => record.Values.Keys)
+            .Select(ValidateIdentifier)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>Adds this row's parameters to the shared batch command (index-based names — <c>@p{row}_{col}</c> —
+    /// so a column name is never itself part of a parameter name) and returns the row's own
+    /// "(@p0_0, @p0_1, ...)" VALUES clause fragment.</summary>
+    private static string AddRowParameters(
+        DbCommand command, MappedDestinationRecord record, IReadOnlyList<string> columns, int rowIndex)
+    {
+        var placeholders = new string[columns.Count];
+        for (var columnIndex = 0; columnIndex < columns.Count; columnIndex++)
+        {
+            var paramName = $"p{rowIndex}_{columnIndex}";
+            placeholders[columnIndex] = "@" + paramName;
+            AddParameter(command, paramName, Stringify(record.Values.GetValueOrDefault(columns[columnIndex])));
+        }
+
+        return $"({string.Join(", ", placeholders)})";
     }
 
     private async Task EnsureTableAsync(
@@ -248,17 +379,19 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         command.Parameters.Add(parameter);
     }
 
-    // The portable relational writer stores every value as text so inserts never fail on cross-dialect type
-    // coercion — but .NET's default ToString() for DateTime/DateOnly ("MM/dd/yyyy HH:mm:ss") isn't a date literal
-    // any SQL dialect accepts, so date/time and boolean values need their own explicit, dialect-portable format
-    // (ISO 8601 date/time; "0"/"1" for boolean) rather than falling through to Convert.ToString.
+    // .NET's default ToString() for DateOnly ("MM/dd/yyyy") isn't a date literal any SQL dialect accepts, so
+    // DateOnly/DateTimeOffset still need their own explicit, dialect-portable string format (ISO 8601) rather
+    // than falling through to Convert.ToString. DateTime and bool are passed through as their native CLR type
+    // so each provider (Npgsql/MySqlConnector/SqlClient) can infer the correct parameter type for whatever real
+    // column type the destination schema actually has (date/datetime/boolean/bit/tinyint), instead of being
+    // coerced to a string that a strictly-typed column will reject.
     private static object Stringify(object? value) => value switch
     {
         null => DBNull.Value,
-        DateTime dateTime => dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        DateTime dateTime => dateTime,
         DateTimeOffset dateTimeOffset => dateTimeOffset.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
         DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        bool boolean => boolean ? "1" : "0",
+        bool boolean => boolean,
         _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
     };
 

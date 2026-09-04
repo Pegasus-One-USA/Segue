@@ -41,7 +41,9 @@ public sealed class MappingSchemaProviderFactory : IMappingSchemaProviderFactory
     public static IReadOnlyList<MappingSchemaProviderRegistration> DefaultRegistrations { get; } =
     [
         new(DestinationType.SqlServer, typeof(SqlServerMappingSchemaProvider)),
-        new(DestinationType.AzureSql, typeof(SqlServerMappingSchemaProvider))
+        new(DestinationType.AzureSql, typeof(SqlServerMappingSchemaProvider)),
+        new(DestinationType.MySql, typeof(MySqlMappingSchemaProvider)),
+        new(DestinationType.PostgreSql, typeof(PostgreSqlMappingSchemaProvider))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

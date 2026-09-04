@@ -1,25 +1,79 @@
-<svg class="fm-wires-svg" aria-hidden="true">
+<!-- No svg-level aria-hidden: each mapped wire's hit-path below is a real, keyboard-focusable control
+     (role="button" + aria-label), so it must stay in the accessibility tree. Everything purely
+     decorative (the thin visible line, the hover dot, the tooltip bubble) is individually aria-hidden
+     instead — its content is already covered by the hit-path's own aria-label. -->
+<svg class="fm-wires-svg">
   @for (p of paths(); track p.rowKey) {
     <path
       class="fm-wire"
       [class.fm-wire--dashed]="p.dashed"
       [attr.d]="p.d"
       [style.stroke]="p.stroke"
-      (click)="onPathClick(p.rowKey)"
+      [style.color]="p.stroke"
+      aria-hidden="true"
+    ></path>
+    <!-- Invisible, much wider stroke on the exact same "d" as the visible wire above -- drawn right
+         after it, so it paints on top and wins hit-testing, while the visible line stays thin and
+         undisturbed. All pointer + keyboard interaction (click/Enter/Space + hover/focus feedback) lives
+         here, not on the thin visible path, so the actual click/hover target is comfortably larger than
+         the ~2px stroke. tabindex/role/aria-label make it a real keyboard-reachable control instead of a
+         mouse-only affordance. -->
+    <path
+      class="fm-wire-hit"
+      [attr.d]="p.d"
+      tabindex="0"
+      role="button"
+      [attr.aria-label]="'Configure mapping: ' + p.sourceLabel + ' to ' + p.targetLabel"
+      (click)="onPathClick(p)"
+      (keydown)="onWireKeydown($event, p)"
+    ></path>
+    <!-- Small circular "this is interactive" indicator at the wire's midpoint — hidden until the hit
+         path right before it (mouse) or two siblings back (keyboard focus, see .fm-wire-tooltip-fo below)
+         is hovered/focused; chained adjacent-sibling selectors keep this scoped to exactly its own row,
+         never a neighboring wire's. -->
+    <circle
+      class="fm-wire-dot"
+      [attr.cx]="p.midX"
+      [attr.cy]="p.midY"
+      [attr.stroke]="p.stroke"
+      r="4"
+      aria-hidden="true"
+    ></circle>
+    <!-- Custom tooltip (native SVG <title> is slow to appear and can't be styled/multi-line) — fades in
+         next to the hovered/focused connector via the same chained-sibling CSS as the dot above. -->
+    <foreignObject
+      class="fm-wire-tooltip-fo"
+      [attr.x]="p.midX - 100"
+      [attr.y]="p.midY - 48"
+      width="200"
+      height="42"
+      aria-hidden="true"
     >
-      <title>Click to configure this mapping</title>
-    </path>
+      <div xmlns="http://www.w3.org/1999/xhtml" class="fm-wire-tooltip">
+        <span class="fm-wire-tooltip-title">Configure mapping</span>
+        <span class="fm-wire-tooltip-detail">{{ p.sourceLabel }} → {{ p.targetLabel }}</span>
+      </div>
+    </foreignObject>
   }
   @for (s of suggestionPaths(); track s.rowKey) {
     <path
       class="fm-wire fm-wire--suggestion"
       [attr.d]="s.d"
+      aria-hidden="true"
+    ></path>
+    <path
+      class="fm-wire-hit"
+      [attr.d]="s.d"
+      tabindex="0"
+      role="button"
+      [attr.aria-label]="'Suggested match, ' + (s.confidence * 100 | number: '1.0-0') + '% confidence — activate to accept'"
       (click)="onSuggestionClick(s.rowKey)"
+      (keydown)="onSuggestionKeydown($event, s.rowKey)"
     >
       <title>Suggested match ({{ (s.confidence * 100) | number: '1.0-0' }}% confidence) — click to accept</title>
     </path>
   }
   @if (tempPath()) {
-    <path class="fm-wire fm-wire--temp" [attr.d]="tempPath()!.d" [style.stroke]="tempPath()!.stroke" />
+    <path class="fm-wire fm-wire--temp" [attr.d]="tempPath()!.d" [style.stroke]="tempPath()!.stroke" aria-hidden="true" />
   }
 </svg>

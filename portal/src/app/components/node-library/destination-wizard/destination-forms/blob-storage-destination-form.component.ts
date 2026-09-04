@@ -77,6 +77,9 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
    *  never repopulated when patching from an existing connection, so requiring it here would permanently block
    *  reuse unless the user retypes it just to satisfy validation. */
   readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — when present, testConnection() sends it instead of a blank secret so the
+   *  backend can resolve the stored secret server-side (see BlobDestinationConnectionTestService). */
+  readonly existingDestinationId = input<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -122,11 +125,15 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
   }
 
   /** The probe needs a container plus a secret for every auth mode except Managed Identity (which resolves no
-   *  secret). Mode-specific extras (account name, tenant/client id) are validated server-side with clear errors. */
+   *  secret) — UNLESS reusing an existing connection unchanged, in which case a blank secretValue is fine: the
+   *  backend resolves the stored secret server-side instead (see BlobDestinationConnectionTestService, and
+   *  existingDestinationId below). Mode-specific extras (account name, tenant/client id) are validated
+   *  server-side with clear errors. */
   canTest(): boolean {
     const v = this.blobForm.value;
     if (!v.container) return false;
-    return v.authMode === 'managedIdentity' || !!v.secretValue;
+    if (v.authMode === 'managedIdentity') return true;
+    return !!v.secretValue || (this.reusingExisting() && !!this.existingDestinationId());
   }
 
   /** Live connectivity check before saving: builds the container client for the chosen auth mode and does a
@@ -146,6 +153,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       tenantId: v.tenantId ?? '',
       clientId: v.clientId ?? '',
       managedIdentityClientId: v.managedIdentityClientId ?? '',
+      destinationId: this.existingDestinationId() ?? undefined,
     }).subscribe({
       next: res => {
         if (res.connected) {

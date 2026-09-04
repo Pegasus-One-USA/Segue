@@ -468,6 +468,10 @@
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
   }
+  &.unsupported.selected {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+  }
 }
 
 .dw-rc-check {
@@ -512,6 +516,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dw-rc-warn-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-warning-strong);
 }
 
 /* ── Dev/demo: load a previously saved mapping snapshot (independent of any node/workflow) ──── */
@@ -622,7 +634,10 @@
 
 /* ── Confirm before discarding an in-progress group mapping ─────────────────── */
 .dw-confirm-backdrop {
-  position: fixed;
+  // Scoped to the nearest positioned ancestor — .dw (position: relative, above) — rather than the
+  // viewport, matching the treatment applied to app-modal-overlay's backdrop (see
+  // modal-overlay.component.scss) and canvas.component.scss's .ctx-backdrop/.confirm-backdrop.
+  position: absolute;
   inset: 0;
   z-index: var(--z-modal, 200);
   background: rgba(15, 20, 30, 0.45);
@@ -1123,6 +1138,10 @@
   &.dw-mono {
     font-family: ui-monospace, Consolas, monospace;
     font-size: 11.5px;
+  }
+
+  &--warn {
+    color: var(--color-warning-strong);
   }
 }
 

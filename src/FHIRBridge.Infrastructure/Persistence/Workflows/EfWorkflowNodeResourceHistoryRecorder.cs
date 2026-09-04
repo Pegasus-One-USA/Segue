@@ -1,8 +1,10 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 
@@ -16,11 +18,14 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 {
     private readonly FHIRBridgeDbContext _dbContext;
     private readonly IPhiFieldEncryptor _encryptor;
+    private readonly ILogger<EfWorkflowNodeResourceHistoryRecorder> _logger;
 
-    public EfWorkflowNodeResourceHistoryRecorder(FHIRBridgeDbContext dbContext, IPhiFieldEncryptor encryptor)
+    public EfWorkflowNodeResourceHistoryRecorder(
+        FHIRBridgeDbContext dbContext, IPhiFieldEncryptor encryptor, ILogger<EfWorkflowNodeResourceHistoryRecorder> logger)
     {
         _dbContext = dbContext;
         _encryptor = encryptor;
+        _logger = logger;
     }
 
     public async Task RecordNodeOutputAsync(
@@ -149,7 +154,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         return payload is null
             ? null
             : new WorkflowNodeRunPayloadDetailDto(
-                workflowNodeRunId, payload.Contract, _encryptor.Decrypt(payload.PayloadJson), payload.ItemCount);
+                workflowNodeRunId, payload.Contract, DecryptOrNull(payload.PayloadJson) ?? "[unable to decrypt]", payload.ItemCount);
     }
 
     public async Task<WorkflowPagedResult<FieldLineageChainDto>> GetFieldLineagePagedAsync(
@@ -290,8 +295,31 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         return await query.ToListAsync(cancellationToken);
     }
 
+    /// <summary>Decrypts a stored PHI value, or null when there's nothing to decrypt. One row's ciphertext
+    /// failing to decrypt (e.g. written under a since-rotated PhiEncryptionKey, or a corrupted/truncated
+    /// payload) must never take down the whole lineage view for every OTHER field in the run — before this,
+    /// GetFieldLineagePagedAsync built its chains inside one .Select(...).ToList(), so a single bad row threw
+    /// an unhandled CryptographicException out of the entire paged query, and the field-filtered request the
+    /// portal issues per column (see FieldLineagePanelComponent.loadChains) came back as a bare HTTP failure
+    /// that the caller quietly rendered as "no rows for this field" — indistinguishable from that field
+    /// genuinely having none, which is exactly the symptom reported (Gender's ValueCodeMapping row existed and
+    /// succeeded, but never appeared in the UI). Catching here lets every other field's hops keep rendering,
+    /// with just this one hop's value shown as a placeholder instead of silently vanishing.</summary>
     private string? DecryptOrNull(string? ciphertext)
     {
-        return ciphertext is null ? null : _encryptor.Decrypt(ciphertext);
+        if (ciphertext is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return _encryptor.Decrypt(ciphertext);
+        }
+        catch (Exception ex) when (ex is CryptographicException or FormatException or ArgumentException or IndexOutOfRangeException)
+        {
+            _logger.LogWarning(ex, "Failed to decrypt a field-lineage/payload value — showing a placeholder instead.");
+            return "[unable to decrypt]";
+        }
     }
 }

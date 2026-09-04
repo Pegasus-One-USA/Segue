@@ -30,12 +30,19 @@ export class FieldMappingPreviewDrawerComponent {
 
   readonly closed = output<void>();
 
+  // SQL Server/MySQL/PostgreSQL all render as a plain, dialect-agnostic INSERT statement
+  // (buildSqlInsert doesn't quote identifiers, so it's already valid across all three) — this used to
+  // only cover 'sql' (SQL Server), silently falling MySQL/PostgreSQL back to the CSV preview instead.
+  readonly isSqlFamily = computed(
+    () => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres',
+  );
+
   readonly sections = computed<FmPreviewSection[]>(() => {
     const delimiter = CSV_DELIMITERS[this.csvDelimiterKey()] ?? ',';
     return this.resources().map(resource => {
       const rowsForResource = this.rows().filter(r => r.resource === resource);
       const tableName = this.targetByResource()[resource] ?? '';
-      const text = this.destType() === 'sql'
+      const text = this.isSqlFamily()
         ? buildSqlInsert(tableName, rowsForResource)
         : buildCsvPreview(rowsForResource, delimiter);
       return { resource, tableName, text };

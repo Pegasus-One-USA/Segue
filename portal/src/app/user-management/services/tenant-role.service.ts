@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, of, map, tap, catchError } from 'rxjs';
 import { TENANT_ENDPOINTS } from '../../core/api-endpoints';
 
@@ -19,6 +19,13 @@ interface TenantDto {
   isActive: boolean;
   createdOnUtc: string;
   createdBy: string | null;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface CustomRole {
@@ -59,6 +66,18 @@ export class TenantRoleService {
       map(dtos => dtos.map(dto => this.fromDto(dto))),
       tap(list => this.tenants.set(list)),
       catchError(() => of(this.tenants())),
+    );
+  }
+
+  /** Paged/search listing for the Tenant Management table (tenant-list.component.ts). Kept separate from the
+   *  `tenants` signal above, which stays a full unpaged list because pickers elsewhere (create-user-dialog,
+   *  role-tab, tenant-tab) need every tenant to populate a dropdown, not one page of it. */
+  getPagedTenants(search: string | undefined, page: number, pageSize: number): Observable<PagedResult<Tenant>> {
+    let params = new HttpParams().set('page', String(page)).set('pageSize', String(pageSize));
+    if (search) params = params.set('search', search);
+
+    return this.http.get<PagedResult<TenantDto>>(TENANT_ENDPOINTS.paged, { params }).pipe(
+      map(result => ({ ...result, items: result.items.map(dto => this.fromDto(dto)) })),
     );
   }
 

@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,6 +12,7 @@ import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 export interface RoleDialogData {
   role?: Role;
@@ -33,12 +34,17 @@ export interface RoleDialogData {
   templateUrl: './role-dialog.component.html',
   styleUrls: ['./role-dialog.component.scss'],
 })
+// No hasUnsavedChanges()/attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) generically
+// duck-types this component's own `form` property (present below) and reads its `.dirty` automatically,
+// so every plain single-reactive-form dialog gets "Discard changes?" gating for free with zero
+// boilerplate. isSaveInProgress() is kept explicit below since "a save is actually in flight" isn't
+// something a generic dirty-check can infer from a form alone.
 export class RoleDialogComponent {
   private readonly svc         = inject(IRoleService);
   private readonly fb          = inject(FormBuilder);
   private readonly actionGuard = inject(PermissionActionGuard);
-  readonly dialogRef   = inject(MatDialogRef<RoleDialogComponent>);
-  readonly data: RoleDialogData = inject(MAT_DIALOG_DATA);
+  readonly dialogRef   = inject<DialogRef<boolean>>(DialogRef);
+  readonly data: RoleDialogData = inject(DIALOG_DATA) as RoleDialogData;
 
   readonly isEdit       = !!this.data?.role;
   readonly isSystemRole = !!this.data?.role?.isSystemRole;
@@ -60,6 +66,10 @@ export class RoleDialogComponent {
   hasError(ctrl: string, err: string): boolean {
     const c = this.form.get(ctrl)!;
     return c.hasError(err) && (c.touched || this.submitted());
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

@@ -94,6 +94,28 @@
           Athena EhrEndpoint Id (MyChart-type row pointing at the athenahealth sandbox)
           <input type="text" [ngModel]="athenaEhrEndpointId()" (ngModelChange)="athenaEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
         </label>
+
+        <h3>eClinicalWorks / eCW (vendor toggle on the Patient Standalone screen)</h3>
+        <p class="subtitle">
+          A separate workflow/base URL for testing the eCW Patient Standalone flow instead of Epic/MyChart or
+          athenahealth — used only for the connect/list step (no detail or CSV export). The workflow's source node
+          must be a Healow (eCW) Patient-audience connection, opted into public launch. eCW's Patient audience
+          currently targets one fixed practice (no per-hospital directory), so instead of a picker, paste the id of
+          a pre-seeded <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is that eCW practice's
+          endpoint — FHIRBridge's public-patient-standalone-url endpoint requires one to mint against.
+        </p>
+        <label class="field">
+          eCW Patient Standalone Workflow Id
+          <input type="text" [ngModel]="ecwPatientWorkflowId()" (ngModelChange)="ecwPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          eCW Patient Standalone Base URL
+          <input type="text" [ngModel]="ecwPatientBaseUrl()" (ngModelChange)="ecwPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+        </label>
+        <label class="field">
+          eCW EhrEndpoint Id (MyChart-type row pointing at the eCW practice's FHIR base URL)
+          <input type="text" [ngModel]="ecwEhrEndpointId()" (ngModelChange)="ecwEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
       </section>
 
       <section class="settings-section">
@@ -116,8 +138,15 @@
         <h2>Provider_InApp (Role: ProviderInApp)</h2>
         <p class="subtitle">Uses the Provider Standalone Base URL above for its FHIRBridge connection. Must be a workflow opted into public launch via <code>POST /api/v1/workflows/{{ '{' }}id{{ '}' }}/enable-public-launch</code>.</p>
         <label class="field">
-          EHR Launch Workflow Id
+          EHR Launch Workflow Id (Epic / default)
           <input type="text" [ngModel]="providerInAppWorkflowId()" (ngModelChange)="providerInAppWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
+        </label>
+
+        <h3>eClinicalWorks / eCW (Provider EMR)</h3>
+        <p class="subtitle">A separate EHR-launch workflow for the eCW Provider EMR launch instead of Epic. Its source node must be a Healow (eCW) Provider EHR-launch connection, opted into public launch. Both share the one registered Launch URL — when a launch arrives, the app auto-selects this workflow if the launching EHR's <code>iss</code> is an eCW practice (host <code>*.ecwcloud.com</code>); otherwise it uses the Epic/default one above. Leave blank to keep eCW Provider EMR off.</p>
+        <label class="field">
+          eCW EHR Launch Workflow Id
+          <input type="text" [ngModel]="ecwProviderInAppWorkflowId()" (ngModelChange)="ecwProviderInAppWorkflowId.set($event)" placeholder="e.g. 29a8c94f-1f64-44ea-a900-1fb97d90dea9" />
         </label>
       </section>
 

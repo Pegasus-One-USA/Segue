@@ -13,8 +13,7 @@
       </button>
       @if (canCreate()) {
         <button class="btn-cta" type="button" (click)="onNewWorkflow()">
-          <span class="btn-ico">&#43;</span>
-          New Workflow
+          New
         </button>
       }
     </div>
@@ -134,103 +133,104 @@
                 {{ sortColumn() === 'actionOn' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
-            <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
           @for (w of paged(); track w.workflowId; let i = $index) {
             <tr class="data-row">
               <td class="col-menu">
-                <div class="row-menu" (click)="$event.stopPropagation()">
-                  <button
-                    class="btn-icon"
-                    type="button"
-                    title="More actions"
-                    (click)="$event.stopPropagation(); toggleActionMenu($event, w.workflowId)"
-                  ><mat-icon>more_vert</mat-icon></button>
+                <button
+                  mat-icon-button
+                  class="btn-more"
+                  type="button"
+                  title="More actions"
+                  [matMenuTriggerFor]="rowMenu"
+                  (click)="$event.stopPropagation()"
+                ><mat-icon>more_vert</mat-icon></button>
 
-                  @if (openActionMenuId() === w.workflowId && actionMenuPosition(); as pos) {
-                    <!-- No click-outside guard needed here: the panel stays a DOM descendant of .row-menu
-                         even though it renders position: fixed, so closeFilterMenuIfOutside's own
-                         closest('.row-menu') check already treats a click anywhere in here as "inside". -->
-                    <div
-                      class="row-menu-panel"
-                      [style.top.px]="pos.top"
-                      [style.bottom.px]="pos.bottom"
-                      [style.left.px]="pos.left"
+                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  @if (w.action === 'Run' && canRun()) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="busyId() === w.workflowId"
+                      (click)="onAction(w, 'async')"
                     >
-                      <!-- Always visible with workflow.view alone (the route guard already required it) —
-                           opening the builder to look at an existing workflow is VIEW access; only its own
-                           Save button (gated on workflow.edit there) decides whether anything can actually
-                           be changed. Relabeled so a view-only role isn't told it can "Edit". -->
-                      <button type="button" class="row-menu-item" (click)="onEdit(w); openActionMenuId.set(null)">
-                        <mat-icon>{{ canEdit() ? 'edit' : 'visibility' }}</mat-icon>
-                        {{ canEdit() ? 'Edit in Workflow Builder' : 'View in Workflow Builder' }}
-                      </button>
-
-                      @if (canEdit()) {
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          [disabled]="rowBusyId() === w.workflowId"
-                          (click)="onToggleEnabled(w); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
-                          {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
-                        </button>
-                      }
-
-                      @if (canEdit()) {
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          [disabled]="rowBusyId() === w.workflowId"
-                          [title]="w.isPubliclyLaunchable
-                            ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
-                            : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
-                          (click)="onTogglePublicLaunch(w); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
-                          {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
-                        </button>
-                      }
-
-                      @if (canCreate()) {
-                        <button
-                          type="button"
-                          class="row-menu-item"
-                          [disabled]="rowBusyId() === w.workflowId"
-                          (click)="askCopyWorkflow(w); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>content_copy</mat-icon> Duplicate
-                        </button>
-                      }
-
-                      <button
-                        type="button"
-                        class="row-menu-item"
-                        [disabled]="rowBusyId() === w.workflowId"
-                        [title]="'Copy workflow ID - ' + w.workflowId"
-                        (click)="copyWorkflowId(w); openActionMenuId.set(null)"
-                      >
-                        <mat-icon>tag</mat-icon> Copy Workflow ID
-                      </button>
-
-                      @if (canDelete()) {
-                        <div class="row-menu-divider"></div>
-
-                        <button
-                          type="button"
-                          class="row-menu-item row-menu-item--danger"
-                          [disabled]="rowBusyId() === w.workflowId"
-                          (click)="askDelete(w); openActionMenuId.set(null)"
-                        >
-                          <mat-icon>delete</mat-icon> Delete
-                        </button>
-                      }
-                    </div>
+                      <mat-icon>play_arrow</mat-icon> Run
+                    </button>
                   }
-                </div>
+
+                  <!-- Always visible with workflow.view alone (the route guard already required it) —
+                       opening the builder to look at an existing workflow is VIEW access; only its own
+                       Save button (gated on workflow.edit there) decides whether anything can actually
+                       be changed. Relabeled so a view-only role isn't told it can "Edit". -->
+                  <button mat-menu-item type="button" (click)="onEdit(w)">
+                    <mat-icon>{{ canEdit() ? 'edit' : 'visibility' }}</mat-icon>
+                    {{ canEdit() ? 'Edit' : 'View' }}
+                  </button>
+
+                  @if (canEdit()) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="rowBusyId() === w.workflowId"
+                      (click)="onToggleEnabled(w)"
+                    >
+                      <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
+                      {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
+                    </button>
+                  }
+
+                  @if (canEdit()) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="rowBusyId() === w.workflowId"
+                      [title]="w.isPubliclyLaunchable
+                        ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
+                        : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
+                      (click)="onTogglePublicLaunch(w)"
+                    >
+                      <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
+                      {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
+                    </button>
+                  }
+
+                  @if (canCreate()) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="rowBusyId() === w.workflowId"
+                      (click)="askCopyWorkflow(w)"
+                    >
+                      <mat-icon>content_copy</mat-icon> Duplicate
+                    </button>
+                  }
+
+                  <button
+                    mat-menu-item
+                    type="button"
+                    [disabled]="rowBusyId() === w.workflowId"
+                    [title]="'Copy workflow ID - ' + w.workflowId"
+                    (click)="copyWorkflowId(w)"
+                  >
+                    <mat-icon>tag</mat-icon> Copy Workflow ID
+                  </button>
+
+                  @if (canDelete()) {
+                    <mat-divider></mat-divider>
+
+                    <button
+                      mat-menu-item
+                      type="button"
+                      class="menu-item-danger"
+                      [disabled]="rowBusyId() === w.workflowId"
+                      (click)="askDelete(w)"
+                    >
+                      <mat-icon>delete</mat-icon> Delete
+                    </button>
+                  }
+                </mat-menu>
               </td>
               <td>
                 <div class="cell-name">
@@ -249,7 +249,7 @@
               </td>
               <td><span class="cell-muted">{{ audienceLabel(w.applicationType) }}</span></td>
               <td>
-                <span class="pill" [class.pill-on]="w.status === 'Enabled'" [class.pill-off]="w.status === 'Disabled'">
+                <span class="badge" [class.badge-active]="w.status === 'Enabled'" [class.badge-inactive]="w.status !== 'Enabled'">
                   {{ w.status }}
                 </span>
               </td>
@@ -258,7 +258,7 @@
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">
-                    <span class="status-badge" [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
+                    <span [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
                     <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
                     @if (w.lastRunErrorReferenceId) {
                       <a
@@ -276,32 +276,6 @@
               </td>
               <td><span class="cell-muted">{{ (w.modifiedBy || w.createdBy) ?? '—' }}</span></td>
               <td><span class="cell-muted">{{ ((w.modifiedOnUtc || w.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
-              <td class="col-actions">
-                <div class="row-actions">
-                  <div class="split-btn" (click)="$event.stopPropagation()">
-                    <!-- "Get Launch URL" hidden per request — only the Run button (backend workflows) still renders.
-                         The sync "Run (wait here)" option is hidden too — every run now always goes through the
-                         background path (see onAction's 'async' default) so the row stays interactive and the run
-                         survives navigating away, with live status now pushed via SignalR (RunStatusHubService)
-                         instead of requiring the old blocking wait. -->
-                    @if (w.action === 'Run' && canRun()) {
-                      <button
-                        class="btn-primary"
-                        type="button"
-                        [disabled]="busyId() === w.workflowId"
-                        (click)="onAction(w, 'async')"
-                      >
-                        @if (busyId() === w.workflowId) {
-                          <span class="spinner-sm"></span>
-                        } @else {
-                          <mat-icon class="btn-ico">play_arrow</mat-icon>
-                        }
-                        Run
-                      </button>
-                    }
-                  </div>
-                </div>
-              </td>
             </tr>
           }
         </tbody>
@@ -318,8 +292,7 @@
         <p>{{ searchQuery() ? 'Try a different search term.' : 'Create your first workflow to see it here.' }}</p>
         @if (!searchQuery() && canCreate()) {
           <button class="btn-cta" type="button" (click)="onNewWorkflow()">
-            <span class="btn-ico">&#43;</span>
-            New Workflow
+            New
           </button>
         }
       </div>

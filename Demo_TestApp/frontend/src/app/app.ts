@@ -125,6 +125,25 @@ export class App implements OnInit {
     return !!params.get('iss') && !!params.get('launch');
   })();
 
+  // The WHOLE ProviderInApp EHR-launch round-trip must render LaunchProviderInAppComponent BEFORE (and instead of)
+  // the login gate, not after it — an embedded Epic/eCW launch runs this app inside a cross-site iframe where the
+  // hb_session cookie (SameSite=Lax) is never sent, so loggedIn() is always false there and the old login-first
+  // ordering trapped every embedded launch on the sign-in screen, so its ngOnInit hand-off to FHIRBridge (and the
+  // iframe break-out) never ran. Both legs land on PROVIDER_IN_APP_PATH: the inbound leg carries iss+launch, the
+  // post-OAuth return leg carries workflowRunId (or launchError). A plain ProviderInApp login carries none of
+  // these, so it still falls through to that role's New 11 menu, gated on login as before.
+  protected readonly isProviderInAppLaunchFlow = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const onLaunchPath = window.location.pathname.toLowerCase() === PROVIDER_IN_APP_PATH;
+    const hasLaunchParams = (!!params.get('iss') && !!params.get('launch'))
+      || !!params.get('workflowRunId')
+      || !!params.get('launchError')
+      // ?autofetch=1 opens the patient view directly (no launch), where it auto-fetches the workflow's latest
+      // patient by workflow id — lets a user re-view an already-launched patient without a fresh EHR launch.
+      || !!params.get('autofetch');
+    return onLaunchPath && hasLaunchParams;
+  })();
+
   // True only when this exact page load landed on PATIENT_STANDALONE_PATH (i.e. via the dashboard mockup's
   // "Connect Get Data" redirect), as opposed to a fresh Patient login that should show the dashboard mockup instead.
   protected readonly isOnPatientStandaloneLaunchPath = window.location.pathname.toLowerCase() === PATIENT_STANDALONE_PATH;

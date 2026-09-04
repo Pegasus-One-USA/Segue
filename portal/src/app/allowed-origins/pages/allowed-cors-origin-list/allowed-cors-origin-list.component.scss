@@ -33,7 +33,7 @@
 // ─── Column widths ────────────────────────────────────────────────────────────
 .col-actions {
   width: 100px;
-  text-align: right;
+  text-align: left;
 }
 
 // ─── Cell elements ────────────────────────────────────────────────────────────
@@ -43,29 +43,11 @@
   gap: 12px;
 }
 
-.endpoint-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--color-primary-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  mat-icon {
-    font-size: 18px;
-    height: 18px;
-    width: 18px;
-    color: var(--color-primary);
-  }
-}
-
 // ─── Action buttons ───────────────────────────────────────────────────────────
 .actions-cell {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 

@@ -320,12 +320,21 @@
       @if (filteredGroups().length === 0) {
         <div class="dw-callout">No resources match "{{ groupSearchQuery() }}".</div>
       }
+      @if (unsupportedSelectedResources().length > 0) {
+        <div class="dw-callout dw-callout--warn">
+          {{ unsupportedSelectedResources().length }} selected resource{{ unsupportedSelectedResources().length > 1 ? 's are' : ' is' }}
+          no longer confirmed supported by this source ({{ unsupportedSelectedResources().join(', ') }}) —
+          it was allowed when this route was saved, but the filter has since narrowed. Review and remove it if it's no longer needed.
+        </div>
+      }
       <div class="dw-resources">
         @for (r of filteredGroups(); track r) {
           <button
             type="button"
             class="dw-resource-card"
             [class.selected]="isResourceSelected(r)"
+            [class.unsupported]="unsupportedSelectedResources().includes(r)"
+            [title]="unsupportedSelectedResources().includes(r) ? 'Selected, but no longer confirmed supported by this source' : ''"
             (click)="toggleResource(r)"
           >
             <div class="dw-rc-check">
@@ -334,6 +343,9 @@
             <div class="dw-rc-body">
               <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
               <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
+              @if (unsupportedSelectedResources().includes(r)) {
+                <span class="dw-rc-warn-badge" title="No longer confirmed supported by this source">⚠ not confirmed supported</span>
+              }
             </div>
           </button>
         }
@@ -763,12 +775,22 @@
           [resources]="[activeMappingGroup()!]"
           [allResources]="selectedResources()"
           [destType]="nonFhirDestType()"
+          [rulesDestinationType]="resolveDestinationTypeForRules()"
+          [deIdentificationProfiles]="deIdentificationProfiles()"
+          [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"
+          [newProfileName]="newProfileName()"
+          [creatingProfile]="creatingProfile()"
+          (selectedDeIdentificationProfileIdChange)="selectedDeIdentificationProfileId.set($event)"
+          (newProfileNameChange)="newProfileName.set($event)"
+          (createDeIdentificationProfileRequested)="createDeIdentificationProfile()"
           [mappingRows]="mappingRows()"
           [targetByResource]="targetByResource()"
           [availableFields]="availableFieldsFn"
+          [defaultAvailableFields]="defaultAvailableFieldsFn"
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
+          [sqlTableNames]="sqlTableBareNames()"
           [schemaAuthoringEnabled]="isSql()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
@@ -800,6 +822,7 @@
           (schemaOpQueued)="onSchemaOpQueued($event)"
           (schemaOpsCancelledForTable)="onSchemaOpsCancelledForTable($event)"
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+          (sourcePayloadReset)="onSourcePayloadReset($event)"
           (childTableRelationAdded)="onChildTableRelationAdded($event)"
         />
       }
@@ -826,7 +849,15 @@
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">De-identification</span>
-          <span class="dw-review-val">{{ selectedDeIdentificationProfileName() }}</span>
+          <span class="dw-review-val" [class.dw-review-val--warn]="!selectedDeIdentificationProfileId() || !selectedProfileHasRules()">
+            @if (!selectedDeIdentificationProfileId()) {
+              ⚠ No policy assigned
+            } @else if (!selectedProfileHasRules()) {
+              ⚠ {{ selectedDeIdentificationProfileName() }} (no active rules)
+            } @else {
+              {{ selectedDeIdentificationProfileName() }}
+            }
+          </span>
         </div>
         @if (isSql()) {
           <div class="dw-review-card">
@@ -1037,6 +1068,36 @@
   }
 
   <!-- ── Confirm before saving despite a non-blocking mapping warning ────────── -->
+  <!-- ── No de-identification profile selected for this destination — never silent; requires an explicit
+       "Continue anyway" before Step 1 advances, whether the connection is new or reused as-is. ── -->
+  @if (pendingDeIdentificationWarning(); as w) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="cancelProceedWithoutDeIdentification()"
+         (keydown.escape)="cancelProceedWithoutDeIdentification()">
+      <div class="dw-confirm-dialog">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">
+          @if (w.reason === 'none') {
+            No de-identification policy assigned
+          } @else {
+            Selected policy has no active rules
+          }
+        </h3>
+        <div class="dw-confirm-body">
+          @if (w.reason === 'none') {
+            <p>This destination has no de-identification profile selected — PHI will not be redacted or generalized before it's written. Continue only if this destination is genuinely meant to receive unprotected data.</p>
+          } @else {
+            <p><strong>{{ selectedDeIdentificationProfileName() }}</strong> is selected, but it currently has no enabled rules under it — nothing will actually be redacted, even though a policy appears to be assigned. Add rules to this profile on the Transformation Rules screen, or pick a different one, before continuing.</p>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelProceedWithoutDeIdentification()">Go back</button>
+          <button type="button" class="btn btn-danger" (click)="confirmProceedWithoutDeIdentification()">Continue anyway</button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (pendingSaveWarnings(); as warnings) {
     <div class="dw-confirm-backdrop" tabindex="0"
          (click)="onSaveWarningsBackdropClick($event)"

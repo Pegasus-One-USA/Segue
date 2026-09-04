@@ -51,10 +51,10 @@
         </div>
       </div>
 
-      @if (isSystemRole()) {
+      @if (isPermissionsLocked()) {
         <div class="notice">
           <mat-icon>lock</mat-icon>
-          <span>System roles cannot be modified.</span>
+          <span>SuperAdmin always has every permission and cannot be modified.</span>
         </div>
       }
 
@@ -83,7 +83,7 @@
 
           <div class="toolbar-right">
             <span class="permissions-count">{{ selectedIds().size }} of {{ allPermissions().length }} selected</span>
-            <button type="button" class="btn-reset" [disabled]="isSystemRole() || !isDirty()" (click)="reset()">
+            <button type="button" class="btn-reset" [disabled]="isPermissionsLocked() || !isDirty()" (click)="reset()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
                 <path d="M3 3v5h5"></path>
@@ -95,7 +95,7 @@
               aria-label="Select all permissions"
               [checked]="isAllChecked()"
               [indeterminate]="isAllIndeterminate()"
-              [disabled]="isSystemRole() || !canEditPermissions()"
+              [disabled]="isPermissionsLocked() || !canEditPermissions()"
               [matTooltip]="canEditPermissions() ? '' : 'You need the Role Edit permission to modify permissions.'"
               matTooltipPosition="above"
               (change)="toggleAll($event.checked)"
@@ -154,7 +154,7 @@
                                     [matTooltip]="canEditPermissions() ? (cell.tooltipOverride ?? cell.perm.description) : 'You need the Role Edit permission to modify permissions.'"
                                     matTooltipPosition="above"
                                     [checked]="isChecked(cell.perm.id)"
-                                    [disabled]="isSystemRole() || !canEditPermissions()"
+                                    [disabled]="isPermissionsLocked() || !canEditPermissions()"
                                     (change)="togglePermission(cell.perm.id)"
                                   ></mat-checkbox>
                                 }
@@ -166,7 +166,7 @@
                                 [attr.aria-label]="'Select all ' + row.label + ' permissions'"
                                 [checked]="isRowChecked(row)"
                                 [indeterminate]="isRowIndeterminate(row)"
-                                [disabled]="isSystemRole() || !canEditPermissions()"
+                                [disabled]="isPermissionsLocked() || !canEditPermissions()"
                                 [matTooltip]="canEditPermissions() ? '' : 'You need the Role Edit permission to modify permissions.'"
                                 matTooltipPosition="above"
                                 (change)="toggleRow(row, $event.checked)"
@@ -193,15 +193,13 @@
           mat-flat-button
           class="btn-save"
           *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Edit)"
-          [disabled]="isSystemRole() || saving()"
+          [disabled]="isPermissionsLocked() || saving()"
           (click)="save()"
         >
           @if (saving()) {
             <mat-spinner diameter="16"></mat-spinner>
-          } @else {
-            <mat-icon>save</mat-icon>
           }
-          Save Permissions
+          Update
         </button>
       </div>
 

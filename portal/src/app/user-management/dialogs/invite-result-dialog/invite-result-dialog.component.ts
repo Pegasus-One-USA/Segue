@@ -1,10 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ToastService } from '../../../services/toast.service';
 import { InviteResult } from '../../../auth/models/user.model';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-invite-result-dialog',
@@ -14,8 +15,8 @@ import { InviteResult } from '../../../auth/models/user.model';
   styleUrls: ['./invite-result-dialog.component.scss'],
 })
 export class InviteResultDialogComponent {
-  readonly dialogRef = inject(MatDialogRef<InviteResultDialogComponent>);
-  readonly data: InviteResult = inject(MAT_DIALOG_DATA);
+  readonly dialogRef = inject<DialogRef<void>>(DialogRef);
+  readonly data: InviteResult = inject(DIALOG_DATA) as InviteResult;
   private readonly toast = inject(ToastService);
 
   copied = signal(false);

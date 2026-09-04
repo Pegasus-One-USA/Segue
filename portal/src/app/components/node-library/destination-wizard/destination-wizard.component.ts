@@ -63,6 +63,9 @@ import {
   LegacyMappingRow,
   PendingSchemaOp,
   MappingDestType,
+  qualifyTableName,
+  reconcileTargetsForDestTypeSwitch,
+  checkColumnTypeCompatibility,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -80,7 +83,7 @@ import {
 import { MappingSummaryService } from './field-mapping/mapping-summary.service';
 import { MappingProfileImportService } from './field-mapping/mapping-profile-import.service';
 import { FieldMappingExportPreviewModalComponent } from './field-mapping/field-mapping-export-preview-modal.component';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { DialogService } from '../../../core/services/dialog.service';
 import {
   TransformRulesDialogComponent,
   TransformRulesDialogData,
@@ -502,7 +505,6 @@ function genericResourceDef(r: string): ResourceDef {
     NgComponentOutlet,
     FieldMappingCanvasComponent,
     FieldMappingExportPreviewModalComponent,
-    MatDialogModule,
   ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
@@ -524,7 +526,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStore);
   private readonly injector = inject(Injector);
-  private readonly dialog = inject(MatDialog);
+  private readonly dialogService = inject(DialogService);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
   private readonly discoverySvc = inject(EpicDiscoveryService);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
@@ -690,22 +692,32 @@ export class DestinationWizardComponent implements OnInit {
       () => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null,
     );
 
-  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
-   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
-   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
-   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
-   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
-   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
-   *  this fresh on every change-detection pass instead. */
+  /** Every registry-routed destination form now declares `reusingExisting` (gates its secret field's required
+   *  validator, and — via getMetadata() — whether a blank secret is sent as null/preserve vs. rebuilt into a
+   *  broken value) — Sql-family/Mongo/Medplum/BlobStorage/Csv/Sftp/AzureFhirService all declare the input, so
+   *  passing it uniformly no longer throws via ComponentRef.setInput. FHIR (Aidbox) never reaches this at all
+   *  (isFhir() is never registry-routed — see registryKey()); its own hand-rolled fhirForm has the equivalent
+   *  logic wired directly in destination-wizard.component.ts instead. Deliberately a plain method, not
+   *  computed() — hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a
+   *  tracked signal, so a computed() here would never invalidate as the user types; template bindings
+   *  re-evaluate this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
-    // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
-    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
-    if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
+    // Also relaxed when reopening an already-provisioned node straight from the canvas (_populateFromNode
+    // sets resolvedDestinationId but never touches connectionMode, since that flag is only ever set by the
+    // "reuse existing connection" dropdown's selectExisting()) — otherwise the never-re-displayed secret
+    // field's required validator blocks saving/testing an edit that doesn't touch the secret at all.
+    // hasExistingChanged() safely returns false when _existingBaseline is null (the case here), so this
+    // doesn't lose the "user actually retyped the secret" protection that flow relies on.
+    const reusingExisting =
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged();
     return {
-      reusingExisting:
-        this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+      reusingExisting,
+      // Only meaningful alongside reusingExisting — lets a form's Test Connection resolve the stored secret
+      // server-side (see e.g. CsvDestinationFormComponent.testConnection()) instead of requiring the user to
+      // retype it just to verify an unchanged connection still works. Null whenever reusingExisting is false,
+      // so a form never accidentally tests-by-id against stale state after the user picks/types something new.
+      existingDestinationId: reusingExisting ? this.resolvedDestinationId() : null,
     };
   }
 
@@ -1039,14 +1051,52 @@ export class DestinationWizardComponent implements OnInit {
   readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>(
     'idle',
   );
+  /** Backend-verified resource types this source's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService.
+   *  Null when no vendor is set yet, the vendor has no known restriction (e.g. Epic), or the request
+   *  failed — availableGroups treats null the same as "no filter", never narrowing the list below what
+   *  it would otherwise show. Only used when a live Discover probe hasn't already produced a more
+   *  authoritative, connection-specific result. */
+  readonly vendorResourceTypes = signal<string[] | null>(null);
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
-  readonly availableGroups = computed(() => {
+  /** The filter's own strict opinion — discovery result, else vendor list, else everything — with no
+   *  regard for what's already selected. Never rendered directly; availableGroups (below) is what the
+   *  template actually uses, and unsupportedSelectedResources diffs against this to find selections the
+   *  filter would otherwise have hidden. */
+  private readonly strictAvailableGroups = computed(() => {
     const discovered = this.discoveredResourceTypes();
-    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
-    const discoveredSet = new Set(discovered);
-    return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    if (discovered) {
+      const discoveredSet = new Set(discovered);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    }
+    const vendorList = this.vendorResourceTypes();
+    if (vendorList) {
+      const vendorSet = new Set(vendorList);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => vendorSet.has(r));
+    }
+    return SUPPORTED_RESOURCE_TYPES;
+  });
+  /** strictAvailableGroups, plus any already-selected resource the filter would otherwise have hidden —
+   *  e.g. a route saved before a vendor filter existed, or before a live Discover probe narrowed the
+   *  list further. The filter should only ever affect what's offered as a NEW selection, never make an
+   *  existing one invisible/un-toggleable (see unsupportedSelectedResources for the accompanying
+   *  warning surfaced in the template). */
+  readonly availableGroups = computed(() => {
+    const strict = this.strictAvailableGroups();
+    const selected = this.selectedResources();
+    if (selected.length === 0) return strict;
+    const strictSet = new Set(strict);
+    const extra = selected.filter((r) => !strictSet.has(r));
+    return extra.length > 0 ? [...strict, ...extra] : strict;
+  });
+  /** Selected resources the current filter (discovery or vendor) no longer confirms as supported —
+   *  drives the Step 2 warning callout and each affected card's inline badge. Empty whenever no filter
+   *  is active (Epic, GenericFhir, ...) or every selection is still within it. */
+  readonly unsupportedSelectedResources = computed(() => {
+    const strictSet = new Set(this.strictAvailableGroups());
+    return this.selectedResources().filter((r) => !strictSet.has(r));
   });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
@@ -1361,7 +1411,13 @@ export class DestinationWizardComponent implements OnInit {
    *  should stay visible; FieldMappingCanvasComponent.isProtectedColumn is what actually stops one of
    *  these from becoming a mapping target, checked at the point a mapping is completed instead of here. */
   readonly columnsForTableFn = (tableFullName: string): string[] => {
-    const table = this.sqlTables().find((t) => t.fullName === tableFullName);
+    const table = this.sqlTables().find(
+      (t) =>
+        t.fullName === tableFullName ||
+        // MySQL-only bare-name fallback — see FieldMappingCanvasComponent.sqlTableNames' doc comment.
+        // SQL Server/PostgreSQL keep strict fullName-only matching.
+        (this.isMySql() && t.tableName === tableFullName),
+    );
     return table ? table.columns.map((c) => c.name) : [];
   };
 
@@ -1422,7 +1478,14 @@ export class DestinationWizardComponent implements OnInit {
     const column: DestinationColumn = { ...e.column, origin: 'userCreated' };
     this.sqlTables.update((tables) =>
       tables.map((t) => {
-        if (t.fullName !== e.tableName) return t;
+        // Same MySQL-only bare-name fallback as columnsForTableFn above: after reopening an existing
+        // MySQL mapping, e.tableName (from targetByResource, restored bare via qualifyTableName) can
+        // legitimately disagree with this entry's own fullName (database-qualified, from the live
+        // schema probe) for the exact same real table. Without this, the lookup below silently never
+        // matches — the column is queued (the toast fires unconditionally) but never actually appears
+        // on the canvas, since every table in sqlTables() comes back unchanged.
+        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
           idx === -1
@@ -1461,7 +1524,8 @@ export class DestinationWizardComponent implements OnInit {
   onColumnDropped(e: { tableName: string; column: string }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? { ...t, columns: t.columns.filter((c) => c.name !== e.column) }
           : t,
       ),
@@ -1478,7 +1542,8 @@ export class DestinationWizardComponent implements OnInit {
   }): void {
     this.sqlTables.update((tables) =>
       tables.map((t) =>
-        t.fullName === e.tableName
+        // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above.
+        t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName)
           ? {
               ...t,
               columns: t.columns.map((c) =>
@@ -1511,6 +1576,20 @@ export class DestinationWizardComponent implements OnInit {
       ...m,
       [e.resource]: e.fields,
     }));
+  }
+
+  /** "Reset to Original" in the Load JSON Payload modal (FieldMappingCanvasComponent.
+   *  onResetToOriginalPayload) — drops this resource's pasted-payload override so availableFields(r)
+   *  falls back through to the real backend catalog (or built-in defs) again, same as it would if this
+   *  resource had never had a payload loaded for it at all. This is the one thing the canvas itself can't
+   *  do (payloadFieldsByResource lives here, not on the canvas) — the canvas's own mapping-row clear
+   *  already happened by the time this fires. */
+  onSourcePayloadReset(resource: string): void {
+    this.payloadFieldsByResource.update((m) => {
+      const rest = { ...m };
+      delete rest[resource];
+      return rest;
+    });
   }
 
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
@@ -1709,6 +1788,22 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
   private static readonly AZUREFHIR_TYPES: DestinationType[] = ['AzureFhirService'];
 
+  /** Every secret-shaped form control name across every destination form's raw FormGroup value — shared by
+   *  hasExistingChanged()/isStep1Dirty() so a real value typed there never counts as "the user changed
+   *  something" (secrets are never re-displayed from the API, so a baseline snapshot always has these blank).
+   *  Previously two separately-hand-maintained lists that had drifted out of sync (isStep1Dirty() was missing
+   *  both 'secretValue' [Blob] and 'secret' [Medplum]; hasExistingChanged() was missing 'secret') despite a
+   *  doc comment claiming they were the same list — kept as one set now so they can't drift again. */
+  private static readonly SECRET_FORM_CONTROL_KEYS = new Set([
+    'password',
+    'sftpPassword',
+    'connectionString',
+    'secretValue',
+    'clientSecret',
+    'bearerToken',
+    'secret',
+  ]);
+
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
   // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
@@ -1834,6 +1929,15 @@ export class DestinationWizardComponent implements OnInit {
     this.fhirForm.controls.authType.valueChanges.subscribe((v) =>
       this._syncFhirAuthValidators(v),
     );
+
+    effect(() => {
+      const profileId = this.selectedDeIdentificationProfileId();
+      if (!profileId) {
+        this.selectedProfileHasRules.set(true); // the "no profile selected" case has its own dedicated flag
+        return;
+      }
+      this.profileHasActiveRules(profileId).subscribe(hasRules => this.selectedProfileHasRules.set(hasRules));
+    });
 
     effect(() => this.stepChange.emit(this.step()));
     effect(() => this.progressChange.emit(this._hasProgressed()));
@@ -1970,6 +2074,21 @@ export class DestinationWizardComponent implements OnInit {
             this.discoverProbeStatus.set('error');
           }
         });
+    });
+
+    // Vendor-level fallback for availableGroups when live Discover hasn't run/succeeded — e.g. a
+    // brand-new Athenahealth or Healow source that hasn't been saved yet. Refetches (cached per vendor
+    // in MappingCatalogService) whenever sourceVendor() changes; a vendor with no known restriction
+    // (Epic, GenericFhir, ...) resolves to null, same as "no filter".
+    effect(() => {
+      const vendor = this.sourceVendor();
+      if (!vendor) {
+        this.vendorResourceTypes.set(null);
+        return;
+      }
+      this.catalogSvc
+        .resourceTypes(vendor)
+        .subscribe((types) => this.vendorResourceTypes.set(types));
     });
   }
 
@@ -2312,7 +2431,10 @@ export class DestinationWizardComponent implements OnInit {
   /** The real backend DestinationType for whichever destination family this wizard instance is
    *  configuring — same ternary already used inline at every mapping-profiles/import call site
    *  (see e.g. buildMappingSummaryDocument's destinationType), centralized here for the Rules dialog. */
-  private resolveDestinationTypeForRules(): DestinationType {
+  /** Non-private: the field-mapping canvas's join popover needs this too, to load/save a per-connector
+   *  transformation rule with the right DestinationType — same resolution the "Rules" button/modal already
+   *  used, just also bound straight into the canvas template now instead of only called from this class. */
+  resolveDestinationTypeForRules(): DestinationType {
     if (this.isMongo()) return 'Mongo';
     if (this.isMedplum()) return 'Medplum';
     if (this.isFhir()) return 'FhirRepository';
@@ -2347,16 +2469,13 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.dialog.open<TransformRulesDialogComponent, TransformRulesDialogData>(
+    this.dialogService.open<TransformRulesDialogComponent, TransformRulesDialogData>(
       TransformRulesDialogComponent,
       {
         width: '680px',
-        // NOT a tighter cap like '95vw' — MatDialogConfig's maxWidth/maxHeight apply once at open and
-        // aren't revisited by dialogRef.updateSize() later, so a smaller static cap here would silently
-        // clamp TransformRulesDialogComponent.toggleMaximize()'s 100vw/100vh fullscreen resize.
-        maxWidth: '100vw',
-        maxHeight: '100vh',
-        restoreFocus: false,
+        // Opts into the shell's own maximize toggle — see TransformRulesDialogComponent's own
+        // scss/html for how it now fills whatever size the shell's panel gives it, in either state.
+        maximizable: true,
         data: {
           resourceType: resource,
           destinationType: this.resolveDestinationTypeForRules(),
@@ -2385,15 +2504,13 @@ export class DestinationWizardComponent implements OnInit {
       this.selectedExistingId() ?? this.resolvedDestinationId();
     if (!sourceConnectionId || !destinationId) return;
 
-    this.dialog
+    this.dialogService
       .open<
         ExistingMappingProfileDialogComponent,
         ExistingMappingProfileDialogData,
         MappingProfileDto | null
       >(ExistingMappingProfileDialogComponent, {
         width: '640px',
-        maxWidth: '95vw',
-        restoreFocus: false,
         data: { resourceType: resource, sourceConnectionId, destinationId },
       })
       .afterClosed()
@@ -2424,15 +2541,13 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    this.dialog
+    this.dialogService
       .open<
         PromoteMappingProfileDialogComponent,
         PromoteMappingProfileDialogData,
         string | null
       >(PromoteMappingProfileDialogComponent, {
         width: '480px',
-        maxWidth: '95vw',
-        restoreFocus: false,
         data: {
           resourceType: resource,
           suggestedName: `${resource} — ${this.destLabel()}`,
@@ -2593,31 +2708,69 @@ export class DestinationWizardComponent implements OnInit {
   saveGroupMapping(): void {
     const group = this.activeMappingGroup();
     if (!group) return;
-    const errors = this.validateMappingForSave(group);
-    if (errors.length > 0) {
-      this.toast.error(
-        `Fix ${errors.length} mapping issue${errors.length === 1 ? '' : 's'} before saving`,
-        errors.join(' '),
-      );
-      return;
-    }
 
-    this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
-      if (conflicts.length > 0) {
-        this.pendingRuleConflicts.set(conflicts);
+    // A rule's declared output type (if any) must win over the raw source type in checkColumnTypeCompatibility
+    // below — see resolveRuleExpectedTypesForSave's own doc comment — so that lookup has to resolve before
+    // validateMappingForSave runs, not after (validateRuleConflictsForSave, further down, is a separate/later
+    // check and doesn't help here: it flags a MISMATCHED rule type, it doesn't supersede the raw-type check).
+    this.resolveRuleExpectedTypesForSave(group).subscribe((ruleExpectedTypeByField) => {
+      const errors = this.validateMappingForSave(group, ruleExpectedTypeByField);
+      if (errors.length > 0) {
+        this.toast.error(
+          `Fix ${errors.length} mapping issue${errors.length === 1 ? '' : 's'} before saving`,
+          errors.join(' '),
+        );
         return;
       }
-      // Soft checks (currently just a missing required parent reference — see buildParentReferenceWarnings)
-      // don't block Save the way validateMappingForSave's errors do: the user may fully intend to wire the
-      // parent resource's mapping in another group, or resolve it later, so they're shown a
-      // confirm-before-proceed dialog instead (see pendingSaveWarnings) rather than forcing a fix right now.
-      const warnings = this.buildParentReferenceWarnings(group);
-      if (warnings.length > 0) {
-        this.pendingSaveWarnings.set(warnings);
-        return;
-      }
-      this.completeSaveGroupMapping(group);
+
+      this.validateRuleConflictsForSave(group).subscribe((conflicts) => {
+        if (conflicts.length > 0) {
+          this.pendingRuleConflicts.set(conflicts);
+          return;
+        }
+        // Soft checks — currently a missing required parent reference (buildParentReferenceWarnings) and
+        // no active de-identification coverage on this destination — don't block Save the way
+        // validateMappingForSave's errors do; each Save on each resource re-checks this, not just the
+        // one-time Step 1 gate, since a profile can be emptied out or unassigned after Step 1 already
+        // passed (e.g. its rules deleted elsewhere). Shown as a confirm-before-proceed dialog instead
+        // (pendingSaveWarnings) rather than forcing a fix right now.
+        this.buildDeIdentificationSaveWarning().subscribe((deIdWarning) => {
+          const warnings = [
+            ...this.buildParentReferenceWarnings(group),
+            ...(deIdWarning ? [deIdWarning] : []),
+          ];
+          if (warnings.length > 0) {
+            this.pendingSaveWarnings.set(warnings);
+            return;
+          }
+          this.completeSaveGroupMapping(group);
+        });
+      });
     });
+  }
+
+  /** The de-identification half of saveGroupMapping's soft-warning check — a single synthetic
+   *  PendingParentReferenceWarning (message-only, no fix-it UI) reusing the same dialog/array
+   *  buildParentReferenceWarnings' real warnings render through, rather than a separate dialog. `parent`
+   *  is a sentinel, not a real resource name, so it can't collide with a real warning's @for track key. */
+  private buildDeIdentificationSaveWarning(): Observable<PendingParentReferenceWarning | null> {
+    const profileId = this.selectedDeIdentificationProfileId();
+    const makeWarning = (message: string): PendingParentReferenceWarning => ({
+      resource: '', parent: '__deidentification__', message,
+      sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
+      destinationColumns: [], selectedDestinationColumn: null,
+    });
+
+    if (!profileId) {
+      return of(makeWarning(
+        'This destination has no de-identification profile selected — PHI will not be redacted or generalized before it\'s written.',
+      ));
+    }
+    return this.profileHasActiveRules(profileId).pipe(
+      map(hasRules => hasRules ? null : makeWarning(
+        `"${this.selectedDeIdentificationProfileName()}" is selected as this destination's de-identification policy, but it currently has no enabled rules — nothing will actually be redacted.`,
+      )),
+    );
   }
 
   /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
@@ -2718,7 +2871,7 @@ export class DestinationWizardComponent implements OnInit {
    *  unnoticed — checked right before "Save" is allowed to actually persist anything (see
    *  saveGroupMapping). Table/column-existence checks are skipped entirely when there's no live SQL
    *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
-  private validateMappingForSave(resource: string): string[] {
+  private validateMappingForSave(resource: string, ruleExpectedTypeByField: Map<string, string | null>): string[] {
     const errors: string[] = [];
 
     // A still-queued "add column" whose name collides with a column the live probe already found on
@@ -2729,8 +2882,10 @@ export class DestinationWizardComponent implements OnInit {
     // this resource has any mapped rows yet, hence ahead of the early-return below.
     for (const op of this.pendingSchemaOps()) {
       if (op.kind !== 'addColumn') continue;
+      // Same MySQL-only bare-name fallback as columnsForTableFn/onColumnAdded above — without it this
+      // lookup silently finds nothing for a reopened MySQL mapping and the collision check below never runs.
       const table = this.sqlTables().find(
-        (t) => t.fullName === op.request.tableName,
+        (t) => t.fullName === op.request.tableName || (this.isMySql() && t.tableName === op.request.tableName),
       );
       const collides = table?.columns.some(
         (c) =>
@@ -2772,7 +2927,17 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const knownTables = this.hasSqlTables()
-      ? new Set(this.sqlTableOptions())
+      ? new Set([
+          ...this.sqlTableOptions(),
+          // MySQL-only bare-name fallback — see FieldMappingCanvasComponent.sqlTableNames' doc comment.
+          // A saved/reopened mapping's row.tableName is always the bare name for MySQL (bareName(),
+          // field-mapping-summary.model.ts), while sqlTableOptions() is the live-probed, database-qualified
+          // name — without this, a perfectly valid restored MySQL mapping fails Save with "no longer exists
+          // in the destination database" even though the table/columns render correctly (isPrimaryTargetValid/
+          // columnsForTableFn already tolerate this same mismatch). SQL Server/PostgreSQL keep strict
+          // fullName-only matching since their dbo./public. qualification genuinely matches the live probe.
+          ...(this.isMySql() ? this.sqlTableBareNames() : []),
+        ])
       : null;
 
     const targetCounts = new Map<string, number>();
@@ -2800,7 +2965,10 @@ export class DestinationWizardComponent implements OnInit {
       // the user's first signal, several steps after the mapping canvas that let it happen.
       if (knownTables) {
         const table = this.sqlTables().find(
-          (t) => t.fullName === row.tableName,
+          (t) =>
+            t.fullName === row.tableName ||
+            // MySQL-only bare-name fallback — see knownTables' own comment above.
+            (this.isMySql() && t.tableName === row.tableName),
         );
         const column = table?.columns.find((c) => c.name === row.targetName);
         if (column?.isAutoGenerated) {
@@ -2816,26 +2984,24 @@ export class DestinationWizardComponent implements OnInit {
           continue;
         }
 
-        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
-        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
-        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
-        // mismatch is caught on this canvas's own Save instead of only surfacing once the whole workflow is
-        // saved. childJson rows are exempt — their value is always written as JSON text (see
-        // resolveArrayPolicy's StoreJson branch), a distinct concern from a scalar field's own type.
-        if (column?.mappingValueType && row.mode === 'value') {
-          const sourceValueType = row.sources[0]?.valueType;
-          if (
-            sourceValueType &&
-            sourceValueType.toLowerCase() !==
-              column.mappingValueType.toLowerCase()
-          ) {
-            errors.push(
-              `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
-                `but "${row.sources[0]?.label ?? row.targetName}" is mapped as ${sourceValueType} — pick a compatible ` +
-                `source field or retarget to a ${sourceValueType}-compatible column.`,
-            );
-            continue;
-          }
+        // See checkColumnTypeCompatibility's own doc comment (field-mapping-model.ts) — mirrors
+        // CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync (the backend's
+        // /workflows/build validator), catching a real type mismatch on this canvas's own Save instead of
+        // only surfacing once the whole workflow is saved. Covers childJson rows too (effective ValueType
+        // 'Json'), not just 'value' rows — a childJson row used to be exempt here on the assumption that
+        // "always written as JSON text" meant always valid, which is true of the write mechanics but not
+        // of whether the destination column accepts Json at all (e.g. a plain varchar column doesn't).
+        // A transformation rule already resolved for this exact connector (see
+        // resolveRuleExpectedTypesForSave) overrides the raw source-type comparison — its declared output
+        // type is what actually reaches the column at runtime, not birthDate's own Date type, e.g.
+        const ruleKey = `${row.tableName}::${row.targetName}`;
+        const ruleExpectedType = ruleExpectedTypeByField.has(ruleKey)
+          ? ruleExpectedTypeByField.get(ruleKey)!
+          : undefined;
+        const typeError = checkColumnTypeCompatibility(row, column, ruleExpectedType);
+        if (typeError) {
+          errors.push(typeError);
+          continue;
         }
       }
 
@@ -2862,6 +3028,52 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     return errors;
+  }
+
+  /** Feeds checkColumnTypeCompatibility's rule-aware branch (field-mapping-model.ts) — one getEffectiveRules
+   *  call per mapped 'value' row of this resource, reduced to just what that check needs: whether a rule is
+   *  already resolved for this exact connector, and if so, its declared expectedValueType. Map key matches
+   *  validateMappingForSave's own targetCounts key ("tableName::targetName"); a present-but-null value means
+   *  "a rule exists here but declares no output type" (skip the type check, trust the rule) — distinct from
+   *  a missing key, which means "no rule at all" (fall back to comparing the raw source type). Same
+   *  hasSqlTables()/destinationType short-circuit as validateRuleConflictsForSave below, which this always
+   *  runs directly ahead of. */
+  private resolveRuleExpectedTypesForSave(resource: string): Observable<Map<string, string | null>> {
+    if (!this.hasSqlTables()) return of(new Map());
+
+    const destinationType = this.resolveDestinationTypeForRules();
+    if (!destinationType) return of(new Map());
+
+    const rows = this.mappingRows().filter((r) => r.resource === resource && r.mode === 'value');
+    if (rows.length === 0) return of(new Map());
+
+    const resourcePipelineRouteId = this.currentWorkflowId() ?? undefined;
+    const sourceSystem = this.sourceVendor() || null;
+
+    const checks = rows.map((row) => {
+      const sourceField = row.sources[0]?.fhirPath ?? null;
+      return this.transformationRulesSvc
+        .getEffectiveRules({
+          destinationType,
+          resourceType: resource,
+          destinationField: row.targetName,
+          resourcePipelineRouteId,
+          sourceSystem,
+          sourceField,
+        })
+        .pipe(
+          map((rules): [string, string | null] | null =>
+            rules.length === 0 ? null : [`${row.tableName}::${row.targetName}`, rules[0].expectedValueType ?? null],
+          ),
+          // A transient rule-lookup failure shouldn't block Save on its own here either — same tolerance
+          // validateRuleConflictsForSave already uses; the server-side check is still the backstop.
+          catchError(() => of(null)),
+        );
+    });
+
+    return forkJoin(checks).pipe(
+      map((entries) => new Map(entries.filter((e): e is [string, string | null] => e !== null))),
+    );
   }
 
   /** Mirrors CreateMappingProfileRequestValidator.ValidateApplicableRulesAsync (the backend's mapping-profile
@@ -3407,17 +3619,9 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'secretValue',
-      'clientSecret',
-      'bearerToken',
-    ]);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
-        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+        Object.entries(v).filter(([key]) => !DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS.has(key)),
       );
     const current = this.isFhir()
       ? this.fhirForm.getRawValue()
@@ -3436,16 +3640,9 @@ export class DestinationWizardComponent implements OnInit {
    *  key list as hasExistingChanged(). */
   isStep1Dirty(): boolean {
     if (!this._step1Baseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'clientSecret',
-      'bearerToken',
-    ]);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
-        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+        Object.entries(v).filter(([key]) => !DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS.has(key)),
       );
     const current = this.isFhir()
       ? this.fhirForm.getRawValue()
@@ -3507,6 +3704,13 @@ export class DestinationWizardComponent implements OnInit {
 
   sqlTableOptions(): string[] {
     return this.sqlTables().map((t) => t.fullName);
+  }
+
+  /** Bare table names (no schema/database prefix) of every already-probed SQL table — feeds the canvas's
+   *  MySQL-only bare-name fallback (see FieldMappingCanvasComponent.sqlTableNames' doc comment). Harmless
+   *  to compute for every dialect; only actually consulted when destType() === 'mysql'. */
+  sqlTableBareNames(): string[] {
+    return this.sqlTables().map((t) => t.tableName);
   }
 
   // Columns of the table currently chosen for a resource (drives the target card's own rendering).
@@ -3754,10 +3958,22 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
+  /** Same precedence as availableFields() minus its FIRST branch — the real backend FHIR catalog (or the
+   *  built-in defs, until that catalog loads), never a pasted-payload override. This is "the true default
+   *  payload" the Load JSON Payload modal's "Reset to Original" restores back to: availableFields() alone
+   *  can't answer that question once ANY payload has ever been loaded for this resource (this session, or
+   *  restored from a previously-saved node/snapshot — payloadFieldsByResource isn't scoped to "pasted
+   *  just now"), since at that point it's permanently returning the override instead of the original. */
+  defaultAvailableFields(r: string): ResourceFieldDef[] {
+    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+  }
+
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
     this.availableFields(r);
+  readonly defaultAvailableFieldsFn = (r: string): ResourceFieldDef[] =>
+    this.defaultAvailableFields(r);
   readonly columnsForResourceTargetFn = (r: string): string[] =>
     this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (
@@ -3771,12 +3987,28 @@ export class DestinationWizardComponent implements OnInit {
     this.keyInfoForTableColumn(tableFullName, column);
 
   // ── private ───────────────────────────────────────────────────────────────
+  // Last destType _rebuildRows actually ran with — null only before its first call. Lets a SQL-family
+  // ⇄ SQL-family switch (see reconcileTargetsForDestTypeSwitch) tell "the destination type just changed"
+  // apart from "resources changed" without needing a second effect/signal.
+  private _previousDestType: MappingDestType | null = null;
+
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
   // auto-populate field rows — the user adds those one at a time via "+".
   private _rebuildRows(resources: string[], type: MappingDestType): void {
     const oldTargets = this.targetByResource();
-    const targets = { ...oldTargets };
+    let targets = { ...oldTargets };
+
+    // Destination-type switch (e.g. SQL Server -> PostgreSQL): re-qualify any currently-selected
+    // resource's target that's still exactly the untouched auto-default under the PREVIOUS type — never
+    // a manually typed/renamed/created target, see reconcileTargetsForDestTypeSwitch's own doc comment.
+    if (this._previousDestType !== null && this._previousDestType !== type) {
+      const catalogSqlTableByResource: Record<string, string> = {};
+      for (const r of resources) catalogSqlTableByResource[r] = this.defFor(r).sqlTable;
+      targets = reconcileTargetsForDestTypeSwitch(targets, catalogSqlTableByResource, this._previousDestType, type);
+    }
+    this._previousDestType = type;
+
     for (const r of resources) {
       if (targets[r]) continue;
       // Seed the per-resource target once; preserve any value the user has already typed.
@@ -3787,12 +4019,17 @@ export class DestinationWizardComponent implements OnInit {
       // a container — the container itself is a single wizard-level field (blobForm.container) — so it seeds
       // from the same file-name-shaped default CSV uses, minus the ".csv" extension (the blob writer already
       // appends its own real extension — a literal "patients.csv" stem would double up as "patients.csv_....ndjson").
+      // def.sqlTable is hand-authored as "dbo.X" (see DEST_RESOURCE_DEFS/genericResourceDef above) — a SQL
+      // Server assumption baked into the static catalog. Strip that and re-qualify per the real destType
+      // (matches SqlDestinationSchemaService.SplitTableName's own per-dialect default: "dbo" for SQL Server,
+      // "public" for PostgreSQL, no schema layer for MySQL) — otherwise every MySQL/PostgreSQL resource seeds
+      // a "dbo."-qualified default that fails at Add to Workflow with "schema 'dbo' does not exist".
       targets[r] =
         type === 'csv'
           ? def.csvFile
           : type === 'blob'
             ? def.csvFile.replace(/\.csv$/i, '')
-            : def.sqlTable;
+            : this._qualifyDefaultTable(def.sqlTable, type);
     }
     this.targetByResource.set(targets);
     this.mappingRows.update((rows) =>
@@ -3808,6 +4045,13 @@ export class DestinationWizardComponent implements OnInit {
             : row;
         }),
     );
+  }
+
+  /** Strips the static resource catalog's hardcoded "dbo." (a SQL Server assumption baked into
+   *  DEST_RESOURCE_DEFS/genericResourceDef's sqlTable) and re-qualifies for the real destType via the
+   *  shared qualifyTableName (field-mapping-model.ts) — the one place this logic lives. */
+  private _qualifyDefaultTable(sqlTable: string, type: MappingDestType): string {
+    return qualifyTableName(sqlTable.replace(/^dbo\./i, ''), type);
   }
 
   private _populateFromNode(node: CanvasNode): void {
@@ -4006,7 +4250,11 @@ export class DestinationWizardComponent implements OnInit {
    *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
    *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
   private _refreshSqlTablesFromLiveSchema(): void {
-    if (this.destType() !== 'sql') return;
+    // MySQL/PostgreSQL are SQL-family too (see isSql()) — DestinationSchemaController.GetSchema already
+    // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
+    // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
+    // stale table/column list the last saved mapping summary happened to restore.
+    if (!this.isSql()) return;
 
     const destinationId = this.resolvedDestinationId();
     const applyTables = (tables: DestinationTable[]) => {
@@ -4147,7 +4395,69 @@ export class DestinationWizardComponent implements OnInit {
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
   // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
+  /** Set when Step 1 is about to advance (new connection or reused existing one alike) with no active
+   *  de-identification coverage — either no profile picked at all, or a profile that's picked but
+   *  currently has zero enabled rules under it (a profile record with nothing left attached still shows
+   *  up in the dropdown — see loadDeIdentificationProfiles — so "a profile is selected" alone doesn't
+   *  mean anything actually gets redacted). Blocks nothing on its own, just forces an explicit "Continue
+   *  anyway" click instead of silently letting an unprotected destination through. Holds the real
+   *  provisioning work to resume if the user confirms; cleared (discarding it) on "Go back". */
+  readonly pendingDeIdentificationWarning = signal<{ reason: 'none' | 'empty'; resume: () => void } | null>(null);
+
+  confirmProceedWithoutDeIdentification(): void {
+    const pending = this.pendingDeIdentificationWarning();
+    this.pendingDeIdentificationWarning.set(null);
+    pending?.resume();
+  }
+
+  cancelProceedWithoutDeIdentification(): void {
+    this.pendingDeIdentificationWarning.set(null);
+  }
+
+  /** Tracks whether the currently-selected profile actually has active rules — drives the Step 4 Review
+   *  card's warning flag the same way pendingDeIdentificationWarning drives Step 1's. Re-checked whenever
+   *  the selection changes; defaults true (no warning) while a check is in flight or none is selected,
+   *  since the "no profile at all" case already has its own, more specific flag in the template. */
+  readonly selectedProfileHasRules = signal(true);
+
+  /** Whether the given profile currently has at least one enabled rule under it. Client-side filter over
+   *  the full rule list (the backend's GET has no deIdentificationProfileId query param — this endpoint
+   *  wasn't built to be filtered by profile, only by resource/destination/field) rather than a new
+   *  backend param for what's otherwise a one-off check. Fails OPEN (treated as "has rules") on a
+   *  transient lookup error — same tolerance validateRuleConflictsForSave already uses elsewhere in this
+   *  file — this warning is a nudge, not the only safeguard, and shouldn't block Step 1 on a flaky call. */
+  private profileHasActiveRules(profileId: string): Observable<boolean> {
+    return this.transformationRulesSvc.list({}).pipe(
+      map(rules => rules.some(r => r.deIdentificationProfileId === profileId && r.isEnabled)),
+      catchError(() => of(true)),
+    );
+  }
+
   private provisionDestinationConnection(
+    metadata: { fields: Record<string, string>; secret?: string | null },
+    onDone: () => void,
+  ): void {
+    // Checked first, ahead of the 'existing'-mode early return below — an unprotected destination is just
+    // as real a gap whether it's being created fresh or reused as-is; selectedDeIdentificationProfileId is
+    // kept in sync with whichever destination is actually selected either way (see selectExisting()).
+    const profileId = this.selectedDeIdentificationProfileId();
+    const resume = () => this._provisionDestinationConnectionAfterDeIdCheck(metadata, onDone);
+
+    if (!profileId) {
+      this.pendingDeIdentificationWarning.set({ reason: 'none', resume });
+      return;
+    }
+
+    this.profileHasActiveRules(profileId).subscribe(hasRules => {
+      if (!hasRules) {
+        this.pendingDeIdentificationWarning.set({ reason: 'empty', resume });
+      } else {
+        resume();
+      }
+    });
+  }
+
+  private _provisionDestinationConnectionAfterDeIdCheck(
     metadata: { fields: Record<string, string>; secret?: string | null },
     onDone: () => void,
   ): void {

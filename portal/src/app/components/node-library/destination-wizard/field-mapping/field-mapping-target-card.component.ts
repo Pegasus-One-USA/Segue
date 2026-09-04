@@ -60,9 +60,24 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   /** True for an added extra (already-existing) table — shows a remove button, hides the table picker. */
   readonly isExtra = input<boolean>(false);
   readonly destType = input.required<MappingDestType>();
+  /** SQL Server/MySQL/PostgreSQL — the relational family that shares real, live-probed table/column
+   *  schema and ALTER TABLE-backed schema authoring (see DestinationWizardComponent.isSql/hasSqlTables,
+   *  which this mirrors). Distinct from a plain destType() === 'sql' check, which used to leave
+   *  MySQL/PostgreSQL wrongly falling through to CSV's free-text-only column handling everywhere below. */
+  readonly isSqlFamily = computed(
+    () => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres',
+  );
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
+  /** Bare table names (no schema/database prefix) of every already-probed SQL table — only meaningful for
+   *  MySQL, whose live schema probe qualifies names with the connected database (e.g.
+   *  "fhirbridge_output.Patient", see SqlDestinationSchemaService.ReadColumnsAsync) while a saved/reopened
+   *  mapping only ever persists the bare table name (bareName(), field-mapping-summary.model.ts). Lets
+   *  hasValidTarget tolerate that bare-vs-qualified mismatch for MySQL specifically, mirroring
+   *  FieldMappingCanvasComponent.sqlTableNames — without loosening SQL Server/PostgreSQL's strict fullName
+   *  match (their dbo./public. qualification genuinely matches what the live probe returns). */
+  readonly sqlTableNames = input<string[]>([]);
   readonly columns = input.required<string[]>();
   readonly rowForColumn = input.required<(column: string) => MappingRow | undefined>();
   /** Real data type (e.g. "nvarchar(50)") for a probed/created SQL column — undefined for CSV or
@@ -96,6 +111,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
   readonly columnActivate = output<string>();
+  /** A mapped (or unmapped — the canvas no-ops then) column was clicked, not dragged onto — a row here
+   *  is a drop TARGET (drag always starts from the source tree), so unlike a source leaf there's no
+   *  drag-vs-click ambiguity to resolve first; see onRowClick. */
+  readonly columnClick = output<{ column: string; anchor: HTMLElement }>();
   readonly positionChange = output<{ x: number; y: number }>();
   readonly removeTable = output<void>();
   /** Mongo-only inline rename of this card's collection name (see startRenameTable) — preserves this
@@ -147,7 +166,11 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    * so a column can't be added against a table nobody actually chose.
    */
   readonly hasValidTarget = computed(() =>
-    this.isExtra() || !this.hasSqlTables() || this.sqlTableOptions().includes(this.targetValue())
+    this.isExtra() ||
+    !this.hasSqlTables() ||
+    this.sqlTableOptions().includes(this.targetValue()) ||
+    // MySQL-only bare-name fallback — see sqlTableNames' doc comment above.
+    (this.destType() === 'mysql' && this.sqlTableNames().includes(this.targetValue()))
   );
 
   /**
@@ -375,5 +398,18 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
     if ((ev.target as HTMLElement).closest('button')) return;
     ev.preventDefault();
     this.columnActivate.emit(column);
+  }
+
+  /** Plain mouse click on a column row — opens its Mapping Configuration (via columnClick, handled by
+   *  the canvas orchestrator), same identity (resource/tableName/column) the connector-line click
+   *  already opens. Ignored when the click landed on one of the row's own buttons (key-toggle/edit/
+   *  delete), which already handle their own click. Deliberately does NOT stop this click from bubbling
+   *  further (e.g. to document) — the canvas's own "close the mapping-picker on the click that opened
+   *  it" guard is a one-shot flag instead (see FieldMappingCanvasComponent.activateFieldMappings), so
+   *  this click still reaches anything else that legitimately reacts to "the user clicked somewhere on
+   *  the canvas" (e.g. the "+ Add a table…" menu's own click-outside-closes-it listener). */
+  onRowClick(column: string, ev: MouseEvent): void {
+    if ((ev.target as HTMLElement).closest('button')) return;
+    this.columnClick.emit({ column, anchor: ev.currentTarget as HTMLElement });
   }
 }

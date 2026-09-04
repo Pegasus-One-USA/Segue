@@ -32,16 +32,12 @@ import { EPIC_ENV } from '../../../data/epic-environments.data';
 import { EnvKey } from '../../../models/epic-env.model';
 import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../../epic-source-wizard/models/epic-config.model';
-import {
-  EpicAudience,
-  AudienceFieldConfig,
-  AUDIENCE_FIELD_CONFIG,
-  isAudienceDisabledForVendor,
-} from '../../epic-source-wizard/models/audience-field-config.data';
+import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG, VENDOR_DISABLED_AUDIENCES, isAudienceDisabledForVendor } from '../../epic-source-wizard/models/audience-field-config.data';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { MappingCatalogService } from '../../../services/mapping-catalog.service';
 import { environment } from '../../../../environments/environment';
 import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
@@ -99,6 +95,13 @@ const ATHENA_SANDBOX_TOKEN_URL =
   'https://api.preview.platform.athenahealth.com/oauth2/v1/token';
 const ATHENA_SANDBOX_AUTHORIZE_URL =
   'https://api.preview.platform.athenahealth.com/oauth2/v1/authorize';
+
+// eClinicalWorks (Healow) — only the Patient audience is enabled so far (see VENDOR_DISABLED_AUDIENCES). This is
+// the new-source FHIR Base URL default (ngOnInit) for that one audience; Token/Authorization Endpoint are
+// watermarks only (see tokenEndpointPlaceholder/authzEndpointPlaceholder below), same treatment as Epic's.
+const HEALOW_SANDBOX_BASE_URL = 'https://fhir4.healow.com/fhir/r4/JAFJCD';
+const HEALOW_TOKEN_URL_PLACEHOLDER     = 'https://oauthserver.eclinicalworks.com/.../oauth2/token';
+const HEALOW_AUTHORIZE_URL_PLACEHOLDER = 'https://oauthserver.eclinicalworks.com/.../oauth2/authorize';
 
 /**
  * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
@@ -857,6 +860,20 @@ export class EhrVendorSourceFormComponent
    *  used to read the form's own vendor `<select>` control now reads this input instead. */
   readonly vendor = input.required<EhrVendor>();
 
+  /** Display-only brand name shown in the form's own title/labels/toasts — defaults to `vendor()` when the
+   *  hosting wrapper doesn't override it. Kept separate from `vendor()` because that value also feeds the
+   *  'Connector' field and backend SourceSystemType matching (see EHR_VENDOR_TO_SOURCE_FORM_KEY), so a vendor
+   *  whose marketed brand name differs from its backend enum member (e.g. eClinicalWorks' 'Healow' enum) can
+   *  show its brand name here without touching that backend-matched identifier. */
+  readonly vendorLabel = input<string>();
+  protected readonly displayVendor = computed(() => this.vendorLabel() ?? this.vendor());
+
+  /** Full override for the topbar title (see the template) — used when the wanted title text isn't simply
+   *  "`{displayVendor()}` Configuration", e.g. eClinicalWorks' 'eClinicalWork Configuration'. Defaults to that
+   *  shape when omitted. */
+  readonly formTitle = input<string>();
+  protected readonly topbarTitle = computed(() => this.formTitle() ?? `${this.displayVendor()} Configuration`);
+
   readonly cancelled = output<void>();
   readonly saved = output<void>();
   /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
@@ -890,6 +907,7 @@ export class EhrVendorSourceFormComponent
   private readonly destroyRef = inject(DestroyRef);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
   private readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
+  private readonly catalogSvc = inject(MappingCatalogService);
 
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
@@ -935,16 +953,23 @@ export class EhrVendorSourceFormComponent
   // JSON as-is with no mapping-template dependency at all, so the cap was blocking resource types (Organization,
   // Location, ...) that already work fine end-to-end.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
+  /** Backend-verified resource types this instance's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService and kept
+   *  in sync with `vendor()` by the effect in the constructor. Null when the vendor has no known
+   *  restriction (Epic, GenericFhir, ...) or the request hasn't resolved yet — isResourceSupported treats
+   *  null the same as "no filter", never narrowing `resources` below SUPPORTED_RESOURCE_TYPES. */
+  protected readonly vendorResourceTypes = signal<string[] | null>(null);
   protected get resources(): string[] {
     return SUPPORTED_RESOURCE_TYPES;
   }
   protected isResourceSupported(r: string): boolean {
-    return SUPPORTED_RESOURCE_TYPES.includes(r);
+    if (!SUPPORTED_RESOURCE_TYPES.includes(r)) return false;
+    const vendorList = this.vendorResourceTypes();
+    return vendorList ? vendorList.includes(r) : true;
   }
 
-  /** Of `resources`, only the subset this pipeline actually supports today — drives "Select all" and the
-   *  selected-count display in the retrieval-method resource grids. Trivially equal to `resources` now that
-   *  both are SUPPORTED_RESOURCE_TYPES; kept as a defensive filter in case the two ever diverge again. */
+  /** Of `resources`, only the subset this vendor/pipeline actually supports today — drives "Select all"
+   *  and the selected-count display in the retrieval-method resource grids. */
   protected readonly selectableResources = computed(() =>
     this.resources.filter((r) => this.isResourceSupported(r)),
   );
@@ -1207,20 +1232,18 @@ export class EhrVendorSourceFormComponent
   );
 
   /** Token/Authorization Endpoint watermarks — both fields are normally auto-populated by Discover, so the
-   *  placeholder is only ever seen while they're still blank. Athenahealth doesn't publish a discoverable
-   *  `/.well-known/smart-configuration` the way Epic does, so its admins are more likely to type these in by
-   *  hand; showing athenahealth's real Preview sandbox URLs here (rather than Epic's) points them at the right
-   *  shape of URL. Every other vendor keeps the existing Epic placeholder unchanged. */
+   *  placeholder is only ever seen while they're still blank. Athenahealth and eClinicalWorks (Healow) don't
+   *  publish a discoverable `/.well-known/smart-configuration` the way Epic does, so their admins are more likely
+   *  to type these in by hand; showing each vendor's real OAuth server URL shape here points them at the right
+   *  format. Every other vendor keeps the existing Epic placeholder unchanged. */
   protected readonly tokenEndpointPlaceholder = computed(() =>
-    this.vendor() === 'Athenahealth'
-      ? ATHENA_SANDBOX_TOKEN_URL
-      : 'https://fhir.epic.com/…/oauth2/token',
-  );
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_TOKEN_URL :
+    this.vendor() === 'Healow' ? HEALOW_TOKEN_URL_PLACEHOLDER :
+    'https://fhir.epic.com/…/oauth2/token');
   protected readonly authzEndpointPlaceholder = computed(() =>
-    this.vendor() === 'Athenahealth'
-      ? ATHENA_SANDBOX_AUTHORIZE_URL
-      : 'https://fhir.epic.com/…/oauth2/authorize',
-  );
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_AUTHORIZE_URL :
+    this.vendor() === 'Healow' ? HEALOW_AUTHORIZE_URL_PLACEHOLDER :
+    'https://fhir.epic.com/…/oauth2/authorize');
 
   /** True when this vendor doesn't support the given audience yet (see VENDOR_DISABLED_AUDIENCES) — used to
    *  grey out the option in the audience `<select>`. The strategy is fully implemented server-side; only the
@@ -1228,6 +1251,27 @@ export class EhrVendorSourceFormComponent
   protected isAudienceDisabled(audience: EpicAudience): boolean {
     return isAudienceDisabledForVendor(this.vendor(), audience);
   }
+
+  private static readonly AUDIENCE_LABELS: Record<EpicAudience, string> = {
+    'provider-ehr-launch': 'Provider EHR Launch',
+    'provider-standalone': 'Provider Standalone',
+    'backend-system':      'Backend System',
+    'patient':             'Patient',
+  };
+
+  /** Drives the "pending sandbox credentials" hint under the Audience select — built from whichever audiences
+   *  VENDOR_DISABLED_AUDIENCES actually disables for the current vendor, rather than a hardcoded audience list/
+   *  vendor name, so it stays correct as more vendors (and more of their audiences) get added there. Null when
+   *  this vendor has nothing disabled. */
+  protected readonly disabledAudienceHint = computed<string | null>(() => {
+    const disabled = VENDOR_DISABLED_AUDIENCES[this.vendor()];
+    if (!disabled || disabled.length === 0) return null;
+    const names = disabled.map(a => EhrVendorSourceFormComponent.AUDIENCE_LABELS[a]);
+    const joined = names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `${joined} ${names.length === 1 ? 'is' : 'are'} pending ${this.displayVendor()} sandbox credentials.`;
+  });
 
   // ── Backend Services signing key: generate / import (see generateKeyPair()/importPrivateKey() below) ──────────
   private readonly keySourceValue = toSignal(
@@ -1642,6 +1686,15 @@ export class EhrVendorSourceFormComponent
       }
     });
 
+    // Narrows the resource-type grid to what this vendor's real FHIR API is verified to support
+    // (VendorResourceTypeSupport, backend) — e.g. hides Task/Communication for Athenahealth. A vendor
+    // with no known restriction resolves to null, same as "no filter" (isResourceSupported above).
+    effect(() => {
+      this.catalogSvc
+        .resourceTypes(this.vendor())
+        .subscribe((types) => this.vendorResourceTypes.set(types));
+    });
+
     // A saved connection's audience can predate a vendor's disabled-audience list (e.g. was created before
     // Provider Standalone/EHR Launch were hidden for Athenahealth), or this instance's `vendor` could change
     // after the form already restored one. Fall back to Backend System — always enabled for every vendor —
@@ -1667,10 +1720,12 @@ export class EhrVendorSourceFormComponent
     // system/{Type}.rs), which is correct for Epic. athenahealth's Backend System app registrations verified
     // against the live preview sandbox are provisioned with v1 coarse scopes only (system/{Type}.read) — sending
     // v2 scopes gets rejected by the token endpoint with "Invalid Scope: One or more scopes are not configured
-    // for the authorization server resource." detectScopeVersion (real evidence from a successful Discover call)
-    // still wins if it ever fires — this is only a default for when it hasn't.
+    // for the authorization server resource." eClinicalWorks (Healow) has the same v1-only requirement — confirmed
+    // against a live authorize attempt, which eCW rejected with invalid_scope for a v2 (.rs) resource scope.
+    // detectScopeVersion (real evidence from a successful Discover call) still wins if it ever fires for either
+    // vendor — this is only a default for when it hasn't.
     effect(() => {
-      if (this.vendor() === 'Athenahealth' && !this.scopeVersionAuto()) {
+      if ((this.vendor() === 'Athenahealth' || this.vendor() === 'Healow') && !this.scopeVersionAuto()) {
         this.form.controls.scopeVersion.setValue('v1');
       }
     });
@@ -1813,6 +1868,22 @@ export class EhrVendorSourceFormComponent
       this.form.controls.appName.setValue('Athena');
       if (this.form.controls.environment.value === 'sandbox') {
         this.form.controls.epicBaseUrl.setValue(ATHENA_SANDBOX_BASE_URL);
+      }
+    }
+
+    // New-source defaults for eClinicalWorks (Healow): App Name, default Patient audience, its FHIR Base URL, and
+    // client_secret_basic auth placement. eCW's token endpoint rejects client_secret_post with invalid_client and
+    // requires Basic (confirmed end-to-end by poc/ecw-ehr-launch-poc), so a confidential eCW source (e.g. Provider
+    // EMR / EHR launch) must default to 'basic' rather than the form-wide 'post' default — the admin can still
+    // change audience/placement. Same "skip once editing" guard as Athenahealth above — never overwrites a
+    // connection the admin already saved or is customizing. Harmless for eCW Patient (a public/PKCE client with no
+    // secret, where authPlacement is unused).
+    if (!this.wiz.isEditing() && this.vendor() === 'Healow') {
+      this.form.controls.appName.setValue('eCW');
+      this.form.controls.audience.setValue('patient');
+      this.form.controls.authPlacement.setValue('basic');
+      if (this.form.controls.environment.value === 'sandbox') {
+        this.form.controls.epicBaseUrl.setValue(HEALOW_SANDBOX_BASE_URL);
       }
     }
 

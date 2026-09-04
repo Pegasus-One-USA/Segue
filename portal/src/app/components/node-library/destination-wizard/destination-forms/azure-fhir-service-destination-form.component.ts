@@ -74,9 +74,9 @@ import { WizardDestinationFormApi } from './destination-form-api';
           </div>
 
           <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
-            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
             <input id="dw-azfhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret"
-              placeholder="client secret" autocomplete="new-password" />
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current client secret' : 'client secret'" autocomplete="new-password" />
             @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
               <span class="dw-error">A client secret is required.</span>
             }
@@ -142,6 +142,11 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
    *  never repopulated when patching from an existing connection, so requiring it here would permanently block
    *  reuse unless the user retypes it just to satisfy validation. Mirrors BlobStorageDestinationFormComponent. */
   readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — not yet consumed here (Test Connection still requires retyping the
+   *  client secret for AzureFhirService), but declared so the wizard can pass it uniformly without
+   *  ComponentRef.setInput throwing on an undeclared input. See CsvDestinationFormComponent for the
+   *  consuming pattern. */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly fhirForm = this.fb.group({
     name: ['Azure FHIR Service', [Validators.required]],
@@ -270,11 +275,22 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Managed identity never resolves a Key Vault secret — buildFhirSecretBlob returns '' for it. Client
+    // credentials returns the {clientId, clientSecret, tokenEndpoint} blob FhirRepositoryAuthResolver expects —
+    // but that blob is non-empty even when clientSecret itself is blank, which would overwrite a working
+    // stored secret with a broken one on a no-op re-save. Only rebuild when the user actually typed a new
+    // secret, or there's no existing one to preserve yet — same guard as
+    // WorkflowBuildAssemblerService.buildDestinationRequest's isAzureFhir branch.
+    const hasNewSecretInput = !!config['dest_clientSecret'];
+    const secret =
+      config['dest_authType'] === 'managedIdentity'
+        ? ''
+        : this.reusingExisting() && !hasNewSecretInput
+          ? null
+          : buildFhirSecretBlob(config);
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'fhir')) as Record<string, string>,
-      // Managed identity never resolves a Key Vault secret — buildFhirSecretBlob returns '' for it. Client
-      // credentials returns the {clientId, clientSecret, tokenEndpoint} blob FhirRepositoryAuthResolver expects.
-      secret: buildFhirSecretBlob(config),
+      secret,
     };
   }
 

@@ -75,6 +75,13 @@
               [disabled]="isRedirectingToMyChart()"
               (click)="selectVendor('athena')"
             >athenahealth</button>
+            <button
+              type="button"
+              class="vendor-toggle__btn"
+              [class.vendor-toggle__btn--active]="vendor() === 'ecw'"
+              [disabled]="isRedirectingToMyChart()"
+              (click)="selectVendor('ecw')"
+            >eCW</button>
           </div>
 
           @if (vendor() === 'epic') {
@@ -121,11 +128,18 @@
                 </div>
               }
             </div>
-          } @else {
+          } @else if (vendor() === 'athena') {
             <div class="hospital-picker">
               <p class="step-label">1. athenahealth sandbox</p>
               <p class="subtitle">
                 athenahealth's Preview sandbox has one fixed FHIR endpoint — nothing to pick here. Just click Connect.
+              </p>
+            </div>
+          } @else {
+            <div class="hospital-picker">
+              <p class="step-label">1. eCW practice</p>
+              <p class="subtitle">
+                eCW's Patient audience currently targets one fixed practice — nothing to pick here. Just click Connect.
               </p>
             </div>
           }
@@ -145,7 +159,7 @@
                 <mat-spinner diameter="18"></mat-spinner>
               } @else if (isRedirectingToMyChart()) {
                 <mat-spinner diameter="18"></mat-spinner>
-                <span>Redirecting to MyChart…</span>
+                <span>{{ vendor() === 'ecw' ? 'Redirecting to Healow…' : 'Redirecting to MyChart…' }}</span>
               } @else {
                 <span>Connect Get Data</span>
               }

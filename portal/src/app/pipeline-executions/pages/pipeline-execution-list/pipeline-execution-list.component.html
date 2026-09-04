@@ -7,7 +7,7 @@
   <details class="info-panel">
     <summary>What am I looking at?</summary>
     <div class="info-body">
-      <p class="info-lead">Every row is <strong>one execution of a configured pipeline route</strong> — a saved rule that reads records from an <strong>input</strong> (Epic, Healow, a FHIR server, a file…) and writes them to a <strong>target</strong> (a database, CSV, SFTP…).</p>
+      <p class="info-lead">Every row is <strong>one execution of a configured pipeline route</strong> — a saved rule that reads records from an <strong>input</strong> (Epic, eCW, a FHIR server, a file…) and writes them to a <strong>target</strong> (a database, CSV, SFTP…).</p>
 
       <section class="info-section">
         <h4 class="info-heading">How a run gets here <span class="info-heading-hint">— shown in the Triggered By column</span></h4>
@@ -147,6 +147,20 @@
               <button class="btn-link corr-link" type="button" (click)="viewCorrelation(r, $event)" [title]="r.correlationId"><code class="mono">{{ r.correlationId }}</code></button>
             } @else {
               —
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.status === 'Running') {
+              <button
+                class="btn-link cancel-run"
+                type="button"
+                [disabled]="cancellingRunIds().has(r.pipelineRunId)"
+                (click)="cancelRun(r, $event)"
+              >{{ cancellingRunIds().has(r.pipelineRunId) ? 'Cancelling…' : 'Cancel' }}</button>
             }
           </td>
         </ng-container>

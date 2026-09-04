@@ -7,7 +7,7 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   min-height: 100%;
   background: var(--color-bg);
 }
@@ -236,15 +236,81 @@
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
-// Tri-state select-all checkbox, shared by the toolbar (regular size) and each group
-// header (smaller, --sm modifier). No visible label.
-// Overrides the MDC internals directly (::ng-deep + !important) rather than the
-// --mdc-checkbox-* custom properties, since the app's global theme sets those with
-// equal specificity and wins the cascade.
+// ─── Checkboxes (tri-state select-all — toolbar + per-row "All" — and every regular
+// per-action permission cell) ──────────────────────────────────────────────────────────
+// Verified directly against Angular Material 20's own compiled checkbox template/CSS
+// (node_modules/@angular/material/fesm2022/checkbox.mjs) rather than assumed: its real DOM is
+//   <mat-checkbox> > .mdc-checkbox > input.mdc-checkbox__native-control (+ sibling)
+//                                     .mdc-checkbox__background (the actual visible box)
+//                                       > svg.mdc-checkbox__checkmark, div.mdc-checkbox__mixedmark
+// and its compiled CSS reads --mat-checkbox-*/--mat-sys-* custom properties — NOT the
+// --mdc-checkbox-* names the portal-wide bridge (styles.scss, "Checkbox (mat-checkbox)") sets.
+// That bridge is silently inert for this Material version: color still looked roughly teal only
+// because --mat-sys-primary (bridged separately, correctly, near the top of styles.scss) is
+// every --mat-checkbox-*-icon-color property's own fallback — but size/border-width/radius have
+// no such fallback, so every checkbox on this screen was rendering at Material's stock 18px/
+// 2px-border/2px-radius look, which is exactly the "default browser/Material" impression this
+// fixes. Overriding the real classes above directly — scoped to this component only, never
+// touching styles.scss — is what actually reaches the rendered pixels.
+.permission-matrix mat-checkbox,
 .select-all-checkbox {
+  display: inline-flex;
+
   ::ng-deep {
-    .mdc-checkbox__native-control:enabled ~ .mdc-checkbox__background {
-      border-color: var(--color-primary-mid) !important;
+    // The whole clickable region — Material defaults this to a 40px touch target padded
+    // around its 18px box; shrinking it is what lets the checkbox's own footprint (not an
+    // invisible touch-target) drive column width/row height and center correctly in a table
+    // cell. Sized a couple px past the visible box below so its border/focus-ring/hover state
+    // layer aren't touching the container's own edge.
+    .mdc-checkbox {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      flex: 0 0 24px;
+    }
+
+    .mat-mdc-checkbox-touch-target { display: none; }
+
+    // The REAL second-layer bug (confirmed via live computed-style inspection, not assumed): a
+    // global rule elsewhere in the app (styles.scss's plain-<input type="checkbox"> block, written
+    // for hand-rolled checkboxes and guarded only by `:not(.checkbox-visual__input)`) also matches
+    // this exact native <input> that Material renders under the hood, since it was never added to
+    // that exclusion list. That rule gives it its own background, border, disabled-opacity, and a
+    // checkmark ::after — layered directly on top of (and slightly offset from) Material's real
+    // .mdc-checkbox__background box below, defeating Material's own opacity:0 for this element.
+    // Two independently-colored, offset boxes is the literal "teal checkbox with an extra gray/
+    // blue layer" reported. Restoring the native input's intended invisibility here — scoped to
+    // this component only — is the fix; the global rule itself is untouched since other screens'
+    // plain checkboxes still rely on it.
+    .mdc-checkbox__native-control {
+      background: transparent !important;
+      border: none !important;
+      opacity: 0 !important;
+
+      &::after {
+        content: none !important;
+      }
+    }
+
+    // The actual visible box every state below targets — 20px, a clean rounded square, and a
+    // real border/background regardless of Material's own (currently-ineffective) tokens.
+    .mdc-checkbox__background {
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: var(--radius-sm) !important;
+      border-width: 1.75px !important;
+      border-style: solid !important;
+      border-color: var(--color-border-input) !important;
+      background-color: var(--color-surface) !important;
+      transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+    }
+
+    // Hover — unchecked only; checked/indeterminate get their own (darker-teal) hover state
+    // right below so hovering a checked box never fades it back toward "unchecked gray".
+    .mdc-checkbox:hover > .mdc-checkbox__native-control:not(:checked):not(:indeterminate) ~ .mdc-checkbox__background {
+      border-color: var(--color-primary) !important;
     }
 
     .mdc-checkbox__native-control:enabled:checked ~ .mdc-checkbox__background,
@@ -253,12 +319,56 @@
       border-color: var(--color-primary) !important;
     }
 
+    .mdc-checkbox:hover > .mdc-checkbox__native-control:enabled:checked ~ .mdc-checkbox__background,
+    .mdc-checkbox:hover > .mdc-checkbox__native-control:enabled:indeterminate ~ .mdc-checkbox__background {
+      background-color: var(--color-primary-dark) !important;
+      border-color: var(--color-primary-dark) !important;
+    }
+
     .mdc-checkbox__checkmark { color: var(--color-on-primary) !important; }
     .mdc-checkbox__mixedmark { border-color: var(--color-on-primary) !important; }
 
+    // Disabled — after (so it wins over the checked/hover rules above even when a locked cell
+    // is also checked) and visually muted, never the vivid enabled teal, so it reads as
+    // genuinely inert rather than "checked but greyed for no visible reason".
+    .mdc-checkbox__native-control:disabled ~ .mdc-checkbox__background {
+      border-color: var(--color-border) !important;
+      background-color: var(--color-side) !important;
+    }
+    .mdc-checkbox__native-control:disabled:checked ~ .mdc-checkbox__background,
+    .mdc-checkbox__native-control:disabled:indeterminate ~ .mdc-checkbox__background {
+      background-color: var(--color-muted-2) !important;
+      border-color: var(--color-muted-2) !important;
+    }
+
+    // Keyboard focus — same ring convention as every other focusable control in the app.
+    .mdc-checkbox__native-control:focus-visible ~ .mdc-checkbox__background {
+      box-shadow: 0 0 0 3px var(--color-primary-mid) !important;
+    }
+
+    // Ripple/state-layer tint for the short-lived click-splash animation (a real, dynamically
+    // inserted element on each click — unrelated to the persistent hover/focus bug fixed below),
+    // matched to the same teal.
     .mdc-checkbox__native-control:enabled:checked ~ .mat-mdc-checkbox-ripple .mat-ripple-element,
     .mdc-checkbox__native-control:enabled:indeterminate ~ .mat-mdc-checkbox-ripple .mat-ripple-element {
       background-color: var(--color-primary) !important;
+    }
+
+    // The PERSISTENT hover/focus/pressed "state layer" is a different element
+    // (.mdc-checkbox__ripple/.mat-mdc-checkbox-ripple, a circle spanning the whole 24px clickable
+    // region) — Material's own hover/focus/pressed rules for it read
+    // --mat-checkbox-*-state-layer-opacity with a --mat-sys-*-state-layer-opacity fallback, and
+    // NEITHER is defined anywhere in this app's token bridge (confirmed: grepping styles.scss for
+    // every one of those names returns nothing). Per spec, that makes the opacity declaration
+    // invalid at computed-value time, so the browser falls back to opacity's own initial value —
+    // 1, fully OPAQUE — while the paired background-color (--mat-sys-on-surface, bridged to
+    // --color-ink) resolves just fine. Net effect: hovering/focusing/pressing ANY checkbox painted
+    // a solid, fully-opaque dark circle behind it — the "double-layered, teal box over/inside a
+    // gray box" this fixes. Hover/focus feedback already comes from the box border-color/focus-ring
+    // rules above, so simply neutralizing this broken layer loses nothing.
+    .mdc-checkbox__ripple,
+    .mat-mdc-checkbox-ripple {
+      opacity: 0 !important;
     }
   }
 }
@@ -442,32 +552,10 @@
     }
   }
 
-  // Angular Material reserves a 40px invisible touch target around every checkbox regardless
-  // of visual size — that's the bulk of the "extra" row padding, not the cell padding itself.
-  // Shrink the state-layer/touch-target via the supported CSS custom properties, and hide the
-  // touch-target element outright, so the checkbox's own ~18px box drives row height.
-  mat-checkbox {
-    display: inline-flex;
-    --mdc-checkbox-state-layer-size: 22px;
-
-    ::ng-deep {
-      .mdc-checkbox {
-        width: 22px;
-        height: 22px;
-        padding: 0;
-        flex: 0 0 22px;
-      }
-
-      .mdc-checkbox__background {
-        top: 2px;
-        left: 2px;
-      }
-
-      .mat-mdc-checkbox-touch-target {
-        display: none;
-      }
-    }
-  }
+  // Checkbox sizing/coloring for every mat-checkbox inside this table (regular per-action
+  // cells and the per-row "All" one alike) lives in one consolidated rule near the top of
+  // this file (see ".permission-matrix mat-checkbox, .select-all-checkbox") — kept there,
+  // not here, specifically so it applies identically to the toolbar's own select-all too.
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────

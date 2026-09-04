@@ -49,6 +49,21 @@ export class LaunchProviderInAppComponent implements OnInit {
   readonly patient = signal<Patient | null>(null);
   readonly isPatientLoading = signal(true);
   readonly launchError = signal<string | null>(null);
+  // Set only when an embedded (iframe) EHR launch couldn't be auto-broken-out of the frame (a sandboxed
+  // cross-origin frame blocks programmatic top-level navigation). Holds the FHIRBridge launch URL so the template
+  // can render a full-page "Continue" link with target="_top" — the user's click is a gesture the browser does
+  // allow to navigate the top window, completing the break-out the automatic attempt couldn't.
+  readonly breakoutUrl = signal<string | null>(null);
+  // Vendor-aware "Environment" chip. Defaults neutral; set to the launching EHR's name once known from the
+  // inbound launch's iss (persisted so the post-OAuth return leg, which has no iss, still shows the right vendor).
+  readonly environmentLabel = signal('FHIRBridge');
+  // True when the auto-fetch-by-workflow-id path produced no patient (or errored) — the template then shows a
+  // "Refresh" button so the user can retry the fetch by hand.
+  readonly canRetry = signal(false);
+
+  // Persisted across the launch round-trip so the "fetch latest by workflow id" call can route to the right
+  // vendor's workflow (eCW vs Epic) the same way the backend mint does — the return leg / a fresh view has no iss.
+  private static readonly ISS_STORAGE_KEY = 'hb_provider_inapp_iss';
 
   // Admin-editable via the unified Admin Settings screen (see AdminSettingsComponent) — persisted on
   // Demo_TestApp's own backend (WorkflowSettingsEntity), read at runtime rather than baked in at build time.
@@ -67,6 +82,18 @@ export class LaunchProviderInAppComponent implements OnInit {
     return dateOfBirth ? this.calculateAge(dateOfBirth) : null;
   });
 
+  // Per-resource-type fetch counts for the current run (Patient, Condition, Observation, …) — from launch-result.
+  readonly resourceCounts = signal<Record<string, number>>({});
+  // Template-friendly, name-sorted list of {type, count}, plus the grand total, for the "Resources Fetched" card.
+  readonly resourceTypeList = computed(() =>
+    Object.entries(this.resourceCounts())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => a.type.localeCompare(b.type)),
+  );
+  readonly totalResourceCount = computed(() =>
+    this.resourceTypeList().reduce((sum, entry) => sum + entry.count, 0),
+  );
+
   constructor(
     private readonly patientService: PatientService,
     private readonly http: HttpClient,
@@ -75,20 +102,23 @@ export class LaunchProviderInAppComponent implements OnInit {
   // Loads the admin-configured launch-context token exactly once per component lifetime (memoized via
   // launchContextLoadPromise) — ngOnInit awaits this before ever building the redirect URL, so a launch can
   // never race ahead and use the config-file fallback by accident.
-  private ensureLaunchContextLoaded(): Promise<void> {
+  private ensureLaunchContextLoaded(iss?: string | null): Promise<void> {
     if (!this.launchContextLoadPromise) {
-      this.launchContextLoadPromise = this.loadLaunchContext();
+      this.launchContextLoadPromise = this.loadLaunchContext(iss);
     }
     return this.launchContextLoadPromise;
   }
 
-  private async loadLaunchContext(): Promise<void> {
+  private async loadLaunchContext(iss?: string | null): Promise<void> {
     try {
+      // Forward the launching EHR's iss so the backend mints against the right vendor's workflow — an eCW iss
+      // (host *.ecwcloud.com) selects the separate eCW Provider EMR workflow id, otherwise the Epic one (see
+      // Demo_TestApp/backend's /api/provider-in-app-launch-context). Omitted on the post-OAuth return leg, which
+      // only needs the vendor-agnostic base URL back.
+      const contextUrl = `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-launch-context`
+        + (iss ? `?iss=${encodeURIComponent(iss)}` : '');
       const current = await firstValueFrom(
-        this.http.get<ProviderInAppLaunchContext>(
-          `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-launch-context`,
-          { withCredentials: true },
-        ),
+        this.http.get<ProviderInAppLaunchContext>(contextUrl, { withCredentials: true }),
       );
       if (isConfiguredValue(current.providerLaunchContext)) {
         this.providerLaunchContext = current.providerLaunchContext;
@@ -110,6 +140,23 @@ export class LaunchProviderInAppComponent implements OnInit {
     // reflects the current URL synchronously, with no such race.
     const params = new URLSearchParams(window.location.search);
 
+    // Vendor-aware Environment chip: the inbound launch leg carries the launching EHR's iss; derive the vendor from
+    // it and persist so the post-OAuth return leg (workflowRunId, no iss) keeps showing the right one. host
+    // *.ecwcloud.com is eCW; otherwise Epic — mirrors the backend mint's own iss routing.
+    const VENDOR_STORAGE_KEY = 'hb_provider_inapp_vendor';
+    const issForVendor = params.get('iss');
+    if (issForVendor) {
+      sessionStorage.setItem(
+        VENDOR_STORAGE_KEY,
+        /ecwcloud\.com/i.test(issForVendor) ? 'eClinicalWorks (eCW)' : 'Epic Sandbox',
+      );
+      sessionStorage.setItem(LaunchProviderInAppComponent.ISS_STORAGE_KEY, issForVendor);
+    }
+    const storedVendor = sessionStorage.getItem(VENDOR_STORAGE_KEY);
+    if (storedVendor) {
+      this.environmentLabel.set(storedVendor);
+    }
+
     // Fresh EHR launch: Epic redirected here with iss+launch (no FHIRBridge round-trip has happened yet). Hand the
     // browser off to FHIRBridge's launch endpoint — it validates iss, completes the OAuth flow with Epic, runs the
     // configured workflow, and redirects back here with ?workflowRunId=... once done (see PatientService.getPatient,
@@ -118,7 +165,7 @@ export class LaunchProviderInAppComponent implements OnInit {
     const iss = params.get('iss');
     const launch = params.get('launch');
     if (iss && launch) {
-      await this.ensureLaunchContextLoaded();
+      await this.ensureLaunchContextLoaded(iss);
       // Passes our own current origin as a live callerId override, so FHIRBridge redirects back here after OAuth
       // completes regardless of which environment (local/staging/production) is actually running this page — the
       // static providerLaunchContext token can't otherwise reflect that per-environment. See OAuthController.LaunchPipeline.
@@ -127,7 +174,21 @@ export class LaunchProviderInAppComponent implements OnInit {
         `${this.baseUrl}/api/v1/oauth/launch/${this.providerLaunchContext}` +
         `?iss=${encodeURIComponent(iss)}&launch=${encodeURIComponent(launch)}` +
         `&callerId=${encodeURIComponent(callerId)}`;
-      window.location.href = launchUrl;
+
+      // Break out of an embedded (Epic/eCW "Embedded" display mode) iframe: this redirect 302s to the EHR's own
+      // authorize page, which refuses to render inside a frame (X-Frame-Options / frame-ancestors), and hb_session
+      // (SameSite=Lax) isn't sent from a cross-site frame — so the whole OAuth round-trip must happen at the top
+      // level. Navigating window.top frame-busts a normal (non-sandboxed) embed; for a plain non-embedded launch
+      // window.top === window.self, so this is identical to a same-frame redirect. Assigning location.href on a
+      // cross-origin ancestor is a permitted navigation (unlike reading it); a sandboxed frame that blocks even
+      // that throws, so fall back to a user-clickable full-page link (a gesture the browser does allow).
+      const topWindow = window.top ?? window;
+      try {
+        topWindow.location.href = launchUrl;
+      } catch {
+        this.breakoutUrl.set(launchUrl);
+        this.isPatientLoading.set(false);
+      }
       return;
     }
 
@@ -167,16 +228,66 @@ export class LaunchProviderInAppComponent implements OnInit {
       return;
     }
 
+    if (workflowRunId) {
+      this.loadPatientByRunId(workflowRunId);
+      return;
+    }
+
+    // No specific run id on the URL (this page was opened without a fresh launch or a post-OAuth return). Instead of
+    // showing mock data, auto-fetch the workflow's latest fetched patient BY WORKFLOW ID — no re-launch needed
+    // (FHIRBridge already holds the data + a refreshable token). If nothing comes back, refresh() flips canRetry so
+    // the user gets a "Refresh" button to try again by hand.
+    await this.refresh();
+  }
+
+  private loadPatientByRunId(workflowRunId: string): void {
     this.patientService.getPatient(workflowRunId).subscribe({
-      next: (patient) => {
-        this.patient.set(patient);
+      next: (outcome) => {
+        this.patient.set(outcome.patient);
+        this.resourceCounts.set(outcome.resourceCounts);
         this.isPatientLoading.set(false);
+        this.canRetry.set(false);
       },
       error: (error: unknown) => {
         this.launchError.set(error instanceof Error ? error.message : 'Failed to load patient data.');
         this.isPatientLoading.set(false);
+        this.canRetry.set(true);
       },
     });
+  }
+
+  // Auto-fetch (or, via the Refresh button, re-fetch) the ProviderInApp workflow's latest fetched patient by
+  // workflow id — the app never needs the specific run id, and this never triggers a fresh EHR launch. Routes to
+  // the right vendor via the persisted iss (see ISS_STORAGE_KEY), the same way the backend mint does.
+  async refresh(): Promise<void> {
+    this.isPatientLoading.set(true);
+    this.launchError.set(null);
+    this.canRetry.set(false);
+
+    const iss = sessionStorage.getItem(LaunchProviderInAppComponent.ISS_STORAGE_KEY);
+    const url = `${HEALTHAPP_BACKEND_BASE_URL}/api/provider-in-app-latest-result`
+      + (iss ? `?iss=${encodeURIComponent(iss)}` : '');
+    try {
+      const latest = await firstValueFrom(
+        this.http.get<{ workflowRunId: string | null; vendor?: string }>(url, { withCredentials: true }),
+      );
+      // Vendor determined server-side BY THE WORKFLOW ID — authoritative across any browser (unlike the
+      // iss-derived sessionStorage guess), so prefer it and persist it for this session's other legs.
+      if (latest.vendor) {
+        this.environmentLabel.set(latest.vendor);
+        sessionStorage.setItem('hb_provider_inapp_vendor', latest.vendor);
+      }
+      if (latest.workflowRunId) {
+        this.loadPatientByRunId(latest.workflowRunId);
+      } else {
+        // Workflow has no run with a patient yet (or none is configured) — offer a manual retry rather than mock.
+        this.isPatientLoading.set(false);
+        this.canRetry.set(true);
+      }
+    } catch {
+      this.isPatientLoading.set(false);
+      this.canRetry.set(true);
+    }
   }
 
   private async checkAccountContextLink(workflowRunId: string | null): Promise<{ ok: boolean; message?: string }> {

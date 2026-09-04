@@ -2,7 +2,10 @@ using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -19,6 +22,17 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(12);
 
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISecretProvider _secretProvider;
+
+    public BlobDestinationConnectionTestService(
+        IConfigurationRepository configurationRepository,
+        ISecretProvider secretProvider)
+    {
+        _configurationRepository = configurationRepository;
+        _secretProvider = secretProvider;
+    }
+
     public async Task<ConnectionTestResultDto> TestConnectionAsync(
         BlobConnectionTestRequest request,
         CancellationToken cancellationToken)
@@ -26,6 +40,16 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
         if (string.IsNullOrWhiteSpace(request.Container))
         {
             return new ConnectionTestResultDto(false, "Container name is required.");
+        }
+
+        var isManagedIdentity = string.Equals(request.AuthMode?.Trim(), "managedidentity", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(request.Secret) && !isManagedIdentity && request.DestinationId is { } destinationId)
+        {
+            var resolvedSecret = await ResolveStoredSecretAsync(destinationId, cancellationToken);
+            if (resolvedSecret is not null)
+            {
+                request = request with { Secret = resolvedSecret };
+            }
         }
 
         BlobContainerClient container;
@@ -132,6 +156,27 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
         if (string.IsNullOrWhiteSpace(secret))
         {
             throw new InvalidOperationException(message);
+        }
+    }
+
+    /// <summary>Resolves an already-saved Blob destination's stored secret (the raw connection string/account
+    /// key/SAS/client secret — Blob's secret, unlike SFTP's, is never wrapped in a composite string, so no
+    /// parsing is needed) so a Test Connection with a blank secret field can still verify against the real
+    /// stored credential without the browser ever holding it. Returns null (never throws) if the destination
+    /// or its secret isn't resolvable — the caller then just attempts the connection with a blank secret,
+    /// which fails honestly rather than masking the real problem.</summary>
+    private async Task<string?> ResolveStoredSecretAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+            if (destination is null) return null;
+
+            return await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
         }
     }
 }

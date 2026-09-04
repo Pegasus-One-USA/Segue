@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +24,6 @@ public sealed class HapiIcd11TerminologySyncService : IHapiIcd11TerminologySyncS
     private const string ZipUrl = "https://icd.who.int/dev11/Downloads/Download?fileName=LinearizationMiniOutput-MMS-en.zip";
     private const string TextFileName = "LinearizationMiniOutput-MMS-en.txt";
     private const string SystemUrl = "http://id.who.int/icd/release/11/mms";
-    private const string ResourceId = "icd11-mms-full";
 
     private static readonly Regex DepthPrefixPattern = new(@"^(?:-\s)+", RegexOptions.Compiled);
 
@@ -33,25 +31,26 @@ public sealed class HapiIcd11TerminologySyncService : IHapiIcd11TerminologySyncS
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcd11TerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiIcd11TerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiIcd11TerminologySyncService> logger)
+        ILogger<HapiIcd11TerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiIcd11SyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Downloading official WHO ICD-11 MMS linearization export.");
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiIcd11TerminologySyncService) + ".Download");
@@ -59,18 +58,8 @@ public sealed class HapiIcd11TerminologySyncService : IHapiIcd11TerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} ICD-11 MMS codes from the official release.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
-        var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "ICD11MMS", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -133,22 +122,6 @@ public sealed class HapiIcd11TerminologySyncService : IHapiIcd11TerminologySyncS
     {
         field = field.Trim();
         return field.Length >= 2 && field[0] == '"' && field[^1] == '"' ? field[1..^1] : field;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "ICD11MMS",
-            title = "ICD-11 MMS (Mortality and Morbidity Statistics) (auto-synced from WHO)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

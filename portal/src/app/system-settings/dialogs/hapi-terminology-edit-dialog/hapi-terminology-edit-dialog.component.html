@@ -1,0 +1,76 @@
+<div class="gsg-dialog" [formGroup]="form">
+
+  <div class="gsg-header">
+    <h2>Edit {{ config.displayName }} Settings</h2>
+    <p>Scheduler and credentials for the {{ config.displayName }} HAPI terminology-server sync — saved together in one update.</p>
+  </div>
+
+  <div class="gsg-body">
+
+    @if (errorMessage()) {
+      <div class="gsg-notice">{{ errorMessage() }}</div>
+    }
+
+    <div class="gsg-field gsg-field--toggle">
+      <label class="gsg-toggle">
+        <input type="checkbox" formControlName="schedulerEnabled" />
+        <span class="gsg-toggle-track"><span class="gsg-toggle-thumb"></span></span>
+        <span class="gsg-field-label">{{ form.get('schedulerEnabled')?.value ? 'Enabled' : 'Disabled' }}</span>
+      </label>
+    </div>
+
+    <div class="gsg-field">
+      <label class="gsg-field-label" for="frequency">Frequency</label>
+      <select class="gsg-input" id="frequency" formControlName="frequency">
+        @for (option of config.frequencyOptions; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+      @if (hasError('frequency', 'required')) {
+        <p class="gsg-field-error">Frequency is required.</p>
+      }
+    </div>
+
+    <div class="gsg-field">
+      <label class="gsg-field-label" for="executionTime">Execution time</label>
+      <input class="gsg-input" type="time" id="executionTime" formControlName="executionTime" />
+      @if (hasError('executionTime', 'required')) {
+        <p class="gsg-field-error">Execution time is required.</p>
+      }
+    </div>
+
+    @if (hasDownloadApiUrl) {
+      <div class="gsg-field">
+        <label class="gsg-field-label" for="downloadApiUrl">Download API URL</label>
+        <input class="gsg-input" type="text" id="downloadApiUrl" formControlName="downloadApiUrl" placeholder="https://loinc.regenstrief.org/api/v1" autocomplete="off" />
+      </div>
+    }
+
+    @if (credentialControls.length) {
+      <ng-container formGroupName="credentials">
+        @for (field of credentialControls; track field.name) {
+          <div class="gsg-field">
+            <label class="gsg-field-label" [attr.for]="field.name">{{ field.label }}</label>
+            <input
+              class="gsg-input"
+              type="password"
+              [id]="field.name"
+              [formControlName]="field.name"
+              [placeholder]="placeholderFor(field.hasValue)"
+              autocomplete="new-password"
+            />
+          </div>
+        }
+      </ng-container>
+    }
+
+  </div>
+
+  <div class="gsg-actions">
+    <button class="gsg-btn-cancel" type="button" (click)="dialogRef.close(false)">Cancel</button>
+    <button class="gsg-btn-save" type="button" [disabled]="saving()" (click)="save()">
+      {{ saving() ? 'Saving…' : 'Update' }}
+    </button>
+  </div>
+
+</div>

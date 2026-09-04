@@ -99,6 +99,18 @@ variable "bind_custom_domain_certificates" {
   default     = false
 }
 
+variable "enable_tenant_secrets_key_vault" {
+  description = "Turns on Azure Key Vault storage for SourceConnection/DestinationConfiguration secrets (KeyVault:UseAzureKeyVault). false (default) keeps everything on the existing local DataProtection-encrypted ProvisionedSecrets DB table — no infra change needed. When true, this config grants the fhirbridge_app/worker Container Apps' system-assigned managed identities the 'Key Vault Secrets Officer' role (RBAC) on var.tenant_secrets_key_vault_name and points KeyVault:VaultName at it. Requires whoever runs this apply to have Owner or User Access Administrator on that vault/resource group — if the role-assignment resources fail for lack of that permission, apply everything else first, then have someone with sufficient rights run the 'az role assignment create' command from this config's fallback (see README/plan notes) using the fhirbridge_app_principal_id/worker_principal_id outputs."
+  type        = bool
+  default     = false
+}
+
+variable "tenant_secrets_key_vault_name" {
+  description = "Name of the EXISTING Azure Key Vault to use for tenant source/destination secrets (its Permission model must be Azure RBAC, not classic Access Policies — this config grants access via azurerm_role_assignment). Not created or managed by this Terraform config; create it once yourself (Portal or 'az keyvault create'). Only consulted when enable_tenant_secrets_key_vault is true."
+  type        = string
+  default     = "seguedev"
+}
+
 variable "sql_external_access" {
   description = "TESTING ONLY: exposes SQL Server directly to the internet (Container Apps external TCP ingress on var.sql_port) so it can be reached from a local client like SSMS. Defaults to false — this deployment is otherwise built around network isolation (sqlserver/redis are internal-only by design), and this bypasses that deliberately. Only set to true for a temporary connectivity check, then set back to false and re-apply. Even with this on, the sa password (from Key Vault) is still required to connect — this only controls network reachability, not authentication."
   type        = bool

@@ -44,7 +44,29 @@ public static class SupportedFhirResourceTypes
         "Schedule",
         "Slot",
         "Specimen",
-        "Task"
+        "Task",
+        "Account",
+        "AdverseEvent",
+        "BodyStructure",
+        "Claim",
+        "Consent",
+        "Contract",
+        "Coverage",
+        "DeviceRequest",
+        "DeviceUseStatement",
+        "Endpoint",
+        "EpisodeOfCare",
+        "ExplanationOfBenefit",
+        "Flag",
+        "Group",
+        "ImmunizationRecommendation",
+        "List",
+        "Media",
+        "NutritionOrder",
+        "RequestGroup",
+        "ResearchStudy",
+        "ResearchSubject",
+        "Substance"
     ];
 
     private static readonly IReadOnlyDictionary<string, string> Normalized =

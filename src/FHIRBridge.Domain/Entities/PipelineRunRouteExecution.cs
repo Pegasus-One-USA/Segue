@@ -10,6 +10,7 @@ public static class PipelineRunRouteExecutionStatus
     public const string CompletedWithErrors = "CompletedWithErrors";
     public const string Failed = "Failed";
     public const string Skipped = "Skipped";
+    public const string Cancelled = "Cancelled";
 }
 
 /// <summary>

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpContext, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of, throwError } from 'rxjs';
-import { EXECUTION_HISTORY_ENDPOINTS } from '../../core/api-endpoints';
+import { EXECUTION_HISTORY_ENDPOINTS, WORKFLOW_ENDPOINTS } from '../../core/api-endpoints';
 import { SKIP_LOADER } from '../../core/loading.interceptor';
 import {
   FieldLineageChain,
@@ -38,6 +38,13 @@ export class ExecutionHistoryApiService {
 
     const context = options?.silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
     return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params, context });
+  }
+
+  /** Requests a graceful stop of a still-running run — the currently in-flight node finishes normally, no
+   *  further nodes start, and the run settles into a terminal Cancelled state. 409 (surfaced to the caller as
+   *  an HttpErrorResponse) means the run already finished or was never started as a cancellable async run. */
+  cancel(id: string): Observable<void> {
+    return this.http.post<void>(WORKFLOW_ENDPOINTS.cancelRun(id), {});
   }
 
   byId(id: string): Observable<RouteExecution> {

@@ -416,7 +416,15 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string? userIdentity = null)
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
-        var effectiveRedirectUri = sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri;
+        // eCW (Healow) is the exception: always use the request-derived callback (the actual scheme/host this launch
+        // arrived on), never the saved RedirectUris. eCW's authorize page upgrades insecure requests, so the callback
+        // MUST be the https origin FHIRBridge is actually reachable on — and the wizard's saved RedirectUris drifts/
+        // resets on every re-save (regenerated from the form's default) so it can't be relied on. Deriving it live
+        // keeps eCW's redirect_uri correct and save-proof; it still has to match what the admin registered on the eCW
+        // portal. Other vendors keep the registered-first behavior (Epic/athenahealth register one exact value).
+        var effectiveRedirectUri = sourceConnection.SourceSystemType == SourceSystemType.Healow
+            ? requestedRedirectUri
+            : (sourceConnection.Interactive?.RedirectUris.FirstOrDefault() ?? requestedRedirectUri);
         _logger.LogInformation(
             "[Step 3/6] IssueAuthorizationAsync: sourceConnectionId={SourceConnectionId} " +
             "applicationType={ApplicationType} hasCallerId={HasCallerId} hasSessionId={HasSessionId} " +
@@ -499,6 +507,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             Scopes: [],
             SourceConnectionId: pending.SourceConnectionId,
             ClientSecret: clientSecret,
+            // Carry the connection's configured client-auth placement into the INITIAL token exchange. Without it the
+            // exchange defaulted to client_secret_post, which eCW's token endpoint rejects with invalid_client (it
+            // requires client_secret_basic; confirmed end-to-end by poc/ecw-ehr-launch-poc). The refresh path already
+            // passes this (SourceConnectionRuntimeResolver), so a confidential source that refreshes today already
+            // relies on its configured placement — making the initial exchange consistent cannot regress it, and a
+            // null/unset placement (e.g. Epic public-PKCE with no secret) keeps the pre-existing post default.
+            AuthPlacement: sourceConnection.Authentication.AuthPlacement,
             ApplicationType: sourceConnection.ApplicationType,
             // The interactive token cache keys on SessionId (an opaque, non-URL identifier), never CallerId — that
             // field is only ever the caller's redirect-back URL (see postLaunchRedirectUri below) and is never

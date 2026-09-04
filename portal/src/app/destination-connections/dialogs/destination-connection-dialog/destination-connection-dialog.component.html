@@ -1,10 +1,23 @@
-<h2 mat-dialog-title>
-  @if (isCreate) { New Connection }
-  @else if (isView) { View Connection — {{ data.destination?.name }} }
-  @else { Edit Connection — {{ data.destination?.name }} }
-</h2>
+<div class="dialog-header">
+  <div class="dialog-header__icon">
+    <mat-icon>storage</mat-icon>
+  </div>
+  <div class="dialog-header__text">
+    <h2>
+      @if (isCreate) { New Connection }
+      @else if (isView) { View Connection — {{ data.destination?.name }} }
+      @else { Edit Connection — {{ data.destination?.name }} }
+    </h2>
+    <p>
+      @if (isCreate) { Choose a type and configure a new destination connection }
+      @else if (isView) { Read-only — this connection has pipeline execution history }
+      @else { Update connection details }
+    </p>
+  </div>
+</div>
 
 <mat-dialog-content class="dcd-content">
+<div class="dcd-body">
 
   @if (isView) {
     <div class="dcd-view-grid">
@@ -48,15 +61,15 @@
   } @else {
     <!-- Edit -->
     <form [formGroup]="metaForm" class="dcd-meta-form">
-      <div class="dcd-meta-field">
-        <label for="dcd-name">Name</label>
-        <input id="dcd-name" formControlName="name" />
-      </div>
-      <div class="dcd-meta-field">
-        <label for="dcd-target">Target</label>
-        <input id="dcd-target" formControlName="target" placeholder="e.g. dbo.Patients or export file pattern" />
-      </div>
-      <div class="dcd-meta-field">
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Name</mat-label>
+        <input matInput id="dcd-name" formControlName="name" autocomplete="off" />
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Target</mat-label>
+        <input matInput id="dcd-target" formControlName="target" placeholder="e.g. dbo.Patients or export file pattern" autocomplete="off" />
+      </mat-form-field>
+      <div class="dcd-meta-field dcd-meta-field--full">
         <span class="dcd-view-label">Type</span>
         <span class="dcd-view-value">{{ data.destination?.destinationType }}</span>
       </div>
@@ -85,19 +98,24 @@
     <p class="dcd-error">{{ errorMessage() }}</p>
   }
 
+</div>
 </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="cancel()">{{ isView ? 'Close' : 'Cancel' }}</button>
-  @if (!isView) {
-    <button
-      mat-flat-button
-      color="primary"
-      type="button"
-      [disabled]="saving() || (isCreate && !chosenType()) || fhirTestPending()"
-      (click)="save()"
-    >
-      {{ saving() ? 'Saving…' : 'Save' }}
-    </button>
-  }
-</mat-dialog-actions>
+@if (!isView) {
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button
+        mat-flat-button
+        class="btn-save"
+        type="button"
+        [disabled]="saving() || (isCreate && !chosenType()) || fhirTestPending()"
+        (click)="save()"
+      >
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        }
+        {{ isEdit ? 'Update' : 'Save' }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+}

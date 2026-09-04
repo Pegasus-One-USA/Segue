@@ -1,21 +1,24 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
+import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint } from '../../models/ehr-endpoint.model';
-import { EhrEndpointDialogComponent } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { EhrEndpointDialogComponent, EhrEndpointDialogData } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
+import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-ehr-endpoint-list',
@@ -29,6 +32,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     HideWithoutPermissionDirective,
   ],
   templateUrl: './ehr-endpoint-list.component.html',
@@ -36,67 +40,65 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 })
 export class EhrEndpointListComponent implements OnInit {
   private readonly svc         = inject(IEhrEndpointService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly dialog      = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly destroyRef  = inject(DestroyRef);
 
-  readonly searchQuery = signal('');
-  readonly pageIndex   = signal(0);
-  readonly pageSize    = signal(10);
-  readonly loading     = signal(true);
+  readonly searchQuery  = signal('');
+  readonly pageIndex    = signal(0);
+  readonly pageSize     = signal(10);
+  readonly loading      = signal(true);
+  readonly totalCount   = signal(0);
 
   readonly endpoints = signal<EhrEndpoint[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'vendor', 'endpointType', 'fhirBaseUrl', 'status', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" (createdOnUtc, or modifiedOnUtc when later). */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
 
+  private readonly searchChanged = new Subject<string>();
+
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+    this.pageIndex.set(0);
+    this.loadEndpoints();
   }
-
-  private static actionOnOf(e: EhrEndpoint): number {
-    const value = e.modifiedOnUtc || e.createdOnUtc;
-    return value ? new Date(value).getTime() : 0;
-  }
-
-  readonly filtered = computed(() => {
-    const q = this.searchQuery().toLowerCase().trim();
-    const rows = !q ? this.endpoints() : this.endpoints().filter(e =>
-      e.name.toLowerCase().includes(q) ||
-      e.vendor.toLowerCase().includes(q) ||
-      e.fhirBaseUrl.toLowerCase().includes(q)
-    );
-
-    const direction = this.actionOnSortDirection();
-    if (!direction) return rows;
-    const sorted = [...rows].sort((a, b) => EhrEndpointListComponent.actionOnOf(a) - EhrEndpointListComponent.actionOnOf(b));
-    return direction === 'desc' ? sorted.reverse() : sorted;
-  });
-
-  readonly paginated = computed(() => {
-    const start = this.pageIndex() * this.pageSize();
-    return this.filtered().slice(start, start + this.pageSize());
-  });
 
   readonly showingFrom = computed(() =>
-    this.filtered().length === 0 ? 0 : this.pageIndex() * this.pageSize() + 1
+    this.totalCount() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1
   );
 
   readonly showingTo = computed(() =>
-    Math.min((this.pageIndex() + 1) * this.pageSize(), this.filtered().length)
+    Math.min((this.pageIndex() + 1) * this.pageSize(), this.totalCount())
   );
 
   ngOnInit(): void {
+    this.searchChanged.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(() => {
+      this.pageIndex.set(0);
+      this.loadEndpoints();
+    });
+
     this.loadEndpoints();
   }
 
   loadEndpoints(): void {
     this.loading.set(true);
-    this.svc.getAll().subscribe({
-      next: endpoints => {
-        this.endpoints.set(endpoints);
+    const direction = this.actionOnSortDirection();
+    this.svc.getPaged({
+      search: this.searchQuery().trim() || undefined,
+      sortDescending: direction ? direction === 'desc' : undefined,
+      page: this.pageIndex() + 1,
+      pageSize: this.pageSize(),
+    }).subscribe({
+      next: result => {
+        this.endpoints.set(result.items);
+        this.totalCount.set(result.totalCount);
         this.loading.set(false);
       },
       error: () => {
@@ -108,26 +110,27 @@ export class EhrEndpointListComponent implements OnInit {
 
   onSearch(val: string): void {
     this.searchQuery.set(val);
-    this.pageIndex.set(0);
+    this.searchChanged.next(val);
   }
 
   reset(): void {
     this.searchQuery.set('');
     this.pageIndex.set(0);
+    this.loadEndpoints();
   }
 
   onPageChange(e: PageEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
+    this.loadEndpoints();
   }
 
   openAdd(): void {
     if (!this.actionGuard.ensure('ehrendpoints.create', 'You do not have permission to create EHR endpoints.')) return;
     this.dialog
-      .open(EhrEndpointDialogComponent, {
+      .open<EhrEndpointDialogComponent, EhrEndpointDialogData, boolean>(EhrEndpointDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: {},
       })
       .afterClosed()
@@ -142,10 +145,9 @@ export class EhrEndpointListComponent implements OnInit {
   openEdit(endpoint: EhrEndpoint): void {
     if (!this.actionGuard.ensure('ehrendpoints.edit', 'You do not have permission to edit EHR endpoints.')) return;
     this.dialog
-      .open(EhrEndpointDialogComponent, {
+      .open<EhrEndpointDialogComponent, EhrEndpointDialogData, boolean>(EhrEndpointDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: { endpoint },
       })
       .afterClosed()
@@ -162,7 +164,6 @@ export class EhrEndpointListComponent implements OnInit {
     this.dialog
       .open(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete EHR Endpoint',
           message: `Are you sure you want to delete "${endpoint.name}"? This action cannot be undone.`,

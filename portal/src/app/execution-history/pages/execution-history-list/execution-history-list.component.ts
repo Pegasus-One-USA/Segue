@@ -61,7 +61,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly loading       = signal(false);
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
 
-  readonly displayedCols = ['index', 'name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
+  readonly displayedCols = ['name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
@@ -144,14 +144,32 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     return {
       Pending: 'Pending',
       Running: 'Running',
+      AwaitingBulkExport: 'Awaiting Bulk Export',
       Succeeded: 'Succeeded',
+      PartialSuccess: 'Partial Success',
       Failed: 'Failed',
       Cancelled: 'Cancelled',
     }[status] ?? status;
   }
 
+  /** Maps this page's RouteExecution status values to the global badge utility classes defined in
+   *  styles.scss (badge-completed/-running/-failed/-queued/-inactive) — replaces the page's old local
+   *  .status-badge / status-* classes. Cancelled has no dedicated global badge; badge-inactive (muted) is
+   *  the closest semantic match. AwaitingBulkExport is non-terminal (a node deferred to an async $export job
+   *  and the run is still in flight) so it reuses the Running badge; PartialSuccess is terminal and fully
+   *  written (every node ran, only some non-parent resource types were skipped) so it reuses the Succeeded
+   *  badge rather than reading as an error. */
   statusClass(status: string): string {
-    return 'status-' + status.toLowerCase();
+    const map: Record<string, string> = {
+      Pending: 'badge-queued',
+      Running: 'badge-running',
+      AwaitingBulkExport: 'badge-running',
+      Succeeded: 'badge-completed',
+      PartialSuccess: 'badge-completed',
+      Failed: 'badge-failed',
+      Cancelled: 'badge-inactive',
+    };
+    return map[status] ?? 'badge-inactive';
   }
 
   triggerClass(triggerType: string | null): string {

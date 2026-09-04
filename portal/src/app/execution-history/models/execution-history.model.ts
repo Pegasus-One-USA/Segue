@@ -56,6 +56,7 @@ export interface WorkflowRunStatusCounts {
   succeeded: number;
   failed: number;
   cancelled: number;
+  partialSuccess: number;
 }
 
 /** Matches the backend's WorkflowNodeRunPayloadDto — what a single node fetched/transformed/wrote. */

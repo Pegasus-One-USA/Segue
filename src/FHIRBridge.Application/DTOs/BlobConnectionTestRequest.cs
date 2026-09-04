@@ -8,6 +8,11 @@ namespace FHIRBridge.Application.DTOs;
 /// <paramref name="AuthMode"/>; it is null for Managed Identity (which resolves no secret). The result reuses the
 /// shared <see cref="ConnectionTestResultDto"/> (Connected + Error).
 /// </summary>
+/// <param name="DestinationId">When set, <paramref name="AuthMode"/> isn't Managed Identity, and
+/// <paramref name="Secret"/> is blank, the secret is resolved server-side from this already-saved destination's
+/// stored secret instead — lets the wizard verify an existing connection without the browser ever holding or
+/// resending the real value. Ignored when <paramref name="Secret"/> is non-blank (a genuinely new/changed
+/// secret always wins).</param>
 public sealed record BlobConnectionTestRequest(
     string AuthMode,
     string Container,
@@ -17,4 +22,5 @@ public sealed record BlobConnectionTestRequest(
     string? EndpointSuffix,
     string? TenantId,
     string? ClientId,
-    string? ManagedIdentityClientId);
+    string? ManagedIdentityClientId,
+    Guid? DestinationId = null);

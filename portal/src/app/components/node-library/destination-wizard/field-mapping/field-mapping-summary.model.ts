@@ -11,7 +11,7 @@
 
 import { DestinationTable, DestinationColumn } from '../../../../services/destination-schema.service';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, qualifyTableName } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
@@ -151,10 +151,11 @@ function bareName(fullName: string): string {
   return i === -1 ? fullName : fullName.slice(i + 1);
 }
 
-function qualify(name: string, destType: MappingDestType): string {
-  if (destType !== 'sql' || name.includes('.')) return name;
-  return `dbo.${name}`;
-}
+// Re-qualification on load goes through the shared qualifyTableName (field-mapping-model.ts) — the same
+// function _qualifyDefaultTable/submitCreateTable use to qualify on creation, so a mapping saved (bare)
+// under one destType and reopened under the same destType always comes back exactly as it went out. This
+// used to be a private, SQL-Server-only qualify() here that never added "public." for PostgreSQL, so
+// reopening a PostgreSQL mapping restored "Appointment" instead of "public.Appointment".
 
 // ── array-context resolution — walks a node's id up through its ancestors (a leaf's own isArray is
 // always false, so starting at a leaf and starting at a group both fall through to the same walk) to
@@ -378,12 +379,25 @@ function computeProcessingOrder(tables: ResolvedTable[]): MappingProcessingStep[
  * probed/created at all yet (no entry in sqlTables) is treated as fully new — every one of its rows is kept,
  * since there's no existing schema yet to validate against. Deliberately NOT scoped to any one resource —
  * called once, on every save, across every mapped resource.
+ *
+ * Only a table whose columns came from an actual LIVE schema probe (origin: 'probed' — set solely by
+ * DestinationWizardComponent._refreshSqlTablesFromLiveSchema, which only ever runs for SQL-family
+ * destinations) is treated as authoritative enough to say a column is genuinely gone. A table known only
+ * from a restored Mapping JSON (origin: 'userCreated' or undefined — see applyMappingSummaryDocument) is
+ * just a snapshot of whatever ONE save happened to know about, not a live view of the real schema — for a
+ * destination table more than one resource shares (a single CSV output table is the common case: it has
+ * no live schema to probe at all, so its columns are ALWAYS restored-only, never 'probed'), that snapshot
+ * only ever reflects whichever resource(s) were mapped as of that earlier save. Pruning against it would
+ * remove a perfectly valid row the moment a second resource maps a new column onto the same shared table,
+ * before the next full reopen ever gets a chance to fold that column into a fresh snapshot. Not scoped by
+ * destination type — a SQL/MySQL table this session hasn't (re)probed yet gets exactly the same "insufficient
+ * evidence, keep it" treatment as a brand-new table does, per the table-not-found branch above.
  */
 export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: DestinationTable[]): MappingRow[] {
   const tablesByName = new Map(sqlTables.map(t => [t.fullName, t]));
   return mappingRows.filter(row => {
     const table = tablesByName.get(row.tableName);
-    return !table || table.columns.some(c => c.name === row.targetName);
+    return !table || table.origin !== 'probed' || table.columns.some(c => c.name === row.targetName);
   });
 }
 
@@ -560,7 +574,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
   for (const entry of doc.mappings) {
     const resource = entry.resourceType;
     const siblingNames = entry.tables.map(t => t.name);
-    const fullNames = entry.tables.map(t => qualify(t.name, destType));
+    const fullNames = entry.tables.map(t => qualifyTableName(t.name, destType));
     const primaryIndex = Math.max(0, entry.tables.indexOf(resolvePrimaryTable(entry.tables) ?? entry.tables[0]));
     targetByResource[resource] = fullNames[primaryIndex] ?? fullNames[0] ?? '';
     extraTablesByGroup[resource] = fullNames.filter((_, i) => i !== primaryIndex);
@@ -569,7 +583,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
       const fullName = fullNames[i];
       if (isGenuineChildRelation(table.relation, siblingNames)) {
         childTableRelationsByTable[fullName] = {
-          parentTable: qualify(table.relation!.parentTable, destType),
+          parentTable: qualifyTableName(table.relation!.parentTable, destType),
           parentColumn: table.relation!.parentColumn,
           foreignKeyColumnName: table.relation!.childColumn,
         };
@@ -632,7 +646,14 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
     mappingRows,
     targetByResource,
     extraTablesByGroup,
-    sqlTables: Array.from(sqlTablesByName.values()),
+    // Non-relational destinations (CSV, Mongo, Medplum, FHIR) never have a real, probed schema — sqlTables
+    // must stay empty for them exactly like a fresh wizard session (see isRelational's own doc comment).
+    // Populating it here from the saved document's tables was actively harmful for CSV specifically: every
+    // CSV resource shares the same generic table name ("csv"), so restoring a document that only had Patient
+    // mapped seeded a "csv" table entry with just Patient's columns — then adding Encounter and saving made
+    // pruneOrphanedMappingRows compare Encounter's brand-new columns against that stale, wrong-resource
+    // column list and silently drop all of them as "orphaned" (the "Encounter gets Patient's data" bug).
+    sqlTables: isRelational(destType) ? Array.from(sqlTablesByName.values()) : [],
     childTableRelationsByTable,
     selectedResources: doc.mappings.map(e => e.resourceType),
   };

@@ -102,9 +102,6 @@ public sealed class MagicLinkAuthTests
         user.SetMagicLinkToken(TokenHash, DateTime.UtcNow.AddMinutes(15));
         _repository.Setup(x => x.GetUserByEmailAsync(Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
         _passwordHasher.Setup(x => x.Verify(Token, TokenHash)).Returns(true);
-        // Pre-existing staleness fix, unrelated to Remember Me: IAccessTokenIssuer.Issue(User, IReadOnlyCollection<string>)
-        // only ever takes 2 arguments — permission codes stopped being embedded as JWT claims a while back
-        // (see IUserPermissionsProvider) — this setup's 3rd argument no longer matches any real overload.
         _accessTokenIssuer.Setup(x => x.Issue(user, It.IsAny<IReadOnlyCollection<string>>()))
             .Returns(new AccessTokenDto("access-token", "Bearer", DateTime.UtcNow.AddHours(1)));
         _accessTokenIssuer.Setup(x => x.IssueRefreshToken()).Returns(("refresh-hash", DateTime.UtcNow.AddDays(30)));
@@ -137,7 +134,6 @@ public sealed class MagicLinkAuthTests
         response.RequiresMfa.Should().BeTrue();
         response.MfaChallengeToken.Should().Be("challenge-hash");
         user.MagicLinkTokenHash.Should().BeNull();
-        // Same pre-existing 2-arg-signature fix as above.
         _accessTokenIssuer.Verify(x => x.Issue(It.IsAny<User>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }
 

@@ -15,9 +15,17 @@
             <span class="cell-muted">{{ ex.sourceName ?? ex.sourceSystemType ?? 'Unknown source' }}</span>
           </div>
         </div>
-        <span class="status-badge" [class]="statusClass(ex.status)">
-          <span class="status-dot"></span>{{ ex.status }}
-        </span>
+        <div class="header-actions">
+          <span class="status-badge" [class]="statusClass(ex.status)">
+            <span class="status-dot"></span>{{ statusLabel(ex.status) }}
+          </span>
+          @if (ex.status === 'Running') {
+            <button class="btn-cancel-run" type="button" [disabled]="cancelling()" (click)="cancelRun()">
+              <mat-icon>cancel</mat-icon>
+              {{ cancelling() ? 'Cancelling…' : 'Cancel Run' }}
+            </button>
+          }
+        </div>
       </div>
 
       <div class="header-stats">

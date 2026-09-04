@@ -80,6 +80,25 @@ export const SYSTEM_MAPPING_FIELDS: readonly FhirElement[] = [
 export class MappingCatalogService {
   private readonly http = inject(HttpClient);
   private readonly cache = new Map<string, Observable<FhirElement[]>>();
+  private readonly resourceTypesCache = new Map<string, Observable<string[] | null>>();
+
+  /** Resource types the backend knows this vendor's real FHIR API supports (VendorResourceTypeSupport),
+   *  narrowed against the platform's own catalog. Omit vendor (or pass one with no known restriction,
+   *  e.g. Epic) to get the full generic catalog's resource-type list. A fetch failure resolves to null
+   *  rather than an empty list, so callers can tell "no data yet / request failed" apart from "this
+   *  vendor genuinely supports zero resource types" and fall back to showing everything. */
+  resourceTypes(vendor?: string | null): Observable<string[] | null> {
+    const key = vendor ?? '';
+    let stream = this.resourceTypesCache.get(key);
+    if (!stream) {
+      stream = this.http.get<string[]>(MAPPING_ENDPOINTS.resources(vendor)).pipe(
+        catchError(() => of(null)),
+        shareReplay(1),
+      );
+      this.resourceTypesCache.set(key, stream);
+    }
+    return stream;
+  }
 
   /** sourceConnectionId lets the backend prefer that source's vendor-specific catalog (Epic, ...) —
    *  omit it (or pass null) to get the generic base-FHIR-R4 catalog, same as before this param existed.

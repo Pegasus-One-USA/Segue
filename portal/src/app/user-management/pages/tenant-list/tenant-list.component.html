@@ -27,11 +27,7 @@
           Reset
         </button>
         <button class="btn-add" type="button" (click)="openAdd()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Add Tenant
+          New
         </button>
       </div>
 
@@ -44,9 +40,9 @@
     <!-- Table meta row -->
     <div class="table-meta">
       <span class="entries-info">
-        @if (filtered().length > 0) {
-          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ filtered().length }}
-          {{ filtered().length === 1 ? 'entry' : 'entries' }}
+        @if (totalCount() > 0) {
+          Showing {{ showingFrom() }} to {{ showingTo() }} of {{ totalCount() }}
+          {{ totalCount() === 1 ? 'entry' : 'entries' }}
         } @else {
           No entries found
         }
@@ -54,7 +50,7 @@
     </div>
 
     <div class="table-wrapper">
-      <table mat-table [dataSource]="paginated()" class="data-table">
+      <table mat-table [dataSource]="tenants()" class="data-table">
 
         <!-- # Column -->
         <ng-container matColumnDef="index">
@@ -113,7 +109,7 @@
     </div>
 
     <!-- Empty State -->
-    @if (filtered().length === 0) {
+    @if (totalCount() === 0) {
       <div class="empty-state">
         <div class="empty-state__icon-wrap">
           <mat-icon>business</mat-icon>
@@ -128,9 +124,9 @@
     }
 
     <!-- Paginator -->
-    @if (filtered().length > pageSize()) {
+    @if (totalCount() > pageSize()) {
       <mat-paginator
-        [length]="filtered().length"
+        [length]="totalCount()"
         [pageSize]="pageSize()"
         [pageIndex]="pageIndex()"
         [pageSizeOptions]="[5, 10, 25, 50]"

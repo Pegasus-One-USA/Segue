@@ -21,6 +21,19 @@ public sealed class InMemoryTenantRepository : ITenantRepository
     public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Tenant>>(_tenants.Values.OrderBy(x => x.Name).ToList());
 
+    public Task<PagedResult<Tenant>> GetPagedAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var all = _tenants.Values
+            .Where(x => string.IsNullOrWhiteSpace(search)
+                || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || x.Code.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Name)
+            .ToArray();
+
+        var items = all.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        return Task.FromResult(new PagedResult<Tenant>(items, all.Length, page, pageSize));
+    }
+
     public Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_tenants.GetValueOrDefault(id));
 

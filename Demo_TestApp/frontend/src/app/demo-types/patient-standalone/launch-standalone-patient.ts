@@ -106,27 +106,28 @@ export class LaunchStandalonePatientComponent implements OnInit {
   readonly hasMyChartToken = signal(false);
   readonly lastConfirmedValidUtc = signal<string | null>(null);
 
-  // Epic/MyChart vs athenahealth vendor toggle for the connect/list step ONLY — detail/CSV export/CSV email stay
-  // Epic-only regardless of this selection (see athenaWorkflowId/athenaBaseUrl/athenaEhrEndpointId below). Persisted
-  // to sessionStorage (not just this signal) because redirectToMyChart is a full-page navigation away to the real
-  // MyChart/athenahealth login and back — a plain in-memory signal would silently reset to 'epic' on return,
-  // exactly when the OAuth-callback branch of initialize() needs to know which vendor's workflow/base URL to
-  // resolve the fetch against.
-  readonly vendor = signal<'epic' | 'athena'>('epic');
+  // Epic/MyChart vs athenahealth vs eCW vendor toggle for the connect/list step ONLY — detail/CSV export/CSV email
+  // stay Epic-only regardless of this selection (see athenaWorkflowId/athenaBaseUrl/athenaEhrEndpointId and
+  // ecwWorkflowId/ecwBaseUrl/ecwEhrEndpointId below). Persisted to sessionStorage (not just this signal) because
+  // redirectToMyChart is a full-page navigation away to the real MyChart/athenahealth/eCW login and back — a plain
+  // in-memory signal would silently reset to 'epic' on return, exactly when the OAuth-callback branch of
+  // initialize() needs to know which vendor's workflow/base URL to resolve the fetch against.
+  readonly vendor = signal<'epic' | 'athena' | 'ecw'>('epic');
   private static readonly VENDOR_STORAGE_KEY = 'patientStandaloneVendor';
 
-  private loadStoredVendor(): 'epic' | 'athena' {
+  private loadStoredVendor(): 'epic' | 'athena' | 'ecw' {
     try {
-      return sessionStorage.getItem(LaunchStandalonePatientComponent.VENDOR_STORAGE_KEY) === 'athena' ? 'athena' : 'epic';
+      const stored = sessionStorage.getItem(LaunchStandalonePatientComponent.VENDOR_STORAGE_KEY);
+      return stored === 'athena' || stored === 'ecw' ? stored : 'epic';
     } catch {
       return 'epic';
     }
   }
 
   // Step 1 (vendor) equivalent of chooseHospital — no network call by itself; loadHospitals() only runs for Epic
-  // (athenahealth's sandbox has one fixed FHIR base URL, so there is nothing to pick — see the html's @else branch).
+  // (athenahealth/eCW each have one fixed FHIR base URL, so there is nothing to pick — see the html's @else branches).
   // Resets the same per-flow state Reset Token clears, since switching vendors starts the connect/list step over.
-  selectVendor(next: 'epic' | 'athena'): void {
+  selectVendor(next: 'epic' | 'athena' | 'ecw'): void {
     if (this.vendor() === next) {
       return;
     }
@@ -156,6 +157,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   // screen for a not-yet-configured Epic/MyChart deployment.
   private athenaConfigured(): boolean {
     return !!(this.athenaWorkflowId && this.athenaBaseUrl && this.athenaEhrEndpointId);
+  }
+
+  // Same shape as athenaConfigured() above, for the eCW branch.
+  private ecwConfigured(): boolean {
+    return !!(this.ecwWorkflowId && this.ecwBaseUrl && this.ecwEhrEndpointId);
   }
 
   readonly launchError = signal<string | null>(null);
@@ -229,6 +235,11 @@ export class LaunchStandalonePatientComponent implements OnInit {
   private athenaWorkflowId = '';
   private athenaBaseUrl = '';
   private athenaEhrEndpointId = '';
+  // eCW counterparts of the athena* fields above, same rationale — eCW's Patient audience also has one fixed
+  // practice FHIR base URL with no directory to pick from.
+  private ecwWorkflowId = '';
+  private ecwBaseUrl = '';
+  private ecwEhrEndpointId = '';
 
   constructor(
     private readonly launchService: PatientStandaloneLaunchService,
@@ -292,6 +303,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.athenaWorkflowId = settings.athenaWorkflowId;
     this.athenaBaseUrl = settings.athenaBaseUrl;
     this.athenaEhrEndpointId = settings.athenaEhrEndpointId;
+    this.ecwWorkflowId = settings.ecwWorkflowId;
+    this.ecwBaseUrl = settings.ecwBaseUrl;
+    this.ecwEhrEndpointId = settings.ecwEhrEndpointId;
 
     if (isOAuthCallback) {
       await this.handleOAuthCallback(workflowRunId, launchError);
@@ -440,19 +454,26 @@ export class LaunchStandalonePatientComponent implements OnInit {
       return;
     }
 
-    // vendor()==='athena' resolves every call below against the admin-configured athenahealth workflow/base URL/
-    // EhrEndpoint instead of Epic's — see athenaConfigured()/selectVendor()'s own remarks. baseUrlOverride is
-    // undefined for Epic, which is exactly what every threaded-through service call already defaults to (this.baseUrl).
-    const isAthena = this.vendor() === 'athena';
-    if (isAthena && !this.athenaConfigured()) {
+    // vendor()==='athena'/'ecw' resolves every call below against that vendor's admin-configured workflow/base URL/
+    // EhrEndpoint instead of Epic's — see athenaConfigured()/ecwConfigured()/selectVendor()'s own remarks.
+    // baseUrlOverride is undefined for Epic, which is exactly what every threaded-through service call already
+    // defaults to (this.baseUrl).
+    const currentVendor = this.vendor();
+    if (currentVendor === 'athena' && !this.athenaConfigured()) {
       this.patientError.set(
         'athenahealth is not configured yet. Ask an admin to set the Athena Patient Standalone Workflow Id, Base URL, and EhrEndpoint Id in Workflow Settings.',
       );
       return;
     }
-    const activeWorkflowId = isAthena ? this.athenaWorkflowId : this.workflowId;
-    const baseUrlOverride = isAthena ? this.athenaBaseUrl : undefined;
-    const ehrEndpointIdOverride = isAthena ? this.athenaEhrEndpointId : undefined;
+    if (currentVendor === 'ecw' && !this.ecwConfigured()) {
+      this.patientError.set(
+        'eCW is not configured yet. Ask an admin to set the eCW Patient Standalone Workflow Id, Base URL, and EhrEndpoint Id in Workflow Settings.',
+      );
+      return;
+    }
+    const activeWorkflowId = currentVendor === 'athena' ? this.athenaWorkflowId : currentVendor === 'ecw' ? this.ecwWorkflowId : this.workflowId;
+    const baseUrlOverride = currentVendor === 'athena' ? this.athenaBaseUrl : currentVendor === 'ecw' ? this.ecwBaseUrl : undefined;
+    const ehrEndpointIdOverride = currentVendor === 'athena' ? this.athenaEhrEndpointId : currentVendor === 'ecw' ? this.ecwEhrEndpointId : undefined;
 
     this.isFetchingPatient.set(true);
     this.patientError.set(null);
@@ -818,6 +839,7 @@ export class LaunchStandalonePatientComponent implements OnInit {
         baseUrlOverride,
       );
       this.sessionId = result.sessionId;
+
       window.location.href = result.launchUrl;
     } catch {
       this.isRedirectingToMyChart.set(false);
@@ -846,9 +868,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
   }
 
   private async discardFhirBridgeToken(): Promise<void> {
-    const isAthena = this.vendor() === 'athena';
-    const activeWorkflowId = isAthena ? this.athenaWorkflowId : this.workflowId;
-    const baseUrlOverride = isAthena ? this.athenaBaseUrl : undefined;
+    const currentVendor = this.vendor();
+    const activeWorkflowId = currentVendor === 'athena' ? this.athenaWorkflowId : currentVendor === 'ecw' ? this.ecwWorkflowId : this.workflowId;
+    const baseUrlOverride = currentVendor === 'athena' ? this.athenaBaseUrl : currentVendor === 'ecw' ? this.ecwBaseUrl : undefined;
     try {
       await this.launchService.discardToken(activeWorkflowId, this.patientId, this.sessionId ?? undefined, baseUrlOverride);
     } catch {

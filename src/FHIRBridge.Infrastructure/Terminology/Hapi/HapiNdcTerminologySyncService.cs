@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -22,32 +21,31 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
     private const string ZipUrl = "https://www.accessdata.fda.gov/cder/ndctext.zip";
     private const string ProductFileEntryName = "product.txt";
     private const string SystemUrl = "http://hl7.org/fhir/sid/ndc";
-    private const string ResourceId = "ndc-full";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiNdcTerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiNdcTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiNdcTerminologySyncService> logger)
+        ILogger<HapiNdcTerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiNdcSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Downloading official NDC directory from the FDA.");
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiNdcTerminologySyncService) + ".Download");
@@ -55,18 +53,8 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
 
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} NDC product codes from the official directory.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-
-        var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "NDC", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -122,22 +110,6 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
         }
 
         return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "NDC",
-            title = "National Drug Code Directory (auto-synced from FDA)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

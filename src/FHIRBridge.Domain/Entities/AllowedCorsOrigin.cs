@@ -26,4 +26,10 @@ public sealed class AllowedCorsOrigin : AuditableChildEntity<Guid>, IHasAuditDis
     /// <summary>Optional operator-facing note, e.g. "Prod VM".</summary>
     public string? Label { get; private set; }
     string? IHasAuditDisplayName.AuditDisplayName => Label ?? OriginUrl;
+
+    public void Update(string originUrl, string? label)
+    {
+        OriginUrl = originUrl;
+        Label = label;
+    }
 }

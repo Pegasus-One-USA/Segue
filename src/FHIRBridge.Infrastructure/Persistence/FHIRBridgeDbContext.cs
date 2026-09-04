@@ -57,6 +57,9 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<SnomedRelationship> SnomedRelationships => Set<SnomedRelationship>();
     public DbSet<SnomedVersion> SnomedVersions => Set<SnomedVersion>();
     public DbSet<SnomedImportHistory> SnomedImportHistory => Set<SnomedImportHistory>();
+    public DbSet<TrmCodeSystem> TrmCodeSystems => Set<TrmCodeSystem>();
+    public DbSet<TrmCodeSystemVer> TrmCodeSystemVers => Set<TrmCodeSystemVer>();
+    public DbSet<TrmConcept> TrmConcepts => Set<TrmConcept>();
     public DbSet<Icd10Code> Icd10Codes => Set<Icd10Code>();
     public DbSet<Icd10Version> Icd10Versions => Set<Icd10Version>();
     public DbSet<Icd10ImportHistory> Icd10ImportHistory => Set<Icd10ImportHistory>();
@@ -78,6 +81,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<UcumUnit> UcumUnits => Set<UcumUnit>();
     public DbSet<UcumVersion> UcumVersions => Set<UcumVersion>();
     public DbSet<UcumImportHistory> UcumImportHistory => Set<UcumImportHistory>();
+    public DbSet<HapiTerminologyImportHistory> HapiTerminologyImportHistory => Set<HapiTerminologyImportHistory>();
 
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
@@ -132,6 +136,16 @@ public sealed class FHIRBridgeDbContext : DbContext
         // Database.IsNpgsql() is safe to call even when only the SqlServer provider is active at runtime.
         var isNpgsql = Database.IsNpgsql();
         var createdOnUtcDefaultSql = isNpgsql ? "timezone('utc', now())" : "GETUTCDATE()";
+
+        // SQL Server's collation name has no Postgres equivalent; Postgres's default "C"-locale
+        // collation is already case-sensitive byte comparison, so no explicit collation is needed there.
+        // See TrmConceptConfiguration for why this column must be case-sensitive at all.
+        if (!isNpgsql)
+        {
+            modelBuilder.Entity<TrmConcept>()
+                .Property(x => x.CodeVal)
+                .UseCollation("SQL_Latin1_General_CP1_CS_AS");
+        }
 
         // Cross-cutting conventions applied after the per-entity configurations:
         //  • soft-deletable entities get a global "hide deleted rows" query filter
@@ -232,6 +246,15 @@ public sealed class FHIRBridgeDbContext : DbContext
             modelBuilder.Entity<RxNormVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
             modelBuilder.Entity<SnomedVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
             modelBuilder.Entity<UcumVersion>().HasIndex(x => x.IsActive).IsUnique().HasFilter("\"IsActive\" = true");
+
+            // TrmConceptConfiguration's SQL Server-only collation ("SQL_Latin1_General_CP1_CS_AS") and column
+            // type ("nvarchar(max)") don't parse on Postgres. Clearing the collation back to the database
+            // default is sufficient there — unlike SQL Server, Postgres's default collation already compares
+            // text byte-for-byte (case-sensitive) for equality/uniqueness, which is the whole reason that
+            // collation was added (see TrmConceptConfiguration's remarks on the UCUM "S"/"s" collision). "text"
+            // is Npgsql's own equivalent of an unbounded column, same as nvarchar(max) is for SQL Server.
+            modelBuilder.Entity<TrmConcept>().Property(x => x.CodeVal).UseCollation(null);
+            modelBuilder.Entity<TrmConcept>().Property(x => x.Display).HasColumnType("text");
         }
     }
 

@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Xml.Linq;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -22,32 +21,31 @@ public sealed class HapiUcumTerminologySyncService : IHapiUcumTerminologySyncSer
 {
     private const string SourceUrl = "https://raw.githubusercontent.com/ucum-org/ucum/main/ucum-essence.xml";
     private const string SystemUrl = "http://unitsofmeasure.org";
-    private const string ResourceId = "ucum-full";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiUcumTerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiUcumTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiUcumTerminologySyncService> logger)
+        ILogger<HapiUcumTerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiUcumSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Downloading official UCUM specification (ucum-essence.xml).");
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiUcumTerminologySyncService) + ".Download");
@@ -55,18 +53,8 @@ public sealed class HapiUcumTerminologySyncService : IHapiUcumTerminologySyncSer
 
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} UCUM unit codes from the official specification.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(5),
-        };
-
-        var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "UCUM", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -81,7 +69,11 @@ public sealed class HapiUcumTerminologySyncService : IHapiUcumTerminologySyncSer
         var document = XDocument.Parse(xml);
         var ns = document.Root!.GetDefaultNamespace();
 
-        var results = new List<Concept>(350);
+        // Keyed by code to dedupe: a handful of codes (e.g. "s") are defined as both a <base-unit> and
+        // a <unit> in the same spec file — a CodeSystem can't contain duplicate concept codes (confirmed
+        // via a real unique-index violation on "S" during a live sync), so first-seen wins, same
+        // approach as NDC's/ICD-11's dedupe.
+        var byCode = new Dictionary<string, string>(350, StringComparer.Ordinal);
         foreach (var element in document.Root!.Elements(ns + "base-unit").Concat(document.Root.Elements(ns + "unit")))
         {
             var code = element.Attribute("Code")?.Value?.Trim();
@@ -91,26 +83,10 @@ public sealed class HapiUcumTerminologySyncService : IHapiUcumTerminologySyncSer
                 continue;
             }
 
-            results.Add(new Concept(code, display));
+            byCode.TryAdd(code, display);
         }
 
-        return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "UCUM",
-            title = "UCUM (Unified Code for Units of Measure) (auto-synced from ucum.org)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
+        return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
     }
 
     private sealed record Concept(string Code, string Display);

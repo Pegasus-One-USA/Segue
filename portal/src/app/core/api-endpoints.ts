@@ -41,6 +41,7 @@ export const AUTH_ENDPOINTS = {
 // tenant-tab), previously backed only by an in-memory, non-persistent mock (TenantRoleService).
 export const TENANT_ENDPOINTS = {
   list:   `${API_V1_BASE}/tenants`,
+  paged:  `${API_V1_BASE}/tenants/paged`,
   byId:   (id: string) => `${API_V1_BASE}/tenants/${id}`,
   create: `${API_V1_BASE}/tenants`,
   update: (id: string) => `${API_V1_BASE}/tenants/${id}`,
@@ -80,8 +81,9 @@ export const USERS_ENDPOINTS = {
 
 // ─── Roles & Permissions (RolesController — api/v1/roles, permissions) ─────────
 export const ROLES_ENDPOINTS = {
-  list: `${API_V1_BASE}/roles`,
-  byId: (id: string) => `${API_V1_BASE}/roles/${id}`,
+  list:  `${API_V1_BASE}/roles`,
+  paged: `${API_V1_BASE}/roles/paged`,
+  byId:  (id: string) => `${API_V1_BASE}/roles/${id}`,
 };
 
 export const PERMISSIONS_ENDPOINTS = {
@@ -92,6 +94,7 @@ export const PERMISSIONS_ENDPOINTS = {
 // ─── EHR Endpoints (EhrEndpointsController — api/v1/ehr-endpoints) ─────────────
 export const EHR_ENDPOINTS_ENDPOINTS = {
   list: `${API_V1_BASE}/ehr-endpoints`,
+  paged: `${API_V1_BASE}/ehr-endpoints/paged`,
   byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
 };
 
@@ -169,7 +172,13 @@ export const MAPPING_PROFILE_ENDPOINTS = {
 // Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
 export const MAPPING_ENDPOINTS = {
-  resources:     `${API_V1_BASE}/mapping/catalog/resources`,
+  // vendor narrows the response to VendorResourceTypeSupport's known-supported list for that source
+  // system (Athenahealth, Healow today) — omitted (or a vendor with no known restriction, e.g. Epic)
+  // returns the full generic catalog's resource types, same as before this param existed.
+  resources: (vendor?: string | null) => {
+    const base = `${API_V1_BASE}/mapping/catalog/resources`;
+    return vendor ? `${base}?vendor=${encodeURIComponent(vendor)}` : base;
+  },
   // sourceConnectionId lets the backend resolve that source's vendor (Epic, ...) and prefer its
   // vendor-specific catalog over the generic base-FHIR-R4 one. sourceVendor is the fallback for a
   // source node that hasn't been saved yet (no real connection id assigned) but already has a vendor
@@ -220,6 +229,7 @@ export const CORS_ORIGINS_ENDPOINTS = {
 export const SYSTEM_SETTINGS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/settings`,
   byKey: (key: string) => `${API_V1_BASE}/system/settings/${encodeURIComponent(key)}`,
+  batch: `${API_V1_BASE}/system/settings/batch`,
   decryptProvisionedSecret: `${API_V1_BASE}/system/settings/decrypt-provisioned-secret`,
 };
 
@@ -321,6 +331,21 @@ export const RXNORM_ENDPOINTS = {
   history: `${API_V1_BASE}/terminology/rxnorm/configuration/history`,
 };
 
+// ─── HAPI terminology server sync (HapiTerminologyConfigurationController — api/v1/terminology/hapi)
+// One row per code system (Cvx/Dcm/Hcpcs/Icd10/Icd10Pcs/Icd11/Icpc3/Loinc/Mesh/Ndc/RxNorm/Snomed/Ucum),
+// grouped settings + manual Run Now + history, shown on Settings → System Settings → General.
+const HAPI_TERMINOLOGY_BASE = `${API_V1_BASE}/terminology/hapi`;
+export const HAPI_TERMINOLOGY_ENDPOINTS = {
+  list: HAPI_TERMINOLOGY_BASE,
+  configuration: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}`,
+  runNow: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/run-now`,
+  history: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/history`,
+  codes: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes`,
+  code: (code: string, pid: number) => `${HAPI_TERMINOLOGY_BASE}/${code}/codes/${pid}`,
+  scan: (code: string) => `${HAPI_TERMINOLOGY_BASE}/${code}/scan`,
+  scanAll: `${HAPI_TERMINOLOGY_BASE}/scan`,
+};
+
 // ─── Source discovery (SourceDiscoveryController — api/v1/source-discovery) ────
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
@@ -349,6 +374,10 @@ export const PIPELINE_RUNS_ENDPOINTS = {
   routeExecutions:         `${API_V1_BASE}/pipeline-runs/route-executions`,
   routeExecutionById:      (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}`,
   routeExecutionResources: (id: string) => `${API_V1_BASE}/pipeline-runs/route-executions/${id}/resources`,
+  // Keyed by PipelineRunId (the batch a route execution belongs to, see PipelineExecutionEntry.pipelineRunId) —
+  // one Configured Pipeline run can process several routes in one pass, so cancelling stops the whole batch,
+  // not just the one route row the user clicked from.
+  cancel:                  (pipelineRunId: string) => `${API_V1_BASE}/pipeline-runs/${pipelineRunId}/cancel`,
 };
 
 // ─── Governance (GovernanceController — api/v1/governance) ─────────────────────
@@ -417,4 +446,5 @@ export const WORKFLOW_ENDPOINTS = {
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
+  cancelRun:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/cancel`,
 };

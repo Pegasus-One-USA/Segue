@@ -12,10 +12,15 @@ namespace FHIRBridge.Application.DTOs;
 /// missing collection surfaces here instead of only at pipeline-run time.</param>
 /// <param name="CreateIfNotExists">Mirrors the form's "Create collection if not exists" checkbox — when true, a
 /// missing <paramref name="Collection"/> doesn't fail the test (the write path will create it).</param>
+/// <param name="DestinationId">When set and <paramref name="ConnectionString"/> is blank, the connection string
+/// is resolved server-side from this already-saved destination's stored secret instead — lets the wizard verify
+/// an existing connection without the browser ever holding or resending it. Ignored when
+/// <paramref name="ConnectionString"/> is non-blank (a genuinely new/changed value always wins).</param>
 public sealed record MongoConnectionTestRequest(
     string ConnectionString,
     string? Collection = null,
-    bool CreateIfNotExists = false);
+    bool CreateIfNotExists = false,
+    Guid? DestinationId = null);
 
 /// <summary>
 /// Result of a Mongo connection test — extends the shared <see cref="ConnectionTestResultDto"/> shape with the

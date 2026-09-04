@@ -16,26 +16,6 @@
 
 .error-reference-link { display: block; margin-top: 4px; font-size: 11px; }
 
-.pipe-avatar {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: var(--color-success-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-
-  mat-icon { font-size: 18px; height: 18px; width: 18px; color: var(--color-success-strong); }
-}
-
-// Status badges
-.status-badge {
-  display: inline-flex; align-items: center;
-  padding: 3px 10px; border-radius: var(--radius-pill);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
-
-  &.status-pending    { background: var(--color-warning-soft); color: var(--color-warning-strong); }
-  &.status-running    { background: var(--color-info-soft); color: var(--color-info-strong); }
-  &.status-succeeded  { background: var(--color-success-soft); color: var(--color-success-strong); }
-  &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); }
-  &.status-cancelled  { background: var(--color-side); color: var(--color-muted); }
-}
-
 // Source tag
 .tag {
   display: inline-flex; align-items: center;

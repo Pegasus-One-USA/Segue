@@ -220,10 +220,14 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         athenaPatientWorkflowId = settings.AthenaPatientWorkflowId,
         athenaPatientBaseUrl = settings.AthenaPatientBaseUrl,
         athenaEhrEndpointId = settings.AthenaEhrEndpointId,
+        ecwPatientWorkflowId = settings.EcwPatientWorkflowId,
+        ecwPatientBaseUrl = settings.EcwPatientBaseUrl,
+        ecwEhrEndpointId = settings.EcwEhrEndpointId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
         providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        ecwProviderInAppWorkflowId = settings.EcwProviderInAppWorkflowId,
         backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
@@ -234,8 +238,8 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
 // list fetch, one for the per-patient detail fetch — each is its own independent FHIRBridge public-launch opt-in.
 // csvExportWorkflowId/csvEmailExportWorkflowId back the "Download Patient Information"/"Email Patient Information"
 // buttons — see launch-standalone-patient.ts's downloadPatientInformation/emailPatientInformation.
-// athena* fields back the screen's Epic/athenahealth vendor toggle — see launch-standalone-patient.ts's vendor
-// signal — and are used only for the connect/list step, never detail/CSV export (those stay Epic-only).
+// athena*/ecw* fields back the screen's Epic/athenahealth/eCW vendor toggle — see launch-standalone-patient.ts's
+// vendor signal — and are used only for the connect/list step, never detail/CSV export (those stay Epic-only).
 app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionStore sessions, HealthAppDbContext db) =>
 {
     if (!TryGetSession(http, sessions, out _, out _))
@@ -253,7 +257,10 @@ app.MapGet("/api/patient-standalone-settings", async (HttpContext http, SessionS
         csvEmailExportWorkflowId = settings.PatientCsvEmailExportWorkflowId,
         athenaWorkflowId = settings.AthenaPatientWorkflowId,
         athenaBaseUrl = settings.AthenaPatientBaseUrl,
-        athenaEhrEndpointId = settings.AthenaEhrEndpointId
+        athenaEhrEndpointId = settings.AthenaEhrEndpointId,
+        ecwWorkflowId = settings.EcwPatientWorkflowId,
+        ecwBaseUrl = settings.EcwPatientBaseUrl,
+        ecwEhrEndpointId = settings.EcwEhrEndpointId
     });
 });
 
@@ -288,10 +295,14 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.AthenaPatientWorkflowId = request.AthenaPatientWorkflowId?.Trim() ?? string.Empty;
     settings.AthenaPatientBaseUrl = request.AthenaPatientBaseUrl?.Trim() ?? string.Empty;
     settings.AthenaEhrEndpointId = request.AthenaEhrEndpointId?.Trim() ?? string.Empty;
+    settings.EcwPatientWorkflowId = request.EcwPatientWorkflowId?.Trim() ?? string.Empty;
+    settings.EcwPatientBaseUrl = request.EcwPatientBaseUrl?.Trim() ?? string.Empty;
+    settings.EcwEhrEndpointId = request.EcwEhrEndpointId?.Trim() ?? string.Empty;
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
     settings.ProviderInAppWorkflowId = request.ProviderInAppWorkflowId?.Trim() ?? string.Empty;
+    settings.EcwProviderInAppWorkflowId = request.EcwProviderInAppWorkflowId?.Trim() ?? string.Empty;
     settings.BackendSystemPractitionerImportWorkflowId = request.BackendSystemPractitionerImportWorkflowId?.Trim() ?? string.Empty;
     await db.SaveChangesAsync();
 
@@ -306,10 +317,14 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         athenaPatientWorkflowId = settings.AthenaPatientWorkflowId,
         athenaPatientBaseUrl = settings.AthenaPatientBaseUrl,
         athenaEhrEndpointId = settings.AthenaEhrEndpointId,
+        ecwPatientWorkflowId = settings.EcwPatientWorkflowId,
+        ecwPatientBaseUrl = settings.EcwPatientBaseUrl,
+        ecwEhrEndpointId = settings.EcwEhrEndpointId,
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
         providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
+        ecwProviderInAppWorkflowId = settings.EcwProviderInAppWorkflowId,
         backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
     });
 });
@@ -348,10 +363,18 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     SessionStore sessions,
     HealthAppDbContext db,
     IHttpClientFactory httpClientFactory,
-    ILogger<Program> logger) =>
+    ILogger<Program> logger,
+    string? iss) =>
 {
     var settings = await db.WorkflowSettings.FindAsync(1);
-    var workflowId = settings?.ProviderInAppWorkflowId;
+    // Auto-select the eCW Provider EMR workflow when the launching EHR's iss is an eCW practice (host *.ecwcloud.com)
+    // and a separate eCW workflow id is configured; otherwise use the Epic ProviderInAppWorkflowId. Lets both
+    // vendors share the one registered Launch URL, disambiguated by iss (see WorkflowSettingsEntity remarks).
+    var isEcwLaunch = !string.IsNullOrWhiteSpace(iss)
+        && iss.Contains("ecwcloud.com", StringComparison.OrdinalIgnoreCase);
+    var workflowId = isEcwLaunch && !string.IsNullOrWhiteSpace(settings?.EcwProviderInAppWorkflowId)
+        ? settings!.EcwProviderInAppWorkflowId
+        : settings?.ProviderInAppWorkflowId;
     var baseUrl = settings?.StandaloneBaseUrl ?? string.Empty;
 
     if (string.IsNullOrWhiteSpace(workflowId) || string.IsNullOrWhiteSpace(baseUrl))
@@ -396,6 +419,53 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     {
         logger.LogWarning(ex, "Could not reach FHIRBridge to mint a launch context for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
         return Results.Ok(new { providerLaunchContext = string.Empty, standaloneBaseUrl = baseUrl });
+    }
+});
+
+// Resolves the ProviderInApp workflow's LATEST fetched patient by workflow id — the "auto-fetch / Refresh"
+// behaviour on the launch view (launch-provider-in-app.ts). No fresh EHR launch is needed: FHIRBridge already
+// holds the data and a refreshable token, and its anonymous, read-only GET /workflows/{id}/latest-launch-result
+// returns the most recent run's Patient (gated on the workflow being publicly launchable). Routes eCW vs Epic by
+// the caller-supplied iss the same way the mint endpoint above does (and, absent an iss, prefers the eCW workflow
+// when one is configured, since that's the vendor the caller most recently set up). Anonymous, like the mint.
+app.MapGet("/api/provider-in-app-latest-result", async (
+    HealthAppDbContext db,
+    IHttpClientFactory httpClientFactory,
+    ILogger<Program> logger,
+    string? iss) =>
+{
+    var settings = await db.WorkflowSettings.FindAsync(1);
+    var baseUrl = settings?.StandaloneBaseUrl ?? string.Empty;
+    var isEcw = (!string.IsNullOrWhiteSpace(iss) && iss.Contains("ecwcloud.com", StringComparison.OrdinalIgnoreCase))
+        || (string.IsNullOrWhiteSpace(iss) && !string.IsNullOrWhiteSpace(settings?.EcwProviderInAppWorkflowId));
+    var useEcw = isEcw && !string.IsNullOrWhiteSpace(settings?.EcwProviderInAppWorkflowId);
+    var workflowId = useEcw ? settings!.EcwProviderInAppWorkflowId : settings?.ProviderInAppWorkflowId;
+    // Vendor is determined BY THE WORKFLOW ID this resolves to (which config field it came from) — reliable across
+    // any browser, unlike the frontend's iss-derived sessionStorage guess.
+    var vendor = useEcw ? "eClinicalWorks (eCW)" : "Epic Sandbox";
+
+    if (string.IsNullOrWhiteSpace(workflowId) || string.IsNullOrWhiteSpace(baseUrl))
+    {
+        return Results.Ok(new { workflowRunId = (string?)null, vendor });
+    }
+
+    try
+    {
+        var client = httpClientFactory.CreateClient("Workflow");
+        var response = await client.GetAsync($"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/latest-launch-result");
+        if (!response.IsSuccessStatusCode)
+        {
+            return Results.Ok(new { workflowRunId = (string?)null, vendor });
+        }
+
+        var body = await response.Content.ReadAsStringAsync();
+        var latest = JsonSerializer.Deserialize<LatestLaunchResult>(body, jsonOptions);
+        return Results.Ok(new { workflowRunId = latest?.WorkflowRunId, vendor });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not reach FHIRBridge for latest-launch-result of workflow {WorkflowId}.", workflowId);
+        return Results.Ok(new { workflowRunId = (string?)null, vendor });
     }
 });
 
@@ -765,13 +835,21 @@ record SaveSettingsRequest(
     string AthenaPatientWorkflowId,
     string AthenaPatientBaseUrl,
     string AthenaEhrEndpointId,
+    string EcwPatientWorkflowId,
+    string EcwPatientBaseUrl,
+    string EcwEhrEndpointId,
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string StandaloneBaseUrl,
     string ProviderInAppWorkflowId,
+    string EcwProviderInAppWorkflowId,
     string BackendSystemPractitionerImportWorkflowId);
 // Matches FHIRBridge's GET /api/v1/workflows/{id}/public-launch-context response shape.
 record MintedLaunchContext(string Context);
+// Matches the subset of FHIRBridge's GET /api/v1/workflows/{id}/latest-launch-result this app needs — the run id
+// of the workflow's most recent run that produced a Patient (the frontend then binds via the existing
+// getPatient(workflowRunId) launch-result path).
+record LatestLaunchResult(string? WorkflowRunId);
 // The subset of FHIRBridge's GET /api/v1/workflows/runs/{id}/launch-result response this app actually needs —
 // the full response also carries the raw Patient resource itself, which /api/account-context-link/check has no
 // use for.

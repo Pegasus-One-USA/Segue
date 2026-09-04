@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms.Nodes;
@@ -54,9 +55,23 @@ public sealed class DateMathAgeNode : ITransformNode
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
         var raw = value?.ToString();
-        if (string.IsNullOrWhiteSpace(raw) || !DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (string.IsNullOrWhiteSpace(raw))
         {
             return TransformResult.Ok(null);
+        }
+
+        // Same partial-precision handling as DateTimeFormatNode: a Safe-Harbor-generalized birthDate arrives
+        // as a bare year ("1987") or year-month ("1987-05") — DateTime.TryParse rejects both outright, which
+        // otherwise nulls out every age computation for every de-identified record. Treat a bare year/year-month
+        // as January 1st of that year for age math; per the spec's "respect the original precision" rule, this
+        // under-counts age by at most 11 months, never over-counts it.
+        if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            var partialMatch = Regex.Match(raw, @"^(\d{4})(-\d{2})?$");
+            if (!partialMatch.Success || !DateTime.TryParse($"{partialMatch.Groups[1].Value}-01-01", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            {
+                return TransformResult.Ok(null);
+            }
         }
 
         switch (config.Get("operation", "age"))
@@ -148,6 +163,16 @@ public sealed class HashingMaskingNode : ITransformNode
         {
             "hash" => Hash(raw, secret),
             "redact" => TransformResult.Ok(config.GetOrNull("token")),
+            // "remove" is Safe Harbor's literal instruction for direct identifiers (name, contact details,
+            // free text, photos): the value must not be present in the output at all, not merely obscured.
+            "remove" => TransformResult.Ok(null),
+            // Safe Harbor generalizes a birth date to year-only precision rather than removing it outright,
+            // since age-in-years is still needed downstream (see DateMathAgeNode).
+            "generalizeDateToYear" => GeneralizeDateToYear(raw),
+            // Safe Harbor generalizes a ZIP code to its first 3 digits; the spec additionally requires
+            // zeroing 3-digit prefixes covering under 20,000 people, which needs a census lookup this node
+            // doesn't have — the 3-digit truncation below is the mechanical part it can do unconditionally.
+            "generalizeZip3" => GeneralizeZip3(raw),
             _ => Mask(raw, config.GetInt("keepLength", 4))
         };
     }
@@ -173,5 +198,27 @@ public sealed class HashingMaskingNode : ITransformNode
 
         var masked = new string('*', raw.Length - keepLength) + raw[^keepLength..];
         return TransformResult.Ok(masked);
+    }
+
+    private static TransformResult GeneralizeDateToYear(string raw)
+    {
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return TransformResult.Ok(date.Year.ToString(CultureInfo.InvariantCulture));
+        }
+
+        // Already a bare year or year-month (e.g. from an upstream partial-precision source) — take the year.
+        var partialMatch = Regex.Match(raw, @"^(\d{4})(-\d{2})?$");
+        return partialMatch.Success
+            ? TransformResult.Ok(partialMatch.Groups[1].Value)
+            : TransformResult.Ok(null);
+    }
+
+    private static TransformResult GeneralizeZip3(string raw)
+    {
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        return digits.Length >= 3
+            ? TransformResult.Ok(digits[..3])
+            : TransformResult.Ok(null);
     }
 }

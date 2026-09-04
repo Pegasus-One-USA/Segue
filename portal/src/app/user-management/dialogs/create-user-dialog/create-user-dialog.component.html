@@ -11,9 +11,6 @@
         ? 'The user has been invited to activate their account.'
         : 'Send an invitation email to onboard a new platform user.' }}</p>
     </div>
-    <button mat-icon-button class="dialog-close" (click)="close()">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <!-- ── SUCCESS STATE ──────────────────────────────────────────────────────── -->
@@ -114,9 +111,6 @@
 
     <mat-dialog-actions>
       <div class="dialog-actions">
-        <button mat-stroked-button class="btn-cancel" (click)="cancel()" [disabled]="loading()">
-          Cancel
-        </button>
         <button mat-flat-button class="btn-submit" (click)="submit()" [disabled]="loading()">
           @if (loading()) {
             <mat-spinner diameter="18" color="accent"></mat-spinner>

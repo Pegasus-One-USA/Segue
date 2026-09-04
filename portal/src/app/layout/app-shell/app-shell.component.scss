@@ -126,6 +126,9 @@
 
 // ── Page content ───────────────────────────────────────────────────────────────
 .shell-content {
+  position:   relative; // containing block for app-modal-overlay's absolutely-positioned backdrop
+                         // (see modal-overlay.component.scss) — scopes every modal to just this content
+                         // area, leaving the sidebar, topbar, and footer visible and clickable underneath.
   flex:       1;
   min-height: 0;
   overflow-y: auto;

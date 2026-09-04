@@ -10,7 +10,7 @@
       <span class="refresh-hint">Last updated {{ lastRefreshed() | date:'h:mm a' }}</span>
       <button class="refresh-btn" type="button" (click)="refresh()">&#8635; Refresh</button>
       @if (canCreateWorkflow()) {
-        <a class="new-pipeline-btn" routerLink="/workflow-builder">+ New Workflow</a>
+        <a class="new-pipeline-btn" routerLink="/workflow-builder">New</a>
       }
     </div>
   </div>
@@ -60,6 +60,15 @@
       <div class="stat-tile__body">
         <span class="stat-tile__value">{{ runStatusCounts().cancelled }}</span>
         <span class="stat-tile__label">Cancelled</span>
+      </div>
+    </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'PartialSuccess' }">
+      <div class="stat-tile__icon stat-tile__icon--partial">
+        <mat-icon>rule</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().partialSuccess }}</span>
+        <span class="stat-tile__label">Partial Success</span>
       </div>
     </a>
   </div>

@@ -91,7 +91,13 @@ public sealed record TransformConfigFieldSchema(
     // Shown as grey example text inside an empty text box — never submitted as the actual value, unlike
     // DefaultValue. Used for fields that are correctly, intentionally blank by default (e.g. an optional
     // override) but still deserve an example so the person configuring the rule isn't guessing at the format.
-    string? Placeholder = null);
+    string? Placeholder = null,
+    // True for a fine-tuning/edge-case field the rule works fine without touching (an optional override, a
+    // rarely-changed knob, a field only relevant in one mode of a multi-mode node) — the UI renders these under
+    // a collapsed "Advanced Options" section instead of the main field list. False (the default) for whatever
+    // a person configuring this node type actually needs to look at first — the node's core behavior selector,
+    // or a field with real compliance/output impact (e.g. DateMathAge's redactOver89) even if it has a default.
+    bool IsAdvanced = false);
 
 public sealed record TransformNodeSchemaDto(
     TransformNodeType NodeType,

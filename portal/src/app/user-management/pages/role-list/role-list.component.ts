@@ -1,18 +1,21 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
+import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
+import { DialogService } from '../../../core/services/dialog.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { AuthService } from '../../../auth/services/auth.service';
@@ -31,6 +34,7 @@ import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
   ],
@@ -39,11 +43,12 @@ import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth
 })
 export class RoleListComponent implements OnInit {
   private readonly svc         = inject(IRoleService);
-  private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   readonly authService         = inject(AuthService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly destroyRef  = inject(DestroyRef);
 
   // ─── Permission gating — mirrors user-list.component.ts's established pattern exactly. Exposed
   // as instance fields (template expressions can't reach an imported enum/function directly) and
@@ -57,49 +62,48 @@ export class RoleListComponent implements OnInit {
   readonly pageIndex   = signal(0);
   readonly pageSize    = signal(10);
   readonly loading     = signal(true);
+  readonly totalCount  = signal(0);
 
   readonly roles = signal<Role[]>([]);
 
-  readonly displayedCols = ['index', 'name', 'description', 'permissions', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedCols = ['actions', 'name', 'description', 'permissions', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" (createdAt, or modifiedOnUtc when later). */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
 
+  private readonly searchChanged = new Subject<string>();
+
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
+    this.pageIndex.set(0);
+    this.loadRoles();
   }
-
-  private static actionOnOf(r: Role): number {
-    const value = r.modifiedOnUtc || r.createdAt;
-    return value ? new Date(value).getTime() : 0;
-  }
-
-  readonly filtered = computed(() => {
-    const q = this.searchQuery().toLowerCase().trim();
-    const rows = !q ? this.roles() : this.roles().filter(r =>
-      r.displayName.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
-    );
-
-    const direction = this.actionOnSortDirection();
-    if (!direction) return rows;
-    const sorted = [...rows].sort((a, b) => RoleListComponent.actionOnOf(a) - RoleListComponent.actionOnOf(b));
-    return direction === 'desc' ? sorted.reverse() : sorted;
-  });
-
-  readonly paginated = computed(() => {
-    const start = this.pageIndex() * this.pageSize();
-    return this.filtered().slice(start, start + this.pageSize());
-  });
 
   ngOnInit(): void {
+    this.searchChanged.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(() => {
+      this.pageIndex.set(0);
+      this.loadRoles();
+    });
+
     this.loadRoles();
   }
 
   loadRoles(): void {
     this.loading.set(true);
-    this.svc.getRoles().subscribe({
-      next: roles => {
-        this.roles.set(roles);
+    const direction = this.actionOnSortDirection();
+    this.svc.getPagedRoles({
+      search: this.searchQuery().trim() || undefined,
+      sortDescending: direction ? direction === 'desc' : undefined,
+      page: this.pageIndex() + 1,
+      pageSize: this.pageSize(),
+    }).subscribe({
+      next: result => {
+        this.roles.set(result.items);
+        this.totalCount.set(result.totalCount);
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -111,26 +115,27 @@ export class RoleListComponent implements OnInit {
 
   onSearch(val: string): void {
     this.searchQuery.set(val);
-    this.pageIndex.set(0);
+    this.searchChanged.next(val);
   }
 
   reset(): void {
     this.searchQuery.set('');
     this.pageIndex.set(0);
+    this.loadRoles();
   }
 
   onPageChange(e: PageChangeEvent): void {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
+    this.loadRoles();
   }
 
   openAdd(): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Create), 'You do not have permission to create roles.')) return;
-    this.dialog
-      .open(RoleDialogComponent, {
+    this.customDialog
+      .open<RoleDialogComponent, {}, boolean>(RoleDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: {},
       })
       .afterClosed()
@@ -144,11 +149,10 @@ export class RoleListComponent implements OnInit {
 
   openEdit(role: Role): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Edit), 'You do not have permission to edit roles.')) return;
-    this.dialog
-      .open(RoleDialogComponent, {
+    this.customDialog
+      .open<RoleDialogComponent, { role: Role }, boolean>(RoleDialogComponent, {
         width: '560px',
         disableClose: true,
-        restoreFocus: false,
         data: { role },
       })
       .afterClosed()
@@ -166,10 +170,9 @@ export class RoleListComponent implements OnInit {
 
   confirmDelete(role: Role): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.Role, PermissionAction.Delete), 'You do not have permission to delete roles.')) return;
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '420px',
-        restoreFocus: false,
         data: {
           title: 'Delete Role',
           message: `Are you sure you want to delete role "${role.displayName}"? This action cannot be undone.`,

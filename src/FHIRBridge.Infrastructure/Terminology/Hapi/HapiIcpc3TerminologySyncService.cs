@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -20,31 +19,31 @@ public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncS
 {
     private const string DataUrl = "https://ct.icpc-3.info/download.php?language=english";
     private const string SystemUrl = "http://terminology.hl7.org/CodeSystem/ICPC-3";
-    private const string ResourceId = "icpc3-full";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcpc3TerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiIcpc3TerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiIcpc3TerminologySyncService> logger)
+        ILogger<HapiIcpc3TerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiIcpc3SyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         _logger.LogInformation("Downloading official ICPC-3 dataset.");
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiIcpc3TerminologySyncService) + ".Download");
@@ -52,18 +51,8 @@ public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} ICPC-3 concepts from the official dataset.", concepts.Count);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(5),
-        };
-
-        var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "ICPC3", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -96,22 +85,6 @@ public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncS
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "ICPC3",
-            title = "International Classification of Primary Care, 3rd Revision (auto-synced from WONCA)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

@@ -20,14 +20,15 @@ import { MatDividerModule } from '@angular/material/divider';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
 import {
-  User, UserRole, UserStatus, UserQueryParams,
+  User, UserRole, UserStatus, UserQueryParams, InviteResult,
 } from '../../../auth/models/user.model';
 
 import { EditUserDialogComponent } from '../../dialogs/edit-user-dialog/edit-user-dialog.component';
 import { InviteUserDialogComponent } from '../../dialogs/invite-user-dialog/invite-user-dialog.component';
 import { AssignRolesDialogComponent } from '../../dialogs/assign-roles-dialog/assign-roles-dialog.component';
 import { InviteResultDialogComponent } from '../../dialogs/invite-result-dialog/invite-result-dialog.component';
-import { ConfirmDialogComponent } from '../../dialogs/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
+import { DialogService } from '../../../core/services/dialog.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
@@ -66,6 +67,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(IUserService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
@@ -93,7 +95,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   inactiveUsers      = computed(() => this.users().filter(u => u.status !== 'active').length);
   mustChangePwdUsers = computed(() => this.users().filter(u => u.mustChangePassword).length);
 
-  readonly displayedColumns = ['avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actionBy', 'actionOn', 'actions'];
+  readonly displayedColumns = ['actions', 'avatar', 'name', 'roles', 'status', 'loginType', 'lastLogin', 'actionBy', 'actionOn'];
 
   // Seeded with the 4 built-ins so the dropdown isn't empty while getRoles() is in flight —
   // replaced with the real role list (including any custom roles) once it loads, see ngOnInit.
@@ -217,16 +219,16 @@ export class UserListComponent implements OnInit, OnDestroy {
   // ─── Dialogs ─────────────────────────────────────────────────────────────
   openEditDialog(user: User): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Edit), 'You do not have permission to edit users.')) return;
-    const ref = this.dialog.open(EditUserDialogComponent, {
-      width: '640px', disableClose: true, restoreFocus: false, data: { user },
+    const ref = this.customDialog.open<EditUserDialogComponent, { user: User }, User>(EditUserDialogComponent, {
+      width: '640px', disableClose: true, data: { user },
     });
     ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
   }
 
   openInviteDialog(): void {
     if (!this.actionGuard.ensure(permissionCode(PermissionGroup.User, PermissionAction.Invite), 'You do not have permission to invite users.')) return;
-    const ref = this.dialog.open(InviteUserDialogComponent, {
-      width: '560px', disableClose: true, restoreFocus: false,
+    const ref = this.customDialog.open<InviteUserDialogComponent, unknown, InviteResult>(InviteUserDialogComponent, {
+      width: '560px', disableClose: true,
     });
     ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
   }
@@ -238,8 +240,8 @@ export class UserListComponent implements OnInit, OnDestroy {
     // full detail (mapDetailDto) first so isAssigned()/the allocation preview have real role ids.
     this.userService.getUser(user.id).subscribe({
       next: fullUser => {
-        const ref = this.dialog.open(AssignRolesDialogComponent, {
-          width: '820px', maxWidth: '95vw', disableClose: true, restoreFocus: false, data: { user: fullUser },
+        const ref = this.customDialog.open<AssignRolesDialogComponent, { user: User }, User>(AssignRolesDialogComponent, {
+          width: '820px', disableClose: true, data: { user: fullUser },
         });
         ref.afterClosed().subscribe(result => { if (result) this.loadUsers(); });
       },
@@ -254,8 +256,8 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.toast.error('You cannot delete your own account.');
       return;
     }
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px', restoreFocus: false,
+    const ref = this.customDialog.open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+      width: '400px',
       data: {
         title:        'Delete user',
         message:      `Are you sure you want to delete "${user.fullName}"? This action cannot be undone.`,
@@ -309,8 +311,8 @@ export class UserListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: res => {
           this.toast.success(`Invitation resent to "${user.email}".`);
-          this.dialog.open(InviteResultDialogComponent, {
-            width: '540px', restoreFocus: false, data: res,
+          this.customDialog.open<InviteResultDialogComponent, InviteResult, void>(InviteResultDialogComponent, {
+            width: '540px', data: res,
           });
         },
         error: (err: { status?: number; message?: string }) => {
@@ -346,12 +348,12 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   getStatusClass(status: string): string {
     const map: Record<string, string> = {
-      active:    'status-active',
-      inactive:  'status-inactive',
-      suspended: 'status-suspended',
-      pending:   'status-pending',
+      active:    'badge-active',
+      inactive:  'badge-inactive',
+      suspended: 'badge-suspended',
+      pending:   'badge-queued',
     };
-    return map[status] ?? 'status-inactive';
+    return map[status] ?? 'badge-inactive';
   }
 
   getRoleConfig(role: UserRole) {

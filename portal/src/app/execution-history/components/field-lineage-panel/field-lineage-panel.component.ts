@@ -48,6 +48,11 @@ export class FieldLineagePanelComponent implements OnInit {
 
   readonly chains = signal<PagedResult<FieldLineageChain>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly loading = signal(false);
+  /** True when the last loadChains() request failed at the HTTP level (e.g. the backend threw decrypting one
+   *  row's PHI value) rather than genuinely returning zero matches — previously indistinguishable, since the
+   *  error handler reset chains() to an empty page either way. The empty-state message below reads this to
+   *  show "couldn't load" instead of silently implying "nothing here" for what's actually a real failure. */
+  readonly loadError = signal(false);
   readonly pageIndex = signal(0);
   readonly pageSize = signal(10);
 
@@ -115,6 +120,7 @@ export class FieldLineagePanelComponent implements OnInit {
 
   loadChains(): void {
     this.loading.set(true);
+    this.loadError.set(false);
     const filter = {
       resourceType: this.selectedResourceType() ?? undefined,
       destinationField: this.groupBy() === 'field' ? (this.selectedField() ?? undefined) : undefined,
@@ -130,6 +136,7 @@ export class FieldLineagePanelComponent implements OnInit {
       },
       error: () => {
         this.chains.set({ items: [], totalCount: 0, page: 1, pageSize: this.pageSize() });
+        this.loadError.set(true);
         this.loading.set(false);
       },
     });

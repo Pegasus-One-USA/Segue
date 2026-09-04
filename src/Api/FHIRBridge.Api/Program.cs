@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Azure.Identity;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
@@ -13,6 +14,7 @@ using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
@@ -34,6 +36,12 @@ using Microsoft.OpenApi;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Pulls ConnectionStrings/messaging-broker secrets from Azure Key Vault when KeyVault:UseAzureKeyVault is set
+// — as early as possible, since ConnectionStrings:FHIRBridgeDb itself (read further below) is one of them. See
+// KeyVaultConfigurationExtensions' remarks for what this does and doesn't cover, and its graceful-on-failure
+// behavior.
+builder.Configuration.AddFhirBridgeKeyVaultConfiguration();
 
 // Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
 // Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
@@ -113,6 +121,18 @@ if (!string.IsNullOrWhiteSpace(dataProtectionCertPath) && !builder.Environment.I
     dataProtection.ProtectKeysWithCertificate(dataProtectionCert);
 }
 
+// Alternative to the certificate above: wraps the key ring using an Azure Key Vault Key's wrap/unwrap
+// operations instead of a local certificate. Same "wraps, never rotates" semantics — each key's own stored
+// descriptor governs how it's decrypted, so keys written before this was configured stay readable. Requires
+// the app's identity to hold the Key Vault "Key Vault Crypto User" role on the referenced key (a different
+// role than "Key Vault Secrets Officer", which the tenant/app secret system uses). Off by default; set
+// DataProtection:KeyVaultKeyId (e.g. https://<vault>.vault.azure.net/keys/<key-name>) to enable.
+var dataProtectionKeyVaultKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeyVaultKeyId))
+{
+    dataProtection.ProtectKeysWithAzureKeyVault(new Uri(dataProtectionKeyVaultKeyId), new DefaultAzureCredential());
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -160,6 +180,26 @@ builder.Services
     .AddFHIRBridgeInfrastructure(builder.Configuration)
     .AddWorkflowCore()
     .AddWorkflowInfrastructure();
+
+// The 13 IHapi{Code}TerminologySyncService implementations were previously registered only in the Worker
+// host (see Worker/Program.cs), since only the scheduled workers called them. The new "Run Now" endpoint
+// (HapiTerminologyConfigurationController) needs to resolve the same services from this host too. All 13
+// are Scoped: every one of them now depends on HapiLocalTerminologyWriter (Scoped, holds a DbContext),
+// so a Singleton registration here would be a captive-dependency DI validation failure at startup.
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IHapiCvxTerminologySyncService, HapiCvxTerminologySyncService>();
+builder.Services.AddScoped<IHapiDcmTerminologySyncService, HapiDcmTerminologySyncService>();
+builder.Services.AddScoped<IHapiHcpcsTerminologySyncService, HapiHcpcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10TerminologySyncService, HapiIcd10TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd10PcsTerminologySyncService, HapiIcd10PcsTerminologySyncService>();
+builder.Services.AddScoped<IHapiIcd11TerminologySyncService, HapiIcd11TerminologySyncService>();
+builder.Services.AddScoped<IHapiIcpc3TerminologySyncService, HapiIcpc3TerminologySyncService>();
+builder.Services.AddScoped<IHapiLoincTerminologySyncService, HapiLoincTerminologySyncService>();
+builder.Services.AddScoped<IHapiMeshTerminologySyncService, HapiMeshTerminologySyncService>();
+builder.Services.AddScoped<IHapiNdcTerminologySyncService, HapiNdcTerminologySyncService>();
+builder.Services.AddScoped<IHapiRxNormTerminologySyncService, HapiRxNormTerminologySyncService>();
+builder.Services.AddScoped<IHapiSnomedTerminologySyncService, HapiSnomedTerminologySyncService>();
+builder.Services.AddScoped<IHapiUcumTerminologySyncService, HapiUcumTerminologySyncService>();
 
 // Scenario A: back the graph engine's stores with SQL (must follow AddWorkflowCore to win the registration).
 // Scenario B: also wires the launch-graph projection/resolver + feature flag (default OFF). Gated the same way
@@ -650,11 +690,14 @@ static void BootstrapDatabase(WebApplication app)
     var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
     systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-    // One-time: create the "HIPAA Safe Harbor — Default" de-identification profile + its rules, ported from
-    // the platform's original hardcoded rule list. Insert-only; never touches a profile an admin has since
-    // created or edited.
-    var deIdentificationProfileSeeder = scope.ServiceProvider.GetService<IDeIdentificationProfileSeeder>();
-    deIdentificationProfileSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+    // De-identification profiles/rules are no longer auto-seeded on a fresh environment — de-identification
+    // policy is now a deliberate, explicitly-authored decision (created via the mapping screen's
+    // "De-identification" tab or Settings > Transformation Rules), not a silent default nobody at the
+    // tenant reviewed. Left here, commented, rather than deleted: DeIdentificationProfileSeeder itself is
+    // unchanged and insert-only, so re-enabling this call is a safe, reversible one-line change if the
+    // decision changes.
+    // var deIdentificationProfileSeeder = scope.ServiceProvider.GetService<IDeIdentificationProfileSeeder>();
+    // deIdentificationProfileSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Generates and persists the JWT signing key / download-link signing secret the first time an install has

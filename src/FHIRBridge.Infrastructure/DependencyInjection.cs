@@ -31,6 +31,7 @@ using FHIRBridge.Infrastructure.Scheduling;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Sources;
 using FHIRBridge.Infrastructure.Terminology;
+using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -398,7 +399,6 @@ public static class DependencyInjection
         services.AddHttpClient(nameof(NdcReleaseClient));
         services.AddHttpClient(nameof(ReleaseFreshnessChecker));
         services.AddHttpClient(nameof(UcumReleaseClient));
-        services.AddHttpClient(nameof(FhirTerminologyTranslationService));
 
         services.AddSingleton<MappedInMemoryDestinationBuffer>();
         services.AddScoped<MappedInMemoryDestinationWriter>();
@@ -525,6 +525,22 @@ public static class DependencyInjection
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
         services.AddHostedService<TerminologyImportBackgroundService>();
+        // Grouped settings/Run Now/history for the 13 HAPI-terminology-server sync systems — see
+        // HapiTerminologyConfigurationController. The registry is stateless (pure lookup + delegate
+        // closures resolved against whatever IServiceProvider is passed at call time), safe as a singleton.
+        services.AddSingleton<HapiTerminologySystemRegistry>();
+        services.AddScoped<IHapiTerminologyConfigurationService, HapiTerminologyConfigurationService>();
+        // Shared PUT-with-retry-and-verify used by all 13 Hapi*TerminologySyncService implementations
+        // for their final "load into the terminology server" step — see its own remarks for why.
+        services.AddSingleton<HapiTerminologyServerClient>();
+        // Local MSSQL cache (mirroring HAPI's own trm_codesystem/trm_codesystem_ver/trm_concept
+        // schema) that the 13 Hapi*TerminologySyncService jobs now write into instead of PUTting to
+        // the remote HAPI server, and that CompositeTerminologyLookupService checks first.
+        services.AddScoped<HapiLocalTerminologyWriter>();
+        services.AddScoped<HapiLocalTerminologyLookupService>();
+        // Search/pagination and manual add/edit/delete over the same TRM_CONCEPT rows above, for the
+        // "View All Codes" screen under each HAPI terminology system's ⋮ menu.
+        services.AddScoped<ITerminologyConceptService, TerminologyConceptService>();
         services.AddScoped<FhirTerminologyLookupService>();
         services.AddScoped<CompositeTerminologyLookupService>();
         services.AddScoped<ITerminologyLookupService>(sp => new CachingTerminologyLookupService(
@@ -533,7 +549,6 @@ public static class DependencyInjection
             sp.GetRequiredService<ISystemSettingsCache>(),
             terminologyCacheTtl));
         services.AddSingleton<LocalTerminologyTranslationService>();
-        services.AddScoped<FhirTerminologyTranslationService>();
         services.AddScoped<CompositeTerminologyTranslationService>();
         services.AddScoped<ITerminologyTranslationService>(sp => new CachingTerminologyTranslationService(
             sp.GetRequiredService<CompositeTerminologyTranslationService>(),
@@ -608,12 +623,16 @@ public static class DependencyInjection
 
         services.AddSingleton<ConfigurationSecretProvider>();
         services.AddSingleton<AzureKeyVaultSecretProvider>();
+        services.AddSingleton<AzureKeyVaultSecretWriter>();
+        services.AddSingleton<ITenantSecretVaultResolver, KeyVaultAwareTenantSecretVaultResolver>();
         // App-level secrets (JWT signing key, download-link signing secret) — auto-generated on first boot
         // via AppSecretProvisioner and cached here for the app's lifetime. See AppSecretAccessor's remarks.
         services.AddSingleton<AppSecretAccessor>();
         services.AddSingleton<IAppSecretAccessor>(sp => sp.GetRequiredService<AppSecretAccessor>());
         // B1: app-provisioned secrets. DbSecretStore/CompositeSecretProvider need FHIRBridgeDbContext, which
         // only exists on the SQL-backed path below — the InMemory path gets a process-local stand-in instead.
+        // The InMemory path is dev/test-only (no durable DB at all) and deliberately never attempts Key Vault —
+        // it always uses InMemorySecretStore for both reads and writes.
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddSingleton<InMemorySecretStore>();
@@ -624,7 +643,7 @@ public static class DependencyInjection
         else
         {
             services.AddScoped<DbSecretStore>();
-            services.AddScoped<ISecretWriter>(sp => sp.GetRequiredService<DbSecretStore>());
+            services.AddScoped<ISecretWriter, CompositeSecretWriter>();
             services.AddScoped<ISecretProvider, CompositeSecretProvider>();
             services.AddScoped<IAppSecretMetadataProvider>(sp => sp.GetRequiredService<DbSecretStore>());
         }
@@ -639,6 +658,9 @@ public static class DependencyInjection
         // the same on both the SQL-backed and InMemory paths above.
         services.AddSingleton<IProvisionedSecretDecryptor, ProvisionedSecretDecryptor>();
 
+        // Singleton by design (see IPipelineRunTracker's remarks) — one shared in-flight-run registry that
+        // survives across the Scoped ConfiguredPipelineService instances created per request/message.
+        services.AddSingleton<IPipelineRunTracker, InMemoryPipelineRunTracker>();
         services.AddScoped<IConfiguredPipelineService, ConfiguredPipelineService>();
 
         // Synchronous patient-scoped aggregation read. Bound from "PatientAggregation"; defaults apply when absent.

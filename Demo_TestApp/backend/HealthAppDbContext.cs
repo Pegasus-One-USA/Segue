@@ -138,6 +138,17 @@ public sealed class WorkflowSettingsEntity
     public string AthenaPatientBaseUrl { get; set; } = string.Empty;
     public string AthenaEhrEndpointId { get; set; } = string.Empty;
 
+    // eClinicalWorks (eCW) variant of the Patient_Standalone list/connect flow — same shape as the athenahealth
+    // fields above (a separate workflow id/base URL pair, never PatientWorkflowId/PatientBaseUrl, since eCW
+    // requires its own SourceConnection: Healow vendor, practice_code, patient-only audience). Also has no
+    // detail/CSV-export/CSV-email-export counterpart, for the same reason athenahealth doesn't. EcwEhrEndpointId is
+    // required for the same reason AthenaEhrEndpointId is: eCW's Patient audience currently targets one fixed
+    // practice (no per-hospital directory), so instead of a picker, an admin pastes the id of a pre-seeded
+    // EhrEndpoint row (type MyChart) whose FHIR base URL is the eCW practice's endpoint.
+    public string EcwPatientWorkflowId { get; set; } = string.Empty;
+    public string EcwPatientBaseUrl { get; set; } = string.Empty;
+    public string EcwEhrEndpointId { get; set; } = string.Empty;
+
     // The two FHIRBridge workflow ids Provider_Standalone's launch-standalone-provider screen needs — "Fetch
     // Patient List" and "Patient Detail" are deliberately separate workflows (see
     // launch-standalone-provider.ts's fetchPatientList/viewPatientDetail), so each gets its own settable id here
@@ -163,6 +174,15 @@ public sealed class WorkflowSettingsEntity
     // separate list/detail pair. Provider_InApp's FHIRBridge base URL deliberately reuses StandaloneBaseUrl above
     // rather than getting its own field — both demo types are Provider-role launches against the same deployment.
     public string ProviderInAppWorkflowId { get; set; } = string.Empty;
+
+    // Provider_InApp's SEPARATE eClinicalWorks (eCW) EHR-launch workflow id — same shape/role as
+    // ProviderInAppWorkflowId above (a raw workflow id, minted on demand, workflow must be opted into public
+    // launch), but for an eCW (Healow) Provider EMR source instead of Epic. The mint endpoint
+    // (/api/provider-in-app-launch-context) auto-selects this one when the launching EHR's iss is an eCW practice
+    // (host *.ecwcloud.com) and this is set, else falls back to the Epic ProviderInAppWorkflowId — so both vendors
+    // can be launched at the same registered Launch URL, disambiguated by iss. Reuses StandaloneBaseUrl like the
+    // Epic one. Empty by default (feature is off until an admin sets it), so existing Epic-only setups are unchanged.
+    public string EcwProviderInAppWorkflowId { get; set; } = string.Empty;
 
     // BackendSystem role's "Import Practitioner" flow (see BackendSystemEndpoints.cs's
     // /api/backend-system/practitioners/import) — the FHIRBridge workflow whose Practitioner source is run, scoped
@@ -492,6 +512,9 @@ public sealed class HealthAppDbContext : DbContext
             AthenaPatientWorkflowId = string.Empty,
             AthenaPatientBaseUrl = string.Empty,
             AthenaEhrEndpointId = string.Empty,
+            EcwPatientWorkflowId = string.Empty,
+            EcwPatientBaseUrl = string.Empty,
+            EcwEhrEndpointId = string.Empty,
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty,
             // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).

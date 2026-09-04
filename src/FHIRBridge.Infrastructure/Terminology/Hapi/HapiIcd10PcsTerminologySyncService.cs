@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -21,11 +20,10 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// no decimal); 15 valid-for-submission flag ("1"=billable); 17-76 short description; 77+ long
 /// description. Confirmed against the real FY2027 release.
 /// </summary>
-public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminologySyncService
+public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminologySyncService, IHapiVersionCheckable
 {
     private const string ListingPageUrl = "https://www.cms.gov/medicare/coding-billing/icd-10-codes";
     private const string SystemUrl = "http://www.cms.gov/Medicare/Coding/ICD10";
-    private const string ResourceId = "icd10pcs-full";
 
     private static readonly Regex ZipLinkPattern = new(
         @"href=""(/files/zip/[a-z0-9\-]*icd-10-pcs-order-file[a-z0-9\-]*\.zip)""",
@@ -35,26 +33,26 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcd10PcsTerminologySyncService> _logger;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiIcd10PcsTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
-        ILogger<HapiIcd10PcsTerminologySyncService> logger)
+        ILogger<HapiIcd10PcsTerminologySyncService> logger,
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiIcd10PcsSyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared setting across every vocabulary — see HapiIcd10TerminologySyncService's remarks.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrl = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
+
 
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiIcd10PcsTerminologySyncService) + ".Download");
         downloadClient.Timeout = TimeSpan.FromMinutes(2);
@@ -67,18 +65,8 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         var billableCount = concepts.Count(c => c.Billable);
         _logger.LogInformation(
             "Parsed {Total} ICD-10-PCS codes ({Billable} billable) from the official release.", concepts.Count, billableCount);
-
-        // Bypasses IHttpClientFactory — see HapiIcd10TerminologySyncService's remarks on the
-        // app-wide resilience default stacking with, rather than being replaced by, a named override.
-        using var serverClient = new HttpClient
-        {
-            BaseAddress = new Uri(serverBaseUrl + "/"),
-            Timeout = TimeSpan.FromMinutes(5),
-        };
-
-        var resource = BuildCodeSystemResource(concepts);
-        var response = await serverClient.PutAsJsonAsync($"CodeSystem/{ResourceId}", resource, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "ICD10PCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -86,6 +74,18 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
 
         return new HapiIcd10PcsSyncResult(concepts.Count, billableCount, stopwatch.Elapsed);
     }
+
+    /// <summary>CMS's fiscal-year zip filename itself as the version identifier — same reasoning as
+    /// HCPCS's quarterly filename: no separately-published release number, but the filename changes
+    /// with each fiscal-year release and is reused as both the check value and the stored version.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        using var client = _httpClientFactory.CreateClient(nameof(HapiIcd10PcsTerminologySyncService) + ".Download");
+        var zipUrl = await FindLatestZipUrlAsync(client, cancellationToken);
+        return VersionFromZipUrl(zipUrl);
+    }
+
+    private static string VersionFromZipUrl(string zipUrl) => zipUrl[(zipUrl.LastIndexOf('/') + 1)..];
 
     private static async Task<string> FindLatestZipUrlAsync(HttpClient http, CancellationToken ct)
     {
@@ -136,22 +136,6 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "ICD10PCS",
-            title = "ICD-10-PCS (auto-synced from CMS)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display, bool Billable);

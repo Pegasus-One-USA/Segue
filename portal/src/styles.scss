@@ -190,6 +190,13 @@ html {
   --color-surface:      var(--brand-surface);
   --color-side:         var(--ref-neutral-75);
 
+  /* Deliberately theme-invariant dark chrome (e.g. a floating popup's own header bar) — unlike
+     --color-ink/--color-surface, which INVERT roles between light/dark theme, this pair stays the same
+     fixed dark-bar-with-light-text look regardless of the active theme, the way a toolbar or title bar
+     often does in other apps. Intentionally never redefined in the dark-theme override below. */
+  --color-header-dark:     var(--ref-neutral-900);
+  --color-on-header-dark:  var(--ref-white);
+
   /* ═══════════════════════════════════════════════════════════════════════
      TIER 3 · COMPONENT tokens — role-scoped, reference the semantic tier.
      Adoption in progress (page + cards wired); expand with cleanup pass.
@@ -854,6 +861,40 @@ a {
   }
 }
 
+/* ─── Maximized in-shell overlay (node config drawer's "maximize") ──────────
+   .nld--maximized (node-library-dialog.component.scss) is `position: fixed; inset: 0` so it computes
+   to full-viewport bounds — but every app-shell ancestor sets `overflow: hidden|auto` for its own
+   scrolling/layout, and an ancestor's overflow clips ALL descendants' *painted* content, including
+   position:fixed ones, regardless of their own containing block. This global rule (matched against the
+   body class node-library-dialog.component.ts toggles while maximized) temporarily lifts that clipping
+   so the fixed panel actually covers the sidebar/topbar/footer too, not just the content area. Global,
+   not component-scoped: Angular's emulated encapsulation would otherwise need every ancestor selector
+   here scoped to app-shell's own stylesheet, which this cross-component toggle isn't part of. */
+body.nld-maximized {
+  .shell, .shell-body, .shell-main, .shell-content {
+    overflow: visible !important;
+  }
+}
+
+/* The actual cause of "maximize" getting stuck inside the content area: app-modal-overlay's own
+   .modal-backdrop sets `backdrop-filter: blur(2px)` for its normal dimmed look — and `filter` /
+   `backdrop-filter` on an ancestor establishes a new containing block for position:fixed (and absolute)
+   descendants, per the CSS Filter Effects spec, exactly like `transform` does. So .nld--maximized's
+   `position: fixed; inset: 0` was never resolving against the real viewport at all — it was resolving
+   against .modal-backdrop's own box (already scoped to just the content area, see modal-overlay.component
+   .scss), which is indistinguishable from being "clipped" to that area. Global (not scoped to either
+   component's stylesheet): .modal-backdrop belongs to ModalOverlayComponent and .nld--maximized belongs
+   to NodeLibraryDialogComponent (projected into the former via ng-content) — Angular's emulated
+   encapsulation attributes each component's own stylesheet writes onto every selector it contains, so
+   neither component's *own* scoped SCSS can select an element that belongs to the other. */
+.modal-backdrop:has(.nld--maximized) {
+  // !important: this and the component-scoped base rule (backdrop-filter: blur(2px), in
+  // modal-overlay.component.scss) tie at equal specificity once Angular's emulated-encapsulation
+  // attribute is counted on the base rule — a tie the cascade then resolves by stylesheet load order,
+  // which isn't reliably "this file wins." Force it rather than depend on that order.
+  backdrop-filter: none !important;
+}
+
 /* ─── Toast Utility Classes ───────────────────────────────────────────────── */
 .toast {
   position:      fixed;
@@ -1012,6 +1053,115 @@ textarea {
     background: var(--color-side);
     cursor:     default;
   }
+}
+
+/* ─── Checkbox (native) ───────────────────────────────────────────────────────
+   Portal-wide audit found ~26 files with checkboxes split between <mat-checkbox>
+   (themed via the M3 token bridge above) and bare native <input type="checkbox">
+   with no styling at all — rendering as the browser/OS's own default widget,
+   a different size/shape/checked-color per browser and unrelated to the app's
+   teal brand. Rather than migrate every native checkbox to <mat-checkbox> across
+   ~20 forms (risking form-binding regressions), this reset gives every native
+   checkbox the same look as a themed <mat-checkbox>: 18x18px box, 1.5px
+   --color-border-input border when unchecked (same border color/width as the
+   text inputs above), --radius-sm corners (not a circle — this isn't a radio
+   button), and a teal fill + white check mark when checked — the same
+   "brand teal when active" treatment used for buttons, active nav, and focus
+   rings everywhere else in the app.
+   Excludes .checkbox-visual__input (rule-config-form's transform-rule config
+   editor), which already hand-implements this exact look via a hidden native
+   input + a custom sibling box, to avoid fighting that component's own
+   absolute-positioned hit target. */
+input[type='checkbox']:not(.checkbox-visual__input) {
+  appearance:    none;
+  -webkit-appearance: none;
+  width:         18px;
+  height:        18px;
+  min-width:     18px;
+  margin:        0;
+  flex-shrink:   0;
+  position:      relative;
+  background:    var(--color-surface);
+  border:        1.5px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  cursor:        pointer;
+  transition:    background-color var(--transition-base),
+                 border-color var(--transition-base),
+                 box-shadow var(--transition-base);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-muted-2);
+  }
+
+  &:checked,
+  &:indeterminate {
+    background:   var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  &:checked::after {
+    content:      '';
+    position:     absolute;
+    left:         5px;
+    top:          1px;
+    width:        5px;
+    height:       9px;
+    border:       solid var(--color-on-primary);
+    border-width: 0 2px 2px 0;
+    transform:    rotate(45deg);
+  }
+
+  &:indeterminate::after {
+    content:    '';
+    position:   absolute;
+    left:       3px;
+    top:        7.5px;
+    width:      10px;
+    height:     2px;
+    background: var(--color-on-primary);
+  }
+
+  &:focus-visible {
+    outline:      none;
+    border-color: var(--color-primary);
+    box-shadow:   0 0 0 3px rgba(0, 168, 157, 0.20);
+  }
+
+  &:disabled {
+    opacity:  0.5;
+    cursor:   not-allowed;
+  }
+}
+
+/* ─── Checkbox (mat-checkbox) ─────────────────────────────────────────────────
+   Same rationale as the outlined-text-field bridge near the top of this file:
+   --mat-sys-primary alone doesn't reliably drive every MDC-level custom
+   property across Material versions, so several dialogs were re-declaring
+   these exact --mdc-checkbox-* tokens locally per component. Bridging them
+   once, globally, keeps every <mat-checkbox> — themed or not — matching the
+   native reset above: teal when checked, --color-border-input border when
+   not, same white checkmark. Border-radius/width are set directly on the
+   rendered .mdc-checkbox__background box since MDC has no custom-property
+   token for either. */
+html {
+  --mdc-checkbox-unselected-icon-color:              var(--color-border-input);
+  --mdc-checkbox-unselected-hover-icon-color:        var(--color-muted-2);
+  --mdc-checkbox-unselected-focus-icon-color:        var(--color-muted-2);
+  --mdc-checkbox-selected-icon-color:                var(--color-primary);
+  --mdc-checkbox-selected-hover-icon-color:           var(--color-primary-dark);
+  --mdc-checkbox-selected-focus-icon-color:           var(--color-primary);
+  --mdc-checkbox-selected-pressed-icon-color:         var(--color-primary-dark);
+  --mdc-checkbox-selected-checkmark-color:            var(--color-on-primary);
+  --mdc-checkbox-selected-focus-state-layer-color:    var(--color-primary);
+  --mdc-checkbox-selected-hover-state-layer-color:    var(--color-primary);
+  --mdc-checkbox-selected-pressed-state-layer-color:  var(--color-primary);
+  --mdc-checkbox-unselected-focus-state-layer-color:  var(--color-muted-2);
+  --mdc-checkbox-unselected-hover-state-layer-color:  var(--color-muted-2);
+}
+
+.mdc-checkbox__background {
+  border-radius: var(--radius-sm) !important;
+  border-width:  1.5px !important;
 }
 
 /* ─── Browser Autofill Background Override ────────────────────────────────── */
@@ -1313,8 +1463,13 @@ input:-webkit-autofill:active {
 }
 
 /* ─── Global Material Menu Override ──────────────────────────────────────── */
-/* mat-menu class is placed ON the panel element, so no descendant combinator */
-.mat-mdc-menu-panel.user-action-menu {
+/* mat-menu class is placed ON the panel element, so no descendant combinator. Named app-kebab-menu
+   (not scoped to any one page) — every row-actions "⋮" mat-menu across the app applies this class
+   (via <mat-menu class="app-kebab-menu">) to get this look (rounded panel, hover states, sized/tinted
+   icons, red danger styling for Delete-type items). Without it, a mat-menu silently falls back to
+   Angular Material's own unstyled default appearance — flat/generic icon colors, no danger red — which
+   is what happened when several row-action menus were first migrated onto mat-menu without this class. */
+.mat-mdc-menu-panel.app-kebab-menu {
   background:       #ffffff !important;
   background-color: #ffffff !important;
   border:           1px solid #E2E8F0 !important;
@@ -1389,7 +1544,7 @@ input:-webkit-autofill:active {
 }
 
 /* mat-menu class is placed ON the panel element, so no descendant combinator (same convention as
-   .user-action-menu above). Backs the Execution History field-lineage panel's resource-tree popover
+   .app-kebab-menu above). Backs the Execution History field-lineage panel's resource-tree popover
    (see field-lineage-panel.component.html's #resourceMenu) — its own content (.resource-tree etc.) is
    styled normally from that component's scoped stylesheet; only the CDK-overlay-owned panel chrome
    needs a global rule + !important to beat MDC's own generated width/padding. */

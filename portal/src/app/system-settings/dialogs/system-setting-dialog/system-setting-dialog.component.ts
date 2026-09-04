@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
 import { SetSystemSettingRequest, SystemSetting } from '../../models/system-setting.model';
 import { describeSettingField, SettingFieldDescriptor } from '../../utils/terminology-setting-field';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 export interface SystemSettingDialogData {
   mode: 'create' | 'edit';
@@ -37,11 +38,13 @@ export interface SystemSettingDialogData {
   templateUrl: './system-setting-dialog.component.html',
   styleUrls: ['./system-setting-dialog.component.scss'],
 })
+// No hasUnsavedChanges()/attemptClose() here — DialogRef.attemptClose() (dialog.service.ts) generically
+// duck-types this component's own `form` property (present below) and reads its `.dirty` automatically.
 export class SystemSettingDialogComponent {
-  private readonly svc  = inject(ISystemSettingsService);
-  private readonly fb   = inject(FormBuilder);
-  readonly dialogRef     = inject(MatDialogRef<SystemSettingDialogComponent>);
-  readonly data          = inject<SystemSettingDialogData>(MAT_DIALOG_DATA);
+  private readonly svc = inject(ISystemSettingsService);
+  private readonly fb  = inject(FormBuilder);
+  readonly dialogRef    = inject<DialogRef<boolean>>(DialogRef);
+  readonly data         = inject<SystemSettingDialogData>(DIALOG_DATA);
 
   readonly isEdit        = this.data.mode === 'edit';
   readonly submitted     = signal(false);
@@ -74,6 +77,10 @@ export class SystemSettingDialogComponent {
   private initialValue(): string | boolean {
     const raw = this.data.setting?.value ?? '';
     return this.fieldDescriptor.kind === 'toggle' ? raw.toLowerCase() === 'true' : raw;
+  }
+
+  isSaveInProgress(): boolean {
+    return this.saving();
   }
 
   save(): void {

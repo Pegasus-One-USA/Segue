@@ -5,6 +5,18 @@
   height:         100%;
   overflow:       hidden;
   background:     var(--color-bg);
+
+  // Another clipping ancestor for the node config panel's maximize state (see the matching override on
+  // .shell/.shell-body/.shell-main/.shell-content in styles.scss, and the comment on isMaximized/the
+  // body-class-toggling effect in node-library-dialog.component.ts for the full explanation): this
+  // component's own :host sits between .shell-content and <app-node-library-dialog>, and its
+  // overflow:hidden clips the maximized panel's position:fixed content right back down just as those
+  // shell-level ones did, even after they're lifted. :host-context (not a plain global body selector)
+  // since :host itself is what needs overriding, and that's only expressible from within this
+  // component's own stylesheet.
+  &:host-context(body.nld-maximized) {
+    overflow: visible;
+  }
 }
 
 // ── Pipeline sub-header ────────────────────────────────────────────────────────
@@ -433,7 +445,7 @@
 
 // ── Reset confirmation dialog ──────────────────────────────────────────────────
 .reset-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: var(--z-modal, 200);
   background: rgba(15, 20, 30, 0.45);
@@ -477,6 +489,66 @@
 }
 
 .reset-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+// ── "Leave this page?" confirm ──────────────────────────────────────────────
+// Same structure/values as .reset-* above and as destination-wizard's .dw-confirm-* ("Exit
+// mapping for ...?", the design reference this needs to match) — 380px width per that reference.
+.leave-backdrop {
+  position: absolute;
+  inset: 0;
+  // Deliberately above app-global-loader's $global-loader-z (300, global-loader.component.scss) —
+  // that component is mounted once at the app root and intentionally floats above every --z-modal
+  // (200) dialog so an in-flight request is never hidden (see styles.scss's --z-modal comment).
+  // This is the one exception: this dialog blocks all other interaction while it's open (a pending
+  // CanDeactivate guard), so it needs to sit above even the loader, not just other modals — a fix
+  // scoped to this class only, not to --z-modal or the shared loader component.
+  z-index: 301;
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  animation: fade-in var(--transition-base, 0.12s) ease;
+}
+
+.leave-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.leave-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.leave-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.leave-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.leave-actions {
   display: flex;
   gap: 10px;
   margin-top: 14px;

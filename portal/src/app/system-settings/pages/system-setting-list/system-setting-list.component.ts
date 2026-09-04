@@ -1,18 +1,33 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
 import { SystemSetting } from '../../models/system-setting.model';
-import { SystemSettingDialogComponent } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
-import { ConfirmDialogComponent } from '../../../user-management/dialogs/confirm-dialog/confirm-dialog.component';
+import { SystemSettingDialogComponent, SystemSettingDialogData } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { terminologyCodeOf, generalSettingGroupOf } from '../../utils/terminology-setting-field';
+import { DialogService } from '../../../core/services/dialog.service';
+import { HapiTerminologyTableComponent } from '../../components/hapi-terminology-table/hapi-terminology-table.component';
+import { GeneralSettingGroupDialogComponent, GeneralSettingGroupDialogData } from '../../dialogs/general-setting-group-dialog/general-setting-group-dialog.component';
+
+// These now render in their own dedicated table (HapiTerminologyTableComponent, above this generic
+// list) with grouped settings, Run Now, and History — excluded here so they don't appear twice.
+const HAPI_TERMINOLOGY_KEY_PATTERN = /^Terminology:\w+Hapi:/;
+
+// LOINC/NDC/RxNorm/SNOMED CT/UCUM's non-Hapi settings already have a proper dedicated settings page
+// each (Settings → System Settings → Terminology → ...) — the raw key/value rows here are a
+// redundant, worse-labeled third way to edit the same data, so they're hidden. LOINC's one setting
+// that genuinely matters to the HAPI sync too (DownloadApiUrl) now lives in the HAPI LOINC edit
+// modal instead (see HapiTerminologySystemRegistry.DownloadApiUrlSettingKey) — everything else in
+// LOINC's legacy group is either superseded by LoincHapi:* or unused by any sync code at all.
+const LEGACY_TERMINOLOGY_KEY_PATTERN = /^Terminology:(Loinc|Ndc|RxNorm|Snomed|Ucum):/;
 
 interface GroupHeaderRow {
   isGroupHeader: true;
@@ -26,7 +41,19 @@ interface CodeGroupHeaderRow {
   collapsed: boolean;
 }
 
-type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow;
+// General Settings groups (e.g. "Alert Evaluation") render as one directly-actionable row rather
+// than an expandable accordion — see GeneralSettingGroupDialogComponent. Terminology's remaining
+// CodeGroupHeaderRow behavior stays as-is for any future terminology grouping that isn't already
+// covered by the dedicated Hapi table.
+interface GeneralGroupRow {
+  isGeneralGroup: true;
+  code: string;
+  label: string;
+  settings: SystemSetting[];
+  lastModifiedOnUtc: string | null;
+}
+
+type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow | GeneralGroupRow;
 
 @Component({
   selector: 'app-system-setting-list',
@@ -38,13 +65,15 @@ type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow;
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
+    HapiTerminologyTableComponent,
   ],
   templateUrl: './system-setting-list.component.html',
   styleUrls: ['./system-setting-list.component.scss'],
 })
 export class SystemSettingListComponent implements OnInit {
   private readonly svc    = inject(ISystemSettingsService);
-  private readonly dialog = inject(MatDialog);
+  private readonly customDialog = inject(DialogService);
   private readonly toast  = inject(ToastService);
 
   readonly loading  = signal(true);
@@ -121,9 +150,14 @@ export class SystemSettingListComponent implements OnInit {
 
   readonly filtered = computed(() => {
     const term = this.search().trim().toLowerCase();
-    const rows = !term ? this.settings() : this.settings().filter(
-      s => s.key.toLowerCase().includes(term) || (s.description ?? '').toLowerCase().includes(term)
-    );
+    // A setting also matches when its GROUP's label matches (e.g. searching "alert" should keep
+    // every AlertEvaluation:* row) — otherwise a group-label-only match would drop sibling settings
+    // out of buildSection()'s entry.rows, leaving the group's Edit dialog showing a partial field set.
+    const rows = !term ? this.settings() : this.settings().filter(s => {
+      if (s.key.toLowerCase().includes(term) || (s.description ?? '').toLowerCase().includes(term)) return true;
+      const groupInfo = s.key.startsWith('Terminology:') ? terminologyCodeOf(s.key) : generalSettingGroupOf(s.key);
+      return !!groupInfo && groupInfo.label.toLowerCase().includes(term);
+    });
 
     const direction = this.actionOnSortDirection();
     if (!direction) return rows;
@@ -131,7 +165,7 @@ export class SystemSettingListComponent implements OnInit {
     return direction === 'desc' ? sorted.reverse() : sorted;
   });
 
-  readonly displayedCols = ['key', 'value', 'description', 'actionBy', 'modifiedOnUtc', 'actions'];
+  readonly displayedCols = ['actions', 'key', 'value', 'description', 'actionBy', 'modifiedOnUtc'];
 
   // ── Group headings ──────────────────────────────────────────────────────────
   // Purely a display grouping. "Terminology:*" keys (LOINC/SNOMED/RxNorm/ICD-10/HAPI-sync
@@ -164,11 +198,26 @@ export class SystemSettingListComponent implements OnInit {
 
     const result: GroupedRow[] = [...ungrouped];
     for (const [code, entry] of [...byCode.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label))) {
-      const isCollapsed = collapsed.has(code);
-      result.push({ isCodeGroupHeader: true, code, label: entry.label, collapsed: isCollapsed });
-      if (!isCollapsed) result.push(...entry.rows);
+      if (isTerminology) {
+        const isCollapsed = collapsed.has(code);
+        result.push({ isCodeGroupHeader: true, code, label: entry.label, collapsed: isCollapsed });
+        if (!isCollapsed) result.push(...entry.rows);
+      } else {
+        result.push({
+          isGeneralGroup: true,
+          code,
+          label: entry.label,
+          settings: entry.rows,
+          lastModifiedOnUtc: SystemSettingListComponent.latestModifiedOf(entry.rows),
+        });
+      }
     }
     return result;
+  }
+
+  private static latestModifiedOf(rows: SystemSetting[]): string | null {
+    const dates = rows.map(r => r.modifiedOnUtc ?? r.createdOnUtc).filter((d): d is string => !!d);
+    return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null;
   }
 
   private subGroupCodes(rows: SystemSetting[], isTerminology: boolean): Set<string> {
@@ -192,7 +241,6 @@ export class SystemSettingListComponent implements OnInit {
       result.push(...this.buildSection(terminology, true, collapsed));
     }
     if (other.length) {
-      result.push({ isGroupHeader: true, label: 'General Settings' });
       result.push(...this.buildSection(other, false, collapsed));
     }
     return result;
@@ -201,18 +249,8 @@ export class SystemSettingListComponent implements OnInit {
   readonly terminologyCodes = computed(() =>
     this.subGroupCodes(this.filtered().filter(s => s.key.startsWith('Terminology:')), true));
 
-  readonly generalCodes = computed(() =>
-    this.subGroupCodes(this.filtered().filter(s => !s.key.startsWith('Terminology:')), false));
-
   readonly allTerminologyCollapsed = computed(() => {
     const codes = this.terminologyCodes();
-    if (codes.size === 0) return true;
-    const collapsed = this.collapsedCodes();
-    return [...codes].every(code => collapsed.has(code));
-  });
-
-  readonly allGeneralCollapsed = computed(() => {
-    const codes = this.generalCodes();
     if (codes.size === 0) return true;
     const collapsed = this.collapsedCodes();
     return [...codes].every(code => collapsed.has(code));
@@ -228,10 +266,6 @@ export class SystemSettingListComponent implements OnInit {
 
   toggleAllTerminology(): void {
     this.toggleAllFor(this.terminologyCodes(), this.allTerminologyCollapsed());
-  }
-
-  toggleAllGeneral(): void {
-    this.toggleAllFor(this.generalCodes(), this.allGeneralCollapsed());
   }
 
   private toggleAllFor(codes: Set<string>, currentlyAllCollapsed: boolean): void {
@@ -252,8 +286,12 @@ export class SystemSettingListComponent implements OnInit {
     return 'isCodeGroupHeader' in row;
   }
 
+  isGeneralGroupRow(_index: number, row: GroupedRow): row is GeneralGroupRow {
+    return 'isGeneralGroup' in row;
+  }
+
   isDataRow(_index: number, row: GroupedRow): row is SystemSetting {
-    return !('isGroupHeader' in row) && !('isCodeGroupHeader' in row);
+    return !('isGroupHeader' in row) && !('isCodeGroupHeader' in row) && !('isGeneralGroup' in row);
   }
 
   ngOnInit(): void {
@@ -268,14 +306,18 @@ export class SystemSettingListComponent implements OnInit {
     this.loading.set(true);
     this.svc.getAll().subscribe({
       next: settings => {
-        this.settings.set(settings);
+        this.settings.set(settings.filter(s =>
+          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key) && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key)));
         this.loading.set(false);
 
         if (!this.collapseDefaultsApplied) {
           this.collapseDefaultsApplied = true;
+          // Only terminology groups use collapse state now — General Settings groups render as a
+          // single actionable row each (see GeneralGroupRow), not an expandable accordion.
           const codes = new Set<string>();
           for (const s of settings) {
-            const groupInfo = SystemSettingListComponent.subGroupOf(s.key, s.key.startsWith('Terminology:'));
+            if (!s.key.startsWith('Terminology:')) continue;
+            const groupInfo = SystemSettingListComponent.subGroupOf(s.key, true);
             if (groupInfo) codes.add(groupInfo.code);
           }
           this.collapsedCodes.set(codes);
@@ -288,12 +330,27 @@ export class SystemSettingListComponent implements OnInit {
     });
   }
 
+  openEditGroup(row: GeneralGroupRow): void {
+    this.customDialog
+      .open<GeneralSettingGroupDialogComponent, GeneralSettingGroupDialogData, boolean>(GeneralSettingGroupDialogComponent, {
+        width: '560px',
+        disableClose: true,
+        data: { label: row.label, settings: row.settings },
+      })
+      .afterClosed()
+      .subscribe(saved => {
+        if (saved) {
+          this.toast.success(`${row.label} settings updated.`);
+          this.load();
+        }
+      });
+  }
+
   openAdd(): void {
-    this.dialog
-      .open(SystemSettingDialogComponent, {
+    this.customDialog
+      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
         width: '520px',
         disableClose: true,
-        restoreFocus: false,
         data: { mode: 'create' },
       })
       .afterClosed()
@@ -306,11 +363,10 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   openEdit(setting: SystemSetting): void {
-    this.dialog
-      .open(SystemSettingDialogComponent, {
+    this.customDialog
+      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
         width: '520px',
         disableClose: true,
-        restoreFocus: false,
         data: { mode: 'edit', setting },
       })
       .afterClosed()
@@ -323,10 +379,9 @@ export class SystemSettingListComponent implements OnInit {
   }
 
   confirmDelete(setting: SystemSetting): void {
-    this.dialog
-      .open(ConfirmDialogComponent, {
+    this.customDialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
         width: '440px',
-        restoreFocus: false,
         data: {
           title: 'Remove Setting Override',
           message: `Remove the DB override for "${setting.key}"? It will revert to its appsettings/code default on next read.`,

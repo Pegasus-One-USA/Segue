@@ -7,7 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Security;
 
-public sealed class AzureKeyVaultSecretProvider : ISecretProvider
+// Not sealed, and GetSecretAsync is virtual, purely so CompositeSecretProvider's unit tests can mock this
+// collaborator (Moq needs a non-sealed class with a virtual member to proxy) — no behavioral change.
+public class AzureKeyVaultSecretProvider : ISecretProvider
 {
     private readonly ILogger<AzureKeyVaultSecretProvider> _logger;
     private readonly Dictionary<string, SecretClient> _clients = new(StringComparer.OrdinalIgnoreCase);
@@ -17,7 +19,7 @@ public sealed class AzureKeyVaultSecretProvider : ISecretProvider
         _logger = logger;
     }
 
-    public async Task<string> GetSecretAsync(
+    public virtual async Task<string> GetSecretAsync(
         SecretReference secretReference,
         CancellationToken cancellationToken)
     {

@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 
 export interface FieldDiff {
   field: string;
@@ -24,6 +25,6 @@ export interface DiffDetailDialogData {
   styleUrls: ['./diff-detail-dialog.component.scss'],
 })
 export class DiffDetailDialogComponent {
-  readonly dialogRef = inject(MatDialogRef<DiffDetailDialogComponent>);
-  readonly data: DiffDetailDialogData = inject(MAT_DIALOG_DATA);
+  readonly dialogRef = inject<DialogRef<void>>(DialogRef);
+  readonly data: DiffDetailDialogData = inject(DIALOG_DATA) as DiffDetailDialogData;
 }

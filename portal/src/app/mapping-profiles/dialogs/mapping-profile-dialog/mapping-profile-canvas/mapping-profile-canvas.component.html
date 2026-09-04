@@ -51,6 +51,7 @@
       [mappingRows]="rowsRich()"
       [targetByResource]="targetByResource()"
       [availableFields]="availableFieldsFn"
+      [defaultAvailableFields]="defaultAvailableFieldsFn"
       [columnsForResourceTarget]="columnsForResourceTargetFn"
       [hasSqlTables]="hasSqlTables()"
       [sqlTableOptions]="sqlTableOptions()"
@@ -76,6 +77,7 @@
       (targetByResourceChange)="onTargetByResourceChange($event)"
       (extraTablesChange)="onExtraTablesChange($event)"
       (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+      (sourcePayloadReset)="onSourcePayloadReset($event)"
     />
   </div>
 </div>
