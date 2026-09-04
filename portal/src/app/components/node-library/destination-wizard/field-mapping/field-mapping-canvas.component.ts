@@ -2,7 +2,7 @@ import {
   Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy, OnInit,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType, qualifyTableName, splitTableName } from './field-mapping-model';
+import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType, SchemaLoadState, qualifyTableName, splitTableName } from './field-mapping-model';
 import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict } from './field-mapping-schema-ops.util';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
@@ -177,6 +177,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  SQL table, so nothing offers an action that would silently no-op against a null connectionInfo.
    *  Defaults true so the Destination Wizard (which always has real connectionInfo) is unaffected. */
   readonly schemaAuthoringEnabled = input(true);
+  /** Outcome of the host's live schema read (see SchemaLoadState). Defaults to 'idle' so a host that never
+   *  reads a schema at all is unaffected — only 'loading'/'failed'/'unavailable' surface the notice below. */
+  readonly schemaLoadState = input<SchemaLoadState>('idle');
 
   // Incrementing counters from the dialog header's "Load JSON payload"/"Preview output" buttons (moved
   // there so this canvas's own toolbar row can be dropped, giving the viewport back that height) — same
@@ -251,6 +254,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  still shows or maps to the table, but "Add to Workflow" would still create it for real, and any
    *  validation still referencing those stale ops would keep naming a table that's no longer on screen. */
   readonly schemaOpsCancelledForTable = output<string>();
+  /** The user asked to re-attempt a schema read that failed or could not be attempted — the host owns the
+   *  retry, since it owns the connection details this canvas never sees. */
+  readonly retrySchemaLoad = output<void>();
 
   // ── local UI state ──────────────────────────────────────────────────────
   readonly collapsedIds = signal<Set<string>>(new Set());
@@ -891,6 +897,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  option (see the template) needs the search box open even against a brand-new, empty database. */
   showAddTablePicker(): boolean {
     return this.hasSqlTables() || this.destType() === 'mongo';
+  }
+
+  /** Whether to say, in place of the (absent) table list, that the list is still loading or could not be
+   *  loaded at all. Only reachable when the picker itself can't render — with a real list on screen there
+   *  is nothing to explain. Guards against the failure this exists to fix: a schema read that never landed
+   *  is otherwise indistinguishable from a database with no tables in it. */
+  showSchemaLoadNotice(): boolean {
+    if (this.showAddTablePicker()) return false;
+    const state = this.schemaLoadState();
+    return state === 'loading' || state === 'failed' || state === 'unavailable';
   }
 
   /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a

@@ -63,6 +63,7 @@ import {
   LegacyMappingRow,
   PendingSchemaOp,
   MappingDestType,
+  SchemaLoadState,
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
@@ -1764,6 +1765,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly resolvedSecretKeyVaultName = signal<string | null>(null);
   readonly resolvedSecretName = signal<string | null>(null);
   readonly provisioningDestination = signal(false);
+  // Outcome of the live schema read in _refreshSqlTablesFromLiveSchema — surfaced on the mapping canvas so
+  // a read that failed, or couldn't be attempted at all, never renders as "this database has no tables".
+  readonly schemaLoadState = signal<SchemaLoadState>('idle');
 
   private static readonly SQL_TYPES: DestinationType[] = [
     'SqlServer',
@@ -4255,13 +4259,17 @@ export class DestinationWizardComponent implements OnInit {
         })),
       );
       this.probeState.set('ok');
+      this.schemaLoadState.set('loaded');
     };
 
     if (destinationId) {
+      this.schemaLoadState.set('loading');
       this.schemaSvc.getSchema(destinationId).subscribe({
         next: (res) => applyTables(res.tables),
         error: () => {
-          /* keep the mapping-summary-restored list; don't block editing on a failed reload */
+          // Keep the mapping-summary-restored list; don't block editing on a failed reload. The state flip
+          // is what stops that partial (or empty) list from passing itself off as the whole database.
+          this.schemaLoadState.set('failed');
         },
       });
       return;
@@ -4273,18 +4281,37 @@ export class DestinationWizardComponent implements OnInit {
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
     // every other failure path here.
     const form = this.activeForm();
-    if (!isSqlFamilyForm(form)) return;
+    if (!isSqlFamilyForm(form)) {
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
     const request = form.getProbeRequest();
-    if (!request.server || !request.database || !request.password) return;
+    if (!request.server || !request.database || !request.password) {
+      // The common case for a reopened node: no destinationId was ever persisted onto it AND dest_password
+      // was stripped before persisting (workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS), so neither
+      // path can run. This used to return in silence — no request, no error, no tables — which the canvas
+      // then rendered as an empty database.
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
 
+    this.schemaLoadState.set('loading');
     this.schemaSvc.probe(request).subscribe({
       next: (res) => {
         if (res.connected) applyTables(res.tables);
+        else this.schemaLoadState.set('failed');
       },
       error: () => {
-        /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */
+        // Keep the mapping-summary-restored list; don't block editing on a failed reconnect.
+        this.schemaLoadState.set('failed');
       },
     });
+  }
+
+  /** Re-attempts the live schema read behind the mapping canvas's "Retry" — the same call ngOnInit makes,
+   *  so a transient failure no longer needs a full close/reopen of the wizard to clear. */
+  retrySchemaLoad(): void {
+    this._refreshSqlTablesFromLiveSchema();
   }
 
   // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/

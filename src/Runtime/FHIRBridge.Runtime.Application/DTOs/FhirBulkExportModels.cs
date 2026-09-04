@@ -71,6 +71,18 @@ public static class BulkExportScopes
         _ => BulkExportScope.System,
     };
 
+    /// <summary>
+    /// Whether this source's server implements ONLY the Group-level <c>$export</c> operation, so a System- or
+    /// Patient-scoped bulk export can never succeed against it no matter how the request is shaped. Epic states this
+    /// outright — "Epic supports only the Group Export operation. We do not support _since or other bulk data
+    /// operations at this time." (Epic's FHIR Bulk Data documentation, which also confirms Epic implements Bulk Data
+    /// 1.0.1, where the kick-off is GET-only) — and athenahealth and eCW are documented Group-only too. A plain
+    /// conformant FHIR server (<see cref="RuntimeSourceType.GenericFhir"/>, e.g. HAPI) does implement all three
+    /// levels, so it is the one source type left un-narrowed. Kept as a narrow additive lookup rather than a switch
+    /// on the vendor, same as <see cref="BulkExportGroupIds"/>, so it doesn't trip the architecture no-switch rule.
+    /// </summary>
+    public static bool IsGroupOnlyVendor(RuntimeSourceType sourceType) => sourceType != RuntimeSourceType.GenericFhir;
+
     /// <summary>Resolves the <c>_type</c> value to actually send for a Group <c>$export</c> kick-off. A job scoped to
     /// ONLY <c>Patient</c> (e.g. <c>Group/{id}/$export?_type=Patient</c>) trips a real Epic Interconnect Group-export
     /// limitation: to materialize the group's Patient records, Epic resolves membership via an internal, unscoped

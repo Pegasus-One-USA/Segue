@@ -792,6 +792,7 @@
           [sqlTableOptions]="sqlTableOptions()"
           [sqlTableNames]="sqlTableBareNames()"
           [schemaAuthoringEnabled]="isSql()"
+          [schemaLoadState]="schemaLoadState()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
           [pendingTableNames]="pendingTableNames()"
@@ -824,6 +825,7 @@
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
           (sourcePayloadReset)="onSourcePayloadReset($event)"
           (childTableRelationAdded)="onChildTableRelationAdded($event)"
+          (retrySchemaLoad)="retrySchemaLoad()"
         />
       }
     }

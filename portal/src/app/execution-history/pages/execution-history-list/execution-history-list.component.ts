@@ -144,7 +144,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     return {
       Pending: 'Pending',
       Running: 'Running',
-      AwaitingBulkExport: 'Awaiting Bulk Export',
+      // Surfaced as plain "Running": it IS a run still in flight (a node deferred to an async $export job that
+      // BulkExportPollWorker will resume), and splitting it out as its own status made the Dashboard's Running
+      // tile disagree with what this list showed. The API keeps the distinct AwaitingBulkExport value.
+      AwaitingBulkExport: 'Running',
       Succeeded: 'Succeeded',
       PartialSuccess: 'Partial Success',
       Failed: 'Failed',

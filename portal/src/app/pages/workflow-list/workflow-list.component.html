@@ -258,7 +258,7 @@
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">
-                    <span [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
+                    <span [class]="runStatusClass(w.lastRun)">{{ runStatusLabel(w.lastRun) }}</span>
                     <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
                     @if (w.lastRunErrorReferenceId) {
                       <a
