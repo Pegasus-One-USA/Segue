@@ -1,0 +1,165 @@
+@for (r of resources(); track r) {
+  <div class="dw-mapping-group">
+    <div class="dw-mapping-group-head" role="button" tabindex="0"
+         [attr.aria-expanded]="!isGroupCollapsed(r)"
+         (click)="toggleGroup(r)" (keydown.enter)="toggleGroup(r)" (keydown.space)="toggleGroup(r)">
+      <span class="dw-mapping-name">
+        <strong>{{ r }}</strong>
+        @if (resourceIssueCount(r) > 0) {
+          <span class="dw-mapping-issue-badge" [attr.title]="resourceIssueCount(r) + ' mapping issue(s) need attention'">
+            ⚠ {{ resourceIssueCount(r) }}
+          </span>
+        }
+      </span>
+      <span class="dw-mapping-target-inline">
+        <label class="dw-mapping-target-label" [attr.for]="'dw-target-' + r">{{ isSql() ? 'Table' : isMongo() ? 'Collection' : 'File name' }}</label>
+        @if (hasSqlTables()) {
+          <div class="dw-select-wrap">
+            <select class="dw-select dw-target-select"
+                    [attr.id]="'dw-target-' + r"
+                    [value]="targetFor(r)"
+                    [disabled]="readOnly()"
+                    (click)="$event.stopPropagation()"
+                    (change)="updateTarget(r, $any($event.target).value)">
+              <option value="" disabled [selected]="!targetFor(r)">Select a table…</option>
+              @for (t of sqlTableOptions(); track t) { <option [value]="t" [selected]="t === targetFor(r)">{{ t }}</option> }
+            </select>
+          </div>
+        } @else {
+          <input
+            class="dw-map-input dw-target-input"
+            [attr.id]="'dw-target-' + r"
+            [value]="targetFor(r)"
+            [disabled]="readOnly()"
+            (click)="$event.stopPropagation()"
+            (input)="updateTarget(r, $any($event.target).value)"
+            [placeholder]="isSql() ? 'dbo.Patient' : isMongo() ? 'patients' : 'patients.csv'"
+          />
+        }
+      </span>
+      <button type="button" class="dw-btn" [disabled]="readOnly() || (isSql() && !targetFor(r))" (click)="$event.stopPropagation(); addFields(r)" title="Auto-add only the fields that confidently match a destination column">⚡ Add Fields</button>
+      <button type="button" class="dw-btn dw-add-field" [disabled]="readOnly() || (isSql() && !targetFor(r))" (click)="$event.stopPropagation(); addRow(r)">+ Add field</button>
+      <button type="button" class="dw-btn dw-clear-fields" [disabled]="readOnly() || rowsForResource(r).length === 0" (click)="$event.stopPropagation(); clearFields(r)" title="Remove every mapped field for this resource (except the mandatory id/key rows)">Clear Fields</button>
+      <span class="dw-mapping-chevron" [class.collapsed]="isGroupCollapsed(r)">›</span>
+    </div>
+    @if (!isGroupCollapsed(r)) {
+    <span class="dw-hint dw-mapping-key-hint">
+      🔒 {{ r }}'s id field is always mapped and always the Upsert key, so duplicate rows can never be written for the same {{ r }}.
+    </span>
+
+    @if (candidateParentsFor(r).length > 0) {
+      <div class="dw-parent-refs">
+        <span class="dw-parent-refs-label">{{ r }} is a child of:</span>
+        @for (parent of candidateParentsFor(r); track parent) {
+          <button
+            type="button"
+            class="dw-chip"
+            [class.selected]="isParentSelected(r, parent)"
+            [disabled]="readOnly()"
+            (click)="toggleParent(r, parent)"
+            [attr.title]="isParentSelected(r, parent)
+              ? 'Required reference field to ' + parent + ' is locked below'
+              : 'Mark ' + r + ' as a child of ' + parent"
+          >
+            @if (isParentSelected(r, parent)) { ✓ }
+            {{ parent }}
+          </button>
+        }
+      </div>
+      @if (selectedParentsOf(r).length === 0) {
+        <div class="dw-callout dw-callout--warn dw-parent-refs-warn">
+          Select at least one parent for {{ r }} — otherwise this record will save with no link back to its parent resource.
+        </div>
+      }
+    }
+
+    <table class="dw-map-table">
+      <thead>
+        <tr>
+          <th>Business field</th>
+          <th>FHIR path</th>
+          <th>{{ isSql() ? 'Column' : isMongo() ? 'Field' : 'CSV column' }}</th>
+          <th class="dw-map-key-col" title="Upsert key — the column an Upsert write matches an existing row on">Key</th>
+          <th class="dw-map-actions" aria-label="Actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rowsForResource(r); track $index) {
+          <tr [class.dw-map-row--id]="isIdRow(row)" [class.dw-map-row--parent-ref]="isRequiredParentRefRow(row)">
+            <td>
+              @if (isIdRow(row)) {
+                <span class="dw-map-locked" title="This resource's id — always mapped, never reassignable">🔒 {{ row.fieldLabel }}</span>
+              } @else if (isRequiredParentRefRow(row)) {
+                <span class="dw-map-locked" [attr.title]="'Required — ' + r + ' is a child of ' + row.parentResourceType">🔒 {{ row.fieldLabel }}</span>
+              } @else {
+                <div class="dw-select-wrap">
+                  <select
+                    class="dw-select"
+                    [value]="row.fieldLabel"
+                    [disabled]="readOnly()"
+                    (change)="changeBusinessField(mappingRows().indexOf(row), $any($event.target).value)"
+                  >
+                    @for (f of availableFields(r); track f.path) {
+                      <option [value]="f.label" [selected]="f.label === row.fieldLabel">{{ f.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </td>
+            <td class="dw-mono">{{ row.fhirPath }}</td>
+            <td>
+              @if (isIdRow(row) && isIdColumnLocked(r)) {
+                <span class="dw-map-locked" title="Auto-matched to this table's primary/unique key column">🔒 {{ row.targetName }}</span>
+                @if (isRowTypeMismatched(row)) {
+                  <span class="dw-error">⚠ {{ typeMismatchMessage(row) }}</span>
+                }
+              } @else if (hasSqlTables() && allColumnsAutoGenerated(r)) {
+                <span class="dw-error">All identity or calculated columns are excluded.</span>
+              } @else if (hasSqlTables() && columnsForResourceTarget(r).length) {
+                <div class="dw-select-wrap">
+                  <select class="dw-select"
+                          [value]="row.targetName"
+                          [disabled]="readOnly()"
+                          (change)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)">
+                    <option value="" disabled [selected]="!row.targetName || !columnsForResourceTarget(r).includes(row.targetName)">Select a column…</option>
+                    @for (c of columnsForResourceTarget(r); track c) { <option [value]="c" [selected]="c === row.targetName">{{ c }}</option> }
+                  </select>
+                </div>
+                @if (isIdRow(row) && isIdColumnUnverified(r)) {
+                  <span class="dw-error">⚠ Pick the real column that uniquely identifies each {{ r }} — this table has no primary/unique key, so nothing is auto-detected, and the current value isn't a column on this table.</span>
+                } @else if (isIdRow(row)) {
+                  <span class="dw-hint">No primary/unique key detected on this table — choose the column that uniquely identifies each {{ r }}.</span>
+                } @else if (isRowColumnUnverified(row)) {
+                  <span class="dw-error">⚠ '{{ row.targetName || '(none)' }}' is not a column on this table — pick a real column.</span>
+                } @else if (isRowTypeMismatched(row)) {
+                  <span class="dw-error">⚠ {{ typeMismatchMessage(row) }}</span>
+                }
+              } @else {
+                <input
+                  class="dw-map-input"
+                  [value]="row.targetName"
+                  [disabled]="readOnly()"
+                  (input)="updateRow(mappingRows().indexOf(row), 'targetName', $any($event.target).value)"
+                />
+              }
+            </td>
+            <td class="dw-map-key-col">
+              <input type="checkbox" [checked]="row.isUpsertKey" disabled title="Only the id row is the Upsert key" />
+            </td>
+            <td class="dw-map-actions">
+              @if (!isIdRow(row) && !isRequiredParentRefRow(row)) {
+                <button type="button" class="dw-row-remove" [disabled]="readOnly()" title="Remove field" (click)="removeRow(row)">✕</button>
+              }
+            </td>
+          </tr>
+        }
+        @if (rowsForResource(r).length === 0) {
+          <tr class="dw-map-empty">
+            <td [attr.colspan]="5">No fields mapped yet — click <strong>+ Add field</strong> to add one.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    }
+  </div>
+}

@@ -1,0 +1,12 @@
+<div class="wiz-rail">
+  @for (step of steps(); track $index) {
+    <div
+      class="wiz-step-wrap"
+      [class.active]="stepStatus($index) === 'active'"
+      [class.done]="stepStatus($index) === 'done'"
+    >
+      <div class="wiz-circle">{{ circleLabel($index) }}</div>
+      <div class="wiz-step-label" [innerHTML]="step.label"></div>
+    </div>
+  }
+</div>

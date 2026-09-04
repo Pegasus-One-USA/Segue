@@ -1,0 +1,543 @@
+:host { display: contents; }
+
+.fm-target-card {
+  position: absolute;
+  z-index: 2;
+  // Wider by default (was 260px) so the header has room for kind + name + search without feeling
+  // cramped right out of the gate — still freely resizable beyond this, see below.
+  width: 300px;
+  // Auto-height by default — tall enough to show every column. Both width AND height are now
+  // user-resizable via the native drag handle (resize: both); dragging height down shrinks the card
+  // below its content, at which point .fm-target-rows' own overflow:auto kicks in as an internal
+  // scrollbar. The header's "fit to screen" toggle (.fm-target-card--fit, see the component) caps height
+  // at a viewport-relative bound without touching the drag-resize inline height directly, so the two
+  // controls never fight each other — see toggleFit()'s doc comment.
+  height: auto;
+  min-width: 220px;
+  max-width: 640px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  // resize needs overflow other than the default `visible` to reliably show the drag handle across
+  // browsers — `auto` here (not `hidden`), same reasoning as the join popover's own resize handle.
+  resize: both;
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+
+  // "Fit to screen" toggle — caps height instead of setting it directly, so a manual drag-resize (which
+  // sets inline height) is preserved underneath the cap rather than overwritten by it.
+  &--fit {
+    max-height: 70vh;
+  }
+
+  // The native resize handle is barely visible against this card's light body — draw an explicit grip
+  // so the affordance is actually discoverable (matches field-mapping-join-popover.component.scss's
+  // same fix). Purely cosmetic (pointer-events: none): the browser's own resize hit-area still does the
+  // real work underneath it.
+  &::after {
+    content: '';
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 13px;
+    height: 13px;
+    pointer-events: none;
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--color-muted-2) 0 1.5px,
+      transparent 1.5px 4px
+    );
+  }
+}
+
+.fm-target-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  cursor: grab;
+  touch-action: none;
+
+  &:active { cursor: grabbing; }
+}
+
+.fm-target-kind {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+// A circular chip (not bare glyph-on-transparent like .fm-target-search-clear) so this destructive,
+// whole-table action reads as visually distinct from the inline "clear search" affordance next to it —
+// the red-tinted hover reinforces that this one removes something, rather than just clearing a filter.
+.fm-target-remove {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.16);
+  border: none;
+  border-radius: 50%;
+  color: var(--color-on-primary);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition-base), color var(--transition-base);
+
+  &:hover { background: var(--color-error); color: var(--color-on-primary); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3); }
+
+  svg { display: block; }
+}
+
+.fm-target-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Inline rename of the card's own collection name (Mongo only — see startRenameTable) — same footprint
+// as .fm-target-name so the header's layout doesn't jump when it appears, styled like
+// .fm-target-colname-edit below for visual consistency with the column-level rename.
+.fm-target-name-edit {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  max-width: 40%;
+  min-width: 80px;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 3px;
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-rename-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-on-primary, currentColor);
+  opacity: 0.7;
+
+  &:hover { opacity: 1; }
+  &:focus-visible { outline: none; opacity: 1; }
+}
+
+// Same "glass" search-on-colored-header treatment as field-mapping-source-tree.component.scss's
+// .fm-source-search — kept in sync intentionally (one card is dark, one is teal, both need the same
+// translucent-white approach rather than a standard surface input that wouldn't read on either).
+.fm-target-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+
+.fm-target-search {
+  width: 100%;
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-on-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: text;
+
+  // Room for the clear button once it appears, so typed text never sits underneath it.
+  &--clearable { padding-right: 22px; }
+
+  &::placeholder { color: rgba(255, 255, 255, 0.65); }
+  &::-webkit-search-cancel-button { display: none; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+// Sits inside the search field itself (not a separate control floating beside it) — same positioning
+// technique as the canvas's own "Add a table" search (field-mapping-canvas.component.scss's
+// .fm-add-table-search-clear), adapted to this card's dark-glass-on-teal header treatment.
+.fm-target-search-clear {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.22);
+  border: none;
+  border-radius: 50%;
+  color: var(--color-on-primary);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0;
+  transition: background var(--transition-base);
+
+  &:hover { background: rgba(255, 255, 255, 0.38); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+}
+
+.fm-target-fit-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-on-primary);
+  opacity: 0.8;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { opacity: 1; background: rgba(255, 255, 255, 0.16); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+}
+
+.fm-target-no-match {
+  padding: var(--space-8, 16px);
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.fm-target-relation {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-4) var(--space-8);
+  font-size: 11.5px;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  border-bottom: 1px solid var(--color-border);
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 0 4px;
+    border-radius: var(--radius-sm, 4px);
+  }
+}
+
+.fm-target-rows {
+  flex: 1;
+  min-height: 0;
+  // Genuinely scrollable now that the card's "fit to screen" toggle (fitMode) can cap its height.
+  // Scrollbar sized up (double a typical thin custom scrollbar) so it's easy to grab without fighting
+  // the drag-to-map gesture that dominates this region.
+  // padding-left: .fm-target-port sits partly outside its row (margin-left: -17px, 10px wide) — a small
+  // buffer so that overhang isn't clipped by this region's own scroll boundary.
+  overflow: auto;
+  padding-left: 6px;
+  background: var(--color-surface);
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-muted-2) transparent;
+
+  &::-webkit-scrollbar { width: 14px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-muted-2);
+    border-radius: 7px;
+    border: 3px solid var(--color-surface);
+  }
+  &::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+}
+
+.fm-target-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-8);
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+
+  &:hover { background: var(--color-side); }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+}
+
+.fm-target-row--armed-target {
+  box-shadow: inset 0 0 0 2px var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.fm-target-row--mapped .fm-target-colname { font-weight: 700; }
+
+.fm-target-port {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-left: -17px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-muted-2);
+  background: var(--color-surface);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.fm-target-row:hover .fm-target-port,
+.fm-target-row--armed-target .fm-target-port {
+  border-color: var(--color-primary);
+}
+
+.fm-target-row--mapped .fm-target-port {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.fm-target-colname {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink-2);
+}
+
+// Inline rename input (✎ on a free-text column — no real schema to ALTER, so it swaps in right here
+// instead of opening the real edit-column modal) — same footprint as .fm-target-colname so the row's
+// layout doesn't jump when it appears.
+.fm-target-colname-edit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 3px;
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-coltype {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.fm-target-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.fm-target-key {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
+}
+
+.fm-target-key--pk {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+}
+
+.fm-target-key--fk {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+}
+
+.fm-target-key-toggle {
+  flex-shrink: 0;
+  opacity: 0.35;
+  background: none;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm, 6px);
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+
+  &:hover { opacity: 1; background: var(--color-warning-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-warning-soft); }
+}
+
+.fm-target-key-toggle--active {
+  opacity: 1;
+  background: var(--color-warning-soft);
+}
+
+.fm-target-caveat {
+  font-size: 11px;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-pill);
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+.fm-target-col-delete,
+.fm-target-col-edit {
+  flex-shrink: 0;
+  opacity: 0;
+  background: none;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition-fast);
+}
+
+.fm-target-col-delete {
+  color: var(--color-error);
+
+  &:hover { background: var(--color-error-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-error-soft); }
+}
+
+.fm-target-col-edit {
+  color: var(--color-primary);
+
+  &:hover { background: var(--color-primary-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-row:hover .fm-target-col-delete,
+.fm-target-row:hover .fm-target-col-edit,
+.fm-target-row:focus-within .fm-target-col-delete,
+.fm-target-row:focus-within .fm-target-col-edit {
+  opacity: 1;
+}
+
+.fm-target-row--add {
+  cursor: default;
+  color: var(--color-muted);
+  border-top: 1px dashed var(--color-border);
+
+  &:hover { background: none; }
+}
+
+.fm-target-add-input {
+  flex: 1;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: transparent;
+  color: var(--color-ink-2);
+
+  &:focus-visible { outline: none; }
+}
+
+.fm-target-add-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-primary); }
+  &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
+  &:disabled:hover { text-decoration: none; }
+}
+
+// Free-text row (CSV, or a not-yet-probed SQL table) — input + a real, clickable "add" button, instead
+// of relying on Enter/blur alone to feel like anything happened. Tinted background + a leading "+"
+// chip mark it as its own distinct affordance rather than blending in with the plain column rows below.
+.fm-target-row--add-free {
+  gap: var(--space-4, 6px);
+  background: var(--color-primary-soft);
+
+  &:hover { background: var(--color-primary-soft); }
+}
+
+.fm-target-add-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+
+  &:hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-add-btn--icon {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark); text-decoration: none; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+  &:disabled { background: var(--color-border); color: var(--color-muted-2); cursor: not-allowed; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-target-row, .fm-target-port, .fm-select, .fm-input { transition: none; }
+}

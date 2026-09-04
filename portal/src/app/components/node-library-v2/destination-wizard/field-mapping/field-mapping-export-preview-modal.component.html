@@ -1,0 +1,29 @@
+<div
+  class="fm-exportpreview-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-exportpreview-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-exportpreview-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+    <h3 class="fm-exportpreview-title" id="fm-exportpreview-title">
+      Mapping saved — {{ data()?.mappings?.length ?? 0 }} resource{{ (data()?.mappings?.length ?? 0) === 1 ? '' : 's' }}
+    </h3>
+    <p class="fm-exportpreview-subtitle">
+      This is the Mapping JSON that will be sent to the backend. Review it, then close to return to
+      the group list.
+    </p>
+
+    <pre class="fm-exportpreview-json">{{ jsonText() }}</pre>
+
+    <div class="fm-exportpreview-actions">
+      <button type="button" class="btn btn-secondary" (click)="copyJson()">
+        {{ copied() ? 'Copied!' : 'Copy JSON' }}
+      </button>
+      <span class="fm-exportpreview-actions-spacer"></span>
+      <button type="button" class="btn btn-primary" (click)="closed.emit()">Close</button>
+    </div>
+  </div>
+</div>

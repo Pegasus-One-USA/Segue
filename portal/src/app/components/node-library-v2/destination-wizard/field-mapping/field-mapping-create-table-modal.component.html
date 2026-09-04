@@ -1,0 +1,181 @@
+<div
+  class="fm-createtable-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-createtable-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-createtable-dialog">
+    <h3 class="fm-createtable-title" id="fm-createtable-title">Create a new destination table</h3>
+
+    <label class="fm-createtable-field">
+      <span class="text-label">Table name<span class="req">*</span></span>
+      <input
+        #nameInput
+        class="fm-createtable-input"
+        [value]="tableName()"
+        (input)="onTableNameInput($any($event.target).value)"
+        (keydown.space)="$event.preventDefault()"
+        placeholder="e.g. PatientAllergy"
+        [disabled]="submitting()"
+      />
+    </label>
+
+    <div class="fm-createtable-field">
+      <span class="text-label">Does this table relate to a table already on the canvas?</span>
+      <div class="fm-createtable-relation-options">
+        <label class="fm-createtable-radio">
+          <input
+            type="radio" name="fm-createtable-relation" value="standalone"
+            [checked]="relation() === 'standalone'"
+            [disabled]="submitting()"
+            (change)="onRelationChange('standalone')"
+          />
+          <span>No — standalone table</span>
+        </label>
+        <label class="fm-createtable-radio">
+          <input
+            type="radio" name="fm-createtable-relation" value="child"
+            [checked]="relation() === 'child'"
+            [disabled]="submitting() || existingTables().length === 0"
+            (change)="onRelationChange('child')"
+          />
+          <span>Yes — child of another table</span>
+        </label>
+      </div>
+    </div>
+
+    @if (relation() === 'child') {
+      <div class="fm-createtable-relation-block">
+        <div class="fm-createtable-field fm-createtable-parent-slot">
+          <span class="text-label">Parent table</span>
+          <button
+            type="button"
+            class="fm-createtable-select fm-createtable-parent-trigger"
+            [class.fm-createtable-parent-trigger--open]="parentTableMenuOpen()"
+            [disabled]="submitting()"
+            (click)="$event.stopPropagation(); toggleParentTableMenu($event)"
+          >
+            <span class="fm-createtable-parent-trigger-text">{{ parentTable() || 'Select a table…' }}</span>
+            <svg class="fm-createtable-parent-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          @if (parentTableMenuOpen() && parentTableMenuStyle(); as pos) {
+            <div
+              class="fm-createtable-parent-panel"
+              [style.top.px]="pos.top"
+              [style.bottom.px]="pos.bottom"
+              [style.left.px]="pos.left"
+              [style.width.px]="pos.width"
+              [style.max-height.px]="pos.maxHeight"
+            >
+              <div class="fm-createtable-parent-search-wrap">
+                <input
+                  #parentTableSearchInput
+                  type="search"
+                  class="fm-createtable-parent-search"
+                  placeholder="Search tables…"
+                  aria-label="Search tables"
+                  [value]="parentTableSearchQuery()"
+                  (input)="onParentTableSearchInput($any($event.target).value)"
+                />
+                @if (parentTableSearchQuery()) {
+                  <button type="button" class="fm-createtable-parent-search-clear" aria-label="Clear search" (click)="clearParentTableSearch()">✕</button>
+                }
+              </div>
+              <div class="fm-createtable-parent-options">
+                @if (filteredExistingTables().length === 0) {
+                  <div class="fm-createtable-parent-no-match">No tables match "{{ parentTableSearchQuery() }}".</div>
+                }
+                @for (t of filteredExistingTables(); track t) {
+                  <button type="button" class="fm-createtable-parent-option" (click)="selectParentTable(t)">{{ t }}</button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        <label class="fm-createtable-field">
+          <span class="text-label">Relation column (parent)</span>
+          <select
+            class="fm-createtable-select"
+            [value]="parentColumn()"
+            (change)="onParentColumnChange($any($event.target).value)"
+            [disabled]="submitting()"
+          >
+            @for (c of parentColumnOptions(); track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+        </label>
+        <label class="fm-createtable-field">
+          <span class="text-label">New FK column name</span>
+          <input
+            class="fm-createtable-input"
+            [value]="fkColumnName()"
+            (input)="onFkColumnNameInput($any($event.target).value)"
+            [disabled]="submitting()"
+          />
+        </label>
+      </div>
+    }
+
+    <div class="fm-createtable-columns-head">
+      <span class="text-label">Columns</span>
+      <button type="button" class="fm-createtable-addcol-btn" [disabled]="submitting()" (click)="addColumn()">+ Add column</button>
+    </div>
+
+    <div class="fm-createtable-columns">
+      <div class="fm-createtable-col-row fm-createtable-col-row--fixed">
+        <span class="fm-createtable-col-name">Id</span>
+        <span class="fm-createtable-col-type">bigint</span>
+        <span class="fm-createtable-col-pk">PK</span>
+      </div>
+      @if (relation() === 'child') {
+        <div class="fm-createtable-col-row fm-createtable-col-row--fixed">
+          <span class="fm-createtable-col-name">{{ fkColumnName() || '(FK column name)' }}</span>
+          <span class="fm-createtable-col-type">bigint</span>
+          <span class="fm-createtable-col-fk">FK</span>
+        </div>
+      }
+      @for (c of columns(); track $index; let i = $index) {
+        <div class="fm-createtable-col-row">
+          <input
+            class="fm-createtable-col-input"
+            [value]="c.name"
+            (input)="onColumnNameInput(i, $any($event.target).value)"
+            placeholder="Column name"
+            [disabled]="submitting()"
+          />
+          <select
+            class="fm-createtable-col-select"
+            [value]="c.dataType"
+            (change)="onColumnTypeChange(i, $any($event.target).value)"
+            [disabled]="submitting()"
+          >
+            @for (t of dataTypes; track t) { <option [value]="t">{{ t }}</option> }
+          </select>
+          <button
+            type="button"
+            class="fm-createtable-col-remove"
+            aria-label="Remove column"
+            [disabled]="submitting()"
+            (click)="removeColumn(i)"
+          >✕</button>
+        </div>
+      }
+    </div>
+
+    @if (error()) {
+      <p class="fm-createtable-error">{{ error() }}</p>
+    }
+
+    <div class="fm-createtable-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Creating…' : 'Create table' }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,12 @@
+<div class="res-grid">
+  @for (resource of resources; track resource) {
+    <label class="res-chk" [class.on]="isSelected(resource)">
+      <input
+        type="checkbox"
+        [checked]="isSelected(resource)"
+        (change)="toggle(resource, $event)"
+      />
+      {{ resource }}
+    </label>
+  }
+</div>

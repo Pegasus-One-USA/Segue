@@ -312,10 +312,19 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
   }
 
+  /** Which builder the New and Edit actions open — V1 (the original canvas) or V2 (the independent
+   *  Source → Mapping → Transformation → De-identification → Destination canvas under
+   *  pages/workflow-builder-v2). Defaults to V1; nothing about the V1 path changes. */
+  readonly builderVersion = signal<'v1' | 'v2'>('v1');
+
+  onBuilderVersionChange(value: string): void {
+    this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
+  }
+
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.router.navigate(['/workflow-builder']);
+    this.router.navigate([this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder']);
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
@@ -422,9 +431,48 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update). */
+  /**
+   * Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update).
+   *
+   * A workflow authored in V2 MUST reopen in V2: the two builders read the same graph differently. V2's
+   * canvas order is Source → Mapping → Transformation → De-identification → Destination, while the
+   * persisted edges are in execution order (see WorkflowGraphMapperServiceV2.toAuthoringOrder, which
+   * reverses that on load). V1 has no such step, so it draws V2's execution-order edges against
+   * authoring-order node positions — every edge crosses backwards, and V2-only steps render as raw ids
+   * because V1's catalog has no entry for them.
+   *
+   * The builder is therefore detected from the graph itself rather than left to the toolbar selector:
+   * the presence of a V2-only chain step decides it. Detection needs the node list, which
+   * /workflows/summary doesn't carry, so this fetches the definition first; a failed fetch just falls
+   * back to the selected version rather than blocking navigation.
+   */
   onEdit(row: WorkflowSummary): void {
-    this.router.navigate(['/workflow-builder'], { queryParams: { id: row.workflowId } });
+    const fallback = this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder';
+    this.api.load(row.workflowId).subscribe({
+      next: definition => {
+        const isV2 = definition.nodes.some(node => {
+          const transformId = this.transformIdOf(node);
+          return transformId === 'transformation' || transformId === 'deidentification';
+        });
+        this.router.navigate([isV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
+          queryParams: { id: row.workflowId },
+        });
+      },
+      error: () => this.router.navigate([fallback], { queryParams: { id: row.workflowId } }),
+    });
+  }
+
+  /** V2 stamps `__transformId` into every node's configuration (see WorkflowGraphMapperServiceV2's
+   *  nodeToRequest) — the only marker that distinguishes a V2 chain step from V1's own node types. */
+  private transformIdOf(node: { configurationJson?: string | null }): string | null {
+    if (!node.configurationJson) return null;
+    try {
+      const config = JSON.parse(node.configurationJson) as Record<string, unknown>;
+      const transformId = config['__transformId'];
+      return typeof transformId === 'string' ? transformId : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */

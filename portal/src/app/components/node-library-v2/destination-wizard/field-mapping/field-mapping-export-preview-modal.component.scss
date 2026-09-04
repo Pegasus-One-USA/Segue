@@ -1,0 +1,64 @@
+.fm-exportpreview-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.fm-exportpreview-dialog {
+  width: 720px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 24px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fm-exportpreview-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.fm-exportpreview-subtitle {
+  margin: -8px 0 0;
+  font-size: 12.5px;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.fm-exportpreview-json {
+  flex: 1;
+  min-height: 240px;
+  max-height: 55vh;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1.5px solid var(--color-border-input);
+  border-radius: var(--radius-base, 8px);
+  background: var(--color-side);
+  color: var(--color-ink);
+  white-space: pre;
+}
+
+.fm-exportpreview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.fm-exportpreview-actions-spacer {
+  flex: 1;
+}

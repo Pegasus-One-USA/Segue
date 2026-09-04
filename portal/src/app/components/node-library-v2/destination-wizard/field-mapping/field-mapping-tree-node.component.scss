@@ -1,0 +1,125 @@
+:host { display: contents; }
+
+.fm-tree-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 13px;
+  color: var(--fm-group-color, var(--color-primary));
+  cursor: grab;
+  user-select: none;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+
+  &:hover { background: var(--color-side); }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+}
+
+.fm-tree-row--group {
+  background: var(--color-side);
+  font-weight: 600;
+}
+
+// Zebra-stripe leaf rows only (group rows keep their own fixed --color-side above). Can't use
+// :nth-child here — each row is wrapped in its own recursive <app-field-mapping-tree-node> host, so
+// rows are never real DOM siblings even though `:host { display: contents }` renders them flush
+// together. --stripe is instead set from the node's position among its own siblings (siblingIndex
+// input, see the component).
+.fm-tree-row--stripe {
+  background: var(--color-bg);
+
+  &:hover { background: var(--color-side); }
+}
+
+.fm-tree-row--armed {
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.fm-tree-row--mapped .fm-tree-label { font-weight: 700; }
+
+.fm-tree-twirl {
+  flex: 0 0 12px;
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.fm-tree-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-wrap: auto;
+  color: var(--color-ink-2);
+}
+
+.fm-tree-badge {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.fm-tree-badge--array {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+}
+
+.fm-tree-badge--json {
+  color: var(--color-success-strong);
+  background: var(--color-success-soft);
+}
+
+.fm-tree-badge--ref {
+  color: var(--color-info-strong);
+  background: var(--color-info-soft);
+  text-wrap: auto;
+}
+
+.fm-tree-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-muted-2);
+  flex: 0 0 auto;
+}
+
+.fm-tree-port {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+  border: 2px solid var(--color-muted-2);
+  background: var(--color-surface);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.fm-tree-row:hover .fm-tree-port,
+.fm-tree-row--armed .fm-tree-port {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+.fm-tree-row--mapped .fm-tree-port {
+  border-color: currentColor;
+  background: currentColor;
+  box-shadow: inset 0 0 0 2px var(--color-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-tree-row, .fm-tree-port { transition: none; }
+}
