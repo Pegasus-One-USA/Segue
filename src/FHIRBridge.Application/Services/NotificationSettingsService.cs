@@ -36,6 +36,21 @@ public sealed class NotificationSettingsService : INotificationSettingsService
         var settings = await _repository.GetAsync(cancellationToken);
         var passwordReference = settings?.PasswordSecretReference;
 
+        // Server-side backstop for the portal form's own required-field validation (EmailSettingsComponent) —
+        // an SMTP server with no username/password can never actually authenticate, so silently accepting one
+        // here would recreate the exact "email quietly never sends" gap that motivated requiring these at all.
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new InvalidOperationException("Username is required.");
+        }
+
+        // Password blank is legitimate on an edit ONLY if one is already saved (means "keep the current
+        // password", same write-only semantics the DTO's own doc comment describes) — never on first setup.
+        if (string.IsNullOrWhiteSpace(request.Password) && passwordReference is null)
+        {
+            throw new InvalidOperationException("Password is required.");
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
             passwordReference = PasswordReference;
