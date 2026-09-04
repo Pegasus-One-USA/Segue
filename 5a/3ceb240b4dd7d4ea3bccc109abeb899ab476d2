@@ -1,0 +1,118 @@
+tests/FHIRBridge.Runtime.UnitTests/Connectors/SearchPagingLimitTests.cs
+  s_8bf8f8a3a05d3f::t_7aa887c8df8f33 1,83-85
+  s_8bf8f8a3a05d3f::t_d082c78c8d162f 2-82,86-99
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IResourceExtractionDiagnostics.cs
+  s_8bf8f8a3a05d3f::t_f4e64702c19501 1-23
+portal/src/app/services/workflow-api.service.ts
+  s_92030e7c0e38a7::t_8c8fe987e1da79 127-131
+src/FHIRBridge.Application/Services/VendorScopeCatalog.cs
+  s_92030e7c0e38a7::t_26dac29bf237b7 1-115
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorTimeoutTests.cs
+  s_8bf8f8a3a05d3f::t_6fc21bbeb4fa35 1,7,74-75
+  s_8bf8f8a3a05d3f::t_8de140c9f2c9df 2-6,8-73,76-120
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_92030e7c0e38a7::t_ecc3c5514681f8 85-86
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_8bf8f8a3a05d3f::t_a82ea9f97efe4d 1,11,176-177
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_92030e7c0e38a7::t_39609b696c1113 53-61
+src/FHIRBridge.Application/Services/IScopeGeneratorService.cs
+  s_92030e7c0e38a7::t_ecc3c5514681f8 2,14-19,25-26
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/EClinicalWorksFhirSourceClient.cs
+  s_8bf8f8a3a05d3f::t_2fb749cf846f13 1,55-73,83-91
+tests/FHIRBridge.Runtime.UnitTests/Connectors/NonAdvancingPagingTests.cs
+  s_8bf8f8a3a05d3f::t_ac953075569062 1-168
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_8bf8f8a3a05d3f::t_1310cf5f82a23b 1,113
+  s_92030e7c0e38a7::t_ecc3c5514681f8 153-154,162-163,178
+  s_8bf8f8a3a05d3f::t_1b2e2343c0c136 45-73,177,188-189
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_8bf8f8a3a05d3f::t_8319a082935524 697-701,706
+  s_8bf8f8a3a05d3f::t_fa52589a5ddef9 996-1003,1010-1012
+  s_92030e7c0e38a7::t_ae63b992bdf60e 317-333
+  s_8bf8f8a3a05d3f::t_0809949f92f948 702-705
+  s_92030e7c0e38a7::t_11c5ef619c8227 293-299,308
+  s_8bf8f8a3a05d3f::t_ec127873348ae9 1004
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_8bf8f8a3a05d3f::t_eebaa2cf997412 301-306,308-316
+  s_8bf8f8a3a05d3f::t_466d882326a872 25,27-32,57-74,133-139,317-321
+  s_8bf8f8a3a05d3f::t_6283042a475cb6 104,119,207-218,221-222,234-238,266-278,280-300,307
+  s_8bf8f8a3a05d3f::t_54fd7c1208e704 86-90
+  s_8bf8f8a3a05d3f::t_48e59d42ebef5f 1,75,233,383-392,398,400,428
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_92030e7c0e38a7::t_0773a33ff8ed5e 147,692-693
+  s_92030e7c0e38a7::t_43cbe926330e0c 179,333-339,434,682,687-691
+portal/src/app/data/source-system-display-names.data.ts
+  s_8bf8f8a3a05d3f::t_bc24a55d4a9017 1-23
+portal/src/app/services/workflow-build-assembler.ecw.spec.ts
+  s_92030e7c0e38a7::t_c64138230e96a7 1-199
+tests/FHIRBridge.Runtime.UnitTests/Connectors/EClinicalWorksObservationCategoryTests.cs
+  s_8bf8f8a3a05d3f::t_0b2eace16f9f8e 1,97-100
+  s_8bf8f8a3a05d3f::t_2ed95017379e3e 2-96,101-114
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorSinglePatientTests.cs
+  s_92030e7c0e38a7::t_2c99b9153aa21e 1-141
+tests/FHIRBridge.UnitTests/Scopes/VendorScopeCatalogTests.cs
+  s_92030e7c0e38a7::t_2c99b9153aa21e 1-173
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/BackendServicesJwtFactory.cs
+  s_8bf8f8a3a05d3f::t_627b55cd18d62a 18-34
+src/FHIRBridge.Infrastructure/Sources/SigningKeySecretGuard.cs
+  s_8bf8f8a3a05d3f::t_5267f08caf6990 1-39
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_92030e7c0e38a7::t_11c5ef619c8227 516-521,547
+  s_92030e7c0e38a7::t_e0f9ac710d6e6b 5,289-297,300-309,312-351,357-359,363-370,374-376,381-392
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/EpicAccessTokenProvider.cs
+  s_92030e7c0e38a7::t_bb37b173733040 5,39,101-119
+portal/src/app/data/source-system-display-names.spec.ts
+  s_8bf8f8a3a05d3f::t_3ec0135f101224 1-26
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_8bf8f8a3a05d3f::t_a82ea9f97efe4d 1,245
+src/FHIRBridge.Infrastructure/Sources/SourceJwksService.cs
+  s_8bf8f8a3a05d3f::t_389d6a640c7c21 80-84,87,92-96,99
+  s_8bf8f8a3a05d3f::t_cad8d551bcbc37 1,57-62,64-79,85-86,88-91,97-98
+portal/src/app/data/vendor-scope-catalog.data.ts
+  s_92030e7c0e38a7::t_26dac29bf237b7 1-83
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_8bf8f8a3a05d3f::t_7a25c3f704409b 1,19,166-174
+src/Api/FHIRBridge.Api/Controllers/V1/SourceCapabilitiesController.cs
+  s_92030e7c0e38a7::t_bb37b173733040 148-149
+tests/FHIRBridge.Runtime.UnitTests/Workflows/PartialSuccessOnIncompleteExtractionTests.cs
+  s_8bf8f8a3a05d3f::t_b9fe6033e4d5dc 1-163
+src/FHIRBridge.Application/Services/ScopeGeneratorService.cs
+  s_92030e7c0e38a7::t_ecc3c5514681f8 2,16-24,33-34,65,71-95,100-103,111-113
+tests/FHIRBridge.UnitTests/Sources/SourceJwksServiceTests.cs
+  s_8bf8f8a3a05d3f::t_2ff405f08c795a 136
+  s_8bf8f8a3a05d3f::t_965b0c8bcbac29 1,100-135,137-158
+tests/FHIRBridge.UnitTests/Sources/SourcePageCapDerivationTests.cs
+  s_8bf8f8a3a05d3f::t_ca2768a492225b 1-86
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_92030e7c0e38a7::t_39609b696c1113 37,105-110,1305-1306,1765-1795,2521-2528,2597-2604
+  s_92030e7c0e38a7::t_61a7487381b0c6 183-184,194,226,290,856,861-894,1117,1259-1262,1442-1457,1473-1477,1484,1486-1488,1494,1668-1669,2394,2536,2950
+  s_92030e7c0e38a7::t_b105f0c7c53ba6 857-860,1459-1471,1478-1483,1485,1489-1493
+  s_92030e7c0e38a7::t_0773a33ff8ed5e 99-102,104,1294-1301,1458
+  s_92030e7c0e38a7::t_e4b56a69b9e073 1302-1304
+  s_8bf8f8a3a05d3f::t_73bef4e8032d52 1,728
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5a3ceb240b4dd7d4ea3bccc109abeb899ab476d2",
+  "prompts": {},
+  "sessions": {
+    "s_8bf8f8a3a05d3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7179d1c6-2222-43b4-a3f8-08771aafbc16",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    },
+    "s_92030e7c0e38a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2c8cccb-0f57-4904-bdde-28a89081691a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
