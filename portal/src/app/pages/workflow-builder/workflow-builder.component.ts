@@ -911,6 +911,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       abbr:           s.abbr,
       color:          s.color,
       connectorLabel: s.name,
+      vendorId:       s.id,
       fields: {
         '__name':         s.name,
         'App context':    s.context,

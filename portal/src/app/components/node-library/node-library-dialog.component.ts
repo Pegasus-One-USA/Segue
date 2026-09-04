@@ -687,6 +687,7 @@ export class NodeLibraryDialogComponent {
         abbr: meta?.abbr ?? 'SRC',
         color: meta?.color ?? '#5b6573',
         connectorLabel: meta?.name,
+        vendorId: meta?.id,
         fields,
       };
       this.store.addNode(node);
