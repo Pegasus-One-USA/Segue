@@ -182,7 +182,8 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
             var ruleDeclaresOutputType = rules.Any(r => r.ExpectedValueType is not null);
 
             if (!ruleDeclaresOutputType &&
-                !string.Equals(column.MappingValueType, field.ValueType.ToString(), StringComparison.OrdinalIgnoreCase))
+                !string.Equals(column.MappingValueType, field.ValueType.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                !IsJsonSafeForColumn(field.ValueType, column))
             {
                 context.AddFailure(
                     $"Fields[{i}].ValueType",
@@ -222,7 +223,8 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
         foreach (var rule in rules)
         {
             if (rule.ExpectedValueType is { } expectedValueType &&
-                !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase) &&
+                !IsJsonSafeForColumn(expectedValueType, column))
             {
                 var failure = new FluentValidation.Results.ValidationFailure(
                     $"Fields[{fieldIndex}].TargetField",
@@ -238,6 +240,47 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
             CheckStructuredOutputFitsColumn(rule, column, fieldIndex, context);
         }
+    }
+
+    /// <summary>
+    /// True when a Json-shaped value (<paramref name="effectiveType"/> is <see cref="MappingValueType.Json"/>
+    /// — a childJson field, or a rule declaring Json output) is safe to write into <paramref name="column"/>
+    /// even though its own <see cref="DestinationColumnSchemaDto.MappingValueType"/> is the generic "String"
+    /// every character-string SQL type collapses to (see SqlDestinationSchemaService.MapSqlServerType/
+    /// MapPostgresType/MapMySqlType — none of them ever produce "Json" for any real column, including a
+    /// native Postgres jsonb) — an exact string-equality check would otherwise reject EVERY Json mapping
+    /// onto EVERY destination, including one deliberately sized to hold it (e.g. SQL Server nvarchar(max)).
+    ///
+    /// Scoped narrowly to an UNBOUNDED string column (<see cref="DestinationColumnSchemaDto.MaxLength"/> is
+    /// null) — the same signal <see cref="CheckStructuredOutputFitsColumn"/> just below already uses to mean
+    /// "no truncation risk here" — OR a column whose DATA TYPE NAME is itself a fixed-capacity large-blob
+    /// type: MySQL's TEXT/MEDIUMTEXT/LONGTEXT and SQL Server's legacy NTEXT never report a null MaxLength at
+    /// all (unlike SQL Server nvarchar(max)'s -1, or PostgreSQL's genuinely NULL character_maximum_length for
+    /// `text`) — MySQL in particular always reports a real, if enormous, number (65,535 / 16,777,215 /
+    /// 4,294,967,296) for these, because capacity is fixed by the keyword itself, not an independently
+    /// configurable length the way varchar(n) is. Recognized by name for exactly that reason, regardless of
+    /// whatever MaxLength SqlDestinationSchemaService happens to report for them (this is what "the actual
+    /// column metadata/type is handled correctly instead of assuming only one exact type name" means in
+    /// practice — MaxLength alone is not a reliable cross-engine "unbounded" signal). Deliberately excludes
+    /// MySQL's much smaller TINYTEXT (255 chars) — genuinely too small for arbitrary JSON, so that one (and
+    /// any other length-BOUNDED string column: nvarchar(50), varchar(200), …) keeps failing exactly as
+    /// before — a real truncation risk there, not a false positive.
+    /// </summary>
+    private static bool IsJsonSafeForColumn(MappingValueType effectiveType, DestinationColumnSchemaDto column)
+    {
+        if (effectiveType != MappingValueType.Json ||
+            !string.Equals(column.MappingValueType, "String", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (column.MaxLength is null)
+        {
+            return true;
+        }
+
+        var family = column.DataType.Trim().ToLowerInvariant().Split('(')[0];
+        return family is "text" or "mediumtext" or "longtext" or "ntext";
     }
 
     /// <summary>

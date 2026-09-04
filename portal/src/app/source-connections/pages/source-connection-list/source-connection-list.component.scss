@@ -38,10 +38,19 @@
 }
 
 .sc-modal-panel {
-  // Fills the whole scoped backdrop (the content area, see .sc-modal-backdrop above) edge-to-edge —
-  // matching the workflow builder's node config panel (.nld in node-library-dialog.component.scss)
-  // rather than floating as a smaller centered card, now that the backdrop itself is already scoped
-  // to just this page's content area instead of the full viewport.
+  // Fills the scoped backdrop's content area edge-to-edge — matching the workflow builder's node
+  // config panel (.nld in node-library-dialog.component.scss) rather than floating as a smaller
+  // centered card. Must be a definite `height`, not `max-height`: EhrVendorSourceFormComponent's own
+  // :host/.eaf/.eaf-body chain is flex:1 all the way down specifically so .eaf-body's white
+  // background stretches to meet .eaf-footer pinned flush at the true bottom (see
+  // ehr-vendor-source-form.component.scss's header comment) — but flex-grow only has space to
+  // distribute when ITS OWN container has a definite size to grow into. Swapping this to max-height
+  // (tried, reverted) removes that definite size, so instead of the form's own body stretching down
+  // to the footer, the panel just shrinks to its content and .sc-modal-backdrop's dark/blurred fill
+  // shows through below it — which at backdrop's low opacity over a light page reads as a flat grey
+  // gap, not clearly "you're seeing the overlay." Same visual complaint, different cause. A short step
+  // (e.g. Audience & Environment before its conditional fields appear) is meant to fill this height
+  // as generous internal whitespace within one continuous white card, not shrink the card itself.
   width: 100%;
   height: 100%;
   background: var(--color-surface);

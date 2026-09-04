@@ -1,6 +1,7 @@
 import { Component, input, signal, computed, effect, untracked, inject } from '@angular/core';
 import { DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
+import { isJsonSafeForColumn } from './field-mapping/field-mapping-model';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -629,7 +630,15 @@ export class MappingProfileFormComponent {
     if (this.isRowColumnUnverified(row)) return false;
     const column = this._targetColumn(row);
     if (!column) return false;
-    return !column.mappingValueType || column.mappingValueType.toLowerCase() !== row.valueType.toLowerCase();
+    if (!column.mappingValueType) return true;
+    if (column.mappingValueType.toLowerCase() === row.valueType.toLowerCase()) return false;
+    // A Json-shaped value is still safe to write into a column that's genuinely unbounded/large-blob
+    // (nvarchar(max), a real `text`/`ntext`/`mediumtext`/`longtext`, …) even though its own
+    // mappingValueType is the generic "String" every character-string type collapses to — see
+    // isJsonSafeForColumn's own doc comment (field-mapping-model.ts) for why, and for the same exception
+    // field-mapping-model.ts's checkColumnTypeCompatibility and CreateMappingProfileRequestValidator
+    // (the backend's own copy of this exact check) already apply.
+    return !isJsonSafeForColumn(row.valueType, column);
   }
 
   // Human-readable message for isRowTypeMismatched, phrased the same way as the server-side validator's

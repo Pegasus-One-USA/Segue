@@ -25,8 +25,6 @@
             {{ copiedField() === 'secret' ? 'Copied!' : 'Copy' }}
           </button>
         </div>
-        <p class="card-sub mono mfa-otp-uri">{{ mfaEnrollment()?.otpAuthUri }}</p>
-
         <div class="form-field">
           <label>6-digit code from your app</label>
           <input type="text" inputmode="numeric" autocomplete="one-time-code" #confirmCode placeholder="123456" />

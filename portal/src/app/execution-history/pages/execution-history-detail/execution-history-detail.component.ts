@@ -280,6 +280,23 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     return ExecutionHistoryDetailComponent.CONTRACT_ICONS[(contract ?? '').toLowerCase()] ?? 'bolt';
   }
 
+  /** Every *Source node run for a gated-vendor connector (eClinicalWorks/Healow, Athenahealth, etc. —
+   *  see workflow-graph-mapper.service.ts's transformIdForNode) shares the internal 'EpicSourceNode'
+   *  NodeType regardless of the connection's real vendor, since the backend's node catalog doesn't yet
+   *  allow a dedicated NodeType per EHR ("GATED (SQL/CSV phase)"). Only that technical label is
+   *  generic — extraction itself is genuinely vendor-correct (SourceNodeExecutors.cs resolves the real
+   *  HTTP client from the connection's actual SourceSystemType), so this is a display-only fix: label a
+   *  source node from this run's real configured source instead of the shared internal type, so e.g. an
+   *  eClinicalWorks run doesn't read as "EpicSourceNode" here just because that's still the shared
+   *  technical NodeType underneath. Same sourceName-first fallback the header above already uses. */
+  nodeLabel(entry: NodeRunHistoryEntry): string {
+    if (!entry.nodeType.endsWith('SourceNode')) {
+      return entry.nodeType;
+    }
+    const source = this.execution()?.sourceName ?? this.execution()?.sourceSystemType;
+    return source ? `${source} Source` : entry.nodeType;
+  }
+
   copyCorrelationId(): void {
     const correlationId = this.execution()?.correlationId;
     if (!correlationId) { return; }
@@ -299,7 +316,7 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     if (!text) { return; }
 
     navigator.clipboard.writeText(text).then(
-      () => this.toast.show('Copied', `${entry.nodeType} details copied to clipboard.`),
+      () => this.toast.show('Copied', `${this.nodeLabel(entry)} details copied to clipboard.`),
       () => this.toast.show('Copy failed', 'Select the text manually.'),
     );
   }

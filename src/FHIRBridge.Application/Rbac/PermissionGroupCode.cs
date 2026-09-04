@@ -54,18 +54,22 @@ public enum PermissionGroupCode
     [PermissionGroup("30000000-0000-0000-0000-000000000013", PermissionCategoryCode.Pipelines, "Allscripts")]
     Allscripts = 13,
 
-    // Same proof as Allscripts above, for a second, brand-new SourceSystemType value (NewEHR) instead
-    // of a pre-existing one — confirms the mechanism also covers vendors that don't exist yet today.
-    [PermissionGroup("30000000-0000-0000-0000-000000000014", PermissionCategoryCode.Pipelines, "NewEHR")]
-    NewEHR = 14,
+    // 14 (NewEHR) intentionally removed — SourceSystemType.NewEHR/.NewEHRTwo are internal placeholder
+    // enum members with no real vendor identity (see EHR_OPTIONS in the portal's
+    // ehr-vendor-source-form.component.ts), never offered to a user anywhere in the app, so this group
+    // showed up as a real-looking Access Control with no feature behind it. Removing the enum member is
+    // enough on its own: SyncDiscoveredPermissionsAsync (Program.cs) deactivates its now-undiscovered
+    // "newehr.*" permissions on next boot, and GetPermissionCatalogAsync already excludes any group with
+    // no active permissions — no migration or manual data cleanup needed.
 
     [PermissionGroup("30000000-0000-0000-0000-000000000015", PermissionCategoryCode.Platform, "Governance")]
     Governance = 15,
 
     // ── Source-type access (RBAC: restrict which source vendors a role can use) ─────────────────────────
-    // Named to match SourceSystemType.Healow/.MeditechGreenfield/.GenericFhir/.Hl7v2/.Sample exactly, same
-    // mechanism as Epic/Athenahealth/Cerner/Allscripts above — completes source-type coverage to all 9
-    // SOURCES catalog entries so every Node Library source tile has its own dedicated Edit permission.
+    // Named to match SourceSystemType.Healow/.MeditechGreenfield/.GenericFhir/.Sample exactly, same
+    // mechanism as Epic/Athenahealth/Cerner/Allscripts above — completes source-type coverage to the
+    // SOURCES catalog entries that have a real, working execution path, so every one of those Node Library
+    // source tiles has its own dedicated Edit permission.
     [PermissionGroup("30000000-0000-0000-0000-000000000016", PermissionCategoryCode.Pipelines, "Healow")]
     Healow = 16,
 
@@ -75,8 +79,13 @@ public enum PermissionGroupCode
     [PermissionGroup("30000000-0000-0000-0000-000000000018", PermissionCategoryCode.Pipelines, "GenericFhir")]
     GenericFhir = 18,
 
-    [PermissionGroup("30000000-0000-0000-0000-000000000019", PermissionCategoryCode.Pipelines, "Hl7v2")]
-    Hl7v2 = 19,
+    // 19 (Hl7v2) intentionally removed — unlike every other source-type group here, its workflow-canvas
+    // node (Hl7v2MllpSourceNodeExecutor, in the Runtime engine) is a hardcoded stub: CreatePayload always
+    // returns an empty ResourceBatch, in every environment, regardless of any real HL7 v2 traffic the MLLP
+    // listener receives. There is no real execution path behind this Access Control to gate, unlike
+    // Cerner/Allscripts/MeditechGreenfield above, which — though their own FHIR client isn't registered yet
+    // either — at least have a genuine, tested save/configure path through the real API
+    // (SourceConnectionPermissionTests). Same self-healing removal as NewEHR: no migration needed.
 
     [PermissionGroup("30000000-0000-0000-0000-000000000020", PermissionCategoryCode.Pipelines, "Sample")]
     Sample = 20,

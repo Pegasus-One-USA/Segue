@@ -23,12 +23,16 @@ export function toUserRole(name: string | undefined): UserRole {
   return canonical ?? trimmed;
 }
 
-/** Backend numeric status (1 Invited / 2 Active / 3 Inactive) → front-end string. */
+/** Backend status name ('Invited' / 'Active' / 'Inactive') → front-end string. Previously matched
+ *  against the numeric enum values (1/2/3), but the API sends the enum's name (JsonStringEnumConverter),
+ *  so that switch never matched anything and every user fell through to the isEnabled-based default —
+ *  which can't tell "invited, not yet activated" apart from "explicitly deactivated" since both have
+ *  isEnabled=false. Matching the real string fixes that without touching the Active/Inactive fallback. */
 function toStatus(status: BackendUserStatus | undefined, isEnabled: boolean): UserStatus {
   switch (status) {
-    case 1:  return 'pending';   // Invited
-    case 2:  return 'active';
-    case 3:  return 'inactive';
+    case 'Invited':  return 'pending';
+    case 'Active':   return 'active';
+    case 'Inactive': return 'inactive';
     default: return isEnabled ? 'active' : 'inactive';
   }
 }

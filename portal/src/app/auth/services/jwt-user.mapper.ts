@@ -126,7 +126,12 @@ export function buildUserFromProfile(profile: AuthProfileDto): User {
     mfaSetupRequired: profile.requiresMfaSetup ?? false,
     emailVerified: true,
     twoFactorEnabled: false,
-    createdAt: nowIso,
+    // Real values from UserProfileDto.CreatedOnUtc/LastLoginOnUtc — previously createdAt was hardcoded to
+    // "now" (so Member Since always showed today's date for every user) and lastLoginAt was never set at
+    // all (so Last Login always showed blank). nowIso stays only as a defensive fallback if the backend
+    // ever omits createdOnUtc; lastLoginOnUtc is genuinely null for a user who has never logged in before.
+    createdAt: profile.createdOnUtc ?? nowIso,
+    lastLoginAt: profile.lastLoginOnUtc ?? undefined,
     updatedAt: nowIso,
   };
 }

@@ -37,10 +37,17 @@ interface ProbeResponse {
 export interface BackendAuthScopesRequest {
   tokenEndpoint: string;
   clientId: string;
-  keyId: string | null;
-  privateKeyVaultName: string;
-  privateKeySecretName: string;
+  /** Which client-credentials method to exchange with — must match whichever the caller's form has selected. */
+  authMethod: 'secret' | 'jwt';
   scope: string;
+  // ── jwt only ──
+  keyId?: string | null;
+  privateKeyVaultName?: string;
+  privateKeySecretName?: string;
+  // ── secret only ──
+  clientSecret?: string;
+  /** Where to place client id/secret — 'post' (form body, the default) or 'basic' (Authorization header). */
+  authPlacement?: 'post' | 'basic' | null;
 }
 
 export interface BackendAuthScopesResult {
@@ -77,9 +84,9 @@ export class EpicDiscoveryService {
   }
 
   /**
-   * Backend System only: runs a real client_credentials + private_key_jwt exchange against Epic's token endpoint
-   * using a signing key already provisioned into the secret store, and returns the scopes Epic actually granted the
-   * app — never the access token itself.
+   * Backend System only: runs a real client_credentials exchange against the source's token endpoint — private_key_jwt
+   * (using a signing key already provisioned into the secret store) or a plain client secret, per `request.authMethod`
+   * — and returns the scopes the source actually granted the app — never the access token itself.
    */
   testBackendAuthScopes(request: BackendAuthScopesRequest): Observable<BackendAuthScopesResult> {
     return this.http.post<BackendAuthScopesResult>(SOURCE_DISCOVERY_ENDPOINTS.backendAuthScopes, request);
