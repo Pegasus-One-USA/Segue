@@ -63,24 +63,6 @@ variable "redis_trusted_certificate_thumbprint" {
   type        = string
 }
 
-variable "hapi_terminology_postgres_password" {
-  description = "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (internal-only — not the app's own FHIRBridgeDb). Stored in Key Vault like the other secrets above."
-  type        = string
-  sensitive   = true
-}
-
-variable "hapi_terminology_external_access" {
-  description = "Exposes the HAPI terminology server externally (Container Apps external ingress) so it can be reached directly from outside this environment — e.g. a separate terminology admin tool, or a third-party integration — rather than only internally by fhirbridge-app/worker. Defaults to false (internal-only, like sqlserver/redis). Setting hapi_terminology_custom_domain also forces this on, since Azure Container Apps custom domains require external ingress."
-  type        = bool
-  default     = false
-}
-
-variable "hapi_terminology_custom_domain" {
-  description = "Custom domain for the HAPI terminology server (e.g. terminology.customer.com). Leave blank to use the auto-generated *.azurecontainerapps.io URL once hapi_terminology_external_access is true. Same flow as fhirbridge_app_custom_domain (including the required first-apply-blank step and the current SSL-binding limitation) — see that variable's description and hapi_terminology_domain_verification."
-  type        = string
-  default     = ""
-}
-
 variable "fhirbridge_app_custom_domain" {
   description = "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank for *.azurecontainerapps.io. REQUIRED to be blank on the very first apply that creates this app: Azure only assigns customDomainVerificationId once the Container App already exists, and there is no way to know that ID in advance — setting a domain before the app exists always fails with InvalidCustomHostNameValidation (\"a TXT record ... was not found\"), regardless of provider version. Correct order: (1) apply with this blank so the app gets created; (2) read fhirbridge_app_domain_verification, create DNS CNAME (domain -> the app's default hostname) + TXT asuid.<domain> = that id, wait for DNS; (3) NOW set this variable and re-apply — registers the hostname (certificate_binding_type Disabled). NOTE: managed-certificate SSL binding (bind_custom_domain_certificates) is currently a no-op — see that variable's description — so the domain resolves to this app but browsers won't get a trusted cert on it yet; front it with your own reverse proxy/CDN cert until the provider migration below happens, or bring your own cert manually."
   type        = string
@@ -100,15 +82,9 @@ variable "bind_custom_domain_certificates" {
 }
 
 variable "enable_tenant_secrets_key_vault" {
-  description = "Turns on Azure Key Vault storage for SourceConnection/DestinationConfiguration secrets (KeyVault:UseAzureKeyVault). false (default) keeps everything on the existing local DataProtection-encrypted ProvisionedSecrets DB table — no infra change needed. When true, this config grants the fhirbridge_app/worker Container Apps' system-assigned managed identities the 'Key Vault Secrets Officer' role (RBAC) on var.tenant_secrets_key_vault_name and points KeyVault:VaultName at it. Requires whoever runs this apply to have Owner or User Access Administrator on that vault/resource group — if the role-assignment resources fail for lack of that permission, apply everything else first, then have someone with sufficient rights run the 'az role assignment create' command from this config's fallback (see README/plan notes) using the fhirbridge_app_principal_id/worker_principal_id outputs."
+  description = "The deployment-time choice between the two secret-storage modes documented in Documents/KeyVault-Implementation.html: false (default) keeps everything — tenant SourceConnection/DestinationConfiguration secrets AND the 4 app-level secrets (jwt-signing-key etc.) — on the local DataProtection-encrypted ProvisionedSecrets DB table, no Azure Key Vault resource created, no extra permission needed. true creates a dedicated Azure Key Vault (RBAC-enabled) via azurerm_key_vault.tenant_secrets, grants the fhirbridge_app/worker Container Apps' system-assigned managed identities (and the identity running this apply) the 'Key Vault Secrets Officer' role on it, and points KeyVault:VaultName/KeyVault:UseAzureKeyVault at it — the app then reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Granting the RBAC role needs Owner or User Access Administrator on the resource group — a Contributor-only account can still create the vault itself, but will hit an authorization error on the 3 azurerm_role_assignment resources specifically; if that happens, comment them out, apply everything else, then have someone with sufficient rights run the 'az role assignment create' command from main.tf's comment above those resources, using the fhirbridge_app_principal_id/worker_principal_id outputs plus your own account's object ID."
   type        = bool
   default     = false
-}
-
-variable "tenant_secrets_key_vault_name" {
-  description = "Name of the EXISTING Azure Key Vault to use for tenant source/destination secrets (its Permission model must be Azure RBAC, not classic Access Policies — this config grants access via azurerm_role_assignment). Not created or managed by this Terraform config; create it once yourself (Portal or 'az keyvault create'). Only consulted when enable_tenant_secrets_key_vault is true."
-  type        = string
-  default     = "seguedev"
 }
 
 variable "sql_external_access" {

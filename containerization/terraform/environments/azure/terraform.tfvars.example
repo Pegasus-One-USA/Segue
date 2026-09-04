@@ -32,6 +32,12 @@ redis_trusted_certificate_thumbprint = "replace-with-the-thumbprint-generate-cer
 # bind_custom_domain_certificates is currently a no-op; see its description in variables.tf).
 # fhirbridge_app_custom_domain        = "app.customer.com"
 # demo_app_custom_domain              = "demo.customer.com"
-# hapi_terminology_custom_domain      = "terminology.customer.com"
 # bind_custom_domain_certificates     = false
+
+# Secret storage: false (default, or simply omit) keeps everything on the local DataProtection-
+# encrypted DB table. true has this config create a dedicated, RBAC-enabled Key Vault for
+# tenant/app-level secrets and wire up all the permissions the app needs to use it automatically —
+# see enable_tenant_secrets_key_vault's description in variables.tf and
+# Documents/KeyVault-Implementation.html for the full picture.
+# enable_tenant_secrets_key_vault = true
 

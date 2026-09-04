@@ -7,10 +7,10 @@
 # create the ACR first with a targeted apply, or push after the first apply and re-apply to update
 # the Container Apps' image references).
 #
-# SQL Server Express, Redis, and the HAPI terminology server's Postgres are pinned to a single
-# replica each (Azure Files-backed data directories are not safe for concurrent multi-instance
-# processes) and are reachable by other Container Apps in the same environment via their app name
-# as hostname (Container Apps' built-in internal DNS) — never exposed externally.
+# SQL Server Express and Redis are pinned to a single replica each (Azure Files-backed data
+# directories are not safe for concurrent multi-instance processes) and are reachable by other
+# Container Apps in the same environment via their app name as hostname (Container Apps' built-in
+# internal DNS) — never exposed externally.
 
 terraform {
   required_version = ">= 1.6.0"
@@ -77,23 +77,31 @@ resource "random_id" "kv_suffix" {
   byte_length = 3
 }
 
+# Own random component too, same reasoning as kv_suffix above, kept independent from it so the two
+# vaults' names never collide and a stuck/soft-deleted one never blocks the other. Generated
+# unconditionally (harmless if enable_tenant_secrets_key_vault ends up false — nothing consumes it).
+resource "random_id" "tenant_kv_suffix" {
+  byte_length = 3
+}
+
 locals {
   suffix               = random_id.suffix.hex
   acr_name             = "${var.name_prefix}acr${local.suffix}"             # ACR: alnum only, globally unique
   storage_account_name = "${var.name_prefix}st${local.suffix}"              # Storage account: alnum only, <=24 chars, globally unique
   key_vault_name       = "${var.name_prefix}-kv-${random_id.kv_suffix.hex}" # Key Vault: alnum + hyphens, <=24 chars, globally unique, own random component
+  # Deliberately shortened to "tkv" (not "tenant-kv") to stay within Key Vault's 24-char name cap
+  # once name_prefix is longer (e.g. "fhirbridge-tkv-a1b2c3" = 21 chars).
+  tenant_secrets_key_vault_name = "${var.name_prefix}-tkv-${random_id.tenant_kv_suffix.hex}"
 
   # Plain-string app names (not resource attribute lookups) so a Container App can safely compute
   # its OWN public URL — Container Apps' FQDN is always "<app-name>.<environment-default-domain>",
   # and the environment's default_domain doesn't depend on any individual app, so this avoids the
   # self-reference a resource would otherwise need to read its own computed attributes.
-  sqlserver_name                 = "${var.name_prefix}-sqlserver"
-  redis_name                     = "${var.name_prefix}-redis"
-  hapi_terminology_postgres_name = "${var.name_prefix}-term-db" # kept short — Container App names cap at 32 chars
-  hapi_terminology_name          = "${var.name_prefix}-term"
-  fhirbridge_app_name            = "${var.name_prefix}-app"
-  demo_app_name                  = "${var.name_prefix}-demo-app"
-  worker_name                    = "${var.name_prefix}-worker"
+  sqlserver_name      = "${var.name_prefix}-sqlserver"
+  redis_name          = "${var.name_prefix}-redis"
+  fhirbridge_app_name = "${var.name_prefix}-app"
+  demo_app_name       = "${var.name_prefix}-demo-app"
+  worker_name         = "${var.name_prefix}-worker"
 
   # Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
   # everything this deployment created, and is what the tag-based teardown path (see
@@ -187,21 +195,6 @@ resource "azurerm_container_app_environment_storage" "redis_data" {
   access_mode                  = "ReadWrite"
 }
 
-resource "azurerm_storage_share" "hapi_terminology_data" {
-  name                 = "hapi-terminology-data"
-  storage_account_name = azurerm_storage_account.main.name
-  quota                = 10
-}
-
-resource "azurerm_container_app_environment_storage" "hapi_terminology_data" {
-  name                         = "hapi-terminology-data"
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  account_name                 = azurerm_storage_account.main.name
-  access_key                   = azurerm_storage_account.main.primary_access_key
-  share_name                   = azurerm_storage_share.hapi_terminology_data.name
-  access_mode                  = "ReadWrite"
-}
-
 resource "azurerm_storage_share" "keys_data" {
   name                 = "keys-data"
   storage_account_name = azurerm_storage_account.main.name
@@ -290,48 +283,190 @@ resource "azurerm_key_vault_secret" "redis_password" {
   }
 }
 
-resource "azurerm_key_vault_secret" "hapi_terminology_postgres_password" {
-  name         = "hapi-terminology-postgres-password"
-  value        = var.hapi_terminology_postgres_password
-  key_vault_id = azurerm_key_vault.main.id
-  tags         = local.common_tags
-  depends_on   = [azurerm_key_vault_access_policy.terraform_kv_secrets]
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
-# --- Tenant secrets Key Vault (SourceConnection/DestinationConfiguration secrets) ---
+# --- Tenant secrets Key Vault (SourceConnection/DestinationConfiguration + app-level secrets) ---
 #
 # Separate from azurerm_key_vault.main above (which only ever holds 3 infra bootstrap secrets seeded
-# by Terraform itself) — this is an EXISTING vault, created and owned outside this config, that the
-# running app reads/writes tenant secrets from/to at runtime via CompositeSecretProvider/Writer. Its
-# Permission model must be Azure RBAC (not classic Access Policies), which is why this uses
-# azurerm_role_assignment below instead of azurerm_key_vault_access_policy like the vault above.
-data "azurerm_key_vault" "tenant_secrets" {
-  count               = var.enable_tenant_secrets_key_vault ? 1 : 0
-  name                = var.tenant_secrets_key_vault_name
-  resource_group_name = data.azurerm_resource_group.main.name
+# once by Terraform itself and then left alone — lifecycle.ignore_changes = [value]) — this vault is
+# what the running app reads/writes to continuously at runtime via CompositeSecretProvider/Writer
+# (tenant SourceConnection/DestinationConfiguration secrets, plus the 4 app-level secrets —
+# jwt-signing-key etc. — AppSecretProvisioner self-provisions on first boot). Created only when
+# var.enable_tenant_secrets_key_vault is true; false (the default) leaves everything on the local
+# DataProtection-encrypted ProvisionedSecrets DB table with no Key Vault, no extra Azure resource,
+# no extra permission to grant. RBAC-enabled (not classic Access Policies, unlike the vault above) —
+# azurerm_role_assignment below, not azurerm_key_vault_access_policy.
+resource "azurerm_key_vault" "tenant_secrets" {
+  count                      = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name                       = local.tenant_secrets_key_vault_name
+  resource_group_name        = data.azurerm_resource_group.main.name
+  location                   = data.azurerm_resource_group.main.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  enable_rbac_authorization  = true
+  soft_delete_retention_days = 7
+  tags                       = local.common_tags
 }
 
-# Assigning this role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
-# Administrator) on the vault/resource group — a Contributor-only account will get an authorization
-# error here specifically. If that happens: comment these two role assignments out, apply everything
-# else, then have someone with sufficient rights run, for each principal_id below:
+# Assigning a role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
+# Administrator) on the vault/resource group — a Contributor-only account can create the vault above
+# just fine but will get an authorization error on these three specifically. If that happens:
+# comment them out, apply everything else, then have someone with sufficient rights run, for each
+# principal_id below:
 #   az role assignment create --role "Key Vault Secrets Officer" --assignee <principal_id> \
 #     --scope <tenant_secrets_key_vault_id output>
+# The applying identity gets the same role as the app/worker (not just the two Container Apps) so
+# whoever ran `terraform apply` can also read/set secrets directly afterward — e.g. to seed the
+# initial values a real Epic/destination connection needs, or debug what's actually stored.
+resource "azurerm_role_assignment" "tenant_secrets_terraform_applier" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
 resource "azurerm_role_assignment" "tenant_secrets_fhirbridge_app" {
   count                = var.enable_tenant_secrets_key_vault ? 1 : 0
-  scope                = data.azurerm_key_vault.tenant_secrets[0].id
+  scope                = azurerm_key_vault.tenant_secrets[0].id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = azurerm_container_app.fhirbridge_app.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "tenant_secrets_worker" {
   count                = var.enable_tenant_secrets_key_vault ? 1 : 0
-  scope                = data.azurerm_key_vault.tenant_secrets[0].id
+  scope                = azurerm_key_vault.tenant_secrets[0].id
   role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_container_app.worker.identity[0].principal_id
+}
+
+# The 4 app-level secrets AppSecretProvisioner otherwise self-provisions on first boot (see
+# AppSecretReferences.cs) — pre-seeding them here means the app never needs that first-boot
+# generate-and-write round trip to succeed at all. Random values match
+# AppSecretValueGenerator.Generate()'s own shape exactly (32 random bytes, base64-encoded) via
+# random_id's b64_std output. Unprefixed names on purpose: this vault is dedicated to this one
+# deployment (not shared across environments), so KeyVault:SecretPrefix is deliberately left unset
+# above — see Documents/KeyVault-Implementation.html's Mode A/B section for why a shared vault would
+# need a prefix and a dedicated one doesn't. ignore_changes on value, same as the infra-bootstrap
+# vault's secrets above — once set, only rotate through the app's own admin tooling
+# (AppSecretsAdminService) or 'az keyvault secret set', never by re-applying this config.
+#
+# depends_on the role assignment above (not just the vault) because RBAC data-plane writes need
+# that role actually granted first — if this hits a transient 403 on the very first apply (Azure AD
+# role-assignment propagation can lag a few seconds behind the assignment's own creation), just
+# re-run apply; nothing else needs to change.
+resource "random_id" "jwt_signing_key" {
+  count       = var.enable_tenant_secrets_key_vault ? 1 : 0
+  byte_length = 32
+}
+
+resource "azurerm_key_vault_secret" "app_jwt_signing_key" {
+  count        = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name         = "jwt-signing-key"
+  value        = random_id.jwt_signing_key[0].b64_std
+  key_vault_id = azurerm_key_vault.tenant_secrets[0].id
+  tags         = local.common_tags
+  depends_on   = [azurerm_role_assignment.tenant_secrets_terraform_applier]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "random_id" "download_link_signing_secret" {
+  count       = var.enable_tenant_secrets_key_vault ? 1 : 0
+  byte_length = 32
+}
+
+resource "azurerm_key_vault_secret" "app_download_link_signing_secret" {
+  count        = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name         = "download-link-signing-secret"
+  value        = random_id.download_link_signing_secret[0].b64_std
+  key_vault_id = azurerm_key_vault.tenant_secrets[0].id
+  tags         = local.common_tags
+  depends_on   = [azurerm_role_assignment.tenant_secrets_terraform_applier]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "random_id" "transform_hashing_key" {
+  count       = var.enable_tenant_secrets_key_vault ? 1 : 0
+  byte_length = 32
+}
+
+resource "azurerm_key_vault_secret" "app_transform_hashing_key" {
+  count        = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name         = "transform-hashing-key"
+  value        = random_id.transform_hashing_key[0].b64_std
+  key_vault_id = azurerm_key_vault.tenant_secrets[0].id
+  tags         = local.common_tags
+  depends_on   = [azurerm_role_assignment.tenant_secrets_terraform_applier]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "random_id" "phi_encryption_key" {
+  count       = var.enable_tenant_secrets_key_vault ? 1 : 0
+  byte_length = 32
+}
+
+# Never rotate this one — see AppSecretReferences.PhiEncryptionKey's own doc comment: doing so
+# leaves every previously-encrypted execution-history row permanently undecryptable. The
+# ignore_changes below already protects it from an accidental value change on re-apply.
+resource "azurerm_key_vault_secret" "app_phi_encryption_key" {
+  count        = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name         = "phi-encryption-key"
+  value        = random_id.phi_encryption_key[0].b64_std
+  key_vault_id = azurerm_key_vault.tenant_secrets[0].id
+  tags         = local.common_tags
+  depends_on   = [azurerm_role_assignment.tenant_secrets_terraform_applier]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# DataProtection key-ring protection (Documents/KeyVault-Implementation.html §3/§7's
+# DataProtection:KeyVaultKeyId) — wraps the app's DataProtection key ring using this Key's
+# wrap/unwrap operations instead of a local certificate. Tied to the same toggle as the secrets
+# above rather than a second variable: this deployment's whole point in turning Key Vault on is to
+# get everything off local/ephemeral storage, and a Key object is cheap or free to also provision
+# once the vault itself already exists.
+#
+# Creating a Key object (not just a Secret) needs Key Vault Crypto OFFICER — a different, broader
+# role than what the app itself needs at runtime (Crypto USER, wrap/unwrap only — granted to
+# fhirbridge_app/worker below).
+resource "azurerm_role_assignment" "tenant_secrets_terraform_applier_crypto" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Crypto Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_key_vault_key" "dataprotection" {
+  count        = var.enable_tenant_secrets_key_vault ? 1 : 0
+  name         = "${var.name_prefix}-dataprotection-key"
+  key_vault_id = azurerm_key_vault.tenant_secrets[0].id
+  key_type     = "RSA"
+  key_size     = 2048
+  key_opts     = ["wrapKey", "unwrapKey"]
+  tags         = local.common_tags
+
+  depends_on = [azurerm_role_assignment.tenant_secrets_terraform_applier_crypto]
+}
+
+resource "azurerm_role_assignment" "tenant_secrets_fhirbridge_app_crypto" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Crypto User"
+  principal_id         = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "tenant_secrets_worker_crypto" {
+  count                = var.enable_tenant_secrets_key_vault ? 1 : 0
+  scope                = azurerm_key_vault.tenant_secrets[0].id
+  role_definition_name = "Key Vault Crypto User"
   principal_id         = azurerm_container_app.worker.identity[0].principal_id
 }
 
@@ -480,157 +615,6 @@ resource "azurerm_container_app" "redis" {
   }
 }
 
-# --- HAPI terminology server's Postgres (internal only, single replica) ---
-
-resource "azurerm_container_app" "hapi_terminology_postgres" {
-  name                         = local.hapi_terminology_postgres_name
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = data.azurerm_resource_group.main.name
-  revision_mode                = "Single"
-  tags                         = local.common_tags
-
-  secret {
-    name  = "hapi-terminology-postgres-password"
-    value = azurerm_key_vault_secret.hapi_terminology_postgres_password.value
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 1
-
-    volume {
-      name         = "hapi-terminology-data"
-      storage_type = "AzureFile"
-      storage_name = azurerm_container_app_environment_storage.hapi_terminology_data.name
-    }
-
-    container {
-      name   = "hapi-terminology-postgres"
-      image  = "postgres:16-alpine"
-      cpu    = 0.5
-      memory = "1Gi"
-
-      env {
-        name  = "POSTGRES_DB"
-        value = "hapi_terminology"
-      }
-      env {
-        name  = "POSTGRES_USER"
-        value = "hapi_terminology"
-      }
-      env {
-        name        = "POSTGRES_PASSWORD"
-        secret_name = "hapi-terminology-postgres-password"
-      }
-      # Azure Files (SMB) doesn't support the chown/chmod postgres's entrypoint does on PGDATA at
-      # first boot ("Operation not permitted") the way a native/NFS filesystem does - pointing
-      # PGDATA at a subdirectory postgres creates and owns itself (rather than the mount root,
-      # which is externally provisioned) works around it. SQL Server doesn't hit this because it
-      # never tries to chmod its own mount point.
-      env {
-        name  = "PGDATA"
-        value = "/var/lib/postgresql/data/pgdata"
-      }
-
-      volume_mounts {
-        name = "hapi-terminology-data"
-        path = "/var/lib/postgresql/data"
-      }
-    }
-  }
-
-  ingress {
-    external_enabled = false
-    target_port      = 5432
-    transport        = "tcp"
-
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-}
-
-# --- HAPI terminology server (internal only, single replica) ---
-#
-# Second, dedicated HAPI FHIR instance used only for code-system lookups/validation/expansion/
-# translation ($lookup et al.) and the automatic vocabulary syncs in
-# FHIRBridge.Infrastructure/Terminology/Hapi — separate from any EHR-sourced FHIR data, which never
-# touches this service. Reached only by hostname within the Container Apps environment, never
-# externally — see Terminology__BaseUrl on fhirbridge_app/worker below.
-
-resource "azurerm_container_app" "hapi_terminology" {
-  name                         = local.hapi_terminology_name
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = data.azurerm_resource_group.main.name
-  revision_mode                = "Single"
-  tags                         = local.common_tags
-
-  depends_on = [azurerm_container_app.hapi_terminology_postgres]
-
-  secret {
-    name  = "hapi-terminology-postgres-password"
-    value = azurerm_key_vault_secret.hapi_terminology_postgres_password.value
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 1
-
-    container {
-      name = "hapi-terminology"
-      # Imported into this ACR (az acr import, not docker build/push -- it's a stock third-party
-      # image, no Dockerfile of our own) under the same image_tag as the 3 custom images, so it was
-      # previously pulling hapiproject/hapi:latest straight from Docker Hub on every deploy/cold
-      # start -- much slower (Docker Hub rate limits + cross-registry latency) than pulling from
-      # this ACR, which sits in the same region as the Container Apps environment.
-      image  = "${azurerm_container_registry.acr.login_server}/hapi-terminology:${var.image_tag}"
-      cpu    = 1.0
-      memory = "2Gi"
-
-      env {
-        name  = "SPRING_DATASOURCE_URL"
-        value = "jdbc:postgresql://${local.hapi_terminology_postgres_name}:5432/hapi_terminology"
-      }
-      env {
-        name  = "SPRING_DATASOURCE_USERNAME"
-        value = "hapi_terminology"
-      }
-      env {
-        name        = "SPRING_DATASOURCE_PASSWORD"
-        secret_name = "hapi-terminology-postgres-password"
-      }
-      env {
-        name  = "SPRING_DATASOURCE_DRIVERCLASSNAME"
-        value = "org.postgresql.Driver"
-      }
-      env {
-        name  = "SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT"
-        value = "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect"
-      }
-      env {
-        name  = "HAPI_FHIR_VERSION"
-        value = "R4"
-      }
-    }
-  }
-
-  # external_enabled defaults to false (internal-only, like sqlserver/redis) — flip on with
-  # var.hapi_terminology_external_access, or implicitly by setting hapi_terminology_custom_domain
-  # (Container Apps custom domains require external ingress). transport is "auto" rather than the
-  # "tcp" sqlserver/redis use because HAPI serves plain HTTP/REST, both internally and externally.
-  ingress {
-    external_enabled = var.hapi_terminology_external_access || var.hapi_terminology_custom_domain != ""
-    target_port      = 8080
-    transport        = "auto"
-
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-}
-
 # --- FHIRBridge app (Api + Gateway), public ---
 
 resource "azurerm_container_app" "fhirbridge_app" {
@@ -640,9 +624,9 @@ resource "azurerm_container_app" "fhirbridge_app" {
   revision_mode                = "Single"
   tags                         = local.common_tags
 
-  # Connection strings reference sqlserver/redis/hapi-terminology by their plain (predictable) name
-  # rather than a resource attribute, so this dependency has to be spelled out explicitly.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.hapi_terminology]
+  # Connection strings reference sqlserver/redis by their plain (predictable) name rather than a
+  # resource attribute, so this dependency has to be spelled out explicitly.
+  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
 
   # System-assigned so DefaultAzureCredential (AzureKeyVaultSecretProvider/Writer) can authenticate
   # to the tenant secrets Key Vault with no credential material to manage. Added unconditionally —
@@ -732,10 +716,6 @@ resource "azurerm_container_app" "fhirbridge_app" {
         name  = "AllowedHosts"
         value = "*"
       }
-      env {
-        name  = "Terminology__BaseUrl"
-        value = "http://${local.hapi_terminology_name}:8080/fhir"
-      }
       # See enable_tenant_secrets_key_vault's description — only emitted when that flag is set, so a
       # deployment that leaves it false keeps today's local-DB-only secret storage untouched.
       dynamic "env" {
@@ -756,7 +736,14 @@ resource "azurerm_container_app" "fhirbridge_app" {
         for_each = var.enable_tenant_secrets_key_vault ? [1] : []
         content {
           name  = "KeyVault__VaultName"
-          value = data.azurerm_key_vault.tenant_secrets[0].vault_uri
+          value = azurerm_key_vault.tenant_secrets[0].vault_uri
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "DataProtection__KeyVaultKeyId"
+          value = azurerm_key_vault_key.dataprotection[0].id
         }
       }
 
@@ -886,15 +873,6 @@ resource "azurerm_container_app_custom_domain" "demo_app" {
   container_app_environment_certificate_id = null
 }
 
-resource "azurerm_container_app_custom_domain" "hapi_terminology" {
-  count            = var.hapi_terminology_custom_domain != "" ? 1 : 0
-  name             = var.hapi_terminology_custom_domain
-  container_app_id = azurerm_container_app.hapi_terminology.id
-
-  certificate_binding_type                 = "Disabled"
-  container_app_environment_certificate_id = null
-}
-
 # --- Worker (no ingress) ---
 
 resource "azurerm_container_app" "worker" {
@@ -907,7 +885,7 @@ resource "azurerm_container_app" "worker" {
   # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
   # on boot and can race on the initial CREATE DATABASE on a fresh database. Container Apps
   # replaces crashed replicas automatically, which turns a lost race into a self-healing retry.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.hapi_terminology, azurerm_container_app.fhirbridge_app]
+  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
 
   # See the identical block on azurerm_container_app.fhirbridge_app for why this exists.
   identity {
@@ -963,10 +941,6 @@ resource "azurerm_container_app" "worker" {
         name  = "Messaging__Provider"
         value = "InMemory"
       }
-      env {
-        name  = "Terminology__BaseUrl"
-        value = "http://${local.hapi_terminology_name}:8080/fhir"
-      }
       dynamic "env" {
         for_each = var.enable_tenant_secrets_key_vault ? [1] : []
         content {
@@ -985,7 +959,14 @@ resource "azurerm_container_app" "worker" {
         for_each = var.enable_tenant_secrets_key_vault ? [1] : []
         content {
           name  = "KeyVault__VaultName"
-          value = data.azurerm_key_vault.tenant_secrets[0].vault_uri
+          value = azurerm_key_vault.tenant_secrets[0].vault_uri
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_tenant_secrets_key_vault ? [1] : []
+        content {
+          name  = "DataProtection__KeyVaultKeyId"
+          value = azurerm_key_vault_key.dataprotection[0].id
         }
       }
     }
@@ -1026,22 +1007,17 @@ locals {
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
     "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
     "azurerm_storage_share.redis_data                      = ${azurerm_storage_share.redis_data.id}",
-    "azurerm_storage_share.hapi_terminology_data           = ${azurerm_storage_share.hapi_terminology_data.id}",
     "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
     "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
     "azurerm_container_app_environment_storage.redis_data  = ${azurerm_container_app_environment_storage.redis_data.id}",
-    "azurerm_container_app_environment_storage.hapi_terminology_data = ${azurerm_container_app_environment_storage.hapi_terminology_data.id}",
     "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",
     "azurerm_key_vault_secret.jwt_signing_key              = ${azurerm_key_vault_secret.jwt_signing_key.id}",
     "azurerm_key_vault_secret.redis_password               = ${azurerm_key_vault_secret.redis_password.id}",
-    "azurerm_key_vault_secret.hapi_terminology_postgres_password = ${azurerm_key_vault_secret.hapi_terminology_postgres_password.id}",
     "azurerm_container_app.sqlserver                       = ${azurerm_container_app.sqlserver.id}",
     "azurerm_container_app.redis                           = ${azurerm_container_app.redis.id}",
-    "azurerm_container_app.hapi_terminology_postgres       = ${azurerm_container_app.hapi_terminology_postgres.id}",
-    "azurerm_container_app.hapi_terminology                = ${azurerm_container_app.hapi_terminology.id}",
     "azurerm_container_app.fhirbridge_app                  = ${azurerm_container_app.fhirbridge_app.id}",
     "azurerm_container_app.demo_app                        = ${azurerm_container_app.demo_app.id}",
     "azurerm_container_app.worker                          = ${azurerm_container_app.worker.id}",
