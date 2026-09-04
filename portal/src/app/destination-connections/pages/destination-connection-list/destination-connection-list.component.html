@@ -90,18 +90,6 @@
             <td mat-cell *matCellDef="let d"><span class="type-badge">{{ d.destinationType }}</span></td>
           </ng-container>
 
-          <ng-container matColumnDef="target">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('target')">
-              Target
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'target'">
-                {{ sortColumn() === 'target' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-target" [matTooltip]="d.target || ''">{{ d.target || '—' }}</span>
-            </td>
-          </ng-container>
-
           <ng-container matColumnDef="isEnabled">
             <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
               Status
@@ -139,6 +127,7 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let d" class="col-actions">
               <div class="actions-cell">
+                @if (hasRowMenu(d)) {
                 <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
                   <mat-icon>more_vert</mat-icon>
                 </button>
@@ -167,6 +156,7 @@
                         : 'Delete' }}
                   </button>
                 </mat-menu>
+                }
               </div>
             </td>
           </ng-container>

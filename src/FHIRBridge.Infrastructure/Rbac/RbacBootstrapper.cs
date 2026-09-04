@@ -223,6 +223,7 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
             _dbContext.Roles.Add(
                 new Role(seed.Id, seed.Name, seed.Description, isSystem: true, isDefault: false));
+            roleIdSet.Add(seed.Id);
         }
 
         var existingLinks = await _dbContext.PermissionAllocations
@@ -235,6 +236,16 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
 
         foreach (var (roleId, seedPermissionIds) in RbacSeedData.RolePermissions)
         {
+            // SystemRoleDefaultPermissions.Grants documents default grants for roles that are no longer all
+            // auto-seeded (see RbacSeedData.Roles) — only apply an entry here if that role actually exists
+            // (either it was just seeded above, or an already-provisioned database still has it from before).
+            // Without this guard, a brand-new database would hit a foreign-key violation trying to grant
+            // permissions to an Admin/Operations/Audit role id that was never inserted into Roles.
+            if (!roleIdSet.Contains(roleId))
+            {
+                continue;
+            }
+
             foreach (var seedPermissionId in seedPermissionIds)
             {
                 var actualPermissionId = actualPermissionIdBySeedId.GetValueOrDefault(seedPermissionId, seedPermissionId);

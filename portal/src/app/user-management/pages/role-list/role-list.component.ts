@@ -13,7 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { IRoleService } from '../../services/i-role.service';
-import { Role } from '../../../auth/models/user.model';
+import { Role, SUPER_ADMIN_ROLE_NAME } from '../../../auth/models/user.model';
 import { RoleDialogComponent } from '../../dialogs/role-dialog/role-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
@@ -166,6 +166,13 @@ export class RoleListComponent implements OnInit {
 
   openPermissions(role: Role): void {
     this.router.navigate(['/user-management/roles', role.id, 'permissions']);
+  }
+
+  /** Only SuperAdmin is non-deletable — every other role (built-in or custom) can be deleted once no
+   *  user holds it (enforced server-side too). Distinct from `isSystemRole`, which still locks
+   *  name/description editing for Admin/Operations/Audit but no longer blocks deletion. */
+  isSuperAdmin(role: Role): boolean {
+    return role.name === SUPER_ADMIN_ROLE_NAME;
   }
 
   confirmDelete(role: Role): void {

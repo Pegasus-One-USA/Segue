@@ -1,13 +1,21 @@
 <div class="invite-result">
   <div class="invite-result__header">
-    <div class="invite-result__icon">
-      <mat-icon>mark_email_read</mat-icon>
+    <div class="invite-result__icon" [class.invite-result__icon--warning]="!data.emailSent">
+      <mat-icon>{{ data.emailSent ? 'mark_email_read' : 'mark_email_unread' }}</mat-icon>
     </div>
     <div class="invite-result__text">
-      <h2 mat-dialog-title>Invitation ready</h2>
-      <p class="invite-result__sub">
-        Share this secure link with <strong>{{ data.email }}</strong> so they can set their password.
-      </p>
+      @if (data.emailSent) {
+        <h2 mat-dialog-title>Invitation ready</h2>
+        <p class="invite-result__sub">
+          Share this secure link with <strong>{{ data.email }}</strong> so they can set their password.
+        </p>
+      } @else {
+        <h2 mat-dialog-title>User created, email not sent</h2>
+        <p class="invite-result__sub">
+          <strong>{{ data.email }}</strong> was created, but the invitation email failed to send. Share the
+          link below with them directly, or use "Resend Invitation" from the user list later.
+        </p>
+      }
     </div>
   </div>
 

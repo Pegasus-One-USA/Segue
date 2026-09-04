@@ -126,7 +126,8 @@
                   <button
                     mat-menu-item
                     class="menu-item-danger"
-                    [disabled]="r.isSystemRole"
+                    [disabled]="isSuperAdmin(r)"
+                    [matTooltip]="isSuperAdmin(r) ? 'The SuperAdmin role cannot be deleted.' : ''"
                     *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Delete)"
                     (click)="confirmDelete(r)">
                     <mat-icon>delete_outline</mat-icon>
