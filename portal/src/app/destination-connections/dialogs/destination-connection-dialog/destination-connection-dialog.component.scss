@@ -97,6 +97,9 @@ mat-dialog-content.dcd-content {
   width: 100%;
   padding: 0 !important;
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .dcd-body {

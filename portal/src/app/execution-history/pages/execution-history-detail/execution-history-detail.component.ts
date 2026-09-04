@@ -227,7 +227,8 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     return {
       Pending: 'Pending',
       Running: 'Running',
-      AwaitingBulkExport: 'Awaiting Bulk Export',
+      // Shown as plain "Running" — same reasoning as ExecutionHistoryListComponent.statusLabel.
+      AwaitingBulkExport: 'Running',
       Succeeded: 'Succeeded',
       PartialSuccess: 'Partial Success',
       Failed: 'Failed',

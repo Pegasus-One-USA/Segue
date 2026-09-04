@@ -19,7 +19,9 @@
           <span class="status-badge" [class]="statusClass(ex.status)">
             <span class="status-dot"></span>{{ statusLabel(ex.status) }}
           </span>
-          @if (ex.status === 'Running') {
+          <!-- AwaitingBulkExport is a still-in-flight run shown as "Running", and it's the longest-lived state
+               there is (a bulk $export can run for hours), so it needs Cancel more than anything else. -->
+          @if (ex.status === 'Running' || ex.status === 'AwaitingBulkExport') {
             <button class="btn-cancel-run" type="button" [disabled]="cancelling()" (click)="cancelRun()">
               <mat-icon>cancel</mat-icon>
               {{ cancelling() ? 'Cancelling…' : 'Cancel Run' }}

@@ -89,6 +89,12 @@ export class DestinationConnectionListComponent implements OnInit {
     return this.hasHistory(item) || this.permissions.hasPermission(this.editCode(item));
   }
 
+  /** Whether this row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
+   *  neither edit nor delete on this row should never see an empty kebab menu. */
+  hasRowMenu(item: DestinationConfigurationDto): boolean {
+    return this.canOpenEntity(item) || this.permissions.hasAll(this.deleteCodes(item));
+  }
+
   readonly searchQuery = signal('');
   readonly typeFilter = signal<DestinationType | ''>('');
   readonly statusFilter = signal<'' | 'true' | 'false'>('');
@@ -106,7 +112,7 @@ export class DestinationConnectionListComponent implements OnInit {
    *  Delete independently of historyById (a never-run destination can still be wired into a live workflow). */
   readonly usedInWorkflowIds = signal<Set<string>>(new Set());
 
-  readonly displayedCols = ['actions', 'name', 'destinationType', 'target', 'isEnabled', 'actionBy', 'actionOn'];
+  readonly displayedCols = ['actions', 'name', 'destinationType', 'isEnabled', 'actionBy', 'actionOn'];
 
   /** Only one sortable column today — "Action on" — server-driven since this list is server-paged. */
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
@@ -279,12 +285,12 @@ export class DestinationConnectionListComponent implements OnInit {
   private _openDialog(data: DestinationConnectionDialogData, successMessage: string): void {
     this.customDialog
       .open<DestinationConnectionDialogComponent, DestinationConnectionDialogData, DestinationConfigurationDto | false>(DestinationConnectionDialogComponent, {
-        // Centered, FIXED-width card — same treatment as Add Role/Invite User (560px) and the big
-        // user-edit dialog (820px), just wider to fit the type-choice grid and per-type connection
-        // forms. A vw-relative width (the old `min(92vw, 1100px)`) leaves almost no backdrop margin on
-        // a typical laptop-width window, unlike every other dialog in the app — a fixed px width keeps
-        // the same comfortable margin regardless of window size.
-        width: '820px',
+        // Edge-to-edge, full content-area panel — same treatment Source Connection's "New" screen
+        // uses (NodeLibraryDialogComponent's `.nld`), so the type-choice grid and per-type connection
+        // forms (which can run long, e.g. Medplum) get the full viewport height with proper internal
+        // scrolling instead of being clipped inside a small fixed-width centered card.
+        fillContent: true,
+        maximizable: true,
         disableClose: true,
         data,
       })

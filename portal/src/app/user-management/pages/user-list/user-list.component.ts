@@ -308,7 +308,11 @@ export class UserListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: res => {
-          this.toast.success(`Invitation resent to "${user.email}".`);
+          if (res.emailSent) {
+            this.toast.success(`Invitation resent to "${user.email}".`);
+          } else {
+            this.toast.warning(`Invitation token refreshed for "${user.email}", but the email failed to send.`);
+          }
           this.customDialog.open<InviteResultDialogComponent, InviteResult, void>(InviteResultDialogComponent, {
             width: '540px', data: res,
           });

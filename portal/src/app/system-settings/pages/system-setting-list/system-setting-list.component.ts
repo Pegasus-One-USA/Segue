@@ -220,60 +220,29 @@ export class SystemSettingListComponent implements OnInit {
     return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null;
   }
 
-  private subGroupCodes(rows: SystemSetting[], isTerminology: boolean): Set<string> {
-    const codes = new Set<string>();
-    for (const s of rows) {
-      const groupInfo = SystemSettingListComponent.subGroupOf(s.key, isTerminology);
-      if (groupInfo) codes.add(groupInfo.code);
-    }
-    return codes;
-  }
-
   readonly groupedRows = computed<GroupedRow[]>(() => {
     const rows = this.filtered();
     const collapsed = this.collapsedCodes();
-    const terminology = rows.filter(s => s.key.startsWith('Terminology:'));
+    // "Terminology:*" settings no longer render here — this page (General) is not the right place
+    // for them; they're managed under Settings > System Settings > Terminology Codes instead (that
+    // route/its dedicated per-code-system pages were never removed, just unlinked from nav — restore
+    // system-settings-shell.component.ts's commented-out 'Terminology Codes' nav entry to reach them).
     const other = rows.filter(s => !s.key.startsWith('Terminology:'));
 
     const result: GroupedRow[] = [];
-    if (terminology.length) {
-      result.push({ isGroupHeader: true, label: 'Terminology Settings' });
-      result.push(...this.buildSection(terminology, true, collapsed));
-    }
     if (other.length) {
       result.push(...this.buildSection(other, false, collapsed));
     }
     return result;
   });
 
-  readonly terminologyCodes = computed(() =>
-    this.subGroupCodes(this.filtered().filter(s => s.key.startsWith('Terminology:')), true));
-
-  readonly allTerminologyCollapsed = computed(() => {
-    const codes = this.terminologyCodes();
-    if (codes.size === 0) return true;
-    const collapsed = this.collapsedCodes();
-    return [...codes].every(code => collapsed.has(code));
-  });
-
+  // Reusable scaffolding for a future collapsible terminology-style grouping (see subGroupOf/
+  // buildSection's isTerminology branch) — not currently invoked, since Terminology Settings no
+  // longer renders on this page (see groupedRows()).
   toggleCode(code: string): void {
     this.collapsedCodes.update(set => {
       const next = new Set(set);
       next.has(code) ? next.delete(code) : next.add(code);
-      return next;
-    });
-  }
-
-  toggleAllTerminology(): void {
-    this.toggleAllFor(this.terminologyCodes(), this.allTerminologyCollapsed());
-  }
-
-  private toggleAllFor(codes: Set<string>, currentlyAllCollapsed: boolean): void {
-    this.collapsedCodes.update(set => {
-      const next = new Set(set);
-      for (const code of codes) {
-        currentlyAllCollapsed ? next.delete(code) : next.add(code);
-      }
       return next;
     });
   }

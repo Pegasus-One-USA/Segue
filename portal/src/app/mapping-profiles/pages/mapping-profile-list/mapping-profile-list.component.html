@@ -159,6 +159,7 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let m" class="col-actions">
               <div class="actions-cell">
+                @if (hasRowMenu()) {
                 <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
                   <mat-icon>more_vert</mat-icon>
                 </button>
@@ -178,6 +179,7 @@
                     {{ isUsedInWorkflow(m) ? 'Cannot delete — referenced by a workflow' : 'Delete' }}
                   </button>
                 </mat-menu>
+                }
               </div>
             </td>
           </ng-container>

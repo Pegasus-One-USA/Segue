@@ -23,6 +23,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly ISystemSettingsCache _settingsCache;
     private readonly LocalAuthOptions _localAuthOptions;
     private readonly ITenantRepository _tenantRepository;
+    private readonly IAllowedCorsOriginsCache? _allowedOriginsCache;
 
     public LocalAuthService(
         IUserAccessRepository repository,
@@ -34,7 +35,8 @@ public sealed class LocalAuthService : ILocalAuthService
         IGovernanceLogger governanceLogger,
         ISystemSettingsCache settingsCache,
         IOptions<LocalAuthOptions> localAuthOptions,
-        ITenantRepository tenantRepository)
+        ITenantRepository tenantRepository,
+        IAllowedCorsOriginsCache? allowedOriginsCache = null)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -46,6 +48,7 @@ public sealed class LocalAuthService : ILocalAuthService
         _settingsCache = settingsCache;
         _localAuthOptions = localAuthOptions.Value;
         _tenantRepository = tenantRepository;
+        _allowedOriginsCache = allowedOriginsCache;
     }
 
     private async Task<(int MaxFailedAttempts, int LockoutMinutes)> ResolveLockoutPolicyAsync(
@@ -240,11 +243,22 @@ public sealed class LocalAuthService : ILocalAuthService
         // exception from reaching the controller and turning into a 500.
         try
         {
-            await _emailSender.SendAsync(
+            var resetLink = await BuildResetLinkAsync(email, token, cancellationToken);
+            var handedToSmtp = await _emailSender.SendAsync(
                 email,
                 "Reset your Segue password",
-                BuildPasswordResetEmailBody(user.DisplayName, BuildResetLink(email, token), expiresOnUtc),
+                BuildPasswordResetEmailBody(user.DisplayName, resetLink, expiresOnUtc),
                 cancellationToken);
+
+            if (!handedToSmtp)
+            {
+                // Not an exception — email sending is OFF/unconfigured (see IEmailSender.SendAsync's
+                // contract). Still logged as a security event (never as a distinct response — see the
+                // anti-enumeration note above) so this doesn't silently vanish the way it did before.
+                await _governanceLogger.LogSecurityEventAsync(
+                    new SecurityEventEntry("PasswordResetEmailDeliveryFailed", "Medium", email, "EmailSendingDisabled"),
+                    cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -544,8 +558,17 @@ public sealed class LocalAuthService : ILocalAuthService
         return email.Trim().ToLowerInvariant();
     }
 
-    private string BuildResetLink(string email, string token)
+    // Same reasoning as UserManagementService.BuildInviteLinkAsync: prefer the calling browser's own
+    // (allowlist-validated) origin over the static LocalAuth:PasswordResetUrlTemplate config, so the
+    // emailed reset link always points at whatever portal the requester is actually using.
+    private async Task<string> BuildResetLinkAsync(string email, string token, CancellationToken cancellationToken)
     {
+        var origin = await ResolveTrustedPortalOriginAsync(cancellationToken);
+        if (origin is not null)
+        {
+            return $"{origin}/auth/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(email)}";
+        }
+
         var template = _localAuthOptions.PasswordResetUrlTemplate;
         if (string.IsNullOrWhiteSpace(template))
         {
@@ -555,6 +578,18 @@ public sealed class LocalAuthService : ILocalAuthService
         return template
             .Replace("{token}", Uri.EscapeDataString(token))
             .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private async Task<string?> ResolveTrustedPortalOriginAsync(CancellationToken cancellationToken)
+    {
+        var origin = _currentUserService.CurrentUser.RequestOrigin;
+        if (string.IsNullOrWhiteSpace(origin) || _allowedOriginsCache is null)
+        {
+            return null;
+        }
+
+        var allowedOrigins = await _allowedOriginsCache.GetOriginsAsync(cancellationToken);
+        return allowedOrigins.Contains(origin) ? origin : null;
     }
 
     private static string BuildPasswordResetEmailBody(string? displayName, string resetLinkOrToken, DateTime expiresOnUtc)

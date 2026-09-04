@@ -142,7 +142,7 @@
       <!-- Nothing to offer here at all when there's neither a real probed schema to pick an existing
            table from, nor authoring rights to create a new one (nor, for Mongo, its own no-schema-needed
            add-collection picker — see showAddTablePicker()). -->
-      @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled())) {
+      @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled() || showSchemaLoadNotice())) {
       <div class="fm-add-table-slot">
         @if (showAddTablePicker()) {
           <button
@@ -200,11 +200,30 @@
             </div>
           }
         } @else {
-          <button
-            type="button"
-            class="fm-add-table-select fm-add-table-createbtn"
-            (click)="openCreateTableModal(primaryResource)"
-          >＋ Create a new table…</button>
+          <!-- Without this, a schema read that failed (or never ran) looks exactly like a database with no
+               tables in it — the "Create a new table…" button below would be the only thing on screen, and
+               every table that really does exist would be silently unreachable. -->
+          @if (showSchemaLoadNotice()) {
+            @if (schemaLoadState() === 'loading') {
+              <div class="fm-schema-notice">Loading tables from your database…</div>
+            } @else {
+              <div class="fm-schema-notice fm-schema-notice--error">
+                <span>
+                  {{ schemaLoadState() === 'unavailable'
+                     ? "Existing tables aren't listed — this destination has no saved connection to read them through. Re-enter its details in Configure, then retry."
+                     : "Existing tables aren't listed — this destination's tables couldn't be loaded." }}
+                </span>
+                <button type="button" class="fm-schema-notice-retry" (click)="retrySchemaLoad.emit()">Retry</button>
+              </div>
+            }
+          }
+          @if (schemaAuthoringEnabled()) {
+            <button
+              type="button"
+              class="fm-add-table-select fm-add-table-createbtn"
+              (click)="openCreateTableModal(primaryResource)"
+            >＋ Create a new table…</button>
+          }
         }
       </div>
       }

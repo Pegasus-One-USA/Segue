@@ -156,6 +156,14 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
     return ['sourceconnections.delete', `${c.sourceSystemType.toLowerCase()}.delete`];
   }
 
+  /** Whether this row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
+   *  none of View/Edit/Delete on this row should never see an empty kebab menu. */
+  hasRowMenu(c: SourceConnectionModel): boolean {
+    return this.permissions.hasPermission('sourceconnections.view')
+      || this.permissions.hasPermission(this.vendorEditCode(c))
+      || this.permissions.hasAll(this.deleteCodes(c));
+  }
+
   /** Which registered per-vendor form to render for the currently-open entity-mode dialog — driven by
    *  wiz.ehrType() (seeded from the row being viewed/edited, or from addVendor() for a brand-new connection; see
    *  openAdd()). Falls back to 'epic' for a legacy row persisted under a vendor with no dedicated entity-mode

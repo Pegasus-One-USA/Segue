@@ -39,8 +39,9 @@
           <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
+            <!-- No separate "Awaiting Bulk Export" option: the API's Running filter also returns AwaitingBulkExport
+                 runs (see WorkflowEndpoints' /workflow-runs status filter), matching how they're labelled here. -->
             <option value="Running">Running</option>
-            <option value="AwaitingBulkExport">Awaiting Bulk Export</option>
             <option value="Succeeded">Succeeded</option>
             <option value="PartialSuccess">Partial Success</option>
             <option value="Failed">Failed</option>

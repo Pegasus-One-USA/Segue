@@ -60,6 +60,13 @@ export class MappingProfileListComponent implements OnInit {
   private readonly actionGuard = inject(PermissionActionGuard);
   readonly permissions         = inject(PermissionService);
 
+  /** Whether a row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
+   *  neither edit nor delete should never see an empty kebab menu. */
+  hasRowMenu(): boolean {
+    return this.permissions.hasPermission('mappingprofiles.edit')
+      || this.permissions.hasPermission('mappingprofiles.delete');
+  }
+
   readonly searchQuery = signal('');
   readonly resourceTypeFilter = signal('');
   readonly statusFilter = signal<'' | 'true' | 'false'>('');

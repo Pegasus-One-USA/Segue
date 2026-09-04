@@ -1586,7 +1586,16 @@ public static class WorkflowEndpoints
 
             if (!string.IsNullOrWhiteSpace(status))
             {
-                items = items.Where(x => string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)).ToList();
+                // AwaitingBulkExport is non-terminal — a node deferred to an async $export job while the run is
+                // still in flight — so the portal presents it as "Running" and /workflow-runs/stats already counts
+                // it in the Running tile. Filtering must agree: an exact-match-only filter here is what made the
+                // Dashboard's Running count not match what clicking that tile actually listed.
+                var matchesAwaitingAsRunning = string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)
+                    || (matchesAwaitingAsRunning
+                        && string.Equals(x.Status, "AwaitingBulkExport", StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
             }
 
             if (!string.IsNullOrWhiteSpace(source))

@@ -105,8 +105,16 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(x => x.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Filtered by soft-delete for the same reason IX_EhrEndpoints_Vendor_VendorEndpointId and
+        // IX_AllowedCorsOrigins_OriginUrl are: without the filter, soft-deleting a user (e.g. cleaning up
+        // a stray/orphaned invite) leaves its ExternalUserId — deterministically "local:{email}" for local
+        // accounts — permanently reserved in the DB-level unique index, even though the app-level duplicate
+        // check (which does respect the global IsDeleted query filter) reports the email as free. Re-inviting
+        // that exact email then always fails with an opaque 500 (Postgres 23505 on IX_Users_ExternalUserId)
+        // that the invite guard's friendly "already exists" message never gets a chance to catch.
         builder.HasIndex(x => x.ExternalUserId)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
 
         builder.HasIndex(x => x.Email);
 

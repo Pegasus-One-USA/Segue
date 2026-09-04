@@ -216,6 +216,9 @@ export interface UserDetailDto {
   mustSetupMfa:              boolean;
   invitationToken?:          string;
   mfaEnabled:                boolean;
+  /** False when this response comes from an invite/resend call whose email failed to send. Absent on a
+   *  plain user read (the backend defaults it to true there — not meaningful outside the invite flow). */
+  invitationEmailSent?:      boolean;
 }
 
 /** Result of an invite / resend-invite call, surfaced to the UI so it can show the invite link. */
@@ -226,6 +229,9 @@ export interface InviteResult {
   invitationToken?: string;
   /** Absolute link the invited user should open to set their password. */
   invitationLink?:  string;
+  /** False when the user was created but the invitation email itself failed to send (e.g. SMTP down) —
+   *  the token/link above is still valid, but the admin must relay it manually or use Resend Invitation. */
+  emailSent:        boolean;
 }
 
 /**
