@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -54,8 +54,49 @@ public sealed class SourceJwksService : ISourceJwksService
 
         var privateKeyPem = await _secretProvider.GetSecretAsync(privateKeyReference, cancellationToken);
 
+        // The connection stores only a REFERENCE to the key, so a connection can be saved (and its JWKS URL handed
+        // to the EHR) while the slot it points at was never populated — e.g. a hand-entered vault/secret name whose
+        // value only exists as an appsettings placeholder. Diagnose that here, naming the connection and the exact
+        // (vault, secret), the same way SourceConnectionRuntimeResolver does before signing an assertion.
+        SigningKeySecretGuard.EnsurePemShaped(privateKeyPem, privateKeyReference, sourceConnection.Name);
+
         using var rsa = RSA.Create();
-        rsa.ImportFromPem(privateKeyPem);
+        try
+        {
+            rsa.ImportFromPem(privateKeyPem);
+        }
+        catch (Exception exception) when (exception is CryptographicException or ArgumentException)
+        {
+            // PEM-shaped (EnsurePemShaped passed) but not importable — a truncated block, wrong PEM label, or a
+            // non-RSA key. Says nothing about the value: it is key material whenever it is valid.
+            throw new InvalidOperationException(
+                $"The signing key for source connection '{sourceConnection.Name}' could not be read as an RSA " +
+                $"private key. Secret '{privateKeyReference.SecretName}' in '{privateKeyReference.KeyVaultName}' " +
+                "contains a PEM block that is truncated, encrypted, or not an RSA private key. Re-provision it via " +
+                "the Generate/Import signing-key source, then register this JWKS URL with the EHR again.",
+                exception);
+        }
+
+        // ImportFromPem accepts a public-key or certificate PEM without error, and the public parameters below
+        // would then export a JWKS that looks perfectly valid — while FHIRBridge holds no private key to actually
+        // sign assertions with, so the EHR only discovers the problem at token time. SigningKeyGenerationService
+        // rejects a public key on import for the same reason; this catches one populated into the reference by
+        // hand. Only a key with its private component present can export one.
+        try
+        {
+            rsa.ExportParameters(includePrivateParameters: true);
+        }
+        catch (CryptographicException exception)
+        {
+            throw new InvalidOperationException(
+                $"The signing key for source connection '{sourceConnection.Name}' is a public key or certificate, " +
+                $"not a private key. Secret '{privateKeyReference.SecretName}' in " +
+                $"'{privateKeyReference.KeyVaultName}' must hold the RSA PRIVATE key FHIRBridge signs assertions " +
+                "with — this endpoint derives the public half to publish. Re-provision it via the Generate/Import " +
+                "signing-key source.",
+                exception);
+        }
+
         var parameters = rsa.ExportParameters(includePrivateParameters: false);
 
         var key = new JsonWebKeyDto(

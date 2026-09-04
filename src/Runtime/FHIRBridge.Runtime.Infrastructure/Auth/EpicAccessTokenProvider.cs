@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.Runtime.Domain.Enums;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
@@ -35,7 +36,7 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             return cachedToken;
         }
 
-        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
+        var scopes = ResolveScopeString(source);
         var clientAssertion = _jwtFactory.CreateClientAssertion(new BackendServicesJwtRequest(
             source.ClientId!,
             source.TokenEndpoint!,
@@ -97,8 +98,25 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
 
     private static string BuildCacheKey(FhirSourceConfiguration source)
     {
-        var scopes = source.Scopes.Count == 0 ? "system/*.read" : string.Join(' ', source.Scopes);
-        return $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+        return $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{ResolveScopeString(source)}";
+    }
+
+    /// <summary>
+    /// The space-joined <c>scope</c> for this source, falling back to the vendor's system wildcard when no scopes
+    /// were resolved at all (SourceConnectionRuntimeResolver normally regenerates them, so this is the
+    /// nothing-configured path). The wildcard is vendor-specific: SMART has no literal <c>*.*</c> access level, and
+    /// eClinicalWorks publishes <c>system/*.r</c> ONLY — it advertises no <c>system/*.read</c> at all, so the Epic
+    /// spelling would be rejected outright with <c>invalid_grant</c>. Every other vendor keeps <c>system/*.read</c>,
+    /// unchanged.
+    /// </summary>
+    private static string ResolveScopeString(FhirSourceConfiguration source)
+    {
+        if (source.Scopes.Count > 0)
+        {
+            return string.Join(' ', source.Scopes);
+        }
+
+        return source.SourceType == RuntimeSourceType.Healow ? "system/*.r" : "system/*.read";
     }
 
     private static void ValidateSource(FhirSourceConfiguration source)

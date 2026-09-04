@@ -290,6 +290,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             var nodeOutputFormatToken = ReadStringConfiguration(node, "FHIR output format");
             var nodePatientIds = (ReadStringConfiguration(node, "Patient ID / list") ?? string.Empty)
                 .Split([',', '\n', '\r', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            // Two retrieval methods write "Patient ID / list": bulk export's patient-scoped $export (a list, keyed
+            // off Export scope) and "single-patient" (at most one id, optional — the wizard's Single Patient
+            // method, which has no Export scope at all). Mirrors workflow-build-assembler.service.ts's
+            // buildRetrieval() gating exactly, so both paths agree on when a node's ids are meaningful.
+            var nodeCarriesPatientIds =
+                string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(nodeRetrievalMethod, "single-patient", StringComparison.OrdinalIgnoreCase);
 
             source = source with
             {
@@ -298,13 +305,30 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 GroupId = string.Equals(nodeExportScope, "group", StringComparison.OrdinalIgnoreCase)
                     ? BulkExportGroupIds.ResolveAthenahealthGroupId(source.SourceType, ReadStringConfiguration(node, "Group ID"), source.PracticeId)
                     : null,
-                PatientIds = string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase) && nodePatientIds.Length > 0
+                PatientIds = nodeCarriesPatientIds && nodePatientIds.Length > 0
                     ? nodePatientIds
                     : null,
                 OutputFormat = nodeOutputFormatToken is { Length: > 0 } token && token.StartsWith("ndjson", StringComparison.OrdinalIgnoreCase)
                     ? "application/fhir+ndjson"
                     : null,
             };
+        }
+
+        // "single-patient" retrieval (eCW's Backend Single Patient API) means every request must be scoped to one
+        // patient. The wizard's Patient ID field is optional so a connection can be drafted without it, but a RUN
+        // with no patient id resolved from anywhere is not a narrower fetch — it is an unscoped, tenant-wide search
+        // issued under system/ scopes. Fail loudly here instead: the searches would either return another patient's
+        // data (where the server allows it) or 403 per resource type (where it does not), and neither outcome should
+        // be reachable by leaving a field blank. Only this retrieval method is affected; every other one is
+        // untouched.
+        if (string.Equals(source.RetrievalMethod, "single-patient", StringComparison.OrdinalIgnoreCase)
+            && source.PatientIds is not { Count: > 0 }
+            && string.IsNullOrWhiteSpace(source.TargetPatientId))
+        {
+            throw new InvalidOperationException(
+                $"Source node '{node.Id}' ({node.NodeType}) uses the Single Patient retrieval method but no Patient " +
+                "ID is configured, so every request would be an unscoped tenant-wide search. Set the Patient ID on " +
+                "the source node's Retrieval Configuration.");
         }
 
         var client = _sourceClientFactory.Create(
@@ -670,6 +694,16 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             }
         }
 
+        // Data the connector lost WITHOUT failing the call — a fan-out category the source rejected, or a page cap
+        // cutting a paged fetch short. Neither throws, so nothing above would otherwise notice: the resource list
+        // looks identical whether it holds everything or a fraction. Folding these into the same
+        // skippedResourceTypes the scope-skips above use routes them through RankedWorkflowOrchestrator's existing
+        // WorkflowRunStatus.PartialSuccess aggregation, so a short extraction stops reporting as a clean success.
+        if (client is IResourceExtractionDiagnostics extractionDiagnostics)
+        {
+            skippedResourceTypes.AddRange(extractionDiagnostics.DrainIncompleteReasons());
+        }
+
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
         {
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
@@ -957,22 +991,25 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
         for (var attempt = 1; ; attempt++)
         {
-            using var timeoutCts = effectiveSource.TimeoutSeconds is { } timeoutSeconds
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                : null;
-            timeoutCts?.CancelAfter(TimeSpan.FromSeconds(effectiveSource.TimeoutSeconds!.Value));
-
             try
             {
-                var result = await client.SearchAsync(resourceType, effectiveSource, timeoutCts?.Token ?? cancellationToken);
+                // No wall-clock budget around SearchAsync. It pages through the whole resource type, so a
+                // CancelAfter here was a CUMULATIVE deadline across every page: a source returning healthy pages
+                // in a few seconds each would blow it partway through and the in-flight page died mid-socket
+                // (TaskCanceledException -> IOException -> SocketException), which reads like a network fault but
+                // was self-inflicted. TimeoutSeconds is enforced per request inside the connector instead (see
+                // FhirSourceConnectorBase.SendWithRetryAsync), so a STALLED request is still cancelled promptly
+                // while a slow-but-progressing extraction runs to completion; total volume stays bounded by
+                // MaxPages/MaxRecordsPerRun.
+                var result = await client.SearchAsync(resourceType, effectiveSource, cancellationToken);
                 return result;
             }
             catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure
                 && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
-                // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a
-                // transient failure the connector's own retries didn't recover from — back off and try the whole
-                // resource-type fetch again.
+                // The outer token is still live, so whatever was caught is either a per-request timeout the
+                // connector's own retries didn't recover from, or another transient failure — back off and try the
+                // whole resource-type fetch again.
                 var delay = source.RetryPolicy == "exponential"
                     ? TimeSpan.FromSeconds(Math.Pow(2, attempt - 1))
                     : TimeSpan.FromSeconds(1);

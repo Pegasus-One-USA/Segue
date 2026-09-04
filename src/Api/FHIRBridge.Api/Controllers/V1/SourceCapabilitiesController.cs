@@ -145,7 +145,8 @@ public sealed class SourceCapabilitiesController : ControllerBase
             // Discovery unavailable (source not reachable / misconfigured) — generate without validation.
         }
 
-        var result = _scopeGenerator.Generate(source.ApplicationType, resourceList, version, detected, supported);
+        var result = _scopeGenerator.Generate(
+            source.ApplicationType, resourceList, version, detected, supported, source.SourceSystemType);
         return Ok(result);
     }
 

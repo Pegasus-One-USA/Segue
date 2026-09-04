@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +16,7 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
+import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -162,7 +163,15 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Audience options are the raw ApplicationType enum names (EhrLaunch/Standalone/...) — display the same
    *  friendly label the Audience column already uses; every other category displays its raw value as-is. */
   displayLabelFor(category: FilterCategory, value: string): string {
-    return category === 'audience' ? this.audienceLabel(value) : value;
+    if (category === 'audience') return this.audienceLabel(value);
+    // The filter's VALUE stays the enum member the API filters on; only the text changes.
+    if (category === 'source') return this.sourceSystemLabel(value);
+    return value;
+  }
+
+  /** Brand name for a source system — the Source badge and the Source filter must agree. */
+  sourceSystemLabel(sourceSystemType: string | null | undefined): string {
+    return sourceSystemDisplayName(sourceSystemType);
   }
 
   selectedSetFor(category: FilterCategory): Set<string> {
