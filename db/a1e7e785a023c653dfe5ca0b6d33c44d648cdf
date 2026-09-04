@@ -1,0 +1,88 @@
+src/FHIRBridge.Infrastructure/Rbac/RbacBootstrapper.cs
+  s_569e47a9591572::t_1f08380de73aab 226
+  s_569e47a9591572::t_77f731aa74441f 239-248
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_569e47a9591572::t_5d8103b0c6fecb 92-94,96-97
+  s_569e47a9591572::t_8f78ba4f14670a 95
+  s_569e47a9591572::t_f83fb8b04f77ab 115
+  s_569e47a9591572::t_ae17ce90cb05d3 288-293
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_569e47a9591572::t_a8933883c07983 4451-4452
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.html
+  s_569e47a9591572::t_36af7639dc5833 3-4,7-18
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_569e47a9591572::t_cdd026062596c3 162
+  s_569e47a9591572::t_b6a072c4cc0d72 182
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_569e47a9591572::t_ad0792c102bf3c 159-166
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_569e47a9591572::t_e96807c17f070f 184-187,189
+  s_569e47a9591572::t_41b4c50bbc5f59 228
+  s_569e47a9591572::t_d90956925814a7 231-233,235
+src/FHIRBridge.Application/DTOs/UserDetailDto.cs
+  s_569e47a9591572::t_2712d771216cdf 19-20
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_569e47a9591572::t_d6b1c3ebd684cc 130
+  s_569e47a9591572::t_d2e4ff68c2676d 159
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.ts
+  s_569e47a9591572::t_2441f32e01eb6d 123-128
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_569e47a9591572::t_72ea8a08a42c3f 171-177
+  s_569e47a9591572::t_43a7403f448528 16
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_569e47a9591572::t_e47fdf46165e9a 63-69
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_569e47a9591572::t_198d5072ca2d48 108-114,116
+  s_569e47a9591572::t_893d874bbd82c2 117
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_569e47a9591572::t_1e32574824879f 10
+  s_569e47a9591572::t_736d583530c4f7 173,184,195-198
+  s_569e47a9591572::t_614309b5a5f570 224,235,246
+  s_569e47a9591572::t_a8a48baaa6ac4b 168-172,186-192
+  s_569e47a9591572::t_fcf8330bdbf951 237-243
+  s_569e47a9591572::t_416825b03b04aa 28,39-40,51
+  s_569e47a9591572::t_b35266b1cad6ce 165-167,174-183,185,193
+  s_569e47a9591572::t_61000c27765423 579-580
+  s_569e47a9591572::t_47109392c08015 9
+  s_569e47a9591572::t_3a90ad29166fba 27,38,50
+  s_569e47a9591572::t_edf741638def0b 544-545
+  s_569e47a9591572::t_f3acb060d22b90 222-223,225-234,236,244
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_569e47a9591572::t_39b550676817d4 188
+  s_569e47a9591572::t_6a98e49eb2f85a 215
+portal/src/app/user-management/dialogs/invite-result-dialog/invite-result-dialog.component.scss
+  s_569e47a9591572::t_566857bcc8a2fc 36-40
+portal/src/app/auth/models/user.model.ts
+  s_569e47a9591572::t_129b79b087c5d1 216-218
+  s_569e47a9591572::t_48185b5e3c2601 229-231
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260904120645_FilterUsersExternalUserIdIndexBySoftDelete.Designer.cs
+  s_569e47a9591572::t_a8933883c07983 1-5977
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_569e47a9591572::t_e7238cf5139cf3 208-214
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260904120645_FilterUsersExternalUserIdIndexBySoftDelete.cs
+  s_569e47a9591572::t_a8933883c07983 1-39
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_569e47a9591572::t_070529f2b16516 129-130
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.scss
+  s_569e47a9591572::t_1548a0af1f2dce 100-102
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_569e47a9591572::t_5af7734a9a4dce 313-317
+portal/src/app/auth/services/api-user.service.ts
+  s_569e47a9591572::t_426fc3222e1326 146-148,151-153,160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dba1e7e785a023c653dfe5ca0b6d33c44d648cdf",
+  "prompts": {},
+  "sessions": {
+    "s_569e47a9591572": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e4bfd2b-5859-48de-9457-82c786ac4e83",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
