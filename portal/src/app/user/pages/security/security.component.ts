@@ -20,7 +20,6 @@ export class SecurityComponent {
   protected readonly pwChangeOpen = signal(false);
 
   protected readonly profile   = this.profSvc.profile;
-  protected readonly apiKeys   = this.profSvc.apiKeys;
 
   // ─── MFA (real state via MfaApiService — not the mock profile flag) ────────
   // Enrollment itself is owned by MfaEnrollmentPanelComponent; this page only tracks whether the
@@ -35,8 +34,6 @@ export class SecurityComponent {
   }
 
   togglePwChange(): void { this.pwChangeOpen.update(v => !v); }
-
-  revokeApiKey(id: string): void  { this.profSvc.revokeApiKey(id); }
 
   private refreshMfaStatus(): void {
     this.mfaApi.getStatus().subscribe({

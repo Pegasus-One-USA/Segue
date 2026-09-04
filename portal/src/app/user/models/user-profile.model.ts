@@ -78,13 +78,3 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     permissions: ['View all resources', 'Export audit logs'],
   },
 ];
-
-export interface ApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  scopes: string[];
-  createdAt: string;
-  lastUsed: string;
-  expiresAt: string | null;
-}

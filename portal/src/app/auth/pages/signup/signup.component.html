@@ -155,7 +155,7 @@
         <span>and</span>
         <a href="#" class="terms-link">Privacy Policy</a>
         @if (form.get('acceptTerms')!.disabled) {
-          <div class="terms-hint">Open and scroll through the Terms and Conditions to enable this checkbox.</div>
+          <div class="terms-hint">Open the Terms and Conditions to enable this checkbox.</div>
         } @else if (fieldError('acceptTerms', 'mustBeTrue')) {
           <div class="terms-error">You must accept the terms to continue</div>
         }

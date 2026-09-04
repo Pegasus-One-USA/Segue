@@ -1,4 +1,9 @@
 :host {
   display: block;
-  min-height: 100%;
+  // height, not min-height — same reasoning as settings-shell.component.scss's :host (one level up in
+  // this same chain): a percentage height only resolves against an ancestor with a DEFINITE height, so
+  // min-height here broke that for .list-page's height: 100% further down, which is what the modal
+  // (.sc-modal-backdrop) needs to size correctly. overflow stays the implicit `visible` default, so a
+  // long table still grows past this and .shell-content still scrolls it — unchanged.
+  height: 100%;
 }

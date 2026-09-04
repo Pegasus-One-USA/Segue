@@ -116,6 +116,12 @@
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  // Explicit override: DevTools was showing this element capped at max-height: fit-content, pinning
+  // it to its own content height (~335px) regardless of flex: 1 above — despite an exhaustive search
+  // (this file, the .sc-modal-panel host, global styles.scss, a whole-repo grep for both "eaf-body"
+  // and "fit-content") turning up no authored rule that sets it. Stated explicitly here so this
+  // element's own rule wins on specificity/source-order regardless of whatever was setting it.
+  max-height: none;
   overflow-y: auto;
 
   &::-webkit-scrollbar { width: 5px; }

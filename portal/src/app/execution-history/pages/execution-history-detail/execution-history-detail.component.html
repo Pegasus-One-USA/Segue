@@ -148,7 +148,7 @@
             <div class="node-summary-main">
               <div class="node-summary-title">
                 <span class="node-index">{{ i + 1 }}</span>
-                <span class="cell-primary">{{ entry.nodeType }}</span>
+                <span class="cell-primary">{{ nodeLabel(entry) }}</span>
                 <span class="status-badge" [class]="statusClass(entry.status)">{{ entry.status }}</span>
                 @if (entry.contract) {
                   <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>

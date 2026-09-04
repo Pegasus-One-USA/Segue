@@ -89,33 +89,4 @@
             }
           </section>
 
-          <!-- API Keys -->
-          <section class="settings-card">
-            <div class="card-row">
-              <h2 class="card-title">API Keys</h2>
-              <button class="btn-outline" type="button">New</button>
-            </div>
-            <div class="api-keys-list">
-              @for (k of apiKeys(); track k.id) {
-                <div class="api-key-item">
-                  <div class="api-key-info">
-                    <span class="api-key-name">{{ k.name }}</span>
-                    <span class="api-key-prefix mono">{{ k.prefix }}...</span>
-                    <div class="api-key-scopes">
-                      @for (scope of k.scopes; track scope) {
-                        <span class="scope-tag">{{ scope }}</span>
-                      }
-                    </div>
-                    <span class="api-key-meta">
-                      Created {{ k.createdAt }} &middot; Last used {{ k.lastUsed }}
-                      @if (k.expiresAt) { &middot; Expires {{ k.expiresAt }} }
-                      @else { &middot; No expiry }
-                    </span>
-                  </div>
-                  <button class="revoke-btn" type="button" (click)="revokeApiKey(k.id)">Revoke</button>
-                </div>
-              }
-            </div>
-          </section>
-
 </div>

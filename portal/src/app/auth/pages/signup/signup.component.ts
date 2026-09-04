@@ -111,8 +111,8 @@ export class SignupComponent {
       password:        ['', [Validators.required, passwordStrengthValidator]],
       confirmPassword: ['', Validators.required],
       role:            ['Audit' as UserRole],
-      // Starts disabled — enabled only once the Terms and Conditions dialog reports the reader
-      // actually scrolled to the end (see openTermsDialog()).
+      // Starts disabled — enabled only once the Terms and Conditions dialog has been opened and
+      // closed (see openTermsDialog()).
       acceptTerms:     [{ value: false, disabled: true }, mustBeTrueValidator],
     },
     { validators: passwordMatchValidator('password', 'confirmPassword') }

@@ -2,7 +2,6 @@ import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import {
   UserProfile,
   AppTheme,
-  ApiKey,
   ROLE_DEFINITIONS,
   ExtendedUserRole,
 } from '../models/user-profile.model';
@@ -59,29 +58,6 @@ const DEFAULT_PROFILE: UserProfile = {
   apiKey:          '',
 };
 
-// ─── Mock API keys (for settings pages) ────────────────────────────────────────
-
-const MOCK_API_KEYS: ApiKey[] = [
-  {
-    id:         'k1',
-    name:       'Production Pipeline Key',
-    prefix:     'pk_live_4f3a',
-    scopes:     ['pipelines:read', 'pipelines:write', 'logs:read'],
-    createdAt:  '2024-03-10',
-    lastUsed:   '2025-06-25',
-    expiresAt:  null,
-  },
-  {
-    id:         'k2',
-    name:       'Dev / Testing Key',
-    prefix:     'pk_test_9b2c',
-    scopes:     ['pipelines:read', 'pipelines:write'],
-    createdAt:  '2024-08-01',
-    lastUsed:   '2025-06-20',
-    expiresAt:  '2026-08-01',
-  },
-];
-
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
@@ -90,10 +66,8 @@ export class UserProfileService {
   private readonly themeSvc = inject(ThemeService);
 
   private readonly _profile  = signal<UserProfile>({ ...DEFAULT_PROFILE });
-  private readonly _apiKeys  = signal<ApiKey[]>(MOCK_API_KEYS);
 
   readonly profile  = this._profile.asReadonly();
-  readonly apiKeys  = this._apiKeys.asReadonly();
 
   readonly theme     = computed(() => this._profile().theme);
   readonly fullName  = computed(() =>
@@ -148,10 +122,6 @@ export class UserProfileService {
 
   updateProfile(partial: Partial<UserProfile>): void {
     this._profile.update(p => ({ ...p, ...partial }));
-  }
-
-  revokeApiKey(id: string): void {
-    this._apiKeys.update(keys => keys.filter(k => k.id !== id));
   }
 
   updateNotifications(email: boolean, inApp: boolean): void {
