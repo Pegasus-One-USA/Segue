@@ -1,0 +1,143 @@
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_41b72370f301d8::t_725a0cde78883f 420-423
+  s_41b72370f301d8::t_be4207c2ba64dc 266,272-273
+  s_41b72370f301d8::t_0298784d243a25 16
+  s_41b72370f301d8::t_c847c45339b607 274-276
+  s_41b72370f301d8::t_1df841d4871b31 417-419
+  s_41b72370f301d8::t_07180087a62368 207-213,412-416
+portal/src/app/services/epic-discovery.service.ts
+  s_41b72370f301d8::t_535b5b0f16ff80 43-48
+  s_41b72370f301d8::t_584520bf788c3b 87-89
+  s_41b72370f301d8::t_e776e5c5f77bee 49-50
+  s_41b72370f301d8::t_bafcc72d32d460 40-41
+portal/src/app/auth/services/api-user.service.ts
+  s_41b72370f301d8::t_bbd2247794a66b 28-30
+  s_41b72370f301d8::t_4373132ae5408c 26-27
+  s_41b72370f301d8::t_01c79b250baeb7 33-35
+portal/src/app/components/node-library/destination-wizard/destination-forms/sql-family-destination-form.component.ts
+  s_41b72370f301d8::t_be4dc37cdd7820 54,63-66
+  s_41b72370f301d8::t_60add1556a4c8f 55-57,60-62
+  s_41b72370f301d8::t_debd26b9e2d56b 67
+  s_41b72370f301d8::t_cae5f28ea657cb 58-59
+src/FHIRBridge.Application/Services/UserAccessService.cs
+  s_41b72370f301d8::t_acaa996dd6bca2 107-109
+portal/src/app/user/services/user-profile.service.ts
+  s_41b72370f301d8::t_8a234da036459c 62
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_41b72370f301d8::t_49e17bc378be89 194-198,218-226,229,236-259
+  s_41b72370f301d8::t_06a32f49fde934 186,191-193,200-217,260-266
+  s_41b72370f301d8::t_142b1e64e359a4 187-190
+  s_41b72370f301d8::t_3342d24cadfbe5 199
+  s_41b72370f301d8::t_3d4fdfa5b96b29 227-228
+  s_41b72370f301d8::t_1aa971dc4ef145 230-235
+  s_41b72370f301d8::t_e8cc5e02175e0f 267
+portal/src/app/user/pages/security/security.component.ts
+  s_41b72370f301d8::t_6250e19cbff779 11
+src/FHIRBridge.Application/DTOs/UserProfileDto.cs
+  s_41b72370f301d8::t_42830ea30cadaa 18-24
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_41b72370f301d8::t_7089600a7b4efa 69-72,82-88
+  s_41b72370f301d8::t_32daa51018a7d4 57-63
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_41b72370f301d8::t_04fee51776ff8d 863-866,871,873,875-879
+  s_41b72370f301d8::t_bd830d79c1769c 862
+  s_41b72370f301d8::t_49172d3daf6f6a 338
+tests/FHIRBridge.UnitTests/Sources/BackendAuthScopeProbeServiceTests.cs
+  s_41b72370f301d8::t_76b6d6ca0b8d42 1-13,16-190
+  s_41b72370f301d8::t_c597b1ce130d30 14-15
+portal/src/app/user/pages/security/security.component.scss
+  s_41b72370f301d8::t_91266824db1fa4 90
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_41b72370f301d8::t_2e342d6d821907 375,380-383,387-388
+  s_41b72370f301d8::t_4c4ffdef8f4a44 370-374,424,442,448-452,463-467
+  s_41b72370f301d8::t_4049af562fb745 389,396
+  s_41b72370f301d8::t_9e812b04e666c6 367-369
+  s_41b72370f301d8::t_6f217dfa8a4ba8 376-379
+  s_41b72370f301d8::t_0940ab935a1b60 384-386
+  s_41b72370f301d8::t_714756cfafaccc 390-395
+  s_41b72370f301d8::t_2b899a5fccb48b 397-399
+  s_41b72370f301d8::t_12fbddbd0ea68e 423
+  s_41b72370f301d8::t_5b632d19171000 364-366,400-413,417-419
+src/FHIRBridge.Application/DTOs/BackendAuthScopesDtos.cs
+  s_41b72370f301d8::t_f1defa675dae8f 8-14,19,21-24
+  s_41b72370f301d8::t_9bae4262e1e445 5-7
+  s_41b72370f301d8::t_29495f71ed1915 4,28-30
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.ts
+  s_41b72370f301d8::t_5c38bd32108985 633-641
+  s_41b72370f301d8::t_5717bc0bcea7f8 4
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_41b72370f301d8::t_d886be3dd3394b 74-79,88,90-93
+  s_41b72370f301d8::t_58982ec291c28a 94-105
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.ts
+  s_41b72370f301d8::t_97f18a90cf6c7a 245,251-252
+  s_41b72370f301d8::t_9f218553f0063c 196,199-202
+  s_41b72370f301d8::t_8cce281ad70043 399-402
+  s_41b72370f301d8::t_f7b5f8562f0250 12
+  s_41b72370f301d8::t_24fd3fa95c8171 197-198
+  s_41b72370f301d8::t_d420c41fe10a8f 253-255
+  s_41b72370f301d8::t_fb145a4e79aa60 396-398
+  s_41b72370f301d8::t_bbf6ae14675751 391-395
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_41b72370f301d8::t_3f289603bcc40e 492-494
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_41b72370f301d8::t_ff038143a86d3a 461
+  s_41b72370f301d8::t_e35228f960fc9c 462,486-487,492-494
+  s_41b72370f301d8::t_55b980f8000e14 488-491
+  s_41b72370f301d8::t_bc8b9a63556590 460
+  s_41b72370f301d8::t_f98d7a6378f9ce 463-465,483-485
+  s_41b72370f301d8::t_70250452e86836 495-497
+  s_41b72370f301d8::t_13cca35406c15a 466-482,498-511
+src/Api/FHIRBridge.Api/Controllers/V1/PermissionsController.cs
+  s_41b72370f301d8::t_08b47bdda32f4e 30-33,35
+tests/FHIRBridge.UnitTests/Users/UserSetEnabledTests.cs
+  s_41b72370f301d8::t_1c9fb4b0a2ca7b 13-18,48-49
+  s_41b72370f301d8::t_a04de091859407 1-12,20-47,50-59
+  s_41b72370f301d8::t_bcf4a0ae194758 19
+  s_41b72370f301d8::t_0dce18c393ac3e 60
+portal/src/app/auth/services/auth-profile.model.ts
+  s_41b72370f301d8::t_2846ba66507ff3 19-23
+portal/src/app/auth/models/user.model.ts
+  s_41b72370f301d8::t_7d1c2f9bdc1406 181-183
+  s_41b72370f301d8::t_1d33158da0a90c 179-180
+portal/src/app/user-management/pages/user-list/user-list.component.html
+  s_41b72370f301d8::t_cf953649a51fb9 220-221,223-226,228-239,241-252,255-257,259-262,264-265
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_41b72370f301d8::t_5f95e034141ade 129-134
+portal/src/app/user/pages/profile/profile.component.html
+  s_41b72370f301d8::t_fa486bd38a0d00 88
+src/FHIRBridge.Infrastructure/Sources/BackendAuthScopeProbeService.cs
+  s_41b72370f301d8::t_f1defa675dae8f 1,3,17-19,27-30,54-57,59-62,64,66-78,80,82-113,119,121-124,132-139,142-143,145,154,166
+  s_41b72370f301d8::t_04046d9dbb50d5 20-22
+  s_41b72370f301d8::t_83e8cddd4cc896 23
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_41b72370f301d8::t_1965fadcc54ae5 186,245
+  s_41b72370f301d8::t_3a0f899e3a1d24 256-261,264
+  s_41b72370f301d8::t_c92112018eb916 246-255
+  s_41b72370f301d8::t_402768b158bece 226-227
+  s_41b72370f301d8::t_66fe6097800b14 185
+  s_41b72370f301d8::t_3404c9bede2923 262-263
+  s_41b72370f301d8::t_c3c1b108b1bf30 265-267
+  s_41b72370f301d8::t_33366a3711e037 268-285
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_41b72370f301d8::t_15e56fc1ea4329 592-599,1988-2007,2339-2349,3495-3499,3501,3557-3563,4281-4285,4293-4301
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_41b72370f301d8::t_e8c534f443f306 15,30,1008-1010,2699,3170-3173,3176-3182,3184-3186,3192-3225,3227-3229,3232-3235,3237-3247,3288-3367
+src/FHIRBridge.Domain/Entities/User.cs
+  s_41b72370f301d8::t_a4f8c770bc5331 165-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "670f230e9f3625fb5e5b4650def281ea632d034d",
+  "prompts": {},
+  "sessions": {
+    "s_41b72370f301d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95bb9773-87ef-49e7-95a8-9ae0c4bf0992",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
