@@ -1,0 +1,85 @@
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_82161cfc79db06::t_1c383153541332 230-231
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_82161cfc79db06::t_a53e89b8fcd22a 604
+  s_82161cfc79db06::t_52508c390efa04 579-582,584-603,605-610
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_82161cfc79db06::t_f46d5ca2c3f792 289-297,312-321
+  s_82161cfc79db06::t_a4070107c213fb 1138-1143
+  s_82161cfc79db06::t_e94e3b4205fb70 390-402
+  s_82161cfc79db06::t_9a62567a5258a3 454-460
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCohortTests.cs
+  s_82161cfc79db06::t_c6aec125d03845 158,160
+  s_82161cfc79db06::t_8290e5be8b5cda 171-173,179
+  s_82161cfc79db06::t_5ab9c8af7192a4 220-259
+  s_82161cfc79db06::t_5acc44b34489a8 357-361
+  s_82161cfc79db06::t_48ba180a83e143 381,383-388,391
+  s_82161cfc79db06::t_d4b6e6c94c0422 196,198
+  s_82161cfc79db06::t_f692b2cdc56cc5 422,424,430
+  s_82161cfc79db06::t_465c118f1d22dc 126-129,135
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_5e625ff6f21faa::t_6a180462cba606 29-37
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_82161cfc79db06::t_68cc024efdcc35 738-748
+  s_82161cfc79db06::t_eb7f06e938fbea 1713-1717
+  s_82161cfc79db06::t_151ea0acc60efc 3218-3221
+  s_82161cfc79db06::t_2e3a781afffbde 1525-1528
+  s_82161cfc79db06::t_b781fc0dd38489 3348,3380
+  s_82161cfc79db06::t_922f6a50e1da1e 3294-3295,3298,3300
+  s_82161cfc79db06::t_1517f22e342733 769-770,777,785,796
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_5e625ff6f21faa::t_d27b968afe2bc2 203-212,215-226
+  s_5e625ff6f21faa::t_f7a176cad950c9 145
+  s_5e625ff6f21faa::t_0a086fab48f9b0 213-214
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_82161cfc79db06::t_a51b5373395423 261
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_5e625ff6f21faa::t_7b9de29fa7bc80 257-259
+  s_5e625ff6f21faa::t_8067936ae1d1b8 5
+  s_5e625ff6f21faa::t_2c69fd1795e4bf 902-911
+  s_5e625ff6f21faa::t_40e50371da8065 180-182
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_82161cfc79db06::t_fb90353e5b277d 147-150
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_5e625ff6f21faa::t_814a73037768b5 4262,4266,4270-4272
+  s_5e625ff6f21faa::t_92ff9632dc2035 1768-1770,4315-4316
+  s_5e625ff6f21faa::t_20be306973b22e 66
+  s_5e625ff6f21faa::t_5679aca3f44d49 4284-4287,4289-4296,4298,4302,4305-4306,4311-4314
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_82161cfc79db06::t_3d1f22b4ac0c4b 42-43
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_5e625ff6f21faa::t_33fe0810f34c3b 795
+  s_5e625ff6f21faa::t_2d59d1446ec736 828
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.scss
+  s_5e625ff6f21faa::t_863f01c325f5fe 223-258
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  s_82161cfc79db06::t_256b8255a0b3a6 74-85
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_82161cfc79db06::t_a96cbd9d9bdffe 1589-1598
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_82161cfc79db06::t_e68163a1d8f46d 22-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b8f67a8497310ea7f12a331ef38e2727ad2bb712",
+  "prompts": {},
+  "sessions": {
+    "s_5e625ff6f21faa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "13fd31ab-ad81-444f-ac59-95db198ae75b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_82161cfc79db06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b5e734b-e430-49e7-8994-c77c2c3f85ae",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
