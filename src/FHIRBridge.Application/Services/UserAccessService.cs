@@ -104,6 +104,8 @@ public sealed class UserAccessService : IUserAccessService
             user.RequiresPasswordChange,
             user.IsMfaSetupRequired,
             user.TenantId,
-            tenant?.Name ?? string.Empty);
+            tenant?.Name ?? string.Empty,
+            user.CreatedOnUtc,
+            user.LastLoginOnUtc);
     }
 }

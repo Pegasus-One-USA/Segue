@@ -51,6 +51,20 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  constructor() {
+    // A successful Test Connection leaves probeState() 'ok' and sqlTables() holding THAT database's tables —
+    // nothing previously invalidated either when server/database/auth/username/password/requireSsl was then
+    // edited (e.g. switching to a different database) without re-testing. That let a stale 'ok' survive the
+    // edit: DestinationWizardComponent.next() (see its own remarks) treats probeState() === 'ok' as "already
+    // verified, no need to re-test" and copies whatever sqlTables() currently holds straight through — which,
+    // uninvalidated, would be the PREVIOUS database's table list, not the newly-typed one's. Resetting here
+    // (idle is already an untested no-op, so only 'ok'/'error' ever actually reset) forces a real re-test
+    // before Next can trust this form's probe result again.
+    this.sqlForm.valueChanges.subscribe(() => {
+      if (this.probeState() !== 'idle') this.resetProbe();
+    });
+  }
+
   private _destinationTypeFor(): 'SqlServer' | 'AzureSql' | 'MySql' | 'PostgreSql' {
     switch (this.engine()) {
       case 'mysql': return 'MySql';

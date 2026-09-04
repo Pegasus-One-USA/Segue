@@ -71,10 +71,12 @@ public sealed class SourceDiscoveryController : ControllerBase
     }
 
     /// <summary>
-    /// Backend System (SMART Backend Services) only: performs a real client_credentials + private_key_jwt exchange
-    /// against Epic's token endpoint using a signing key already provisioned into the secret store, and returns the
-    /// scopes Epic actually granted the app — the wizard's Discover action calls this to show what the app is really
-    /// allowed to do, as opposed to the scopes the server merely advertises support for.
+    /// Backend System (SMART Backend Services) only: performs a real client_credentials exchange against the
+    /// source's token endpoint — using either a private_key_jwt signing key already provisioned into the secret
+    /// store, or a plain client secret — and returns the scopes actually granted. Called both by the wizard's
+    /// Discover action and its explicit "Test Connection and Next" gate, to show what the app is really allowed to
+    /// do (and that the configured credentials really work) instead of only discovering a bad client id/secret/key
+    /// once a whole workflow is built and run.
     /// </summary>
     [HttpPost("backend-auth-scopes")]
     [ProducesResponseType(typeof(BackendAuthScopesResult), StatusCodes.Status200OK)]
@@ -83,12 +85,24 @@ public sealed class SourceDiscoveryController : ControllerBase
         [FromBody] BackendAuthScopesRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request?.TokenEndpoint) ||
-            string.IsNullOrWhiteSpace(request.ClientId) ||
-            string.IsNullOrWhiteSpace(request.PrivateKeyVaultName) ||
-            string.IsNullOrWhiteSpace(request.PrivateKeySecretName))
+        if (string.IsNullOrWhiteSpace(request?.TokenEndpoint) || string.IsNullOrWhiteSpace(request.ClientId))
         {
-            return BadRequest("tokenEndpoint, clientId, privateKeyVaultName, and privateKeySecretName are required.");
+            return BadRequest("tokenEndpoint and clientId are required.");
+        }
+
+        var authMethod = (request.AuthMethod ?? "jwt").Trim().ToLowerInvariant();
+        if (authMethod != "secret" && authMethod != "jwt")
+        {
+            return BadRequest("authMethod must be 'jwt' or 'secret'.");
+        }
+        if (authMethod == "secret" && string.IsNullOrWhiteSpace(request.ClientSecret))
+        {
+            return BadRequest("clientSecret is required for the secret auth method.");
+        }
+        if (authMethod == "jwt" &&
+            (string.IsNullOrWhiteSpace(request.PrivateKeyVaultName) || string.IsNullOrWhiteSpace(request.PrivateKeySecretName)))
+        {
+            return BadRequest("privateKeyVaultName and privateKeySecretName are required for the jwt auth method.");
         }
 
         var result = await _backendAuthScopeProbeService.ProbeGrantedScopesAsync(request, cancellationToken);

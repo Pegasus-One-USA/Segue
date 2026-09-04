@@ -13,6 +13,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
+import { checkColumnTypeCompatibility } from '../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
 import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
@@ -203,6 +204,13 @@ export class MappingProfileDialogComponent {
    *  for a non-relational destination type or before one is selected. Feeds MappingProfileFormComponent's
    *  [sqlTables] so the SQL column pickers show real columns instead of always falling back to free text. */
   readonly sqlTables = signal<DestinationTable[]>([]);
+  // Bumped by every _loadSchemaFor() call, captured as `seq` in its own closure — an in-flight getSchema()
+  // response only ever gets applied if it's still the most recent request when it lands. Without this, picking
+  // destination A then quickly switching to B starts two overlapping requests with no cancellation; if A's
+  // (now-stale) response happens to resolve after B's, it would silently overwrite sqlTables() with A's tables
+  // even though B is the current selection — an intermittent, network-timing-dependent race, not a logic bug
+  // tied to any one destination, which is exactly why it only ever showed up "sometimes".
+  private _schemaRequestSeq = 0;
 
   readonly initialRows = computed<MappingRow[]>(() => {
     const profile = this.data.mappingProfile;
@@ -255,13 +263,17 @@ export class MappingProfileDialogComponent {
   }
 
   private _loadSchemaFor(destinationId: string | null | undefined): void {
+    const seq = ++this._schemaRequestSeq;
     if (!destinationId) {
       this.sqlTables.set([]);
       return;
     }
     this.schemaSvc.getSchema(destinationId).subscribe({
-      next: res => this.sqlTables.set(res.tables),
-      error: () => this.sqlTables.set([]),
+      // A newer call (a later destination pick) started while this one was still in flight — that call owns
+      // sqlTables() now, whether or not it has resolved yet; applying this stale response would silently
+      // revert it to the wrong destination's tables.
+      next: res => { if (seq === this._schemaRequestSeq) this.sqlTables.set(res.tables); },
+      error: () => { if (seq === this._schemaRequestSeq) this.sqlTables.set([]); },
     });
   }
 
@@ -397,22 +409,18 @@ export class MappingProfileDialogComponent {
           errors.push(`"${label}" is a foreign key on ${row.tableName}${schemaColumn.references ? ` (→ ${schemaColumn.references})` : ''} — it's populated automatically from that relationship and cannot be a mapping write target. Remove or retarget this field.`);
           continue;
         }
-        // Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
-        // ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
-        // widening: Integer→Decimal is rejected exactly like String→Integer is), moved here so a real type
-        // mismatch is caught on this dialog's own Save instead of only surfacing once the whole workflow is
-        // saved. childJson rows are exempt — their value is always written as JSON text, a distinct concern
-        // from a scalar field's own type.
-        if (schemaColumn?.mappingValueType && row.mode === 'value') {
-          const sourceValueType = row.sources[0]?.valueType;
-          if (sourceValueType && sourceValueType.toLowerCase() !== schemaColumn.mappingValueType.toLowerCase()) {
-            errors.push(
-              `"${label}" on ${row.tableName} is a ${schemaColumn.dataType} column (expects ${schemaColumn.mappingValueType}), ` +
-                `but "${row.sources[0]?.label ?? label}" is mapped as ${sourceValueType} — pick a compatible ` +
-                `source field or retarget to a ${sourceValueType}-compatible column.`,
-            );
-            continue;
-          }
+        // Reuses the exact same check field-mapping-model.ts's own Map Fields screen and
+        // CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync (the backend's
+        // /workflows/build validator) already enforce — was previously a hand-rolled copy here that
+        // additionally, incorrectly exempted every childJson row outright (a JSON-shaped row IS a real
+        // type — "always written as JSON text" doesn't mean any destination column can hold it; see
+        // checkColumnTypeCompatibility's own doc comment). Reusing the shared function instead of a
+        // second inline copy is what keeps this dialog's own pre-save check, the canvas's, and the
+        // backend's genuinely in sync going forward, rather than three copies free to drift apart again.
+        const typeError = checkColumnTypeCompatibility(row, schemaColumn);
+        if (typeError) {
+          errors.push(typeError);
+          continue;
         }
       }
 

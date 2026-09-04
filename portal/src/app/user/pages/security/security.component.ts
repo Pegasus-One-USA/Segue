@@ -1,5 +1,4 @@
 import { Component, inject, signal } from '@angular/core';
-import { DatePipe }             from '@angular/common';
 import { UserProfileService }   from '../../services/user-profile.service';
 import { MfaApiService }        from '../../../auth/services/mfa-api.service';
 import { MfaStatusResponse }    from '../../../auth/models/mfa.model';
@@ -9,7 +8,7 @@ import { MfaEnrollmentPanelComponent } from '../../../auth/components/mfa-enroll
 @Component({
   selector:    'app-security',
   standalone:  true,
-  imports:     [DatePipe, MfaEnrollmentPanelComponent],
+  imports:     [MfaEnrollmentPanelComponent],
   templateUrl: './security.component.html',
   styleUrl:    './security.component.scss',
 })
@@ -21,8 +20,6 @@ export class SecurityComponent {
   protected readonly pwChangeOpen = signal(false);
 
   protected readonly profile   = this.profSvc.profile;
-  protected readonly sessions  = this.profSvc.sessions;
-  protected readonly apiKeys   = this.profSvc.apiKeys;
 
   // ─── MFA (real state via MfaApiService — not the mock profile flag) ────────
   // Enrollment itself is owned by MfaEnrollmentPanelComponent; this page only tracks whether the
@@ -37,9 +34,6 @@ export class SecurityComponent {
   }
 
   togglePwChange(): void { this.pwChangeOpen.update(v => !v); }
-
-  revokeSession(id: string): void { this.profSvc.revokeSession(id); }
-  revokeApiKey(id: string): void  { this.profSvc.revokeApiKey(id); }
 
   private refreshMfaStatus(): void {
     this.mfaApi.getStatus().subscribe({

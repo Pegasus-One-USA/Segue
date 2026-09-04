@@ -377,20 +377,6 @@
   }
 }
 
-.btn-view {
-  font-size:   13px;
-  font-weight: 500;
-  color:       var(--color-primary) !important;
-  border-radius: 6px;
-  min-width:   52px;
-  height:      32px;
-  line-height: 32px;
-
-  &:hover {
-    background: var(--color-primary) !important;
-    color:      #fff !important;
-  }
-}
 
 .btn-more {
   // --mat-icon-button-state-layer-size drives Material's own width/height/padding/ripple-diameter
