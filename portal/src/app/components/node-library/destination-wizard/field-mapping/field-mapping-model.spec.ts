@@ -457,6 +457,58 @@ describe('checkColumnTypeCompatibility', () => {
     expect(checkColumnTypeCompatibility(row, column)).not.toBeNull();
   });
 
+  // No schema probe in this codebase ever reports a column's own mappingValueType as literally "Json"
+  // (every character type — including a real Postgres jsonb — collapses to "String"), so a column
+  // intentionally used to hold JSON must not be rejected purely on that exact-match mismatch — while a
+  // genuinely length-BOUNDED column can't hold it and must still fail.
+  describe('regression: JSON source onto an unbounded (max-length) String column', () => {
+    const childJsonRow: MappingRow = {
+      resource: 'Observation', sources: [{ fhirPath: 'Observation.component', label: 'Component' }],
+      mode: 'childJson', childNodeId: 'component', targetName: 'ComponentJson', tableName: 'dbo.Observation',
+    };
+
+    it('SQL Server nvarchar(max) (bare "nvarchar" dataType — what a live probe actually reports; maxLength: null from its -1) is allowed', () => {
+      const column = { dataType: 'nvarchar', mappingValueType: 'String', maxLength: null };
+      expect(checkColumnTypeCompatibility(childJsonRow, column)).toBeNull();
+    });
+
+    it('a length-bounded nvarchar(n) (a real maxLength) still fails — genuine truncation risk', () => {
+      const column = { dataType: 'nvarchar', mappingValueType: 'String', maxLength: 200 };
+      expect(checkColumnTypeCompatibility(childJsonRow, column)).not.toBeNull();
+    });
+
+    it('a rule declaring Json output onto the same unbounded column is likewise allowed', () => {
+      const column = { dataType: 'nvarchar', mappingValueType: 'String', maxLength: null };
+      expect(checkColumnTypeCompatibility(childJsonRow, column, 'Json')).toBeNull();
+    });
+
+    // MySQL's information_schema NEVER reports a null character_maximum_length for TEXT/MEDIUMTEXT/
+    // LONGTEXT — always a real (if huge) number, since capacity is fixed by the type keyword itself, not
+    // an independently configurable length the way varchar(n) is. maxLength === null alone would miss
+    // these entirely — they must be recognized by data type NAME instead (isJsonSafeForColumn). Jasmine
+    // (this suite's actual framework — no it.each here, that's a Jest-only API) has no parameterized-test
+    // helper, so this is a plain loop generating one `it` per case instead.
+    const unboundedByNameCases: Array<[dataType: string, maxLength: number]> = [
+      ['text', 65535],
+      ['mediumtext', 16777215],
+      ['longtext', 4294967295],
+      ['ntext', 1073741823], // SQL Server's own legacy unbounded unicode type — same non-null quirk.
+    ];
+    for (const [dataType, maxLength] of unboundedByNameCases) {
+      it(`MySQL/SQL-Server-style unbounded-by-name "${dataType}" column (maxLength: ${maxLength}, not null) is allowed`, () => {
+        const column = { dataType, mappingValueType: 'String', maxLength };
+        expect(checkColumnTypeCompatibility(childJsonRow, column)).toBeNull();
+      });
+    }
+
+    // TINYTEXT (255 chars) is genuinely too small for arbitrary JSON — must NOT be swept up by the same
+    // by-name exception just because it shares the "*text" naming family as its larger siblings.
+    it('MySQL TINYTEXT still fails — genuinely too small for arbitrary JSON', () => {
+      const column = { dataType: 'tinytext', mappingValueType: 'String', maxLength: 255 };
+      expect(checkColumnTypeCompatibility(childJsonRow, column)).not.toBeNull();
+    });
+  });
+
   it('is a no-op when the column has no mappingValueType metadata yet (nothing to compare against)', () => {
     const row: MappingRow = {
       resource: 'Patient', sources: [{ fhirPath: 'Patient.name.family', label: 'Family', valueType: 'String' }],

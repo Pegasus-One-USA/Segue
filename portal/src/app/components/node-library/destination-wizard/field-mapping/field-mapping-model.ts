@@ -362,16 +362,66 @@ export function effectiveMappingValueType(row: MappingRow): string | undefined {
 }
 
 /**
+ * True when a Json-shaped value (a childJson row, or a transformation rule that declares a Json output)
+ * is safe to write into `column` even though its own declared mappingValueType is the generic "String"
+ * every character-string SQL type collapses to — no destination type/schema probe in this codebase has
+ * ever produced "Json" for any real column (see SqlDestinationSchemaService.MapSqlServerType/
+ * MapPostgresType/MapMySqlType and this file's own field-mapping-canvas.component.ts mapSqlServerType
+ * preview copy: every one of them falls through to "String" for every character type, including a native
+ * `jsonb`), so an exact-match "Json === column's declared type" comparison would reject EVERY Json
+ * mapping onto EVERY destination, including one deliberately sized to hold it (e.g. SQL Server
+ * nvarchar(max)).
+ *
+ * Scoped narrowly to an UNBOUNDED string column — `maxLength` EXPLICITLY `null` (never merely absent/
+ * `undefined` — see below), the same signal the backend's own CheckStructuredOutputFitsColumn
+ * (CreateMappingProfileRequestValidator.cs) already uses to mean "no truncation risk here". A
+ * length-BOUNDED string column (nvarchar(50), varchar(200), …) keeps failing exactly as before: genuine
+ * truncation risk there, not a false positive. See this file's own regression tests
+ * (field-mapping-model.spec.ts) for both the still-rejected bounded case and this newly-allowed
+ * unbounded one.
+ *
+ * `undefined` is deliberately NOT treated the same as `null` here, even though `column.maxLength` is
+ * optional on this function's own parameter type: a REAL DestinationColumn (destination-schema.service.ts)
+ * always carries an explicit `number | null` for this field — `undefined` only ever means a caller
+ * (a test fixture, or any other narrower object literal) simply didn't populate it, which must keep
+ * behaving exactly as it did before this exception existed, not silently start being treated as
+ * "definitely unbounded, therefore Json-safe".
+ *
+ * `maxLength === null` alone is NOT a reliable "unbounded" signal across every engine — MySQL's
+ * TEXT/MEDIUMTEXT/LONGTEXT never report a null max length at all (unlike SQL Server nvarchar(max)'s -1,
+ * or PostgreSQL's genuinely NULL character_maximum_length for `text`); MySQL always reports a real, if
+ * enormous, number (65,535 / 16,777,215 / 4,294,967,296) for these, because their capacity is fixed by the
+ * type keyword itself, not an independently configurable length the way varchar(n) is. So those three (plus
+ * SQL Server's own legacy `ntext`, whose CHARACTER_MAXIMUM_LENGTH is likewise a real, non-null number) are
+ * additionally recognized by DATA TYPE NAME, regardless of whatever maxLength happens to be reported —
+ * exported so every mapping-save surface (this file's own checkColumnTypeCompatibility, and the
+ * mapping-profiles dialogs that don't share its MappingRow shape) applies the identical rule.
+ * Deliberately excludes MySQL's much smaller TINYTEXT (255 chars) — genuinely too small for arbitrary
+ * JSON, so that one correctly keeps failing, same as any other length-bounded column.
+ */
+export function isJsonSafeForColumn(
+  effectiveType: string,
+  column: { dataType?: string; mappingValueType?: string; maxLength?: number | null },
+): boolean {
+  if (effectiveType.toLowerCase() !== 'json') return false;
+  if ((column.mappingValueType ?? '').toLowerCase() !== 'string') return false;
+  if (column.maxLength === null) return true;
+
+  const family = (column.dataType ?? '').trim().toLowerCase().split('(')[0];
+  return family === 'text' || family === 'mediumtext' || family === 'longtext' || family === 'ntext';
+}
+
+/**
  * Mirrors CreateMappingProfileRequestValidator.ValidateAgainstDestinationSchemaAsync's own strict
  * ValueType check (the backend's /workflows/build validator) — same exact-match rule (no implicit
- * widening: Integer→Decimal is rejected exactly like String→Integer is). Extracted out of
- * DestinationWizardComponent.validateMappingForSave so the exact rule it enforces is independently
- * testable without standing up that component's full DI graph.
+ * widening: Integer→Decimal is rejected exactly like String→Integer is), with the one deliberate
+ * exception in isJsonSafeForColumn above. Extracted out of DestinationWizardComponent.validateMappingForSave
+ * so the exact rule it enforces is independently testable without standing up that component's full DI graph.
  *
  * Compares row's EFFECTIVE ValueType (effectiveMappingValueType — 'Json' for childJson, not just a
  * 'value' row's own source type) against the column's mappingValueType, so a childJson mapping onto a
- * column that doesn't accept Json (e.g. a plain varchar) is caught here too, instead of only surfacing
- * once the whole workflow is saved.
+ * column that doesn't accept Json (e.g. a plain, length-bounded varchar) is caught here too, instead of
+ * only surfacing once the whole workflow is saved.
  *
  * Returns the exact user-facing error text on a mismatch, or null when compatible / when there's nothing
  * meaningful to compare yet (no column type metadata, or no known effective type — e.g. an empty row).
@@ -389,13 +439,17 @@ export function effectiveMappingValueType(row: MappingRow): string | undefined {
  */
 export function checkColumnTypeCompatibility(
   row: MappingRow,
-  column: { dataType: string; mappingValueType?: string } | undefined,
+  column: { dataType: string; mappingValueType?: string; maxLength?: number | null } | undefined,
   ruleExpectedType?: string | null,
 ): string | null {
   if (!column?.mappingValueType) return null;
 
   if (ruleExpectedType !== undefined) {
-    if (ruleExpectedType === null || ruleExpectedType.toLowerCase() === column.mappingValueType.toLowerCase()) {
+    if (
+      ruleExpectedType === null ||
+      ruleExpectedType.toLowerCase() === column.mappingValueType.toLowerCase() ||
+      isJsonSafeForColumn(ruleExpectedType, column)
+    ) {
       return null;
     }
     return (
@@ -406,7 +460,11 @@ export function checkColumnTypeCompatibility(
   }
 
   const sourceValueType = effectiveMappingValueType(row);
-  if (!sourceValueType || sourceValueType.toLowerCase() === column.mappingValueType.toLowerCase()) {
+  if (
+    !sourceValueType ||
+    sourceValueType.toLowerCase() === column.mappingValueType.toLowerCase() ||
+    isJsonSafeForColumn(sourceValueType, column)
+  ) {
     return null;
   }
   return (

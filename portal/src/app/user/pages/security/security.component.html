@@ -89,34 +89,6 @@
             }
           </section>
 
-          <!-- Active Sessions -->
-          <section class="settings-card">
-            <h2 class="card-title">Active Sessions</h2>
-            <div class="sessions-list">
-              @for (s of sessions(); track s.id) {
-                <div class="session-item" [class.current]="s.isCurrent">
-                  <div class="session-icon">
-                    @if (s.device.includes('Mac') || s.device.includes('PC')) {
-                      <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M6 17h8M10 13v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    } @else {
-                      <svg viewBox="0 0 20 20" fill="none"><rect x="6" y="2" width="8" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="15.5" r=".75" fill="currentColor"/></svg>
-                    }
-                  </div>
-                  <div class="session-info">
-                    <div class="session-device">
-                      {{ s.device }}
-                      @if (s.isCurrent) { <span class="current-badge">Current</span> }
-                    </div>
-                    <div class="session-meta">{{ s.browser }} · {{ s.location }} · {{ s.lastActive | date:'MMM d, h:mm a' }}</div>
-                  </div>
-                  @if (!s.isCurrent) {
-                    <button class="revoke-btn" type="button" (click)="revokeSession(s.id)">Revoke</button>
-                  }
-                </div>
-              }
-            </div>
-          </section>
-
           <!-- API Keys -->
           <section class="settings-card">
             <div class="card-row">

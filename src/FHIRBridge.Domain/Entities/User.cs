@@ -162,6 +162,16 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 
     public void SetEnabled(bool isEnabled)
     {
+        // An invited-but-not-yet-activated user is neither Active nor Inactive — only SetInvited(),
+        // AcceptInvitation(), or AcceptInvitationViaSso() may move Status away from Invited. Without
+        // this guard, any caller that resubmits the pending invite's already-false IsEnabled (e.g.
+        // saving an edit to the invited user's name) silently flipped Status to Inactive, so the user
+        // list showed a brand-new invite as "Deactivated" even though nobody explicitly deactivated it.
+        if (Status == UserStatus.Invited)
+        {
+            return;
+        }
+
         IsEnabled = isEnabled;
         Status = isEnabled ? UserStatus.Active : UserStatus.Inactive;
     }

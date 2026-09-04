@@ -119,8 +119,6 @@ export class UserListComponent implements OnInit, OnDestroy {
   canEdit       = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Edit));
   canAssignRole = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.Role, PermissionAction.Assign));
   canDelete     = (): boolean => this.isAdmin() || this.authService.hasPermission(permissionCode(PermissionGroup.User, PermissionAction.Delete));
-  hasRowMenu   = (): boolean =>
-    this.canEdit() || this.canAssignRole() || this.canToggle() || this.canInvite() || this.canDelete();
 
   // Compared by email, not id: the list's user.id is the real database GUID, but
   // authService.currentUser().id is derived from the JWT's external/oid claim (see

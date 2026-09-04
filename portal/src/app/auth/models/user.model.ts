@@ -176,8 +176,11 @@ export interface RoleDto {
   modifiedBy?:    string | null;
 }
 
-/** Backend numeric user status: 1 = Invited, 2 = Active, 3 = Inactive. */
-export type BackendUserStatus = 1 | 2 | 3;
+/** Backend user status. The API serializes the C# UserStatus enum via JsonStringEnumConverter
+ *  (see FHIRBridge.Api Program.cs), so this is the enum member's name on the wire, not its
+ *  underlying number — matching against 1|2|3 here would never hit and silently fall through
+ *  to whatever default a caller picks. */
+export type BackendUserStatus = 'Invited' | 'Active' | 'Inactive';
 
 export interface UserManagementDto {
   id:                   string;

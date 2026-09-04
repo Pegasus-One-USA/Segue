@@ -38,7 +38,6 @@ export interface UserProfile {
   emailNotifications: boolean;
   inAppNotifications: boolean;
   apiKey: string;
-  sessionCount: number;
 }
 
 export interface RoleDefinition {
@@ -79,15 +78,6 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     permissions: ['View all resources', 'Export audit logs'],
   },
 ];
-
-export interface ActiveSession {
-  id: string;
-  device: string;
-  location: string;
-  browser: string;
-  lastActive: string;
-  isCurrent: boolean;
-}
 
 export interface ApiKey {
   id: string;

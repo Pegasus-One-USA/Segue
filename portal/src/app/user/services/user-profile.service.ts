@@ -2,7 +2,6 @@ import { Injectable, signal, computed, inject, effect } from '@angular/core';
 import {
   UserProfile,
   AppTheme,
-  ActiveSession,
   ApiKey,
   ROLE_DEFINITIONS,
   ExtendedUserRole,
@@ -58,29 +57,9 @@ const DEFAULT_PROFILE: UserProfile = {
   emailNotifications:   true,
   inAppNotifications:   true,
   apiKey:          '',
-  sessionCount:    0,
 };
 
-// ─── Mock sessions & API keys (for settings pages) ────────────────────────────
-
-const MOCK_SESSIONS: ActiveSession[] = [
-  {
-    id:         's1',
-    device:     'MacBook Pro 16"',
-    location:   'San Francisco, CA',
-    browser:    'Chrome 125',
-    lastActive: '2025-06-25T09:30:00Z',
-    isCurrent:  true,
-  },
-  {
-    id:         's2',
-    device:     'iPhone 15 Pro',
-    location:   'San Francisco, CA',
-    browser:    'Safari Mobile',
-    lastActive: '2025-06-24T18:05:00Z',
-    isCurrent:  false,
-  },
-];
+// ─── Mock API keys (for settings pages) ────────────────────────────────────────
 
 const MOCK_API_KEYS: ApiKey[] = [
   {
@@ -111,11 +90,9 @@ export class UserProfileService {
   private readonly themeSvc = inject(ThemeService);
 
   private readonly _profile  = signal<UserProfile>({ ...DEFAULT_PROFILE });
-  private readonly _sessions = signal<ActiveSession[]>(MOCK_SESSIONS);
   private readonly _apiKeys  = signal<ApiKey[]>(MOCK_API_KEYS);
 
   readonly profile  = this._profile.asReadonly();
-  readonly sessions = this._sessions.asReadonly();
   readonly apiKeys  = this._apiKeys.asReadonly();
 
   readonly theme     = computed(() => this._profile().theme);
@@ -156,7 +133,6 @@ export class UserProfileService {
         status:          user.status          as 'active' | 'inactive' | 'suspended',
         twoFactorEnabled: user.twoFactorEnabled,
         tenant:          user.orgId           ?? p.tenant,
-        sessionCount:    this._sessions().length,
       }));
     });
   }
@@ -172,10 +148,6 @@ export class UserProfileService {
 
   updateProfile(partial: Partial<UserProfile>): void {
     this._profile.update(p => ({ ...p, ...partial }));
-  }
-
-  revokeSession(id: string): void {
-    this._sessions.update(sess => sess.filter(s => s.id !== id));
   }
 
   revokeApiKey(id: string): void {
