@@ -1,16 +1,5 @@
 :host {
   display: block;
-  // height, not min-height: this component (and workflow-configurations-shell.component.scss below
-  // it in the same chain) sits between .shell-content (app-shell.component.scss — a genuine flex:1
-  // box with a real, definite height) and pages like SourceConnectionListComponent's .list-page,
-  // which itself does `height: 100%` so its absolutely-positioned modal backdrop (.sc-modal-backdrop,
-  // position:absolute; inset:0) has a definite box to fill. A percentage height only resolves against
-  // an ancestor with a DEFINITE height — min-height doesn't count (CSS2.1 §10.5) — so with min-height
-  // here, .list-page's height:100% silently computed as auto instead, sizing the whole modal chain to
-  // its own content (the exact "small form, empty space below" bug this fixes). overflow stays the
-  // implicit `visible` default, unchanged, so a page with a long table still visually grows past this
-  // 100% and .shell-content's own overflow-y: auto still scrolls it — this only fixes percentage-height
-  // resolution for descendants, it doesn't clip anything.
-  height: 100%;
+  min-height: 100%;
   background: var(--color-bg);
 }
