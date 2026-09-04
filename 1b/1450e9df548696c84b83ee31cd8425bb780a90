@@ -1,0 +1,19 @@
+portal/src/app/auth/models/permission.constants.ts
+  s_5efbfd58cf2e78::t_0fde65fd949f5f 26-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1b1450e9df548696c84b83ee31cd8425bb780a90",
+  "prompts": {},
+  "sessions": {
+    "s_5efbfd58cf2e78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c581937a-5297-4992-bb3c-c53308893595",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

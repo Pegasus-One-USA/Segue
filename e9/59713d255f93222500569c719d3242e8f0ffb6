@@ -1,0 +1,90 @@
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  s_036af994396749::t_9635e84cda5a21 69,78-88
+  s_036af994396749::t_382045325f57e3 23,89
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyConfigurationService.cs
+  s_036af994396749::t_f71a625d6e101b 179-186
+  s_036af994396749::t_6181bc9f356681 153-178,187-196
+src/FHIRBridge.Infrastructure/Terminology/CompositeTerminologyTranslationService.cs
+  s_036af994396749::t_a4913f513d866d 6-10,15,20,24-25
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_036af994396749::t_f208ba17de8770 3
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologySystemRegistry.cs
+  s_036af994396749::t_c5e21cc9ec4f76 91-96
+  s_036af994396749::t_de89eb815564d2 111-116,121-126
+  s_036af994396749::t_782f6145a23d40 136-141
+  s_036af994396749::t_ce220eca1168f0 146-151
+  s_036af994396749::t_9dd3d9f01a24c6 25-31
+  s_036af994396749::t_0d55cc220ab988 76-81
+src/Api/FHIRBridge.Api/Controllers/V1/HapiTerminologyConfigurationController.cs
+  s_036af994396749::t_c671f65add2260 65-77
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_8a276704c12b26::t_fc75ac98dcab16 140-149
+src/FHIRBridge.Application/Services/Terminology/IHapiTerminologyConfigurationService.cs
+  s_036af994396749::t_91c478ddf2f923 23-31
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HapiLocalTerminologyConfigurations.cs
+  s_8a276704c12b26::t_73935718f34bb5 40-52
+src/FHIRBridge.Infrastructure/Terminology/Hapi/IHapiVersionCheckable.cs
+  s_036af994396749::t_e72c63b10a5c65 1-19
+src/FHIRBridge.Application/DTOs/HapiTerminologyConfigurationDtos.cs
+  s_036af994396749::t_32b5f414e23d89 45-57
+portal/src/app/core/api-endpoints.ts
+  s_036af994396749::t_d113c76d33d6ad 345-346
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  s_036af994396749::t_a4c07eef82eeed 21,77
+  s_036af994396749::t_198bd27e049e30 58,64,73-76,78-83,97
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_036af994396749::t_1f3d8b3fcb81a7 3
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  s_036af994396749::t_d2583e1fbe2996 24
+  s_036af994396749::t_f9391e668dd67f 77-87
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.scss
+  s_036af994396749::t_ac587d2e49137e 61-81
+  s_036af994396749::t_419eff8645d6d4 7-10,16-20
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_036af994396749::t_d401ad44342830 310
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  s_036af994396749::t_8762fc8f7067f6 20
+  s_036af994396749::t_bc6009bd24fbc8 71-78
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  s_036af994396749::t_358e0695389ac4 21
+  s_036af994396749::t_7978859134400e 72-79
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_036af994396749::t_eaef38c3b5bcb9 70,79-90
+  s_036af994396749::t_97b936d15b8ee4 25,91
+portal/src/app/system-settings/services/hapi-terminology-configuration.service.ts
+  s_036af994396749::t_2ca344ec656b4f 59-71
+  s_036af994396749::t_3841018aafd8f0 99-108
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.html
+  s_036af994396749::t_a07e6782f6bfa8 24-51
+  s_036af994396749::t_28f91eb1752390 6-9
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_036af994396749::t_488e6a83a22c50 53
+  s_036af994396749::t_a374f8e77e0aa8 11
+  s_036af994396749::t_dbec4503cabcc8 50-51
+  s_036af994396749::t_2fc8fa8ee5029b 86-111
+  s_036af994396749::t_be3d63ac5ac72c 188-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e959713d255f93222500569c719d3242e8f0ffb6",
+  "prompts": {},
+  "sessions": {
+    "s_036af994396749": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "353af656-cf6d-48d4-9cb6-8b68cb5d83a0",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_8a276704c12b26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b47ec5c1-e5fc-47ee-bb59-e4020b6a44bb",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
