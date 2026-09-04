@@ -1,0 +1,43 @@
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_82161cfc79db06::t_fc37f07c19bb63 484
+  s_82161cfc79db06::t_ce9c230c30937a 295
+  s_82161cfc79db06::t_8966b775863733 427
+  s_82161cfc79db06::t_06b86a30d700c9 336,338
+  s_82161cfc79db06::t_83cede441777b8 175,179
+  s_82161cfc79db06::t_6ad592b43393a1 508
+  s_82161cfc79db06::t_93461c976e5491 263
+  s_82161cfc79db06::t_e50d2440252d50 415
+  s_82161cfc79db06::t_c2edb8d5995d74 377
+  s_82161cfc79db06::t_2ac6ba498008bf 129
+  s_82161cfc79db06::t_03bf3666b88a1f 451,453
+  s_82161cfc79db06::t_97cc5eb62a5d2d 492,496
+  s_82161cfc79db06::t_d8009160c12b3d 522
+portal/src/app/components/node-library/meditech-source-form/meditech-source-form.component.html
+  s_82161cfc79db06::t_699a5ab87bcb66 3
+portal/src/app/services/wizard.service.ts
+  s_82161cfc79db06::t_1981c7fcce43d0 18
+  s_82161cfc79db06::t_3fd0bd78db2754 19-34
+  s_82161cfc79db06::t_b1ce9b081ecf6a 518-520,522,530,540-541,544
+  s_82161cfc79db06::t_2e281813c5b0a4 521
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_82161cfc79db06::t_8b658c9f7a367b 531
+  s_82161cfc79db06::t_1301d25287cfe3 1548-1550
+  s_82161cfc79db06::t_cec850a37d9012 3444
+  s_82161cfc79db06::t_b3f02d45b0ca2d 1906-1919
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3dd914deed5ecd3a57cc2d53bcff0b080538fda7",
+  "prompts": {},
+  "sessions": {
+    "s_82161cfc79db06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b5e734b-e430-49e7-8994-c77c2c3f85ae",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

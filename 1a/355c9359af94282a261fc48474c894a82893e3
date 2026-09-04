@@ -1,0 +1,57 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-tree-node.component.ts
+  s_41b72370f301d8::t_56f9fa3cb0a0dc 30
+  s_41b72370f301d8::t_5632e2ef2cd94f 32-42
+  s_41b72370f301d8::t_ea52e744335f7e 2
+  s_41b72370f301d8::t_f912fcaa680926 74-89,95-97,100
+  s_41b72370f301d8::t_b841c512465320 90-94,98-99
+  s_41b72370f301d8::t_f124745d2e4edb 136-137
+  s_41b72370f301d8::t_cec167f8dd40f7 145,150
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-payload.util.ts
+  s_41b72370f301d8::t_f3612ea3a30a37 171-242,244-247
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_41b72370f301d8::t_8948af7c82b3be 1533-1540,1543-1546
+  s_41b72370f301d8::t_90fbca51e910cf 1541-1542
+  s_41b72370f301d8::t_1c4acf35fc4e97 3897-3906,3911-3912
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_41b72370f301d8::t_c3d84387b0501f 167-176
+  s_41b72370f301d8::t_437e016834817f 206-216
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.ts
+  s_41b72370f301d8::t_12ccd8f3cacd1d 1,16,30,34-37,41-44,49-50,61-63
+  s_41b72370f301d8::t_6d9fc6bb2959fc 45-48
+  s_41b72370f301d8::t_69524702dcb72f 22-29
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-load-payload-modal.component.html
+  s_41b72370f301d8::t_112fdbdf6bc24a 33-34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_41b72370f301d8::t_b6a01b48889466 314,316
+  s_41b72370f301d8::t_50399472bbb371 313
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_41b72370f301d8::t_ff4356c675b9f4 235-238
+  s_41b72370f301d8::t_e7a736b2c7478e 1395-1405,1409-1411
+  s_41b72370f301d8::t_0bd90a10271f74 21,1463-1464
+  s_41b72370f301d8::t_cef6b84091dacc 1412-1413,1415-1425,1437,1444-1445,1449-1450,1456-1459,1461-1462
+  s_41b72370f301d8::t_2e38bff598a4a0 1406-1408,1414
+  s_41b72370f301d8::t_5fb49a570ece17 1451-1455,1460
+  s_41b72370f301d8::t_ec28ba20053d96 125-131
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_41b72370f301d8::t_bf9494db273f07 813
+  s_41b72370f301d8::t_d77034461df796 777
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_41b72370f301d8::t_4f87fcb4523a49 80
+  s_41b72370f301d8::t_98a1a09a05e108 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1a355c9359af94282a261fc48474c894a82893e3",
+  "prompts": {},
+  "sessions": {
+    "s_41b72370f301d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95bb9773-87ef-49e7-95a8-9ae0c4bf0992",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

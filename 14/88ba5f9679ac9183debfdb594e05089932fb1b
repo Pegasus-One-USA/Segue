@@ -1,0 +1,235 @@
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_262a72ca3c36fe::t_c2089da7093ff7 44-51
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_262a72ca3c36fe::t_ac88310804ad40 65-73
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_262a72ca3c36fe::t_78eed6d45381e2 20
+  s_262a72ca3c36fe::t_c613e8477b56cd 18-19,21-28
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.scss
+  s_e4534b30a08423::t_5e84d9092543bb 1-330
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrEndpointRepository.cs
+  s_262a72ca3c36fe::t_c92f063d56eb9e 20-40
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrEndpointRepository.cs
+  s_262a72ca3c36fe::t_b8cced07fe050b 14-21
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_262a72ca3c36fe::t_2071ed283a2613 1312-1326
+  s_262a72ca3c36fe::t_ec2d26155a4c1f 1638-1641,1645
+  s_262a72ca3c36fe::t_45dcd5bf0b8c1d 1235-1238,1254
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_262a72ca3c36fe::t_c3579bd6e8c5e1 4
+  s_262a72ca3c36fe::t_7a8f250d847961 43-49
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_262a72ca3c36fe::t_d74b60c2168347 1
+  s_262a72ca3c36fe::t_54421cf44ba1f5 13
+  s_262a72ca3c36fe::t_a592ffff8f6ed1 46,48-52,61-62,65-66,70,74,78-86,92-101,113,119,125
+  s_262a72ca3c36fe::t_7120c293954b72 2
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d6a175d3cd28ec::t_677227b7a20d00 1054-1058,1071-1090
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IWorkflowRunTracker.cs
+  s_262a72ca3c36fe::t_ce080e4cf9e7ce 14-17,19-20,24-29
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_262a72ca3c36fe::t_6eebdcb3cd7447 160-161,163-165
+  s_262a72ca3c36fe::t_fae470e209ecc5 57-78
+portal/src/app/ehr-endpoints/services/i-ehr-endpoint.service.ts
+  s_262a72ca3c36fe::t_3c4494838e0b36 2,6
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_262a72ca3c36fe::t_a64e7c3bfc755b 59
+src/FHIRBridge.Domain/Entities/Terminology/HapiLocalTerminologyEntities.cs
+  s_262a72ca3c36fe::t_e9d6694445fc91 66-71
+src/FHIRBridge.Infrastructure/Persistence/EfEhrEndpointRepository.cs
+  s_262a72ca3c36fe::t_ce9d38c79b5edd 20-25,27-39
+  s_262a72ca3c36fe::t_fdfe4e1d97fe40 26
+portal/src/app/ehr-endpoints/services/api-ehr-endpoint.service.ts
+  s_262a72ca3c36fe::t_9b0888c33f7731 2,7,19-31
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_d6a175d3cd28ec::t_95f02a2625a0db 323-329,336-337,346-348
+src/FHIRBridge.Application/Abstractions/Pipeline/IPipelineRunTracker.cs
+  s_262a72ca3c36fe::t_af7bcf135e5bb5 1-28
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.html
+  s_e4534b30a08423::t_1bef85c5aabe45 1-140
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.ts
+  s_262a72ca3c36fe::t_b8e341f0e210ef 1-2,9
+  s_262a72ca3c36fe::t_3127dc4830d7a8 30-34,39-40,44,47,51,54-77,80,86,92
+  s_262a72ca3c36fe::t_d1e3e20c641a5a 104-107,120-123
+  s_262a72ca3c36fe::t_7391406132fd27 142-145
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_262a72ca3c36fe::t_030aa2c2f8d50e 50
+  s_262a72ca3c36fe::t_a5891590e5e95a 147
+  s_262a72ca3c36fe::t_cbe3f4594408e9 171,175
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.html
+  s_e4534b30a08423::t_29957571ad688c 1-69
+src/FHIRBridge.Infrastructure/Terminology/Hapi/TerminologyConceptService.cs
+  s_e4534b30a08423::t_d407c38f782790 1-178
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_e4534b30a08423::t_b9c28e703c008e 2105-2108,2858-2894,3966-4048,5107-5109
+  s_e4534b30a08423::t_781f283d0ae704 2895-2896,4049-4050,5110
+src/Api/FHIRBridge.Api/Controllers/V1/RolesController.cs
+  s_262a72ca3c36fe::t_e6b70fe006119e 33-47
+  s_262a72ca3c36fe::t_4d75d5b20287f9 2
+portal/src/app/dashboard/pages/dashboard/dashboard.component.scss
+  s_262a72ca3c36fe::t_94caf49a8bfaa2 127
+  s_262a72ca3c36fe::t_88269135018407 90,93
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_262a72ca3c36fe::t_93c69dd1791d92 21
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.scss
+  s_e4534b30a08423::t_7d71412a19142a 1-159
+src/Api/FHIRBridge.Api/Controllers/V1/HapiTerminologyConfigurationController.cs
+  s_262a72ca3c36fe::t_e9d6694445fc91 1,26,28-29,33,64-87
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.ts
+  s_262a72ca3c36fe::t_24fa95f09693bd 4,9-11
+  s_262a72ca3c36fe::t_dbd9c039c33793 91-132
+  s_262a72ca3c36fe::t_b36f2d45600003 23-24,35-37
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/InMemoryWorkflowRunTracker.cs
+  s_262a72ca3c36fe::t_cbdad8e98f05dd 7,9-10,12-18,21-31
+src/FHIRBridge.Domain/Entities/PipelineRunRouteExecution.cs
+  s_262a72ca3c36fe::t_baa47a6edbf8b3 13
+src/FHIRBridge.Application/Services/InMemoryPipelineRunTracker.cs
+  s_262a72ca3c36fe::t_13cfbda66344f3 1-33
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologySystemRegistry.cs
+  s_262a72ca3c36fe::t_e9d6694445fc91 30-36,59,64,69,74,79,84,89,94,99,104,109,114,119
+src/FHIRBridge.Application/Abstractions/Persistence/ITenantRepository.cs
+  s_262a72ca3c36fe::t_4253f4523e68fc 8-11
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_262a72ca3c36fe::t_6d9cd0771369a7 153
+  s_262a72ca3c36fe::t_ef8343e11ab738 47-49,57
+  s_262a72ca3c36fe::t_bbddaecb811df4 176,178
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_262a72ca3c36fe::t_22eda7fe95a4ab 1
+  s_262a72ca3c36fe::t_d612b57c4c680f 4,10-11
+  s_262a72ca3c36fe::t_f3a69b9b8de7f2 28,31
+  s_262a72ca3c36fe::t_dd4d28ceee8efe 224-237
+  s_262a72ca3c36fe::t_543d0aa8bde1a1 23
+  s_262a72ca3c36fe::t_a0509087229825 166-188,190-199,218-219
+  s_262a72ca3c36fe::t_0e76e1ab8e01c9 59-64
+  s_262a72ca3c36fe::t_6e64bcaa0c48bb 189,200-217
+portal/src/app/ehr-endpoints/models/ehr-endpoint.model.ts
+  s_262a72ca3c36fe::t_251dc3229efb00 34-47
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.html
+  s_e4534b30a08423::t_9200a114989788 79
+  s_262a72ca3c36fe::t_e9d6694445fc91 78,80
+portal/src/app/user-management/services/api-role.service.ts
+  s_262a72ca3c36fe::t_cb91f19fefcb18 24-37
+  s_262a72ca3c36fe::t_2689e62b8342ed 2,6
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.ts
+  s_e4534b30a08423::t_65438d206af73e 1-88
+src/FHIRBridge.Application/Services/IEhrEndpointService.cs
+  s_262a72ca3c36fe::t_896da612f2ccec 1,11-15
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.scss
+  s_262a72ca3c36fe::t_86c4926509a335 70-77
+src/FHIRBridge.Application/Services/TenantsService.cs
+  s_262a72ca3c36fe::t_15088231374b56 36-49
+portal/src/app/pipeline-executions/services/pipeline-execution-api.service.ts
+  s_262a72ca3c36fe::t_8d53ea8f39d88c 40-45
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_e4534b30a08423::t_3546ba37fb8841 239-247
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_262a72ca3c36fe::t_c0b9a859aae9c6 1-2,7
+  s_262a72ca3c36fe::t_925a5bbaef6002 65,74-75,78-79,83-91,97-106,118,124,130
+  s_262a72ca3c36fe::t_b15dad748bb1c0 51
+src/Api/FHIRBridge.Api/Controllers/V1/PipelineRunsController.cs
+  s_262a72ca3c36fe::t_88ee23f8e1b1bc 114-127
+src/FHIRBridge.Application/DTOs/HapiTerminologyConfigurationDtos.cs
+  s_262a72ca3c36fe::t_e9d6694445fc91 44-51
+portal/src/app/core/api-endpoints.ts
+  s_262a72ca3c36fe::t_50fa13ba3837d0 97
+  s_e4534b30a08423::t_470650c75abcb1 343-344
+  s_262a72ca3c36fe::t_b0c70752f219a7 84-86
+  s_262a72ca3c36fe::t_964953ed2adc39 44
+  s_262a72ca3c36fe::t_8e08010b96fcae 447
+  s_262a72ca3c36fe::t_2d5268c4e65d3f 375-378
+src/Api/FHIRBridge.Api/Controllers/V1/TenantsController.cs
+  s_262a72ca3c36fe::t_12c28409077632 1
+  s_262a72ca3c36fe::t_b4621a28f92948 36-44
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260903051303_AddHapiLocalTerminologyAndImportHistory.cs
+  s_e4534b30a08423::t_b9c28e703c008e 1-158
+src/FHIRBridge.Application/Abstractions/Tenancy/ITenantsService.cs
+  s_262a72ca3c36fe::t_241b7428b50d49 1,13-16
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEndpointsController.cs
+  s_262a72ca3c36fe::t_0cb0ccd60fbdd7 2
+  s_262a72ca3c36fe::t_522c971b2a95aa 38-52
+portal/src/app/user-management/pages/tenant-list/tenant-list.component.html
+  s_262a72ca3c36fe::t_ecb04cebca4ef7 43-45,53
+  s_262a72ca3c36fe::t_a1a60ead8a1176 112
+  s_262a72ca3c36fe::t_1ccb4980a5ae22 127,129
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_d6a175d3cd28ec::t_220be743ce0970 471-474
+  s_d6a175d3cd28ec::t_e463ef2e496c76 521-528
+portal/src/app/user-management/services/tenant-role.service.ts
+  s_262a72ca3c36fe::t_9ccffe26f0bad5 24-30
+  s_262a72ca3c36fe::t_c07ff68106fe58 2
+  s_262a72ca3c36fe::t_3e4dfe6463525e 72-83
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.ts
+  s_e4534b30a08423::t_552f9ca990ecb6 1-167
+src/FHIRBridge.Infrastructure/Persistence/EfTenantRepository.cs
+  s_262a72ca3c36fe::t_30fc3caf688a02 19-31
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_e4534b30a08423::t_3b948f93cef0b6 525-527
+  s_262a72ca3c36fe::t_6d548b57742425 642-644
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_262a72ca3c36fe::t_ec914c357f7ef8 147,149,158-161,166,168
+portal/src/app/user-management/services/i-role.service.ts
+  s_262a72ca3c36fe::t_f4af30a49af91c 5-18,21
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_262a72ca3c36fe::t_4530ea9926abfd 43,45
+src/FHIRBridge.Application/Services/Terminology/ITerminologyConceptService.cs
+  s_e4534b30a08423::t_a27c59c217192c 1-22
+portal/src/app/pipeline-executions/pages/pipeline-execution-list/pipeline-execution-list.component.html
+  s_262a72ca3c36fe::t_c90574813a362c 154-167
+portal/src/app/system-settings/services/hapi-terminology-configuration.service.ts
+  s_262a72ca3c36fe::t_e9d6694445fc91 2,7-26,85-103
+src/FHIRBridge.Application/Services/IRoleManagementService.cs
+  s_262a72ca3c36fe::t_c38889e16bc0a8 1,10-19
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_262a72ca3c36fe::t_e9d6694445fc91 1,14,37,61-62,68-74,142-148,175-178,181,185-188
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_262a72ca3c36fe::t_d8cfc798f5fb9e 797-803
+  s_262a72ca3c36fe::t_0c6a81e71bf99d 58,207
+  s_262a72ca3c36fe::t_e21496972d1450 71
+  s_262a72ca3c36fe::t_631b22aaafefb6 422-429
+  s_262a72ca3c36fe::t_966d8bcde5e1f8 495-529
+  s_262a72ca3c36fe::t_db555569c62465 199-200,206,208-212
+  s_262a72ca3c36fe::t_4dc602d6305938 188-192,194-195
+  s_262a72ca3c36fe::t_37eb544c7551d0 193
+  s_262a72ca3c36fe::t_6a9fc51f3b52b3 113
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_262a72ca3c36fe::t_705edd26032b6a 339-362
+  s_262a72ca3c36fe::t_2569f6e4f65a1f 480-535
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260903051303_AddHapiLocalTerminologyAndImportHistory.Designer.cs
+  s_e4534b30a08423::t_b9c28e703c008e 1-5976
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_262a72ca3c36fe::t_11305ad2240718 45-67
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTenantRepository.cs
+  s_262a72ca3c36fe::t_839a02a0546414 24-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1488ba5f9679ac9183debfdb594e05089932fb1b",
+  "prompts": {},
+  "sessions": {
+    "s_262a72ca3c36fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70d61ac2-c7b1-42bf-a3a1-2f14627bd258",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d6a175d3cd28ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2fa3f7d0-63b0-4667-95a4-a6881a778994",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_e4534b30a08423": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5ac2d56-1054-4e38-9e9f-7774d7773f5d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
