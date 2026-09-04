@@ -13,6 +13,22 @@ output "tenant_secrets_key_vault_id" {
   value       = var.enable_tenant_secrets_key_vault ? azurerm_key_vault.tenant_secrets[0].id : null
 }
 
+output "redis_mode" {
+  description = "Which Redis this deployment actually has — \"azure-cache\" or \"container\"."
+  value       = var.use_azure_cache_for_redis ? "azure-cache" : "container"
+}
+
+output "azure_cache_hostname" {
+  description = "Populated only when use_azure_cache_for_redis is true. Same host ConnectionStrings:Redis points the app at — useful for connecting a client (e.g. redis-cli / RedisInsight) directly for debugging."
+  value       = var.use_azure_cache_for_redis ? azurerm_redis_cache.main[0].hostname : null
+}
+
+output "azure_cache_primary_access_key" {
+  description = "Populated only when use_azure_cache_for_redis is true. Rotate with 'az redis regenerate-keys' (or the Portal) — this output will reflect the new value on the next apply/refresh."
+  value       = var.use_azure_cache_for_redis ? azurerm_redis_cache.main[0].primary_access_key : null
+  sensitive   = true
+}
+
 output "tenant_secrets_key_vault_name" {
   description = "Populated only when enable_tenant_secrets_key_vault is true. Name of the Key Vault this config created for tenant/app-level secrets — use with 'az keyvault secret list --vault-name <this>' to see what the app has provisioned there so far."
   value       = var.enable_tenant_secrets_key_vault ? azurerm_key_vault.tenant_secrets[0].name : null

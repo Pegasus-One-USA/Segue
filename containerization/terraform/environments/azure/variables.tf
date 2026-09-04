@@ -52,15 +52,35 @@ variable "redis_port" {
   default     = 6379
 }
 
+variable "use_azure_cache_for_redis" {
+  description = "Chooses which Redis this deployment gets. false (default) keeps the existing containerized Redis (azurerm_container_app.redis) — self-signed TLS cert baked into the fhirbridge-redis image, Azure Files-backed persistence, single replica, requires redis_password/redis_trusted_certificate_thumbprint. true creates a managed azurerm_redis_cache instead (see azure_cache_sku/azure_cache_capacity) and points ConnectionStrings:Redis at it — no container, no volume, no self-signed cert to generate; Azure issues its own CA-trusted certificate, which FHIRBridge.Api/.Worker accept automatically. redis_password and redis_trusted_certificate_thumbprint are both ignored in this mode — Azure Cache manages its own access keys and presents its own trusted certificate."
+  type        = bool
+  default     = false
+}
+
+variable "azure_cache_sku" {
+  description = "Azure Cache for Redis pricing tier — Basic (no SLA, single node, cheapest), Standard (SLA, primary/replica pair), or Premium (SLA, plus VNet injection/clustering/persistence — also switches family to P). Only consulted when use_azure_cache_for_redis is true."
+  type        = string
+  default     = "Basic"
+}
+
+variable "azure_cache_capacity" {
+  description = "Azure Cache for Redis size within the chosen sku: 0-6 for Basic/Standard (family C — 0 is the smallest, ~250MB), 1-5 for Premium (family P — 1 is the smallest, 6GB). Only consulted when use_azure_cache_for_redis is true. Defaults to the smallest size for whichever tier is chosen."
+  type        = number
+  default     = 0
+}
+
 variable "redis_password" {
-  description = "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Note: since it's passed as a plain container command argument (Redis has no env-var equivalent), it's visible to anyone with read access to this Container App's configuration in the Azure Portal/CLI, same exposure level as any other container command argument."
+  description = "Password the containerized Redis requires (--requirepass) — defense-in-depth on top of network isolation. Note: since it's passed as a plain container command argument (Redis has no env-var equivalent), it's visible to anyone with read access to this Container App's configuration in the Azure Portal/CLI, same exposure level as any other container command argument. Ignored entirely when use_azure_cache_for_redis is true (Azure Cache manages its own access keys) — still required to be set either way since Terraform variables without a default must be provided, but its value is simply unused in that mode."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "redis_trusted_certificate_thumbprint" {
-  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs. REQUIRED (the connection will fail at runtime without it) when use_azure_cache_for_redis is false; ignored entirely — leave blank — when it's true, since Azure Cache presents a normal CA-trusted certificate that needs no pinning."
   type        = string
+  default     = ""
 }
 
 variable "fhirbridge_app_custom_domain" {

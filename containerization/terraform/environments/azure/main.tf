@@ -7,10 +7,11 @@
 # create the ACR first with a targeted apply, or push after the first apply and re-apply to update
 # the Container Apps' image references).
 #
-# SQL Server Express and Redis are pinned to a single replica each (Azure Files-backed data
-# directories are not safe for concurrent multi-instance processes) and are reachable by other
-# Container Apps in the same environment via their app name as hostname (Container Apps' built-in
-# internal DNS) — never exposed externally.
+# SQL Server Express is pinned to a single replica (Azure Files-backed data directories are not
+# safe for concurrent multi-instance processes) and is reachable by other Container Apps in the
+# same environment via its app name as hostname (Container Apps' built-in internal DNS) — never
+# exposed externally. Redis is either the same containerized/single-replica/internal-only pattern,
+# or a managed Azure Cache for Redis instance — see use_azure_cache_for_redis in variables.tf.
 
 terraform {
   required_version = ">= 1.6.0"
@@ -103,6 +104,18 @@ locals {
   demo_app_name       = "${var.name_prefix}-demo-app"
   worker_name         = "${var.name_prefix}-worker"
 
+  # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__Redis (was
+  # duplicated identically in both places before this became a local) — resolves to whichever of
+  # the two Redis resources use_azure_cache_for_redis actually created. Azure Cache's own
+  # abortConnect=false matches StackExchange.Redis's usual recommended default for a managed
+  # service (retries instead of failing fast on a transient connect issue); the containerized path
+  # doesn't set it, matching its pre-existing behavior.
+  redis_connection_string = var.use_azure_cache_for_redis ? (
+    "${azurerm_redis_cache.main[0].hostname}:${azurerm_redis_cache.main[0].ssl_port},password=${azurerm_redis_cache.main[0].primary_access_key},ssl=true,abortConnect=false"
+    ) : (
+    "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password[0].value},ssl=true"
+  )
+
   # Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
   # everything this deployment created, and is what the tag-based teardown path (see
   # ../../../azure-deploy/cleanup.sh|ps1's -UseTags mode, and az cli one-liners in the
@@ -171,7 +184,10 @@ resource "azurerm_storage_share" "sql_data" {
   quota                = 50
 }
 
+# Only needed for the containerized Redis path — Azure Cache for Redis is a managed PaaS service
+# with no Azure Files volume of its own. Gated the same as azurerm_container_app.redis below.
 resource "azurerm_storage_share" "redis_data" {
+  count                = var.use_azure_cache_for_redis ? 0 : 1
   name                 = "redis-data"
   storage_account_name = azurerm_storage_account.main.name
   quota                = 10
@@ -187,11 +203,12 @@ resource "azurerm_container_app_environment_storage" "sql_data" {
 }
 
 resource "azurerm_container_app_environment_storage" "redis_data" {
+  count                        = var.use_azure_cache_for_redis ? 0 : 1
   name                         = "redis-data"
   container_app_environment_id = azurerm_container_app_environment.main.id
   account_name                 = azurerm_storage_account.main.name
   access_key                   = azurerm_storage_account.main.primary_access_key
-  share_name                   = azurerm_storage_share.redis_data.name
+  share_name                   = azurerm_storage_share.redis_data[0].name
   access_mode                  = "ReadWrite"
 }
 
@@ -271,7 +288,10 @@ resource "azurerm_key_vault_secret" "jwt_signing_key" {
   }
 }
 
+# Only needed for the containerized Redis path — Azure Cache for Redis generates and manages its
+# own access keys, var.redis_password is simply unused when use_azure_cache_for_redis is true.
 resource "azurerm_key_vault_secret" "redis_password" {
+  count        = var.use_azure_cache_for_redis ? 0 : 1
   name         = "redis-password"
   value        = var.redis_password
   key_vault_id = azurerm_key_vault.main.id
@@ -541,9 +561,10 @@ resource "azurerm_container_app" "sqlserver" {
   }
 }
 
-# --- Redis (internal only, single replica) ---
+# --- Redis (internal only, single replica) — only when NOT using Azure Cache for Redis ---
 
 resource "azurerm_container_app" "redis" {
+  count                        = var.use_azure_cache_for_redis ? 0 : 1
   name                         = local.redis_name
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = data.azurerm_resource_group.main.name
@@ -568,7 +589,7 @@ resource "azurerm_container_app" "redis" {
     volume {
       name         = "redis-data"
       storage_type = "AzureFile"
-      storage_name = azurerm_container_app_environment_storage.redis_data.name
+      storage_name = azurerm_container_app_environment_storage.redis_data[0].name
     }
 
     container {
@@ -593,7 +614,7 @@ resource "azurerm_container_app" "redis" {
         "--tls-cert-file", "/certs/redis.crt",
         "--tls-key-file", "/certs/redis.key",
         "--tls-auth-clients", "no",
-        "--requirepass", azurerm_key_vault_secret.redis_password.value,
+        "--requirepass", azurerm_key_vault_secret.redis_password[0].value,
       ]
 
       volume_mounts {
@@ -613,6 +634,28 @@ resource "azurerm_container_app" "redis" {
       percentage      = 100
     }
   }
+}
+
+# --- Azure Cache for Redis — only when use_azure_cache_for_redis is true ---
+#
+# Managed alternative to the containerized Redis above: no container, no Azure Files volume, no
+# self-signed TLS cert to generate/bake into an image — Azure issues a normal CA-trusted
+# certificate, so FHIRBridge.Api/.Worker's ValidateRedisServerCertificate (see
+# DependencyInjection.cs) accepts it automatically as long as Redis:TrustedCertificateThumbprint is
+# left UNSET (see the dynamic "env" blocks below — that value is only ever emitted for the
+# containerized path). minimum_tls_version 1.2 matches what the app already requires
+# (ConnectionStrings:Redis must include ssl=true outside Development).
+resource "azurerm_redis_cache" "main" {
+  count                = var.use_azure_cache_for_redis ? 1 : 0
+  name                 = "${var.name_prefix}-cache"
+  resource_group_name  = data.azurerm_resource_group.main.name
+  location             = data.azurerm_resource_group.main.location
+  capacity             = var.azure_cache_capacity
+  family               = var.azure_cache_sku == "Premium" ? "P" : "C"
+  sku_name             = var.azure_cache_sku
+  minimum_tls_version  = "1.2"
+  non_ssl_port_enabled = false
+  tags                 = local.common_tags
 }
 
 # --- FHIRBridge app (Api + Gateway), public ---
@@ -675,11 +718,17 @@ resource "azurerm_container_app" "fhirbridge_app" {
       }
       env {
         name  = "ConnectionStrings__Redis"
-        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
+        value = local.redis_connection_string
       }
-      env {
-        name  = "Redis__TrustedCertificateThumbprint"
-        value = var.redis_trusted_certificate_thumbprint
+      # Only for the containerized path's self-signed cert — Azure Cache for Redis presents a
+      # normal CA-trusted certificate, which ValidateRedisServerCertificate accepts on its own when
+      # this is left unset. See the azurerm_redis_cache.main resource's comment above.
+      dynamic "env" {
+        for_each = var.use_azure_cache_for_redis ? [] : [1]
+        content {
+          name  = "Redis__TrustedCertificateThumbprint"
+          value = var.redis_trusted_certificate_thumbprint
+        }
       }
       env {
         name        = "Authentication__SigningKey"
@@ -927,11 +976,14 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "ConnectionStrings__Redis"
-        value = "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password.value},ssl=true"
+        value = local.redis_connection_string
       }
-      env {
-        name  = "Redis__TrustedCertificateThumbprint"
-        value = var.redis_trusted_certificate_thumbprint
+      dynamic "env" {
+        for_each = var.use_azure_cache_for_redis ? [] : [1]
+        content {
+          name  = "Redis__TrustedCertificateThumbprint"
+          value = var.redis_trusted_certificate_thumbprint
+        }
       }
       env {
         name  = "RuntimeWorker__Enabled"
@@ -1006,18 +1058,14 @@ locals {
     "azurerm_container_app_environment.main                = ${azurerm_container_app_environment.main.id}",
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
     "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
-    "azurerm_storage_share.redis_data                      = ${azurerm_storage_share.redis_data.id}",
     "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
     "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
-    "azurerm_container_app_environment_storage.redis_data  = ${azurerm_container_app_environment_storage.redis_data.id}",
     "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",
     "azurerm_key_vault_secret.jwt_signing_key              = ${azurerm_key_vault_secret.jwt_signing_key.id}",
-    "azurerm_key_vault_secret.redis_password               = ${azurerm_key_vault_secret.redis_password.id}",
     "azurerm_container_app.sqlserver                       = ${azurerm_container_app.sqlserver.id}",
-    "azurerm_container_app.redis                           = ${azurerm_container_app.redis.id}",
     "azurerm_container_app.fhirbridge_app                  = ${azurerm_container_app.fhirbridge_app.id}",
     "azurerm_container_app.demo_app                        = ${azurerm_container_app.demo_app.id}",
     "azurerm_container_app.worker                          = ${azurerm_container_app.worker.id}",

@@ -13,14 +13,24 @@ resource_group_name = "rg-tusharpuri"   # must already exist: az group create --
 image_tag           = "v1"
 sql_sa_password = "Ch4ngeMe!Str0ng"
 jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
-redis_password  = "replace-with-a-strong-redis-password"
+
+# Redis: false (default, or simply omit use_azure_cache_for_redis) uses the containerized Redis
+# below — redis_password and redis_trusted_certificate_thumbprint are both REQUIRED in that mode.
+# true instead creates a managed Azure Cache for Redis (see azure_cache_sku/azure_cache_capacity in
+# variables.tf) — both of those become unused, leave them blank or omit entirely.
+# use_azure_cache_for_redis = true
+# azure_cache_sku           = "Basic"
+# azure_cache_capacity      = 0
+
+redis_password = "replace-with-a-strong-redis-password"
 
 # Run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images -
-# it prints this value.
+# it prints this value. Only needed when use_azure_cache_for_redis is false (the default).
 redis_trusted_certificate_thumbprint = "replace-with-the-thumbprint-generate-cert-printed"
 
 # Optional — internal-only ports for SQL Server / Redis (reached only by the other Container Apps
-# in this environment, never externally). Uncomment to override.
+# in this environment, never externally; redis_port is meaningless when use_azure_cache_for_redis
+# is true — Azure Cache uses its own ssl_port). Uncomment to override.
 # sql_port   = 1433
 # redis_port = 6379
 
