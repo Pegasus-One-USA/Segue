@@ -188,6 +188,13 @@ export class WorkflowGraphMapperServiceV2 {
       configurationJson: JSON.stringify({
         ...this.redactSecrets(node.fields),
         __transformId: transformId,
+        // Which builder authored this workflow. The two lay the same graph out differently (V2 orders its
+        // canvas Source → Mapping → Transformation → De-identification → Destination and reorders on
+        // save/load; see toBackendOrder/toAuthoringOrder) and offer different next steps from a node's `+`,
+        // so reopening a V2 workflow in V1 shows the wrong picker even when the graph itself renders fine.
+        // Recorded explicitly rather than inferred from node types, which can't distinguish the builders
+        // for a workflow that happens to contain no V2-only step (e.g. a bare Source → Destination).
+        __builderVersion: 'v2',
         __name: node.fields['__name'] ?? item?.displayName ?? this.displayNameFor(node, item),
         // Cosmetic-only vendor hint (see SourceNode.vendorId's doc comment) — never fed into nodeType/
         // transformId, so it can't affect what NodeType the backend validates this node against. Only

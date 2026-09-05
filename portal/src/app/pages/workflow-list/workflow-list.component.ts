@@ -456,31 +456,44 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    * back to the selected version rather than blocking navigation.
    */
   onEdit(row: WorkflowSummary): void {
-    const fallback = this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder';
+    // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
+    // existed — those can't be detected and would otherwise always open in V1.
+    const forcedV2 = this.builderVersion() === 'v2';
     this.api.load(row.workflowId).subscribe({
-      next: definition => {
-        const isV2 = definition.nodes.some(node => {
-          const transformId = this.transformIdOf(node);
-          return transformId === 'transformation' || transformId === 'deidentification';
-        });
-        this.router.navigate([isV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
-          queryParams: { id: row.workflowId },
-        });
-      },
-      error: () => this.router.navigate([fallback], { queryParams: { id: row.workflowId } }),
+      next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
+      error: () => this.openBuilder(row.workflowId, forcedV2),
     });
   }
 
-  /** V2 stamps `__transformId` into every node's configuration (see WorkflowGraphMapperServiceV2's
-   *  nodeToRequest) — the only marker that distinguishes a V2 chain step from V1's own node types. */
-  private transformIdOf(node: { configurationJson?: string | null }): string | null {
-    if (!node.configurationJson) return null;
-    try {
-      const config = JSON.parse(node.configurationJson) as Record<string, unknown>;
+  private openBuilder(workflowId: string, useV2: boolean): void {
+    this.router.navigate([useV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
+      queryParams: { id: workflowId },
+    });
+  }
+
+  /**
+   * Whether this graph was authored in V2. Prefers the explicit `__builderVersion` stamp
+   * (WorkflowGraphMapperServiceV2.nodeToRequest); falls back to spotting a V2-only chain step for
+   * workflows saved before that stamp existed. The fallback can't identify a V2 workflow that contains
+   * no such step — a bare Source → Destination looks identical either way — which is what the toolbar
+   * override above is for.
+   */
+  private isV2Definition(definition: { nodes: { configurationJson?: string | null }[] }): boolean {
+    return definition.nodes.some(node => {
+      const config = this.configOf(node);
+      if (config['__builderVersion'] === 'v2') return true;
       const transformId = config['__transformId'];
-      return typeof transformId === 'string' ? transformId : null;
+      return transformId === 'transformation' || transformId === 'deidentification';
+    });
+  }
+
+  private configOf(node: { configurationJson?: string | null }): Record<string, unknown> {
+    if (!node.configurationJson) return {};
+    try {
+      const parsed = JSON.parse(node.configurationJson) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
     } catch {
-      return null;
+      return {};
     }
   }
 
