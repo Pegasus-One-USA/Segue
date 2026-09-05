@@ -600,12 +600,15 @@ export class NodeLibraryDialogComponent {
   });
 
   // ── search-filtered categories ────────────────────────────────────────────
+  // V2 lists only what can actually be picked right now: an item the current pipeline can't accept is
+  // omitted rather than shown greyed out, so the list never offers something that does nothing when
+  // clicked. Categories left with no selectable item drop out entirely.
   readonly filteredCategories = computed<LibraryCategory[]>(() => {
     const q = this.searchQuery().trim().toLowerCase();
-    if (!q) return this.allCategories();
+    const isSelectable = (i: LibraryItem): boolean => i.status !== 'disabled' && i.status !== 'hide';
     return this.allCategories()
       .map(cat => ({ ...cat, items: cat.items.filter(i =>
-        i.name.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)
+        isSelectable(i) && (!q || i.name.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q))
       )}))
       .filter(cat => cat.items.length > 0);
   });
