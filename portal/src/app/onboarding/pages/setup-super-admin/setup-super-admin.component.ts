@@ -84,10 +84,13 @@ export class SetupSuperAdminComponent {
     smtpHost:        ['', Validators.required],
     smtpPort:        [587, [Validators.required, Validators.min(1), Validators.max(65535)]],
     smtpEnableSsl:   [true],
-    smtpUsername:    [''],
-    smtpPassword:    [''],
+    // Required: this is a first-ever setup, so there is never a previously saved password to fall
+    // back to (unlike Email Settings' later edits) — a blank credential here would let setup finish
+    // "successfully" while every real email silently fails at the SMTP auth step.
+    smtpUsername:    ['', Validators.required],
+    smtpPassword:    ['', Validators.required],
     smtpFromAddress: ['', [Validators.required, Validators.email]],
-    smtpFromName:    ['FHIRBridge', Validators.required],
+    smtpFromName:    ['Segue', Validators.required],
     // Always enabled (see termsReadToEnd/onAcceptTermsChange — a disabled checkbox can't be clicked
     // at all, which reads as broken rather than gated). Validators.requiredTrue still blocks
     // canSubmit() below until it's actually checked.
@@ -132,6 +135,8 @@ export class SetupSuperAdminComponent {
       this.passwordsMatch() &&
       this.form.get('smtpHost')!.valid &&
       this.form.get('smtpPort')!.valid &&
+      this.form.get('smtpUsername')!.valid &&
+      this.form.get('smtpPassword')!.valid &&
       this.form.get('smtpFromAddress')!.valid &&
       this.form.get('smtpFromName')!.valid &&
       this.form.get('acceptTerms')!.valid
