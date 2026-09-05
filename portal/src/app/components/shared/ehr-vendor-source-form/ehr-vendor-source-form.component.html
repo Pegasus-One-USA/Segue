@@ -144,7 +144,7 @@
             <label class="eaf-label" for="eaf-epicBaseUrl">FHIR Base URL <span class="eaf-req">*</span></label>
             <div class="eaf-input-row">
               <input id="eaf-epicBaseUrl" class="eaf-input" type="url" formControlName="epicBaseUrl"
-                     placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+                     [placeholder]="baseUrlPlaceholder()" />
               <button class="eaf-discover-btn" type="button"
                       [disabled]="discStatus() === 'loading' || isReadonly"
                       (click)="runDiscover()">
@@ -330,6 +330,13 @@
               @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
                 <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
               }
+              @if (isEclinicalWorks() && audience() === 'backend-system') {
+                <p class="eaf-hint"><strong>eCW must allow-list this URL's host on its own servers</strong>, on top of
+                  the app registration. A host that isn't allow-listed fails with a bare <code>invalid_client</code>
+                  that looks identical to a wrong <code>kid</code>, and it can't be checked from here — ask eCW.
+                  Prefer pointing this at the JWKS URL your eCW app is already registered and allow-listed against,
+                  rather than generating a new key whose URL only exists after this connection is saved.</p>
+              }
               @if (audience() === 'backend-system' && (isGenKey() || isImportKey())) {
                 <p class="eaf-hint">Auto-filled with this connection's real JWKS URL once known — save first if it still shows a placeholder.</p>
               } @else if (keyLoadedFromExistingConnection()) {
@@ -424,7 +431,7 @@
                   @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
                     <p class="eaf-error-msg">Key ID is required.</p>
                   }
-                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what {{ displayVendor() }}'s app registration expects.</p>
+                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what your {{ displayVendor() }} app registration expects.</p>
                 </div>
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
                   <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
@@ -672,9 +679,16 @@
             <span class="eaf-badge-neutral">{{ method.label }}</span>
           </div>
 
-          @if (vendor() === 'Athenahealth') {
+          @if (vendor() === 'Athenahealth' || isEclinicalWorks()) {
             <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
               from whatever is mapped on the destination — configure them there, not here.</p>
+          }
+
+          @if (vendorOmittedResources().length) {
+            <p class="eaf-section-sub">{{ displayVendor() }} publishes no <code>system/</code> read scope for
+              {{ vendorOmittedResources().join(', ') }}, so {{ vendorOmittedResources().length === 1 ? 'it is' : 'they are' }}
+              left out of this connection's scope request. Anything mapped for
+              {{ vendorOmittedResources().length === 1 ? 'it' : 'them' }} on a destination will not be retrieved.</p>
           }
 
           <div class="eaf-grid">

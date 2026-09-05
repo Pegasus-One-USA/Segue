@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
@@ -42,6 +42,35 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         _logger = logger ?? NullLogger<SourceConnectionRuntimeResolver>.Instance;
     }
 
+    // Pages are a transport detail, not a data-volume policy: the operator's volume knob is Max Records Per Run,
+    // and page size is theirs too, so the page cap is derived from both rather than hard-coded. It used to be a
+    // bare "5", which with the default 100-record page silently capped EVERY resource type at 500 — no error, no
+    // PartialSuccess, just a short count, and no setting anywhere to raise it (there is no MaxPages column). A
+    // resource type with 501 records simply lost the rest.
+    //
+    // With Max Records Per Run set, that record cap is what bounds the run (SourceNodeExecutor trims to it), so no
+    // single type needs more pages than can reach it. With it unset the operator asked for everything, so page
+    // until the server stops offering a next link — bounded only by the backstop below, which exists to stop a
+    // server that keeps handing out next links forever, not to cap legitimate data.
+    private const int PageCountBackstop = 1000;
+
+    private static int ResolveMaxPages(int pageSize, int? maxRecordsPerRun)
+    {
+        if (pageSize <= 0)
+        {
+            return PageCountBackstop;
+        }
+
+        if (maxRecordsPerRun is not { } maxRecords || maxRecords <= 0)
+        {
+            return PageCountBackstop;
+        }
+
+        // Ceiling division: a 250-record cap over 100-record pages still needs the partial third page.
+        var pagesToReachCap = (maxRecords + pageSize - 1) / pageSize;
+        return Math.Min(pagesToReachCap, PageCountBackstop);
+    }
+
     public async Task<FhirSourceConfiguration?> ResolveAsync(
         Guid sourceConnectionId,
         string? searchParameters,
@@ -81,6 +110,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         if (!isLoopback && sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.PrivateKey, cancellationToken);
+            SigningKeySecretGuard.EnsurePemShaped(privateKeyPem, sourceConnection.Authentication.PrivateKey, sourceConnection.Name);
         }
 
         string? clientSecret = null;
@@ -120,7 +150,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 retrieval.ResourceTypes,
                 scopeVersion: scopeVersion,
                 scopeVersionDetected: false,
-                supportedScopes: null).Scopes
+                supportedScopes: null,
+                vendor: sourceConnection.SourceSystemType).Scopes
             : sourceConnection.Authentication.Scopes.Any()
                 ? sourceConnection.Authentication.Scopes
                 : _scopeGenerator.Generate(
@@ -128,7 +159,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                     [],
                     scopeVersion: scopeVersion,
                     scopeVersionDetected: false,
-                    supportedScopes: null).Scopes;
+                    supportedScopes: null,
+                    vendor: sourceConnection.SourceSystemType).Scopes;
 
         // eClinicalWorks (Healow) rejects the ENTIRE token request (400 invalid_scope) if it carries a single resource
         // scope its app registration doesn't grant, and it accepts no wildcard — so the requested set MUST be a subset
@@ -155,6 +187,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 : sourceConnection.Authentication.Scopes.Any() ? "stored" : $"fallback-generated({scopeVersion})",
             string.Join(' ', scopes));
 
+        var pageSize = retrieval?.PageSize ?? 100;
+
         var config = new FhirSourceConfiguration(
             sourceType,
             sourceConnection.Name,
@@ -164,8 +198,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             sourceConnection.Authentication.KeyId,
             privateKeyPem,
             scopes,
-            retrieval?.PageSize ?? 100,
-            5,
+            pageSize,
+            ResolveMaxPages(pageSize, retrieval?.MaxRecordsPerRun),
             sourceConnection.Id,
             composedSearchParameters,
             clientSecret,

@@ -1,4 +1,5 @@
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Application.Services;
@@ -12,6 +13,15 @@ namespace FHIRBridge.Application.Services;
 /// </list>
 /// When <c>scopes_supported</c> is supplied, each generated resource scope is checked against it (exact or wildcard
 /// match) and any unsupported ones are reported — never silently dropped, so the caller decides.
+/// <para>
+/// The suffix rule above holds for every vendor that accepts the generic SMART vocabulary. A vendor registered in
+/// <see cref="VendorScopeCatalog"/> instead spells each <c>system/</c> read scope with whatever access level it
+/// actually advertises for that resource type, and contributes no scope at all for a resource type it advertises
+/// none for — those are reported in <see cref="GeneratedScopesDto.UnsupportedScopes"/>. This matters for vendors
+/// that fail the WHOLE token request on a single unrecognized scope (eCW and athenahealth both do), where one
+/// wrongly-spelled suffix costs every other scope in the request too. Scoped to the <c>system/</c> prefix
+/// (Backend) deliberately: the interactive prefixes' generation is left byte-identical.
+/// </para>
 /// </summary>
 public sealed class ScopeGeneratorService : IScopeGeneratorService
 {
@@ -20,7 +30,8 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
         IEnumerable<string> resourceTypes,
         string scopeVersion,
         bool scopeVersionDetected,
-        IReadOnlyCollection<string>? supportedScopes)
+        IReadOnlyCollection<string>? supportedScopes,
+        SourceSystemType? vendor = null)
     {
         var version = string.Equals(scopeVersion, "v1", StringComparison.OrdinalIgnoreCase) ? "v1" : "v2";
         // Prefix by application type (is-pattern, not a switch on ApplicationType — the engine's dispatch stays in the
@@ -51,19 +62,45 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
             }
         }
 
-        var resourceScopes = resourceTypes
+        var requestedResourceTypes = resourceTypes
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .Select(r => r.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(r => r, StringComparer.OrdinalIgnoreCase)
-            .Select(r => $"{prefix}/{r}.{suffix}")
             .ToList();
+
+        // A vendor profile only governs system/ scopes (see the class remarks) — every other prefix, and every
+        // vendor with no registered profile, keeps the uniform version suffix exactly as before.
+        var profile = prefix == "system" ? VendorScopeCatalog.For(vendor) : null;
+
+        var resourceScopes = new List<string>(requestedResourceTypes.Count);
+        // Resource types this vendor advertises no read scope for at all. Reported rather than requested: asking
+        // for a scope the authorization server doesn't publish is what fails the entire token request.
+        var vendorUnsupported = new List<string>();
+        foreach (var resourceType in requestedResourceTypes)
+        {
+            if (profile is null)
+            {
+                resourceScopes.Add($"{prefix}/{resourceType}.{suffix}");
+            }
+            else if (profile.TryGetReadAccessLevel(resourceType, out var vendorAccessLevel))
+            {
+                resourceScopes.Add($"{prefix}/{resourceType}.{vendorAccessLevel}");
+            }
+            else
+            {
+                vendorUnsupported.Add($"{prefix}/{resourceType}.{suffix}");
+            }
+        }
+
         scopes.AddRange(resourceScopes);
 
         var validated = supportedScopes is { Count: > 0 };
         var unsupported = validated
-            ? resourceScopes.Where(scope => !IsSupported(scope, supportedScopes!)).ToList()
-            : [];
+            ? vendorUnsupported
+                .Concat(resourceScopes.Where(scope => !IsSupported(scope, supportedScopes!)))
+                .ToList()
+            : vendorUnsupported;
 
         return new GeneratedScopesDto(
             ScopeVersion: version,
@@ -71,7 +108,9 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
             Scopes: scopes,
             ScopeString: string.Join(' ', scopes),
             UnsupportedScopes: unsupported,
-            ValidatedAgainstDiscovery: validated);
+            // A vendor profile is itself a statement of what the server publishes, captured from its own
+            // discovery document — so a profile-filtered result is validated even without a live scopes_supported.
+            ValidatedAgainstDiscovery: validated || profile is not null);
     }
 
     // A scope is supported if the server advertises it exactly, or via a wildcard that covers it — e.g. advertised

@@ -124,6 +124,11 @@ export interface SourceAuthenticationRequest {
   privateKeyKeyVaultName?: string | null;
   privateKeySecretName?: string | null;
   keyId?: string | null;
+  /** The URL actually registered with the EHR to fetch this connection's JWK Set (SourceAuthenticationDto.JwksUrl).
+   *  Purely informational — FHIRBridge never fetches it — but eCW additionally requires this URL's HOST to be
+   *  allow-listed on its own servers, so persisting what was really registered is what makes a later bare
+   *  `invalid_client` diagnosable. Null for connections that don't sign a JWT assertion. */
+  jwksUrl?: string | null;
   /** Scopes Epic (or another EHR) actually granted on the last successful Discover token exchange — distinct
    *  from `scopes` (what was requested). Null until Discover has run once. */
   discoveredScopes?: string[] | null;

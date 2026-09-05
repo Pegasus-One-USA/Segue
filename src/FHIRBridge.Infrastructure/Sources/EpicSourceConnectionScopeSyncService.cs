@@ -82,7 +82,8 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
             usedResourceTypes,
             scopeVersion,
             scopeVersionDetected: false,
-            supportedScopes: null);
+            supportedScopes: null,
+            vendor: sourceConnection.SourceSystemType);
 
         var retrievalChanged = false;
         if (isAthenahealthBackend && usedResourceTypes.Count > 0)

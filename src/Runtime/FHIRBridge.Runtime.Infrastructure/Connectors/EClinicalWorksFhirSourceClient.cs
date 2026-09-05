@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using Microsoft.Extensions.Logging;
@@ -52,9 +52,25 @@ public sealed class EClinicalWorksFhirSourceClient : FhirSourceConnectorBase
     /// sandbox during a real Provider EMR launch run:
     /// <list type="bullet">
     ///   <item>eCW's US Core <c>Observation</c> search requires a <c>category</c> (a bare patient search is rejected);
-    ///   eCW serves the three USCDI categories below (vitals, labs, social-history/smoking). The base's Epic table
-    ///   lists 11 categories eCW does not have, which only produce wasted/failed per-category requests — and enough of
-    ///   them to blow past eCW's ~5-minute access-token lifetime mid-run.</item>
+    ///   eCW's Observation categories are the seven the eCW Backend Single Patient proof-of-concept probes and
+    ///   that a live Provider EMR run confirmed all answer 200 — NOT the three (vitals/labs/social-history) listed
+    ///   here originally. That under-count silently dropped every <c>survey</c> Observation: on the verified
+    ///   reference patient, laboratory returned 28 and social-history 2, but <c>survey</c> returned a further 25
+    ///   (disability status, PRAPARE scores, the SDOH screening answers) — 30 of 55 extracted instead of all 55,
+    ///   with no error, because an absent category value simply never gets requested. <c>vital-signs</c>,
+    ///   <c>exam</c>, <c>imaging</c> and <c>sdoh</c> returned nothing for that patient but are accepted, and are
+    ///   kept so a patient who does have them is not silently short-changed the same way; <c>sdoh</c> is normally
+    ///   redundant (eCW dual-tags those resources <c>survey</c>) and dedupe by resource id absorbs the overlap.
+    ///   Still far short of the base's Epic table of 11, whose eCW-invalid values produced wasted/failed requests —
+    ///   and enough of them to blow past eCW's ~5-minute access-token lifetime mid-run, since the token is acquired
+    ///   ONCE per resource-type fetch (see FhirSourceConnectorBase.SearchAsync) and not refreshed between the
+    ///   per-category requests.</item>
+    ///   <item><c>CarePlan</c> needs <c>category=assess-plan</c> and <c>CareTeam</c> needs <c>status=active</c> —
+    ///   the single US Core value eCW serves for each, taken from the eCW Backend Single Patient proof-of-concept's
+    ///   own verified endpoint catalog (RnD/eCWBackendSinglePatientAPI, <c>src/Catalog.php</c>). Neither had any
+    ///   entry here before, so a CarePlan search went out with no category at all; the base's Epic CarePlan default
+    ///   lists ten Epic-specific category codes eCW does not serve, which is why this table overrides rather than
+    ///   extends it.</item>
     ///   <item><c>MedicationRequest</c> and <c>Condition</c> are intentionally ABSENT (no default → one bare
     ///   <c>?patient=</c> search). Unlike Epic, eCW accepts a bare Condition search, and it REJECTS a MedicationRequest
     ///   <c>status</c> filter outright with 400 "does not know how to handle get operation with parameter
@@ -64,7 +80,15 @@ public sealed class EClinicalWorksFhirSourceClient : FhirSourceConnectorBase
     protected override IReadOnlyDictionary<string, (string ParameterName, string DefaultValue)> DefaultSearchParametersByResourceType { get; } =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Observation"] = ("category", "vital-signs,laboratory,social-history"),
+            ["Observation"] = ("category", "laboratory,vital-signs,social-history,survey,exam,imaging,sdoh"),
+            ["CarePlan"] = ("category", "assess-plan"),
+            ["CareTeam"] = ("status", "active"),
+            // MedicationRequest is deliberately still ABSENT even though the proof-of-concept sends
+            // intent=order (US Core's documented requirement). A live eCW Provider EMR run already confirmed a
+            // BARE ?patient= MedicationRequest search succeeds, and that eCW rejects an added `status` filter
+            // outright ("does not know how to handle get operation with parameter [patient,status]"). Adding a
+            // second filter here would change behaviour that is already verified working, for a requirement eCW
+            // evidently does not enforce — so it stays out until a live run shows the bare search failing.
         };
 
     /// <summary>

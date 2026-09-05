@@ -50,12 +50,14 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
  */
 export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
   Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
-  // eClinicalWorks (Healow): Patient, Provider EHR launch, AND Backend System are rolled out. Provider EHR launch
-  // (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch → PKCE →
-  // confidential client_secret_basic token → multi-resource FHIR reads). Backend System was verified end-to-end
-  // against the live eCW sandbox (SMART Backend Services: RS384 private_key_jwt → client_credentials token →
-  // Group/{id}/$export → poll → NDJSON; see docs/backend/17-ecw-backend-bulkexport-integration-plan.md). Provider
-  // standalone stays disabled until its own sandbox credentials/round-trip verification exist — re-enable when verified.
+  // eClinicalWorks (Healow): Patient, Provider EHR launch AND Backend System are rolled out. Provider EHR launch
+  // (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch →
+  // PKCE → confidential client_secret_basic token → multi-resource FHIR reads). Backend System is eCW's
+  // "Backend — Single Patient" API: client_credentials + RS384 private_key_jwt, system/ scopes, one authorized
+  // patient (see the 'single-patient' Data Retrieval Method, which is offered for this vendor only). Its scope
+  // vocabulary differs per resource type — see VENDOR_SCOPE_PROFILES in data/vendor-scope-catalog.data.ts and its
+  // authoritative backend twin, VendorScopeCatalog. Provider standalone stays disabled until its own sandbox
+  // credentials/round-trip verification exist.
   Healow: ['provider-standalone'],
 };
 

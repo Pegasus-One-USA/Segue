@@ -1,4 +1,4 @@
-<div class="list-page">
+﻿<div class="list-page">
 
   <!-- Header -->
   <div class="page-head">
@@ -250,7 +250,7 @@
               </td>
               <td>
                 @if (w.sourceSystemType) {
-                  <span class="tag">{{ w.sourceSystemType }}</span>
+                  <span class="tag">{{ sourceSystemLabel(w.sourceSystemType) }}</span>
                 } @else {
                   <span class="cell-muted">—</span>
                 }
