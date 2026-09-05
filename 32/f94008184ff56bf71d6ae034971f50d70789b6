@@ -1,0 +1,25 @@
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_5849c970b9c366::t_ba9933cbd2db9e 112-129,133,145
+  s_5849c970b9c366::t_bfb864db585ee9 79
+  s_5849c970b9c366::t_29530c954334bc 26-27
+  s_5849c970b9c366::t_7685a2179fde10 110-111
+portal/src/app/data/node-permission-visibility.util.ts
+  s_5849c970b9c366::t_479220951ae4e9 1-60
+  s_5849c970b9c366::t_05eaf2887dbc5c 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "32f94008184ff56bf71d6ae034971f50d70789b6",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

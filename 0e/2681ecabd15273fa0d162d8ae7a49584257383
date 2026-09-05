@@ -1,0 +1,27 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260905075313_FilterUsersExternalUserIdIndexBySoftDelete.cs
+  s_5849c970b9c366::t_7c450897cd7332 1-39
+src/FHIRBridge.Infrastructure/Persistence/Configurations/UserConfiguration.cs
+  s_5849c970b9c366::t_fc432d34a27c2f 113,115-119,122
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_5849c970b9c366::t_1cc7f609527caf 234-235
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260905075313_FilterUsersExternalUserIdIndexBySoftDelete.Designer.cs
+  s_5849c970b9c366::t_f426e7881f582b 1-6011
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_5849c970b9c366::t_ffb4abf1906e60 4484-4485
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0e2681ecabd15273fa0d162d8ae7a49584257383",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

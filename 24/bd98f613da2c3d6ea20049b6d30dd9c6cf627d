@@ -1,0 +1,81 @@
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.scss
+  s_5849c970b9c366::t_fefd772e97839c 237-254,262-301
+  s_5849c970b9c366::t_bb18e90ebfa1ce 236
+  s_5849c970b9c366::t_71b2f587bddb6a 255-257,259-261
+  s_5849c970b9c366::t_b6854129f789cb 302
+  s_5849c970b9c366::t_998b746563f11c 258
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.scss
+  s_5849c970b9c366::t_ba1f01331589d8 118-134,142-176
+  s_5849c970b9c366::t_49b3e8b5bca8a3 135-137,139-141
+  s_5849c970b9c366::t_7920a8c348c65a 177-178
+  s_5849c970b9c366::t_9c43e82238bfeb 138
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.html
+  s_5849c970b9c366::t_b088235a7f3895 50-59,61,63
+portal/src/app/system-settings/dialogs/system-setting-dialog/system-setting-dialog.component.html
+  s_5849c970b9c366::t_1e140baba7e2d8 56-64,66,68
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_5849c970b9c366::t_1390f16acef147 114-122,124-165
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.scss
+  s_5849c970b9c366::t_cd4cfc491a00c5 101-119,127-161
+  s_5849c970b9c366::t_98e159cda4a0c4 120-122,124-126
+  s_5849c970b9c366::t_8bd588fd16e637 162-163
+  s_5849c970b9c366::t_688def11a10471 123
+portal/src/app/user-management/dialogs/create-user-dialog/create-user-dialog.component.html
+  s_5849c970b9c366::t_14928573719f9a 98-110
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_5849c970b9c366::t_011801322f0937 58-67,69,71,73-82,84,86,88-97,99,101
+portal/src/app/user-management/pages/user-list/tabs/role-tab.component.scss
+  s_5849c970b9c366::t_cb72708c7b810c 172-204,208-238
+  s_5849c970b9c366::t_0a7423070dd11a 239
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_5849c970b9c366::t_800e2c7bb6397b 43-57
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.scss
+  s_5849c970b9c366::t_dd16f504b23218 115-184
+  s_5849c970b9c366::t_ea000613050c37 112-114
+  s_5849c970b9c366::t_33958c5e80fc7d 185
+portal/src/app/auth/pages/signup/signup.component.html
+  s_5849c970b9c366::t_f540a1e2f03ec6 137-146
+portal/src/app/user-management/dialogs/invite-user-dialog/invite-user-dialog.component.html
+  s_5849c970b9c366::t_3b9941e3651208 50-65,67,69-72
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_5849c970b9c366::t_a7506cd3ea699d 264-266
+  s_5849c970b9c366::t_b9d5f2bf833a4f 25-26
+  s_5849c970b9c366::t_9cdd4fa1e8ed85 178,181-193,196,205
+  s_5849c970b9c366::t_63795cc4650017 19
+  s_5849c970b9c366::t_a5c1b827970dd1 80
+  s_5849c970b9c366::t_9480d522bb7385 175-177
+  s_5849c970b9c366::t_55614005b58fb0 179-180
+  s_5849c970b9c366::t_0901013984fe64 194-195
+  s_5849c970b9c366::t_c6fe2d9dbe591a 197-199,202-204
+  s_5849c970b9c366::t_2f799ad9fb1ecf 206
+  s_5849c970b9c366::t_05e66d8e5a935f 267
+  s_5849c970b9c366::t_bd143d4301637e 110,174,200-201,210,272,314,316,352,382-384,405,407
+portal/src/app/auth/pages/signup/signup.component.scss
+  s_5849c970b9c366::t_b14c1161c43ca4 212-264
+  s_5849c970b9c366::t_2415266eac8107 265
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.scss
+  s_5849c970b9c366::t_2e1cc68058ab47 115-177
+  s_5849c970b9c366::t_9a17c61d900e14 112-114
+  s_5849c970b9c366::t_788650c202376d 178
+  s_5849c970b9c366::t_5caa3d1eeaaf59 111
+portal/src/app/user-management/dialogs/edit-user-dialog/edit-user-dialog.component.html
+  s_5849c970b9c366::t_ff810647c83a07 50-62,64-76
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_5849c970b9c366::t_83c76ea85c561d 126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "24bd98f613da2c3d6ea20049b6d30dd9c6cf627d",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
