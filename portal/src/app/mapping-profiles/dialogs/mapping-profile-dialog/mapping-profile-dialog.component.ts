@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
@@ -124,7 +123,7 @@ function toMappingFieldDto(row: MappingRow): MappingFieldDto {
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, MatDialogModule, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatProgressSpinnerModule,
+    MatFormFieldModule, MatInputModule, MatCheckboxModule, MatProgressSpinnerModule,
     MappingProfileCanvasComponent,
   ],
   templateUrl: './mapping-profile-dialog.component.html',

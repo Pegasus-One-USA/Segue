@@ -111,10 +111,58 @@
 .role-switcher {
   width: 240px;
   flex-shrink: 0;
+}
 
-  ::ng-deep {
-    .mat-mdc-text-field-wrapper { border-radius: var(--radius-base); }
-    .mat-mdc-select-panel { background: var(--color-surface) !important; }
+// ─── Native <select> (dw-select convention, replacing mat-select — matching
+// Invite User / Edit User) ───────────────────────────────────────────────────
+.dw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dw-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dw-select-wrap {
+  position: relative;
+
+  &::after {
+    content: '›';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%) rotate(90deg);
+    color: var(--color-muted-2);
+    pointer-events: none;
+    font-size: 16px;
+  }
+}
+
+.dw-select {
+  height: 38px;
+  padding: 8px 32px 8px 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  outline: none;
+  appearance: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
 }
 

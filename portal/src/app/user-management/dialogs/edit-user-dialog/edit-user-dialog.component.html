@@ -47,27 +47,33 @@
 
       <!-- Row 2: Role + Status -->
       <div class="form-row form-row--2col">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
-          <mat-label>Role</mat-label>
-          <mat-icon matPrefix>badge</mat-icon>
-          <mat-select formControlName="role">
-            @for (opt of roleOptions; track opt.value) {
-              <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
-            }
-          </mat-select>
-          <mat-error *ngIf="hasError('role', 'required')">Role is required</mat-error>
-        </mat-form-field>
+        <div class="dw-field form-field" [class.dw-field--error]="hasError('role', 'required')">
+          <label class="dw-label" for="edit-role">Role</label>
+          <div class="dw-select-wrap">
+            <select id="edit-role" class="dw-select" formControlName="role">
+              @for (opt of roleOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+          @if (hasError('role', 'required')) {
+            <span class="dw-error">Role is required</span>
+          }
+        </div>
 
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field">
-          <mat-label>Status</mat-label>
-          <mat-icon matPrefix>toggle_on</mat-icon>
-          <mat-select formControlName="status">
-            @for (opt of statusOptions; track opt.value) {
-              <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
-            }
-          </mat-select>
-          <mat-error *ngIf="hasError('status', 'required')">Status is required</mat-error>
-        </mat-form-field>
+        <div class="dw-field form-field" [class.dw-field--error]="hasError('status', 'required')">
+          <label class="dw-label" for="edit-status">Status</label>
+          <div class="dw-select-wrap">
+            <select id="edit-status" class="dw-select" formControlName="status">
+              @for (opt of statusOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+          @if (hasError('status', 'required')) {
+            <span class="dw-error">Status is required</span>
+          }
+        </div>
       </div>
 
       <!-- Row 3: Department + Job Title -->
