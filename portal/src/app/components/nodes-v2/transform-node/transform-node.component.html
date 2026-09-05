@@ -1,0 +1,47 @@
+<span class="port port-in"></span>
+<span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
+
+@if (!isMapping() && !readOnly() && canDelete()) {
+  <button
+    class="sn-del-btn"
+    (click)="onDeleteClick($event)"
+    (pointerdown)="$event.stopPropagation()"
+    title="Delete this module"
+  >
+    <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+  </button>
+}
+
+<!-- V2: a destination is NOT the end of the chain — Mapping / Transformation / De-identification are
+     added from its own `+` (see ApplicabilityServiceV2.pickerModel), so unlike V1 the button shows for
+     destinations too. The picker itself decides whether anything is actually offerable. -->
+@if (!readOnly() && canAddNext()) {
+  <button
+    class="sn-add-btn"
+    (click)="onAddNextClick($event)"
+    (pointerdown)="$event.stopPropagation()"
+    title="Add next module"
+  >
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+}
+
+<div
+  class="sn-circle"
+  [style.background]="nodeColor()"
+  [style.--node-color]="nodeColor()"
+  (pointerdown)="onCirclePointerDown($event)"
+  (pointermove)="onCirclePointerMove($event)"
+  (pointerup)="onCirclePointerUp($event)"
+  (pointercancel)="onCirclePointerUp($event)"
+>
+  <span class="sn-abbr">{{ abbr() }}</span>
+</div>
+
+<div class="sn-labels">
+  <strong class="sn-name">{{ transformName() }}</strong>
+  <span class="sn-context">from {{ sourceName() }}</span>
+  @if (isCaveat()) {
+    <span class="sn-caveat-tag">⚠ caveat</span>
+  }
+</div>

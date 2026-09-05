@@ -1,0 +1,28 @@
+:host { display: contents; }
+
+.connector-svg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.connector {
+  fill: none; stroke: #d4d9e3; stroke-width: 3; stroke-linecap: round;
+}
+
+.connector-flow {
+  fill: none; stroke: var(--purple); stroke-width: 6; stroke-linecap: round;
+  stroke-dasharray: .1 17;
+  animation: flow-dots 1.05s linear infinite;
+}
+
+.connector-temp {
+  fill: none; stroke: var(--purple); stroke-width: 3; stroke-dasharray: 6 7; opacity: .85;
+}
+
+@keyframes flow-dots { to { stroke-dashoffset: -17.1; } }
+@media (prefers-reduced-motion: reduce) {
+  .connector-flow { animation: none; stroke-dasharray: 2 10; }
+}

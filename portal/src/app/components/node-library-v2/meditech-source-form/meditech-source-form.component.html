@@ -1,0 +1,9 @@
+<app-ehr-vendor-source-form
+  [vendor]="'MeditechGreenfield'"
+  [vendorLabel]="'MEDITECH Greenfield'"
+  [isMaximized]="isMaximized()"
+  (saved)="saved.emit()"
+  (cancelled)="cancelled.emit()"
+  (closeAll)="closeAll.emit()"
+  (toggleMaximizeRequest)="toggleMaximizeRequest.emit()"
+/>

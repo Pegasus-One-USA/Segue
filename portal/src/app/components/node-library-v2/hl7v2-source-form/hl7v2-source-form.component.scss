@@ -1,0 +1,44 @@
+.hl7-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hl7-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hl7-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #1f2937);
+}
+
+.hl7-req {
+  color: var(--color-danger, #dc2626);
+}
+
+.hl7-input {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.hl7-field--error .hl7-input {
+  border-color: var(--color-danger, #dc2626);
+}
+
+.hl7-error-msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-danger, #dc2626);
+}
+
+.hl7-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+}

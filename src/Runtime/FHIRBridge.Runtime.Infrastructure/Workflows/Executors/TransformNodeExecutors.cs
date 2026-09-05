@@ -1086,7 +1086,21 @@ public abstract class PassThroughNodeExecutor : WorkflowNodeExecutorBase
         => inputs.SelectMany(input => input.Payload switch
             {
                 ResourceBatch batch => batch.Resources,
-                NormalizedResourceBatch batch => batch.Resources.Select((resource, index) => new ResourceEnvelope("Patient", index.ToString(), resource)),
+                // NormalizedResourceBatch.Resources is IReadOnlyCollection<object>, and every producer
+                // (PassThroughNodeExecutor — Normalization / DataQualityScoring / FlattenExtensions /
+                // PatientMatching) fills it with ResourceEnvelope instances. Wrapping those in ANOTHER
+                // envelope put the envelope object itself in the Payload slot, so every downstream
+                // Convert.ToString(resource.Payload) yielded "ResourceEnvelope { ... }" instead of the
+                // resource JSON — "'R' is an invalid start of a value" out of the mapping engine, and a
+                // silently skipped de-identification pass before it. It also relabelled every resource as
+                // "Patient" with its index as the id. Unwrap first, exactly as the DeIdentifiedBatch branch
+                // below already does for the same object-typed collection.
+                NormalizedResourceBatch batch => batch.Resources.Select((resource, index) => resource switch
+                {
+                    ResourceEnvelope envelope => envelope,
+                    MappedDestinationRecord record => new ResourceEnvelope(record.ResourceType, record.SourceResourceId ?? index.ToString(), record.SourceJson ?? "{}"),
+                    _ => new ResourceEnvelope("Patient", index.ToString(), resource)
+                }),
                 DeIdentifiedBatch batch => batch.Records.Select((resource, index) => resource switch
                 {
                     ResourceEnvelope envelope => envelope,

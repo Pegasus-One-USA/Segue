@@ -1,0 +1,13 @@
+<app-modal-overlay [open]="open()" (closed)="closed.emit()">
+  <section class="payload-box">
+    <header>
+      <h2>Scenario payload</h2>
+      <button class="close-x" type="button" (click)="closed.emit()">×</button>
+    </header>
+    <pre>{{ json }}</pre>
+    <footer>
+      <button class="cancel" type="button" (click)="copy()">Copy</button>
+      <button class="save"   type="button" (click)="closed.emit()">Done</button>
+    </footer>
+  </section>
+</app-modal-overlay>

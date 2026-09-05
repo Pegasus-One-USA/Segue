@@ -69,6 +69,19 @@ export const routes: Routes = [
             m => m.WorkflowBuilderComponent
           ),
       },
+      // V2 — the independent Source → Destination → Mapping → Transformation → De-identification canvas.
+      // A fully separate component/service/model tree from V1 above (see pages/workflow-builder-v2/) —
+      // nothing here shares code with the V1 route.
+      {
+        path: 'workflow-builder-v2',
+        canActivate: [permissionGuard],
+        data: { workflowModuleAccess: true },
+        canDeactivate: [unsavedChangesGuard],
+        loadComponent: () =>
+          import('./pages/workflow-builder-v2/workflow-builder-v2.component').then(
+            m => m.WorkflowBuilderV2Component
+          ),
+      },
 
       // Workflows list (launch / run / view destination data)
       {

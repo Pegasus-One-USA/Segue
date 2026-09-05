@@ -1,0 +1,43 @@
+<div
+  class="fm-loadpayload-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-loadpayload-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-loadpayload-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+    <h3 class="fm-loadpayload-title" id="fm-loadpayload-title">Load source payload — {{ resource() }}</h3>
+    <p class="fm-loadpayload-subtitle">
+      Paste a FHIR {{ resource() }} resource (or a Bundle containing one) below. Every nested object
+      and array — including extensions — becomes an expandable group in the source tree, replacing
+      the built-in field list for {{ resource() }} in this mapping session.
+    </p>
+
+    <textarea
+      #payloadInput
+      class="fm-loadpayload-textarea"
+      [value]="raw()"
+      (input)="onInput($any($event.target).value)"
+      placeholder="Paste FHIR JSON here…"
+      [disabled]="submitting()"
+      spellcheck="false"
+    ></textarea>
+
+    @if (error()) {
+      <p class="fm-loadpayload-error">{{ error() }}</p>
+    }
+
+    <div class="fm-loadpayload-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="onResetToOriginal()">
+        Reset to Original
+      </button>
+      <span class="fm-loadpayload-actions-spacer"></span>
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Loading…' : 'Load payload' }}
+      </button>
+    </div>
+  </div>
+</div>
