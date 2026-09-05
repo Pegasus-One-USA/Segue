@@ -223,13 +223,19 @@
 
           <div class="field-row">
             <div class="field-group">
-              <label class="field-label" for="smtpUsername">Username</label>
+              <label class="field-label" for="smtpUsername">Username <span class="required">*</span></label>
               <input id="smtpUsername" class="text-input" type="text" formControlName="smtpUsername" autocomplete="off" />
+              @if (submitted() && form.get('smtpUsername')!.invalid) {
+                <p class="field-hint field-hint--error">Username is required.</p>
+              }
             </div>
 
             <div class="field-group">
-              <label class="field-label" for="smtpPassword">Password</label>
+              <label class="field-label" for="smtpPassword">Password <span class="required">*</span></label>
               <input id="smtpPassword" class="text-input" type="password" formControlName="smtpPassword" autocomplete="new-password" />
+              @if (submitted() && form.get('smtpPassword')!.invalid) {
+                <p class="field-hint field-hint--error">Password is required.</p>
+              }
             </div>
           </div>
 
@@ -250,7 +256,7 @@
 
             <div class="field-group">
               <label class="field-label" for="smtpFromName">From name <span class="required">*</span></label>
-              <input id="smtpFromName" class="text-input" type="text" formControlName="smtpFromName" placeholder="FHIRBridge" />
+              <input id="smtpFromName" class="text-input" type="text" formControlName="smtpFromName" placeholder="Segue" />
               @if (submitted() && form.get('smtpFromName')!.invalid) {
                 <p class="field-hint field-hint--error">From name is required.</p>
               }

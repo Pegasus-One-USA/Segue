@@ -33,19 +33,22 @@ public sealed class NotificationSettingsService : INotificationSettingsService
         UpdateNotificationSettingsRequest request,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            throw new InvalidOperationException("Username is required.");
+        }
+
         var settings = await _repository.GetAsync(cancellationToken);
         var passwordReference = settings?.PasswordSecretReference;
 
         // Server-side backstop for the portal form's own required-field validation (EmailSettingsComponent) —
         // an SMTP server with no username/password can never actually authenticate, so silently accepting one
         // here would recreate the exact "email quietly never sends" gap that motivated requiring these at all.
-        if (string.IsNullOrWhiteSpace(request.Username))
-        {
-            throw new InvalidOperationException("Username is required.");
-        }
-
-        // Password blank is legitimate on an edit ONLY if one is already saved (means "keep the current
-        // password", same write-only semantics the DTO's own doc comment describes) — never on first setup.
+        // (Username itself is already checked above, at the top of this method.)
+        //
+        // A blank password is only acceptable once one is already on file (the frontend's "leave blank
+        // to keep the current password" edit UX) — never on first-ever setup, or the settings would
+        // save successfully but every real send would fail at the SMTP auth step.
         if (string.IsNullOrWhiteSpace(request.Password) && passwordReference is null)
         {
             throw new InvalidOperationException("Password is required.");
@@ -89,7 +92,7 @@ public sealed class NotificationSettingsService : INotificationSettingsService
 
     private static NotificationSettingsDto ToDto(NotificationSettings? settings) =>
         settings is null
-            ? new NotificationSettingsDto(false, string.Empty, 587, true, string.Empty, string.Empty, "FHIRBridge", false)
+            ? new NotificationSettingsDto(false, string.Empty, 587, true, string.Empty, string.Empty, "Segue", false)
             : new NotificationSettingsDto(
                 settings.IsEnabled,
                 settings.Host,

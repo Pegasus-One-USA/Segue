@@ -47,19 +47,29 @@
       </div>
 
       <!-- Role -->
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="form-field form-field--full">
-        <mat-label>Assigned Role</mat-label>
-        <mat-icon matPrefix>badge</mat-icon>
-        <mat-select formControlName="roleId" [disabled]="rolesLoading()">
-          @for (role of roles(); track role.id) {
-            <mat-option [value]="role.id">{{ role.displayName }}</mat-option>
-          }
-        </mat-select>
+      <div class="dw-field form-field form-field--full" [class.dw-field--error]="hasError('roleId', 'required')">
+        <label class="dw-label" for="invite-roleId">Assigned Role <span class="dw-req">*</span></label>
+        <div class="dw-select-wrap">
+          <select id="invite-roleId" class="dw-select" formControlName="roleId" [disabled]="rolesLoading()">
+            @if (rolesLoading()) {
+              <option value="" disabled>Loading roles…</option>
+            } @else if (!roles().length) {
+              <option value="" disabled>No roles available</option>
+            } @else {
+              <option value="" disabled>Select a role…</option>
+            }
+            @for (role of roles(); track role.id) {
+              <option [value]="role.id">{{ role.displayName }}</option>
+            }
+          </select>
+        </div>
         @if (rolesLoading()) {
-          <mat-hint>Loading roles…</mat-hint>
+          <span class="dw-hint">Loading roles…</span>
         }
-        <mat-error *ngIf="hasError('roleId', 'required')">Role is required</mat-error>
-      </mat-form-field>
+        @if (hasError('roleId', 'required')) {
+          <span class="dw-error">Role is required</span>
+        }
+      </div>
 
       <!-- Invitation note -->
       <div class="invite-notice">

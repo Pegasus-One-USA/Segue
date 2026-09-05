@@ -95,16 +95,19 @@
           <mat-error *ngIf="hasError('email', 'email')">Enter a valid email address</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="form-field form-field--full">
-          <mat-label>Role</mat-label>
-          <mat-icon matPrefix>shield</mat-icon>
-          <mat-select formControlName="role">
-            @for (r of availableRoles; track r.value) {
-              <mat-option [value]="r.value">{{ r.label }}</mat-option>
-            }
-          </mat-select>
-          <mat-error *ngIf="hasError('role', 'required')">Role is required</mat-error>
-        </mat-form-field>
+        <div class="dw-field form-field form-field--full" [class.dw-field--error]="hasError('role', 'required')">
+          <label class="dw-label" for="create-user-role">Role</label>
+          <div class="dw-select-wrap">
+            <select id="create-user-role" class="dw-select" formControlName="role">
+              @for (r of availableRoles; track r.value) {
+                <option [value]="r.value">{{ r.label }}</option>
+              }
+            </select>
+          </div>
+          @if (hasError('role', 'required')) {
+            <span class="dw-error">Role is required</span>
+          }
+        </div>
 
       </form>
     </mat-dialog-content>

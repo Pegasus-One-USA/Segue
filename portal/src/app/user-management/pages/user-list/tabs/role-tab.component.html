@@ -47,18 +47,20 @@
         </mat-form-field>
 
         <!-- Tenant -->
-        <mat-form-field appearance="outline" class="form-field">
-          <mat-label>Tenant</mat-label>
-          <mat-icon matPrefix class="field-prefix-icon">domain</mat-icon>
-          <mat-select formControlName="tenantId" [disabled]="tenants().length === 0">
-            @for (t of tenants(); track t.id) {
-              <mat-option [value]="t.id">{{ t.name }}</mat-option>
-            }
-          </mat-select>
+        <div class="dw-field form-field" [class.dw-field--error]="hasError('tenantId', 'required')">
+          <label class="dw-label" for="role-tab-tenantId">Tenant</label>
+          <div class="dw-select-wrap">
+            <select id="role-tab-tenantId" class="dw-select" formControlName="tenantId" [disabled]="tenants().length === 0">
+              <option value="" disabled>{{ tenants().length === 0 ? 'No tenants available' : 'Select a tenant…' }}</option>
+              @for (t of tenants(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
           @if (hasError('tenantId', 'required')) {
-            <mat-error>Tenant selection is required</mat-error>
+            <span class="dw-error">Tenant selection is required</span>
           }
-        </mat-form-field>
+        </div>
 
         <!-- Description (full width) -->
         <mat-form-field appearance="outline" class="form-field form-field--full">

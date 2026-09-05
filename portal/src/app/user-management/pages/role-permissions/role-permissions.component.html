@@ -40,14 +40,21 @@
             </div>
           </div>
 
-          <mat-form-field appearance="outline" class="role-switcher">
-            <mat-label>Switch Role</mat-label>
-            <mat-select [value]="role()!.id" (selectionChange)="onRoleChange($event.value)">
-              @for (r of roles(); track r.id) {
-                <mat-option [value]="r.id">{{ r.displayName }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
+          <div class="dw-field role-switcher">
+            <label class="dw-label" for="role-switcher">Switch Role</label>
+            <div class="dw-select-wrap">
+              <select
+                id="role-switcher"
+                class="dw-select"
+                [value]="role()!.id"
+                (change)="onRoleChange($any($event.target).value)"
+              >
+                @for (r of roles(); track r.id) {
+                  <option [value]="r.id">{{ r.displayName }}</option>
+                }
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
