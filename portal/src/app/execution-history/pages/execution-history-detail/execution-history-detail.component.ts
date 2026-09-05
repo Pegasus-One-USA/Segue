@@ -1,11 +1,14 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../../services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { DestinationWriteResultPayload, NodeRunHistoryEntry, NodeRunPayloadDetail, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { FieldLineagePanelComponent } from '../../components/field-lineage-panel/field-lineage-panel.component';
@@ -17,13 +20,15 @@ import { FieldLineagePanelComponent } from '../../components/field-lineage-panel
   templateUrl: './execution-history-detail.component.html',
   styleUrls: ['./execution-history-detail.component.scss'],
 })
-export class ExecutionHistoryDetailComponent implements OnInit {
+export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
   private readonly api = inject(ExecutionHistoryApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   readonly execution   = signal<RouteExecution | null>(null);
+  readonly cancelling  = signal(false);
   readonly nodeRuns    = signal<PagedResult<NodeRunHistoryEntry>>({ items: [], totalCount: 0, page: 1, pageSize: 25 });
   readonly loading      = signal(false);
   readonly expandedIds  = signal<Set<string>>(new Set());
@@ -49,6 +54,12 @@ export class ExecutionHistoryDetailComponent implements OnInit {
 
     this.api.byId(this.runId).subscribe(execution => this.execution.set(execution));
     this.loadNodeRuns();
+  }
+
+  ngOnDestroy(): void {
+    if (this.cancelPollTimer !== null) {
+      clearTimeout(this.cancelPollTimer);
+    }
   }
 
   setTab(tab: 'nodeRuns' | 'fieldLineage'): void {
@@ -152,8 +163,77 @@ export class ExecutionHistoryDetailComponent implements OnInit {
     this.router.navigate(['/execution-history']);
   }
 
+  /** Requests a graceful stop — the node currently in flight finishes normally, no further nodes start, and
+   *  the run settles into Cancelled. Steps already completed are NOT undone; a re-run can double-write at any
+   *  destination that isn't configured for Upsert (plain SQL insert, file/blob writers), so the confirmation
+   *  says so plainly rather than implying a clean rollback that doesn't exist. */
+  cancelRun(): void {
+    this.dialog
+      .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+        width: '480px',
+        data: {
+          title: 'Cancel this run?',
+          message: 'This stops the workflow after its current step finishes. Steps already completed are not undone — re-running later may duplicate data at destinations not configured for Upsert (plain SQL insert, file/blob writers).',
+          confirmLabel: 'Cancel Run',
+          danger: true,
+        },
+      })
+      .afterClosed()
+      .subscribe(confirmed => {
+        if (!confirmed) return;
+
+        this.cancelling.set(true);
+        this.api.cancel(this.runId).subscribe({
+          next: () => {
+            this.toast.show('Cancellation requested', 'The run will stop once its current step finishes.');
+            this.pollUntilSettled();
+          },
+          error: (err: HttpErrorResponse) => {
+            this.cancelling.set(false);
+            const message = err.status === 409
+              ? 'This run has already finished and cannot be cancelled.'
+              : 'Failed to request cancellation. Please try again.';
+            this.toast.error(message);
+          },
+        });
+      });
+  }
+
+  private cancelPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Polls this run's status while a cancel is pending — there's no live push on this page (unlike the
+   *  Dashboard/Workflow List's SignalR-driven refresh), so without this the badge would keep reading
+   *  "Running" until the user manually reloads, even once the run has actually settled into Cancelled. */
+  private pollUntilSettled(): void {
+    this.api.byId(this.runId).subscribe(execution => {
+      this.execution.set(execution);
+      if (execution.status === 'Running') {
+        this.cancelPollTimer = setTimeout(() => this.pollUntilSettled(), 3000);
+        return;
+      }
+
+      this.cancelling.set(false);
+      this.loadNodeRuns();
+    });
+  }
+
   statusClass(status: string): string {
     return 'status-' + status.toLowerCase();
+  }
+
+  /** Same friendly labels as execution-history-list.component.ts's statusLabel() — kept in sync so a run's
+   *  status reads the same on both screens. */
+  statusLabel(status: string): string {
+    return {
+      Pending: 'Pending',
+      Running: 'Running',
+      // Shown as plain "Running" — same reasoning as ExecutionHistoryListComponent.statusLabel.
+      AwaitingBulkExport: 'Running',
+      Succeeded: 'Succeeded',
+      PartialSuccess: 'Partial Success',
+      Failed: 'Failed',
+      Cancelled: 'Cancelled',
+    }[status] ?? status;
   }
 
   formatDuration(ms: number | null): string {

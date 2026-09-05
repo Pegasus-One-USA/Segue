@@ -168,7 +168,83 @@ function inferValueType(value: unknown): string {
   return 'String';
 }
 
+// ── Reconstructing a resource's CURRENT payload back into JSON (Load JSON Payload modal's "original") ──
+// The wizard never persists the literal raw JSON someone pastes — only the ResourceFieldDef[] it parses
+// out of it (payloadFieldsByResource; see DestinationWizardComponent.onSourcePayloadLoaded), which is
+// also exactly what already drives this resource's source tree (buildResourceTree, field-mapping-tree.
+// util.ts) whether those fields came from a real pasted payload or the built-in/backend FHIR catalog. So
+// rather than inventing a second, separate "original payload" concept, this rebuilds a JSON document
+// straight from that SAME field list — the modal's textarea then always shows exactly the structure the
+// source tree is already displaying for this resource, never a generic fixture unrelated to it.
+//
+// This is necessarily a reconstruction, not a byte-for-byte replay: ResourceFieldDef only ever carries a
+// field's label/path/valueType/array-ancestry, never a sample value, so there is no original literal
+// value anywhere in this app's model to recover — every leaf gets a type-appropriate placeholder instead.
+// Structure, nesting, and field set are exact; only the literal values can't be.
+
+/** Mirrors buildResourceTree's own fallback/segmenting rule exactly (same isFallback check, same
+ *  relPath derivation) — this payload's nesting must match whatever the source tree is actually
+ *  rendering for these same fields. */
+export function reconstructPayloadJsonFor(resource: string, fields: ResourceFieldDef[]): string {
+  const root: Record<string, unknown> = { resourceType: resource };
+  if (!fields.length) return JSON.stringify(root, null, 2);
+
+  const isFallback = fields.every(f => f.jsonPath === undefined);
+  for (const f of fields) {
+    const relPath = f.path.startsWith(`${resource}.`) ? f.path.slice(resource.length + 1) : f.path;
+    const segments = isFallback ? [relPath] : relPath.split('.');
+    placeValue(root, segments, new Set(f.arrays ?? []), placeholderValue(f));
+  }
+  return JSON.stringify(root, null, 2);
+}
+
+/** Descends/creates nested objects per `segments`, wrapping any segment whose cumulative dot-path is a
+ *  known array-ancestor (ResourceFieldDef.arrays) in a single-element array — mirrors how a real FHIR
+ *  payload nests a repeating group (e.g. `name: [{ family: ... }]`), just always exactly one instance.
+ *  Reuses an already-built container for a path two different fields share (e.g. "name.family" and
+ *  "name.given" both land inside the SAME "name" object/array-item), never overwriting a sibling. */
+function placeValue(root: Record<string, unknown>, segments: string[], arrayAncestors: Set<string>, value: unknown): void {
+  let node = root;
+  let cum = '';
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    cum = cum ? `${cum}.${seg}` : seg;
+    if (i === segments.length - 1) {
+      node[seg] = value;
+      break;
+    }
+    if (arrayAncestors.has(cum)) {
+      const existing = node[seg];
+      const item: Record<string, unknown> = Array.isArray(existing) && isPlainObject(existing[0]) ? existing[0] : {};
+      if (!Array.isArray(existing)) node[seg] = [item];
+      node = item;
+    } else {
+      const existing = node[seg];
+      const container: Record<string, unknown> = isPlainObject(existing) ? existing : {};
+      node[seg] = container;
+      node = container;
+    }
+  }
+}
+
+/** One representative value per ResourceFieldDef.valueType — see reconstructPayloadJsonFor's own doc
+ *  comment on why this can only ever be a placeholder, never the field's true original value. */
+function placeholderValue(f: ResourceFieldDef): unknown {
+  switch (f.valueType) {
+    case 'Boolean': return false;
+    case 'Integer':
+    case 'Decimal': return 0;
+    case 'Date': return '2026-01-01';
+    case 'DateTime': return '2026-01-01T00:00:00Z';
+    default: return '';
+  }
+}
+
 // ── Sample payloads for the modal's "Use sample FHIR {resource}" shortcut ──────────────────────────
+// No longer wired into the Load JSON Payload modal itself (see reconstructPayloadJsonFor above, now used
+// for both its initial fill and its "Reset to Original" button) — kept here since it's still exported/
+// tested (field-mapping-payload.util.spec.ts) and may still be useful as a starting-point fixture
+// elsewhere; nothing below this line was changed.
 const SAMPLE_PAYLOADS: Record<string, unknown> = {
   Patient: {
     resourceType: 'Patient',

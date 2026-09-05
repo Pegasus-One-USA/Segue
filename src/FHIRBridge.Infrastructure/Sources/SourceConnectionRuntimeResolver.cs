@@ -162,6 +162,19 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                     supportedScopes: null,
                     vendor: sourceConnection.SourceSystemType).Scopes;
 
+        // eClinicalWorks (Healow) rejects the ENTIRE token request (400 invalid_scope) if it carries a single resource
+        // scope its app registration doesn't grant, and it accepts no wildcard — so the requested set MUST be a subset
+        // of eCW's registered resource types. The scope list above is regenerated from Retrieval.ResourceTypes (or a
+        // stored snapshot), either of which can carry types eCW never registered (the portal's resource picker and the
+        // destination-driven scope sync both widen it well past eCW's ~30). Cap it to the known eCW-supported set so a
+        // broad or stale resource selection can't take down the whole grant. Non-resource scopes pass through untouched;
+        // every eCW backend scope is system/{ResourceType}.read. (athenahealth handles this by keeping its resource
+        // list trimmed instead; eCW gets a hard cap here because its registered set is fixed and not discoverable.)
+        if (sourceConnection.SourceSystemType == SourceSystemType.Healow)
+        {
+            scopes = scopes.Where(IsEClinicalWorksSupportedScope).ToList();
+        }
+
         _logger.LogInformation(
             "SourceConnectionRuntimeResolver: resolved connection {SourceConnectionId} ({SourceSystemType}) — " +
             "baseUrl={BaseUrl} tokenEndpoint={TokenEndpoint} practiceId={PracticeId} authPlacement={AuthPlacement} " +
@@ -302,6 +315,36 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
     /// unchanged when there is no retrieval config (interactive sources, or Backend sources predating this field) —
     /// every existing connection keeps behaving exactly as before.
     /// </summary>
+    // eCW's Bulk/Backend app registration grants exactly these system resource scopes (dev-portal "Selected Scopes",
+    // confirmed 2026-09-01). eCW rejects any resource scope outside this set with 400 invalid_scope and fails the
+    // whole token request, so ResolveAsync caps a Healow source's requested scopes to this list. Update if eCW's
+    // registration changes. Kept here (like the Healow v1-only special-case above) rather than discovered, because
+    // eCW's discovery does not advertise a usable scopes_supported to intersect against.
+    private static readonly HashSet<string> EClinicalWorksSupportedResourceTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AllergyIntolerance", "Binary", "CarePlan", "CareTeam", "Condition", "Coverage", "Device", "DiagnosticReport",
+        "DocumentReference", "Encounter", "Goal", "Group", "Immunization", "Location", "Media", "Medication",
+        "MedicationAdministration", "MedicationDispense", "MedicationRequest", "Observation", "Organization", "Patient",
+        "Practitioner", "PractitionerRole", "Procedure", "Provenance", "QuestionnaireResponse", "RelatedPerson",
+        "ServiceRequest", "Specimen",
+    };
+
+    // Keeps any non-resource scope (openid/fhirUser/offline_access/launch — no '/'), and any "system/{ResourceType}.*"
+    // scope whose resource type is in the eCW-supported set. Used only for Healow (see ResolveAsync).
+    private static bool IsEClinicalWorksSupportedScope(string scope)
+    {
+        var slash = scope.IndexOf('/');
+        if (slash < 0)
+        {
+            return true;
+        }
+
+        var rest = scope[(slash + 1)..];
+        var dot = rest.LastIndexOf('.');
+        var resourceType = dot < 0 ? rest : rest[..dot];
+        return EClinicalWorksSupportedResourceTypes.Contains(resourceType);
+    }
+
     private static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
     {
         if (retrieval is null)

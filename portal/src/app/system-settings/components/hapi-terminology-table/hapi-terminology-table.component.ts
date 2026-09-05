@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
@@ -8,16 +8,13 @@ import { MatButtonModule } from '@angular/material/button';
 import {
   HapiTerminologyConfiguration,
   HapiTerminologyConfigurationService,
+  HapiTerminologyVersionCheckResult,
 } from '../../services/hapi-terminology-configuration.service';
 import { HapiTerminologyEditDialogComponent } from '../../dialogs/hapi-terminology-edit-dialog/hapi-terminology-edit-dialog.component';
 import { HapiTerminologyHistoryDialogComponent } from '../../dialogs/hapi-terminology-history-dialog/hapi-terminology-history-dialog.component';
+import { HapiTerminologyCodesDialogComponent, HapiTerminologyCodesDialogData } from '../../dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
-import { ISystemSettingsService } from '../../services/i-system-settings.service';
-import { SystemSetting } from '../../models/system-setting.model';
-import { SystemSettingDialogComponent, SystemSettingDialogData } from '../../dialogs/system-setting-dialog/system-setting-dialog.component';
-
-const BASE_URL_KEY = 'Terminology:BaseUrl';
 
 const HISTORY_POLL_INTERVAL_MS = 3000;
 
@@ -33,11 +30,10 @@ const HISTORY_POLL_INTERVAL_MS = 3000;
   templateUrl: './hapi-terminology-table.component.html',
   styleUrls: ['./hapi-terminology-table.component.scss'],
 })
-export class HapiTerminologyTableComponent implements OnInit {
+export class HapiTerminologyTableComponent implements OnInit, OnDestroy {
   private readonly svc = inject(HapiTerminologyConfigurationService);
   private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
-  private readonly settingsSvc = inject(ISystemSettingsService);
 
   /** Bound to the parent page's shared search box, so one search filters both General Settings
    *  groups and this table's rows instead of needing a second search field. */
@@ -51,42 +47,22 @@ export class HapiTerminologyTableComponent implements OnInit {
     return this.configs().filter(c => c.displayName.toLowerCase().includes(term) || c.code.toLowerCase().includes(term));
   });
   readonly runningCodes = signal<Set<string>>(new Set());
-  // Shared across every row below — not per-system, so it's shown once here rather than repeated
-  // in each row/dialog. Same key the old Terminology tabs' FHIR API URL points at too.
-  readonly baseUrlSetting = signal<SystemSetting | null>(null);
+  readonly scanning = signal(false);
+  readonly versionChecks = signal<Map<string, HapiTerminologyVersionCheckResult>>(new Map());
 
-  readonly displayedCols = ['actions', 'displayName', 'schedulerEnabled', 'frequency', 'executionTime', 'lastRunUtc'];
+  readonly displayedCols = ['actions', 'displayName', 'version', 'schedulerEnabled', 'frequency', 'executionTime', 'lastRunUtc'];
+
+  private readonly pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   ngOnInit(): void {
     this.load();
-    this.loadBaseUrl();
   }
 
-  private loadBaseUrl(): void {
-    this.settingsSvc.getAll().subscribe({
-      next: (settings) => {
-        this.baseUrlSetting.set(settings.find((s) => s.key === BASE_URL_KEY) ?? null);
-      },
-      error: () => {},
-    });
-  }
-
-  editBaseUrl(): void {
-    const setting = this.baseUrlSetting();
-    if (!setting) return;
-    this.dialog
-      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
-        width: '520px',
-        disableClose: true,
-        data: { mode: 'edit', setting },
-      })
-      .afterClosed()
-      .subscribe((saved) => {
-        if (saved) {
-          this.toast.success('Terminology server URL updated.');
-          this.loadBaseUrl();
-        }
-      });
+  ngOnDestroy(): void {
+    for (const timer of this.pollTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pollTimers.clear();
   }
 
   load(): void {
@@ -105,6 +81,32 @@ export class HapiTerminologyTableComponent implements OnInit {
 
   isRunning(code: string): boolean {
     return this.runningCodes().has(code);
+  }
+
+  versionCheck(code: string): HapiTerminologyVersionCheckResult | undefined {
+    return this.versionChecks().get(code);
+  }
+
+  /** Checks all 13 systems' official sources for a newer version than what's stored locally — does
+   *  not download or import anything, just populates each row's Version column with the result. */
+  scanForUpdates(): void {
+    this.scanning.set(true);
+    this.svc.scanAll().subscribe({
+      next: (results) => {
+        this.scanning.set(false);
+        this.versionChecks.set(new Map(results.map((r) => [r.code, r])));
+        const updateCount = results.filter((r) => r.updateAvailable).length;
+        if (updateCount > 0) {
+          this.toast.success(`${updateCount} code system${updateCount === 1 ? '' : 's'} ${updateCount === 1 ? 'has' : 'have'} a newer version available.`);
+        } else {
+          this.toast.success('All code systems are up to date.');
+        }
+      },
+      error: () => {
+        this.scanning.set(false);
+        this.toast.error('Failed to scan for terminology updates.');
+      },
+    });
   }
 
   openEdit(config: HapiTerminologyConfiguration): void {
@@ -126,6 +128,13 @@ export class HapiTerminologyTableComponent implements OnInit {
     this.dialog.open<HapiTerminologyHistoryDialogComponent, { code: string; displayName: string }, void>(
       HapiTerminologyHistoryDialogComponent,
       { width: '760px', data: { code: config.code, displayName: config.displayName } },
+    );
+  }
+
+  openCodes(config: HapiTerminologyConfiguration): void {
+    this.dialog.open<HapiTerminologyCodesDialogComponent, HapiTerminologyCodesDialogData, void>(
+      HapiTerminologyCodesDialogComponent,
+      { width: '900px', maximizable: true, data: { systemCode: config.code, displayName: config.displayName } },
     );
   }
 
@@ -155,19 +164,33 @@ export class HapiTerminologyTableComponent implements OnInit {
     this.svc.getHistory(code).subscribe({
       next: (entries) => {
         if (entries.some((e) => e.status === 'Running')) {
-          setTimeout(() => this.pollUntilSettled(code), HISTORY_POLL_INTERVAL_MS);
+          this.pollTimers.set(
+            code,
+            setTimeout(() => this.pollUntilSettled(code), HISTORY_POLL_INTERVAL_MS),
+          );
           return;
         }
+        this.pollTimers.delete(code);
         this.setRunning(code, false);
         this.refreshRow(code);
       },
-      error: () => this.setRunning(code, false),
+      error: () => {
+        this.pollTimers.delete(code);
+        this.setRunning(code, false);
+      },
     });
   }
 
   private refreshRow(code: string): void {
     this.svc.get(code).subscribe((updated) => {
       this.configs.update((list) => list.map((c) => (c.code === code ? updated : c)));
+    });
+    // Clear this row's stale "update available" badge — the sync that just finished should have
+    // brought it current. A fresh scan (not run automatically) will confirm the real latest state.
+    this.versionChecks.update((map) => {
+      const next = new Map(map);
+      next.delete(code);
+      return next;
     });
   }
 

@@ -54,6 +54,28 @@
 
 .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+.btn-cancel-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1.5px solid var(--color-error);
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-error);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--color-error-soft); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  mat-icon { font-size: 16px; height: 16px; width: 16px; }
+}
+
 .header-title {
   display: flex;
   align-items: center;
@@ -135,7 +157,12 @@
 
   &.status-pending    { background: var(--color-warning-soft); color: var(--color-warning-strong); .status-dot { background: var(--color-warning-strong); } }
   &.status-running    { background: var(--color-info-soft); color: var(--color-info-strong); .status-dot { background: var(--color-info-strong); animation: statusPulse 2s ease-in-out infinite; } }
+  // Non-terminal, same as Running — a node deferred to an async $export job and the run is still in flight.
+  &.status-awaitingbulkexport { background: var(--color-info-soft); color: var(--color-info-strong); .status-dot { background: var(--color-info-strong); animation: statusPulse 2s ease-in-out infinite; } }
   &.status-succeeded  { background: var(--color-success-soft); color: var(--color-success-strong); .status-dot { background: var(--color-success-strong); } }
+  // Terminal and fully written — every node ran, only some non-parent resource types were skipped — same as
+  // Succeeded rather than reading as an error.
+  &.status-partialsuccess { background: var(--color-success-soft); color: var(--color-success-strong); .status-dot { background: var(--color-success-strong); } }
   &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); .status-dot { background: var(--color-error-strong); } }
   &.status-cancelled  { background: var(--color-side); color: var(--color-muted); .status-dot { background: var(--color-muted); } }
 }

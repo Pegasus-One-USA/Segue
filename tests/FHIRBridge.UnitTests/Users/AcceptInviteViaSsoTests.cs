@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Notifications;
+﻿using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -7,6 +7,7 @@ using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -35,7 +36,8 @@ public sealed class AcceptInviteViaSsoTests
         _email.Object,
         _externalTokenValidator.Object,
         _localAuth.Object,
-        Options.Create(new LocalAuthOptions()));
+        Options.Create(new LocalAuthOptions()),
+        NullLogger<UserManagementService>.Instance);
 
     private static User InvitedUser(string email)
     {

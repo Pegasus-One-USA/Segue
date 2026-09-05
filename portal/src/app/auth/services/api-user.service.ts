@@ -143,15 +143,21 @@ function mapDetailDto(dto: UserDetailDto): User {
 function toInviteResult(dto: UserDetailDto, fallbackEmail: string): InviteResult {
   const token = dto.invitationToken;
   const email = dto.email || fallbackEmail;
+  // Defaults to true (not false) when the backend omits the field on a non-invite response — see the
+  // "absent on a plain user read" note on UserDetailDto.invitationEmailSent.
+  const emailSent = dto.invitationEmailSent ?? true;
   return {
     success:         true,
-    message:         `Invitation ready for ${email}.`,
+    message:         emailSent
+      ? `Invitation ready for ${email}.`
+      : `User "${email}" was created, but the invitation email failed to send. Share the link below directly, or use Resend Invitation later.`,
     email,
     invitationToken: token,
     // The set-password page needs the email alongside the token to POST /users/accept-invite.
     invitationLink:  token
       ? `${location.origin}/auth/set-password?token=${token}&email=${encodeURIComponent(email)}`
       : undefined,
+    emailSent,
   };
 }
 

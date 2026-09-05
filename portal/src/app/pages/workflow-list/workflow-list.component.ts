@@ -585,13 +585,38 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two
+   *  different badges across the two screens. AwaitingBulkExport is non-terminal (a node deferred to an async
+   *  $export job and the run is still in flight), so it reuses the Running badge rather than the queued one;
+   *  PartialSuccess is terminal and fully written, so it reuses Succeeded rather than reading as an error. */
   runStatusClass(status: string | null): string {
-    switch (status) {
-      case 'Succeeded': return 'badge badge-completed';
-      case 'Running':   return 'badge badge-running';
-      case 'Failed':    return 'badge badge-failed';
-      default:          return 'badge badge-queued';
-    }
+    const map: Record<string, string> = {
+      Pending: 'badge-queued',
+      Running: 'badge-running',
+      AwaitingBulkExport: 'badge-running',
+      Succeeded: 'badge-completed',
+      PartialSuccess: 'badge-completed',
+      Failed: 'badge-failed',
+      Cancelled: 'badge-inactive',
+    };
+    return `badge ${(status && map[status]) ?? 'badge-queued'}`;
+  }
+
+  /** Same label map as ExecutionHistoryListComponent.statusLabel — without it the raw enum name leaks into the
+   *  table ("AwaitingBulkExport" instead of "Awaiting Bulk Export"). */
+  runStatusLabel(status: string | null): string {
+    if (!status) return '';
+    return (
+      {
+        Pending: 'Pending',
+        Running: 'Running',
+        AwaitingBulkExport: 'Running',
+        Succeeded: 'Succeeded',
+        PartialSuccess: 'Partial Success',
+        Failed: 'Failed',
+        Cancelled: 'Cancelled',
+      }[status] ?? status
+    );
   }
 
   private messageOf(err: unknown, fallback: string): string {

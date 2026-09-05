@@ -24,6 +24,7 @@
         (dragStart)="onSourceDragStart($event)"
         (dragMove)="onSourceDragMove($event)"
         (dragEnd)="onSourceDragEnd($event)"
+        (fieldClick)="onSourceFieldClick($event)"
         (positionChange)="onSourcePositionChange($event)"
       />
 
@@ -52,6 +53,7 @@
           (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
+          (columnClick)="onTargetFieldClick(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
           (removeTable)="onRemoveTable(card.resource, card.tableName, card.isExtra)"
           (renameTable)="onRenameTable(card.resource, card.tableName, $event, card.isExtra)"
@@ -75,16 +77,63 @@
 
     <!-- ── Chrome that must stay a constant screen size regardless of canvas zoom — siblings of the
          transformed .fm-canvas-inner, never descendants of it. ── -->
-    @if (popoverRow(); as row) {
+    @if (popoverDisplayRow(); as row) {
       <app-field-mapping-join-popover
         [row]="row"
         [allResources]="allResources()"
         [rulesDestinationType]="rulesDestinationType()"
         [dataTypeForTable]="dataTypeForTable()"
+        [totalSourceCount]="(popoverRow()?.sources ?? []).length"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"
+        (showAllSources)="onShowAllSources()"
       />
+    }
+
+    <!-- "Select mapping" — only appears when a source/target field click resolved to MORE THAN ONE
+         option (see FieldMappingCanvasComponent.onSourceFieldClick/onTargetFieldClick); a field with
+         exactly one match opens app-field-mapping-join-popover above directly instead (openMappingDirectly),
+         same as a connector-line click always has. position: fixed at coordinates computed in
+         computeFieldPickerStyle() from real getBoundingClientRect() measurements (the clicked field's own
+         row + the real browser viewport) — same escape-the-overflow-hidden-ancestor technique as
+         .fm-add-table-panel above, now with genuinely viewport-aware placement (tries below/right of the
+         field first, flips above/left when there isn't room, clamps as a last resort) and a capped,
+         internally-scrolling height instead of ever growing tall enough to run off the canvas. -->
+    @if (fieldPickerState(); as picker) {
+      <div
+        #fieldPickerPanel
+        class="fm-field-picker"
+        [style.top.px]="picker.style.top"
+        [style.bottom.px]="picker.style.bottom"
+        [style.left.px]="picker.style.left"
+        [style.width.px]="picker.style.width"
+        [style.max-height.px]="picker.style.maxHeight"
+        [attr.aria-label]="'Select mapping — ' + picker.subtitle"
+        tabindex="-1"
+      >
+        <div class="fm-field-picker-head">
+          <div class="fm-field-picker-head-text">
+            <span class="fm-field-picker-title">Select mapping</span>
+            <span class="fm-field-picker-subtitle">{{ picker.subtitle }}</span>
+          </div>
+          <button type="button" class="fm-field-picker-close" aria-label="Close" (click)="closeFieldPicker()">✕</button>
+        </div>
+        <!-- Only this list scrolls (see .fm-field-picker-options's own overflow-y) once there are more
+             options than the panel's own max-height (computeFieldPickerStyle) can show at once — the
+             head above stays fixed in place either way. -->
+        <div class="fm-field-picker-options">
+          @for (opt of picker.options; track opt.resource + '::' + opt.tableName + '::' + opt.targetName + '::' + (opt.sourceFhirPath ?? '')) {
+            <button type="button" class="fm-field-picker-option" (click)="onFieldPickerChoice(opt)">
+              <span class="fm-field-picker-option-dot" aria-hidden="true"></span>
+              <span class="fm-field-picker-option-text">
+                <span class="fm-field-picker-option-source">{{ opt.sourceLabel }}</span>
+                <span class="fm-field-picker-option-target">→ {{ opt.targetLabel }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      </div>
     }
 
     <!-- No real "table" concept for a CSV destination — the create-table modal it opens asks for SQL
@@ -93,7 +142,7 @@
       <!-- Nothing to offer here at all when there's neither a real probed schema to pick an existing
            table from, nor authoring rights to create a new one (nor, for Mongo, its own no-schema-needed
            add-collection picker — see showAddTablePicker()). -->
-      @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled())) {
+      @if (!drawerOpen() && destType() !== 'csv' && (showAddTablePicker() || schemaAuthoringEnabled() || showSchemaLoadNotice())) {
       <div class="fm-add-table-slot">
         @if (showAddTablePicker()) {
           <button
@@ -151,11 +200,30 @@
             </div>
           }
         } @else {
-          <button
-            type="button"
-            class="fm-add-table-select fm-add-table-createbtn"
-            (click)="openCreateTableModal(primaryResource)"
-          >＋ Create a new table…</button>
+          <!-- Without this, a schema read that failed (or never ran) looks exactly like a database with no
+               tables in it — the "Create a new table…" button below would be the only thing on screen, and
+               every table that really does exist would be silently unreachable. -->
+          @if (showSchemaLoadNotice()) {
+            @if (schemaLoadState() === 'loading') {
+              <div class="fm-schema-notice">Loading tables from your database…</div>
+            } @else {
+              <div class="fm-schema-notice fm-schema-notice--error">
+                <span>
+                  {{ schemaLoadState() === 'unavailable'
+                     ? "Existing tables aren't listed — this destination has no saved connection to read them through. Re-enter its details in Configure, then retry."
+                     : "Existing tables aren't listed — this destination's tables couldn't be loaded." }}
+                </span>
+                <button type="button" class="fm-schema-notice-retry" (click)="retrySchemaLoad.emit()">Retry</button>
+              </div>
+            }
+          }
+          @if (schemaAuthoringEnabled()) {
+            <button
+              type="button"
+              class="fm-add-table-select fm-add-table-createbtn"
+              (click)="openCreateTableModal(primaryResource)"
+            >＋ Create a new table…</button>
+          }
         }
       </div>
       }
@@ -261,7 +329,10 @@
     <app-field-mapping-load-payload-modal
       [resource]="resources()[0]"
       [error]="loadPayloadError()"
+      [currentRaw]="currentPayloadJsonFor(resources()[0])"
+      [originalRaw]="originalPayloadJsonFor(resources()[0])"
       (submitted)="submitLoadPayload($event)"
+      (resetToOriginal)="onResetToOriginalPayload()"
       (cancelled)="closeLoadPayloadModal()"
     />
   }

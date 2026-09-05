@@ -11,6 +11,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Governance;
+using FHIRBridge.Runtime.Application.Transformations;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
@@ -730,6 +731,45 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 .ToArray();
         }
 
+        // Honor the destination's selected resource types strictly (pairs with the bulk-export manifest filter). A
+        // source can still deliver records for types the user never selected for THIS destination — a bulk server
+        // that returns resources beyond the requested _type (eCW adds Binary/Medication/Media/Specimen), or a source
+        // _type broader than the destination's own resource selection. Drop those so only selected types are written.
+        // Guarded: no declared selection, or a filter that would drop the whole batch, leaves records unchanged
+        // (never writes nothing). Surfaced in node metadata as "filteredOutResourceTypes".
+        string[]? filteredOutResourceTypes = null;
+        var selectedResourceTypes = ReadSelectedResourceTypes(node);
+        if (selectedResourceTypes is { Count: > 0 } && records.Length > 0)
+        {
+            var kept = records.Where(record => selectedResourceTypes.Contains(record.ResourceType)).ToArray();
+            if (kept.Length > 0 && kept.Length < records.Length)
+            {
+                filteredOutResourceTypes = records
+                    .Where(record => !selectedResourceTypes.Contains(record.ResourceType))
+                    .Select(record => record.ResourceType)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                records = kept;
+            }
+        }
+
+        // Make each resource FHIR-conformant before it reaches ANY destination writer. EHR sources routinely emit
+        // resources that violate FHIR invariants (e.g. eCW's Condition.clinicalStatus present on an entered-in-error
+        // condition — con-5) or carry malformed free text; a strict FHIR server (Medplum/Aidbox/validation-on HAPI)
+        // rejects just those records with a 400 while writing the rest. Sanitizing here (before both the multi-table
+        // and single-profile write branches below) fixes the common cases so they persist too. No-op for already-
+        // conformant data — see FhirConformanceSanitizer.
+        for (var i = 0; i < records.Length; i++)
+        {
+            if (records[i].SourceJson is { Length: > 0 } sourceJson)
+            {
+                records[i] = records[i] with
+                {
+                    SourceJson = FhirConformanceSanitizer.Sanitize(records[i].ResourceType, sourceJson),
+                };
+            }
+        }
+
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
 
@@ -879,8 +919,49 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 ["downloadUrl"] = downloadUrl,
                 // Same metadata key/shape SourceNodeExecutors uses for scope-authorization skips — see the
                 // writeFailureReasons doc comment above for why this destination-write case reuses it.
-                ["skippedResourceTypes"] = writeFailureReasons.Count > 0 ? writeFailureReasons.ToArray() : null
+                ["skippedResourceTypes"] = writeFailureReasons.Count > 0 ? writeFailureReasons.ToArray() : null,
+                // Resource types the source delivered but this destination wasn't configured to write, dropped before
+                // the write (see the ReadSelectedResourceTypes filter above). Null when nothing was filtered out.
+                ["filteredOutResourceTypes"] = filteredOutResourceTypes
             });
+    }
+
+    // The resource types this destination node was configured to write — the destination wizard's own selection,
+    // stored as "dest_resources" (comma-separated) with the "dest_targets" ({sourceType: destType} JSON map) keys as
+    // a fallback. Returns null when neither is present (older nodes, or destinations with no explicit selection) so
+    // the caller leaves the batch unfiltered rather than guessing.
+    private static HashSet<string>? ReadSelectedResourceTypes(WorkflowNode node)
+    {
+        var csv = ReadStringConfiguration(node, "dest_resources");
+        if (!string.IsNullOrWhiteSpace(csv))
+        {
+            var set = new HashSet<string>(
+                csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+            if (set.Count > 0)
+            {
+                return set;
+            }
+        }
+
+        var targetsJson = ReadStringConfiguration(node, "dest_targets");
+        if (!string.IsNullOrWhiteSpace(targetsJson))
+        {
+            try
+            {
+                var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(targetsJson);
+                if (map is { Count: > 0 })
+                {
+                    return new HashSet<string>(map.Keys, StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Malformed dest_targets — treat as no explicit selection (leave the batch unfiltered).
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

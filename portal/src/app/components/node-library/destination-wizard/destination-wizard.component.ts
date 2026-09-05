@@ -63,6 +63,7 @@ import {
   LegacyMappingRow,
   PendingSchemaOp,
   MappingDestType,
+  SchemaLoadState,
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
@@ -1041,14 +1042,52 @@ export class DestinationWizardComponent implements OnInit {
   readonly discoverProbeStatus = signal<'idle' | 'probing' | 'done' | 'error'>(
     'idle',
   );
+  /** Backend-verified resource types this source's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService.
+   *  Null when no vendor is set yet, the vendor has no known restriction (e.g. Epic), or the request
+   *  failed — availableGroups treats null the same as "no filter", never narrowing the list below what
+   *  it would otherwise show. Only used when a live Discover probe hasn't already produced a more
+   *  authoritative, connection-specific result. */
+  readonly vendorResourceTypes = signal<string[] | null>(null);
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
-  readonly availableGroups = computed(() => {
+  /** The filter's own strict opinion — discovery result, else vendor list, else everything — with no
+   *  regard for what's already selected. Never rendered directly; availableGroups (below) is what the
+   *  template actually uses, and unsupportedSelectedResources diffs against this to find selections the
+   *  filter would otherwise have hidden. */
+  private readonly strictAvailableGroups = computed(() => {
     const discovered = this.discoveredResourceTypes();
-    if (!discovered) return SUPPORTED_RESOURCE_TYPES;
-    const discoveredSet = new Set(discovered);
-    return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    if (discovered) {
+      const discoveredSet = new Set(discovered);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => discoveredSet.has(r));
+    }
+    const vendorList = this.vendorResourceTypes();
+    if (vendorList) {
+      const vendorSet = new Set(vendorList);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => vendorSet.has(r));
+    }
+    return SUPPORTED_RESOURCE_TYPES;
+  });
+  /** strictAvailableGroups, plus any already-selected resource the filter would otherwise have hidden —
+   *  e.g. a route saved before a vendor filter existed, or before a live Discover probe narrowed the
+   *  list further. The filter should only ever affect what's offered as a NEW selection, never make an
+   *  existing one invisible/un-toggleable (see unsupportedSelectedResources for the accompanying
+   *  warning surfaced in the template). */
+  readonly availableGroups = computed(() => {
+    const strict = this.strictAvailableGroups();
+    const selected = this.selectedResources();
+    if (selected.length === 0) return strict;
+    const strictSet = new Set(strict);
+    const extra = selected.filter((r) => !strictSet.has(r));
+    return extra.length > 0 ? [...strict, ...extra] : strict;
+  });
+  /** Selected resources the current filter (discovery or vendor) no longer confirms as supported —
+   *  drives the Step 2 warning callout and each affected card's inline badge. Empty whenever no filter
+   *  is active (Epic, GenericFhir, ...) or every selection is still within it. */
+  readonly unsupportedSelectedResources = computed(() => {
+    const strictSet = new Set(this.strictAvailableGroups());
+    return this.selectedResources().filter((r) => !strictSet.has(r));
   });
   readonly selectedResources = signal<string[]>([]);
   readonly groupSearchQuery = signal<string>('');
@@ -1530,6 +1569,20 @@ export class DestinationWizardComponent implements OnInit {
     }));
   }
 
+  /** "Reset to Original" in the Load JSON Payload modal (FieldMappingCanvasComponent.
+   *  onResetToOriginalPayload) — drops this resource's pasted-payload override so availableFields(r)
+   *  falls back through to the real backend catalog (or built-in defs) again, same as it would if this
+   *  resource had never had a payload loaded for it at all. This is the one thing the canvas itself can't
+   *  do (payloadFieldsByResource lives here, not on the canvas) — the canvas's own mapping-row clear
+   *  already happened by the time this fires. */
+  onSourcePayloadReset(resource: string): void {
+    this.payloadFieldsByResource.update((m) => {
+      const rest = { ...m };
+      delete rest[resource];
+      return rest;
+    });
+  }
+
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
   // Every schema-authoring action on the canvas is staged here instead of hitting the database the
   // moment the user clicks it — nothing real happens until "Add to Pipeline" flushes this queue (see
@@ -1712,6 +1765,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly resolvedSecretKeyVaultName = signal<string | null>(null);
   readonly resolvedSecretName = signal<string | null>(null);
   readonly provisioningDestination = signal(false);
+  // Outcome of the live schema read in _refreshSqlTablesFromLiveSchema — surfaced on the mapping canvas so
+  // a read that failed, or couldn't be attempted at all, never renders as "this database has no tables".
+  readonly schemaLoadState = signal<SchemaLoadState>('idle');
 
   private static readonly SQL_TYPES: DestinationType[] = [
     'SqlServer',
@@ -1996,6 +2052,21 @@ export class DestinationWizardComponent implements OnInit {
             this.discoverProbeStatus.set('error');
           }
         });
+    });
+
+    // Vendor-level fallback for availableGroups when live Discover hasn't run/succeeded — e.g. a
+    // brand-new Athenahealth or Healow source that hasn't been saved yet. Refetches (cached per vendor
+    // in MappingCatalogService) whenever sourceVendor() changes; a vendor with no known restriction
+    // (Epic, GenericFhir, ...) resolves to null, same as "no filter".
+    effect(() => {
+      const vendor = this.sourceVendor();
+      if (!vendor) {
+        this.vendorResourceTypes.set(null);
+        return;
+      }
+      this.catalogSvc
+        .resourceTypes(vendor)
+        .subscribe((types) => this.vendorResourceTypes.set(types));
     });
   }
 
@@ -3880,10 +3951,22 @@ export class DestinationWizardComponent implements OnInit {
     );
   }
 
+  /** Same precedence as availableFields() minus its FIRST branch — the real backend FHIR catalog (or the
+   *  built-in defs, until that catalog loads), never a pasted-payload override. This is "the true default
+   *  payload" the Load JSON Payload modal's "Reset to Original" restores back to: availableFields() alone
+   *  can't answer that question once ANY payload has ever been loaded for this resource (this session, or
+   *  restored from a previously-saved node/snapshot — payloadFieldsByResource isn't scoped to "pasted
+   *  just now"), since at that point it's permanently returning the override instead of the original. */
+  defaultAvailableFields(r: string): ResourceFieldDef[] {
+    return this.catalogByResource()[r] ?? this.defFor(r).fields;
+  }
+
   // Stable references for the field-mapping-canvas's function inputs — declared once so the child
   // component doesn't see a new function identity (and re-render) on every change-detection tick.
   readonly availableFieldsFn = (r: string): ResourceFieldDef[] =>
     this.availableFields(r);
+  readonly defaultAvailableFieldsFn = (r: string): ResourceFieldDef[] =>
+    this.defaultAvailableFields(r);
   readonly columnsForResourceTargetFn = (r: string): string[] =>
     this.columnsForResourceTarget(r);
   readonly dataTypeForTableColumnFn = (
@@ -4176,13 +4259,17 @@ export class DestinationWizardComponent implements OnInit {
         })),
       );
       this.probeState.set('ok');
+      this.schemaLoadState.set('loaded');
     };
 
     if (destinationId) {
+      this.schemaLoadState.set('loading');
       this.schemaSvc.getSchema(destinationId).subscribe({
         next: (res) => applyTables(res.tables),
         error: () => {
-          /* keep the mapping-summary-restored list; don't block editing on a failed reload */
+          // Keep the mapping-summary-restored list; don't block editing on a failed reload. The state flip
+          // is what stops that partial (or empty) list from passing itself off as the whole database.
+          this.schemaLoadState.set('failed');
         },
       });
       return;
@@ -4194,18 +4281,37 @@ export class DestinationWizardComponent implements OnInit {
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
     // every other failure path here.
     const form = this.activeForm();
-    if (!isSqlFamilyForm(form)) return;
+    if (!isSqlFamilyForm(form)) {
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
     const request = form.getProbeRequest();
-    if (!request.server || !request.database || !request.password) return;
+    if (!request.server || !request.database || !request.password) {
+      // The common case for a reopened node: no destinationId was ever persisted onto it AND dest_password
+      // was stripped before persisting (workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS), so neither
+      // path can run. This used to return in silence — no request, no error, no tables — which the canvas
+      // then rendered as an empty database.
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
 
+    this.schemaLoadState.set('loading');
     this.schemaSvc.probe(request).subscribe({
       next: (res) => {
         if (res.connected) applyTables(res.tables);
+        else this.schemaLoadState.set('failed');
       },
       error: () => {
-        /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */
+        // Keep the mapping-summary-restored list; don't block editing on a failed reconnect.
+        this.schemaLoadState.set('failed');
       },
     });
+  }
+
+  /** Re-attempts the live schema read behind the mapping canvas's "Retry" — the same call ngOnInit makes,
+   *  so a transient failure no longer needs a full close/reopen of the wizard to clear. */
+  retrySchemaLoad(): void {
+    this._refreshSqlTablesFromLiveSchema();
   }
 
   // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/

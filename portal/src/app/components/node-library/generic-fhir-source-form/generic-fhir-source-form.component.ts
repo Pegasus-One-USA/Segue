@@ -20,9 +20,10 @@ export type GenericFhirRetrievalMethod = 'subscription' | 'webhook' | 'search-re
 export type GenericFhirRunMode = 'incremental' | 'full' | 'manual';
 export type GenericFhirExportScope = 'system' | 'group' | 'patient';
 
+// Subscription and Webhook are excluded from the dropdown: SourceNodeExecutor (Runtime plane) only ever executes
+// search-rest/bulk-export today, so offering them would let a user pick a retrieval method the backend silently
+// never runs. GenericFhirRetrievalMethod keeps both values (existing saved connections may still reference them).
 const RETRIEVAL_METHOD_OPTIONS: readonly { value: GenericFhirRetrievalMethod; label: string; description: string }[] = [
-  { value: 'subscription', label: 'Subscription', description: 'The server pushes change notifications through a standard FHIR Subscription (rest-hook/websocket).' },
-  { value: 'webhook', label: 'Webhook', description: 'The server (or a middleware relay) posts updates to a callback endpoint.' },
   { value: 'search-rest', label: 'Search (REST)', description: 'FHIRBridge polls the server’s FHIR REST search API on a schedule.' },
   { value: 'bulk-export', label: 'Bulk Export', description: 'Kicks off a FHIR Bulk Data $export job and retrieves the resulting NDJSON files.' },
 ];

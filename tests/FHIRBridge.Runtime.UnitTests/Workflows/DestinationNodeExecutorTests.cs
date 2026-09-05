@@ -195,6 +195,108 @@ public sealed class DestinationNodeExecutorTests
             "resolution must never search by the (resourceType, sourceConnectionId, destinationId) triple — more than one workflow can share it");
     }
 
+    [Fact]
+    public async Task Records_for_resource_types_not_selected_on_the_destination_are_filtered_out_before_writing()
+    {
+        // The destination selected only Patient + Condition (dest_resources), but the upstream batch also carries a
+        // Binary record (e.g. a bulk source that returned a referenced type beyond the requested _type). Only the
+        // selected types must reach the writer; the unselected one is dropped and surfaced in node metadata.
+        var destinationId = Guid.NewGuid();
+
+        IReadOnlyCollection<MappedDestinationRecord>? writtenRecords = null;
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
+                (_, _, records, _, _) => writtenRecords = records)
+            .ReturnsAsync((DestinationConfiguration _, MappingProfile _, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _)
+                => new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(records.Count));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.Medplum)).Returns(writer.Object);
+
+        var executor = new MedplumDestinationNodeExecutor(writerFactory.Object);
+        var node = CreateMedplumNode(destinationId, resourceSelection: "Patient,Condition");
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "Patient", "p1", new Dictionary<string, object?>(), "{\"resourceType\":\"Patient\",\"id\":\"p1\"}"),
+            new MappedDestinationRecord(Guid.NewGuid(), "Condition", "Condition", "c1", new Dictionary<string, object?>(), "{\"resourceType\":\"Condition\",\"id\":\"c1\"}"),
+            new MappedDestinationRecord(Guid.NewGuid(), "Binary", "Binary", "b1", new Dictionary<string, object?>(), "{\"resourceType\":\"Binary\",\"id\":\"b1\"}"),
+        };
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.Mapping, new MappedRecordBatch(records), WorkflowDataContract.MappedRecordBatch);
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        writtenRecords.Should().NotBeNull();
+        writtenRecords!.Select(r => r.ResourceType).Should().BeEquivalentTo(["Patient", "Condition"], "the unselected Binary record must be filtered out before the write");
+        output.Metadata.Should().ContainKey("filteredOutResourceTypes");
+        ((string[])output.Metadata["filteredOutResourceTypes"]!).Should().BeEquivalentTo(["Binary"]);
+    }
+
+    [Fact]
+    public async Task All_records_are_written_when_the_destination_declares_no_resource_selection()
+    {
+        // Guard: a destination node without a dest_resources/dest_targets selection must not filter anything.
+        var destinationId = Guid.NewGuid();
+
+        IReadOnlyCollection<MappedDestinationRecord>? writtenRecords = null;
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
+                (_, _, records, _, _) => writtenRecords = records)
+            .ReturnsAsync((DestinationConfiguration _, MappingProfile _, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _)
+                => new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(records.Count));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.Medplum)).Returns(writer.Object);
+
+        var executor = new MedplumDestinationNodeExecutor(writerFactory.Object);
+        var node = CreateMedplumNode(destinationId, resourceSelection: null);
+
+        var records = new[]
+        {
+            new MappedDestinationRecord(Guid.NewGuid(), "Patient", "Patient", "p1", new Dictionary<string, object?>(), "{\"resourceType\":\"Patient\",\"id\":\"p1\"}"),
+            new MappedDestinationRecord(Guid.NewGuid(), "Binary", "Binary", "b1", new Dictionary<string, object?>(), "{\"resourceType\":\"Binary\",\"id\":\"b1\"}"),
+        };
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.Mapping, new MappedRecordBatch(records), WorkflowDataContract.MappedRecordBatch);
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        writtenRecords.Should().NotBeNull();
+        writtenRecords!.Select(r => r.ResourceType).Should().BeEquivalentTo(["Patient", "Binary"]);
+        output.Metadata["filteredOutResourceTypes"].Should().BeNull();
+    }
+
+    private static WorkflowNode CreateMedplumNode(Guid destinationId, string? resourceSelection)
+    {
+        var config = new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+            ["secretKeyVaultName"] = "workflow-secrets",
+            ["secretName"] = "dest-test",
+            ["dest_medplumBaseUrl"] = "https://api.medplum.com/fhir/R4",
+            ["dest_medplumClientId"] = "client-1",
+            ["dest_medplumAuthMethod"] = "client_secret",
+        };
+        if (resourceSelection is not null)
+        {
+            config["dest_resources"] = resourceSelection;
+        }
+
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "medplum-destination-node-test", 1);
+        return workflow.AddNode(
+            WorkflowNodeTypes.MedplumDestination,
+            WorkflowNodeCategory.Destination,
+            90,
+            configurationJson: JsonSerializer.Serialize(config, JsonOptions));
+    }
+
     private static WorkflowNode CreateDestinationNode(
         Guid destinationId, string? writeMode = null, Guid? sourceConnectionId = null,
         IReadOnlyDictionary<string, string>? mappingProfileIds = null)

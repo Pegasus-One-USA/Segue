@@ -125,6 +125,25 @@ public sealed class FhirBulkExportClientTests
         statusUrl.Should().Be("https://fhir.example.com/status/1");
     }
 
+    [Theory]
+    // eCW rejects a duplicate kick-off with HTTP 200 + an OperationOutcome (code "duplicate" / "already in progress"),
+    // not a 4xx — the status alone reads like success, so the payload must be inspected.
+    [InlineData(HttpStatusCode.OK, """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"duplicate","diagnostics":"Bulk operation is already in progress for the group"}]}""")]
+    [InlineData(HttpStatusCode.TooManyRequests, """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"duplicate"}]}""")]
+    [InlineData(HttpStatusCode.OK, """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"An export is already in progress."}]}""")]
+    public async Task Duplicate_kickoff_throws_a_duplicate_error_even_when_status_is_200(HttpStatusCode status, string body)
+    {
+        var handler = new SinglePollHandler(status, manifestBody: body);
+        var client = CreateClient(handler);
+
+        var act = async () => await client.KickOffExportAsync(
+            new FhirBulkExportRequest(BulkExportScope.Group, GroupId: "grp-9", ResourceTypes: ["Patient"]),
+            Source, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Message.Should().Contain("duplicate");
+    }
+
     [Fact]
     public async Task PollOnceAsync_returns_InProgress_with_RetryAfter_on_202()
     {
@@ -161,6 +180,90 @@ public sealed class FhirBulkExportClientTests
 
         result.Status.Should().Be(BulkExportPollStatus.Failed);
         result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task DownloadResultsAsync_reacquires_the_token_once_per_file()
+    {
+        var handler = new NdjsonDownloadHandler();
+        var tokenProvider = new CountingTokenProvider("access-token");
+        var client = new FhirRestBulkExportClient(new HttpClient(handler), tokenProvider, delay: (_, _) => Task.CompletedTask);
+
+        var files = new[]
+        {
+            new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson"),
+            new BulkExportFile("Observation", "https://fhir.example.com/files/2.ndjson"),
+            new BulkExportFile("Condition", "https://fhir.example.com/files/3.ndjson"),
+        };
+
+        await client.DownloadResultsAsync(files, Source, CancellationToken.None);
+
+        // The token is fetched once per file, not once for the whole loop — so a long multi-file download re-mints an
+        // expiring token via the provider instead of holding one token past its lifetime and 401-ing on later files.
+        tokenProvider.CallCount.Should().Be(files.Length);
+    }
+
+    [Fact]
+    public async Task DownloadResultsAsync_retries_a_transient_file_failure_instead_of_failing_the_whole_download()
+    {
+        // First download attempt 401s (flaky eCW edge), second succeeds — the file's download must recover on retry
+        // rather than throwing and restarting the entire multi-file download.
+        var handler = new FlakyDownloadHandler(failFirst: 1);
+        var tokenProvider = new CountingTokenProvider("access-token");
+        var client = new FhirRestBulkExportClient(new HttpClient(handler), tokenProvider, delay: (_, _) => Task.CompletedTask);
+
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+
+        var resources = await client.DownloadResultsAsync(files, Source, CancellationToken.None);
+
+        resources.Should().ContainSingle(r => r.ResourceType == "Patient");
+        tokenProvider.CallCount.Should().Be(2, "the retry re-acquires a fresh token for the second attempt");
+    }
+
+    // Fails the first `failFirst` requests with 401, then serves NDJSON — simulates an intermittently-flaky edge.
+    private sealed class FlakyDownloadHandler : HttpMessageHandler
+    {
+        private readonly int _failFirst;
+        private int _requests;
+
+        public FlakyDownloadHandler(int failFirst) => _failFirst = failFirst;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var n = Interlocked.Increment(ref _requests);
+            return Task.FromResult(n <= _failFirst
+                ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"resourceType":"Patient","id":"x"}"""),
+                });
+        }
+    }
+
+    private sealed class CountingTokenProvider : IFhirAccessTokenProvider
+    {
+        private readonly string _token;
+        private int _callCount;
+
+        public CountingTokenProvider(string token) => _token = token;
+
+        public int CallCount => _callCount;
+
+        public Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _callCount);
+            return Task.FromResult(_token);
+        }
+    }
+
+    // Answers any download GET with a single-line NDJSON body so DownloadResultsAsync parses one resource per file.
+    private sealed class NdjsonDownloadHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"resourceType":"Patient","id":"x"}"""),
+            });
     }
 
     private sealed class SinglePollHandler : HttpMessageHandler

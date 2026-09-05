@@ -8,33 +8,33 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
     public partial class SyncNotificationHistoryColumns : Migration
     {
         /// <inheritdoc />
+        // Guarded raw SQL so re-applying this migration against a database where these columns already
+        // exist is a no-op instead of a "column already exists" error.
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "AttachmentNames",
-                table: "NotificationHistory",
-                type: "character varying(1000)",
-                maxLength: 1000,
-                nullable: true);
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE "NotificationHistory" ADD COLUMN IF NOT EXISTS "AttachmentNames" character varying(1000);
+                """);
 
-            migrationBuilder.AddColumn<string>(
-                name: "Body",
-                table: "NotificationHistory",
-                type: "character varying(8000)",
-                maxLength: 8000,
-                nullable: true);
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE "NotificationHistory" ADD COLUMN IF NOT EXISTS "Body" character varying(8000);
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "AttachmentNames",
-                table: "NotificationHistory");
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE "NotificationHistory" DROP COLUMN IF EXISTS "AttachmentNames";
+                """);
 
-            migrationBuilder.DropColumn(
-                name: "Body",
-                table: "NotificationHistory");
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE "NotificationHistory" DROP COLUMN IF EXISTS "Body";
+                """);
         }
     }
 }

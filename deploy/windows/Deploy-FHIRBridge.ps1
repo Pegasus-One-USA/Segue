@@ -59,6 +59,17 @@ param(
     [int]$DemoApiPort,
 
     [int]$ServiceStopTimeoutSeconds = 30,
+
+    # Separate from ServiceStopTimeoutSeconds on purpose: BootstrapDatabase (Program.cs) runs
+    # dbContext.Database.Migrate() synchronously before the service reports Running, and a migration
+    # batch that alters/indexes a large existing table (e.g. terminology.TRM_CONCEPT, populated by the
+    # Hapi*TerminologySyncService workers) can take well over 30 seconds one-time. Reusing the 30s stop
+    # timeout for this wait made the very first deploy after such a migration appear to fail here even
+    # though the process was still up and finishing the migration -- a redeploy then "worked" only
+    # because the migration had already completed. 180s gives one-time heavy migrations headroom without
+    # masking a genuinely hung/crashed service for multiple minutes.
+    [int]$ServiceStartTimeoutSeconds = 180,
+
     [int]$HealthCheckRetries = 10,
     [int]$HealthCheckDelaySeconds = 3
 )
@@ -226,7 +237,7 @@ function Deploy-Service {
     Write-Host "Starting service $Name..."
     try {
         Start-Service -Name $Name
-        (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStopTimeoutSeconds))
+        (Get-Service -Name $Name).WaitForStatus('Running', (New-TimeSpan -Seconds $ServiceStartTimeoutSeconds))
     } catch {
         Write-Host "Service $Name failed to start -- capturing diagnostics before failing the deploy."
         Show-ServiceStartFailureDiagnostics -ExePath $exePath -EnvironmentVariables $EnvironmentVariables

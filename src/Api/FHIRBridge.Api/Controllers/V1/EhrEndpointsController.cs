@@ -1,4 +1,5 @@
 using FHIRBridge.Api.Security;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -32,6 +33,21 @@ public sealed class EhrEndpointsController : ControllerBase
     {
         var endpoints = await _service.GetAllAsync(cancellationToken);
         return Ok(endpoints);
+    }
+
+    [HttpGet("paged")]
+    [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.View, description: "View the EHR endpoint directory.")]
+    [ProducesResponseType(typeof(PagedResult<EhrEndpointDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListPaged(
+        [FromQuery] string? search,
+        [FromQuery] bool? sortDescending,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await _service.GetPagedAsync(
+            search, sortDescending, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

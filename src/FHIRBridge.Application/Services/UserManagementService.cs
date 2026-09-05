@@ -6,6 +6,8 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
@@ -22,6 +24,8 @@ public sealed class UserManagementService : IUserManagementService
     private readonly IExternalTokenValidator _externalTokenValidator;
     private readonly ILocalAuthService _localAuthService;
     private readonly LocalAuthOptions _localAuthOptions;
+    private readonly ILogger<UserManagementService> _logger;
+    private readonly IGlobalExceptionManager? _exceptionManager;
 
     public UserManagementService(
         IUserAccessRepository repository,
@@ -31,7 +35,9 @@ public sealed class UserManagementService : IUserManagementService
         IEmailSender emailSender,
         IExternalTokenValidator externalTokenValidator,
         ILocalAuthService localAuthService,
-        IOptions<LocalAuthOptions> localAuthOptions)
+        IOptions<LocalAuthOptions> localAuthOptions,
+        ILogger<UserManagementService> logger,
+        IGlobalExceptionManager? exceptionManager = null)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -41,6 +47,8 @@ public sealed class UserManagementService : IUserManagementService
         _externalTokenValidator = externalTokenValidator;
         _localAuthService = localAuthService;
         _localAuthOptions = localAuthOptions.Value;
+        _logger = logger;
+        _exceptionManager = exceptionManager;
     }
 
     public async Task<IReadOnlyList<UserManagementDto>> GetUsersAsync(CancellationToken cancellationToken)
@@ -154,13 +162,40 @@ public sealed class UserManagementService : IUserManagementService
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);
 
-        await _emailSender.SendAsync(
-            email,
-            "You've been invited to Segue",
-            BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
-            cancellationToken);
+        // The user (and its invitation token) is already committed at this point — a failure sending the
+        // email must not surface as a request failure, since retrying "Invite" would then hit the
+        // duplicate-email guard above and the admin would have no way to recover except "Resend Invitation"
+        // (which they'd never learn about, having just been told the whole invite failed). Swallow instead of
+        // rethrowing, but still route it through the same IGlobalExceptionManager every other captured
+        // exception uses (see BulkExportPollService for the identical pattern) — a plain ILogger call alone
+        // only reaches the console/Seq, not the ErrorLogs table Logs & Compliance → Errors reads from, so an
+        // admin would have no way to notice email delivery is broken short of an angry new-user phone call.
+        var emailSent = true;
+        try
+        {
+            await _emailSender.SendAsync(
+                email,
+                "You've been invited to Segue",
+                BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            emailSent = false;
+            _logger.LogError(ex, "Failed to send invitation email to {Email}; user was still created and can be resent an invite.", email);
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureAsync(
+                    ex,
+                    new ExceptionContext(Module: "User Invitation", CorrelationId: user.Id.ToString()),
+                    CancellationToken.None);
+            }
+        }
 
-        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
+        // The caller must know when the email didn't actually go out — a plain "invitation ready" success
+        // message would leave the admin assuming the new user has it, when really the only way to relay the
+        // link is manually (the invite-result dialog's copy button) or via "Resend Invitation" later.
+        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken, invitationEmailSent: emailSent);
     }
 
     public async Task<UserDetailDto> ResendInviteAsync(Guid userId, CancellationToken cancellationToken)
@@ -184,13 +219,31 @@ public sealed class UserManagementService : IUserManagementService
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
         var roleName = roles.FirstOrDefault()?.Name ?? "user";
 
-        await _emailSender.SendAsync(
-            user.Email!,
-            "Your Segue invitation (resent)",
-            BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
-            cancellationToken);
+        // Same reasoning as InviteUserAsync: the reissued token is already committed, so an email
+        // delivery failure here shouldn't fail the request — just log it and let the caller retry "Resend".
+        var emailSent = true;
+        try
+        {
+            await _emailSender.SendAsync(
+                user.Email!,
+                "Your Segue invitation (resent)",
+                BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            emailSent = false;
+            _logger.LogError(ex, "Failed to resend invitation email to {Email}.", user.Email);
+            if (_exceptionManager is not null)
+            {
+                await _exceptionManager.CaptureAsync(
+                    ex,
+                    new ExceptionContext(Module: "User Invitation", CorrelationId: user.Id.ToString()),
+                    CancellationToken.None);
+            }
+        }
 
-        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken);
+        return await ToDetailDtoAsync(user, invitationToken: rawToken, cancellationToken, invitationEmailSent: emailSent);
     }
 
     public async Task<UserDetailDto> AcceptInviteAsync(
@@ -488,7 +541,8 @@ public sealed class UserManagementService : IUserManagementService
     private async Task<UserDetailDto> ToDetailDtoAsync(
         User user,
         string? invitationToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool invitationEmailSent = true)
     {
         var roles = await _repository.GetUserRolesAsync(user.Id, cancellationToken);
         var roleDtos = new List<RoleDto>();
@@ -522,7 +576,8 @@ public sealed class UserManagementService : IUserManagementService
             user.LastLoginOnUtc,
             invitationToken,
             user.MfaEnabled,
-            user.MustSetupMfa);
+            user.MustSetupMfa,
+            invitationEmailSent);
     }
 
     private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)

@@ -120,7 +120,12 @@ export class InviteUserDialogComponent implements OnInit {
     this.userService.inviteUser(req).subscribe({
       next: res => {
         this.loading.set(false);
-        this.toast.success(res.message ?? `Invitation sent to "${req.email}".`);
+        const message = res.message ?? `Invitation sent to "${req.email}".`;
+        if (res.emailSent) {
+          this.toast.success(message);
+        } else {
+          this.toast.warning(message);
+        }
         // Show the invitation link with a copy button.
         this.customDialog.open<InviteResultDialogComponent, InviteResult, void>(InviteResultDialogComponent, {
           width: '540px', data: res,

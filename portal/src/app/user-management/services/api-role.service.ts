@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS } from '../../core/api-endpoints';
-import { IRoleService } from './i-role.service';
+import { IRoleService, PagedResult, RoleFilter } from './i-role.service';
 import { mapRoleDto, mapPermissionDto, mapPermissionCatalogDto } from '../../auth/services/api-user.service';
 import { CreateRoleRequest, UpdateRoleRequest } from '../../auth/models/auth-request.model';
 import {
@@ -17,6 +17,20 @@ export class ApiRoleService extends IRoleService {
   getRoles(): Observable<Role[]> {
     return this.http.get<RoleDto[]>(ROLES_ENDPOINTS.list).pipe(
       map(dtos => (dtos ?? []).map(mapRoleDto)),
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  getPagedRoles(filter: RoleFilter): Observable<PagedResult<Role>> {
+    let params = new HttpParams()
+      .set('page', String(filter.page))
+      .set('pageSize', String(filter.pageSize));
+
+    if (filter.search) params = params.set('search', filter.search);
+    if (filter.sortDescending !== undefined) params = params.set('sortDescending', String(filter.sortDescending));
+
+    return this.http.get<PagedResult<RoleDto>>(ROLES_ENDPOINTS.paged, { params }).pipe(
+      map(result => ({ ...result, items: result.items.map(mapRoleDto) })),
       catchError(err => throwError(() => err))
     );
   }

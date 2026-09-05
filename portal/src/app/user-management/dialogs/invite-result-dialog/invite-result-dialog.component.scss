@@ -33,6 +33,11 @@
     color: var(--color-primary);
 
     mat-icon { font-size: 24px; width: 24px; height: 24px; }
+
+    &--warning {
+      background: var(--color-warning-soft);
+      color: var(--color-warning-strong);
+    }
   }
 
   &__text {

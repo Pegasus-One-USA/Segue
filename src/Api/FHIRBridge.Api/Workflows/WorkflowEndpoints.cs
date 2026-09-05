@@ -1232,7 +1232,10 @@ public static class WorkflowEndpoints
 
             if (request?.Async == true)
             {
-                runTracker.MarkRunning(workflowRunId);
+                // Owned by the tracker from here on — MarkComplete disposes it once the run finishes either way,
+                // and RequestCancellation (see the /cancel endpoint below) is the only other thing that touches it.
+                var runCancellationSource = new CancellationTokenSource();
+                runTracker.MarkRunning(workflowRunId, runCancellationSource);
 
                 // Fire-and-forget on purpose: the caller gets the run id back now and polls for status, so this
                 // must survive the HTTP request (and its scoped DbContext) ending. Resolve a fresh scope rather
@@ -1248,7 +1251,7 @@ public static class WorkflowEndpoints
                     using var actorScope = ambientActorContext.BeginCorrelatedScope("Background Workflow Run", context.CorrelationId);
                     try
                     {
-                        await scopedOrchestrator.ExecuteAsync(workflow, context, CancellationToken.None);
+                        await scopedOrchestrator.ExecuteAsync(workflow, context, runCancellationSource.Token);
                     }
                     catch (Exception exception)
                     {
@@ -1305,6 +1308,21 @@ public static class WorkflowEndpoints
             }
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+
+        // Requests a graceful stop of an in-flight async run (see the Async branch of /run above). The orchestrator
+        // only checks for this between nodes (RankedWorkflowOrchestrator.RunNodesAsync) — the node already
+        // executing when this is called is left to finish and keeps its normal terminal state, so cancelling never
+        // leaves a node run half-written. A run already past this window (finished, or never started as async in
+        // the first place) reports 409 rather than silently no-op'ing.
+        group.MapPost("/workflow-runs/{runId:guid}/cancel", (
+            Guid runId,
+            IWorkflowRunTracker runTracker) =>
+        {
+            return runTracker.RequestCancellation(runId)
+                ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
+                : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Run)));
 
         // Discards FHIRBridge's cached token for this workflow's source connection (both the given patientId's slot,
         // if any, and the unscoped "default" slot) — the next /run or launch requires a genuinely fresh interactive
@@ -1568,7 +1586,16 @@ public static class WorkflowEndpoints
 
             if (!string.IsNullOrWhiteSpace(status))
             {
-                items = items.Where(x => string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)).ToList();
+                // AwaitingBulkExport is non-terminal — a node deferred to an async $export job while the run is
+                // still in flight — so the portal presents it as "Running" and /workflow-runs/stats already counts
+                // it in the Running tile. Filtering must agree: an exact-match-only filter here is what made the
+                // Dashboard's Running count not match what clicking that tile actually listed.
+                var matchesAwaitingAsRunning = string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)
+                    || (matchesAwaitingAsRunning
+                        && string.Equals(x.Status, "AwaitingBulkExport", StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
             }
 
             if (!string.IsNullOrWhiteSpace(source))
@@ -1617,13 +1644,14 @@ public static class WorkflowEndpoints
 
             // AwaitingBulkExport is non-terminal — a node deferred to an async $export job and the run is still
             // in flight pending BulkExportPollWorker's resume — so it belongs in "Running", not invisible in no
-            // tile at all. PartialSuccess is a terminal, fully-written outcome (every node ran; only some non-parent
-            // resource types were skipped for lack of authorization) — it belongs in "Succeeded", same as the
-            // Recent Workflows table already labels it "Completed"-equivalent.
+            // tile at all. PartialSuccess gets its OWN dashboard tile (not folded into Succeeded) so a tile's
+            // count always matches exactly what clicking through to Execution History filtered by that same
+            // status shows — folding it into Succeeded here while the list only matches on the exact status
+            // string was the original source of the two screens looking inconsistent.
             return Results.Ok(new WorkflowRunStatusCountsDto(
                 counts[WorkflowRunStatus.Pending],
                 counts[WorkflowRunStatus.Running] + counts[WorkflowRunStatus.AwaitingBulkExport],
-                counts[WorkflowRunStatus.Succeeded] + counts[WorkflowRunStatus.PartialSuccess],
+                counts[WorkflowRunStatus.Succeeded],
                 counts[WorkflowRunStatus.Failed],
                 counts[WorkflowRunStatus.Cancelled],
                 counts[WorkflowRunStatus.PartialSuccess]));

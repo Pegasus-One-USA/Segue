@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { PipelineStore } from './pipeline.store';
 import { WorkflowGraphMapperService } from './workflow-graph-mapper.service';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
@@ -309,6 +309,12 @@ export class WorkflowBuildAssemblerService {
       // form field-bag). Guarded on 'Auth method' so the Healow Patient/public (PKCE) flow stays byte-identical:
       // non-'secret' → authenticationType 'None', null secret refs, null placement — exactly as before.
       const healowAuthMethod = fields['Auth method'] || 'public';
+      // A signing key is persisted when EITHER rule that previously set these keys wanted it: the Backend
+      // audience (client_credentials + private_key_jwt), or an interactive audience explicitly on the JWT
+      // auth method. They used to be two SEPARATE assignments of the same three properties in one object
+      // literal, so the later silently won and the Backend rule never took effect. One condition now, so
+      // they cannot disagree again.
+      const healowNeedsSigningKey = healowIsBackend || healowAuthMethod === 'jwt';
       const healowTypedSecret = healowIsBackend
         ? null
         : (fields['Client Secret'] ?? '').trim() || null;
@@ -337,6 +343,17 @@ export class WorkflowBuildAssemblerService {
             ? healowSystemScopes
             : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean))
         : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      // A Group-level Bulk Data $export needs system/Group.read (to read the Group definition) on top of the
+      // per-resource read scopes ScopeBuilderService derives from the selected resource types — otherwise eCW's
+      // token omits it and Group/{id}/$export is rejected. eCW's app registration already grants Group.read, so
+      // this only asks for what's available. Idempotent: skip if the scope string already carries it.
+      if (
+        fields['Retrieval method key'] === 'bulk-export' &&
+        fields['Export scope'] === 'group' &&
+        !healowScopes.includes('system/Group.read')
+      ) {
+        healowScopes.unshift('system/Group.read');
+      }
       // Backend System owns a Data Retrieval Method (Search REST / Bulk Export / Single Patient) whose config —
       // including Single Patient's Patient ID — has to reach the connection, or the run has no retrieval settings
       // at all. Null for the interactive audiences, exactly as before.
@@ -362,9 +379,9 @@ export class WorkflowBuildAssemblerService {
           scopes: healowScopes,
           // Backend Services signs its assertion with a private key referenced by (Key Vault Name, Secret Name);
           // the wizard writes all three of these for any Backend + JWT audience (see WizardService.save()).
-          keyId: healowIsBackend ? fields['JWT kid'] || null : null,
-          privateKeyKeyVaultName: healowIsBackend ? fields['Key vault reference'] || null : null,
-          privateKeySecretName: healowIsBackend ? fields['Secret Name'] || null : null,
+          keyId: healowNeedsSigningKey ? fields['JWT kid'] || null : null,
+          privateKeyKeyVaultName: healowNeedsSigningKey ? fields['Key vault reference'] || null : null,
+          privateKeySecretName: healowNeedsSigningKey ? fields['Secret Name'] || null : null,
           // Informational only (FHIRBridge never fetches it) — but eCW must allow-list this URL's host, so
           // persisting what was actually registered is what makes an invalid_client diagnosable later.
           jwksUrl: healowIsBackend ? fields['JWKS URL'] || null : null,

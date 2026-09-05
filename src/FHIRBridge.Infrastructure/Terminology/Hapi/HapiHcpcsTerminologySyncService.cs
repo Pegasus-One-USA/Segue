@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -23,12 +22,11 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Record layout (1-indexed): 1-5 HCPCS code; 6-10 sequence number; 12-91 long description chunk (80
 /// chars, word-wrapped, no mid-word splits). Confirmed against the real October 2026 release.
 /// </summary>
-public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncService
+public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncService, IHapiVersionCheckable
 {
     private const string ListingPageUrl =
         "https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update";
     private const string SystemUrl = "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets";
-    private const string ResourceId = "hcpcs-full";
 
     private static readonly Regex ZipLinkPattern = new(
         @"href=""(/files/zip/[a-z0-9\-]*alpha-numeric-hcpcs-file[a-z0-9\-]*\.zip)""",
@@ -38,20 +36,20 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiHcpcsTerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiHcpcsTerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiHcpcsTerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiHcpcsSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -68,8 +66,8 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, zipUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(ResourceId, resource, concepts.Count, TimeSpan.FromMinutes(5), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "HCPCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -77,6 +75,19 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed);
     }
+
+    /// <summary>CMS's quarterly zip filename itself (e.g. "october-2026-alpha-numeric-hcpcs-file.zip")
+    /// as the version identifier — there's no separately-published release number, but the filename
+    /// changes every quarter and is the same value used both to check for updates and to store what
+    /// was actually synced, so the comparison is reliable.</summary>
+    public async Task<string?> GetLatestAvailableVersionAsync(CancellationToken cancellationToken)
+    {
+        using var client = _httpClientFactory.CreateClient(nameof(HapiHcpcsTerminologySyncService) + ".Download");
+        var zipUrl = await FindLatestZipUrlAsync(client, cancellationToken);
+        return VersionFromZipUrl(zipUrl);
+    }
+
+    private static string VersionFromZipUrl(string zipUrl) => zipUrl[(zipUrl.LastIndexOf('/') + 1)..];
 
     private static async Task<string> FindLatestZipUrlAsync(HttpClient http, CancellationToken ct)
     {
@@ -152,22 +163,6 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         FlushCurrent();
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = ResourceId,
-            url = SystemUrl,
-            name = "HCPCS",
-            title = "HCPCS Level II (auto-synced from CMS)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display);

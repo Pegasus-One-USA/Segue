@@ -228,6 +228,79 @@ public sealed class BulkExportPollServiceTests
     }
 
     [Fact]
+    public async Task Completed_result_downloads_only_the_files_for_requested_resource_types()
+    {
+        // The node requested Patient + Condition, but the server's manifest also lists Binary and Medication
+        // (resources it considers related to the requested _type — the eCW referenced-resource behavior). Only the
+        // requested-type files should be downloaded; the unrequested ones are dropped before any download happens.
+        var job = CreateJob(Guid.NewGuid(), requestedResourceTypesJson: "[\"Patient\",\"Condition\"]");
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var patientFile = new BulkExportFile("Patient", "https://fhir.example.com/files/patient.ndjson");
+        var conditionFile = new BulkExportFile("Condition", "https://fhir.example.com/files/condition.ndjson");
+        var binaryFile = new BulkExportFile("Binary", "https://fhir.example.com/files/binary.ndjson");
+        var medicationFile = new BulkExportFile("Medication", "https://fhir.example.com/files/medication.ndjson");
+        var manifest = new[] { patientFile, conditionFile, binaryFile, medicationFile };
+
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: manifest));
+
+        IReadOnlyList<BulkExportFile>? downloadedFiles = null;
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<BulkExportFile>, FhirSourceConfiguration, CancellationToken>((files, _, _) => downloadedFiles = files)
+            .ReturnsAsync([]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkflowRunResult(
+                new WorkflowRun(job.WorkflowRunId!.Value, Guid.NewGuid(), DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        downloadedFiles.Should().NotBeNull();
+        downloadedFiles!.Select(f => f.ResourceType).Should().BeEquivalentTo(["Patient", "Condition"]);
+    }
+
+    [Fact]
+    public async Task Completed_result_downloads_all_files_when_none_match_the_requested_types()
+    {
+        // Guard: a server that labels every output file generically ("Resource") would match nothing — filtering must
+        // fall back to downloading everything rather than silently turning a real export into an empty one.
+        var job = CreateJob(Guid.NewGuid(), requestedResourceTypesJson: "[\"Patient\",\"Condition\"]");
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var manifest = new[]
+        {
+            new BulkExportFile("Resource", "https://fhir.example.com/files/1.ndjson"),
+            new BulkExportFile("Resource", "https://fhir.example.com/files/2.ndjson"),
+        };
+
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: manifest));
+
+        IReadOnlyList<BulkExportFile>? downloadedFiles = null;
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<BulkExportFile>, FhirSourceConfiguration, CancellationToken>((files, _, _) => downloadedFiles = files)
+            .ReturnsAsync([]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkflowRunResult(
+                new WorkflowRun(job.WorkflowRunId!.Value, Guid.NewGuid(), DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        downloadedFiles.Should().NotBeNull();
+        downloadedFiles!.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task Missing_source_connection_marks_the_job_failed_without_calling_the_bulk_export_client()
     {
         var job = CreateJob(Guid.NewGuid());

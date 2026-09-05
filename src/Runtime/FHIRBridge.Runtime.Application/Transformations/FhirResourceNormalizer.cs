@@ -17,9 +17,13 @@ public sealed class FhirResourceNormalizer : IResourceTransformer
                 using var document = JsonDocument.Parse(resource.RawJson);
                 var compactJson = JsonSerializer.Serialize(document.RootElement);
 
+                // Make the resource FHIR-conformant (invariant fixes + malformed-string cleanup) before it reaches a
+                // destination writer, so strict FHIR servers don't 400 individual records. No-op for clean data.
+                var conformantJson = FhirConformanceSanitizer.Sanitize(resource.ResourceType, compactJson) ?? compactJson;
+
                 return resource with
                 {
-                    RawJson = compactJson
+                    RawJson = conformantJson
                 };
             })
             .ToList();

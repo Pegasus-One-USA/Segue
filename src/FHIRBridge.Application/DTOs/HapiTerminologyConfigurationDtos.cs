@@ -41,3 +41,24 @@ public sealed record HapiTerminologyImportHistoryEntryDto(
     int ImportedConceptCount,
     string Status,
     string? ErrorMessage);
+
+/// <summary>Result of checking one HAPI terminology system's source for a newer version than what's
+/// currently stored locally, without downloading/importing anything. <see cref="Supported"/> is false
+/// for the systems whose source has no discoverable "latest version" pointer to check (see
+/// HapiTerminologySystemRegistry.CheckLatestVersionAsync) — in that case StoredVersion is still
+/// populated but LatestAvailableVersion is always null and UpdateAvailable is always false.</summary>
+public sealed record HapiTerminologyVersionCheckResultDto(
+    string Code,
+    bool Supported,
+    string? StoredVersion,
+    string? LatestAvailableVersion,
+    bool UpdateAvailable,
+    string? ErrorMessage);
+
+/// <summary>One code/description row from a HAPI terminology system's local store (TRM_CONCEPT),
+/// browsable/editable from Settings → General → Terminology's "View All Codes" screen.</summary>
+public sealed record TerminologyConceptDto(long Pid, string Code, string? Display);
+
+/// <summary>Adds or edits one code/description row for a given HAPI terminology system, stored the
+/// same way (TRM_CODESYSTEM/TRM_CODESYSTEM_VER/TRM_CONCEPT) as a synced code, e.g. ICD-10-CM.</summary>
+public sealed record UpsertTerminologyConceptRequest(string Code, string? Display);

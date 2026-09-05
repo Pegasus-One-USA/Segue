@@ -31,6 +31,20 @@ export interface EhrEndpoint {
   endpointType: EhrEndpointType;
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface EhrEndpointFilter {
+  search?: string;
+  sortDescending?: boolean;
+  page: number;
+  pageSize: number;
+}
+
 export interface EhrEndpointRequest {
   vendor: EhrVendor;
   vendorEndpointId: string;

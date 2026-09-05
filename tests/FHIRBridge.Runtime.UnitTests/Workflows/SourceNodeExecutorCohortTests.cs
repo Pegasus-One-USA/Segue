@@ -123,12 +123,16 @@ public sealed class SourceNodeExecutorCohortTests
         output.Metadata!["cohortSize"].Should().BeNull();
     }
 
+    // Generic FHIR (a plain conformant server, e.g. HAPI) rather than Epic: cohort narrowing rewrites the export to
+    // Patient scope, and Patient-level $export only exists on a server that implements all three export levels.
+    // Epic implements the Group Export operation only, so BulkExportScopes.IsGroupOnlyVendor now rejects a
+    // Group-less Epic bulk export up front — see Group_only_vendor_bulk_export_without_a_group_id_fails_fast.
     [Fact]
     public async Task Cohort_forces_patient_scoped_bulk_export_when_scope_unset()
     {
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
-            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            RuntimeSourceType.GenericFhir, "HAPI Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
             SourceConnectionId: sourceConnectionId,
             RetrievalMethod: "bulk-export");
 
@@ -151,9 +155,9 @@ public sealed class SourceNodeExecutorCohortTests
             });
 
         var clientFactory = new Mock<IFhirSourceClientFactory>();
-        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.GenericFhir)).Returns(new Mock<IFhirSourceClient>().Object);
 
-        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+        var executor = new GenericFhirSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
         var node = BuildNode(sourceConnectionId, "Patient,Observation");
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
@@ -164,12 +168,15 @@ public sealed class SourceNodeExecutorCohortTests
         capturedObservationRequest.PatientIds.Should().BeEquivalentTo(["p1", "p2"]);
     }
 
+    // Generic FHIR rather than Epic: system-level [base]/$export only exists on a server implementing all three
+    // export levels. Epic documents "Epic supports only the Group Export operation", so a System-scoped Epic bulk
+    // export is now rejected up front rather than issued — see the group-only test below.
     [Fact]
     public async Task System_scoped_bulk_export_is_left_unscoped()
     {
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
-            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            RuntimeSourceType.GenericFhir, "HAPI Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
             SourceConnectionId: sourceConnectionId,
             RetrievalMethod: "bulk-export",
             ExportScope: "system");
@@ -186,9 +193,9 @@ public sealed class SourceNodeExecutorCohortTests
                 [new ResourceEnvelope("Patient", "p1", "{}", null, null), new ResourceEnvelope("Observation", "o1", "{}", null, null)]);
 
         var clientFactory = new Mock<IFhirSourceClientFactory>();
-        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.GenericFhir)).Returns(new Mock<IFhirSourceClient>().Object);
 
-        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+        var executor = new GenericFhirSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
         var node = BuildNode(sourceConnectionId, "Patient,Observation");
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
@@ -208,6 +215,46 @@ public sealed class SourceNodeExecutorCohortTests
         capturedRequest.ResourceTypes.Should().BeEquivalentTo(["Patient", "Observation"]);
 
         output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(2);
+    }
+
+    // Epic implements the Group Export operation only ("Epic supports only the Group Export operation. We do not
+    // support _since or other bulk data operations at this time." — Epic's FHIR Bulk Data documentation), so a bulk
+    // export with no Group ID cannot succeed against it no matter how the request is shaped: Epic reads
+    // "Patient/$export" as a Patient read whose id is "$export" and answers with an "Invalid FHIR ID"
+    // OperationOutcome that names neither the scope nor the missing id. Fail fast with the real reason instead.
+    [Fact]
+    public async Task Group_only_vendor_bulk_export_without_a_group_id_fails_fast()
+    {
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            SourceConnectionId: sourceConnectionId,
+            RetrievalMethod: "bulk-export",
+            ExportScope: "patient",
+            PatientIds: ["egqBHVfQlt4Bw3XGXoxVxHg3"]);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var bulkExportClient = new Mock<IFhirBulkExportClient>();
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(new Mock<IFhirSourceClient>().Object);
+
+        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+        var node = BuildNode(sourceConnectionId, "Patient");
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var act = () => executor.ExecuteAsync(context, node, [], CancellationToken.None);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage("*Group*");
+
+        // The doomed kick-off must never leave the process.
+        bulkExportClient.Verify(
+            x => x.ExportAsync(It.IsAny<FhirBulkExportRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -307,12 +354,11 @@ public sealed class SourceNodeExecutorCohortTests
 
         var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
 
-        // A best-effort Group-membership resolution attempt happens once (to try re-issuing this as a narrower
-        // Patient-scoped export — see ResolveGroupPatientIdsAsync) and fails since this mock has no "Group"
-        // response configured; the run correctly falls back to the original Group-scoped, ResourceTypes-omitted
-        // export below rather than erroring. Search-rest must never have been hit — the run went entirely
-        // through bulk export/direct-read, never a paged search.
-        client.Verify(x => x.ReadByIdAsync("Group", "group-abc", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Once);
+        // No Group-membership read at all: resolving membership only exists to re-issue the job as a narrower
+        // Patient-scoped export, and Epic — a Group-only vendor — has no Patient-level $export to re-issue against
+        // (see BulkExportScopes.IsGroupOnlyVendor), so the job stays Group-scoped with _type omitted. Search-rest
+        // must never have been hit either — the run went entirely through bulk export, never a paged search.
+        client.Verify(x => x.ReadByIdAsync("Group", "group-abc", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
         client.Verify(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
 
         bulkExportClient.Verify(
@@ -332,15 +378,17 @@ public sealed class SourceNodeExecutorCohortTests
     }
 
     [Fact]
-    public async Task Group_scoped_export_of_only_patient_resolves_membership_and_narrows_to_patient_scope()
+    public async Task Group_scoped_export_of_only_patient_narrows_to_patient_scope_on_a_generic_fhir_server()
     {
-        // The real fix for the bug the omit-_type workaround above dodges: resolving the Group's membership
-        // ourselves (a plain FHIR read, not a bulk job) lets the export be re-issued as Patient-scoped with
-        // _type=Patient — Epic never hits its Group-export membership-resolution bug on that path, AND it only
-        // has to process the one resource type this workflow actually wants instead of every authorized type.
+        // Resolving the Group's membership ourselves (a plain FHIR read, not a bulk job) lets the export be
+        // re-issued as Patient-scoped with _type=Patient, so the server only processes the one resource type this
+        // workflow wants. Generic FHIR rather than Epic: this rewrite is only viable against a server that
+        // implements Patient-level $export, and Epic implements the Group Export operation only — for Epic the
+        // membership read is skipped entirely and the job stays a Group export (see the two tests either side of
+        // this one, which cover the lone-Patient _type omission and the throwaway-second-type fallback).
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
-            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            RuntimeSourceType.GenericFhir, "HAPI Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
             SourceConnectionId: sourceConnectionId,
             RetrievalMethod: "bulk-export",
             ExportScope: "group",
@@ -371,15 +419,15 @@ public sealed class SourceNodeExecutorCohortTests
             .Setup(x => x.ReadByIdAsync("Group", "group-123", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ResourceEnvelope("Group", "group-123", groupRawJson, null, null));
         var clientFactory = new Mock<IFhirSourceClientFactory>();
-        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.GenericFhir)).Returns(client.Object);
 
-        var executor = new EpicSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
+        var executor = new GenericFhirSourceNodeExecutor(clientFactory.Object, resolver.Object, null, bulkExportClient.Object);
         var node = BuildNode(sourceConnectionId, "Patient");
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
 
         var output = await executor.ExecuteAsync(context, node, [], CancellationToken.None);
 
-        // A direct read, not a search — Group?_id=X can reject an id on Epic that GET Group/X resolves fine.
+        // A direct read, not a search — Group?_id=X can reject an id that GET Group/X resolves fine.
         client.Verify(x => x.ReadByIdAsync("Group", "group-123", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Once);
 
         bulkExportClient.Verify(

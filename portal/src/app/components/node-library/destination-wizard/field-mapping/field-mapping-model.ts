@@ -26,6 +26,15 @@ export type PendingSchemaOp =
  *  still tell the SQL engines apart where it matters (e.g. destination.type on the wire). */
 export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob';
 
+/** Outcome of the live destination-schema read that populates the SQL table list. Distinguishes the three
+ *  states an empty table list can mean, which an empty array alone cannot: never attempted ('idle'), in
+ *  flight ('loading'), read successfully — so an empty list really does mean an empty database ('loaded'),
+ *  the read was attempted and failed ('failed'), or it could not be attempted at all ('unavailable', e.g.
+ *  a reopened node carrying neither a destinationId nor a password, since secrets are stripped on persist).
+ *  Without this, 'failed'/'unavailable' render identically to a genuinely empty database, silently hiding
+ *  every existing table behind "+ Create a new table…". */
+export type SchemaLoadState = 'idle' | 'loading' | 'loaded' | 'failed' | 'unavailable';
+
 // ── SQL-family table-name qualification — the ONE place a bare table name becomes schema-qualified (or
 // vice versa) for SQL Server/MySQL/PostgreSQL. Mirrors SqlDestinationSchemaService.SplitTableName's own
 // per-dialect default exactly (src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs),

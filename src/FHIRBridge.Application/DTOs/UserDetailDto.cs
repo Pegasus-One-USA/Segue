@@ -16,4 +16,5 @@ public sealed record UserDetailDto(
     DateTime? LastLoginOnUtc,
     string? InvitationToken,
     bool MfaEnabled,
-    bool MustSetupMfa);
+    bool MustSetupMfa,
+    bool InvitationEmailSent = true);

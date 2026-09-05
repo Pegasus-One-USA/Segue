@@ -47,7 +47,7 @@
     } @else {
 
       <div class="table-wrapper">
-        <table mat-table [dataSource]="paginated()" class="data-table">
+        <table mat-table [dataSource]="roles()" class="data-table">
 
           <!-- Name Column -->
           <ng-container matColumnDef="name">
@@ -126,7 +126,8 @@
                   <button
                     mat-menu-item
                     class="menu-item-danger"
-                    [disabled]="r.isSystemRole"
+                    [disabled]="isSuperAdmin(r)"
+                    [matTooltip]="isSuperAdmin(r) ? 'The SuperAdmin role cannot be deleted.' : ''"
                     *appHideWithoutPermission="permissionCode(PermissionGroup.Role, PermissionAction.Delete)"
                     (click)="confirmDelete(r)">
                     <mat-icon>delete_outline</mat-icon>
@@ -144,7 +145,7 @@
       </div>
 
       <!-- Empty State -->
-      @if (filtered().length === 0) {
+      @if (totalCount() === 0) {
         <div class="empty-state">
           <div class="empty-state__icon-wrap">
             <mat-icon>shield</mat-icon>
@@ -168,11 +169,11 @@
 
       <!-- Paginator — always shown when there are any results (matching the Workflows list), not just
            once results overflow one page, so "Showing X-Y of Z" stays visible either way. -->
-      @if (filtered().length > 0) {
+      @if (totalCount() > 0) {
         <app-pagination-bar
           [pageIndex]="pageIndex()"
           [pageSize]="pageSize()"
-          [totalCount]="filtered().length"
+          [totalCount]="totalCount()"
           [pageSizeOptions]="[5, 10, 25, 50]"
           (pageChange)="onPageChange($event)"
         />

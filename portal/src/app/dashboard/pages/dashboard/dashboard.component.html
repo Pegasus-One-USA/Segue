@@ -62,6 +62,15 @@
         <span class="stat-tile__label">Cancelled</span>
       </div>
     </a>
+    <a class="stat-tile" routerLink="/execution-history" [queryParams]="{ status: 'PartialSuccess' }">
+      <div class="stat-tile__icon stat-tile__icon--partial">
+        <mat-icon>rule</mat-icon>
+      </div>
+      <div class="stat-tile__body">
+        <span class="stat-tile__value">{{ runStatusCounts().partialSuccess }}</span>
+        <span class="stat-tile__label">Partial Success</span>
+      </div>
+    </a>
   </div>
 
   <app-pipeline-table

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Component,
   input,
   output,
@@ -38,6 +38,7 @@ import { vendorScopeProfile } from '../../../data/vendor-scope-catalog.data';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
+import { MappingCatalogService } from '../../../services/mapping-catalog.service';
 import { environment } from '../../../../environments/environment';
 import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
@@ -538,7 +539,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
     'search-rest': {
       value: 'search-rest',
       label: 'Search (REST)',
-      description: 'Segue polls Epic’s FHIR REST API on a schedule.',
+      description: 'Segue polls the server’s FHIR REST API on a schedule.',
       fields: [
         // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
         // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
@@ -745,20 +746,17 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           required: false,
           visibleWhen: () => false,
         },
-        {
-          key: 'exportScope',
-          label: 'Export Scope',
-          type: 'select',
-          required: true,
-          options: [
-            { value: 'system', label: 'System ($export)' },
-            { value: 'group', label: 'Group ($export)' },
-            { value: 'patient', label: 'Patient ($export)' },
-          ],
-        },
-        // Static defaults below are Epic-shaped (Epic's Group export uses a real FHIR Group resource id) — athenahealth
-        // addresses a Group export by Practice instead, so groupIdPlaceholder()/groupIdHint() override this per-vendor
-        // at render time (this field config has no access to the vendor() input).
+        // Every vendor this form serves implements the Group-level $export operation ONLY. Epic states it outright
+        // — "Epic supports only the Group Export operation. We do not support _since or other bulk data operations
+        // at this time." (Epic's FHIR Bulk Data documentation) — and athenahealth and eCW are documented the same
+        // way. So a bulk export here is ALWAYS a Group export: there is deliberately no Export Scope choice, no
+        // Patient ID list and no _since cursor in this list at all, and Group ID is the one identifier it needs.
+        // GenericFhirSourceFormComponent — a separate component for a plain conformant FHIR server, which does
+        // implement all three export levels — keeps the full set of scopes.
+        //
+        // Placeholder/hint are Epic-shaped (Epic's Group export uses a real FHIR Group resource id) — athenahealth
+        // addresses a Group export by Practice instead, so groupIdPlaceholder()/groupIdHint() override them
+        // per-vendor at render time (this field config has no access to the vendor() input).
         {
           key: 'groupId',
           label: 'Group ID',
@@ -766,23 +764,6 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           required: true,
           placeholder: 'e.g. 4diBHMQR-nurOSMS8UbGqQB',
           hint: 'Epic Group FHIR ID to export.',
-          visibleWhen: (ctx) => ctx.exportScope === 'group',
-        },
-        {
-          key: 'patientIdList',
-          label: 'Patient ID / Patient List',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Comma-separated Patient FHIR IDs',
-          hint: 'One or more Patient FHIR IDs to export.',
-          visibleWhen: (ctx) => ctx.exportScope === 'patient',
-        },
-        {
-          key: 'incrementalCursor',
-          label: 'Incremental Cursor (_since)',
-          type: 'checkbox',
-          required: false,
-          hint: 'Only export resources changed since the last successful export.',
         },
         {
           key: 'fhirOutputFormat',
@@ -796,17 +777,15 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
         },
         // Bulk $export is a heavy operation and servers (e.g. Epic) cap its frequency (~once/24h), so it schedules on a
         // calendar "Repeat" (min daily) — the same recurrence control as Search-REST Full Refresh — never a tight poll
-        // frequency. System and Group exports repeat on a schedule; a Patient ID list is a one-off, so it stays manual
-        // (no recurrence fields shown).
+        // frequency. Always shown: a Group export is the only shape this form produces, and it always repeats on a
+        // schedule (the previous per-scope gating existed only to hide these for a one-off Patient ID list export).
         {
           key: 'fullRefreshRecurrence',
           label: 'Repeat',
           type: 'select',
           required: true,
           options: FULL_REFRESH_RECURRENCE_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
-          hint: 'How often to re-run this export. Patient ID list exports run manually and are not scheduled.',
+          hint: 'How often to re-run this export.',
         },
         {
           key: 'fullRefreshDaysOfWeek',
@@ -814,9 +793,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           type: 'weekday-picker',
           required: true,
           options: WEEKDAY_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== 'patient' &&
-            ctx.fullRefreshRecurrence === 'weekly',
+          visibleWhen: (ctx) => ctx.fullRefreshRecurrence === 'weekly',
         },
         {
           key: 'fullRefreshDayOfMonth',
@@ -827,9 +804,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
             value: String(i + 1),
             label: `${i + 1}`,
           })),
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== 'patient' &&
-            ctx.fullRefreshRecurrence === 'monthly',
+          visibleWhen: (ctx) => ctx.fullRefreshRecurrence === 'monthly',
           hint: 'Capped at 28 so it fires every month, including February.',
         },
         {
@@ -837,8 +812,6 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           label: 'At',
           type: 'time',
           required: true,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
           hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.',
         },
         {
@@ -847,8 +820,6 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           type: 'select',
           required: true,
           options: TIME_ZONE_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
           hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.',
         },
       ],
@@ -956,6 +927,7 @@ export class EhrVendorSourceFormComponent
   private readonly destroyRef = inject(DestroyRef);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
   private readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
+  private readonly catalogSvc = inject(MappingCatalogService);
 
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
@@ -1001,16 +973,23 @@ export class EhrVendorSourceFormComponent
   // JSON as-is with no mapping-template dependency at all, so the cap was blocking resource types (Organization,
   // Location, ...) that already work fine end-to-end.
   protected readonly discoveredResourceTypes = signal<string[]>([]);
+  /** Backend-verified resource types this instance's vendor is known to support
+   *  (VendorResourceTypeSupport, e.g. Athenahealth/Healow), fetched via MappingCatalogService and kept
+   *  in sync with `vendor()` by the effect in the constructor. Null when the vendor has no known
+   *  restriction (Epic, GenericFhir, ...) or the request hasn't resolved yet — isResourceSupported treats
+   *  null the same as "no filter", never narrowing `resources` below SUPPORTED_RESOURCE_TYPES. */
+  protected readonly vendorResourceTypes = signal<string[] | null>(null);
   protected get resources(): string[] {
     return SUPPORTED_RESOURCE_TYPES;
   }
   protected isResourceSupported(r: string): boolean {
-    return SUPPORTED_RESOURCE_TYPES.includes(r);
+    if (!SUPPORTED_RESOURCE_TYPES.includes(r)) return false;
+    const vendorList = this.vendorResourceTypes();
+    return vendorList ? vendorList.includes(r) : true;
   }
 
-  /** Of `resources`, only the subset this pipeline actually supports today — drives "Select all" and the
-   *  selected-count display in the retrieval-method resource grids. Trivially equal to `resources` now that
-   *  both are SUPPORTED_RESOURCE_TYPES; kept as a defensive filter in case the two ever diverge again. */
+  /** Of `resources`, only the subset this vendor/pipeline actually supports today — drives "Select all"
+   *  and the selected-count display in the retrieval-method resource grids. */
   protected readonly selectableResources = computed(() =>
     this.resources.filter((r) => this.isResourceSupported(r)),
   );
@@ -1595,9 +1574,16 @@ export class EhrVendorSourceFormComponent
    * the field currently has a value — drives the Search Criteria control's required validator (see
    * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
    * against the live value on every keystroke regardless.
+   *
+   * Gated on showRetrievalSection() — this section (and Search Criteria within it) only renders for the Backend
+   * System audience. Other audiences (Patient, Provider Standalone/EHR Launch) still carry a 'search-rest'
+   * retrievalMethod / Patient-inclusive resources from cloning an existing connection (see the clone fallback a
+   * few hundred lines down), but their data actually flows through the SMART launch context, not a live
+   * search-rest query — requiring a field the admin can never see would leave the form permanently invalid.
    */
   protected readonly athenaPatientSearchNeedsCriteria = computed(
     () =>
+      this.showRetrievalSection() &&
       this.vendor() === 'Athenahealth' &&
       this.retrievalMethod() === 'search-rest' &&
       this.activeRetrievalResourceTypes().includes('Patient'),
@@ -1633,24 +1619,21 @@ export class EhrVendorSourceFormComponent
         '"a-1.C-{Practice}" automatically.'
       );
     }
+    if (field.key === 'groupId' && this.vendor() !== 'Epic') {
+      return `${this.displayVendor()} Group FHIR ID to export.`;
+    }
     return field.hint;
   }
 
   /**
-   * athenahealth's FHIR Bulk Export supports Group-level export ONLY — there is no System ($export) or Patient
-   * ($export) endpoint on their server at all (confirmed against athenahealth's own implementation guide/docs).
-   * The static Export Scope options above are shared across every vendor (Epic supports all three), so for
-   * athenahealth this narrows the dropdown down to the one scope that's actually valid — same per-field-override
-   * pattern as groupIdPlaceholder/groupIdHint, since the static field config has no access to `vendor()`. Paired
-   * with the exportScope-locking effect in the constructor, which forces the control's value to 'group' and
-   * disables it for this vendor.
+   * Options for whichever `select` field the config-driven renderer is currently drawing. There is no longer an
+   * Export Scope dropdown to narrow per vendor — every vendor this form serves does Group-level $export only, so
+   * bulk export has no scope choice at all (see RETRIEVAL_METHOD_CONFIG's 'bulk-export' entry) — leaving this as a
+   * plain pass-through of the field's own static options.
    */
   protected exportScopeOptions(
     field: RetrievalFieldDef,
   ): readonly RetrievalFieldOption[] {
-    if (field.key === 'exportScope' && this.vendor() === 'Athenahealth') {
-      return [{ value: 'group', label: 'Group ($export)' }];
-    }
     return field.options ?? [];
   }
 
@@ -1816,6 +1799,15 @@ export class EhrVendorSourceFormComponent
       }
     });
 
+    // Narrows the resource-type grid to what this vendor's real FHIR API is verified to support
+    // (VendorResourceTypeSupport, backend) — e.g. hides Task/Communication for Athenahealth. A vendor
+    // with no known restriction resolves to null, same as "no filter" (isResourceSupported above).
+    effect(() => {
+      this.catalogSvc
+        .resourceTypes(this.vendor())
+        .subscribe((types) => this.vendorResourceTypes.set(types));
+    });
+
     // A saved connection's audience can predate a vendor's disabled-audience list (e.g. was created before
     // Provider Standalone/EHR Launch were hidden for Athenahealth), or this instance's `vendor` could change
     // after the form already restored one. Fall back to Backend System — always enabled for every vendor —
@@ -1851,24 +1843,11 @@ export class EhrVendorSourceFormComponent
       }
     });
 
-    // athenahealth's Bulk Export only ever supports Group-level export (see exportScopeOptions' remarks) — force
-    // the control to 'group' and lock it so an admin can't pick System/Patient, which would fail against
-    // athenahealth's server. Also self-heals a connection saved before this restriction existed (restoreExtended-
-    // FieldsFromEditingNode runs in ngOnInit, before this effect's first flush, so a legacy 'system'/'patient'
-    // value gets corrected here). Every other vendor is re-enabled here too, guarded by !isReadonly so this never
-    // fights the view-mode "disable the whole form" lock — needed only if this instance's `vendor` input ever
-    // changes at runtime (same caveat already noted on the audience-reset effect above).
-    effect(() => {
-      const control = this.form.controls.exportScope;
-      if (this.vendor() === 'Athenahealth') {
-        if (control.value !== 'group') {
-          control.setValue('group');
-        }
-        control.disable({ emitEvent: false });
-      } else if (!this.isReadonly) {
-        control.enable({ emitEvent: false });
-      }
-    });
+    // Bulk export is always a Group export for every vendor this form serves (see RETRIEVAL_METHOD_CONFIG's
+    // 'bulk-export' entry), so the exportScope/patientIdList/incrementalCursor controls are no longer part of that
+    // method's field list at all. buildFieldsToSave pins the persisted scope to 'group' and writes no patient id
+    // list, and clearInapplicableRetrievalFields resets those controls on the way in, so nothing here has to keep
+    // a hidden picker in sync any more.
 
     // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
     // showing the real URL in a toast — once resolvedSourceConnectionId() is known (after the first save, or
@@ -2008,6 +1987,20 @@ export class EhrVendorSourceFormComponent
       }
     }
 
+    // Generic new-source App Name default for every other non-Epic vendor (Cerner, MEDITECH Greenfield,
+    // Allscripts, ...): wiz.stepName() above defaults to 'Epic' regardless of which vendor form is actually
+    // open (see WizardService.open()), and Athenahealth/Healow already correct it via their own overrides
+    // above (they also need other field defaults). Every remaining vendor gets this vendor-neutral fallback
+    // instead of silently keeping the word "Epic" on screen. Skipped once editing, same as the blocks above.
+    if (
+      !this.wiz.isEditing() &&
+      this.vendor() !== 'Epic' &&
+      this.vendor() !== 'Athenahealth' &&
+      this.vendor() !== 'Healow'
+    ) {
+      this.form.controls.appName.setValue(this.displayVendor());
+    }
+
     this.prevAudience = this.audience();
     this.prevAuthMethod = this.form.controls.authMethod.value as
       | 'public'
@@ -2086,10 +2079,6 @@ export class EhrVendorSourceFormComponent
         this.ensureRetrievalResourceTypeDefault();
         this.syncRetrievalValidators();
       });
-
-    this.form.controls.exportScope.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncRetrievalValidators());
 
     this.form.controls.runMode.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -3376,6 +3365,10 @@ export class EhrVendorSourceFormComponent
     cfg: AudienceFieldConfig,
     emitRecurrence: boolean,
   ): Record<string, string> {
+    // Bulk export is always a Group export for every vendor this form serves, and Epic documents that it does not
+    // support _since — so Export scope / Patient ID list / Incremental cursor are pinned below rather than read
+    // off controls the Bulk Export field list no longer contains. Search (REST) writes all three normally.
+    const isBulkExport = this.retrievalMethod() === 'bulk-export';
     return {
       // Lets NodeLibraryDialogComponent re-open the correct per-vendor wrapper when editing an existing canvas
       // node later (see its _sourceFormKeyForNode) — the same pattern GenericFhirSourceFormComponent/
@@ -3448,12 +3441,13 @@ export class EhrVendorSourceFormComponent
             'Reconciliation schedule': v.reconciliationSchedule ?? '',
             'Payload format': v.payloadFormat ?? '',
             'Search criteria': v.searchCriteria ?? '',
-            'Incremental cursor': v.incrementalCursor ? 'enabled' : 'disabled',
+            'Incremental cursor':
+              !isBulkExport && v.incrementalCursor ? 'enabled' : 'disabled',
             'Schedule / poll frequency': v.schedulePollFrequency ?? '',
             'Run mode': v.runMode ?? '',
-            'Export scope': v.exportScope ?? '',
+            'Export scope': isBulkExport ? 'group' : (v.exportScope ?? ''),
             'Group ID': v.groupId ?? '',
-            'Patient ID / list': v.patientIdList ?? '',
+            'Patient ID / list': isBulkExport ? '' : (v.patientIdList ?? ''),
             'FHIR output format': v.fhirOutputFormat ?? '',
             // ── Calendar recurrence (Search-REST Full Refresh, or System/Group bulk export) ──
             ...(emitRecurrence
@@ -3501,10 +3495,7 @@ export class EhrVendorSourceFormComponent
     const aud = v.audience as EpicAudience;
     const cfg = this.audienceConfig();
     const emitRecurrence =
-      v.runMode === 'full' ||
-      (this.retrievalMethod() === 'bulk-export' &&
-        v.exportScope !== '' &&
-        v.exportScope !== 'patient');
+      v.runMode === 'full' || this.retrievalMethod() === 'bulk-export';
     return this.buildFieldsToSave(v, aud, cfg, emitRecurrence);
   }
 
@@ -3536,10 +3527,7 @@ export class EhrVendorSourceFormComponent
     // a System/Group bulk export (a Patient-id-list export is a one-off and stays manual). buildTrigger() in the
     // workflow builder reads 'Full refresh schedule (cron)' to compile the workflow's Schedule trigger.
     const emitRecurrence =
-      v.runMode === 'full' ||
-      (this.retrievalMethod() === 'bulk-export' &&
-        v.exportScope !== '' &&
-        v.exportScope !== 'patient');
+      v.runMode === 'full' || this.retrievalMethod() === 'bulk-export';
 
     // "Existing Source" has two outcomes depending on whether the form still matches what
     // populateFormFromSourceConnection() cloned in (as re-confirmed by discovery):
@@ -3549,7 +3537,7 @@ export class EhrVendorSourceFormComponent
     //  - Edited: fork it as a new, independent connection. If the user left Name exactly as cloned,
     //    it collides with the original unless suffixed; if they typed their own distinct name, honor
     //    it as-is (only deduped on an actual collision) rather than silently suffixing a chosen name.
-    let resolvedName = v.appName ?? 'Epic';
+    let resolvedName = v.appName ?? this.displayVendor();
     let resolvedSourceConnectionId: string | null = null;
     if (this.sourceMode() === 'existing') {
       const original = this.existingConnections().find(

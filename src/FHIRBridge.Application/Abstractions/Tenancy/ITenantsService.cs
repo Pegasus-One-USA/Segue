@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 
 namespace FHIRBridge.Application.Abstractions.Tenancy;
@@ -8,6 +9,10 @@ namespace FHIRBridge.Application.Abstractions.Tenancy;
 public interface ITenantsService
 {
     Task<IReadOnlyList<TenantDto>> GetAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>Server-side paged/search listing backing the admin Tenant Management screen's table — unlike
+    /// <see cref="GetAllAsync"/>, which stays used by pickers/dropdowns elsewhere that need every tenant.</summary>
+    Task<PagedResult<TenantDto>> GetPagedAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
 
     Task<TenantDto> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

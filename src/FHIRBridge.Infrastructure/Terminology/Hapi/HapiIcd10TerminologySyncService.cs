@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Net.Http.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -25,38 +24,30 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
         "https://ftp.cdc.gov/pub/health_statistics/nchs/Publications/ICD10CM/2025/ICD10-CM%20Code%20Descriptions%202025.zip";
     private const string OrderFileEntryName = "icd10cm-order-2025.txt";
     private const string SystemUrl = "http://hl7.org/fhir/sid/icd-10-cm";
-    private const string DemoResourceId = "icd10cm-demo-subset";
-    private const string FullResourceId = "icd10cm-full-2025";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ISystemSettingsCache _settings;
     private readonly ILogger<HapiIcd10TerminologySyncService> _logger;
-    private readonly HapiTerminologyServerClient _serverClient;
+    private readonly HapiLocalTerminologyWriter _localWriter;
 
     public HapiIcd10TerminologySyncService(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ISystemSettingsCache settings,
         ILogger<HapiIcd10TerminologySyncService> logger,
-        HapiTerminologyServerClient serverClient)
+        HapiLocalTerminologyWriter localWriter)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _settings = settings;
         _logger = logger;
-        _serverClient = serverClient;
+        _localWriter = localWriter;
     }
 
     public async Task<HapiIcd10SyncResult> SyncAsync(CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        // Shared across every vocabulary — they all load into the same terminology server, so one
-        // setting ("Terminology:BaseUrl", also used by FhirTerminologyLookupService et al.) governs
-        // all of them rather than a separate ServerBaseUrl per vocabulary.
-        var configuredDefault = _configuration["Terminology:BaseUrl"] ?? "http://hapi-terminology:8080/fhir";
-        var serverBaseUrlForDelete = (await _settings.GetStringAsync(
-            "Terminology:BaseUrl", configuredDefault, cancellationToken)).TrimEnd('/');
 
         _logger.LogInformation("Downloading official ICD-10-CM {Year} release from CDC.", ReleaseYear);
         var downloadClient = _httpClientFactory.CreateClient(nameof(HapiIcd10TerminologySyncService) + ".Download");
@@ -69,21 +60,8 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
             concepts.Count,
             billableCount);
 
-        // Retire the earlier demo subset, if present, so only one CodeSystem claims this system URL.
-        // Best-effort only — a lightweight client of its own, separate from the retry/verify-aware
-        // one used for the real (large) upload below.
-        try
-        {
-            using var deleteClient = new HttpClient { BaseAddress = new Uri(serverBaseUrlForDelete + "/"), Timeout = TimeSpan.FromMinutes(1) };
-            await deleteClient.DeleteAsync($"CodeSystem/{DemoResourceId}", cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogWarning(exception, "Could not delete the superseded demo ICD-10-CM CodeSystem (non-fatal).");
-        }
-
-        var resource = BuildCodeSystemResource(concepts);
-        await _serverClient.PutCodeSystemAsync(FullResourceId, resource, concepts.Count, TimeSpan.FromMinutes(15), cancellationToken);
+        await _localWriter.WriteConceptsAsync(
+            SystemUrl, "ICD10CM", ReleaseYear, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -131,23 +109,6 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
         }
 
         return results;
-    }
-
-    private static object BuildCodeSystemResource(IReadOnlyList<Concept> concepts)
-    {
-        return new
-        {
-            resourceType = "CodeSystem",
-            id = FullResourceId,
-            url = SystemUrl,
-            version = ReleaseYear,
-            name = "ICD10CM",
-            title = $"ICD-10-CM {ReleaseYear} (auto-synced from CDC)",
-            status = "active",
-            content = "complete",
-            count = concepts.Count,
-            concept = concepts.Select(c => new { code = c.Code, display = c.Display }).ToArray(),
-        };
     }
 
     private sealed record Concept(string Code, string Display, bool Billable);
