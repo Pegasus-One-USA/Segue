@@ -1,0 +1,51 @@
+src/FHIRBridge.Application/Services/NotificationSettingsService.cs
+  s_5849c970b9c366::t_02cd6ea4a4845e 47-48
+  s_41b72370f301d8::t_c7f449bc73ee14 95
+  s_41b72370f301d8::t_d216735d9812e2 36-38,51
+  s_41b72370f301d8::t_b5bdb0e35b8e80 39-40
+  s_5849c970b9c366::t_2453be616732f0 49-50
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_41b72370f301d8::t_18f95e5b5fa182 259
+  s_41b72370f301d8::t_b9a76a19a3744d 226,228-230,234,236-238
+src/FHIRBridge.Infrastructure/FHIRBridge.Infrastructure.csproj
+  s_41b72370f301d8::t_05ba0fcc391bfd 15
+src/Api/FHIRBridge.Api/Controllers/V1/NotificationSettingsController.cs
+  s_41b72370f301d8::t_f9c169426688dc 64-65
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_41b72370f301d8::t_9b09bf0a76e19f 89-91,93
+  s_41b72370f301d8::t_a6591d03451f3f 138-139
+  s_41b72370f301d8::t_1c76397a4111cd 87-88
+tests/FHIRBridge.UnitTests/Services/NotificationSettingsServiceTests.cs
+  s_41b72370f301d8::t_70920ed634b078 28
+  s_41b72370f301d8::t_ae6140e3d13ecf 47,49-52,56,58,60-61,67-78
+  s_41b72370f301d8::t_6d46827d13efa2 79-80
+src/FHIRBridge.Infrastructure/Email/SmtpEmailSender.cs
+  s_41b72370f301d8::t_3d872931e64df6 114,116-121
+  s_41b72370f301d8::t_1f6538f73a2740 138-143
+  s_41b72370f301d8::t_3f89af7e7bab5a 5-6,8,16-21,48,52-54,76,80,84,89,92,95,97,105,125-134
+  s_41b72370f301d8::t_4ed794ea20b9cd 135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0b622ee955d981022e80e4989957932978d2e818",
+  "prompts": {},
+  "sessions": {
+    "s_41b72370f301d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95bb9773-87ef-49e7-95a8-9ae0c4bf0992",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    },
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

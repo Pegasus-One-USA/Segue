@@ -1,0 +1,30 @@
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_569e47a9591572::t_4cd621dff179e2 690
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_569e47a9591572::t_7b1be8120b9131 287-297
+  s_569e47a9591572::t_e62190d5bb5347 182
+  s_569e47a9591572::t_467242c3e64c9a 183-185
+  s_569e47a9591572::t_61713623bcae9f 228-236,246
+portal/src/app/pages/workflow-builder/workflow-builder.component.ts
+  s_569e47a9591572::t_e58d8f6d65e45a 914
+portal/src/app/services/wizard.service.ts
+  s_569e47a9591572::t_ec73652a43fe64 542
+portal/src/app/models/node.model.ts
+  s_569e47a9591572::t_92bdc511e758df 19-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "81a88df7d46a54d368cebaca5e8409b961beecc9",
+  "prompts": {},
+  "sessions": {
+    "s_569e47a9591572": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e4bfd2b-5859-48de-9457-82c786ac4e83",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

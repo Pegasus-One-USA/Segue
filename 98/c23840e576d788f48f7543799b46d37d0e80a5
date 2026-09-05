@@ -1,0 +1,37 @@
+src/FHIRBridge.Application/Abstractions/Security/ICurrentUserService.cs
+  s_569e47a9591572::t_d570195f055075 20-27
+src/FHIRBridge.Application/Services/LocalAuthService.cs
+  s_569e47a9591572::t_2eac8e79fc9b62 559-562,564-569,581-592
+  s_569e47a9591572::t_9621055dca440c 246-247,250,252-261
+  s_569e47a9591572::t_9ca1a7569a5bae 26,38-39,51
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_569e47a9591572::t_79dbff12d709fa 239-241
+  s_569e47a9591572::t_5a4a85650f2845 226-229
+src/Api/FHIRBridge.Api/Security/HttpContextCurrentUserService.cs
+  s_569e47a9591572::t_e1bf87f2959187 58,62-87
+  s_569e47a9591572::t_ec7a86e98be714 35,40,88
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_569e47a9591572::t_db247e262cea00 242-243,246,248-253
+  s_569e47a9591572::t_a733a0a157be77 30,42-43,55
+  s_569e47a9591572::t_261683ee396213 642-650,652-657,669-680
+  s_569e47a9591572::t_d3688c769dfd76 180-181,184,186-195
+  s_569e47a9591572::t_85d20f443aa731 2
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_569e47a9591572::t_c569e7a9cc7626 3-15,17,27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "98c23840e576d788f48f7543799b46d37d0e80a5",
+  "prompts": {},
+  "sessions": {
+    "s_569e47a9591572": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e4bfd2b-5859-48de-9457-82c786ac4e83",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

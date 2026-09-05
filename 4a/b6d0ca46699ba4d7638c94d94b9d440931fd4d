@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Email/SmtpEmailSender.cs
+  s_5849c970b9c366::t_a13fef343827d9 1-2,41,43,45-46,48,70,72,74-75,80,85,88-89,92,101,110,112-113,115,118,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4ab6d0ca46699ba4d7638c94d94b9d440931fd4d",
+  "prompts": {},
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
