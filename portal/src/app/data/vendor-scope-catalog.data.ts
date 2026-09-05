@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Per-vendor SMART `system/` scope vocabulary — the portal-side mirror of the backend's
  * VendorScopeCatalog (src/FHIRBridge.Application/Services/VendorScopeCatalog.cs). Keep the two in sync: the
  * backend copy is authoritative at run time (SourceConnectionRuntimeResolver regenerates scopes on every
@@ -11,11 +11,11 @@
 /** Access level (`read` | `rs` | `r`) a vendor spells each resource type's system read scope with. A resource
  *  type absent from a vendor's map has no system read scope on that vendor at all and is omitted from the
  *  generated scope string entirely, rather than requested and rejected. */
-export type VendorScopeProfile = {
+export interface VendorScopeProfile {
   readonly readAccessLevelByResourceType: Readonly<Record<string, string>>;
   /** Access level for this vendor's `system/*` wildcard. */
   readonly wildcardReadAccessLevel: string;
-};
+}
 
 /**
  * eClinicalWorks (Healow), derived from the practice's own live `/.well-known/smart-configuration`
