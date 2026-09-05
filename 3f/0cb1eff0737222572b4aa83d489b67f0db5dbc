@@ -1,0 +1,21 @@
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_f72cc3aac83253::t_e32b03c501f6e6 191-197
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_f72cc3aac83253::t_9b684e98a57794 459-461,463-464,468-484,486-494,496
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "3f0cb1eff0737222572b4aa83d489b67f0db5dbc",
+  "prompts": {},
+  "sessions": {
+    "s_f72cc3aac83253": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99510800-b942-496b-8cbc-cc416d8d65af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
