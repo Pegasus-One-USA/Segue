@@ -472,7 +472,6 @@ export class NodeLibraryDialogComponent {
       node,
       this.store.nodes(),
       this.store.edges(),
-      this.showHidden(),
     );
   });
 

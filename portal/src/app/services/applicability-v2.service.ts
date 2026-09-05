@@ -1,11 +1,7 @@
 import { Injectable } from '@angular/core';
 import { TRANSFORMS } from '../data/transforms-v2.data';
-import { RANK_LABEL, SQL_FAMILY_DESTINATION_TYPES } from '../models/transform-v2.model';
-import {
-  ApplicabilityResult,
-  ApplicabilityOrigin,
-  EpicConfig,
-} from '../models/transform-applicability-v2.model';
+import { SQL_FAMILY_DESTINATION_TYPES } from '../models/transform-v2.model';
+import { EpicConfig } from '../models/transform-applicability-v2.model';
 import { CanvasNode, TransformNode, isSourceNode, isMergeNode, isTransformNode } from '../models/node-v2.model';
 import { PickerModel, PickerItem, MergeNodeOption } from '../models/wizard-state-v2.model';
 
@@ -15,38 +11,14 @@ export const MAPPING_RANK = 2;
 export const TRANSFORMATION_RANK = 3;
 export const DEIDENTIFICATION_RANK = 4;
 
-/** V2's simplified straight-chain sequence — no groups, no branching/merge on this path (multi-source
- *  merge, an unrelated existing feature, is preserved separately below). */
-const RANK_SEQUENCE = 'Source(0)→Destination(1)→Mapping(2)→Transformation(3)→De-identification(4)';
-
 @Injectable({ providedIn: 'root' })
 export class ApplicabilityServiceV2 {
 
-  // ── core applicability ─────────────────────────────────────────────────────
-  // V2's Transformation/De-identification/Mapping steps are single consolidated entries (no EHR-context
-  // caveats the way the old granular per-rank items had) — every catalog entry is simply "show" here.
-  // Real gating (SQL-family-only Mapping, single-path chain) happens in pickerModel() below, keyed off
-  // node type/relationship rather than EpicConfig.
-  applicableTransforms(_cfg: EpicConfig, _origin?: ApplicabilityOrigin): ApplicabilityResult[] {
-    return TRANSFORMS.map(t => ({
-      id:     t.id,
-      name:   t.name,
-      sub:    t.sub,
-      rank:   t.rank,
-      group:  null,
-      status: 'show',
-      reason: null,
-      code:   null,
-    }));
-  }
-
   // ── helpers ──────────────────────────────────────────────────────────────
-  groupOf(_transformId: string): string | null {
-    return null;
-  }
-
-  groupMembers(_group: string): string[] {
-    return [];
+  /** V2's catalog defines no groups (see transforms-v2.data.ts) — this stays keyed off the entry so it
+   *  keeps telling the truth if grouped steps are ever reintroduced, rather than hardcoding null. */
+  groupOf(transformId: string): string | null {
+    return TRANSFORMS.find(t => t.id === transformId)?.group ?? null;
   }
 
   groupLabel(group: string): string {
@@ -149,7 +121,7 @@ export class ApplicabilityServiceV2 {
     allNodes: CanvasNode[],
     allEdges: { id: string; from: string; to: string }[],
   ): boolean {
-    const model = this.pickerModel(node, allNodes, allEdges, false);
+    const model = this.pickerModel(node, allNodes, allEdges);
     return model.items.length > 0 || !!model.mergeOpt;
   }
 
@@ -179,9 +151,7 @@ export class ApplicabilityServiceV2 {
     node: CanvasNode,
     allNodes: CanvasNode[],
     allEdges: { id: string; from: string; to: string }[],
-    _showHidden: boolean
   ): PickerModel {
-    const byId = (id: string) => allNodes.find(n => n.id === id);
     const hasChild = (nodeId: string): boolean => allEdges.some(e => e.from === nodeId);
 
     const cfg: EpicConfig = { context: '', ingestionMode: '', resources: [] };

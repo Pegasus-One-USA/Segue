@@ -47,7 +47,6 @@ export class TransformPickerComponent {
       node,
       this.store.nodes(),
       this.store.edges(),
-      this.showHidden(),
     );
   });
 
