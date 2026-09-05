@@ -16,6 +16,15 @@ export interface SourceNode extends BaseNode {
   abbr?: string;
   color?: string;
   connectorLabel?: string;
+  /** SOURCES catalog id (e.g. 'athena', 'cerner') for THIS node's real EHR vendor — independent of
+   *  whatever backend workflow NodeType the node round-trips through. Every EHR vendor except Sample/
+   *  GenericFhir currently saves under the generic 'EpicSourceNode' NodeType (no dedicated backend node
+   *  type exists yet for Cerner/Athenahealth/Allscripts/Healow/Meditech — see
+   *  workflow-graph-mapper.service.ts's transformIdForNode), so re-deriving the vendor from that on
+   *  reload always guesses 'epic'. Persisted separately (workflow-graph-mapper.service.ts's `__vendorId`
+   *  config key) purely for cosmetic display (abbr/color on the canvas) — never used for anything the
+   *  backend validates. */
+  vendorId?: string;
 }
 
 export interface TransformNode extends BaseNode {

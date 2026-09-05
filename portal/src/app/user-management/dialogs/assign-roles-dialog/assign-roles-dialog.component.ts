@@ -23,6 +23,8 @@ import { ROLE_CONFIG } from '../../pages/user-list/user-list.component';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
 
 function backendErrorMessage(err: unknown, fallback: string): string {
   const body = (err as { error?: { error?: string } } | null)?.error;
@@ -74,6 +76,7 @@ export class AssignRolesDialogComponent implements OnInit {
   private readonly dialogRef   = inject<DialogRef<User>>(DialogRef);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg    = inject(PhaseConfigService);
   readonly data                = inject<DialogData>(DIALOG_DATA);
 
   // ─── State signals ────────────────────────────────────────────────────────
@@ -104,10 +107,30 @@ export class AssignRolesDialogComponent implements OnInit {
   // ─── Computed: what the assigned role grants ──────────────────────────────
   effectivePermissions = computed<Permission[]>(() => this.assignedRole()?.permissions ?? []);
 
+  // The backend's permission catalog lists every source/destination vendor's node group
+  // unconditionally (Epic, HL7 v2, MeditechGreenfield, Azure SQL, ...) — several of those aren't
+  // actually addable in the Workflow Builder yet (see PhaseConfigService/node-permission-visibility.util.ts,
+  // the exact same gate node-library-dialog.component.ts's own tile visibility uses), so this dialog's
+  // "Role Allocations" preview would otherwise show CREATE/DELETE/EDIT/EXECUTE/VIEW chips for nodes no
+  // one can currently add. A group's own vendor/destination prefix is read off its first permission's
+  // `resource` (Permission.resource is "derived from name, matches the owning PermissionGroup" — see
+  // user.model.ts), never hand-maintained here; a non-node group (Role, User, Workflow, Settings, ...)
+  // always keeps its permissions, since isNodePermissionPrefixVisible only ever recognizes a real
+  // source/destination prefix.
+  private readonly visibleCatalog = computed<PermissionCategory[]>(() =>
+    this.catalog().map(cat => ({
+      ...cat,
+      groups: cat.groups.filter(g => {
+        const prefix = g.permissions[0]?.resource;
+        return !prefix || isNodePermissionPrefixVisible(prefix, this.phaseCfg);
+      }),
+    }))
+  );
+
   // ─── Computed: full catalog, each permission marked allowed/denied by the assigned role ─
   catalogWithStatus = computed<StatusCategory[]>(() => {
     const allowedIds = new Set(this.effectivePermissions().map(p => p.id));
-    return this.catalog().map(cat => ({
+    return this.visibleCatalog().map(cat => ({
       id:          cat.id,
       displayName: cat.displayName,
       groups: cat.groups.map(g => ({
@@ -119,7 +142,7 @@ export class AssignRolesDialogComponent implements OnInit {
   });
 
   totalPermissionsCount = computed(() =>
-    this.catalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
+    this.visibleCatalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
   );
   // Counted from catalogWithStatus (catalog permissions only) rather than effectivePermissions()
   // directly — a role can carry permissions the catalog excludes (deactivated/hidden ones), which

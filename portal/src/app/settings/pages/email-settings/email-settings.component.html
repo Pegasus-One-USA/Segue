@@ -45,14 +45,20 @@
           </label>
 
           <div class="form-field">
-            <label for="es-username">Username</label>
+            <label for="es-username">Username <span class="req">*</span></label>
             <input id="es-username" type="text" formControlName="username" autocomplete="off" />
+            @if (form.controls.username.touched && form.controls.username.invalid) {
+              <p class="field-error">Username is required.</p>
+            }
           </div>
 
           <div class="form-field">
-            <label for="es-password">Password</label>
+            <label for="es-password">Password <span class="req">*</span></label>
             <input id="es-password" type="password" formControlName="password" autocomplete="new-password"
                    [placeholder]="hasPasswordConfigured() ? 'Leave blank to keep the current password' : 'Enter a password'" />
+            @if (form.controls.password.touched && form.controls.password.invalid) {
+              <p class="field-error">Password is required.</p>
+            }
           </div>
 
           <div class="form-field">

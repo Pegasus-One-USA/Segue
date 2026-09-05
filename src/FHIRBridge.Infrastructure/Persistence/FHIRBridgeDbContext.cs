@@ -231,6 +231,8 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<User>()
+                .HasIndex(x => x.ExternalUserId).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ErrorLog>()
                 .HasIndex(x => x.ErrorReferenceId).HasFilter("\"ErrorReferenceId\" IS NOT NULL");
             modelBuilder.Entity<PermissionAllocation>().ToTable(tb => tb.HasCheckConstraint(

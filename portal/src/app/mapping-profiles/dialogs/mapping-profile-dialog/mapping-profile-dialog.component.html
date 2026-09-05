@@ -55,41 +55,50 @@
           }
         </mat-form-field>
 
-        <mat-form-field appearance="outline" class="mpd-form-field">
-          <mat-label>Resource Type</mat-label>
-          <mat-select id="mpd-resourceType" formControlName="resourceType" placeholder="Choose a FHIR resource…">
-            @for (r of resourceTypeOptions; track r) {
-              <mat-option [value]="r">{{ r }}</mat-option>
-            }
-          </mat-select>
+        <div class="dw-field mpd-form-field" [class.dw-field--error]="metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched">
+          <label class="dw-label" for="mpd-resourceType">Resource Type</label>
+          <div class="dw-select-wrap">
+            <select id="mpd-resourceType" class="dw-select" formControlName="resourceType">
+              <option value="" disabled>Choose a FHIR resource…</option>
+              @for (r of resourceTypeOptions; track r) {
+                <option [value]="r">{{ r }}</option>
+              }
+            </select>
+          </div>
           @if (metaForm.controls.resourceType.invalid && metaForm.controls.resourceType.touched) {
-            <mat-error>Resource type is required.</mat-error>
+            <span class="dw-error">Resource type is required.</span>
           }
-        </mat-form-field>
+        </div>
 
-        <mat-form-field appearance="outline" class="mpd-form-field">
-          <mat-label>Source Connection</mat-label>
-          <mat-select id="mpd-source" formControlName="sourceConnectionId" placeholder="Choose a source connection…">
-            @for (s of sourceOptions(); track s.id) {
-              <mat-option [value]="s.id">{{ s.name }}</mat-option>
-            }
-          </mat-select>
+        <div class="dw-field mpd-form-field" [class.dw-field--error]="metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched">
+          <label class="dw-label" for="mpd-source">Source Connection</label>
+          <div class="dw-select-wrap">
+            <select id="mpd-source" class="dw-select" formControlName="sourceConnectionId">
+              <option value="" disabled>Choose a source connection…</option>
+              @for (s of sourceOptions(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
           @if (metaForm.controls.sourceConnectionId.invalid && metaForm.controls.sourceConnectionId.touched) {
-            <mat-error>Source connection is required.</mat-error>
+            <span class="dw-error">Source connection is required.</span>
           }
-        </mat-form-field>
+        </div>
 
-        <mat-form-field appearance="outline" class="mpd-form-field">
-          <mat-label>Destination</mat-label>
-          <mat-select id="mpd-destination" formControlName="destinationId" placeholder="Choose a destination…">
-            @for (d of destinationOptions(); track d.id) {
-              <mat-option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</mat-option>
-            }
-          </mat-select>
+        <div class="dw-field mpd-form-field" [class.dw-field--error]="metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched">
+          <label class="dw-label" for="mpd-destination">Destination</label>
+          <div class="dw-select-wrap">
+            <select id="mpd-destination" class="dw-select" formControlName="destinationId">
+              <option value="" disabled>Choose a destination…</option>
+              @for (d of destinationOptions(); track d.id) {
+                <option [value]="d.id">{{ d.name }} ({{ d.destinationType }})</option>
+              }
+            </select>
+          </div>
           @if (metaForm.controls.destinationId.invalid && metaForm.controls.destinationId.touched) {
-            <mat-error>Destination is required.</mat-error>
+            <span class="dw-error">Destination is required.</span>
           }
-        </mat-form-field>
+        </div>
 
         <mat-form-field appearance="outline" class="mpd-form-field">
           <mat-label>Destination Object</mat-label>

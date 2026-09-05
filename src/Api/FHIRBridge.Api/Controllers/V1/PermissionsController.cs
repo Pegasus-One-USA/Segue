@@ -27,7 +27,12 @@ public sealed class PermissionsController : ControllerBase
         return Ok(permissions);
     }
 
+    // The catalog reflects live RBAC state (which groups currently have any active permission) — it must
+    // never be served stale out of a browser/proxy cache, or a permission-sync change (e.g. deactivating a
+    // group whose feature was removed) would keep showing the old list until a hard refresh. GetAll above
+    // doesn't need this: nothing currently caches it, and it's a flatter, less state-sensitive read.
     [HttpGet("catalog")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(IReadOnlyList<PermissionCatalogCategoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCatalog(CancellationToken cancellationToken)
     {

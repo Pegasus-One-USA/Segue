@@ -342,7 +342,7 @@
               } @else if (keyLoadedFromExistingConnection()) {
                 <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If {{ displayVendor() }} is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>
               } @else {
-                <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in the {{ displayVendor() }} app).</p>
+                <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in your {{ displayVendor() }} app).</p>
               }
             </div>
             @if (audience() === 'backend-system') {
@@ -873,14 +873,24 @@
     }
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
+      @if (testStatus() === 'fail' && connectionTestError() && !form.invalid) {
+        <span class="eaf-missing-hint" [title]="connectionTestError()!">
+          Connection test failed: {{ connectionTestError() }}
+        </span>
+      }
       <button
         class="eaf-btn eaf-btn--primary"
         type="button"
         [class.eaf-btn--invalid]="form.invalid"
+        [disabled]="testStatus() === 'running'"
         [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
-        (click)="save()"
+        (click)="testConnectionAndNext()"
       >
-        {{ isEditing ? 'Update' : (wiz.wizardMode() === 'entity' ? 'Save' : 'Add to Workflow') }}
+        @if (testStatus() === 'running') {
+          <span class="eaf-spin"></span>&nbsp;Testing connection…
+        } @else {
+          Test Connection {{ isEditing ? '& Update' : (wiz.wizardMode() === 'entity' ? '& Save' : '& Add to Workflow') }}
+        }
       </button>
     }
   </div>

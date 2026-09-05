@@ -539,6 +539,7 @@ export class WizardService {
           connected: this.connected(),
           abbr:      sourceMeta.abbr,
           color:     sourceMeta.color,
+          vendorId:  sourceMeta.id,
         };
         this.store.addNode(newNode);
         this.toast.show(`${sourceMeta.name} added`, `${fields['__name']} added to the canvas.`);

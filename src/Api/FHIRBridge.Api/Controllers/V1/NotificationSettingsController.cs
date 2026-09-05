@@ -61,8 +61,8 @@ public sealed class NotificationSettingsController : ControllerBase
     {
         await _emailSender.SendAsync(
             request.ToEmail,
-            "FHIRBridge test email",
-            "<p>This is a test email from FHIRBridge confirming your email settings are configured correctly.</p>",
+            "Segue test email",
+            "<p>This is a test email from Segue confirming your email settings are configured correctly.</p>",
             cancellationToken);
 
         return NoContent();

@@ -179,6 +179,10 @@ export class WorkflowGraphMapperService {
         ...this.redactSecrets(node.fields),
         __transformId: transformId,
         __name: node.fields['__name'] ?? item?.displayName ?? this.displayNameFor(node, item),
+        // Cosmetic-only vendor hint (see SourceNode.vendorId's doc comment) — never fed into nodeType/
+        // transformId, so it can't affect what NodeType the backend validates this node against. Only
+        // ever set on a source node (TransformNode/MergeNode have no vendorId field to begin with).
+        ...((node as SourceNode).vendorId ? { __vendorId: (node as SourceNode).vendorId! } : {}),
       }),
       positionX: node.x,
       positionY: node.y,
@@ -221,7 +225,15 @@ export class WorkflowGraphMapperService {
     const name = config['__name'] ?? node.displayName ?? item?.displayName ?? transformId;
 
     if (this.isSourceCategory(node.category)) {
-      const source = SOURCES.find(candidate => candidate.id === transformId);
+      // transformId is near-useless for display here: every EHR vendor except Sample/GenericFhir saves
+      // under the shared 'EpicSourceNode' NodeType/'epic' transformId (see transformIdForNode's own
+      // comment — no dedicated backend NodeType exists yet for Cerner/Athenahealth/Allscripts/Healow/
+      // Meditech), so matching SOURCES by transformId alone would mislabel every one of them as Epic.
+      // __vendorId (see nodeToRequest) is the reliable source once a node has been saved after this was
+      // added; guessVendorId's name-match is the best-effort fallback for a workflow saved before that,
+      // like the one that's actually motivating this fix.
+      const vendorId = config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
+      const source = SOURCES.find(candidate => candidate.id === vendorId);
       return {
         id: node.id,
         kind: undefined,
@@ -231,6 +243,7 @@ export class WorkflowGraphMapperService {
         abbr: source?.abbr ?? name.slice(0, 2).toUpperCase(),
         color: source?.color,
         connectorLabel: name,
+        vendorId: source?.id,
         fields: { ...config, __name: name },
         checkpointUrlEnabled: !!node.checkpointUrlEnabled,
       } satisfies SourceNode;
@@ -269,6 +282,17 @@ export class WorkflowGraphMapperService {
     // node 'epic' here only costs a cosmetic mislabel on canvas reload — swapping it to a real 'healow' NodeType
     // breaks the actual pipeline run until the catalog gate lifts.
     return 'epic';
+  }
+
+  // Best-effort cosmetic vendor guess for a node saved BEFORE __vendorId existed (nodeToRequest above) —
+  // every current display name for a gated vendor happens to be built from/around its real name (e.g.
+  // "Athena-Backend-SearchRest-Medplum", "Cerner Provider Launch"), so a substring match is enough to
+  // undo the mislabeling without a data migration. Checks non-Epic vendors first so a name that happens
+  // to also contain "epic" doesn't shadow a real Cerner/Athenahealth/etc. match.
+  private guessVendorId(displayName: string): string | undefined {
+    const lower = displayName.toLowerCase();
+    return SOURCES.find(s => s.id !== 'epic' && lower.includes(s.id))?.id
+      ?? (lower.includes('epic') ? 'epic' : undefined);
   }
 
   private transformIdFromNodeType(nodeType: string): string {

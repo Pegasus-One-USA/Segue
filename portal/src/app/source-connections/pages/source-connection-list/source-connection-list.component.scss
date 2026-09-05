@@ -1,15 +1,20 @@
 @use '../../../_list-page' as *;
 
-// The shared .list-page (see _list-page.scss) only sets `min-height: 100%` — it grows taller than
-// that to fit its own content, which is exactly what lets .shell-content scroll a long table. But
-// .sc-modal-backdrop below is `position: absolute; inset: 0` against THIS element, and stretching an
-// absolutely positioned box via inset only resolves to a definite size when its containing block's own
-// height is itself definite — `min-height` doesn't count, only `height` does. Without this override the
-// modal panel's height was indeterminate, which pushed its footer Cancel/Close button out of reach
-// (effectively no way to close it without a full page refresh). Safe to pin here — pagination already
-// caps visible rows, so this page's content isn't expected to need more than one viewport's height.
+// The shared .list-page (see _list-page.scss) sets `position: relative`, meant so a page's OWN small
+// in-flow bits have a positioning context — but everything that actually needs one here (.search-ico,
+// .select-chevron) already sits behind its own nested `position: relative` wrapper, never against
+// .list-page directly. The real consequence of .list-page being positioned is that it becomes the
+// containing block .sc-modal-backdrop below resolves `inset: 0` against — and .list-page's height is only
+// ever as definite as its own in-flow content (the filter bar + table), which on a short table (few rows)
+// left the modal that same short height, with its footer stranded right after the content instead of
+// filling the screen. `position: static` here makes the browser's containing-block search skip .list-page
+// (and every ancestor shell between it and there — none of them set `position` either) and land on
+// .shell-content (app-shell.component.scss: position: relative, flex: 1, min-height: 0) instead — which
+// is ALWAYS definitely sized to the visible content area, regardless of how many rows this page's table
+// has. That's what makes the modal reliably fill the entire right content screen on every open — edit,
+// view, or new — not just when the table happens to be tall enough to fill it on its own.
 .list-page {
-  height: 100%;
+  position: static;
 }
 
 // ─── Source Connection modal (any per-vendor form — Epic, Cerner, Athenahealth, ...) ───────────────────────────
@@ -19,8 +24,8 @@
 // wrapper. Each wrapper's own host styles (e.g. epic-source-form.component.scss) already set flex/min-height on
 // their own tag; the duplicate rule below is defense-in-depth for this specific modal shell, not load-bearing.
 .sc-modal-backdrop {
-  // Scoped to .list-page (position: relative, see _list-page.scss) rather than the viewport — same
-  // content-area-only treatment as every other modal backdrop in the app now uses (see
+  // Scoped to .shell-content (see the .list-page { position: static } override above) rather than the
+  // viewport — same content-area-only treatment as every other modal backdrop in the app now uses (see
   // modal-overlay.component.scss's .modal-backdrop for the original fix and rationale).
   position: absolute;
   inset: 0;
@@ -33,10 +38,19 @@
 }
 
 .sc-modal-panel {
-  // Fills the whole scoped backdrop (the content area, see .sc-modal-backdrop above) edge-to-edge —
-  // matching the workflow builder's node config panel (.nld in node-library-dialog.component.scss)
-  // rather than floating as a smaller centered card, now that the backdrop itself is already scoped
-  // to just this page's content area instead of the full viewport.
+  // Fills the scoped backdrop's content area edge-to-edge — matching the workflow builder's node
+  // config panel (.nld in node-library-dialog.component.scss) rather than floating as a smaller
+  // centered card. Must be a definite `height`, not `max-height`: EhrVendorSourceFormComponent's own
+  // :host/.eaf/.eaf-body chain is flex:1 all the way down specifically so .eaf-body's white
+  // background stretches to meet .eaf-footer pinned flush at the true bottom (see
+  // ehr-vendor-source-form.component.scss's header comment) — but flex-grow only has space to
+  // distribute when ITS OWN container has a definite size to grow into. Swapping this to max-height
+  // (tried, reverted) removes that definite size, so instead of the form's own body stretching down
+  // to the footer, the panel just shrinks to its content and .sc-modal-backdrop's dark/blurred fill
+  // shows through below it — which at backdrop's low opacity over a light page reads as a flat grey
+  // gap, not clearly "you're seeing the overlay." Same visual complaint, different cause. A short step
+  // (e.g. Audience & Environment before its conditional fields appear) is meant to fill this height
+  // as generous internal whitespace within one continuous white card, not shrink the card itself.
   width: 100%;
   height: 100%;
   background: var(--color-surface);

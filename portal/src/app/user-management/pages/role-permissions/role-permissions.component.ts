@@ -7,8 +7,6 @@ import { forkJoin } from 'rxjs';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -18,12 +16,14 @@ import { Role, Permission, PermissionCategory, SUPER_ADMIN_ROLE_NAME } from '../
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ToastService } from '../../../services/toast.service';
-import { ALL_MATRIX_CODES, MATRIX_SECTIONS, MatrixRow, MatrixSection } from './permission-matrix.config';
+import { MATRIX_SECTIONS, MatrixRow, MatrixSection } from './permission-matrix.config';
 import { computeEffectiveCodes, toggleExplicitCode } from './permission-matrix-dependencies';
 import { AuthService } from '../../../auth/services/auth.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
 
 // A resolved permission plus, where the static config set one, a tooltip that should replace the
 // catalog's own perm.description on this specific checkbox — see MatrixAction.tooltipOverride.
@@ -59,8 +59,6 @@ interface GridSection {
     CommonModule,
     MatButtonModule,
     MatIconModule,
-    MatSelectModule,
-    MatFormFieldModule,
     MatCheckboxModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
@@ -79,6 +77,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   private readonly authService = inject(AuthService);
   private readonly actionGuard = inject(PermissionActionGuard);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly phaseCfg    = inject(PhaseConfigService);
 
   // ─── Permission gating ──────────────────────────────────────────────────────
   // The route (`user-management.routes.ts`) requires only role.view to open this screen at all — a
@@ -108,7 +107,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
 
   // ─── Two-layer permission model ──────────────────────────────────────────────
   // EXPLICIT — codes (not ids) the admin has directly toggled on that exact row/action, scoped to
-  // what this matrix manages (ALL_MATRIX_CODES). The ONLY thing togglePermission/toggleRow/toggleAll
+  // what this matrix manages AND currently displays (visibleMatrixCodes). The ONLY thing togglePermission/toggleRow/toggleAll
   // mutate. Loading a role treats its full stored permission set as the new explicit baseline (the
   // database has no column to record "this one was only ever implied" — see
   // permission-matrix-dependencies.ts's module doc comment for why that's fine: effective state
@@ -172,14 +171,43 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     return map;
   });
 
-  // Resolves the static MATRIX_SECTIONS layout against the live catalog — every action whose code
-  // doesn't exist in this deployment yet is silently dropped from `cells` (defensive; every code
-  // referenced here is a real, already-seeded/discovered permission as of this screen's last
-  // verification, so this only matters for an out-of-sync environment).
+  // MATRIX_SECTIONS's own 'workflow-nodes' rows include every source/destination vendor the backend
+  // has a permission group for — several of those (HL7 v2, Meditech, Azure SQL, ...) aren't actually
+  // addable in the Workflow Builder yet (see PhaseConfigService/sources.data.ts/transforms.data.ts —
+  // the exact same gate node-library-dialog.component.ts's own tile visibility uses). Filtering rows
+  // out here, rather than editing MATRIX_SECTIONS itself, keeps the static config as the complete,
+  // ungated list (still correct once a vendor's phase flag flips on) while this screen only ever
+  // *displays* what's currently reachable. A non-node row (role, user, workflow, settings, ...) has
+  // no vendor prefix to check, so isNodePermissionPrefixVisible always keeps it — this only ever
+  // narrows the Workflow Nodes table.
+  private readonly visibleMatrixSections = computed<MatrixSection[]>(() =>
+    MATRIX_SECTIONS.map(section => ({
+      ...section,
+      rows: section.rows.filter(row => {
+        const prefix = row.actions?.[0]?.code.split('.')[0];
+        return !prefix || isNodePermissionPrefixVisible(prefix, this.phaseCfg);
+      }),
+    }))
+  );
+
+  // Every code the matrix can manage, narrowed to currently-visible rows only (see
+  // visibleMatrixSections) — this is what makes a hidden vendor's already-stored permissions (e.g. a
+  // role granted hl7v2.edit before HL7 v2 was phase-gated) fall through applyLoadedPermissions'
+  // ALL_MATRIX_CODES check into outOfScopeIds instead: preserved and resent untouched on save, exactly
+  // like any other out-of-scope permission this screen doesn't manage (Pipeline.Execute, ...) — never
+  // silently dropped, never toggleable from a row nobody can see.
+  private readonly visibleMatrixCodes = computed<string[]>(() => [...new Set(
+    this.visibleMatrixSections().flatMap(section => section.rows.flatMap(row => row.actions?.map(a => a.code) ?? []))
+  )]);
+
+  // Resolves the static MATRIX_SECTIONS layout (narrowed to visibleMatrixSections) against the live
+  // catalog — every action whose code doesn't exist in this deployment yet is silently dropped from
+  // `cells` (defensive; every code referenced here is a real, already-seeded/discovered permission as
+  // of this screen's last verification, so this only matters for an out-of-sync environment).
   private readonly gridSections = computed<GridSection[]>(() => {
     const byCode = this.permissionByCode();
 
-    return MATRIX_SECTIONS.map((section: MatrixSection) => {
+    return this.visibleMatrixSections().map((section: MatrixSection) => {
       const rows: GridRow[] = section.rows.map((row: MatrixRow) => {
         const cells = new Map<string, GridCell>();
         for (const action of row.actions ?? []) {
@@ -233,14 +261,15 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
       .filter(section => section.rows.length > 0);
   });
 
-  // Scoped to exactly what this matrix can manage (ALL_MATRIX_CODES), not the whole catalog — a
-  // handful of existing permissions (Pipeline.Execute, Report.View, Payload.View, the unused
-  // per-vendor Read/Assign/Execute actions on Epic/Athenahealth/Cerner) have no menu home and
+  // Scoped to exactly what this matrix can manage AND currently displays (visibleMatrixCodes), not
+  // the whole catalog — a handful of existing permissions (Pipeline.Execute, Report.View,
+  // Payload.View, the unused per-vendor Read/Assign/Execute actions on Epic/Athenahealth/Cerner,
+  // plus any phase-hidden vendor's node permissions — see visibleMatrixCodes) have no menu home and
   // aren't shown here; this screen never adds or removes them, so a role's existing grant of any
   // of those passes through save untouched.
   readonly allPermissions = computed<Permission[]>(() => {
     const byCode = this.permissionByCode();
-    return ALL_MATRIX_CODES.map(code => byCode.get(code)).filter((p): p is Permission => !!p);
+    return this.visibleMatrixCodes().map(code => byCode.get(code)).filter((p): p is Permission => !!p);
   });
 
   // Route param changes reuse this component instance, so ngOnInit won't refire — reload here.
@@ -282,8 +311,9 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   private applyLoadedPermissions(permissions: Permission[]): void {
     const explicit = new Set<string>();
     const outOfScope = new Set<string>();
+    const visibleCodes = this.visibleMatrixCodes();
     for (const p of permissions) {
-      if (ALL_MATRIX_CODES.includes(p.name)) explicit.add(p.name); else outOfScope.add(p.id);
+      if (visibleCodes.includes(p.name)) explicit.add(p.name); else outOfScope.add(p.id);
     }
     this.outOfScopeIds = outOfScope;
     this.explicitCodes.set(explicit);
@@ -319,7 +349,7 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     const code = this.codeById().get(permissionId);
     if (!code) return;
     const checked = !this.selectedIds().has(permissionId);
-    this.explicitCodes.set(toggleExplicitCode(this.explicitCodes(), code, checked, ALL_MATRIX_CODES));
+    this.explicitCodes.set(toggleExplicitCode(this.explicitCodes(), code, checked, this.visibleMatrixCodes()));
   }
 
   // ─── Dependency engine bridge ───────────────────────────────────────────────
@@ -349,8 +379,9 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     // being cleared alongside everything else), but going through one primitive avoids maintaining a
     // second, subtly-different mutation path.
     let next = this.explicitCodes();
-    for (const code of ALL_MATRIX_CODES) {
-      next = toggleExplicitCode(next, code, checked, ALL_MATRIX_CODES);
+    const visibleCodes = this.visibleMatrixCodes();
+    for (const code of visibleCodes) {
+      next = toggleExplicitCode(next, code, checked, visibleCodes);
     }
     this.explicitCodes.set(next);
   }
@@ -371,8 +402,9 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
     // checking Epic's ALL runs each of Epic's 5 actions through toggleExplicitCode, which is what
     // pulls in the matching Workflow action for every one of them (see permission-matrix-dependencies.ts).
     let next = this.explicitCodes();
+    const visibleCodes = this.visibleMatrixCodes();
     for (const cell of row.cells.values()) {
-      next = toggleExplicitCode(next, cell.perm.name, checked, ALL_MATRIX_CODES);
+      next = toggleExplicitCode(next, cell.perm.name, checked, visibleCodes);
     }
     this.explicitCodes.set(next);
   }

@@ -15,4 +15,10 @@ public sealed record UserProfileDto(
     // Always populated: every user has a required TenantId (see User.cs), defaulted to the well-known
     // Default Tenant for pre-existing/JIT-provisioned/first-run users by the AddTenant migration/SetupService.
     Guid TenantId = default,
-    string TenantName = "");
+    string TenantName = "",
+    // Real account-creation/last-login timestamps for the portal's own Profile page (Member Since/Last
+    // Login) — already tracked on User.cs and already exposed to admins via UserManagementDto/UserDetailDto
+    // for OTHER users; this DTO (the current user's own /auth/me profile) just never carried them, which
+    // left the portal falling back to "now" for Member Since and nothing at all for Last Login.
+    DateTime CreatedOnUtc = default,
+    DateTime? LastLoginOnUtc = null);

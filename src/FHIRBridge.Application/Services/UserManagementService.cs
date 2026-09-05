@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Notifications;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -26,6 +27,7 @@ public sealed class UserManagementService : IUserManagementService
     private readonly LocalAuthOptions _localAuthOptions;
     private readonly ILogger<UserManagementService> _logger;
     private readonly IGlobalExceptionManager? _exceptionManager;
+    private readonly IAllowedCorsOriginsCache? _allowedOriginsCache;
 
     public UserManagementService(
         IUserAccessRepository repository,
@@ -37,7 +39,8 @@ public sealed class UserManagementService : IUserManagementService
         ILocalAuthService localAuthService,
         IOptions<LocalAuthOptions> localAuthOptions,
         ILogger<UserManagementService> logger,
-        IGlobalExceptionManager? exceptionManager = null)
+        IGlobalExceptionManager? exceptionManager = null,
+        IAllowedCorsOriginsCache? allowedOriginsCache = null)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -49,6 +52,7 @@ public sealed class UserManagementService : IUserManagementService
         _localAuthOptions = localAuthOptions.Value;
         _logger = logger;
         _exceptionManager = exceptionManager;
+        _allowedOriginsCache = allowedOriginsCache;
     }
 
     public async Task<IReadOnlyList<UserManagementDto>> GetUsersAsync(CancellationToken cancellationToken)
@@ -173,11 +177,22 @@ public sealed class UserManagementService : IUserManagementService
         var emailSent = true;
         try
         {
-            await _emailSender.SendAsync(
+            var inviteLink = await BuildInviteLinkAsync(email, rawToken, cancellationToken);
+            var handedToSmtp = await _emailSender.SendAsync(
                 email,
                 "You've been invited to Segue",
-                BuildInviteEmailBody(request.FirstName, role.Name, BuildInviteLink(email, rawToken), expiresOnUtc),
+                BuildInviteEmailBody(request.FirstName, role.Name, inviteLink, expiresOnUtc),
                 cancellationToken);
+
+            if (!handedToSmtp)
+            {
+                // Not an exception — email sending is simply OFF or unconfigured in Notification Settings
+                // (see IEmailSender.SendAsync's contract). Silently reporting success here is exactly how
+                // this went unnoticed before: treat it the same as a real send failure so the admin finds
+                // out, instead of it vanishing into an Information-level log line nobody watches.
+                throw new InvalidOperationException(
+                    "Email sending is currently disabled in Settings > System Settings > Email — the invitation was not sent.");
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -224,11 +239,18 @@ public sealed class UserManagementService : IUserManagementService
         var emailSent = true;
         try
         {
-            await _emailSender.SendAsync(
+            var inviteLink = await BuildInviteLinkAsync(user.Email!, rawToken, cancellationToken);
+            var handedToSmtp = await _emailSender.SendAsync(
                 user.Email!,
                 "Your Segue invitation (resent)",
-                BuildInviteEmailBody(user.FirstName, roleName, BuildInviteLink(user.Email!, rawToken), expiresOnUtc),
+                BuildInviteEmailBody(user.FirstName, roleName, inviteLink, expiresOnUtc),
                 cancellationToken);
+
+            if (!handedToSmtp)
+            {
+                throw new InvalidOperationException(
+                    "Email sending is currently disabled in Settings > System Settings > Email — the invitation was not resent.");
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -617,8 +639,22 @@ public sealed class UserManagementService : IUserManagementService
 
     private static string LocalExternalId(string email) => $"local:{email}";
 
-    private string BuildInviteLink(string email, string token)
+    // Prefers the calling browser's own origin (Origin/Referer header, captured on ICurrentUserService —
+    // see HttpContextCurrentUserService.ResolveRequestOrigin) over the static LocalAuth:AcceptInviteUrlTemplate
+    // config, so the emailed link always points at whatever portal the admin who sent the invite is actually
+    // using — no per-environment config to keep in sync (and no risk of it going stale to a dev/localhost
+    // value, which is exactly what happened before this). Falls back to the config template, then the raw
+    // token, for a non-HTTP caller or an origin that isn't in the trusted allowlist. The origin is NEVER
+    // trusted un-validated: an unauthenticated client-supplied header must not end up embedded in an email
+    // just because it triggered an invite.
+    private async Task<string> BuildInviteLinkAsync(string email, string token, CancellationToken cancellationToken)
     {
+        var origin = await ResolveTrustedPortalOriginAsync(cancellationToken);
+        if (origin is not null)
+        {
+            return $"{origin}/auth/set-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(email)}";
+        }
+
         var template = _localAuthOptions.AcceptInviteUrlTemplate;
         if (string.IsNullOrWhiteSpace(template))
         {
@@ -628,6 +664,18 @@ public sealed class UserManagementService : IUserManagementService
         return template
             .Replace("{token}", Uri.EscapeDataString(token))
             .Replace("{email}", Uri.EscapeDataString(email));
+    }
+
+    private async Task<string?> ResolveTrustedPortalOriginAsync(CancellationToken cancellationToken)
+    {
+        var origin = _currentUserService.CurrentUser.RequestOrigin;
+        if (string.IsNullOrWhiteSpace(origin) || _allowedOriginsCache is null)
+        {
+            return null;
+        }
+
+        var allowedOrigins = await _allowedOriginsCache.GetOriginsAsync(cancellationToken);
+        return allowedOrigins.Contains(origin) ? origin : null;
     }
 
     private static string BuildInviteEmailBody(string? firstName, string roleName, string inviteLinkOrToken, DateTime expiresOnUtc)

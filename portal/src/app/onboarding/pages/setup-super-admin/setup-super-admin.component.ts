@@ -10,7 +10,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatCheckboxModule, MatCheckboxChange } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 
 import { AppInitService } from '../../services/app-init.service';
@@ -69,6 +69,10 @@ export class SetupSuperAdminComponent {
   protected readonly showCfm     = signal(false);
   protected readonly serverError = signal('');
 
+  // Applies to the acceptTerms checkbox below — a plain signal rather than relying on the
+  // control's disabled state, so the checkbox itself is always clickable (see onAcceptTermsChange).
+  protected readonly termsReadToEnd = signal(false);
+
   protected readonly form = this.fb.nonNullable.group({
     firstName:       ['', [Validators.required, Validators.maxLength(80)]],
     lastName:        ['', [Validators.required, Validators.maxLength(80)]],
@@ -80,14 +84,17 @@ export class SetupSuperAdminComponent {
     smtpHost:        ['', Validators.required],
     smtpPort:        [587, [Validators.required, Validators.min(1), Validators.max(65535)]],
     smtpEnableSsl:   [true],
-    smtpUsername:    [''],
-    smtpPassword:    [''],
+    // Required: this is a first-ever setup, so there is never a previously saved password to fall
+    // back to (unlike Email Settings' later edits) — a blank credential here would let setup finish
+    // "successfully" while every real email silently fails at the SMTP auth step.
+    smtpUsername:    ['', Validators.required],
+    smtpPassword:    ['', Validators.required],
     smtpFromAddress: ['', [Validators.required, Validators.email]],
-    smtpFromName:    ['FHIRBridge', Validators.required],
-    // Starts disabled — enabled only once the Terms and Conditions dialog reports the reader actually
-    // scrolled to the end (see openTermsDialog()). A disabled control's own .valid is false (status is
-    // DISABLED, not VALID), so canSubmit() below stays blocked without any extra wiring.
-    acceptTerms:     [{ value: false, disabled: true }, Validators.requiredTrue],
+    smtpFromName:    ['Segue', Validators.required],
+    // Always enabled (see termsReadToEnd/onAcceptTermsChange — a disabled checkbox can't be clicked
+    // at all, which reads as broken rather than gated). Validators.requiredTrue still blocks
+    // canSubmit() below until it's actually checked.
+    acceptTerms:     [false, Validators.requiredTrue],
   }, { validators: matchPasswords });
 
   // Signal-backed live values for reactive computed
@@ -108,18 +115,33 @@ export class SetupSuperAdminComponent {
     this.pwValue() !== '' && this.pwValue() === this.cfmValue()
   );
 
-  protected readonly canSubmit = computed(() =>
-    this.form.get('firstName')!.valid &&
-    this.form.get('lastName')!.valid &&
-    this.form.get('email')!.valid &&
-    this.pwValidation().allMet &&
-    this.passwordsMatch() &&
-    this.form.get('smtpHost')!.valid &&
-    this.form.get('smtpPort')!.valid &&
-    this.form.get('smtpFromAddress')!.valid &&
-    this.form.get('smtpFromName')!.valid &&
-    this.form.get('acceptTerms')!.valid
+  // canSubmit reads plain FormControl.valid getters below, not signals — computed() only re-runs when
+  // one of its tracked *signal* reads changes, so without this it would only ever recompute when
+  // pwValidation()/passwordsMatch() (the only real signal deps) changed, e.g. while typing a password.
+  // Checking the Terms box, or filling in name/email/SMTP fields, wouldn't register at all and the
+  // button would stay stuck on a stale result. This tracks the form's own status so every relevant
+  // change re-triggers a fresh read of the .valid getters below.
+  private readonly formStatus = toSignal(
+    this.form.statusChanges.pipe(startWith(this.form.status))
   );
+
+  protected readonly canSubmit = computed(() => {
+    this.formStatus();
+    return (
+      this.form.get('firstName')!.valid &&
+      this.form.get('lastName')!.valid &&
+      this.form.get('email')!.valid &&
+      this.pwValidation().allMet &&
+      this.passwordsMatch() &&
+      this.form.get('smtpHost')!.valid &&
+      this.form.get('smtpPort')!.valid &&
+      this.form.get('smtpUsername')!.valid &&
+      this.form.get('smtpPassword')!.valid &&
+      this.form.get('smtpFromAddress')!.valid &&
+      this.form.get('smtpFromName')!.valid &&
+      this.form.get('acceptTerms')!.valid
+    );
+  });
 
   protected openTermsDialog(): void {
     this.dialog
@@ -128,9 +150,25 @@ export class SetupSuperAdminComponent {
       .afterClosed()
       .subscribe((result) => {
         if (result?.readToEnd) {
-          this.form.get('acceptTerms')!.enable();
+          this.termsReadToEnd.set(true);
         }
       });
+  }
+
+  // The checkbox itself is always clickable (mat-checkbox [checked] below, not formControlName) so a
+  // click is never simply swallowed. mat-checkbox flips its own internal checked state natively on
+  // click before this handler runs; if we just skip calling setValue() here, Angular's [checked]
+  // binding won't re-push false to it (the bound expression's value never changed, so change
+  // detection has nothing to diff), leaving the box visibly checked despite the form still being
+  // false. Reset event.source.checked directly instead — that goes straight through mat-checkbox's
+  // own setter rather than relying on binding re-evaluation, so it reverts immediately and reliably.
+  protected onAcceptTermsChange(event: MatCheckboxChange): void {
+    if (event.checked && !this.termsReadToEnd()) {
+      event.source.checked = false;
+      this.openTermsDialog();
+      return;
+    }
+    this.form.get('acceptTerms')!.setValue(event.checked);
   }
 
   protected togglePw():  void { this.showPw.update(v => !v); }

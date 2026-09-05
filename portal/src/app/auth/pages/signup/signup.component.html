@@ -134,15 +134,16 @@
       </mat-form-field>
 
       <!-- Role -->
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Role</mat-label>
-        <mat-icon matPrefix class="field-icon" aria-hidden="true">badge</mat-icon>
-        <mat-select formControlName="role">
-          @for (r of roles; track r.value) {
-            <mat-option [value]="r.value">{{ r.label }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+      <div class="dw-field full-width">
+        <label class="dw-label" for="signup-role">Role</label>
+        <div class="dw-select-wrap">
+          <select id="signup-role" class="dw-select" formControlName="role">
+            @for (r of roles; track r.value) {
+              <option [value]="r.value">{{ r.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
 
       <!-- Accept Terms — the links are deliberately siblings of mat-checkbox, not nested inside its
            projected label content. mat-checkbox (plus its touch-target overlay) claims its whole label
@@ -155,7 +156,7 @@
         <span>and</span>
         <a href="#" class="terms-link">Privacy Policy</a>
         @if (form.get('acceptTerms')!.disabled) {
-          <div class="terms-hint">Open and scroll through the Terms and Conditions to enable this checkbox.</div>
+          <div class="terms-hint">Open the Terms and Conditions to enable this checkbox.</div>
         } @else if (fieldError('acceptTerms', 'mustBeTrue')) {
           <div class="terms-error">You must accept the terms to continue</div>
         }

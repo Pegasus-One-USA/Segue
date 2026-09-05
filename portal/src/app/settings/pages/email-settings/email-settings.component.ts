@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, DestroyRef, signal } from '@angular/core';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { ToastService } from '../../../services/toast.service';
@@ -36,16 +36,24 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
 
   protected readonly testEmailAddress = signal('');
 
+  /** Password is write-only: blank means "keep the currently saved password" on an edit, but a server
+   *  that's never had one configured must not be savable without one — matches username/host/etc. all
+   *  being mandatory for an SMTP connection to actually work. Reads hasPasswordConfigured live rather
+   *  than being fixed at form-build time — see ngOnInit/save(), which call updateValueAndValidity() on
+   *  this control whenever that signal changes so the requirement re-evaluates correctly. */
+  private readonly passwordRequiredUnlessAlreadyConfigured = (control: AbstractControl): ValidationErrors | null =>
+    this.hasPasswordConfigured() || (control.value ?? '').trim() ? null : { required: true };
+
   protected readonly form = this.fb.nonNullable.group({
     isEnabled:   [false],
     host:        ['', Validators.required],
     port:        [587, [Validators.required, Validators.min(1), Validators.max(65535)]],
     enableSsl:   [true],
-    username:    [''],
+    username:    ['', Validators.required],
     fromAddress: ['', [Validators.required, Validators.email]],
     fromName:    ['Segue', Validators.required],
     // Write-only: blank means "keep the currently saved password". Only sent to the API when non-blank.
-    password:    [''],
+    password:    ['', this.passwordRequiredUnlessAlreadyConfigured],
   });
 
   constructor() {
@@ -68,6 +76,10 @@ export class EmailSettingsComponent implements OnInit, HasUnsavedChanges {
           fromName:    settings.fromName,
         }, { emitEvent: false });
         this.hasPasswordConfigured.set(settings.hasPasswordConfigured);
+        // passwordRequiredUnlessAlreadyConfigured reads this signal, not the control's own value —
+        // Angular only re-runs a control's validators on ITS OWN value changes, so this must be
+        // triggered explicitly whenever hasPasswordConfigured changes out from under it.
+        this.form.controls.password.updateValueAndValidity({ emitEvent: false });
         this.form.markAsPristine();
         if (!this.canWrite) { this.form.disable({ emitEvent: false }); }
         this.loading.set(false);
