@@ -17,8 +17,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
         Source(WorkflowNodeTypes.SampleSource),
-        Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, WorkflowDataContract.ResourceBatch, WorkflowDataContract.ResourceBatch),
-        Compliance(WorkflowNodeTypes.UsCoreValidation, "fhir-validation", "FHIR Validation", "Validate resources against US Core / base R4 profiles.", 20, WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.ResourceBatch),
+        Compliance(WorkflowNodeTypes.UsCoreValidation, "fhir-validation", "FHIR Validation", "Validate resources against US Core / base R4 profiles.", 20, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.Normalization, "normalize", "Normalize Data", "Normalize FHIR resources for downstream transforms.", 30, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.FlattenExtensions, "flatten-extensions", "Flatten Extensions", "Flatten FHIR extensions into mappable fields.", 31, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.DataQualityScoring, "data-quality", "Data Quality Scoring", "Score resource completeness and data quality.", 32, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
@@ -28,7 +28,17 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Transform(WorkflowNodeTypes.TerminologyLookup, "terminology-lookup", "Terminology Lookup", "Lookup display and metadata for coded values.", 42, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.TerminologyTranslate, "terminology-translate", "Terminology Translate", "Translate coded values between code systems.", 43, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.TerminologyExpand, "terminology-expand", "Terminology Expand", "Expand value sets for downstream validation.", 44, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
-        Compliance(WorkflowNodeTypes.DeIdentification, "deid-safeharbor", "De-identification", "Apply HIPAA de-identification policy when required.", 50, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch),
+        // Accepts raw resources as well as normalized ones: de-identification reads whatever
+        // ReadResourceEnvelopes hands it (both shapes carry ResourceEnvelopes), and a pipeline may redact
+        // straight off the source without a normalization step in front.
+        Compliance(
+            WorkflowNodeTypes.DeIdentification,
+            "deid-safeharbor",
+            "De-identification",
+            "Apply HIPAA de-identification policy when required.",
+            50,
+            [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch],
+            WorkflowDataContract.DeIdentifiedBatch),
         Transform(
             WorkflowNodeTypes.Mapping,
             "field-mapping",
@@ -152,14 +162,14 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         string displayName,
         string description,
         int rank,
-        WorkflowDataContract inputContract,
+        WorkflowDataContract[] inputContracts,
         WorkflowDataContract outputContract)
         => new(
             nodeType,
             WorkflowNodeCategory.Compliance,
             rank,
             [],
-            [inputContract],
+            inputContracts,
             outputContract,
             nodeType,
             displayName,
@@ -177,7 +187,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             // into destination columns. Every other destination type is unaffected: MappedRecordBatch remains
             // their only accepted input, so WorkflowGraphValidator's Mapping-node requirement still applies to them.
             nodeType == WorkflowNodeTypes.FhirRepositoryDestination
-                ? [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.MappedRecordBatch]
+                ? [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch, WorkflowDataContract.MappedRecordBatch]
                 : [WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.DestinationWriteResult,
             nodeType,
