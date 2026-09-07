@@ -62,6 +62,12 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
 
   testConnection(): void {
     const v = this.sftpForm.value;
+    const id = this.existingDestinationId();
+    console.log(
+      `[SFTP Test Connection] reusingExisting=${this.reusingExisting()} existingDestinationId=${id ?? '(none)'} ` +
+      `passwordTyped=${!!v.sftpPassword} ` +
+      `=> ${!v.sftpPassword && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) password'}`,
+    );
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.testSftp({
@@ -70,13 +76,15 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
       username: v.sftpUsername ?? '',
       password: v.sftpPassword ?? undefined,
       remoteFolder: v.sftpRemoteFolder ?? undefined,
-      destinationId: this.existingDestinationId() ?? undefined,
+      destinationId: id ?? undefined,
     }).subscribe({
       next: res => {
+        console.log(`[SFTP Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
         this.probeState.set(res.connected ? 'ok' : 'error');
         if (!res.connected) this.probeError.set(res.error ?? 'Connection failed.');
       },
       error: err => {
+        console.error(`[SFTP Test Connection] FAILED for destinationId=${id ?? '(none)'}`, err);
         this.probeState.set('error');
         this.probeError.set(typeof err?.error?.title === 'string' ? err.error.title : (err?.message ?? 'Connection failed.'));
       },

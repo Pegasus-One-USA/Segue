@@ -141,6 +141,12 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
   testConnection(): void {
     if (!this.canTest()) return;
     const v = this.blobForm.value;
+    const id = this.existingDestinationId();
+    console.log(
+      `[Blob Test Connection] authMode=${v.authMode} reusingExisting=${this.reusingExisting()} ` +
+      `existingDestinationId=${id ?? '(none)'} secretTyped=${!!v.secretValue} ` +
+      `=> ${!v.secretValue && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) secret'}`,
+    );
     this.probeState.set('testing');
     this.probeError.set(null);
     this.schemaSvc.testBlob({
@@ -153,9 +159,10 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       tenantId: v.tenantId ?? '',
       clientId: v.clientId ?? '',
       managedIdentityClientId: v.managedIdentityClientId ?? '',
-      destinationId: this.existingDestinationId() ?? undefined,
+      destinationId: id ?? undefined,
     }).subscribe({
       next: res => {
+        console.log(`[Blob Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
         if (res.connected) {
           this.probeState.set('ok');
         } else {
@@ -164,6 +171,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
         }
       },
       error: err => {
+        console.error(`[Blob Test Connection] FAILED for destinationId=${id ?? '(none)'}`, err);
         this.probeState.set('error');
         this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
       },

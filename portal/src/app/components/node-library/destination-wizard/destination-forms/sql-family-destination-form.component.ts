@@ -31,9 +31,8 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
    *  connection with a blank password. This is only consulted by getMetadata() below, to avoid rebuilding
    *  a connection string with a blank embedded password on a no-op re-save. */
   readonly reusingExisting = input<boolean>(false);
-  /** Set alongside reusingExisting — not yet consumed here (Test Connection still requires retyping the
-   *  password for SQL), but declared so the wizard can pass it uniformly without ComponentRef.setInput
-   *  throwing on an undeclared input. See CsvDestinationFormComponent for the consuming pattern. */
+  /** Set alongside reusingExisting — when present and the password field is blank, testConnection() calls
+   *  GetSchema to resolve the stored secret server-side instead of probing with a blank password. */
   readonly existingDestinationId = input<string | null>(null);
 
   /** AzureSql has no live UI anywhere prior to this refactor — it reuses SqlServer's exact fields/behavior,
@@ -178,6 +177,40 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
   testConnection(onSettled?: (result: { connected: boolean; tables: DestinationTable[] }) => void): void {
     this.probeState.set('testing');
     this.probeError.set(null);
+    // Reusing an existing connection with a blank (never-re-displayed) password can't be probed ad-hoc — a
+    // blank password would just fail auth against the real server. GetSchema resolves the saved destination's
+    // real stored secret server-side instead (same as MongoDestinationConnectionTestService's destinationId
+    // path), which doubles as a genuine connectivity check: an unreachable server or a rotated/invalid
+    // credential surfaces as an HTTP error here exactly like a failed probe() would.
+    const id = this.existingDestinationId();
+    const willUseStoredSecret = this.reusingExisting() && !!id && !this.sqlForm.value.password;
+    console.log(
+      `[SQL-family Test Connection] engine=${this.engine()} reusingExisting=${this.reusingExisting()} ` +
+      `existingDestinationId=${id ?? '(none)'} passwordTyped=${!!this.sqlForm.value.password} ` +
+      `=> ${willUseStoredSecret ? 'resolving stored secret server-side via GetSchema' : 'probing with the form\'s own (typed) password'}`,
+    );
+    if (willUseStoredSecret) {
+      this.schemaSvc.getSchema(id!).subscribe({
+        next: res => {
+          console.log(`[SQL-family Test Connection] GetSchema succeeded for destination id=${id} — ${res.tables.length} table(s) returned`);
+          const tables = res.tables.map(t => ({
+            ...t,
+            origin: 'probed' as const,
+            columns: t.columns.map(c => ({ ...c, origin: 'probed' as const })),
+          }));
+          this.sqlTables.set(tables);
+          this.probeState.set('ok');
+          onSettled?.({ connected: true, tables });
+        },
+        error: err => {
+          console.error(`[SQL-family Test Connection] GetSchema FAILED for destination id=${id}`, err);
+          this.probeState.set('error');
+          this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+          onSettled?.({ connected: false, tables: [] });
+        },
+      });
+      return;
+    }
     this.schemaSvc.probe(this.getProbeRequest()).subscribe({
       next: res => {
         if (res.connected) {

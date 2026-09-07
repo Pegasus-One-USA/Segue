@@ -88,15 +88,22 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     this.probeState.set('testing');
     this.probeError.set(null);
     const v = this.mongoForm.value;
+    const id = this.existingDestinationId();
+    console.log(
+      `[Mongo Test Connection] reusingExisting=${this.reusingExisting()} existingDestinationId=${id ?? '(none)'} ` +
+      `connectionStringTyped=${!!v.connectionString} ` +
+      `=> ${!v.connectionString && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) connection string'}`,
+    );
     this.schemaSvc
       .testMongo({
         connectionString: v.connectionString ?? '',
         collection: v.collection || undefined,
         createIfNotExists: v.createIfNotExists ?? false,
-        destinationId: this.existingDestinationId() ?? undefined,
+        destinationId: id ?? undefined,
       })
       .subscribe({
         next: res => {
+          console.log(`[Mongo Test Connection] result connected=${res.connected}${res.connected ? ` — ${res.collections?.length ?? 0} collection(s) returned` : ` — ${res.error ?? 'no error message'}`}`);
           this.collections.set(res.collections ?? []);
           if (res.connected) {
             this.probeState.set('ok');
@@ -107,6 +114,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
           onSettled?.({ connected: res.connected });
         },
         error: err => {
+          console.error(`[Mongo Test Connection] FAILED for destinationId=${id ?? '(none)'}`, err);
           this.probeState.set('error');
           this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
           onSettled?.({ connected: false });
