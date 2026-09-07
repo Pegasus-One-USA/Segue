@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -30,6 +30,17 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
    *  isMongoForm() in destination-form-api.ts for why duck-typing on those alone is unsafe. */
   readonly kind = 'mongo' as const;
 
+  /** Relaxes connectionString's required validator when reopening an already-saved connection — otherwise the
+   *  never-re-displayed secret field's required validator hard-blocks Next on every edit that doesn't retype
+   *  the whole connection string, per the same pattern Blob/Csv(sftp)/AzureFhirService already use. */
+  readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — when present, testConnection() sends it instead of a blank connection
+   *  string so the backend can resolve the stored secret server-side (see
+   *  MongoDestinationConnectionTestService). Also directly gates canTest() so Next (which requires a
+   *  successful probe for Mongo — see destination-wizard.component.ts's next()) isn't permanently blocked on
+   *  a reopened node with a blank connection string. */
+  readonly existingDestinationId = input<string | null>(null);
+
   readonly mongoForm = this.fb.group({
     name: ['MongoDB Production', [Validators.required]],
     // Single URI (database embedded, e.g. mongodb://user:pass@host:27017/dbname?authSource=admin) — matches
@@ -44,14 +55,27 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     createIfNotExists: [false, []],
   });
 
+  constructor() {
+    effect(() => {
+      const requireConnectionString = !this.reusingExisting();
+      untracked(() => {
+        const ctrl = this.mongoForm.get('connectionString')!;
+        ctrl.setValidators(requireConnectionString ? [Validators.required] : []);
+        ctrl.updateValueAndValidity({ emitEvent: false });
+      });
+    });
+  }
+
   isValid(): boolean {
     return this.mongoForm.valid;
   }
 
   /** The probe only needs the connection string (which embeds host/db/credentials); the other required fields
-   *  (name, collection) aren't part of the connectivity check. */
+   *  (name, collection) aren't part of the connectivity check. Also testable with a blank connection string
+   *  when reusing an existing connection unchanged — the backend resolves the stored one server-side (see
+   *  MongoDestinationConnectionTestService, and existingDestinationId below). */
   canTest(): boolean {
-    return !!this.mongoForm.value.connectionString;
+    return !!this.mongoForm.value.connectionString || (this.reusingExisting() && !!this.existingDestinationId());
   }
 
   /** Live connectivity + collection-existence check before saving: opens a Mongo client on the entered
@@ -69,6 +93,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
         connectionString: v.connectionString ?? '',
         collection: v.collection || undefined,
         createIfNotExists: v.createIfNotExists ?? false,
+        destinationId: this.existingDestinationId() ?? undefined,
       })
       .subscribe({
         next: res => {
@@ -107,9 +132,13 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Explicit null (rather than relying on the '' fallback) when reusing an existing connection and nothing
+    // was typed — matches WorkflowBuildAssemblerService.buildDestinationRequest's isMongo branch.
+    const secret =
+      this.reusingExisting() && !config['dest_connectionString'] ? null : config['dest_connectionString'] || '';
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: config['dest_connectionString'] || '',
+      secret,
     };
   }
 

@@ -1,4 +1,4 @@
-import { Component, viewChild } from '@angular/core';
+import { Component, input, viewChild } from '@angular/core';
 import { SqlFamilyDestinationFormComponent } from './sql-family-destination-form.component';
 import { SqlFamilyFormApi } from './destination-form-api';
 import { DestinationTable } from '../../../../services/destination-schema.service';
@@ -8,9 +8,14 @@ import { DestinationTable } from '../../../../services/destination-schema.servic
   selector: 'app-my-sql-destination-form',
   standalone: true,
   imports: [SqlFamilyDestinationFormComponent],
-  template: `<app-sql-family-destination-form engine="mysql" />`,
+  template: `<app-sql-family-destination-form engine="mysql" [reusingExisting]="reusingExisting()" [existingDestinationId]="existingDestinationId()" />`,
 })
 export class MySqlDestinationFormComponent implements SqlFamilyFormApi {
+  /** Forwarded straight through to the shared engine — see SqlFamilyDestinationFormComponent's own inputs.
+   *  Declared here too since ComponentRef.setInput targets this wrapper instance, not the inner engine. */
+  readonly reusingExisting = input<boolean>(false);
+  readonly existingDestinationId = input<string | null>(null);
+
   private readonly engineForm = viewChild.required(SqlFamilyDestinationFormComponent);
 
   get sqlTables() { return this.engineForm().sqlTables; }

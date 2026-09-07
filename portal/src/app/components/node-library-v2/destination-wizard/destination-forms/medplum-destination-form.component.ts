@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -44,9 +44,9 @@ import { DestinationSchemaService } from '../../../../services/destination-schem
         </div>
 
         <div class="dw-field" [class.dw-field--error]="medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched">
-          <label class="dw-label" for="dw-medplum-secret">Client secret / private key <span class="dw-req">*</span></label>
+          <label class="dw-label" for="dw-medplum-secret">Client secret / private key @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
           <input id="dw-medplum-secret" type="password" class="dw-input" formControlName="secret"
-            placeholder="client secret or PEM private key" autocomplete="new-password" />
+            [placeholder]="reusingExisting() ? 'Leave blank to keep the current secret/key' : 'client secret or PEM private key'" autocomplete="new-password" />
           @if (medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched) {
             <span class="dw-error">A client secret or private key is required.</span>
           }
@@ -114,6 +114,15 @@ export class MedplumDestinationFormComponent implements WizardDestinationFormApi
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
+  /** Relaxes secret's required validator when reopening an already-saved connection — otherwise the
+   *  never-re-displayed secret field's required validator hard-blocks Next on every edit that doesn't retype
+   *  it, per the same pattern Blob/Csv(sftp)/AzureFhirService already use. */
+  readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — not yet consumed here (Test Connection still requires retyping the
+   *  secret for Medplum), but declared so the wizard can pass it uniformly without ComponentRef.setInput
+   *  throwing on an undeclared input. See CsvDestinationFormComponent for the consuming pattern. */
+  readonly existingDestinationId = input<string | null>(null);
+
   readonly medplumForm = this.fb.group({
     name: ['Medplum Production', [Validators.required]],
     // The FHIR R4 base URL — becomes the DestinationConfiguration.target (e.g. https://api.medplum.com/fhir/R4).
@@ -127,6 +136,17 @@ export class MedplumDestinationFormComponent implements WizardDestinationFormApi
     batchSize: ['100', []],
     identifierSystem: ['', []],
   });
+
+  constructor() {
+    effect(() => {
+      const requireSecret = !this.reusingExisting();
+      untracked(() => {
+        const ctrl = this.medplumForm.get('secret')!;
+        ctrl.setValidators(requireSecret ? [Validators.required] : []);
+        ctrl.updateValueAndValidity({ emitEvent: false });
+      });
+    });
+  }
 
   isValid(): boolean {
     return this.medplumForm.valid;
@@ -188,11 +208,15 @@ export class MedplumDestinationFormComponent implements WizardDestinationFormApi
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Explicit null (rather than relying on the '' fallback) when reusing an existing connection and nothing
+    // was typed — matches WorkflowBuildAssemblerService.buildDestinationRequest's isMedplum branch.
+    const secret =
+      this.reusingExisting() && !config['dest_medplumSecret'] ? null : config['dest_medplumSecret'] || '';
     return {
       // buildConnectionMetadata's default (csv/catch-all) branch carries the non-secret dest_medplum* keys,
       // stripping dest_medplumSecret — which is returned separately as the opaque connection secret.
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: config['dest_medplumSecret'] || '',
+      secret,
     };
   }
 

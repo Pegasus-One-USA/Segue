@@ -773,22 +773,26 @@ export class DestinationWizardComponent implements OnInit {
       () => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null,
     );
 
-  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
-   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
-   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
-   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
+  /** Every registry-routed destination form now declares `reusingExisting` (gates its secret field's required
+   *  validator, and — via getMetadata() — whether a blank secret is sent as null/preserve vs. rebuilt into a
+   *  broken value) — Sql-family/Mongo/Medplum/BlobStorage/Csv/Sftp/AzureFhirService all declare the input, so
+   *  passing it uniformly no longer throws via ComponentRef.setInput. FHIR (Aidbox) never reaches this at all
+   *  (isFhir() is never registry-routed — see registryKey()). Deliberately a plain method, not computed() —
    *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
    *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
    *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
-    // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
-    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
-    if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
+    const reusingExisting =
+      this.connectionMode() === 'existing' && !this.hasExistingChanged();
     return {
-      reusingExisting:
-        this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+      reusingExisting,
+      // Only meaningful alongside reusingExisting — lets a form's Test Connection resolve the stored secret
+      // server-side instead of requiring the user to retype it just to verify an unchanged connection still
+      // works. Null whenever reusingExisting is false, so a form never accidentally tests-by-id against
+      // stale state after the user picks/types something new. Mirrors the same selectedExistingId() ??
+      // resolvedDestinationId() fallback already used at save/mapping-summary time elsewhere in this file.
+      existingDestinationId:
+        reusingExisting ? (this.selectedExistingId() ?? this.resolvedDestinationId()) : null,
     };
   }
 
