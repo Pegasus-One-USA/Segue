@@ -63,8 +63,14 @@ terminate() {
 }
 trap terminate TERM INT
 
+# set +e/-e around this wait specifically: with `set -e` active, `wait` returning postgres's exit
+# code non-zero (e.g. it crashed rather than being signaled) would abort this script immediately at
+# this line, skipping backup_out below entirely - defeating the whole point of also backing up on a
+# self-initiated exit, not just the external-signal path in terminate() above.
+set +e
 wait "$PG_PID"
 EXIT_CODE=$?
+set -e
 # Covers postgres exiting on its own (not just an external signal) - still worth preserving
 # whatever made it to disk rather than only backing up on the external-signal path above.
 backup_out

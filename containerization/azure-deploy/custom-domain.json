@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "13372203670052883855"
+      "templateHash": "6648146912023901009"
     }
   },
   "parameters": {
@@ -94,7 +94,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "16570397132375237209"
+              "templateHash": "2322192660738068580"
             }
           },
           "parameters": {
@@ -179,6 +179,9 @@
               "apiVersion": "2024-03-01",
               "name": "[parameters('appName')]",
               "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('managedEnvironmentId')]",
                 "configuration": "[union(parameters('baseConfiguration'), createObject('secrets', parameters('existingSecrets'), 'ingress', union(parameters('baseConfiguration').ingress, createObject('external', true(), 'customDomains', concat(parameters('otherCustomDomains'), createArray(variables('thisCustomDomain')))))))]",
@@ -244,7 +247,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.45.15.27210",
-              "templateHash": "16570397132375237209"
+              "templateHash": "2322192660738068580"
             }
           },
           "parameters": {
@@ -329,6 +332,9 @@
               "apiVersion": "2024-03-01",
               "name": "[parameters('appName')]",
               "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('managedEnvironmentId')]",
                 "configuration": "[union(parameters('baseConfiguration'), createObject('secrets', parameters('existingSecrets'), 'ingress', union(parameters('baseConfiguration').ingress, createObject('external', true(), 'customDomains', concat(parameters('otherCustomDomains'), createArray(variables('thisCustomDomain')))))))]",
