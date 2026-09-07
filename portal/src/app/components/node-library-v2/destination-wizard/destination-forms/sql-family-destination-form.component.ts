@@ -184,7 +184,7 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
     // credential surfaces as an HTTP error here exactly like a failed probe() would.
     const id = this.existingDestinationId();
     const willUseStoredSecret = this.reusingExisting() && !!id && !this.sqlForm.value.password;
-    console.log(
+    console.info(
       `[SQL-family Test Connection] engine=${this.engine()} reusingExisting=${this.reusingExisting()} ` +
       `existingDestinationId=${id ?? '(none)'} passwordTyped=${!!this.sqlForm.value.password} ` +
       `=> ${willUseStoredSecret ? 'resolving stored secret server-side via GetSchema' : 'probing with the form\'s own (typed) password'}`,
@@ -192,7 +192,7 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
     if (willUseStoredSecret) {
       this.schemaSvc.getSchema(id!).subscribe({
         next: res => {
-          console.log(`[SQL-family Test Connection] GetSchema succeeded for destination id=${id} — ${res.tables.length} table(s) returned`);
+          console.info(`[SQL-family Test Connection] GetSchema succeeded for destination id=${id} — ${res.tables.length} table(s) returned`);
           const tables = res.tables.map(t => ({
             ...t,
             origin: 'probed' as const,

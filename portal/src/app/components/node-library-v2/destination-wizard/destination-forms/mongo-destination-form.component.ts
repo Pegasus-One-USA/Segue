@@ -89,7 +89,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     this.probeError.set(null);
     const v = this.mongoForm.value;
     const id = this.existingDestinationId();
-    console.log(
+    console.info(
       `[Mongo Test Connection] reusingExisting=${this.reusingExisting()} existingDestinationId=${id ?? '(none)'} ` +
       `connectionStringTyped=${!!v.connectionString} ` +
       `=> ${!v.connectionString && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) connection string'}`,
@@ -103,7 +103,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       })
       .subscribe({
         next: res => {
-          console.log(`[Mongo Test Connection] result connected=${res.connected}${res.connected ? ` — ${res.collections?.length ?? 0} collection(s) returned` : ` — ${res.error ?? 'no error message'}`}`);
+          console.info(`[Mongo Test Connection] result connected=${res.connected}${res.connected ? ` — ${res.collections?.length ?? 0} collection(s) returned` : ` — ${res.error ?? 'no error message'}`}`);
           this.collections.set(res.collections ?? []);
           if (res.connected) {
             this.probeState.set('ok');

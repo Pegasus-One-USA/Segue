@@ -142,7 +142,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
     if (!this.canTest()) return;
     const v = this.blobForm.value;
     const id = this.existingDestinationId();
-    console.log(
+    console.info(
       `[Blob Test Connection] authMode=${v.authMode} reusingExisting=${this.reusingExisting()} ` +
       `existingDestinationId=${id ?? '(none)'} secretTyped=${!!v.secretValue} ` +
       `=> ${!v.secretValue && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) secret'}`,
@@ -162,7 +162,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       destinationId: id ?? undefined,
     }).subscribe({
       next: res => {
-        console.log(`[Blob Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
+        console.info(`[Blob Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
         if (res.connected) {
           this.probeState.set('ok');
         } else {

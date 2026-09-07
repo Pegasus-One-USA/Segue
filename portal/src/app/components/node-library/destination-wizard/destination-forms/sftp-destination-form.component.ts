@@ -63,7 +63,7 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
   testConnection(): void {
     const v = this.sftpForm.value;
     const id = this.existingDestinationId();
-    console.log(
+    console.info(
       `[SFTP Test Connection] reusingExisting=${this.reusingExisting()} existingDestinationId=${id ?? '(none)'} ` +
       `passwordTyped=${!!v.sftpPassword} ` +
       `=> ${!v.sftpPassword && id ? 'resolving stored secret server-side' : 'using the form\'s own (typed) password'}`,
@@ -79,7 +79,7 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
       destinationId: id ?? undefined,
     }).subscribe({
       next: res => {
-        console.log(`[SFTP Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
+        console.info(`[SFTP Test Connection] result connected=${res.connected}${res.connected ? '' : ` — ${res.error ?? 'no error message'}`}`);
         this.probeState.set(res.connected ? 'ok' : 'error');
         if (!res.connected) this.probeError.set(res.error ?? 'Connection failed.');
       },

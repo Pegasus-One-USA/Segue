@@ -3126,11 +3126,11 @@ export class EhrVendorSourceFormComponent
     const clientId = this.form.controls.clientId.value.trim();
     const method = this.authMethod();
     if (!clientId || !tokenEndpoint || (method !== 'secret' && method !== 'jwt')) {
-      console.log(`[Backend Auth Probe] skipped — clientId=${!!clientId} tokenEndpoint=${!!tokenEndpoint} method=${method}`);
+      console.info(`[Backend Auth Probe] skipped — clientId=${!!clientId} tokenEndpoint=${!!tokenEndpoint} method=${method}`);
       return;
     }
     if (method === 'secret' && !this.form.controls.clientSecret.value) {
-      console.log('[Backend Auth Probe] skipped — Client Secret auth selected but the field is blank (isEditing=' + this.isEditing + '); this connection\'s stored secret will NOT be re-validated by Discover');
+      console.info('[Backend Auth Probe] skipped — Client Secret auth selected but the field is blank (isEditing=' + this.isEditing + '); this connection\'s stored secret will NOT be re-validated by Discover');
       return;
     }
     if (
@@ -3138,10 +3138,10 @@ export class EhrVendorSourceFormComponent
       (!this.form.controls.privateKeyRef.value.trim() ||
         !this.form.controls.privateKeySecretName.value.trim())
     ) {
-      console.log('[Backend Auth Probe] skipped — JWT auth selected but Key Vault Name/Secret Name reference is incomplete');
+      console.info('[Backend Auth Probe] skipped — JWT auth selected but Key Vault Name/Secret Name reference is incomplete');
       return;
     }
-    console.log(
+    console.info(
       `[Backend Auth Probe] running — method=${method} clientId=${clientId} ` +
       (method === 'jwt'
         ? `keyVaultName=${this.form.controls.privateKeyRef.value.trim()} secretName=${this.form.controls.privateKeySecretName.value.trim()}`
@@ -3151,7 +3151,7 @@ export class EhrVendorSourceFormComponent
     this.grantedScopesStatus.set('loading');
     this.runRealCredentialTest(method, tokenEndpoint).subscribe({
       next: (result) => {
-        console.log(`[Backend Auth Probe] result success=${result.success}${result.success ? ` — granted scopes: ${result.grantedScopes.join(', ')}` : ` — ${result.error ?? 'no error message'}`}`);
+        console.info(`[Backend Auth Probe] result success=${result.success}${result.success ? ` — granted scopes: ${result.grantedScopes.join(', ')}` : ` — ${result.error ?? 'no error message'}`}`);
         if (result.success) {
           this.grantedScopes.set(result.grantedScopes);
           this.grantedScopesStatus.set('done');
