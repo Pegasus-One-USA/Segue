@@ -41,7 +41,8 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
         _sut = new CreateMappingProfileRequestValidator(
@@ -330,7 +331,8 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
     [Fact]

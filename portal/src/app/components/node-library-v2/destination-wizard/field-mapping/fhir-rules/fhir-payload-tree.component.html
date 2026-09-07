@@ -1,0 +1,45 @@
+<div class="fm-source-card" [class.fm-source-card--fit]="fitMode()">
+  <div class="fm-source-head">
+    <span class="fm-source-kind">payload</span>
+    <span class="fm-source-name">{{ headerName() }}</span>
+    <div class="fm-source-search-wrap">
+      <input
+        type="search"
+        class="fm-source-search"
+        placeholder="Search fields…"
+        aria-label="Search fields in this payload"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+      @if (isSearching()) {
+        <button type="button" class="fm-source-search-clear" aria-label="Clear search" (click)="clearSearch()">✕</button>
+      }
+    </div>
+    <button
+      type="button"
+      class="fm-source-fit-toggle"
+      [attr.aria-label]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      [title]="fitMode() ? 'Expand to full height' : 'Fit to screen height'"
+      (click)="toggleFit()"
+    >{{ fitMode() ? '⤢' : '⤡' }}</button>
+  </div>
+
+  <div class="fm-source-rows">
+    @if (hasActiveFilter() && matchCount() === 0) {
+      <div class="fm-source-no-match">No fields match "{{ effectiveQuery() }}".</div>
+    }
+    @for (root of filteredRoots(); track root.node.id; let i = $index) {
+      <div class="fm-source-group" [style.--fm-group-color]="groupColorVar(root.colorIndex)">
+        <app-fhir-payload-tree-node
+          [node]="root.node"
+          [depth]="0"
+          [siblingIndex]="i"
+          [isCollapsed]="effectiveIsCollapsed()"
+          [hasRule]="hasRule()"
+          (toggleCollapse)="toggleCollapse.emit($event)"
+          (fieldClick)="fieldClick.emit($event)"
+        />
+      </div>
+    }
+  </div>
+</div>

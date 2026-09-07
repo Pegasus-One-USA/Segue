@@ -18,6 +18,20 @@ import {
 const CATEGORY_SOURCE: WorkflowNodeCategory = 0;
 const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
 
+/** Destinations that persist whole FHIR resources rather than mapped relational rows, so they need no
+ *  upstream Mapping node (see isFhirDirectDestination). MappingNodeExecutor already treats all three
+ *  identically via its `wholeResourceFhir` branch; listing only dest-fhir here left a Medplum/Azure FHIR
+ *  workflow with an inert synthetic Mapping node injected on save. */
+const FHIR_DIRECT_DESTINATION_IDS = new Set(['dest-fhir', 'dest-medplum', 'dest-azurefhir']);
+
+/** Backend NodeTypes of V2's three chain steps — the nodes that sit between source and destination and each
+ *  need the destinationId stamped onto them at save time (see the stamping loop in toRequest). */
+const CHAIN_NODE_TYPES = new Set([
+  'MappingNode',
+  'FhirResourceTransformNode',
+  'DeIdentificationNode',
+]);
+
 const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
   sample: 'SampleSourceNode',
@@ -31,11 +45,15 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'deid-kanon': 'DeIdentificationNode',
   'field-mapping': 'MappingNode',
   // V2's two consolidated chain steps (see transforms-v2.data.ts): 'transformation' stands in for the old
-  // granular normalize/terminology/patient-matching trio and persists as the backend's general-purpose
-  // NormalizationNode; 'deidentification' replaces deid-safeharbor/deid-kanon and persists as the same
-  // DeIdentificationNode both of those always mapped to. Without these two entries a saved V2 workflow
-  // would carry a chain node with no resolvable backend NodeType.
-  transformation: 'NormalizationNode',
+  // granular normalize/terminology/patient-matching trio and persists as FhirResourceTransformNode — V2's OWN
+  // node type, deliberately not V1's general-purpose NormalizationNode, so the FHIR-resource rule engine it
+  // will carry can never execute inside a V1 pipeline; 'deidentification' replaces deid-safeharbor/deid-kanon
+  // and persists as the same DeIdentificationNode both of those always mapped to. Without these two entries a
+  // saved V2 workflow would carry a chain node with no resolvable backend NodeType.
+  //
+  // FALLBACK only — nodeToRequest()'s catalog lookup wins whenever the catalog has loaded. The two must agree:
+  // a stale value here surfaces only on the path where the catalog request hasn't landed yet.
+  transformation: 'FhirResourceTransformNode',
   deidentification: 'DeIdentificationNode',
   'dest-sqlserver': 'SqlServerDestinationNode',
   'dest-mysql': 'MySqlDestinationNode',
@@ -65,7 +83,17 @@ export class WorkflowGraphMapperServiceV2 {
   private readonly store = inject(PipelineStoreV2);
   private readonly workflowApi = inject(WorkflowApiService);
 
-  toRequest(name: string, trigger?: WorkflowTriggerRequest | null): WorkflowDefinitionRequest {
+  /**
+   * @param workflowId The persisted workflow's own id, when it has one. Stamped onto every chain node so the
+   *   runtime can resolve THIS workflow's transformation rules (the Workflow scope tier keys on it). Null on a
+   *   brand-new workflow's first save — nothing can have been authored against an id that does not exist yet,
+   *   so there is nothing to lose by omitting it until the next save.
+   */
+  toRequest(
+    name: string,
+    trigger?: WorkflowTriggerRequest | null,
+    workflowId?: string | null,
+  ): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
     const nodes = this.store.nodes();
     const edges = this.store.edges();
@@ -124,18 +152,40 @@ export class WorkflowGraphMapperServiceV2 {
     // the user placed on the canvas is serialized by nodeToRequest, which only keeps that node's own fields, so
     // the linkage the graph already expresses has to be re-applied here. (The syntheticMappingRequest path, used
     // when a source connects straight to a destination, already copies the whole destination field bag.)
-    for (const edge of emittedEdges) {
-      const destinationNode = byId.get(edge.toNodeId);
-      const mappingRequest = requests.find(request => request.id === edge.fromNodeId);
-      if (!destinationNode || !this.isDestination(destinationNode) || !mappingRequest) continue;
-      if (mappingRequest.nodeType !== FALLBACK_NODE_TYPES['field-mapping']) continue;
-
+    //
+    // Applied to EVERY chain node feeding the destination, not just the one adjacent to it: in backend order
+    // the chain is Source -> Transformation -> De-identification -> Mapping -> Destination, so the
+    // Transformation node is two hops upstream. FhirResourceTransformNodeExecutor needs the same destinationId
+    // for the same reason the mapping node does — the destination's type is one of the rule-resolution tiers,
+    // so a Transformation node without it resolves no rules and passes every resource through untouched,
+    // silently, with the run still reporting success.
+    for (const destinationNode of nodes.filter(node => this.isDestination(node))) {
       const destinationId = destinationNode.fields['destinationId'];
       if (!destinationId) continue;
 
-      const config = this.parseConfig(mappingRequest.configurationJson);
-      if (config['destinationId']) continue;
-      mappingRequest.configurationJson = JSON.stringify({ ...config, destinationId });
+      // Walk back along the emitted (execution-order) edges for as long as each predecessor is a chain node.
+      let cursorId: string | undefined = destinationNode.id;
+      let guard = 0;
+      while (cursorId && guard++ < 20) {
+        const inbound = emittedEdges.find(candidate => candidate.toNodeId === cursorId);
+        const request = inbound ? requests.find(candidate => candidate.id === inbound.fromNodeId) : undefined;
+        if (!inbound || !request || !CHAIN_NODE_TYPES.has(request.nodeType)) break;
+
+        const config = this.parseConfig(request.configurationJson);
+        const patch: Record<string, string> = {};
+        if (!config['destinationId']) patch['destinationId'] = destinationId;
+        // The workflow's own id, under the key the rule resolver's Workflow tier is addressed by. Without it
+        // FhirResourceTransformNodeExecutor/MappingNodeExecutor cannot tell which workflow they are running
+        // for, and a workflow-scoped rule can never match.
+        if (workflowId && !config['resourcePipelineRouteId']) {
+          patch['resourcePipelineRouteId'] = workflowId;
+        }
+        if (Object.keys(patch).length > 0) {
+          request.configurationJson = JSON.stringify({ ...config, ...patch });
+        }
+
+        cursorId = inbound.fromNodeId;
+      }
     }
 
     return {
@@ -361,7 +411,7 @@ export class WorkflowGraphMapperServiceV2 {
   // node's field-mapping engine), so a direct source/transform -> destination edge should persist as-is rather
   // than getting a synthetic Mapping node inserted to satisfy a requirement that doesn't apply to this node type.
   private isFhirDirectDestination(node: CanvasNode): boolean {
-    return node.kind === 'transform' && node.transformId === 'dest-fhir';
+    return node.kind === 'transform' && FHIR_DIRECT_DESTINATION_IDS.has(node.transformId);
   }
 
   private isSourceCategory(category: WorkflowNodeCategory | string): boolean {

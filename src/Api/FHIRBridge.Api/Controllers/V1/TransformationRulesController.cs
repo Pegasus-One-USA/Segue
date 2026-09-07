@@ -53,10 +53,15 @@ public sealed class TransformationRulesController : ControllerBase
         [FromQuery] Guid? resourcePipelineRouteId,
         [FromQuery] string? sourceSystem,
         [FromQuery] string? sourceField,
+        /// <summary>Omit for the historical listing (PostMapping + PreMapping de-identification rows).
+        /// Pass <c>FhirResource</c> to list the rules V2's Transformation node authors against FHIR paths —
+        /// those are excluded by default, since this screen keys on destination columns they don't have.</summary>
+        [FromQuery] TransformExecutionPhase? executionPhase,
         CancellationToken cancellationToken)
     {
         var rules = await _service.ListRulesAsync(
-            scope, destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+            scope, destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
+            executionPhase, cancellationToken);
         return Ok(rules);
     }
 
@@ -79,6 +84,25 @@ public sealed class TransformationRulesController : ControllerBase
     {
         var rule = await _service.SaveRuleAsync(request, cancellationToken);
         return Ok(rule);
+    }
+
+    /// <summary>Binds rules authored before this workflow existed to it — called by the builder right after a
+    /// brand-new workflow's first save. Until then such rules are stored inert (Workflow scope, null route), so
+    /// authoring can happen while the pipeline is still being drawn without any rule leaking into another one.</summary>
+    [HttpPost("attach-pending/{workflowId:guid}")]
+    [StandardPermission(
+        PermissionGroupCode.TransformationRules,
+        PermissionActionCode.Write,
+        description: "Attach pending transformation rules to a newly saved workflow.")]
+    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AttachPendingRules(
+        Guid workflowId,
+        [FromQuery] DestinationType[]? destinationTypes,
+        CancellationToken cancellationToken)
+    {
+        var attached = await _service.AttachPendingRulesToWorkflowAsync(
+            workflowId, destinationTypes ?? [], cancellationToken);
+        return Ok(attached);
     }
 
     [HttpDelete("{ruleId:guid}")]
@@ -119,10 +143,15 @@ public sealed class TransformationRulesController : ControllerBase
         [FromQuery] Guid? resourcePipelineRouteId,
         [FromQuery] string? sourceSystem,
         [FromQuery] string? sourceField,
+        /// <summary>True to consider only rules belonging to the workflow named by
+        /// <paramref name="resourcePipelineRouteId"/>, with no fall-through to the tenant-wide tiers. Set by
+        /// the V2 builder, whose rules are pipeline-private; omit for V1's original five-tier resolution.</summary>
+        [FromQuery] bool workflowScopedOnly,
         CancellationToken cancellationToken)
     {
         var rules = await _service.GetEffectiveRulesAsync(
-            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
+            cancellationToken, workflowScopedOnly);
         return Ok(rules);
     }
 

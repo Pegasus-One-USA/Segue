@@ -1,0 +1,170 @@
+<!-- Focusable and Escape-dismissable, not just click-dismissable — a mouse-only backdrop leaves keyboard
+     users with no way out of the modal. -->
+<div
+  class="frp-backdrop"
+  role="button"
+  tabindex="0"
+  aria-label="Close"
+  (click)="close()"
+  (keydown.escape)="close()"
+  (keydown.enter)="close()"
+  (keydown.space)="close()"></div>
+
+<div class="frp" role="dialog" aria-modal="true" aria-labelledby="frp-title">
+  <header class="frp__head">
+    <div class="frp__head-text">
+      <span class="frp__eyebrow">{{ isDeIdentification() ? 'De-identification rule' : 'Transformation rule' }}</span>
+      <h3 class="frp__title" id="frp-title">{{ sourceField() || 'Choose a field' }}</h3>
+    </div>
+    <button type="button" class="frp__close" aria-label="Close" (click)="close()">✕</button>
+  </header>
+
+  <div class="frp__body">
+    <!-- Only when the popover was opened from "Add rule" rather than by clicking a path in the tree; a
+         tree click already knows the resource and the path, so re-asking would be noise. -->
+    @if (picksPath()) {
+      <div class="frp__row">
+        <label class="frp__field frp__field--half">
+          <span class="frp__label">Resource</span>
+          <select
+            class="frp__input"
+            [ngModel]="resourceType()"
+            (ngModelChange)="onResourceChange($event)"
+            [ngModelOptions]="{ standalone: true }">
+            @for (option of context.resourceTypes; track option) {
+              <option [value]="option">{{ option }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="frp__field frp__field--half">
+          <span class="frp__label">FHIR path</span>
+          <select
+            class="frp__input"
+            [ngModel]="sourceField()"
+            (ngModelChange)="sourceField.set($event)"
+            [ngModelOptions]="{ standalone: true }">
+            <option value="" disabled>Select a field…</option>
+            @for (option of pathOptionsForResource(); track option.path) {
+              <option [value]="option.path">{{ option.path }}</option>
+            }
+          </select>
+        </label>
+      </div>
+    }
+
+    <label class="frp__field">
+      <span class="frp__label">{{ isDeIdentification() ? 'Redaction' : 'Transformation' }}</span>
+      <select
+        class="frp__input"
+        [ngModel]="nodeType()"
+        (ngModelChange)="onNodeTypeChange($event)"
+        [ngModelOptions]="{ standalone: true }">
+        @for (option of nodeTypeOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+
+    <!-- RuleConfigFormComponent writes straight into the object it is handed, so there is nothing to read
+         back out — the signal already holds the same reference. -->
+    <app-rule-config-form [schema]="schemaFor(nodeType())" [config]="config()" />
+
+    @if (!isDeIdentification()) {
+      <label class="frp__field">
+        <span class="frp__label">Write result to</span>
+        <input
+          type="text" class="frp__input"
+          placeholder="leave empty to write back where the rule read"
+          [ngModel]="writeBackPath()"
+          (ngModelChange)="writeBackPath.set($event)"
+          [ngModelOptions]="{ standalone: true }" />
+        <small class="frp__hint">Lands on <code>{{ effectiveWriteBackPath() }}</code></small>
+        @if (warnsAboutWriteBack()) {
+          <small class="frp__hint frp__hint--warn">
+            This transformation builds a whole element, not a single value — it usually belongs at the parent
+            path. A rule reading <code>code.coding.code</code> but building a CodeableConcept should write to
+            <code>code</code>.
+          </small>
+        }
+      </label>
+
+      <div class="frp__row">
+        <label class="frp__field frp__field--half">
+          <span class="frp__label">If the value is missing</span>
+          <select
+            class="frp__input"
+            [ngModel]="onNull()"
+            (ngModelChange)="onNull.set($event)"
+            [ngModelOptions]="{ standalone: true }">
+            <option value="Skip">Skip the rule</option>
+            <option value="Default">Use a default value</option>
+            <option value="Error">Treat as an error</option>
+          </select>
+        </label>
+
+        @if (onNull() === 'Default') {
+          <label class="frp__field frp__field--half">
+            <span class="frp__label">Default value</span>
+            <input
+              type="text" class="frp__input"
+              [ngModel]="onNullDefaultValue()"
+              (ngModelChange)="onNullDefaultValue.set($event)"
+              [ngModelOptions]="{ standalone: true }" />
+          </label>
+        }
+      </div>
+
+      <div class="frp__row">
+        <label class="frp__field frp__field--half">
+          <span class="frp__label">If the rule fails</span>
+          <select
+            class="frp__input"
+            [ngModel]="errorPolicy()"
+            (ngModelChange)="errorPolicy.set($event)"
+            [ngModelOptions]="{ standalone: true }">
+            <option value="NullOut">Leave the original value</option>
+            <option value="PassThrough">Carry on with the previous value</option>
+            <option value="Fail">Fail the record</option>
+            <option value="RouteToDeadLetter">Route to dead letter</option>
+          </select>
+        </label>
+
+        <label class="frp__field frp__field--half">
+          <span class="frp__label">Repeating values</span>
+          <select
+            class="frp__input"
+            [ngModel]="arrayMode()"
+            (ngModelChange)="arrayMode.set($event)"
+            [ngModelOptions]="{ standalone: true }">
+            <option value="Whole">Run once on the value</option>
+            <option value="PerItem">Run once per item</option>
+          </select>
+        </label>
+      </div>
+    }
+  </div>
+
+  <footer class="frp__foot">
+    <label class="frp__toggle">
+      <input
+        type="checkbox"
+        [ngModel]="isEnabled()"
+        (ngModelChange)="isEnabled.set($event)"
+        [ngModelOptions]="{ standalone: true }" />
+      <span>Enabled</span>
+    </label>
+
+    <span class="frp__spacer"></span>
+
+    @if (isEditing()) {
+      <button type="button" class="frp__btn frp__btn--danger" [disabled]="saving()" (click)="remove()">
+        Remove
+      </button>
+    }
+    <button type="button" class="frp__btn" [disabled]="saving()" (click)="close()">Cancel</button>
+    <button type="button" class="frp__btn frp__btn--primary" [disabled]="saving()" (click)="apply()">
+      {{ saving() ? 'Saving…' : (isEditing() ? 'Update rule' : 'Apply rule') }}
+    </button>
+  </footer>
+</div>

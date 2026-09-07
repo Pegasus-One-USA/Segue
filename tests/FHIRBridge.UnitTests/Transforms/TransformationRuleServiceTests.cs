@@ -212,10 +212,23 @@ public sealed class TransformationRuleServiceTests
         }
     }
 
+    /// <summary>A save with no id now looks for an existing rule with the same natural key before inserting
+    /// (see TransformationRuleService.FindByNaturalKeyAsync), so every such test has to stub that lookup.
+    /// Returns nothing by default — "this really is a new rule".</summary>
+    private static void StubNaturalKeyLookup(
+        Mock<ITransformationRuleRepository> repository, params TransformationRule[] matches) =>
+        repository
+            .Setup(x => x.ListAsync(
+                It.IsAny<TransformScope?>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<TransformExecutionPhase?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(matches);
+
     [Fact]
     public async Task SaveRuleAsync_creates_a_new_rule_when_no_id_is_supplied()
     {
         var repository = new Mock<ITransformationRuleRepository>();
+        StubNaturalKeyLookup(repository);
         TransformationRule? added = null;
         repository
             .Setup(x => x.AddAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()))
@@ -236,6 +249,77 @@ public sealed class TransformationRuleServiceTests
         added.Should().NotBeNull();
         added!.DestinationField.Should().Be("FamilyName");
         dto.Config["case"].Should().Be("upper");
+    }
+
+    [Fact]
+    public async Task SaveRuleAsync_updates_the_matching_rule_instead_of_cloning_it_when_no_id_is_supplied()
+    {
+        // The authoring UIs do not always have an id to send — a rule reopened from a list, a re-save after an
+        // error. Without a natural-key match every such save appended a duplicate: four byte-identical
+        // Patient.birthDate/DateMathAge rows were observed in a dev database, and deleting the one on screen
+        // left the other three quietly in effect.
+        var repository = new Mock<ITransformationRuleRepository>();
+        var existing = new TransformationRule(
+            TransformScope.Field,
+            TransformNodeType.DateMathAge,
+            "{\"operation\":\"age\"}",
+            resourceType: "Patient",
+            destinationField: "BirthDateAge",
+            sourceField: "Patient.birthDate");
+        StubNaturalKeyLookup(repository, existing);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
+
+        var dto = await service.SaveRuleAsync(new SaveTransformationRuleRequest(
+            Id: null,
+            Scope: TransformScope.Field,
+            NodeType: TransformNodeType.DateMathAge,
+            Config: new Dictionary<string, string> { ["operation"] = "age", ["days"] = "30" },
+            ResourceType: "Patient",
+            DestinationField: "BirthDateAge",
+            SourceField: "Patient.birthDate"));
+
+        dto.Id.Should().Be(existing.Id, "the same rule was saved again, not a second one created");
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()), Times.Never);
+        repository.Verify(
+            x => x.UpdateAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
+        existing.ConfigJson.Should().Contain("30", "the incoming config replaces the stored one");
+    }
+
+    [Fact]
+    public async Task SaveRuleAsync_creates_a_new_rule_when_more_than_one_row_already_matches()
+    {
+        // Pre-existing duplicates are left alone rather than one being picked arbitrarily — a save must never
+        // silently rewrite a row the caller did not name.
+        var repository = new Mock<ITransformationRuleRepository>();
+        TransformationRule Duplicate() => new(
+            TransformScope.Field, TransformNodeType.DateMathAge, "{}",
+            resourceType: "Patient", destinationField: "BirthDateAge", sourceField: "Patient.birthDate");
+        StubNaturalKeyLookup(repository, Duplicate(), Duplicate());
+
+        TransformationRule? added = null;
+        repository
+            .Setup(x => x.AddAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()))
+            .Callback<TransformationRule, CancellationToken>((r, _) => added = r)
+            .Returns(Task.CompletedTask);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
+
+        await service.SaveRuleAsync(new SaveTransformationRuleRequest(
+            Id: null,
+            Scope: TransformScope.Field,
+            NodeType: TransformNodeType.DateMathAge,
+            Config: new Dictionary<string, string>(),
+            ResourceType: "Patient",
+            DestinationField: "BirthDateAge",
+            SourceField: "Patient.birthDate"));
+
+        added.Should().NotBeNull();
+        repository.Verify(
+            x => x.UpdateAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

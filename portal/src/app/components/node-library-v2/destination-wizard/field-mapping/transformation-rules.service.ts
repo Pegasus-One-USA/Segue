@@ -9,8 +9,12 @@ export type TransformScope = 'Global' | 'DestinationType' | 'ResourceType' | 'Fi
 
 /** PostMapping (default) — the rule sees a value already assigned to a destination field/column.
  *  PreMapping — the rule walks the raw source resource JSON by SourceField path, before any field mapping;
- *  only valid at Global/ResourceType scope, and only when tagged with a DeIdentificationProfileId. */
-export type TransformExecutionPhase = 'PostMapping' | 'PreMapping';
+ *  only valid at Global/ResourceType scope, and only when tagged with a DeIdentificationProfileId.
+ *  FhirResource — also walks the raw resource JSON, but for a FHIR-native destination (Aidbox/Medplum/Azure
+ *  FHIR) that stores the resource itself and so has no destination column for a PostMapping rule to attach to.
+ *  Keyed by sourceField (what to read) and fhirWriteBackJsonPath (where the result goes, defaulting to the
+ *  read path); carries no de-identification profile. Executed only by V2's Transformation node. */
+export type TransformExecutionPhase = 'PostMapping' | 'PreMapping' | 'FhirResource';
 
 /** The 20 field-level FHIR-aware transform nodes — FHIRBridge_Top20_Transformations.pdf v1.0. */
 export type TransformNodeType =
@@ -182,9 +186,13 @@ export class TransformationRulesService {
   private nodeSchemasCache: Observable<TransformNodeSchema[]> | null = null;
   private hiddenCache: Observable<boolean> | null = null;
 
+  /** `executionPhase` omitted lists what this screen has always listed — PostMapping plus PreMapping
+   *  de-identification rows — and excludes FhirResource rules, which are authored against a FHIR path rather
+   *  than a destination column. Pass 'FhirResource' to list those (see FhirTransformRulesDialogComponent). */
   list(filter: {
     scope?: TransformScope; destinationType?: DestinationType; resourceType?: string;
     destinationField?: string; resourcePipelineRouteId?: string; sourceSystem?: string; sourceField?: string;
+    executionPhase?: TransformExecutionPhase;
   }): Observable<TransformationRule[]> {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => {
@@ -198,9 +206,12 @@ export class TransformationRulesService {
    *  the wizard's Rules dialog show/clone what's really running instead of starting an override from blank
    *  schema defaults. Resolves the same Workflow &gt; Field &gt; ResourceType &gt; DestinationType &gt; Global
    *  chain as preview(). */
+  /** `workflowScopedOnly` restricts the answer to rules belonging to `resourcePipelineRouteId` — no
+   *  fall-through to the tenant-wide tiers. Set by V2, whose rules are pipeline-private. */
   getEffectiveRules(filter: {
     destinationType: DestinationType; resourceType: string; destinationField: string;
     resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
+    workflowScopedOnly?: boolean;
   }): Observable<TransformationRule[]> {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => {
@@ -211,6 +222,18 @@ export class TransformationRulesService {
 
   save(request: SaveTransformationRuleRequest): Observable<TransformationRule> {
     return this.http.post<TransformationRule>(TRANSFORMATION_RULES_ENDPOINTS.save, request);
+  }
+
+  /** Binds rules authored before the workflow existed to it — called once, right after a brand-new
+   *  workflow's first save. Until then those rules are stored inert (Workflow scope, no workflow), so a
+   *  pipeline can be drawn and its rules written in any order. `destinationTypes` narrows which pending rules
+   *  are claimed, so a second unsaved builder session's rules for another destination are left alone. */
+  attachPending(workflowId: string, destinationTypes: DestinationType[]): Observable<number> {
+    const params = new URLSearchParams();
+    for (const destinationType of destinationTypes) params.append('destinationTypes', destinationType);
+    const qs = params.toString();
+    const url = TRANSFORMATION_RULES_ENDPOINTS.attachPending(workflowId);
+    return this.http.post<number>(qs ? `${url}?${qs}` : url, {});
   }
 
   delete(ruleId: string): Observable<void> {

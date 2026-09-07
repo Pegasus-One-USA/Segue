@@ -5,6 +5,8 @@ import { PermissionService } from '../../auth/services/permission.service';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
+import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
+import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityServiceV2 } from '../../services/applicability-v2.service';
 import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
@@ -14,13 +16,17 @@ import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
 import { SQL_FAMILY_DESTINATION_TYPES } from '../../models/transform-v2.model';
 
-import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
 import { environment } from '../../../environments/environment';
 /** V2's chain steps in canonical canvas order — Source → Mapping → Transformation →
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
 const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentification'];
+
+/** Destinations whose transformation rules are workflow-scoped (FhirResource phase), so "does this
+ *  workflow have rules?" can be asked of the server directly. Everything else is still Field-scoped
+ *  and has to be intersected with the node's own mapped fields — see syncChainNodes. */
+const FHIR_DIRECT_DESTINATION_TYPES = new Set(['FhirRepository', 'Medplum', 'AzureFhirService']);
 
 import { CanvasComponent } from '../../components/canvas-v2/canvas.component';
 import { PayloadPreviewComponent } from '../../components/modals-v2/payload-preview/payload-preview.component';
@@ -46,6 +52,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly store  = inject(PipelineStoreV2);
   private readonly toast  = inject(ToastService);
   private readonly appSvc = inject(ApplicabilityServiceV2);
+  private readonly transformationRules = inject(TransformationRulesService);
   private readonly workflowApi = inject(WorkflowApiService);
   private readonly graphMapper = inject(WorkflowGraphMapperServiceV2);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerServiceV2);
@@ -53,7 +60,6 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly router = inject(Router);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
-  private readonly transformationRules = inject(TransformationRulesService);
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
@@ -458,7 +464,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const definitionRequest = this.graphMapper.toRequest(workflowName, this.buildTrigger());
+    const definitionRequest = this.graphMapper.toRequest(
+      workflowName, this.buildTrigger(), this.currentWorkflowId());
     this.workflowApi.save(definitionRequest, workflowId).subscribe({
       next: () => {
         this.workflowBusy.set(false);
@@ -637,21 +644,67 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     const hasDeIdentification = !!fields['deIdentificationProfileId'];
 
     if (mappingApplies) this.ensureChainNode(destination, 'field-mapping');
+    if (hasDeIdentification) this.ensureChainNode(destination, 'deidentification');
 
-    // Transformation rules live server-side per destination type, not in the node's own config, so this is
-    // the one signal that has to be asked for rather than read locally.
-    if (destinationType) {
-      this.transformationRules.list({ destinationType }).subscribe({
-        next: rules => {
-          if (rules.length > 0) this.ensureChainNode(destination, 'transformation');
-          if (hasDeIdentification) this.ensureChainNode(destination, 'deidentification');
-        },
-        // A rules lookup failure shouldn't block the de-identification node the config alone already proves.
-        error: () => { if (hasDeIdentification) this.ensureChainNode(destination, 'deidentification'); },
-      });
-    } else if (hasDeIdentification) {
-      this.ensureChainNode(destination, 'deidentification');
+    // Transformation rules are the only step that lives server-side, so this is the one signal that has to be
+    // asked for rather than read off the node. What it asks for is the part that matters: rules belonging to
+    // THIS pipeline. The original query was `list({ destinationType })` — destination TYPE alone, no workflow
+    // and no field filter — so one rule authored anywhere made the node appear in every workflow writing to
+    // that type of destination, and deleting the rule you could see never helped because the others remained.
+    if (!destinationType) return;
+
+    if (FHIR_DIRECT_DESTINATION_TYPES.has(destinationType)) {
+      // FHIR rules carry the workflow id (Workflow scope), so this is an exact question.
+      const workflowId = this.currentWorkflowId();
+      if (!workflowId) return;
+      this.transformationRules
+        .list({ destinationType, executionPhase: 'FhirResource', resourcePipelineRouteId: workflowId })
+        .subscribe({
+          next: rules => {
+            if (rules.some(rule => rule.resourcePipelineRouteId === workflowId)) {
+              this.ensureChainNode(destination, 'transformation');
+            }
+          },
+          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+        });
+      return;
     }
+
+    // SQL-family rules are still Field-scoped and carry no workflow id, so "this workflow's rules" cannot be
+    // asked for directly. It can be answered though: a rule is this pipeline's business only if it targets a
+    // field this destination node actually maps. The mapped triples are local (dest_mappings), so the
+    // tenant-wide result gets intersected with them.
+    const mappedKeys = this.mappedRuleKeys(fields);
+    if (mappedKeys.size === 0) return;
+
+    this.transformationRules.list({ destinationType }).subscribe({
+      next: rules => {
+        const appliesHere = rules.some(rule =>
+          !!rule.resourceType
+          && !!rule.destinationField
+          && mappedKeys.has(`${rule.resourceType}|${rule.destinationField}`)
+          // A rule naming a different source field is about a different mapping of the same column.
+          && (!rule.sourceField || mappedKeys.has(`${rule.resourceType}|${rule.destinationField}|${rule.sourceField}`)));
+        if (appliesHere) this.ensureChainNode(destination, 'transformation');
+      },
+      error: () => { /* as above — never add a node on a guess */ },
+    });
+  }
+
+  /** The (resourceType, column) and (resourceType, column, sourceField) keys this destination node maps, from
+   *  its own saved rows — what makes "does a rule apply to THIS workflow" answerable for a SQL destination
+   *  whose rules are not workflow-keyed. */
+  private mappedRuleKeys(fields: Record<string, string>): Set<string> {
+    const keys = new Set<string>();
+    try {
+      const rows = JSON.parse(fields['dest_mappings'] ?? '[]') as LegacyMappingRow[];
+      for (const row of rows) {
+        if (!row?.resource || !row?.column) continue;
+        keys.add(`${row.resource}|${row.column}`);
+        if (row.path) keys.add(`${row.resource}|${row.column}|${row.path}`);
+      }
+    } catch { /* malformed config is not a reason to add a node */ }
+    return keys;
   }
 
   /** Adds `transformId` to `destination`'s chain if it isn't already there (see insertChainStep). */
@@ -829,6 +882,30 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     });
   }
 
+  /**
+   * Binds rules authored before this workflow existed to it, once it does.
+   *
+   * A pipeline is normally drawn and configured in one sitting, so rules get written while the workflow still
+   * has no id — they are stored inert (Workflow scope, no workflow attached) and claimed here. Only runs on a
+   * workflow's FIRST save: after that every rule is authored against a real id and there is nothing pending.
+   *
+   * Failure is deliberately quiet. The workflow itself saved fine, and the rules are still on disk — a toast
+   * about an internal attach step would only be alarming, and the next save retries it anyway.
+   */
+  private attachPendingRules(workflowId: string): void {
+    const destinationTypes = this.store.nodes()
+      .filter(node => node.kind === 'transform' && (node as TransformNode).transformId.startsWith('dest-'))
+      .map(node => TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType)
+      .filter(destinationType => !!destinationType);
+
+    if (destinationTypes.length === 0) return;
+
+    this.transformationRules.attachPending(workflowId, destinationTypes).subscribe({
+      next: () => { /* nothing to report: the rules were already visible in the wizard */ },
+      error: () => { /* see the doc comment — retried on the next save */ },
+    });
+  }
+
   // ── private helpers ────────────────────────────────────────────────────────
   private saveWorkflow(name: string, workflowId?: string | null, activate = false): void {
     if (this.workflowApi.catalog().length === 0) {
@@ -836,7 +913,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const request = this.graphMapper.toRequest(name, this.buildTrigger());
+    const request = this.graphMapper.toRequest(name, this.buildTrigger(), this.currentWorkflowId());
     this.workflowBusy.set(true);
     this.workflowStatus.set('Validating workflow...');
     this.workflowApi.validate(request).subscribe({
@@ -850,9 +927,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set('Saving workflow...');
         this.workflowApi.save(request, workflowId).subscribe({
           next: saved => {
+            // Captured BEFORE currentWorkflowId is overwritten — "was this the first save" is the whole
+            // condition for attaching pending rules.
+            const wasUnsaved = !this.currentWorkflowId();
             this.currentWorkflowId.set(saved.id);
             this.workflowIdInput.set(saved.id);
             this.workflowName.set(saved.name);
+            if (wasUnsaved) this.attachPendingRules(saved.id);
 
             if (!activate) {
               this.workflowStatus.set(`Saved ${saved.name}.`);

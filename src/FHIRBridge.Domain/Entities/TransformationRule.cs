@@ -55,6 +55,14 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
                 "A de-identification profile only applies to pre-mapping rules.", nameof(deIdentificationProfileId));
         }
 
+        if (executionPhase == TransformExecutionPhase.FhirResource && string.IsNullOrWhiteSpace(sourceField))
+        {
+            // SourceField is the ONLY key a FHIR-resource rule has: with no destination column to attach to, a
+            // rule that doesn't say which path to read has nothing to act on, and would silently never fire.
+            throw new ArgumentException(
+                "FHIR-resource rules must declare a SourceField — the FHIR path the rule reads.", nameof(sourceField));
+        }
+
         Id = Guid.NewGuid();
         Scope = scope;
         NodeType = nodeType;
@@ -164,6 +172,30 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         ArrayMode = arrayMode;
         FhirWriteBackJsonPath = fhirWriteBackJsonPath;
         ExpectedValueType = expectedValueType;
+    }
+
+    /// <summary>Binds a rule authored before its workflow existed to that workflow, once it does.
+    ///
+    /// A builder session can author rules before the workflow has ever been saved and so has no id — the rule
+    /// is stored at <see cref="TransformScope.Workflow"/> scope with a null
+    /// <see cref="ResourcePipelineRouteId"/>, which is inert: the resolver matches on that id, so a null one
+    /// can never apply to any run. This is what makes it apply, and only ever from null — a rule already bound
+    /// to a workflow is never silently moved to a different one.</summary>
+    public void AttachToWorkflow(Guid resourcePipelineRouteId)
+    {
+        if (Scope != TransformScope.Workflow)
+        {
+            throw new InvalidOperationException(
+                "Only a workflow-scoped rule can be attached to a workflow.");
+        }
+
+        if (ResourcePipelineRouteId is not null)
+        {
+            throw new InvalidOperationException(
+                "This rule already belongs to a workflow; re-pointing it would silently move another pipeline's rule.");
+        }
+
+        ResourcePipelineRouteId = resourcePipelineRouteId;
     }
 
     public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;

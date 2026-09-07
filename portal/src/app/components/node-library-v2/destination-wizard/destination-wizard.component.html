@@ -1,5 +1,16 @@
 <div class="dw">
 
+  <!-- ── FHIR transformation rules ── covers the whole right-hand detail panel (position:absolute inset:0
+       against this .dw, which is already position:relative) rather than floating as a centred dialog. Kept
+       first in the wrapper so it paints above the wizard beneath it without needing a higher stacking hack. -->
+  @if (fhirRulesPanel(); as rulesPanelData) {
+    <app-fhir-rules-panel
+      [data]="rulesPanelData"
+      (closed)="fhirRulesPanel.set(null)"
+      (deIdentificationProfileChange)="selectedDeIdentificationProfileId.set($event)"
+    />
+  }
+
   <!-- ── Top bar + step indicator ── hidden while a group's mapping canvas is open; the outer
        Node Library header shows "Map fields — {group}" instead, and Close/Save below the canvas
        are the only navigation needed there. ── -->
@@ -385,7 +396,33 @@
         </div>
       </label>
 
+      <!-- Transformation rules for a FHIR destination are authored here rather than in a second per-field
+           engine of this screen's own: they persist as real TransformationRule rows (FhirResource phase) and
+           run on the Transformation node, which brings them the shared 20-node registry, null/error policies
+           and field lineage that the legacy customize block below has none of. -->
+      <div class="dw-fhir-choice">
+        <div class="dw-fhir-choice-body">
+          <span class="dw-fhir-choice-title">Transform fields before writing</span>
+          <span class="dw-hint">
+            Read a FHIR path, transform the value, and write it back into the resource — rounding, unit
+            conversion, code mapping, status coercion and the rest of the transformation library. Rules are
+            applied by the Transformation node on the canvas.
+          </span>
+          <button type="button" class="dw-btn" (click)="openRulesForResource(activeRuleResource() ?? selectedResources()[0])">
+            Configure transformation rules
+          </button>
+        </div>
+      </div>
+
       @if (fhirMapMode() === 'customize') {
+        <!-- Legacy: this workflow was saved before transformation rules moved onto the Transformation node.
+             Its rules keep running (FhirFieldTransformApplier still handles them) and are still editable here
+             so nothing silently stops working, but new rules belong above. Deliberately no way back INTO this
+             mode — selectFhirCustomizeMode() has no call site any more. -->
+        <p class="dw-hint">
+          This workflow uses the older per-field rules below. They still run, but new rules should be added
+          under “Transform fields before writing” above, which supports the full transformation library.
+        </p>
         <div class="dw-fhir-resource-tabs">
           @for (rt of selectedResources(); track rt) {
             <button
@@ -696,6 +733,21 @@
           </div>
         </div>
       </div>
+
+      <!-- Same entry point Aidbox gets above. Medplum and Azure FHIR previously had none at all, so their only
+           option was verbatim passthrough even though the runtime treats all three identically. -->
+      <div class="dw-fhir-choice">
+        <div class="dw-fhir-choice-body">
+          <span class="dw-fhir-choice-title">Transform fields before writing</span>
+          <span class="dw-hint">
+            Read a FHIR path, transform the value, and write it back into the resource. Rules are applied by
+            the Transformation node on the canvas.
+          </span>
+          <button type="button" class="dw-btn" (click)="openRulesForResource(activeRuleResource() ?? selectedResources()[0])">
+            Configure transformation rules
+          </button>
+        </div>
+      </div>
     } @else if (isStepActive(3)) {
       @if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
@@ -760,14 +812,11 @@
                   <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">
                     {{ configTab() === 'transformation' ? 'Transformation' : configTab() === 'deidentification' ? 'De-identification' : 'Map' }}
                   </button>
-                  @if (!rulesHidden()) {
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-secondary"
-                      title="Configure transformation rules for this resource's mapped fields"
-                      (click)="openRulesForResource(r)"
-                    >Rules</button>
-                  }
+                  <!-- The per-resource "Rules" button used to live here. Transformation rules are now
+                       reached from the canvas's own Transformation node — which lands on the matching tab
+                       of the mapping list for a SQL destination, and opens the payload-tree rules panel
+                       for a FHIR one — so a second entry point from this row is redundant. The
+                       TransformationRules:Hidden setting (rulesHidden) still gates the rules UI itself. -->
                   @if (canSelectExistingProfile()) {
                     <button
                       type="button"
@@ -794,6 +843,7 @@
           [allResources]="selectedResources()"
           [destType]="nonFhirDestType()"
           [rulesDestinationType]="resolveDestinationTypeForRules()"
+          [workflowId]="currentWorkflowId()"
           [deIdentificationProfiles]="deIdentificationProfiles()"
           [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"
           [newProfileName]="newProfileName()"

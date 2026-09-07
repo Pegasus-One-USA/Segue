@@ -37,5 +37,9 @@ public sealed class TransformationRuleConfiguration : IEntityTypeConfiguration<T
         builder.HasIndex(x => new { x.Scope, x.ResourcePipelineRouteId, x.ResourceType, x.DestinationField, x.SourceSystem, x.SourceField });
         // Speeds up SafeHarborDeIdentificationService's pre-mapping lookup by profile + resource type.
         builder.HasIndex(x => new { x.ExecutionPhase, x.DeIdentificationProfileId, x.ResourceType });
+        // Speeds up FhirResourceRuleResolver's per-tier lookups, which key on SourceField (the FHIR read path)
+        // rather than DestinationField — none of the indexes above lead with ExecutionPhase + Scope, so without
+        // this every tier walk scans the table.
+        builder.HasIndex(x => new { x.ExecutionPhase, x.Scope, x.ResourceType, x.SourceField });
     }
 }

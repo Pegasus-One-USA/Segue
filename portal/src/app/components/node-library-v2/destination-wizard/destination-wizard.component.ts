@@ -90,6 +90,10 @@ import {
   TransformRulesDialogData,
 } from './field-mapping/transform-rules-dialog/transform-rules-dialog.component';
 import {
+  FhirRulesPanelComponent,
+  FhirRulesPanelData,
+} from './field-mapping/fhir-rules/fhir-rules-panel.component';
+import {
   TransformationRulesService,
   TransformationRule,
 } from './field-mapping/transformation-rules.service';
@@ -509,6 +513,7 @@ function genericResourceDef(r: string): ResourceDef {
     NgComponentOutlet,
     FieldMappingCanvasComponent,
     FieldMappingExportPreviewModalComponent,
+    FhirRulesPanelComponent,
   ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
@@ -2551,7 +2556,39 @@ export class DestinationWizardComponent implements OnInit {
    *  currently in effect (resolved via the Global/DestinationTypeV2/ResourceType/Field/Workflow scope
    *  chain) and lets the user add/edit a field-level override. Unlike "Map", this never mutates
    *  mappingRows() itself, so there's no snapshot/discard-guard needed around it. */
+  /** Non-null while the FHIR transformation-rules panel is covering the right-hand detail area. Holds the
+   *  panel's inputs, so opening and configuring it is one assignment. */
+  readonly fhirRulesPanel = signal<FhirRulesPanelData | null>(null);
+
+  /** True for the destinations that persist whole FHIR resources rather than mapped columns. Their rules are
+   *  authored against FHIR paths, so they get their own panel — see openRulesForResource. */
+  private isWholeResourceFhirDestination(): boolean {
+    return this.isFhir() || this.isMedplum() || this.isAzureFhir();
+  }
+
   openRulesForResource(resource: string): void {
+    // A FHIR-native destination has no destination columns for a rule to attach to, so the column-oriented
+    // dialog below has nothing to show. Its rules read and write FHIR paths on the resource itself, applied by
+    // the Transformation node (FhirResourceTransformNode) rather than after field mapping.
+    if (this.isWholeResourceFhirDestination()) {
+      // Opened INLINE (see the template's .dw-fhir-rules-panel) rather than through DialogService: these
+      // rules are a full working surface, so they take over the entire right-hand detail panel instead of
+      // floating as a centred card over the wizard nobody is looking at while editing one.
+      this.fhirRulesPanel.set({
+        // Every resource this workflow pulls, not just `resource` — the panel tabs across them, since these
+        // rules aren't anchored to a mapped column the way the per-resource column list is.
+        resourceTypes: this.selectedResources().length ? this.selectedResources() : [resource],
+        destinationType: this.resolveDestinationTypeForRules(),
+        sourceSystem: this.sourceVendor() || null,
+        sourceConnectionId: this.sourceConnectionId(),
+        sourceVendor: this.sourceVendor(),
+        deIdentificationProfiles: this.deIdentificationProfiles(),
+        selectedDeIdentificationProfileId: this.selectedDeIdentificationProfileId(),
+        workflowId: this.currentWorkflowId(),
+      });
+      return;
+    }
+
     const columns = this.mappingRows()
       .filter((r) => r.resource === resource)
       .map((r) => ({

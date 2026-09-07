@@ -34,6 +34,11 @@ export class FieldMappingJoinPopoverComponent {
   /** See FieldMappingCanvasComponent's own doc comment — null hides the transformation-rule section
    *  entirely (this popover has no destination type to scope a rule against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** The workflow being edited. A rule is saved against it (Workflow scope) so it applies to THIS pipeline
+   *  only — the broader tiers key on (resource type, destination column) and so apply to every workflow that
+   *  maps the same column, which is how a rule authored in one pipeline started transforming another's.
+   *  Null while the workflow is unsaved: nothing can be authored against an id that does not exist yet. */
+  readonly workflowId = input<string | null>(null);
   /** Same resolver FieldMappingCanvasComponent already threads through its own cards (display-only,
    *  same role as its own dataTypeForTable) — used to show the target column's real type next to its
    *  name, rather than inventing one. Undefined (no live schema, e.g. a CSV/Mongo destination) just
@@ -91,6 +96,10 @@ export class FieldMappingJoinPopoverComponent {
         resourceType: row.resource,
         destinationField: row.targetName,
         sourceField: row.sources[0]?.fhirPath ?? null,
+        resourcePipelineRouteId: this.workflowId() ?? undefined,
+        // Only THIS workflow's rule may show here. Without this the popover opened in "update" mode over a
+        // rule some other pipeline had authored against the same column.
+        workflowScopedOnly: true,
       })
       .subscribe({
         next: rules => {
@@ -133,7 +142,10 @@ export class FieldMappingJoinPopoverComponent {
     this.rulesService
       .save({
         id: this.existingRule()?.id ?? null,
-        scope: 'Field',
+        // Workflow scope, not Field — see workflowId's own comment. Field scope is what made these rules
+        // tenant-wide, and no UI ever authored the narrower Workflow tier the resolver already supported.
+        scope: 'Workflow',
+        resourcePipelineRouteId: this.workflowId(),
         nodeType: this.ruleNodeType(),
         config: this.ruleConfig(),
         destinationType,

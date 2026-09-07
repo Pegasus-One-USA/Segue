@@ -18,6 +18,7 @@ public sealed class NoOpEffectiveRuleResolver : IEffectiveRuleResolver
         Guid? resourcePipelineRouteId,
         string? sourceSystem,
         string? sourceField,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        bool workflowScopedOnly = false) =>
         Task.FromResult<IReadOnlyList<TransformationRule>>([]);
 }

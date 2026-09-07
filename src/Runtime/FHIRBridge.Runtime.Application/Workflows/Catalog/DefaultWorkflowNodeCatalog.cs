@@ -1,9 +1,24 @@
-using FHIRBridge.Runtime.Domain.Workflows;
+﻿using FHIRBridge.Runtime.Domain.Workflows;
 
 namespace FHIRBridge.Runtime.Application.Workflows.Catalog;
 
 public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
 {
+    /// <summary>Destinations that persist whole FHIR resources rather than mapped relational rows — see
+    /// MappingNodeExecutor's <c>wholeResourceFhir</c> branch, which already treats all three alike.
+    /// <c>WorkflowGraphValidator.DestinationRequiresMappedRecords</c> reads this same set, so the "no upstream
+    /// Mapping node required" exemption and the widened input contracts below can never drift apart.
+    ///
+    /// Declared BEFORE <see cref="Items"/>: static field initializers run in textual order, and Destination()
+    /// reads this set while Items is being built — below Items it would still be null at that point.</summary>
+    internal static readonly HashSet<string> WholeResourceFhirDestinationNodeTypes =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            WorkflowNodeTypes.FhirRepositoryDestination,
+            WorkflowNodeTypes.MedplumDestination,
+            WorkflowNodeTypes.AzureFhirServiceDestination,
+        };
+
     private static readonly WorkflowNodeCatalogItem[] Items =
     [
         Source(WorkflowNodeTypes.EpicSource),
@@ -23,6 +38,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Transform(WorkflowNodeTypes.FlattenExtensions, "flatten-extensions", "Flatten Extensions", "Flatten FHIR extensions into mappable fields.", 31, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.DataQualityScoring, "data-quality", "Data Quality Scoring", "Score resource completeness and data quality.", 32, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.PatientMatching, "patient-matching", "Patient Matching (MPI)", "Match patients against a master patient index.", 33, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
+        Transform(WorkflowNodeTypes.FhirResourceTransform, "transformation", "Transformation", "Apply transformation rules to FHIR resources before they are written.", 34, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.Terminology, "terminology", "Terminology Mapping", "Validate / translate ICD, SNOMED, LOINC, RxNorm codes.", 40, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.TerminologyValidate, "terminology-validate", "Terminology Validate", "Validate coded values against configured terminology services.", 41, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.TerminologyLookup, "terminology-lookup", "Terminology Lookup", "Lookup display and metadata for coded values.", 42, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
@@ -182,11 +198,15 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeCategory.Destination,
             70,
             [],
-            // FhirRepositoryDestination additionally accepts raw/normalized resources directly (no Mapping node
-            // required) — it's spec-owned, so passthrough writes a resource unchanged rather than mapping fields
-            // into destination columns. Every other destination type is unaffected: MappedRecordBatch remains
-            // their only accepted input, so WorkflowGraphValidator's Mapping-node requirement still applies to them.
-            nodeType == WorkflowNodeTypes.FhirRepositoryDestination
+            // Whole-resource FHIR destinations additionally accept raw/normalized resources directly (no Mapping
+            // node required) — they're spec-owned, so passthrough writes a resource unchanged rather than mapping
+            // fields into destination columns. This must stay in step with WorkflowGraphValidator's
+            // WholeResourceFhirDestinations set: exempting a destination from the Mapping-node REQUIREMENT while
+            // still declaring MappedRecordBatch as its only accepted INPUT rejects the very graph the exemption
+            // was meant to allow, since the contract check runs independently of the requirement check. Every
+            // other destination type is unaffected: MappedRecordBatch remains their only accepted input, so the
+            // Mapping-node requirement still applies to them.
+            WholeResourceFhirDestinationNodeTypes.Contains(nodeType)
                 ? [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.DeIdentifiedBatch, WorkflowDataContract.MappedRecordBatch]
                 : [WorkflowDataContract.MappedRecordBatch],
             WorkflowDataContract.DestinationWriteResult,

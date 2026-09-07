@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -50,6 +50,151 @@ public sealed class PatientMatchingNodeExecutor : PassThroughNodeExecutor
     public PatientMatchingNodeExecutor(IResourceNormalizationService? normalizationService = null)
         : base(WorkflowNodeTypes.PatientMatching, WorkflowDataContract.NormalizedResourceBatch, normalizationService)
     {
+    }
+}
+
+/// <summary>
+/// Executor for V2's consolidated "Transformation" chain step: applies
+/// <see cref="TransformExecutionPhase.FhirResource"/> rules to each resource's own JSON, in place.
+///
+/// This is the only place the 20 transform nodes can run for a FHIR-native destination, which stores whole
+/// resources and so has no mapped columns for a PostMapping rule to attach to. Kept as its own node type rather
+/// than reusing <see cref="NormalizationNodeExecutor"/> (V1's "Normalize Data" step) precisely so this work can
+/// never execute inside a V1 pipeline.
+///
+/// Falls back to plain passthrough whenever its dependencies aren't wired, the node names no destination, or no
+/// rule matched — a resource is only ever replaced by a genuinely transformed one.
+/// </summary>
+public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
+{
+    private readonly IFhirResourceTransformService? _transformService;
+    private readonly IConfigurationRepository? _configurationRepository;
+    private readonly ILineageCaptureDispatcher? _lineageCaptureDispatcher;
+
+    public FhirResourceTransformNodeExecutor(
+        IFhirResourceTransformService? transformService = null,
+        IConfigurationRepository? configurationRepository = null,
+        ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
+        IResourceNormalizationService? normalizationService = null)
+        : base(WorkflowNodeTypes.FhirResourceTransform, WorkflowDataContract.NormalizedResourceBatch, normalizationService)
+    {
+        _transformService = transformService;
+        _configurationRepository = configurationRepository;
+        _lineageCaptureDispatcher = lineageCaptureDispatcher;
+    }
+
+    public override async Task<WorkflowNodeOutput> ExecuteAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        IReadOnlyCollection<WorkflowNodeOutput> inputs,
+        CancellationToken cancellationToken)
+    {
+        if (_transformService is null || _configurationRepository is null)
+        {
+            return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        // The destination decides which rules apply (its DestinationType is a resolver tier), so a node with no
+        // destination stamped on it has nothing to resolve against and passes through untouched.
+        Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
+        if (destinationId == Guid.Empty)
+        {
+            return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        if (destination is null)
+        {
+            return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId);
+        var sourceSystem = sourceConnectionId == Guid.Empty
+            ? null
+            : (await _configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken))
+                ?.SourceSystemType.ToString();
+        Guid.TryParse(ReadStringConfiguration(node, "resourcePipelineRouteId"), out var routeId);
+
+        var transformed = new List<ResourceEnvelope>();
+        var transformedCount = 0;
+        var ruleErrors = new List<string>();
+
+        foreach (var resource in ReadResourceEnvelopes(inputs))
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+            var result = await _transformService.TransformAsync(
+                sourceJson, resource.ResourceType, resource.ResourceId, destination.DestinationType,
+                routeId == Guid.Empty ? null : routeId, sourceSystem, cancellationToken);
+
+            if (!ReferenceEquals(result.Json, sourceJson))
+            {
+                transformedCount++;
+            }
+
+            foreach (var hop in result.Hops.Where(hop => !hop.Success))
+            {
+                ruleErrors.Add($"{resource.ResourceType}/{resource.ResourceId} {hop.SourceField} [{hop.NodeType}]: {hop.Error}");
+            }
+
+            transformed.Add(resource with { Payload = result.Json });
+            await CaptureLineageAsync(context, node, resource, result, destination, sourceSystem, cancellationToken);
+        }
+
+        return new WorkflowNodeOutput(
+            node.Id,
+            node.NodeType,
+            new NormalizedResourceBatch(transformed),
+            OutputContract,
+            new Dictionary<string, object?>
+            {
+                ["executor"] = GetType().Name,
+                ["count"] = transformed.Count,
+                ["transformed"] = transformedCount,
+                ["ruleErrors"] = ruleErrors
+            });
+    }
+
+    /// <summary>Fire-and-continue, matching MappingNodeExecutor: a lineage publish failure must never fail the
+    /// resource's own transform, so it is swallowed rather than surfaced into the caller's exception path.</summary>
+    private async Task CaptureLineageAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        ResourceEnvelope resource,
+        FhirResourceTransformResult result,
+        DestinationConfiguration destination,
+        string? sourceSystem,
+        CancellationToken cancellationToken)
+    {
+        if (_lineageCaptureDispatcher is null || result.Hops.Count == 0)
+        {
+            return;
+        }
+
+        // DestinationField carries the FHIR write-back path here — for a FHIR-native destination that IS the
+        // "column" the value lands in, so the lineage view reads the same way it does for a SQL target.
+        var entries = result.Hops
+            .Select(hop => new LineageHopEntryDto(
+                hop.WriteBackPath, hop.SourceField, hop.NodeOrder, hop.NodeType.ToString(), hop.ConfigJson,
+                hop.Before, hop.After, hop.Success, hop.Error, hop.DurationMs, hop.ExecutedAtUtc))
+            .ToList();
+
+        try
+        {
+            await _lineageCaptureDispatcher.EnqueueAsync(
+                new LineageCaptureCommand(
+                    context.WorkflowRunId, node.Id, resource.ResourceType, resource.ResourceId, entries,
+                    Guid.NewGuid().ToString("N"))
+                {
+                    SourceSystemType = sourceSystem,
+                    DestinationTypeName = destination.DestinationType.ToString(),
+                    DestinationName = destination.Name,
+                },
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Intentionally swallowed — see the method summary.
+        }
     }
 }
 
@@ -180,6 +325,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         var configuredDestinationObject = ReadStringConfiguration(node, "destinationObject") ?? configuredResourceType;
         Guid.TryParse(ReadStringConfiguration(node, "sourceConnectionId"), out var sourceConnectionId);
         Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId);
+        // The WORKFLOW's own id, stamped onto this node at save time — NOT context.WorkflowRunId, which used to
+        // be passed here. A run id is freshly generated per execution, so it could never match the id a rule
+        // was authored against: the resolver's Workflow tier was queried with a value guaranteed to miss, and
+        // every lookup silently fell through to the tenant-wide tiers below it. Null on a workflow saved before
+        // this key existed, which the resolver reads as "skip the Workflow tier" — exactly the old behaviour.
+        Guid.TryParse(ReadStringConfiguration(node, "resourcePipelineRouteId"), out var routeId);
+        var resourcePipelineRouteId = routeId == Guid.Empty ? (Guid?)null : routeId;
 
         // Resolved once per node execution (not per record) — both are stable for this whole batch, and the
         // transform-rule resolver only needs the type/system-type, never the full entities. The display names
@@ -286,7 +438,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 await PreWarmCodeableConceptLookupsAsync(
                     group, fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
-                    context.WorkflowRunId, ruleCache, cancellationToken);
+                    resourcePipelineRouteId, ruleCache, cancellationToken);
             }
 
             foreach (var resource in group)
@@ -338,7 +490,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     {
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
-                            context.WorkflowRunId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
+                            resourcePipelineRouteId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
                             mapped.RawArrayValues, cancellationToken);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
@@ -426,7 +578,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string resourceType,
         DestinationType destinationType,
         string? sourceSystem,
-        Guid workflowRunId,
+        Guid? resourcePipelineRouteId,
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
         CancellationToken cancellationToken)
     {
@@ -443,8 +595,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType, resourceType, targetField, workflowRunId, sourceSystem,
-                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
+                    destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken,
+                    workflowScopedOnly: resourcePipelineRouteId is not null);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -646,7 +799,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         IReadOnlyDictionary<string, string> sourceFieldByTarget,
         DestinationType? destinationType,
         string? sourceSystem,
-        Guid workflowRunId,
+        Guid? resourcePipelineRouteId,
         Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
         string resourceId,
         string? sourceJson,
@@ -706,8 +859,12 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType.Value, resourceType, destinationField, workflowRunId, sourceSystem,
-                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken);
+                    destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, sourceSystem,
+                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken,
+                    // A node carrying a workflow id was authored by the V2 builder, whose rules are
+                    // pipeline-private — so it must not inherit another workflow's. A V1 graph never carries
+                    // one, which leaves its five-tier resolution exactly as it was.
+                    workflowScopedOnly: resourcePipelineRouteId is not null);
                 ruleCache[cacheKey] = rules;
             }
 

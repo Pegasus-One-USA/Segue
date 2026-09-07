@@ -209,6 +209,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   save:    `${API_V1_BASE}/transformation-rules`,
   delete:  (id: string) => `${API_V1_BASE}/transformation-rules/${id}`,
   preview: `${API_V1_BASE}/transformation-rules/preview`,
+  attachPending: (workflowId: string) => `${API_V1_BASE}/transformation-rules/attach-pending/${workflowId}`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
   effective: `${API_V1_BASE}/transformation-rules/effective`,

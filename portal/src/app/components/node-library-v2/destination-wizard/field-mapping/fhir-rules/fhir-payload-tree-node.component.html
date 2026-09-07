@@ -1,0 +1,54 @@
+@if (isGroup()) {
+  <div
+    class="fm-tree-row fm-tree-row--group"
+    [class.fm-tree-row--mapped]="hasRule()(node().id)"
+    [style.padding-left.px]="12 + depth() * 18"
+    role="button"
+    tabindex="0"
+    [attr.aria-expanded]="!isCollapsed()(node().id)"
+    [attr.aria-label]="ariaLabel()"
+    [title]="node().id + (node().isArray ? ' (repeats per record)' : '')"
+    (click)="onHeaderClick()"
+    (keydown)="onKeydown($event)"
+  >
+    <span class="fm-tree-twirl" aria-hidden="true">{{ isCollapsed()(node().id) ? '▸' : '▾' }}</span>
+    <span class="fm-tree-label">{{ label() }}</span>
+    @if (node().isArray) { <span class="fm-tree-badge fm-tree-badge--array">array</span> }
+    <span class="fm-tree-count">{{ fieldCount() }} field{{ fieldCount() === 1 ? '' : 's' }}</span>
+    <span class="fm-tree-port" aria-hidden="true"></span>
+  </div>
+
+  @if (!isCollapsed()(node().id)) {
+    @for (child of node().children; track child.id; let i = $index) {
+      <app-fhir-payload-tree-node
+        [node]="child"
+        [depth]="depth() + 1"
+        [siblingIndex]="i"
+        [isCollapsed]="isCollapsed()"
+        [hasRule]="hasRule()"
+        (toggleCollapse)="toggleCollapse.emit($event)"
+        (fieldClick)="fieldClick.emit($event)"
+      />
+    }
+  }
+} @else {
+  <div
+    class="fm-tree-row fm-tree-row--leaf"
+    [class.fm-tree-row--mapped]="hasRule()(node().id)"
+    [class.fm-tree-row--stripe]="isStripe()"
+    [style.padding-left.px]="12 + depth() * 18"
+    role="button"
+    tabindex="0"
+    [attr.aria-label]="ariaLabel()"
+    [title]="leafTooltip()"
+    (click)="onLeafClick()"
+    (keydown)="onKeydown($event)"
+  >
+    <span class="fm-tree-label">{{ label() }}</span>
+    @if (referenceTargetTypes().length) {
+      <span class="fm-tree-badge fm-tree-badge--ref">→ {{ referenceTargetTypes().join(', ') }}</span>
+    }
+    @if (hasRule()(node().id)) { <span class="fm-tree-badge fm-tree-badge--json">rule</span> }
+    <span class="fm-tree-port" aria-hidden="true"></span>
+  </div>
+}

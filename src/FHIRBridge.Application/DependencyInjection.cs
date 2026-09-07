@@ -72,6 +72,10 @@ public static class DependencyInjection
         // avoids. Both of its current callers (TransformationRuleService, MappingNodeExecutor) are Scoped already.
         services.AddScoped<ITransformNodeRegistry, TransformNodeRegistry>();
         services.AddScoped<IEffectiveRuleResolver, EffectiveRuleResolver>();
+        // FHIR-native counterparts: same node registry, keyed on a FHIR path instead of a destination
+        // column. Only reachable from V2's FhirResourceTransformNode.
+        services.AddScoped<IFhirResourceRuleResolver, FhirResourceRuleResolver>();
+        services.AddScoped<IFhirResourceTransformService, FhirResourceTransformService>();
         services.AddScoped<ITransformationRuleService, TransformationRuleService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();

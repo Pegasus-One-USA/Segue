@@ -4280,6 +4280,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.HasIndex("ExecutionPhase", "DeIdentificationProfileId", "ResourceType");
 
+                    b.HasIndex("ExecutionPhase", "Scope", "ResourceType", "SourceField");
+
                     b.HasIndex("Scope", "DestinationType", "DestinationField");
 
                     b.HasIndex("Scope", "ResourceType", "DestinationField", "SourceSystem", "SourceField");
