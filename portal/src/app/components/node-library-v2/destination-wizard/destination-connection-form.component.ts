@@ -172,9 +172,23 @@ export class DestinationConnectionFormComponent {
     if (this.isFhir()) {
       if (!this.fhirForm.valid) return null;
       const config = this._buildFhirConfig();
+      // buildFhirSecretBlob always returns a non-empty JSON blob (e.g. clientSecret: '' baked in), which would
+      // overwrite a working stored secret with a broken one on a no-op re-save — same guard as SQL-family's
+      // buildSqlConnectionString. Only the field the current authType actually uses is checked.
+      const authType = config['dest_authType'] ?? 'oauth2';
+      const blankSecretField =
+        authType === 'basic'
+          ? !config['dest_password']
+          : authType === 'bearer'
+            ? !config['dest_bearerToken']
+            : authType === 'oauth2'
+              ? !config['dest_clientSecret']
+              : false;
+      const secret =
+        this._fhirReusingExisting() && blankSecretField ? null : buildFhirSecretBlob(config);
       return {
         fields: JSON.parse(buildConnectionMetadata(config, 'fhir')) as Record<string, string>,
-        secret: buildFhirSecretBlob(config),
+        secret,
       };
     }
     return this.activeForm()?.getMetadata() ?? null;
@@ -267,20 +281,30 @@ export class DestinationConnectionFormComponent {
     this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
   }
 
+  /** No "fork vs reuse" concept here (unlike the canvas wizard's connectionMode/hasExistingChanged) — this is
+   *  a plain entity-mode edit dialog, so editing an existing FHIR connection always means "keep the stored
+   *  secret unless something new was typed". */
+  protected _fhirReusingExisting(): boolean {
+    return this.mode() === 'edit';
+  }
+
   private _syncFhirAuthValidators(authType: string | null): void {
+    const reusingExisting = this._fhirReusingExisting();
     // tokenEndpoint is deliberately NOT in this list — see _testFhir()'s comment.
     (['clientId', 'clientSecret'] as const).forEach(name => {
       const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+      const required = authType === 'oauth2' && !(name === 'clientSecret' && reusingExisting);
+      ctrl.setValidators(required ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
     (['username', 'password'] as const).forEach(name => {
       const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+      const required = authType === 'basic' && !(name === 'password' && reusingExisting);
+      ctrl.setValidators(required ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
     const bearerToken = this.fhirForm.get('bearerToken')!;
-    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.setValidators(authType === 'bearer' && !reusingExisting ? [Validators.required] : []);
     bearerToken.updateValueAndValidity({ emitEvent: false });
   }
 }

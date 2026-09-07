@@ -2244,23 +2244,38 @@ export class DestinationWizardComponent implements OnInit {
     return destWriteMode || 'upsert';
   }
 
+  /** Same reusingExisting formula activeFormInputs() computes for registry-routed forms — fhirForm isn't
+   *  registry-routed (isFhir() never reaches DESTINATION_FORM_REGISTRY), so this is recomputed inline here
+   *  instead of flowing through an @Input(). A blank clientSecret/password/bearerToken on an edit means "keep
+   *  what's stored" (see the 'secret' field-mapping build below), never "clear it" — so these must not be
+   *  required when reopening an already-provisioned connection unchanged, same as every other destination type. */
+  protected _fhirReusingExisting(): boolean {
+    return (
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged()
+    );
+  }
+
   private _syncFhirAuthValidators(authType: string | null): void {
+    const reusingExisting = this._fhirReusingExisting();
     // tokenEndpoint is deliberately NOT in this list — it's no longer user-entered. For oauth2/clientCredentials
     // it's discovered from baseUrl (GET {baseUrl}/.well-known/smart-configuration) during testFhirConnection()
     // and patched into this same control, so it still ends up in dest_tokenEndpoint at save time.
     (['clientId', 'clientSecret'] as const).forEach((name) => {
       const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+      const required = authType === 'oauth2' && !(name === 'clientSecret' && reusingExisting);
+      ctrl.setValidators(required ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
     (['username', 'password'] as const).forEach((name) => {
       const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+      const required = authType === 'basic' && !(name === 'password' && reusingExisting);
+      ctrl.setValidators(required ? [Validators.required] : []);
       ctrl.updateValueAndValidity({ emitEvent: false });
     });
     const bearerToken = this.fhirForm.get('bearerToken')!;
     bearerToken.setValidators(
-      authType === 'bearer' ? [Validators.required] : [],
+      authType === 'bearer' && !reusingExisting ? [Validators.required] : [],
     );
     bearerToken.updateValueAndValidity({ emitEvent: false });
   }
@@ -4460,7 +4475,20 @@ export class DestinationWizardComponent implements OnInit {
       if (!DestinationWizardComponent.FHIR_SECRET_FIELD_KEYS.includes(key))
         fields[key] = value;
     }
-    const secret = buildFhirSecretBlob(full);
+    // buildFhirSecretBlob always returns a non-empty JSON blob (e.g. clientSecret: '' baked in), which would
+    // overwrite a working stored secret with a broken one on a no-op re-save — same guard as SQL-family's
+    // buildSqlConnectionString. Only the field the current authType actually uses is checked.
+    const authType = full['dest_authType'] ?? 'oauth2';
+    const blankSecretField =
+      authType === 'basic'
+        ? !full['dest_password']
+        : authType === 'bearer'
+          ? !full['dest_bearerToken']
+          : authType === 'oauth2'
+            ? !full['dest_clientSecret']
+            : false;
+    const secret =
+      this._fhirReusingExisting() && blankSecretField ? null : buildFhirSecretBlob(full);
     return { fields, secret };
   }
 
