@@ -1,0 +1,24 @@
+portal/src/app/components/shared/toast/toast.component.scss
+  s_c7569e329949f3::t_69e4520ce091f2 4-6,125
+  s_c7569e329949f3::t_143775b6ea6492 15-21,26-30,38-42,50,72-76,91,100,111,118,132-134
+  s_c7569e329949f3::t_1359c81216467a 135
+portal/src/styles.scss
+  s_c7569e329949f3::t_2b22d6d0028d48 906-914,924,943-945,949-951,955-957,961-963
+  s_c7569e329949f3::t_cfb0b80a8f82e0 901-902,928-939
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "59c5e6825bcc7b6e4c4374b85f60c762799d8b0b",
+  "prompts": {},
+  "sessions": {
+    "s_c7569e329949f3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "930d3848-c15c-4355-a992-c2ec624764bb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
