@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Live Deployment &mdash; Run Log V2 &mdash; FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --blocked: #7C3AED;
+    --blocked-bg: #EDE9FE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; max-width: 720px; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--azure); margin-right: 8px; }
+  h3 { font-size: 17px; font-weight: 700; color: var(--ink); margin: 30px 0 12px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 14px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--azure); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .pill-fixed    { color: var(--new); background: var(--new-bg); }
+  .pill-blocked  { color: var(--blocked); background: var(--blocked-bg); }
+  .pill-pending  { color: var(--modified); background: var(--modified-bg); }
+  .pill-azure    { color: var(--azure); background: var(--azure-bg); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 110px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--azure);
+    background: var(--azure-bg);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.blocked { border-left-color: var(--blocked); background: var(--blocked-bg); }
+  .callout.fixed { border-left-color: var(--new); background: var(--new-bg); }
+  .callout.modified { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0 28px; }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .summary-card .num { font-size: 26px; font-weight: 800; color: var(--azure); font-variant-numeric: tabular-nums; }
+  .summary-card .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  /* Timeline */
+  .timeline { position: relative; margin: 20px 0 32px; padding-left: 28px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+  .timeline-step { position: relative; margin-bottom: 18px; }
+  .timeline-step::before {
+    content: "";
+    position: absolute; left: -28px; top: 4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--surface); border: 3px solid var(--azure);
+  }
+  .timeline-step.ok::before { border-color: var(--new); }
+  .timeline-step.bug::before { border-color: var(--deleted); }
+  .timeline-step.blocked::before { border-color: var(--blocked); }
+  .timeline-step strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .timeline-step span { font-size: 13px; color: var(--muted); }
+
+  /* Issue cards, matching the sibling docs' bug-card component */
+  .issue-card {
+    border: 1px solid var(--deleted);
+    background: #FFFBFB;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+  .issue-card h4 { margin-top: 0; color: var(--deleted); font-size: 15px; display: flex; align-items: center; gap: 10px; }
+  .issue-card .issue-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  .issue-card.resolved { border-color: var(--new); background: #F7FEFB; }
+  .issue-card.resolved h4 { color: #047857; }
+  .issue-card.open { border-color: var(--blocked); background: #FBFAFF; }
+  .issue-card.open h4 { color: var(--blocked); }
+
+  /* Screenshot placeholders */
+  .screenshot-placeholder {
+    border: 2px dashed #94A3B8;
+    background: #F1F5F9;
+    border-radius: 12px;
+    padding: 32px 20px;
+    margin: 16px 0 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .screenshot-placeholder .icon { font-size: 28px; display: block; margin-bottom: 8px; opacity: 0.6; }
+  .screenshot-placeholder strong { display: block; font-size: 13.5px; color: #475569; margin-bottom: 4px; }
+
+  .toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 16px 0 24px; }
+  .toggle-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .toggle-card h4 { margin: 0 0 8px; font-size: 14.5px; color: var(--azure); }
+  .toggle-card p { font-size: 13px; margin-bottom: 8px; }
+  .toggle-card code.param { display: inline-block; margin-top: 4px; }
+
+  .chat-message {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 12px 12px 0;
+    padding: 22px 26px;
+    margin: 16px 0 28px;
+    font-size: 13.5px;
+  }
+  .chat-message .label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary-dark);
+    background: #E6F7F5;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+  .chat-message h4 { margin: 0 0 10px; font-size: 15px; color: var(--ink); }
+  .chat-message p { font-size: 13.5px; }
+  .chat-message p:last-child { margin-bottom: 0; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--azure) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+    .timeline { padding-left: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Azure Live Deployment &mdash; Run Log V2</h1>
+    <p class="subtitle">Companion to <code style="background:rgba(255,255,255,0.15);color:#fff;">Containerization-Azure-Deployment-Run-Log.html</code> (V1, Terraform) &mdash; this one covers the <strong>Bicep one-click deployment</strong> (<code style="background:rgba(255,255,255,0.15);color:#fff;">containerization/azure-deploy/main.bicep</code>), exercised against real Azure subscriptions across several live deploy attempts until every path (containerized and managed Postgres, containerized and managed Redis, optional Key Vault, custom domain binding) worked end to end.</p>
+    <div class="meta">
+      <div><strong>Template</strong> containerization/azure-deploy (main.bicep, custom-domain.bicep, createUiDefinition.json)</div>
+      <div><strong>Outcome</strong> <span class="pill pill-fixed" style="background:rgba(255,255,255,0.2);color:#fff;">Working</span> &mdash; tagged <code style="background:rgba(255,255,255,0.15);color:#fff;">v2.1.0</code> as the verified-working state</div>
+      <div><strong>Issues hit</strong> 7 &mdash; all fixed or resolved without needing a subscription-admin escalation</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#summary">Where things stand</a></li>
+      <li><a href="#since-v1">What's different from V1</a></li>
+      <li><a href="#toggles">The three deployment-mode toggles</a></li>
+      <li><a href="#walkthrough">Step-by-step: deploying from scratch</a></li>
+      <li><a href="#timeline">Run timeline</a></li>
+      <li><a href="#issue-acr">Issue 1 &mdash; image pull UNAUTHORIZED</a></li>
+      <li><a href="#issue-sku">Issue 2 &mdash; invalid Postgres SKU / Redis capacity values</a></li>
+      <li><a href="#issue-region">Issue 3 &mdash; Postgres Flexible Server region restriction</a></li>
+      <li><a href="#issue-leftover">Issue 4 &mdash; leftover resources block a redeploy</a></li>
+      <li><a href="#issue-root">Issue 5 &mdash; Postgres container refuses to run as root</a></li>
+      <li><a href="#issue-smb">Issue 6 &mdash; Postgres can't satisfy its permission check on Azure Files</a></li>
+      <li><a href="#issue-identity">Issue 7 &mdash; custom domain bind strips the app's managed identity</a></li>
+      <li><a href="#limitations">Known limitations to keep in mind</a></li>
+      <li><a href="#changes">Every file changed this round</a></li>
+      <li><a href="#next-steps">Next steps</a></li>
+      <li><a href="#context-handoff">Context for another branch / next chat</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="summary"><span class="num">1.</span>Where things stand</h2>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="num">7</div><div class="label">Issues hit</div></div>
+    <div class="summary-card"><div class="num">7</div><div class="label">Fixed / resolved</div></div>
+    <div class="summary-card"><div class="num">3</div><div class="label">Deployment-mode toggles</div></div>
+    <div class="summary-card"><div class="num">v2.1.0</div><div class="label">Verified-working tag</div></div>
+  </div>
+  <div class="callout fixed">
+    <strong>The Bicep one-click template is fully working, in every combination tested</strong>
+    Containerized Postgres, managed Postgres (Azure Database for PostgreSQL Flexible Server),
+    containerized Redis, managed Redis (Azure Managed Redis), the optional tenant-secrets Key Vault,
+    and the two-step custom-domain binding flow all deployed and ran successfully against real Azure
+    subscriptions. Every issue below was hit on an actual live deployment, not caught in review &mdash;
+    and every one is either fixed in the repo or is a documented environment fact (a subscription-level
+    region restriction) with a clear workaround, not something blocking further use.
+  </div>
+  <div class="callout">
+    <strong>Why so many issues, and why that's expected here</strong>
+    This round specifically exercised code paths nobody had run against a real subscription before:
+    the Postgres and Redis deployment-mode toggles, the Key Vault toggle, and the interaction between
+    a domain-binding redeploy and an already-running app. Bicep's own <code>az bicep build</code> and
+    <code>az deployment group validate</code> catch schema errors, but none of them catch "the
+    container crashes at runtime" or "this redeploy silently resets a property it doesn't mention" &mdash;
+    those only surface from an actual deploy, which is exactly what this round did, repeatedly, until
+    every path was clean.
+  </div>
+
+  <h2 id="since-v1"><span class="num">2.</span>What's different from V1</h2>
+  <p class="section-intro">V1 covered the Terraform environment and ended blocked on a subscription-level
+  <code>Microsoft.App</code> registration gap. This round is a different deployment path entirely (the
+  Bicep single-template "Deploy to Azure" experience, not Terraform) and reached a fully working state
+  with no outstanding subscription-admin dependency.</p>
+  <table class="file-table">
+    <tr><th>V1 (Terraform)</th><th>V2 (this document, Bicep)</th></tr>
+    <tr>
+      <td class="why"><code>containerization/terraform/environments/azure</code> &mdash; <code>terraform apply</code>, for your own CI/CD or repeatable internal environments</td>
+      <td class="why"><code>containerization/azure-deploy</code> &mdash; single Bicep template, for a customer-run one-click install or a plain <code>az deployment group create</code></td>
+    </tr>
+    <tr>
+      <td class="why">Ended blocked on <code>Microsoft.App</code> provider registration (subscription-admin action)</td>
+      <td class="why">No outstanding blocker &mdash; every path deployed and ran successfully</td>
+    </tr>
+    <tr>
+      <td class="why">Postgres: containerized only (SQL Server Express at the time)</td>
+      <td class="why">Postgres: containerized (local-disk + Azure Files backup image) <em>or</em> managed Azure Database for PostgreSQL Flexible Server</td>
+    </tr>
+    <tr>
+      <td class="why">Redis: containerized only</td>
+      <td class="why">Redis: containerized <em>or</em> managed Azure Managed Redis (classic Azure Cache for Redis is being retired)</td>
+    </tr>
+    <tr>
+      <td class="why">Secrets: Key Vault via classic Access Policies, always on</td>
+      <td class="why">Secrets: plain <code>@secure()</code> parameters by default, <em>or</em> an opt-in RBAC-enabled tenant-secrets Key Vault</td>
+    </tr>
+  </table>
+
+  <h2 id="toggles"><span class="num">3.</span>The three deployment-mode toggles</h2>
+  <p class="section-intro">All three are independent booleans in <code>main.bicep</code>, each exposed as a
+  plain-language choice in the <code>createUiDefinition.json</code> wizard.</p>
+  <div class="toggle-grid">
+    <div class="toggle-card">
+      <h4>Postgres</h4>
+      <p><strong>Containerized</strong> (default) runs Postgres in a Container App on local ephemeral
+      disk, using a mounted Azure Files share purely as an at-rest backup target (see
+      <a href="#issue-smb">Issue 6</a> for why). <strong>Managed</strong> uses Azure Database for
+      PostgreSQL Flexible Server &mdash; no container, no backup/restore tradeoff, Azure handles
+      patching/backups/HA.</p>
+      <code class="param">useAzurePostgresql</code>
+    </div>
+    <div class="toggle-card">
+      <h4>Redis</h4>
+      <p><strong>Containerized</strong> (default) runs the custom <code>fhirbridge-redis</code> image
+      (self-signed TLS) in a Container App. <strong>Managed</strong> provisions Azure Managed Redis
+      (<code>Microsoft.Cache/redisEnterprise</code>) &mdash; classic Azure Cache for Redis is being
+      retired and is already blocked for new caches on some subscriptions.</p>
+      <code class="param">useAzureCacheForRedis</code>
+    </div>
+    <div class="toggle-card">
+      <h4>Tenant/app secrets</h4>
+      <p><strong>Local database</strong> (default) keeps tenant connection secrets and app-level
+      secrets on the local DataProtection-encrypted table. <strong>Azure Key Vault</strong> creates a
+      dedicated RBAC-enabled vault and grants the app's managed identities access to it &mdash; needs
+      Owner/User Access Administrator on the resource group to grant that RBAC.</p>
+      <code class="param">enableTenantSecretsKeyVault</code>
+    </div>
+  </div>
+
+  <h2 id="walkthrough"><span class="num">4.</span>Step-by-step: deploying from scratch</h2>
+  <p class="section-intro">The same flow whether you use the plain <code>az deployment group create</code>
+  CLI path or the "Deploy to Azure" button (which drives the same template through the
+  <code>createUiDefinition.json</code> wizard).</p>
+
+  <h3>4.1 Publish the images (one-time, or whenever code changes)</h3>
+  <p>Build and push the 4 custom images to whatever registry you control
+  (<code>containerization/scripts/build-images.ps1|sh</code>), then confirm they're pullable from the
+  Container Apps environment before proceeding &mdash; see <code>README.md</code> in this folder for
+  the full publish story, including the read-only ACR pull-token pattern used for a vendor registry.</p>
+
+  <h3>4.2 Run the wizard &mdash; Basics &amp; Region</h3>
+  <div class="screenshot-placeholder">
+    <span class="icon">&#128247;</span>
+    <strong>SCREENSHOT PLACEHOLDER: Basics step</strong>
+    Deployment name prefix field and Region dropdown, as shown in the Azure Portal's custom-deployment
+    blade.
+  </div>
+  <div class="callout modified">
+    <strong>Region matters more than it looks</strong>
+    The <code>location</code> parameter (set here) applies to every resource in the deployment,
+    including a managed Postgres Flexible Server if you choose that mode. Some subscriptions
+    (Sponsorship offers in particular) restrict PostgreSQL Flexible Server provisioning in specific
+    regions &mdash; see <a href="#issue-region">Issue 3</a> before picking a region if you plan to use
+    Managed Postgres.
+  </div>
+
+  <h3>4.3 Container Sizes step</h3>
+  <div class="screenshot-placeholder">
+    <span class="icon">&#128247;</span>
+    <strong>SCREENSHOT PLACEHOLDER: Container Sizes step</strong>
+    Postgres/Redis/FHIRBridge app/Worker size dropdowns. Postgres and Redis size fields are only
+    shown when their respective deployment type (next step) is Containerized.
+  </div>
+
+  <h3>4.4 FHIRBridge Settings step &mdash; the three toggles</h3>
+  <div class="screenshot-placeholder">
+    <span class="icon">&#128247;</span>
+    <strong>SCREENSHOT PLACEHOLDER: FHIRBridge Settings step</strong>
+    Postgres deployment type, Postgres/API/Redis passwords (each with a properly-labeled "Confirm"
+    field), Redis deployment type, and Tenant/app secret storage choice.
+  </div>
+  <p>Passwords require a matching confirmation field; managed-mode fields (Postgres SKU/storage,
+  Azure Cache for Redis tier) only appear once you pick the corresponding "Managed" option, and are
+  curated dropdowns &mdash; not free text &mdash; specifically so an invalid Azure value can't be
+  submitted (see <a href="#issue-sku">Issue 2</a>).</p>
+
+  <h3>4.5 Version, Network Access, Review + create</h3>
+  <div class="screenshot-placeholder">
+    <span class="icon">&#128247;</span>
+    <strong>SCREENSHOT PLACEHOLDER: Review + create step</strong>
+    Final parameter summary before the deployment actually starts.
+  </div>
+
+  <h3>4.6 (Optional) Bind a custom domain &mdash; Step 2</h3>
+  <p>Once Step 1 finishes, read <code>fhirbridgeAppDomainVerificationId</code> from its outputs, create
+  the CNAME + <code>asuid</code> TXT records at your DNS provider, wait for propagation, then run the
+  separate <code>custom-domain.bicep</code> deployment once &mdash; it registers the hostname, creates
+  the managed certificate, and binds it, all in one deploy. See <a href="#issue-identity">Issue 7</a>
+  for a real bug this exact step used to trigger.</p>
+  <div class="screenshot-placeholder">
+    <span class="icon">&#128247;</span>
+    <strong>SCREENSHOT PLACEHOLDER: Custom domain wizard + Portal Custom domains tab</strong>
+    The Step 2 deployment form, and the app's Custom domains tab afterward showing
+    "Secured &mdash; SNI SSL" once bound.
+  </div>
+
+  <h2 id="timeline"><span class="num">5.</span>Run timeline</h2>
+  <div class="timeline">
+    <div class="timeline-step bug"><strong>First live deploy &mdash; image pull failed</strong><span>Container Apps couldn't authenticate to the vendor ACR. See <a href="#issue-acr">Issue 1</a>.</span></div>
+    <div class="timeline-step ok"><strong>Fixed &mdash; images pulled and the containerized-default path deployed successfully</strong><span>Confirmed working end to end on the default (containerized Postgres + Redis, no Key Vault) path.</span></div>
+    <div class="timeline-step bug"><strong>Tried Managed Postgres for the first time &mdash; <code>ParameterOutOfRange</code></strong><span>The wizard's SKU field was free text carrying an invalid raw Azure value. See <a href="#issue-sku">Issue 2</a>.</span></div>
+    <div class="timeline-step bug"><strong>Fixed the SKU field, redeployed &mdash; same error, different cause</strong><span>The subscription itself can't provision PostgreSQL Flexible Server in that region at all. See <a href="#issue-region">Issue 3</a>.</span></div>
+    <div class="timeline-step bug"><strong>Switched region, redeployed &mdash; Redis update failed</strong><span>A partially-created cache from the earlier failed attempt blocked a clean redeploy. See <a href="#issue-leftover">Issue 4</a>.</span></div>
+    <div class="timeline-step ok"><strong>Cleared leftovers, redeployed &mdash; Managed Postgres + Managed Redis + Key Vault all succeeded together</strong><span>First fully-clean run of every "Managed" toggle at once.</span></div>
+    <div class="timeline-step bug"><strong>Tried Containerized Postgres specifically &mdash; the container crash-looped</strong><span>Postgres refused to start as root. See <a href="#issue-root">Issue 5</a>.</span></div>
+    <div class="timeline-step bug"><strong>Fixed the entrypoint override, redeployed &mdash; still crash-looping, different error</strong><span>Postgres's own permission check can't pass on Azure Files (SMB). See <a href="#issue-smb">Issue 6</a>.</span></div>
+    <div class="timeline-step ok"><strong>Built a custom local-disk-plus-backup image &mdash; Containerized Postgres finally stayed up</strong><span>See <a href="#issue-smb">Issue 6</a> for the durability tradeoff this accepts.</span></div>
+    <div class="timeline-step bug"><strong>Bound a custom domain on a working deployment &mdash; it stopped responding afterward</strong><span>The domain-binding template silently dropped the app's managed identity. See <a href="#issue-identity">Issue 7</a>.</span></div>
+    <div class="timeline-step ok"><strong>Fixed, republished, tagged <code>v2.1.0</code></strong><span>Every path confirmed working; this document written immediately after.</span></div>
+  </div>
+
+  <h2 id="issue-acr"><span class="num">6.</span>Issue 1 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Container Apps couldn't pull the freshly-pushed images &mdash; <code>UNAUTHORIZED</code></h4>
+    <div class="issue-meta">Symptom: <code>Failed to provision revision &hellip; GET https:?scope=repository%3Afhirbridge-redis%3Apull&hellip;: UNAUTHORIZED: authentication required</code></div>
+    <p>The images pushed to the vendor ACR successfully, but the deploy script (<code>deploy-vendor.ps1</code>)
+    never passed <code>imageRegistryUsername</code>/<code>imageRegistryPassword</code> to the deployment
+    &mdash; the ACR has neither the admin user nor anonymous pull enabled, so Container Apps had no way
+    to authenticate.</p>
+    <p><strong>Fix:</strong> wired in the same read-only, scoped <code>one-click-pull</code> ACR token
+    already used by the customer-facing wizard's <code>createUiDefinition.json</code> &mdash; same
+    credential, same trust boundary, just also passed on this script's own direct deploy path.</p>
+  </div>
+
+  <h2 id="issue-sku"><span class="num">7.</span>Issue 2 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Free-text SKU/capacity fields let an invalid raw Azure value reach the ARM API</h4>
+    <div class="issue-meta">Symptom: <code>ParameterOutOfRange &mdash; The value of the 'Version' should be in: []</code> for Postgres; <code>properties.sku.Capacity cannot be updated to C0</code> for Redis</div>
+    <p>Two related problems. The Postgres SKU parameter took Terraform's combined
+    <code>tier_size</code> string format (e.g. <code>B_Standard_B1ms</code>) directly as the ARM
+    <code>sku.name</code> field, which the raw ARM API doesn't accept &mdash; it wants
+    <code>sku.name</code> and <code>sku.tier</code> as two separate fields. Separately, Redis capacity
+    and SKU were two independent free-choice fields that could combine into an invalid pair (e.g. a
+    Premium-range capacity under a Basic SKU).</p>
+    <p><strong>Fix:</strong> both became curated dropdown keys (<code>Burstable_B1ms</code>,
+    <code>GeneralPurpose_D2s_v3</code>, etc. for Postgres; <code>Basic_C0</code>, <code>Premium_P1</code>,
+    etc. for Redis), mapped internally in <code>main.bicep</code> to the correct real Azure
+    name/tier/capacity values &mdash; an invalid combination is no longer representable, let alone
+    submittable.</p>
+  </div>
+
+  <h2 id="issue-region"><span class="num">8.</span>Issue 3 <span class="pill pill-fixed">resolved &mdash; environment fact, not a bug</span></h2>
+  <div class="issue-card resolved">
+    <h4>PostgreSQL Flexible Server provisioning is restricted in some regions, for some subscriptions</h4>
+    <div class="issue-meta">Symptom: same <code>ParameterOutOfRange &mdash; Version should be in: []</code> error, persisting after Issue 2's fix, on a fresh resource with no leftover state</div>
+    <p>Confirmed directly via <code>az postgres flexible-server list-skus --location &lt;region&gt;</code>:
+    the response's top-level <code>reason</code> field read <em>"Provisioning is restricted in this
+    region. Please choose a different region."</em> &mdash; for every SKU, not just the one selected.
+    This is a subscription-level capacity/policy restriction (common on Sponsorship-type offers), not
+    anything this template controls.</p>
+    <p><strong>Resolution:</strong> checked several regions the same way; some (this session found
+    <code>centralus</code>, <code>westus3</code>, <code>northcentralus</code>) are unrestricted for the
+    same subscription and support the same SKU/version. No template change fixes this &mdash; picking
+    an unrestricted <code>location</code> is the only actual fix. A support ticket
+    ("Service and subscription limits") can be filed to request an exception, but Sponsorship-type
+    restrictions are usually by design and often declined.</p>
+  </div>
+
+  <h2 id="issue-leftover"><span class="num">9.</span>Issue 4 <span class="pill pill-fixed">resolved &mdash; operational, not a bug</span></h2>
+  <div class="issue-card resolved">
+    <h4>A partially-created resource from an earlier failed deploy blocked a clean redeploy</h4>
+    <div class="issue-meta">Symptom: <code>Invalid update request: properties.sku.Capacity cannot be updated to C0</code></div>
+    <p>When one resource in a deployment fails (Issue 3's Postgres error), independent resources with no
+    dependency on it &mdash; here, an Azure Cache for Redis instance &mdash; can still be created
+    successfully in that same failed run. Azure Cache for Redis doesn't support scaling capacity
+    <em>down</em> via a later redeploy, so a subsequent attempt targeting a smaller size than what
+    already exists fails with this error.</p>
+    <p><strong>Resolution:</strong> deleted the specific orphaned resource (not the whole resource
+    group) and redeployed fresh. General lesson: after any partially-failed deployment, check what
+    actually got created (<code>az resource list --resource-group &lt;rg&gt;</code>) before assuming a
+    clean slate.</p>
+  </div>
+
+  <h2 id="issue-root"><span class="num">10.</span>Issue 5 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Containerized Postgres crash-looped &mdash; "must not be run as root"</h4>
+    <div class="issue-meta">Symptom: repeated <code>./entrypoint.sh: line 33: Aborted (core dumped)</code>, then the whole container (and Api alongside it) restarting endlessly</div>
+    <p>The container's <code>command</code> override (<code>['postgres', '-p', &lt;port&gt;]</code>)
+    replaced the <code>postgres:16-alpine</code> image's <code>ENTRYPOINT</code> entirely &mdash;
+    skipping <code>docker-entrypoint.sh</code>, the script that drops the process from root to the
+    unprivileged <code>postgres</code> user before starting the server. Postgres refuses outright to
+    run as root, so it aborted immediately every time.</p>
+    <p><strong>Fix:</strong> switched from <code>command</code> to <code>args</code> &mdash; ARM's
+    Container Apps schema treats these the same way Kubernetes does: <code>command</code> replaces
+    <code>ENTRYPOINT</code>, <code>args</code> only replaces <code>CMD</code>. With
+    <code>args</code>, the image's own entrypoint stays intact and does the privilege drop correctly.
+    The identical bug existed in the Terraform <code>azure</code> environment's equivalent resource and
+    was fixed there too.</p>
+  </div>
+
+  <h2 id="issue-smb"><span class="num">11.</span>Issue 6 <span class="pill pill-fixed">worked around &mdash; platform limitation</span></h2>
+  <div class="issue-card resolved">
+    <h4>Postgres's own startup permission check can never pass directly on Azure Files</h4>
+    <div class="issue-meta">Symptom: <code>error: could not change permissions of directory "&hellip;/pgdata": Operation not permitted</code>, immediately after Issue 5's fix let <code>initdb</code> actually run</div>
+    <p>Postgres's <code>initdb</code> unconditionally <code>chmod</code>s its data directory to
+    <code>0700</code> as a hard-coded security check &mdash; on every startup, not just first init.
+    Azure Files, as mounted by Container Apps' <code>azureFile</code> storage type, is SMB, which has
+    no concept of POSIX permission bits at all. Confirmed by directly probing the ARM type schema:
+    <code>azureFile</code> only exposes <code>accountName</code>/<code>accountKey</code>/
+    <code>shareName</code>/<code>accessMode</code> &mdash; no mount-options or NFS alternative exists
+    to work around it. This isn't fixable from inside a container image; the permission check lives
+    in the compiled <code>postgres</code> binary, and the mount is controlled entirely by the Container
+    Apps platform.</p>
+    <p><strong>Workaround, not a fix:</strong> a new custom image
+    (<code>containerization/docker/postgres-local</code>) keeps <code>PGDATA</code> on the container's
+    own local (ephemeral) disk &mdash; real POSIX permissions, no SMB involved &mdash; and treats the
+    Azure Files mount purely as an at-rest backup target, restored on container start and saved back
+    out only on a <em>graceful</em> stop. See <a href="#limitations">Known limitations</a> for the real
+    durability cost this accepts. For anything where that tradeoff isn't acceptable, use
+    <code>useAzurePostgresql=true</code> instead, which has no such caveat.</p>
+  </div>
+
+  <h2 id="issue-identity"><span class="num">12.</span>Issue 7 <span class="pill pill-fixed">fixed</span></h2>
+  <div class="issue-card resolved">
+    <h4>Binding a custom domain silently stripped the app's managed identity</h4>
+    <div class="issue-meta">Symptom: the app (confirmed healthy and working right up until this point) went completely unresponsive afterward &mdash; Gateway logged <code>Connection refused (127.0.0.1:5000)</code> and Api produced zero log output, not even its own startup line</div>
+    <p><code>identity</code> is a resource-level property on a Container App &mdash; a sibling of
+    <code>properties</code>, not something inside <code>properties.template</code> or
+    <code>properties.configuration</code>. The custom-domain deployment's app-update module
+    (<code>custom-domain-app-update.bicep</code>) carefully reads back and passes through every
+    <em>property</em>-level setting (env vars, secrets, volumes, registries) to avoid drifting them on
+    a domain-only redeploy &mdash; but it declared the updated container app resource with no
+    <code>identity</code> block at all, which silently resets identity to <code>None</code>. With Key
+    Vault mode on, the app's managed identity is exactly what <code>DefaultAzureCredential</code> uses
+    to authenticate at startup &mdash; losing it made that authentication hang indefinitely, with no
+    log output, well before Kestrel even started listening.</p>
+    <p><strong>Fix:</strong> the module now always sets <code>identity: { type: 'SystemAssigned' }</code>,
+    matching what <code>main.bicep</code> sets on first deploy. Confirmed live: the previously-broken
+    app's Identity blade showed Status <strong>Off</strong> before the fix.</p>
+    <p><strong>Recovering an already-broken app</strong> (this fix only prevents it going forward, it
+    doesn't retroactively repair a live app): re-enable System-assigned identity on the Container App
+    directly (Portal &rarr; Identity &rarr; toggle On), then manually re-grant the same Key Vault roles
+    (Secrets Officer, Crypto User) to the new identity &mdash; the old role assignments now point at a
+    deleted principal and won't apply to the new one. Redeploying <code>main.bicep</code> again instead
+    is <em>not</em> a safe shortcut here: its role-assignment resources use a name derived from the app
+    name, not the principal ID, and Azure doesn't allow changing an existing role assignment's
+    principal in place &mdash; that redeploy would likely fail outright on those resources.</p>
+  </div>
+
+  <h2 id="limitations"><span class="num">13.</span>Known limitations to keep in mind</h2>
+  <table class="file-table">
+    <tr><th>Limitation</th><th>Why, and what to do about it</th></tr>
+    <tr>
+      <td class="why">Containerized Postgres only backs up on a <strong>graceful</strong> shutdown</td>
+      <td class="why">A crash, a forcibly-killed replica, or Container Apps exceeding its (generously
+      set, 90s) termination grace period loses every write since the last graceful stop &mdash; there's
+      no continuous replication or WAL archiving, just a full-directory snapshot copy. Acceptable for a
+      demo/test environment; use <code>useAzurePostgresql=true</code> for anything that needs
+      guaranteed durability.</td>
+    </tr>
+    <tr>
+      <td class="why">Redeploying <code>main.bicep</code> without re-supplying the custom domain
+      parameters wipes the bound domain</td>
+      <td class="why"><code>ingress.customDomains</code> is fully replaced on every deploy of the
+      container app; it defaults to blank. Any future <code>main.bicep</code> redeploy against a
+      domain-bound stack needs <code>fhirbridgeAppCustomDomain</code> and
+      <code>bindCustomDomainCertificates=true</code> passed again, or the domain binding disappears
+      (though the certificate resource itself usually survives, since it's a separate resource).</td>
+    </tr>
+    <tr>
+      <td class="why">Granting the tenant-secrets Key Vault RBAC needs Owner/User Access Administrator</td>
+      <td class="why">A Contributor-only deploying identity can create the vault itself but will hit an
+      authorization error on the 3 role-assignment resources specifically. See
+      <code>enableTenantSecretsKeyVault</code>'s description in <code>main.bicep</code> for the manual
+      <code>az role assignment create</code> fallback.</td>
+    </tr>
+    <tr>
+      <td class="why">PostgreSQL Flexible Server may be region-restricted for some subscriptions</td>
+      <td class="why">See <a href="#issue-region">Issue 3</a> &mdash; check
+      <code>az postgres flexible-server list-skus --location &lt;region&gt;</code> before committing to
+      a region if using Managed Postgres.</td>
+    </tr>
+  </table>
+
+  <h2 id="changes"><span class="num">14.</span>Every file changed this round</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Change</th><th>Because of</th></tr>
+    <tr>
+      <td class="file-path">deploy-vendor.ps1</td>
+      <td class="why">Passes the <code>one-click-pull</code> ACR credentials on its own direct deploy path</td>
+      <td class="why"><a href="#issue-acr">Issue 1</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">main.bicep</td>
+      <td class="why">Postgres SKU/storage and Redis tier turned into curated dropdown keys mapped to real Azure values internally</td>
+      <td class="why"><a href="#issue-sku">Issue 2</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">main.bicep</td>
+      <td class="why">Postgres container: <code>command</code> &rarr; <code>args</code> so the image's own entrypoint (and its privilege drop) stays intact</td>
+      <td class="why"><a href="#issue-root">Issue 5</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">containerization/terraform/environments/azure/main.tf</td>
+      <td class="why">Identical <code>command</code> &rarr; <code>args</code> fix for the equivalent resource</td>
+      <td class="why"><a href="#issue-root">Issue 5</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">containerization/docker/postgres-local/Dockerfile, entrypoint.sh <span class="pill pill-fixed" style="margin-left:6px;">new</span></td>
+      <td class="why">Custom image: PGDATA on local ephemeral disk, Azure Files used only as an at-rest backup target restored/saved around a graceful stop</td>
+      <td class="why"><a href="#issue-smb">Issue 6</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">containerization/scripts/build-images.ps1, .sh</td>
+      <td class="why">Added the new <code>fhirbridge-postgres</code> image to the 4-image build/push list</td>
+      <td class="why"><a href="#issue-smb">Issue 6</a></td>
+    </tr>
+    <tr>
+      <td class="file-path">createUiDefinition.json</td>
+      <td class="why">Postgres/Redis/Key Vault mode choices added to the wizard; Container Sizes step reordered before the passwords step; confirm-password labels now say what they're confirming</td>
+      <td class="why">Usability feedback during this round</td>
+    </tr>
+    <tr>
+      <td class="file-path">custom-domain-app-update.bicep</td>
+      <td class="why">Always sets <code>identity: { type: 'SystemAssigned' }</code>, matching <code>main.bicep</code></td>
+      <td class="why"><a href="#issue-identity">Issue 7</a></td>
+    </tr>
+  </table>
+  <p><code>az bicep build</code> and <code>terraform validate</code> both pass clean as of the last
+  change above; every combination of the 3 toggles was validated with
+  <code>az deployment group validate</code> before being confirmed on a real deploy.</p>
+
+  <h2 id="next-steps"><span class="num">15.</span>Next steps</h2>
+  <div class="callout">
+    <strong>1. Republish after any further template change</strong>
+    <code>publish-deploy-artifacts.ps1|sh</code> uploads <code>main.json</code>/<code>createUiDefinition.json</code>/
+    <code>custom-domain.json</code>/<code>createUiDefinition.custom-domain.json</code> together and
+    prints fresh cache-busting Deploy-to-Azure URLs &mdash; always re-run it after editing any
+    <code>.bicep</code> source, and rebuild the corresponding <code>.json</code> first.
+  </div>
+  <div class="callout">
+    <strong>2. If you need Managed Postgres, check region restrictions first</strong>
+    <code>az postgres flexible-server list-skus --location &lt;region&gt;</code> &mdash; look for a
+    <code>reason</code> field mentioning a provisioning restriction before committing to a region.
+  </div>
+  <div class="callout">
+    <strong>3. Add the screenshots this document is placeholder for</strong>
+    Every <span style="display:inline-block;border:1px dashed #94A3B8;border-radius:4px;padding:0 4px;">dashed box</span>
+    above marks exactly where a wizard/Portal screenshot belongs &mdash; replace the placeholder
+    <code>div</code> with an <code>&lt;img&gt;</code> tag once captured.
+  </div>
+
+  <h2 id="context-handoff"><span class="num">16.</span>Context for another branch / next chat</h2>
+  <p class="section-intro">Self-contained summary meant to be pasted directly into a fresh chat, or
+  read cold by whoever needs to port this work onto a different branch &mdash; it assumes no memory of
+  this session and repeats the facts that matter rather than just linking back up the page.</p>
+
+  <div class="chat-message">
+    <span class="label">Copy this whole block into a new chat</span>
+    <h4>Context: FHIRBridge Azure Bicep one-click deployment &mdash; Postgres/Redis/Key Vault toggles, live-verified</h4>
+    <p>Branch: <code>Main_Working_Mapping_V1_Terraform_with_Keyvault</code>. Commits
+    <code>350bd638</code> and <code>ac9660e2</code>, tagged <code>v2.1.0</code> (verified working
+    end-to-end against real Azure subscriptions). Full write-up:
+    <code>Documents/Containerization-Azure-Deployment-Run-Log-V2.html</code>.</p>
+
+    <p><strong>What changed:</strong> <code>containerization/azure-deploy/main.bicep</code> (the
+    single-template &ldquo;Deploy to Azure&rdquo; path) gained three independent boolean toggles, all
+    defaulting to the cheaper/local option:</p>
+    <ul style="padding-left:20px;margin:0 0 14px;">
+      <li><code>useAzurePostgresql</code> &mdash; containerized Postgres vs. managed Azure Database for PostgreSQL Flexible Server</li>
+      <li><code>useAzureCacheForRedis</code> &mdash; containerized Redis vs. managed Azure Managed Redis (<code>Microsoft.Cache/redisEnterprise</code> &mdash; classic <code>Microsoft.Cache/redis</code> is being retired)</li>
+      <li><code>enableTenantSecretsKeyVault</code> &mdash; local DB-stored secrets vs. an RBAC-enabled Key Vault</li>
+    </ul>
+
+    <p><strong>Two facts to not rediscover the hard way:</strong></p>
+    <p><strong>1.</strong> Containerized Postgres can't put its data directory on Azure Files.
+    Postgres's <code>initdb</code> hard-codes a <code>chmod 0700</code> check on every startup; Azure
+    Files (SMB, the only persistent storage Container Apps supports) can't honor POSIX permission bits
+    at all &mdash; confirmed by probing the ARM type schema directly, no mount-options escape hatch
+    exists. The fix in place: a custom <code>fhirbridge-postgres</code> image
+    (<code>containerization/docker/postgres-local/</code>) runs Postgres on the container's local
+    ephemeral disk and treats the Azure Files mount purely as an at-rest backup target, restored on
+    start / saved on a <strong>graceful</strong> stop only. Real cost: anything written since the last
+    graceful shutdown is lost on a crash or forced kill. Don't try to &ldquo;fix&rdquo; this further
+    with more mount tricks &mdash; it's a platform ceiling, not a bug.</p>
+    <p><strong>2.</strong> <code>identity: { type: 'SystemAssigned' }</code> must be set explicitly on
+    every template/module that redeploys the <code>fhirbridge-app</code>/<code>worker</code> Container
+    Apps &mdash; not just the original <code>main.bicep</code>. It's a resource-level property (sibling
+    of <code>properties</code>), easy to silently drop in a module that otherwise carefully preserves
+    everything else. This exact bug lived in <code>custom-domain-app-update.bicep</code> (the Step 2
+    custom-domain binder) &mdash; it read back and passed through env vars/secrets/volumes
+    meticulously but never touched <code>identity</code>, so binding a domain silently reset a working
+    app's identity to <code>None</code>, breaking Key Vault auth with zero log output and no crash. If
+    you're writing or reviewing any new Bicep module that touches these Container Apps, grep for every
+    <code>resource ... 'Microsoft.App/containerApps@...'</code> declaration and confirm each one either
+    sets identity or is provably read-only.</p>
+
+    <p><strong>Also worth knowing:</strong> PostgreSQL Flexible Server region availability is
+    subscription-specific (a Sponsorship-type subscription hit a hard &ldquo;provisioning restricted in
+    this region&rdquo; wall in <code>eastus</code>/<code>eastus2</code>/<code>westus2</code>/
+    <code>southcentralus</code>/<code>westeurope</code> but not
+    <code>centralus</code>/<code>westus3</code>/<code>northcentralus</code> &mdash; check with
+    <code>az postgres flexible-server list-skus --location &lt;region&gt;</code> before assuming a
+    region works). And if an app already had a custom domain bound before the identity fix existed, it
+    may be live-broken right now independent of any code fix &mdash; check its Identity blade (Status
+    On/Off) and see Issue 7's recovery steps in this document (re-enable identity, manually re-grant
+    the 2 Key Vault roles to the new principal, restart) rather than assuming a redeploy fixes it.</p>
+
+    <p><strong>Before trusting a port to another branch:</strong> cherry-pick both commits, re-run
+    <code>az bicep build</code>/<code>terraform validate</code>, rebuild the compiled JSON
+    (<code>main.json</code>, <code>custom-domain.json</code> &mdash; a stale compiled JSON next to a
+    fixed <code>.bicep</code> source caused real confusion this round), republish via
+    <code>publish-deploy-artifacts.ps1|sh</code>, and make sure the <code>fhirbridge-postgres</code>
+    image actually exists in whatever registry the target points at before deploying.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Where this work actually lives</strong>
+    Branch <code>Main_Working_Mapping_V1_Terraform_with_Keyvault</code>. Two commits carry everything
+    in this document: <code>350bd638</code> (&ldquo;Migrate FHIRBridge DB from SQL Server to PostgreSQL;
+    replace retiring Azure Cache for Redis with Azure Managed Redis&rdquo; &mdash; the bulk of the
+    Postgres/Redis toggle work, the <code>fhirbridge-postgres</code> image, the wizard changes) and
+    <code>ac9660e2</code> (&ldquo;Fix custom-domain deploy stripping the app's managed identity&hellip;&rdquo;
+    &mdash; Issue 7 and the entrypoint crash-path fix). Tag <code>v2.1.0</code> points at
+    <code>ac9660e2</code> and marks the whole thing as live-verified working.
+  </div>
+
+  <h3>What to do if porting to a different branch</h3>
+  <div class="callout modified">
+    <strong>1. Try cherry-picking both commits first</strong>
+    <pre><code>git cherry-pick 350bd638 ac9660e2</code></pre>
+    If <code>main.bicep</code>, <code>createUiDefinition.json</code>, or the Terraform
+    <code>azure</code> environment have diverged significantly on the target branch, this will
+    conflict &mdash; resolve by hand using the <a href="#changes">file-by-file change table</a> above
+    as the checklist of what each file needs, not just what the conflict markers show.
+  </div>
+  <div class="callout modified">
+    <strong>2. After merging, re-validate before trusting it</strong>
+    <pre><code>az bicep build --file containerization/azure-deploy/main.bicep --outfile /tmp/check.json
+az bicep build --file containerization/azure-deploy/custom-domain.bicep --outfile /tmp/check2.json
+cd containerization/terraform/environments/azure &amp;&amp; terraform validate</code></pre>
+    Then rebuild the compiled JSON for real (<code>main.json</code>, <code>custom-domain.json</code>)
+    and republish via <code>publish-deploy-artifacts.ps1|sh</code> &mdash; a stale compiled JSON next
+    to a fixed <code>.bicep</code> source is exactly how several issues in this document went
+    unnoticed for a while.
+  </div>
+  <div class="callout modified">
+    <strong>3. Rebuild and push the images before deploying</strong>
+    The new <code>fhirbridge-postgres</code> image (<code>containerization/docker/postgres-local</code>)
+    has to exist in whatever registry the target environment/branch points at &mdash; it will not
+    build/push itself, and a deploy against a registry that doesn't have it yet fails the same way
+    <a href="#issue-acr">Issue 1</a> did, just for a different image tag.
+  </div>
+  <div class="callout blocked">
+    <strong>4. If a stack on the target branch/environment already has a custom domain bound, expect Issue 7's fallout</strong>
+    Any app that had its domain bound <em>before</em> this fix existed may already have a stripped
+    identity live right now, independent of the branch/code state. Check its Identity blade
+    (Status On/Off) before assuming the code fix alone resolves it &mdash; see the
+    <a href="#issue-identity">recovery steps in Issue 7</a> for fixing an already-broken live app
+    (re-enable identity, manually re-grant the 2 Key Vault roles to the new principal, restart).
+  </div>
+
+  <h3>The facts that matter most, restated plainly</h3>
+  <table class="file-table">
+    <tr><th>Fact</th><th>Why it matters</th></tr>
+    <tr>
+      <td class="why">3 independent toggles: <code>useAzurePostgresql</code>,
+      <code>useAzureCacheForRedis</code>, <code>enableTenantSecretsKeyVault</code></td>
+      <td class="why">All default <code>false</code> (containerized/local). Any combination is valid
+      and was tested; see <a href="#toggles">section 3</a>.</td>
+    </tr>
+    <tr>
+      <td class="why">Containerized Postgres cannot use a normal Azure Files volume for
+      <code>PGDATA</code></td>
+      <td class="why">Platform limitation (SMB can't satisfy Postgres's <code>chmod</code> check), not
+      a bug to re-fix. The <code>fhirbridge-postgres</code> image's local-disk-plus-backup approach is
+      the accepted workaround, with a real durability tradeoff &mdash; see
+      <a href="#issue-smb">Issue 6</a> and <a href="#limitations">Known limitations</a>.</td>
+    </tr>
+    <tr>
+      <td class="why"><code>identity: SystemAssigned</code> must be set on <strong>every</strong>
+      template/module that redeploys <code>fhirbridgeApp</code>/<code>worker</code>, not just the
+      original <code>main.bicep</code></td>
+      <td class="why">It's a resource-level property, easy to forget when a module only touches
+      <code>properties</code>. Grep for <code>resource.*containerApps@</code> across any new
+      domain/config-update template and confirm each one either sets this explicitly or is provably
+      read-only.</td>
+    </tr>
+    <tr>
+      <td class="why">PostgreSQL Flexible Server region availability is subscription-specific, not
+      universal</td>
+      <td class="why">Don't assume a region that worked on one subscription works on another &mdash;
+      check with <code>az postgres flexible-server list-skus --location &lt;region&gt;</code> first.
+      See <a href="#issue-region">Issue 3</a>.</td>
+    </tr>
+    <tr>
+      <td class="why">Classic Azure Cache for Redis (<code>Microsoft.Cache/redis</code>) is retired;
+      this template now uses Azure Managed Redis (<code>Microsoft.Cache/redisEnterprise</code>)</td>
+      <td class="why">Don't reintroduce the classic resource type if merging older branch history that
+      still references it &mdash; it may already be blocked for new caches on some subscriptions.</td>
+    </tr>
+  </table>
+
+  <footer>
+    Written immediately after this round of live deployment testing, from the actual terminal/Portal
+    output produced along the way &mdash; nothing here is reconstructed from memory. Companion to
+    <code>Containerization-Azure-Deployment-Run-Log.html</code> (V1, Terraform),
+    <code>Containerization-Setup-Steps.html</code> (general how-to), and
+    <code>Containerization-Multi-Cloud-Guide.html</code> (full technical reference) in this same folder.
+  </footer>
+
+</div>
+</body>
+</html>
