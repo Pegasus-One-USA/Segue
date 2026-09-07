@@ -321,12 +321,19 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
   }
 
-  /** Which builder the New and Edit actions open — V1 (the original canvas) or V2 (the independent
-   *  Source → Mapping → Transformation → De-identification → Destination canvas under
-   *  pages/workflow-builder-v2). Defaults to V1; nothing about the V1 path changes. */
-  readonly builderVersion = signal<'v1' | 'v2'>('v1');
+  /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
+   *  De-identification → Destination canvas under pages/workflow-builder-v2) by default, V1 for the
+   *  original canvas. */
+  readonly builderVersion = signal<'v1' | 'v2'>('v2');
+
+  /** Whether the user actually picked a version, as opposed to this just holding its default. Edit reads
+   *  the same signal as an override (see onEdit), so without this the new V2 default would force EVERY
+   *  existing workflow into V2 — including V1-authored ones, whose V1-only steps (normalize, terminology,
+   *  patient matching) V2's catalog has no entry for and cannot render. */
+  private builderVersionTouched = false;
 
   onBuilderVersionChange(value: string): void {
+    this.builderVersionTouched = true;
     this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
   }
 
@@ -457,8 +464,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    */
   onEdit(row: WorkflowSummary): void {
     // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
-    // existed — those can't be detected and would otherwise always open in V1.
-    const forcedV2 = this.builderVersion() === 'v2';
+    // existed — those can't be detected and would otherwise always open in V1. Only counts once the user
+    // has actually picked a version: the default is V2 now, and treating that as an override would send
+    // every V1 workflow to a builder that cannot draw it.
+    const forcedV2 = this.builderVersionTouched && this.builderVersion() === 'v2';
     this.api.load(row.workflowId).subscribe({
       next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
       error: () => this.openBuilder(row.workflowId, forcedV2),

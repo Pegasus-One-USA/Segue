@@ -14,7 +14,7 @@
       @if (canCreate()) {
         <select
           class="builder-version-select"
-          aria-label="Builder version for New and Edit"
+          aria-label="Builder version for New"
           [value]="builderVersion()"
           (change)="onBuilderVersionChange($any($event.target).value)">
           <option value="v1">V1</option>
