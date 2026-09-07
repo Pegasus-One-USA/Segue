@@ -2455,7 +2455,11 @@ export class EhrVendorSourceFormComponent
     // wires it to a destination. Leaving this required with no control to satisfy it made the form
     // permanently invalid for every showResourcePicker audience.
     apply('resources', false);
-    apply('clientSecret', method === 'secret');
+    // Not required when editing: a blank value here means "keep whatever secret is already stored"
+    // (see the 'Client Secret' field-mapping comment near save()), never "clear the secret" — so
+    // Angular's own required validator must not block save on an intentionally-blank field. Only a
+    // brand-new connection (no existing secret to fall back to) actually needs one typed in.
+    apply('clientSecret', method === 'secret' && !this.isEditing);
     // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
     // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
     // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it).
