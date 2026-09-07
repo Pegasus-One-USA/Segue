@@ -1,7 +1,26 @@
-// Sits above every other layer (topbar 10, fab 20, dropdown 30, backdrop 50, toast 70,
-// modal 200 — see styles.scss §23 z-index scale) since "an API call is happening" should
-// never be hidden by whatever else is currently on screen, including an open modal.
-$global-loader-z: 300;
+// Sits above every other layer, including Angular Material's own MatDialog/MatMenu (rendered into
+// .cdk-overlay-container, outside this app's own --z-* scale entirely) — see the --z-loading-overlay
+// token's own comment in styles.scss for why. Shared (not a local $variable) so the blocking backdrop
+// below and every loader variant agree on exactly one number.
+$global-loader-z: var(--z-loading-overlay);
+
+// Dims and blurs the screen behind the loader and — unlike the loader variants themselves, which stay
+// pointer-events: none so they never intercept a click meant for the backdrop — actually absorbs
+// pointer input, so nothing underneath can be clicked, typed into, or scrolled while the app is busy.
+// Sibling of the loader markup (not a wrapper around it): CSS stacks same-z-index siblings in DOM
+// order, so painting this first means the spinner/bar/list on top of it is unaffected visually, and
+// its own pointer-events: none lets clicks over the visible loader graphic fall through to (and be
+// absorbed by) this backdrop rather than reaching the content two layers down.
+.global-loader-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: $global-loader-z;
+  // Same tint/blur as .modal-backdrop (modal-overlay.component.scss) for a consistent "temporarily
+  // unavailable" look everywhere the app dims its content, in both light and dark theme.
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
 
 // ── Bar variant (default) ───────────────────────────────────────────────────────
 .global-loader--bar {

@@ -294,6 +294,14 @@ html {
   --z-dropdown: 30;
   --z-backdrop: 50;
   --z-modal:    200;
+  /* The blocking loading overlay (GlobalLoaderComponent's backdrop) must sit above every custom app
+     modal (--z-modal above) AND above Angular Material's own MatDialog/MatMenu/etc., which render into
+     .cdk-overlay-container — a separate layer Angular CDK defaults to z-index: 1000 regardless of this
+     app's own scale (see --z-toast below). 1050 clears that CDK default, so a blocking load triggered
+     from inside a real MatDialog still blocks that dialog's own fields too, while staying under
+     --z-toast so a completion/error toast (which only ever fires after loading stops) is never buried
+     under a backdrop that should already be gone by then. */
+  --z-loading-overlay: 1050;
   /* Toasts sit above every modal — a confirmation for an action taken inside a dialog (e.g. "Copied" on the
      Launch URL modal, "Step saved" on the Transformation Rules dialog) must stay visible, not be hidden
      behind the dialog it was triggered from. 300 clears every custom app modal using --z-modal above, but
