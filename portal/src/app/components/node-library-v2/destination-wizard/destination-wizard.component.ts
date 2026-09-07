@@ -782,8 +782,15 @@ export class DestinationWizardComponent implements OnInit {
    *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
    *  this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
+    // Also relaxed when reopening an already-provisioned node straight from the canvas (_populateFromNode
+    // sets resolvedDestinationId but never touches connectionMode, since that flag is only ever set by the
+    // "reuse existing connection" dropdown's selectExisting()) — otherwise the never-re-displayed secret
+    // field's required validator blocks saving/testing an edit that doesn't touch the secret at all.
+    // hasExistingChanged() safely returns false when there's no baseline yet, so this doesn't lose the
+    // "user actually retyped the secret" protection that flow relies on.
     const reusingExisting =
-      this.connectionMode() === 'existing' && !this.hasExistingChanged();
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged();
     return {
       reusingExisting,
       // Only meaningful alongside reusingExisting — lets a form's Test Connection resolve the stored secret
@@ -2322,7 +2329,8 @@ export class DestinationWizardComponent implements OnInit {
    *  required when reopening an already-provisioned connection unchanged, same as every other destination type. */
   protected _fhirReusingExisting(): boolean {
     return (
-      this.connectionMode() === 'existing' && !this.hasExistingChanged()
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged()
     );
   }
 
